@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { api, AutomationRule, Member, Project } from "@/lib/api";
-import AppShell from "@/components/AppShell";
-import Icon from "@/components/Icon";
-import ProjectTabs from "@/components/ProjectTabs";
+import AppShell from "@/components/layout/AppShell";
+import Icon from "@/components/ui/Icon";
+import ProjectTabs from "@/components/layout/ProjectTabs";
 import { STATUSES } from "@/lib/status";
 
 export default function AutomationsPage() {

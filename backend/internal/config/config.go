@@ -83,8 +83,8 @@ func Load() (*Config, error) {
 		FrontendURL: getEnv("FRONTEND_URL", "http://localhost:3000"),
 		DatabaseURL: getEnv("DATABASE_URL", ""),
 
-		SessionSecret: getEnv("SESSION_SECRET", ""),
-		SessionTTL:    time.Duration(ttlHours) * time.Hour,
+		SessionSecret:     getEnv("SESSION_SECRET", ""),
+		SessionTTL:        time.Duration(ttlHours) * time.Hour,
 		SystemAdminEmails: adminEmails,
 
 		Azure: AzureConfig{

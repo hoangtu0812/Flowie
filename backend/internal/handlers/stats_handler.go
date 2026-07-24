@@ -23,6 +23,36 @@ func (h *Handlers) ProjectStats(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, http.StatusOK, stats)
 }
 
+// WorkspaceOverview returns dashboard aggregates + charts for a workspace.
+func (h *Handlers) WorkspaceOverview(w http.ResponseWriter, r *http.Request) {
+	userID, _ := auth.UserID(r.Context())
+	ws, _, ok := h.requireWorkspaceMember(w, r, userID)
+	if !ok {
+		return
+	}
+	ov, err := h.Store.Tasks.WorkspaceOverview(r.Context(), ws.ID)
+	if err != nil {
+		httpx.Error(w, http.StatusInternalServerError, "overview_failed", err.Error())
+		return
+	}
+	httpx.JSON(w, http.StatusOK, ov)
+}
+
+// ProjectOverview returns dashboard aggregates + charts for a single project.
+func (h *Handlers) ProjectOverview(w http.ResponseWriter, r *http.Request) {
+	userID, _ := auth.UserID(r.Context())
+	proj, _, ok := h.requireProjectAccess(w, r, userID)
+	if !ok {
+		return
+	}
+	ov, err := h.Store.Tasks.ProjectOverview(r.Context(), proj.ID)
+	if err != nil {
+		httpx.Error(w, http.StatusInternalServerError, "overview_failed", err.Error())
+		return
+	}
+	httpx.JSON(w, http.StatusOK, ov)
+}
+
 // Dashboard returns the caller's summary metrics.
 func (h *Handlers) Dashboard(w http.ResponseWriter, r *http.Request) {
 	userID, _ := auth.UserID(r.Context())

@@ -70,8 +70,12 @@ func (s *WorklogStore) TimesheetForUser(ctx context.Context, userID uuid.UUID, f
 			&e.TaskTitle, &e.ProjectID, &e.ProjectName, &e.ProjectKey, &dname, &email); err != nil {
 			return nil, err
 		}
-		if dname != nil { e.UserDisplayName = *dname }
-		if email != nil { e.UserEmail = *email }
+		if dname != nil {
+			e.UserDisplayName = *dname
+		}
+		if email != nil {
+			e.UserEmail = *email
+		}
 		out = append(out, e)
 	}
 	return out, rows.Err()
@@ -100,8 +104,12 @@ func (s *WorklogStore) TimesheetForProject(ctx context.Context, projectID uuid.U
 			&e.TaskTitle, &e.ProjectID, &e.ProjectName, &e.ProjectKey, &dname, &email); err != nil {
 			return nil, err
 		}
-		if dname != nil { e.UserDisplayName = *dname }
-		if email != nil { e.UserEmail = *email }
+		if dname != nil {
+			e.UserDisplayName = *dname
+		}
+		if email != nil {
+			e.UserEmail = *email
+		}
 		out = append(out, e)
 	}
 	return out, rows.Err()

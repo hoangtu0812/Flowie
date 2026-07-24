@@ -49,7 +49,7 @@ func (h *Handlers) AdminToggleUser(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusBadRequest, "invalid_id", err.Error())
 		return
 	}
-	
+
 	var payload struct {
 		IsSystemAdmin bool `json:"isSystemAdmin"`
 	}
@@ -96,7 +96,7 @@ func (h *Handlers) AdminCreateWorkspace(w http.ResponseWriter, r *http.Request) 
 		httpx.Error(w, http.StatusInternalServerError, "db_error", err.Error())
 		return
 	}
-	
+
 	httpx.JSON(w, http.StatusCreated, ws)
 }
 
@@ -182,7 +182,7 @@ func (h *Handlers) AdminSyncAzureUsers(w http.ResponseWriter, r *http.Request) {
 			if email == "" || gu.ID == "" {
 				continue
 			}
-			
+
 			isAdmin := false
 			for _, e := range h.Cfg.SystemAdminEmails {
 				if strings.EqualFold(e, email) {

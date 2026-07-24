@@ -1,30 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { api, Project, Workspace, DashboardStats } from "@/lib/api";
-import AppShell from "@/components/AppShell";
-import Icon from "@/components/Icon";
-
-function StatCard({ icon, label, value }: { icon: string; label: string; value: React.ReactNode }) {
-  return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
-      <div className="w-12 h-12 rounded-xl bg-gray-100 text-gray-700 flex items-center justify-center shrink-0">
-        <Icon name={icon} size={24} />
-      </div>
-      <div>
-        <p className="text-[24px] font-bold text-gray-900 leading-tight">{value}</p>
-        <p className="text-[14px] font-medium text-gray-500 mt-1">{label}</p>
-      </div>
-    </div>
-  );
-}
+import { api, Project, Workspace, WorkspaceOverview } from "@/lib/api";
+import AppShell from "@/components/layout/AppShell";
+import Icon from "@/components/ui/Icon";
+import {
+  StatTile,
+  BarSparkline,
+  AreaSparkline,
+  RingProgress,
+  TrendAreaChart,
+} from "@/components/ui/DashboardCharts";
+import { monthLabel } from "@/lib/format";
 
 export default function WorkspacePage() {
   const { id } = useParams<{ id: string }>();
   const [ws, setWs] = useState<Workspace | null>(null);
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [ov, setOv] = useState<WorkspaceOverview | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [form, setForm] = useState({ name: "", key: "", description: "" });
   const [open, setOpen] = useState(false);
@@ -32,7 +26,7 @@ export default function WorkspacePage() {
 
   useEffect(() => {
     api.getWorkspace(id).then(setWs).catch(() => {});
-    api.dashboard(id).then(setStats).catch(() => {});
+    api.workspaceOverview(id).then(setOv).catch(() => {});
     api.listProjects(id).then(setProjects).catch((e) => setError(e.message));
   }, [id]);
 
@@ -48,10 +42,26 @@ export default function WorkspacePage() {
       setProjects((prev) => [p, ...prev]);
       setForm({ name: "", key: "", description: "" });
       setOpen(false);
+      api.workspaceOverview(id).then(setOv).catch(() => {});
     } catch (err) {
       setError((err as Error).message);
     }
   }
+
+  const trendLabels = useMemo(() => (ov?.trend ?? []).map((t) => monthLabel(t.month)), [ov]);
+  const trendRows = useMemo(
+    () =>
+      (ov?.trend ?? []).map((t) => ({
+        created: t.created,
+        completed: t.completed,
+        inWork: t.inWork,
+      })),
+    [ov],
+  );
+
+  const donePct = ov && ov.totalTasks > 0 ? (ov.doneTasks / ov.totalTasks) * 100 : 0;
+  const openTasks = ov ? ov.totalTasks - ov.doneTasks : 0;
+  const overduePct = openTasks > 0 && ov ? (ov.overdueTasks / openTasks) * 100 : 0;
 
   const actions = (
     <button className="btn-primary" onClick={() => setOpen(true)}>
@@ -62,7 +72,7 @@ export default function WorkspacePage() {
 
   return (
     <AppShell title={ws?.name || "Workspace"} actions={actions}>
-      <div className="p-lg max-w-6xl">
+      <div className="p-lg max-w-[1400px]">
         <div className="flex items-center gap-xs text-body-sm text-on-surface-variant mb-lg">
           <Link href="/" className="hover:text-primary">Dashboard</Link>
           <Icon name="chevron_right" size={16} />
@@ -71,11 +81,116 @@ export default function WorkspacePage() {
 
         {error && <p className="text-error text-body-sm mb-md">{error}</p>}
 
-        <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mb-10">
-          <StatCard icon="assignment" label="Việc đang mở" value={stats?.openTasks ?? "–"} />
-          <StatCard icon="event_upcoming" label="Sắp đến hạn (7 ngày)" value={stats?.dueSoon ?? "–"} />
-          <StatCard icon="folder_open" label="Dự án" value={stats?.projectCount ?? "–"} />
-          <StatCard icon="schedule" label="Giờ tuần này" value={stats ? `${stats.hoursThisWeek.toFixed(1)}h` : "–"} />
+        {/* KPI tiles */}
+        <div className="grid gap-5 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 mb-6">
+          <StatTile
+            title="Tổng công việc"
+            value={(ov?.totalTasks ?? 0).toLocaleString()}
+            delta={ov?.createdDelta}
+            visual={<BarSparkline values={(ov?.trend ?? []).map((t) => t.created)} />}
+          />
+          <StatTile
+            title="Đã hoàn thành"
+            value={(ov?.doneTasks ?? 0).toLocaleString()}
+            delta={ov?.completedDelta}
+            visual={<AreaSparkline values={(ov?.trend ?? []).map((t) => t.completed)} />}
+          />
+          <StatTile
+            title="Chưa hoàn thành"
+            value={openTasks.toLocaleString()}
+            visual={<RingProgress percent={100 - donePct} color="#f97316" track="#fdeee2" />}
+          />
+          <StatTile
+            title="Quá hạn"
+            value={(ov?.overdueTasks ?? 0).toLocaleString()}
+            visual={<RingProgress percent={overduePct} color="#e11d48" track="#fee2e6" />}
+          />
+        </div>
+
+        {/* Secondary KPIs */}
+        <div className="grid gap-5 grid-cols-2 xl:grid-cols-4 mb-8">
+          <MiniStat icon="folder_open" label="Dự án" value={String(ov?.projectCount ?? 0)} />
+          <MiniStat icon="group" label="Thành viên" value={String(ov?.memberCount ?? 0)} />
+          <MiniStat icon="schedule" label="Giờ đã log" value={`${(ov?.hoursLogged ?? 0).toFixed(1)}h`} />
+          <MiniStat
+            icon="payments"
+            label="Chi phí thực tế"
+            value={(ov?.costActual ?? 0).toLocaleString(undefined, { style: "currency", currency: "USD" })}
+          />
+        </div>
+
+        {/* Trend chart */}
+        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-8">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-[17px] font-bold text-gray-900">Biểu đồ công việc</h3>
+            <span className="text-[13px] text-gray-400">6 tháng gần nhất</span>
+          </div>
+          <TrendAreaChart
+            labels={trendLabels}
+            rows={trendRows}
+            series={[
+              { key: "created", label: "Tạo mới", color: "#6366f1" },
+              { key: "inWork", label: "Đang làm", color: "#22c55e" },
+              { key: "completed", label: "Hoàn thành", color: "#8b5cf6" },
+            ]}
+          />
+        </div>
+
+        {/* Per-project rollup */}
+        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm mb-8 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h3 className="text-[17px] font-bold text-gray-900">Tiến độ theo dự án</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[14px]">
+              <thead>
+                <tr className="text-left text-gray-500 border-b border-gray-100">
+                  <th className="py-3 px-6 font-semibold">Dự án</th>
+                  <th className="py-3 px-4 font-semibold">Tiến độ</th>
+                  <th className="py-3 px-4 font-semibold text-right">Việc</th>
+                  <th className="py-3 px-4 font-semibold text-right">Đang làm</th>
+                  <th className="py-3 px-4 font-semibold text-right">Quá hạn</th>
+                  <th className="py-3 px-4 font-semibold text-right">Giờ</th>
+                  <th className="py-3 px-6 font-semibold text-right">Chi phí</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(ov?.projects ?? []).map((p) => {
+                  const pct = p.total > 0 ? (p.done / p.total) * 100 : 0;
+                  return (
+                    <tr key={p.projectId} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60">
+                      <td className="py-3 px-6">
+                        <Link href={`/projects/${p.projectId}/dashboard`} className="flex items-center gap-3 group">
+                          <span className="chip bg-primary-container/10 text-primary">{p.key}</span>
+                          <span className="font-semibold text-gray-900 group-hover:text-primary truncate">{p.name}</span>
+                        </Link>
+                      </td>
+                      <td className="py-3 px-4 min-w-[160px]">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-grow bg-gray-100 rounded-full h-2 overflow-hidden">
+                            <div className="h-full rounded-full bg-green-500" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="text-[12px] font-semibold text-gray-500 w-9 text-right">{Math.round(pct)}%</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-right text-gray-700">{p.done}/{p.total}</td>
+                      <td className="py-3 px-4 text-right text-gray-700">{p.inProgress}</td>
+                      <td className={`py-3 px-4 text-right font-semibold ${p.overdue > 0 ? "text-red-500" : "text-gray-400"}`}>{p.overdue}</td>
+                      <td className="py-3 px-4 text-right text-gray-700">{p.hoursLogged.toFixed(1)}h</td>
+                      <td className="py-3 px-6 text-right text-gray-700">
+                        {p.costActual.toLocaleString(undefined, { style: "currency", currency: "USD" })}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {(ov?.projects ?? []).length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="py-10 text-center text-gray-500">Chưa có dự án nào.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <h3 className="text-[20px] font-bold text-gray-900 mb-6">Danh sách Dự án</h3>
@@ -155,5 +270,19 @@ export default function WorkspacePage() {
         </div>
       )}
     </AppShell>
+  );
+}
+
+function MiniStat({ icon, label, value }: { icon: string; label: string; value: string }) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm flex items-center gap-4">
+      <div className="w-11 h-11 rounded-xl bg-gray-100 text-gray-700 flex items-center justify-center shrink-0">
+        <Icon name={icon} size={22} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-[20px] font-bold text-gray-900 leading-tight truncate">{value}</p>
+        <p className="text-[13px] font-medium text-gray-500 mt-0.5">{label}</p>
+      </div>
+    </div>
   );
 }

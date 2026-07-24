@@ -10,16 +10,16 @@ import (
 
 // User is a person authenticated via Azure AD SSO.
 type User struct {
-	ID          uuid.UUID  `json:"id"`
-	AzureOID    string     `json:"-"`
-	Email       string     `json:"email"`
-	DisplayName string     `json:"displayName"`
+	ID            uuid.UUID  `json:"id"`
+	AzureOID      string     `json:"-"`
+	Email         string     `json:"email"`
+	DisplayName   string     `json:"displayName"`
 	AvatarURL     string     `json:"avatarUrl"`
 	IsSystemAdmin bool       `json:"isSystemAdmin"`
 	IsActive      bool       `json:"isActive"`
-	LastLoginAt *time.Time `json:"lastLoginAt,omitempty"`
-	CreatedAt   time.Time  `json:"createdAt"`
-	UpdatedAt   time.Time  `json:"updatedAt"`
+	LastLoginAt   *time.Time `json:"lastLoginAt,omitempty"`
+	CreatedAt     time.Time  `json:"createdAt"`
+	UpdatedAt     time.Time  `json:"updatedAt"`
 }
 
 // WorkspaceRole enumerates organisation-level roles (Module 1.2).
@@ -93,25 +93,25 @@ type Project struct {
 
 // Task is a unit of work within a project.
 type Task struct {
-	ID           uuid.UUID  `json:"id"`
-	ProjectID    uuid.UUID  `json:"projectId"`
-	ParentTaskID *uuid.UUID `json:"parentTaskId,omitempty"`
-	Title        string     `json:"title"`
-	Description  string     `json:"description"`
-	Status       string     `json:"status"`
-	Priority     string     `json:"priority"`
+	ID             uuid.UUID   `json:"id"`
+	ProjectID      uuid.UUID   `json:"projectId"`
+	ParentTaskID   *uuid.UUID  `json:"parentTaskId,omitempty"`
+	Title          string      `json:"title"`
+	Description    string      `json:"description"`
+	Status         string      `json:"status"`
+	Priority       string      `json:"priority"`
 	AssigneeID     *uuid.UUID  `json:"assigneeId,omitempty"`
 	ReporterID     *uuid.UUID  `json:"reporterId,omitempty"`
 	ParticipantIDs []uuid.UUID `json:"participantIds,omitempty"`
-	StoryPoints  *float64   `json:"storyPoints,omitempty"`
-	StartDate    *time.Time `json:"startDate,omitempty"`
-	DueDate      *time.Time `json:"dueDate,omitempty"`
-	Position     float64    `json:"position"`
-	SprintID     *uuid.UUID `json:"sprintId,omitempty"`
-	StartAt      *time.Time `json:"startAt,omitempty"`
-	EndAt        *time.Time `json:"endAt,omitempty"`
-	CreatedAt    time.Time  `json:"createdAt"`
-	UpdatedAt    time.Time  `json:"updatedAt"`
+	StoryPoints    *float64    `json:"storyPoints,omitempty"`
+	StartDate      *time.Time  `json:"startDate,omitempty"`
+	DueDate        *time.Time  `json:"dueDate,omitempty"`
+	Position       float64     `json:"position"`
+	SprintID       *uuid.UUID  `json:"sprintId,omitempty"`
+	StartAt        *time.Time  `json:"startAt,omitempty"`
+	EndAt          *time.Time  `json:"endAt,omitempty"`
+	CreatedAt      time.Time   `json:"createdAt"`
+	UpdatedAt      time.Time   `json:"updatedAt"`
 }
 
 // SprintState enumerates sprint lifecycle states.
@@ -176,34 +176,133 @@ type DashboardStats struct {
 	HoursThisWeek  float64 `json:"hoursThisWeek"`
 }
 
+// TrendPoint is one month of activity used by dashboard charts (Module 5.1).
+type TrendPoint struct {
+	Month     string  `json:"month"` // "2026-07"
+	Created   int     `json:"created"`
+	Completed int     `json:"completed"`
+	InWork    int     `json:"inWork"`
+	Hours     float64 `json:"hours"`
+}
+
+// ProjectSummary is a per-project rollup shown on the workspace dashboard.
+type ProjectSummary struct {
+	ProjectID   uuid.UUID `json:"projectId"`
+	Key         string    `json:"key"`
+	Name        string    `json:"name"`
+	Status      string    `json:"status"`
+	Total       int       `json:"total"`
+	Done        int       `json:"done"`
+	InProgress  int       `json:"inProgress"`
+	Todo        int       `json:"todo"`
+	Overdue     int       `json:"overdue"`
+	HoursLogged float64   `json:"hoursLogged"`
+	CostActual  float64   `json:"costActual"`
+}
+
+// AssigneeLoad is a per-person rollup shown on the project dashboard.
+// Avatars are intentionally omitted: they are stored as base64 data URIs
+// (~20KB each) and would dominate the dashboard payload.
+type AssigneeLoad struct {
+	UserID      *uuid.UUID `json:"userId,omitempty"`
+	DisplayName string     `json:"displayName"`
+	Total       int        `json:"total"`
+	Done        int        `json:"done"`
+	Overdue     int        `json:"overdue"`
+	HoursLogged float64    `json:"hoursLogged"`
+}
+
+// WorkspaceOverview powers the workspace dashboard charts (Module 5.1).
+type WorkspaceOverview struct {
+	TotalTasks     int              `json:"totalTasks"`
+	DoneTasks      int              `json:"doneTasks"`
+	InProgressTask int              `json:"inProgressTasks"`
+	BacklogTasks   int              `json:"backlogTasks"`
+	OverdueTasks   int              `json:"overdueTasks"`
+	ProjectCount   int              `json:"projectCount"`
+	MemberCount    int              `json:"memberCount"`
+	HoursLogged    float64          `json:"hoursLogged"`
+	CostActual     float64          `json:"costActual"`
+	CreatedDelta   float64          `json:"createdDelta"`   // % vs previous 30d
+	CompletedDelta float64          `json:"completedDelta"` // % vs previous 30d
+	ByStatus       map[string]int   `json:"byStatus"`
+	ByPriority     map[string]int   `json:"byPriority"`
+	Projects       []ProjectSummary `json:"projects"`
+	Trend          []TrendPoint     `json:"trend"`
+}
+
+// ProjectOverview powers the per-project dashboard (Module 5.1).
+type ProjectOverview struct {
+	ProjectStats
+	OverdueTasks   int            `json:"overdueTasks"`
+	CreatedDelta   float64        `json:"createdDelta"`
+	CompletedDelta float64        `json:"completedDelta"`
+	Trend          []TrendPoint   `json:"trend"`
+	Assignees      []AssigneeLoad `json:"assignees"`
+}
+
 // CalendarItem is a lightweight task projection for calendar/timeline views.
 type CalendarItem struct {
-	ID          uuid.UUID  `json:"id"`
-	Title       string     `json:"title"`
-	Status      string     `json:"status"`
-	Priority    string     `json:"priority"`
-	StartDate   *time.Time `json:"startDate,omitempty"`
-	DueDate     *time.Time `json:"dueDate,omitempty"`
-	StartAt     *time.Time `json:"startAt,omitempty"`
-	EndAt       *time.Time `json:"endAt,omitempty"`
-	AssigneeID     *uuid.UUID `json:"assigneeId,omitempty"`
-	AssigneeName   *string       `json:"assigneeName,omitempty"`
-	AssigneeAvatar *string       `json:"assigneeAvatar,omitempty"`
-	ParticipantIDs []uuid.UUID   `json:"participantIds,omitempty"`
-	ProjectID      uuid.UUID     `json:"projectId"`
-	ProjectKey  string     `json:"projectKey"`
-	ProjectName string     `json:"projectName"`
+	ID             uuid.UUID   `json:"id"`
+	Title          string      `json:"title"`
+	Status         string      `json:"status"`
+	Priority       string      `json:"priority"`
+	StartDate      *time.Time  `json:"startDate,omitempty"`
+	DueDate        *time.Time  `json:"dueDate,omitempty"`
+	StartAt        *time.Time  `json:"startAt,omitempty"`
+	EndAt          *time.Time  `json:"endAt,omitempty"`
+	AssigneeID     *uuid.UUID  `json:"assigneeId,omitempty"`
+	AssigneeName   *string     `json:"assigneeName,omitempty"`
+	AssigneeAvatar *string     `json:"assigneeAvatar,omitempty"`
+	ParticipantIDs []uuid.UUID `json:"participantIds,omitempty"`
+	ProjectID      uuid.UUID   `json:"projectId"`
+	ProjectKey     string      `json:"projectKey"`
+	ProjectName    string      `json:"projectName"`
+}
+
+// CustomFieldDef is a project-scoped custom field definition (Module 3.4).
+type CustomFieldDef struct {
+	ID        uuid.UUID       `json:"id"`
+	ProjectID uuid.UUID       `json:"projectId"`
+	Name      string          `json:"name"`
+	FieldType string          `json:"fieldType"` // text, number, dropdown, date, url
+	Options   json.RawMessage `json:"options,omitempty"`
+}
+
+// CustomFieldValue is a field definition paired with a task's value (nullable).
+type CustomFieldValue struct {
+	FieldID   uuid.UUID       `json:"fieldId"`
+	Name      string          `json:"name"`
+	FieldType string          `json:"fieldType"`
+	Options   json.RawMessage `json:"options,omitempty"`
+	Value     json.RawMessage `json:"value,omitempty"`
+}
+
+// TaskDependencyItem is a task referenced by a dependency edge (Module 3.4).
+type TaskDependencyItem struct {
+	ID         uuid.UUID `json:"id"`
+	Title      string    `json:"title"`
+	Status     string    `json:"status"`
+	Priority   string    `json:"priority"`
+	ProjectKey string    `json:"projectKey"`
+}
+
+// TaskDependencies groups a task's dependency edges: tasks that block it
+// (BlockedBy) and tasks it blocks (Blocks).
+type TaskDependencies struct {
+	BlockedBy []TaskDependencyItem `json:"blockedBy"`
+	Blocks    []TaskDependencyItem `json:"blocks"`
 }
 
 // Comment is a message on a task.
 type Comment struct {
-	ID          uuid.UUID `json:"id"`
-	TaskID      uuid.UUID `json:"taskId"`
+	ID          uuid.UUID  `json:"id"`
+	TaskID      uuid.UUID  `json:"taskId"`
 	AuthorID    *uuid.UUID `json:"authorId,omitempty"`
-	AuthorName  string    `json:"authorName"`
-	AuthorEmail string    `json:"authorEmail"`
-	Body        string    `json:"body"`
-	CreatedAt   time.Time `json:"createdAt"`
+	AuthorName  string     `json:"authorName"`
+	AuthorEmail string     `json:"authorEmail"`
+	Body        string     `json:"body"`
+	CreatedAt   time.Time  `json:"createdAt"`
 }
 
 // ChecklistItem is a sub-item of a task's checklist.

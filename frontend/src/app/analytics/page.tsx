@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { api, Project, ProjectStats, Workspace } from "@/lib/api";
-import AppShell from "@/components/AppShell";
-import Icon from "@/components/Icon";
-import { Donut, BarList } from "@/components/Charts";
+import AppShell from "@/components/layout/AppShell";
+import Icon from "@/components/ui/Icon";
+import { Donut, BarList } from "@/components/ui/Charts";
 import { STATUS_HEX, PRIORITY_HEX, statusLabel } from "@/lib/status";
 
 export default function AnalyticsPage() {

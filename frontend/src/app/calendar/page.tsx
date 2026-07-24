@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, CalendarItem, Project, Workspace } from "@/lib/api";
-import AppShell from "@/components/AppShell";
-import Icon from "@/components/Icon";
-import TaskDrawer from "@/components/TaskDrawer";
+import AppShell from "@/components/layout/AppShell";
+import Icon from "@/components/ui/Icon";
+import TaskDrawer from "@/components/task/TaskDrawer";
 import {
   START_HOUR, ROW_H, hours, fmtHour, fmtTime, startOfWeek, addDays, sameDay, ymd,
   eventColor, eventBox,

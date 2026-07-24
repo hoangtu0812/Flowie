@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api, Notification } from "@/lib/api";
-import Icon from "./Icon";
+import Icon from "../ui/Icon";
 
 const TYPE_ICON: Record<string, string> = {
   assigned: "assignment_ind",

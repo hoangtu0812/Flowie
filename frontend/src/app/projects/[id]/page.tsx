@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { api, Member, Project, Task } from "@/lib/api";
-import AppShell from "@/components/AppShell";
-import Icon from "@/components/Icon";
-import Avatar from "@/components/Avatar";
-import TaskDrawer from "@/components/TaskDrawer";
+import AppShell from "@/components/layout/AppShell";
+import Icon from "@/components/ui/Icon";
+import Avatar from "@/components/ui/Avatar";
+import TaskDrawer from "@/components/task/TaskDrawer";
 import { STATUSES, PRIORITIES, labelColor } from "@/lib/status";
 
 type View = "list" | "board";

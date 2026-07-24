@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { api, User, Workspace } from "@/lib/api";
-import AppShell from "@/components/AppShell";
-import Icon from "@/components/Icon";
+import AppShell from "@/components/layout/AppShell";
+import Icon from "@/components/ui/Icon";
 
 export default function AdminPage() {
   const [users, setUsers] = useState<User[]>([]);

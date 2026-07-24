@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, TimesheetEntry, Project } from "@/lib/api";
-import AppShell from "@/components/AppShell";
-import Icon from "@/components/Icon";
+import AppShell from "@/components/layout/AppShell";
+import Icon from "@/components/ui/Icon";
 
 function startOfWeek(d: Date) {
   const x = new Date(d);

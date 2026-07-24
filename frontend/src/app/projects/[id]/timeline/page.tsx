@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { api, Project, Task } from "@/lib/api";
-import AppShell from "@/components/AppShell";
-import ProjectTabs from "@/components/ProjectTabs";
-import TaskDrawer from "@/components/TaskDrawer";
+import AppShell from "@/components/layout/AppShell";
+import ProjectTabs from "@/components/layout/ProjectTabs";
+import TaskDrawer from "@/components/task/TaskDrawer";
 import { statusByKey } from "@/lib/status";
 
 const DAY = 34; // px per day

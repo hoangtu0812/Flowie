@@ -7,12 +7,14 @@ import {
   ChecklistItem,
   Comment,
   Label,
+  CustomFieldValue,
   Member,
   Task,
+  TaskDependencies,
   Worklog,
 } from "@/lib/api";
-import Icon from "./Icon";
-import { PRIORITIES, STATUSES, labelColor } from "@/lib/status";
+import Icon from "../ui/Icon";
+import { PRIORITIES, STATUSES, labelColor, statusByKey } from "@/lib/status";
 
 function timeAgo(iso: string) {
   const d = new Date(iso);
@@ -44,6 +46,14 @@ export default function TaskDrawer({
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [worklogs, setWorklogs] = useState<Worklog[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
+  const [deps, setDeps] = useState<TaskDependencies>({ blockedBy: [], blocks: [] });
+  const [projectTasks, setProjectTasks] = useState<Task[]>([]);
+  const [depPick, setDepPick] = useState("");
+  const [customFields, setCustomFields] = useState<CustomFieldValue[]>([]);
+  const [showFieldManager, setShowFieldManager] = useState(false);
+  const [newFieldName, setNewFieldName] = useState("");
+  const [newFieldType, setNewFieldType] = useState("text");
+  const [newFieldOptions, setNewFieldOptions] = useState("");
   const [hoursDraft, setHoursDraft] = useState("");
   const [showPartMenu, setShowPartMenu] = useState(false);
   const [workNote, setWorkNote] = useState("");
@@ -62,6 +72,9 @@ export default function TaskDrawer({
     setDescDraft(d.task.description);
     setWorklogs(await api.listTaskWorklogs(taskId).catch(() => []));
     setMembers(await api.projectMembers(d.task.projectId).catch(() => []));
+    setDeps(d.dependencies ?? { blockedBy: [], blocks: [] });
+    setProjectTasks(await api.listTasks(d.task.projectId).catch(() => []));
+    setCustomFields(d.customFields ?? []);
   }
 
   useEffect(() => {
@@ -79,6 +92,11 @@ export default function TaskDrawer({
 
   const activeLabelIds = new Set((task.labels ?? []).map((l) => l.id));
   const checkedCount = checklist.filter((c) => c.done).length;
+  const unfinishedBlockers = deps.blockedBy.filter((d) => d.status !== "done");
+  const blockedIds = new Set(deps.blockedBy.map((d) => d.id));
+  const depOptions = projectTasks.filter(
+    (t) => t.id !== task.id && !blockedIds.has(t.id),
+  );
 
   async function saveDesc() {
     await api.updateTask(task!.id, { description: descDraft });
@@ -117,10 +135,101 @@ export default function TaskDrawer({
     onChanged();
   }
   async function moveStatus(s: string) {
+    const unfinished = deps.blockedBy.filter((d) => d.status !== "done");
+    if ((s === "in_progress" || s === "in_review") && unfinished.length > 0) {
+      const ok = window.confirm(
+        `Công việc này đang bị chặn bởi ${unfinished.length} task chưa hoàn thành:\n` +
+          unfinished.map((d) => `• ${d.title}`).join("\n") +
+          `\n\nVẫn tiếp tục chuyển trạng thái?`,
+      );
+      if (!ok) return;
+    }
     await api.updateTaskStatus(task!.id, s);
     setTask({ ...task!, status: s });
     onChanged();
     load();
+  }
+  async function addDep() {
+    if (!depPick) return;
+    try {
+      const next = await api.addDependency(task!.id, depPick);
+      setDeps(next);
+      setDepPick("");
+      load();
+    } catch (err: any) {
+      alert(err.message || "Không thể thêm phụ thuộc");
+    }
+  }
+  async function removeDep(dependsOnId: string) {
+    await api.removeDependency(task!.id, dependsOnId);
+    setDeps((p) => ({
+      ...p,
+      blockedBy: p.blockedBy.filter((d) => d.id !== dependsOnId),
+    }));
+    load();
+  }
+  async function saveFieldValue(fieldId: string, raw: string, fieldType: string) {
+    let value: unknown = raw;
+    if (raw === "") value = null;
+    else if (fieldType === "number") {
+      const n = parseFloat(raw);
+      value = isNaN(n) ? null : n;
+    }
+    const res = await api.setTaskCustomField(task!.id, fieldId, value);
+    setCustomFields(res.customFields);
+    onChanged();
+  }
+  async function createField() {
+    const name = newFieldName.trim();
+    if (!name) return;
+    const options =
+      newFieldType === "dropdown"
+        ? newFieldOptions.split(",").map((s) => s.trim()).filter(Boolean)
+        : undefined;
+    await api.createCustomField(task!.projectId, { name, fieldType: newFieldType, options });
+    setNewFieldName("");
+    setNewFieldOptions("");
+    load();
+  }
+  async function deleteFieldDef(fieldId: string) {
+    if (!window.confirm("Xóa trường này khỏi toàn bộ dự án?")) return;
+    await api.deleteCustomField(task!.projectId, fieldId);
+    load();
+  }
+  function renderFieldInput(cf: CustomFieldValue) {
+    const val = cf.value == null ? "" : String(cf.value);
+    const cls = "text-body-sm border border-outline-variant rounded-md px-2 py-1 flex-grow max-w-xs";
+    if (cf.fieldType === "dropdown") {
+      return (
+        <select
+          className={cls}
+          value={val}
+          onChange={(e) => saveFieldValue(cf.fieldId, e.target.value, cf.fieldType)}
+        >
+          <option value="">—</option>
+          {(cf.options ?? []).map((o) => (
+            <option key={o} value={o}>{o}</option>
+          ))}
+        </select>
+      );
+    }
+    const type =
+      cf.fieldType === "number"
+        ? "number"
+        : cf.fieldType === "date"
+          ? "date"
+          : cf.fieldType === "url"
+            ? "url"
+            : "text";
+    return (
+      <input
+        key={`${cf.fieldId}:${val}`}
+        type={type}
+        className={cls}
+        defaultValue={val}
+        onBlur={(e) => saveFieldValue(cf.fieldId, e.target.value, cf.fieldType)}
+      />
+    );
   }
   async function toggleLabel(l: Label) {
     const on = !activeLabelIds.has(l.id);
@@ -378,6 +487,123 @@ export default function TaskDrawer({
           )}
         </section>
 
+        {/* Dependencies */}
+        <section>
+          <p className="text-label-sm uppercase text-on-surface-variant mb-sm">Phụ thuộc</p>
+          {unfinishedBlockers.length > 0 && (
+            <div className="flex items-start gap-sm mb-sm px-sm py-2 rounded-lg bg-error-container/40 text-on-error-container text-body-sm">
+              <Icon name="block" size={16} className="mt-0.5" />
+              <span>Đang bị chặn bởi {unfinishedBlockers.length} công việc chưa hoàn thành.</span>
+            </div>
+          )}
+          <div className="flex flex-col gap-3">
+            <div>
+              <p className="text-body-sm text-on-surface-variant mb-1">Bị chặn bởi (Blocked by)</p>
+              {deps.blockedBy.length === 0 && (
+                <p className="text-body-sm text-on-surface-variant/60">Không có.</p>
+              )}
+              <div className="flex flex-col gap-1">
+                {deps.blockedBy.map((d) => (
+                  <div key={d.id} className="flex items-center justify-between gap-sm text-body-sm border border-outline-variant/50 rounded-md px-2 py-1">
+                    <span className="flex items-center gap-sm min-w-0">
+                      <span className={`chip ${statusByKey(d.status).chipBg} ${statusByKey(d.status).chipText}`}>{statusByKey(d.status).label}</span>
+                      <span className="truncate">{d.title}</span>
+                    </span>
+                    <button onClick={() => removeDep(d.id)} className="p-1 rounded-full hover:bg-surface-container text-on-surface-variant" title="Gỡ phụ thuộc">
+                      <Icon name="close" size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-sm mt-sm">
+                <select className="field flex-grow" value={depPick} onChange={(e) => setDepPick(e.target.value)}>
+                  <option value="">Chọn công việc chặn…</option>
+                  {depOptions.map((t) => (
+                    <option key={t.id} value={t.id}>{t.title}</option>
+                  ))}
+                </select>
+                <button className="btn-ghost" onClick={addDep}><Icon name="add" size={18} /></button>
+              </div>
+            </div>
+            {deps.blocks.length > 0 && (
+              <div>
+                <p className="text-body-sm text-on-surface-variant mb-1">Đang chặn (Blocks)</p>
+                <div className="flex flex-col gap-1">
+                  {deps.blocks.map((d) => (
+                    <div key={d.id} className="flex items-center gap-sm text-body-sm border border-outline-variant/50 rounded-md px-2 py-1">
+                      <span className={`chip ${statusByKey(d.status).chipBg} ${statusByKey(d.status).chipText}`}>{statusByKey(d.status).label}</span>
+                      <span className="truncate">{d.title}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Custom fields */}
+        <section>
+          <div className="flex items-center justify-between mb-sm">
+            <p className="text-label-sm uppercase text-on-surface-variant">Trường tùy chỉnh</p>
+            <button
+              className="text-body-sm text-primary flex items-center gap-1"
+              onClick={() => setShowFieldManager((v) => !v)}
+            >
+              <Icon name="tune" size={16} /> Quản lý
+            </button>
+          </div>
+          <div className="flex flex-col gap-2">
+            {customFields.length === 0 && !showFieldManager && (
+              <p className="text-body-sm text-on-surface-variant/60">Chưa có trường tùy chỉnh.</p>
+            )}
+            {customFields.map((cf) => (
+              <div key={cf.fieldId} className="flex items-center gap-sm">
+                <span className="w-32 text-body-sm text-on-surface-variant truncate">{cf.name}</span>
+                {renderFieldInput(cf)}
+                {showFieldManager && (
+                  <button
+                    onClick={() => deleteFieldDef(cf.fieldId)}
+                    className="p-1 rounded-full hover:bg-red-50 text-red-500"
+                    title="Xóa trường khỏi dự án"
+                  >
+                    <Icon name="delete" size={16} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          {showFieldManager && (
+            <div className="mt-sm flex flex-wrap gap-sm items-center border-t border-outline-variant/50 pt-sm">
+              <input
+                className="field w-40"
+                placeholder="Tên trường"
+                value={newFieldName}
+                onChange={(e) => setNewFieldName(e.target.value)}
+              />
+              <select
+                className="field w-32"
+                value={newFieldType}
+                onChange={(e) => setNewFieldType(e.target.value)}
+              >
+                <option value="text">Text</option>
+                <option value="number">Number</option>
+                <option value="date">Date</option>
+                <option value="url">URL</option>
+                <option value="dropdown">Dropdown</option>
+              </select>
+              {newFieldType === "dropdown" && (
+                <input
+                  className="field flex-grow"
+                  placeholder="Lựa chọn, cách nhau bởi dấu phẩy"
+                  value={newFieldOptions}
+                  onChange={(e) => setNewFieldOptions(e.target.value)}
+                />
+              )}
+              <button className="btn-primary" onClick={createField}>Thêm trường</button>
+            </div>
+          )}
+        </section>
+
         {/* Checklist */}
         <section>
           <p className="text-label-sm uppercase text-on-surface-variant mb-sm">
@@ -507,6 +733,10 @@ function verbText(a: ActivityEvent): string {
       return "đã bình luận";
     case "logged_time":
       return `log ${((Number(a.meta?.minutes ?? 0)) / 60).toFixed(2)}h`;
+    case "dependency_added":
+      return `thêm phụ thuộc "${String(a.meta?.title ?? "")}"`;
+    case "dependency_removed":
+      return "gỡ một phụ thuộc";
     default:
       return a.verb;
   }

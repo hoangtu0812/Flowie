@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import Icon from "./Icon";
+import Icon from "../ui/Icon";
 import { User, api } from "@/lib/api";
 
 interface NavItem {

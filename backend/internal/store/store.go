@@ -14,10 +14,10 @@ var ErrNotFound = errors.New("not found")
 type Store struct {
 	pool *pgxpool.Pool
 
-	Users      *UserStore
-	Workspaces *WorkspaceStore
-	Projects   *ProjectStore
-	Tasks      *TaskStore
+	Users         *UserStore
+	Workspaces    *WorkspaceStore
+	Projects      *ProjectStore
+	Tasks         *TaskStore
 	Sprints       *SprintStore
 	Worklogs      *WorklogStore
 	Notifications *NotificationStore
@@ -27,11 +27,11 @@ type Store struct {
 // New builds a Store from a pgx pool.
 func New(pool *pgxpool.Pool) *Store {
 	return &Store{
-		pool:       pool,
-		Users:      &UserStore{pool: pool},
-		Workspaces: &WorkspaceStore{pool: pool},
-		Projects:   &ProjectStore{pool: pool},
-		Tasks:      &TaskStore{pool: pool},
+		pool:          pool,
+		Users:         &UserStore{pool: pool},
+		Workspaces:    &WorkspaceStore{pool: pool},
+		Projects:      &ProjectStore{pool: pool},
+		Tasks:         &TaskStore{pool: pool},
 		Sprints:       &SprintStore{pool: pool},
 		Worklogs:      &WorklogStore{pool: pool},
 		Notifications: &NotificationStore{pool: pool},

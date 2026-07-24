@@ -34,11 +34,11 @@ func scanTask(row pgx.Row) (*domain.Task, error) {
 
 // CreateTaskParams carries inputs to create a task.
 type CreateTaskParams struct {
-	ProjectID    uuid.UUID
-	ParentTaskID *uuid.UUID
-	Title        string
-	Description  string
-	Status       string
+	ProjectID      uuid.UUID
+	ParentTaskID   *uuid.UUID
+	Title          string
+	Description    string
+	Status         string
 	Priority       string
 	AssigneeID     *uuid.UUID
 	ReporterID     uuid.UUID

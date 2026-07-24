@@ -60,10 +60,10 @@ func (h *Handlers) notifyMentions(r *http.Request, task *domain.Task, body strin
 }
 
 type createTaskRequest struct {
-	Title        string     `json:"title"`
-	Description  string     `json:"description"`
-	Status       string     `json:"status"`
-	Priority     string     `json:"priority"`
+	Title          string      `json:"title"`
+	Description    string      `json:"description"`
+	Status         string      `json:"status"`
+	Priority       string      `json:"priority"`
 	AssigneeID     *uuid.UUID  `json:"assigneeId"`
 	ParentTaskID   *uuid.UUID  `json:"parentTaskId"`
 	ParticipantIDs []uuid.UUID `json:"participantIds"`
@@ -93,12 +93,12 @@ func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	task, err := h.Store.Tasks.Create(r.Context(), store.CreateTaskParams{
-		ProjectID:    proj.ID,
-		ParentTaskID: req.ParentTaskID,
-		Title:        req.Title,
-		Description:  req.Description,
-		Status:       req.Status,
-		Priority:     req.Priority,
+		ProjectID:      proj.ID,
+		ParentTaskID:   req.ParentTaskID,
+		Title:          req.Title,
+		Description:    req.Description,
+		Status:         req.Status,
+		Priority:       req.Priority,
 		AssigneeID:     req.AssigneeID,
 		ReporterID:     userID,
 		ParticipantIDs: req.ParticipantIDs,
@@ -195,12 +195,16 @@ func (h *Handlers) GetTask(w http.ResponseWriter, r *http.Request) {
 	checklist, _ := h.Store.Tasks.ListChecklist(r.Context(), task.ID)
 	activity, _ := h.Store.Tasks.ListActivity(r.Context(), task.ID)
 	labels, _ := h.Store.Tasks.ListLabels(r.Context(), task.ProjectID)
+	dependencies, _ := h.Store.Tasks.ListDependencies(r.Context(), task.ID)
+	customFields, _ := h.Store.Tasks.ListCustomFieldValues(r.Context(), task.ID)
 	httpx.JSON(w, http.StatusOK, map[string]any{
-		"task":      task,
-		"comments":  comments,
-		"checklist": checklist,
-		"activity":  activity,
-		"labels":    labels,
+		"task":         task,
+		"comments":     comments,
+		"checklist":    checklist,
+		"activity":     activity,
+		"labels":       labels,
+		"dependencies": dependencies,
+		"customFields": customFields,
 	})
 }
 
@@ -214,7 +218,7 @@ type updateTaskRequest struct {
 	AssigneeID     *string   `json:"assigneeId"` // uuid, or "" to unassign
 	ReporterID     *string   `json:"reporterId"` // uuid, or "" to unassign
 	ParticipantIDs *[]string `json:"participantIds"`
-	StartAt        *string   `json:"startAt"`    // datetime, or "" to clear
+	StartAt        *string   `json:"startAt"` // datetime, or "" to clear
 	EndAt          *string   `json:"endAt"`
 }
 

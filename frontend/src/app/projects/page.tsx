@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, Project, Workspace } from "@/lib/api";
-import AppShell from "@/components/AppShell";
-import Icon from "@/components/Icon";
+import AppShell from "@/components/layout/AppShell";
+import Icon from "@/components/ui/Icon";
 
 interface Group {
   workspace: Workspace;

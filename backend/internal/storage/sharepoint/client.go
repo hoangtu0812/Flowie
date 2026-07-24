@@ -28,12 +28,12 @@ type Client struct {
 	tokenURL   string
 	rootFolder string
 
-	mu        sync.Mutex
-	token     string
-	tokenExp  time.Time
-	siteID    string
-	driveID   string
-	resolved  bool
+	mu       sync.Mutex
+	token    string
+	tokenExp time.Time
+	siteID   string
+	driveID  string
+	resolved bool
 }
 
 // New builds a SharePoint client. Returns nil (no error) when not configured so

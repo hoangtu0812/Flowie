@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, Member, Workspace } from "@/lib/api";
-import AppShell from "@/components/AppShell";
-import Icon from "@/components/Icon";
+import AppShell from "@/components/layout/AppShell";
+import Icon from "@/components/ui/Icon";
 
 const ROLES = ["owner", "admin", "billing", "member", "guest"];
 const ROLE_STYLE: Record<string, string> = {

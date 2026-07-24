@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, User, Workspace } from "@/lib/api";
-import Icon from "./Icon";
+import Icon from "../ui/Icon";
 import NotificationBell from "./NotificationBell";
 
 export default function TopBar({

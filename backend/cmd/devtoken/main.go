@@ -42,7 +42,8 @@ func main() {
 
 	st := store.New(pool)
 	// azure_oid derived from email so repeated runs are idempotent.
-	user, err := st.Users.UpsertFromAzure(ctx, "dev|"+*email, *email, *name)
+	// Local dev tokens get system-admin so the admin panel is reachable.
+	user, err := st.Users.UpsertFromAzure(ctx, "dev|"+*email, *email, *name, "", true)
 	if err != nil {
 		fatal(err)
 	}

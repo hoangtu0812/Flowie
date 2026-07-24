@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { api, Member, Project, Task } from "@/lib/api";
-import AppShell from "@/components/AppShell";
-import ProjectTabs from "@/components/ProjectTabs";
-import TaskDrawer from "@/components/TaskDrawer";
+import AppShell from "@/components/layout/AppShell";
+import ProjectTabs from "@/components/layout/ProjectTabs";
+import TaskDrawer from "@/components/task/TaskDrawer";
 
 const CAPACITY = 20; // story points/sprint (giả định)
 

@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, DashboardStats, Workspace } from "@/lib/api";
-import AppShell from "@/components/AppShell";
-import Icon from "@/components/Icon";
+import AppShell from "@/components/layout/AppShell";
+import Icon from "@/components/ui/Icon";
 
 function StatCard({ icon, label, value }: { icon: string; label: string; value: React.ReactNode }) {
   return (
