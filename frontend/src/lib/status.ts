@@ -8,10 +8,10 @@ export interface StatusDef {
 }
 
 export const STATUSES: StatusDef[] = [
-  { key: "todo", label: "To Do", chipBg: "bg-surface-container-high", chipText: "text-on-surface-variant", dot: "bg-outline" },
-  { key: "in_progress", label: "In Progress", chipBg: "bg-primary-fixed", chipText: "text-on-primary-fixed-variant", dot: "bg-primary" },
-  { key: "in_review", label: "In Review", chipBg: "bg-tertiary-fixed", chipText: "text-on-tertiary-fixed-variant", dot: "bg-tertiary" },
-  { key: "done", label: "Done", chipBg: "bg-success-container", chipText: "text-success", dot: "bg-success" },
+  { key: "in_progress", label: "In Work", chipBg: "bg-[#f4ebff]", chipText: "text-[#9d4edd]", dot: "bg-purple-500" },
+  { key: "todo", label: "To Do", chipBg: "bg-[#e8f0fe]", chipText: "text-blue-600", dot: "bg-blue-500" },
+  { key: "in_review", label: "On Review", chipBg: "bg-[#fff3e0]", chipText: "text-[#ef6c00]", dot: "bg-orange-500" },
+  { key: "done", label: "Done", chipBg: "bg-[#e6f4ea]", chipText: "text-[#1e8e3e]", dot: "bg-green-500" },
 ];
 
 export const statusByKey = (k: string) =>

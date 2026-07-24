@@ -51,10 +51,11 @@ func (s *WorklogStore) ListByTask(ctx context.Context, taskID uuid.UUID) ([]doma
 func (s *WorklogStore) TimesheetForUser(ctx context.Context, userID uuid.UUID, from, to time.Time) ([]domain.TimesheetEntry, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT w.id, w.task_id, w.user_id, w.minutes, w.note, w.logged_on, w.source, w.state, w.created_at,
-		       t.title, p.id, p.name, p.key
+		       t.title, p.id, p.name, p.key, u.display_name, u.email
 		FROM worklogs w
 		JOIN tasks t ON t.id = w.task_id
 		JOIN projects p ON p.id = t.project_id
+		LEFT JOIN users u ON u.id = w.user_id
 		WHERE w.user_id=$1 AND w.logged_on BETWEEN $2 AND $3
 		ORDER BY w.logged_on`, userID, from, to)
 	if err != nil {
@@ -64,10 +65,43 @@ func (s *WorklogStore) TimesheetForUser(ctx context.Context, userID uuid.UUID, f
 	out := []domain.TimesheetEntry{}
 	for rows.Next() {
 		var e domain.TimesheetEntry
+		var dname, email *string
 		if err := rows.Scan(&e.ID, &e.TaskID, &e.UserID, &e.Minutes, &e.Note, &e.LoggedOn, &e.Source, &e.State, &e.CreatedAt,
-			&e.TaskTitle, &e.ProjectID, &e.ProjectName, &e.ProjectKey); err != nil {
+			&e.TaskTitle, &e.ProjectID, &e.ProjectName, &e.ProjectKey, &dname, &email); err != nil {
 			return nil, err
 		}
+		if dname != nil { e.UserDisplayName = *dname }
+		if email != nil { e.UserEmail = *email }
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// TimesheetForProject returns all worklogs for a project in a date range.
+func (s *WorklogStore) TimesheetForProject(ctx context.Context, projectID uuid.UUID, from, to time.Time) ([]domain.TimesheetEntry, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT w.id, w.task_id, w.user_id, w.minutes, w.note, w.logged_on, w.source, w.state, w.created_at,
+		       t.title, p.id, p.name, p.key, u.display_name, u.email
+		FROM worklogs w
+		JOIN tasks t ON t.id = w.task_id
+		JOIN projects p ON p.id = t.project_id
+		LEFT JOIN users u ON u.id = w.user_id
+		WHERE p.id=$1 AND w.logged_on BETWEEN $2 AND $3
+		ORDER BY w.user_id, w.logged_on`, projectID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []domain.TimesheetEntry{}
+	for rows.Next() {
+		var e domain.TimesheetEntry
+		var dname, email *string
+		if err := rows.Scan(&e.ID, &e.TaskID, &e.UserID, &e.Minutes, &e.Note, &e.LoggedOn, &e.Source, &e.State, &e.CreatedAt,
+			&e.TaskTitle, &e.ProjectID, &e.ProjectName, &e.ProjectKey, &dname, &email); err != nil {
+			return nil, err
+		}
+		if dname != nil { e.UserDisplayName = *dname }
+		if email != nil { e.UserEmail = *email }
 		out = append(out, e)
 	}
 	return out, rows.Err()

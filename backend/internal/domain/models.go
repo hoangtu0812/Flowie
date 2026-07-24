@@ -14,8 +14,9 @@ type User struct {
 	AzureOID    string     `json:"-"`
 	Email       string     `json:"email"`
 	DisplayName string     `json:"displayName"`
-	AvatarURL   string     `json:"avatarUrl"`
-	IsActive    bool       `json:"isActive"`
+	AvatarURL     string     `json:"avatarUrl"`
+	IsSystemAdmin bool       `json:"isSystemAdmin"`
+	IsActive      bool       `json:"isActive"`
 	LastLoginAt *time.Time `json:"lastLoginAt,omitempty"`
 	CreatedAt   time.Time  `json:"createdAt"`
 	UpdatedAt   time.Time  `json:"updatedAt"`
@@ -49,6 +50,7 @@ type MemberInfo struct {
 	UserID      uuid.UUID     `json:"userId"`
 	DisplayName string        `json:"displayName"`
 	Email       string        `json:"email"`
+	AvatarURL   *string       `json:"avatarUrl"`
 	Role        WorkspaceRole `json:"role"`
 	HourlyRate  float64       `json:"hourlyRate"`
 	Currency    string        `json:"currency"`
@@ -98,8 +100,9 @@ type Task struct {
 	Description  string     `json:"description"`
 	Status       string     `json:"status"`
 	Priority     string     `json:"priority"`
-	AssigneeID   *uuid.UUID `json:"assigneeId,omitempty"`
-	ReporterID   *uuid.UUID `json:"reporterId,omitempty"`
+	AssigneeID     *uuid.UUID  `json:"assigneeId,omitempty"`
+	ReporterID     *uuid.UUID  `json:"reporterId,omitempty"`
+	ParticipantIDs []uuid.UUID `json:"participantIds,omitempty"`
 	StoryPoints  *float64   `json:"storyPoints,omitempty"`
 	StartDate    *time.Time `json:"startDate,omitempty"`
 	DueDate      *time.Time `json:"dueDate,omitempty"`
@@ -183,8 +186,11 @@ type CalendarItem struct {
 	DueDate     *time.Time `json:"dueDate,omitempty"`
 	StartAt     *time.Time `json:"startAt,omitempty"`
 	EndAt       *time.Time `json:"endAt,omitempty"`
-	AssigneeID  *uuid.UUID `json:"assigneeId,omitempty"`
-	ProjectID   uuid.UUID  `json:"projectId"`
+	AssigneeID     *uuid.UUID `json:"assigneeId,omitempty"`
+	AssigneeName   *string       `json:"assigneeName,omitempty"`
+	AssigneeAvatar *string       `json:"assigneeAvatar,omitempty"`
+	ParticipantIDs []uuid.UUID   `json:"participantIds,omitempty"`
+	ProjectID      uuid.UUID     `json:"projectId"`
 	ProjectKey  string     `json:"projectKey"`
 	ProjectName string     `json:"projectName"`
 }
@@ -226,10 +232,12 @@ type Worklog struct {
 // TimesheetEntry is a worklog enriched with task/project context for grids.
 type TimesheetEntry struct {
 	Worklog
-	TaskTitle   string    `json:"taskTitle"`
-	ProjectID   uuid.UUID `json:"projectId"`
-	ProjectName string    `json:"projectName"`
-	ProjectKey  string    `json:"projectKey"`
+	TaskTitle       string    `json:"taskTitle"`
+	ProjectID       uuid.UUID `json:"projectId"`
+	ProjectName     string    `json:"projectName"`
+	ProjectKey      string    `json:"projectKey"`
+	UserDisplayName string    `json:"userDisplayName,omitempty"`
+	UserEmail       string    `json:"userEmail,omitempty"`
 }
 
 // AutomationRule is a simple Trigger→Action rule (MVP): when a task's status

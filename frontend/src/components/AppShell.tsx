@@ -46,8 +46,8 @@ export default function AppShell({
 
   return (
     <div>
-      <Sidebar />
-      <main className="ml-64 flex flex-col min-h-screen bg-background">
+      <Sidebar user={user} />
+      <main className="ml-[260px] flex flex-col min-h-screen bg-white">
         <TopBar title={title} user={user} actions={actions} />
         <div className="flex-grow">{children}</div>
       </main>

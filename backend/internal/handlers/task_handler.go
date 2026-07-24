@@ -64,8 +64,9 @@ type createTaskRequest struct {
 	Description  string     `json:"description"`
 	Status       string     `json:"status"`
 	Priority     string     `json:"priority"`
-	AssigneeID   *uuid.UUID `json:"assigneeId"`
-	ParentTaskID *uuid.UUID `json:"parentTaskId"`
+	AssigneeID     *uuid.UUID  `json:"assigneeId"`
+	ParentTaskID   *uuid.UUID  `json:"parentTaskId"`
+	ParticipantIDs []uuid.UUID `json:"participantIds"`
 }
 
 // CreateTask creates a task within a project.
@@ -98,8 +99,9 @@ func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
 		Description:  req.Description,
 		Status:       req.Status,
 		Priority:     req.Priority,
-		AssigneeID:   req.AssigneeID,
-		ReporterID:   userID,
+		AssigneeID:     req.AssigneeID,
+		ReporterID:     userID,
+		ParticipantIDs: req.ParticipantIDs,
 	})
 	if err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "create_failed", err.Error())
@@ -107,6 +109,24 @@ func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = h.Store.Tasks.RecordActivity(r.Context(), task.ID, userID, "created", map[string]any{"title": task.Title})
 	httpx.JSON(w, http.StatusCreated, task)
+}
+
+// DeleteTask removes a task.
+func (h *Handlers) DeleteTask(w http.ResponseWriter, r *http.Request) {
+	userID, _ := auth.UserID(r.Context())
+	task, role, ok := h.requireTaskAccess(w, r, userID)
+	if !ok {
+		return
+	}
+	if role == domain.WorkspaceRoleGuest {
+		httpx.Error(w, http.StatusForbidden, "forbidden", "guests cannot delete tasks")
+		return
+	}
+	if err := h.Store.Tasks.Delete(r.Context(), task.ID); err != nil {
+		httpx.Error(w, http.StatusInternalServerError, "delete_failed", err.Error())
+		return
+	}
+	httpx.JSON(w, http.StatusNoContent, nil)
 }
 
 // ListTasks returns all tasks in a project, enriched with labels + counts.
@@ -185,15 +205,17 @@ func (h *Handlers) GetTask(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateTaskRequest struct {
-	Title       *string  `json:"title"`
-	Description *string  `json:"description"`
-	Priority    *string  `json:"priority"`
-	StoryPoints *float64 `json:"storyPoints"`
-	StartDate   *string  `json:"startDate"` // "YYYY-MM-DD" or "" to clear
-	DueDate     *string  `json:"dueDate"`
-	AssigneeID  *string  `json:"assigneeId"` // uuid, or "" to unassign
-	StartAt     *string  `json:"startAt"`    // datetime, or "" to clear
-	EndAt       *string  `json:"endAt"`
+	Title          *string   `json:"title"`
+	Description    *string   `json:"description"`
+	Priority       *string   `json:"priority"`
+	StoryPoints    *float64  `json:"storyPoints"`
+	StartDate      *string   `json:"startDate"` // "YYYY-MM-DD" or "" to clear
+	DueDate        *string   `json:"dueDate"`
+	AssigneeID     *string   `json:"assigneeId"` // uuid, or "" to unassign
+	ReporterID     *string   `json:"reporterId"` // uuid, or "" to unassign
+	ParticipantIDs *[]string `json:"participantIds"`
+	StartAt        *string   `json:"startAt"`    // datetime, or "" to clear
+	EndAt          *string   `json:"endAt"`
 }
 
 // UpdateTask patches editable task fields.
@@ -234,6 +256,22 @@ func (h *Handlers) UpdateTask(w http.ResponseWriter, r *http.Request) {
 		if *req.AssigneeID != "" {
 			if aid, err := uuid.Parse(*req.AssigneeID); err == nil {
 				f.AssigneeID = &aid
+			}
+		}
+	}
+	if req.ReporterID != nil {
+		f.SetReporter = true
+		if *req.ReporterID != "" {
+			if rid, err := uuid.Parse(*req.ReporterID); err == nil {
+				f.ReporterID = &rid
+			}
+		}
+	}
+	if req.ParticipantIDs != nil {
+		f.SetParticipants = true
+		for _, pidStr := range *req.ParticipantIDs {
+			if uid, err := uuid.Parse(pidStr); err == nil {
+				f.ParticipantIDs = append(f.ParticipantIDs, uid)
 			}
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/flowie/backend/internal/auth"
@@ -80,7 +81,15 @@ func (h *Handlers) AzureCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.Store.Users.UpsertFromAzure(r.Context(), claims.ResolvedOID(), email, claims.Name)
+	isAdmin := false
+	for _, e := range h.Cfg.SystemAdminEmails {
+		if strings.EqualFold(e, email) {
+			isAdmin = true
+			break
+		}
+	}
+
+	user, err := h.Store.Users.UpsertFromAzure(r.Context(), claims.ResolvedOID(), email, claims.Name, claims.Picture, isAdmin)
 	if err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "provision_failed", err.Error())
 		return
@@ -116,7 +125,16 @@ func (h *Handlers) DevLogin(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = "Dev User"
 	}
-	user, err := h.Store.Users.UpsertFromAzure(r.Context(), "dev|"+email, email, name)
+
+	isAdmin := false
+	for _, e := range h.Cfg.SystemAdminEmails {
+		if strings.EqualFold(e, email) {
+			isAdmin = true
+			break
+		}
+	}
+
+	user, err := h.Store.Users.UpsertFromAzure(r.Context(), "dev|"+email, email, name, "", isAdmin)
 	if err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "provision_failed", err.Error())
 		return
@@ -139,6 +157,21 @@ func (h *Handlers) DevLogin(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) Logout(w http.ResponseWriter, r *http.Request) {
 	h.Sessions.ClearCookie(w)
 	httpx.JSON(w, http.StatusOK, map[string]string{"status": "logged_out"})
+}
+
+// DevMakeAdmin (DEV ONLY) makes the caller a system admin instantly.
+func (h *Handlers) DevMakeAdmin(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.UserID(r.Context())
+	if !ok {
+		httpx.Error(w, http.StatusUnauthorized, "unauthenticated", "")
+		return
+	}
+	err := h.Store.Users.SetSystemAdmin(r.Context(), userID, true)
+	if err != nil {
+		httpx.Error(w, http.StatusInternalServerError, "db_error", err.Error())
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]string{"message": "You are now an admin"})
 }
 
 // Me returns the currently authenticated user's profile.

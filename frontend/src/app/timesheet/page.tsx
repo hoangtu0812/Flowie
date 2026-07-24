@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, TimesheetEntry } from "@/lib/api";
+import { api, TimesheetEntry, Project } from "@/lib/api";
 import AppShell from "@/components/AppShell";
 import Icon from "@/components/Icon";
 
@@ -26,6 +26,8 @@ const DAYS = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 export default function TimesheetPage() {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
   const [entries, setEntries] = useState<TimesheetEntry[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProject, setSelectedProject] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const weekDays = useMemo(
@@ -35,18 +37,36 @@ export default function TimesheetPage() {
   const from = fmt(weekStart);
   const to = fmt(addDays(weekStart, 6));
 
+  useEffect(() => {
+    api.listWorkspaces().then(wss => {
+      if (wss.length > 0) {
+        api.listProjects(wss[0].id).then(ps => setProjects(ps.filter(p => p.role === "owner")));
+      }
+    }).catch(() => {});
+  }, []);
+
   const load = useCallback(() => {
-    api.myTimesheet(from, to).then((r) => setEntries(r.entries)).catch(() => setEntries([]));
-  }, [from, to]);
+    if (!selectedProject) {
+      api.myTimesheet(from, to).then((r) => setEntries(r.entries)).catch(() => setEntries([]));
+    } else {
+      api.projectTimesheet(selectedProject, from, to).then((r) => setEntries(r.entries)).catch(() => setEntries([]));
+    }
+  }, [from, to, selectedProject]);
 
   useEffect(() => { load(); }, [load]);
 
-  // Gộp theo task, mỗi task 7 ô ngày (giờ).
+  // Gộp theo task (và user nếu xem team)
   const rows = useMemo(() => {
-    const map = new Map<string, { title: string; projectKey: string; days: number[]; total: number }>();
+    const map = new Map<string, { title: string; projectKey: string; user: string; days: number[]; total: number }>();
     for (const e of entries) {
-      const key = e.taskId;
-      if (!map.has(key)) map.set(key, { title: e.taskTitle, projectKey: e.projectKey, days: [0, 0, 0, 0, 0, 0, 0], total: 0 });
+      const key = selectedProject ? e.userId + "|" + e.taskId : e.taskId;
+      if (!map.has(key)) map.set(key, { 
+        title: e.taskTitle, 
+        projectKey: e.projectKey, 
+        user: e.userDisplayName || e.userEmail || "Unknown",
+        days: [0, 0, 0, 0, 0, 0, 0], 
+        total: 0 
+      });
       const row = map.get(key)!;
       const di = (new Date(e.loggedOn).getDay() + 6) % 7;
       const h = e.minutes / 60;
@@ -71,10 +91,64 @@ export default function TimesheetPage() {
     setSubmitting(false);
   }
 
+  function exportWeek() {
+    const lines = [];
+    if (selectedProject) lines.push("Thành viên,Dự án,Công việc,T2,T3,T4,T5,T6,T7,CN,Tổng (giờ)");
+    else lines.push("Dự án,Công việc,T2,T3,T4,T5,T6,T7,CN,Tổng (giờ)");
+    rows.forEach(r => {
+      const d = r.days.map(x => (x > 0 ? x.toFixed(2) : "")).join(",");
+      if (selectedProject) lines.push(`"${r.user}","${r.projectKey}","${r.title}",${d},${r.total.toFixed(2)}`);
+      else lines.push(`"${r.projectKey}","${r.title}",${d},${r.total.toFixed(2)}`);
+    });
+    downloadCSV(lines, `timesheet_${from}_${to}.csv`);
+  }
+
+  async function exportMonth() {
+    const mStart = new Date(weekStart.getFullYear(), weekStart.getMonth(), 1);
+    const mEnd = new Date(weekStart.getFullYear(), weekStart.getMonth() + 1, 0);
+    const f = fmt(mStart);
+    const t = fmt(mEnd);
+    const r = selectedProject ? await api.projectTimesheet(selectedProject, f, t) : await api.myTimesheet(f, t);
+    
+    const map = new Map<string, any>();
+    for (const e of r.entries) {
+      const key = selectedProject ? e.userId + "|" + e.taskId : e.taskId;
+      if (!map.has(key)) map.set(key, { user: e.userDisplayName || e.userEmail || "Unknown", project: e.projectKey, task: e.taskTitle, total: 0 });
+      map.get(key).total += e.minutes / 60;
+    }
+    
+    const lines = [];
+    if (selectedProject) lines.push("Thành viên,Dự án,Công việc,Tổng (giờ)");
+    else lines.push("Dự án,Công việc,Tổng (giờ)");
+    for (const r of Array.from(map.values())) {
+      if (selectedProject) lines.push(`"${r.user}","${r.project}","${r.task}",${r.total.toFixed(2)}`);
+      else lines.push(`"${r.project}","${r.task}",${r.total.toFixed(2)}`);
+    }
+    downloadCSV(lines, `timesheet_thang_${f.slice(0, 7)}.csv`);
+  }
+
+  function downloadCSV(lines: string[], filename: string) {
+    const csv = "\uFEFF" + lines.join("\n");
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+    link.download = filename;
+    link.click();
+  }
+
   const actions = (
-    <button className="btn-primary" disabled={!anyDraft || submitting} onClick={submit}>
-      <Icon name="send" size={18} /> Trình duyệt
-    </button>
+    <div className="flex items-center gap-2">
+      <button className="btn-secondary" onClick={exportWeek}>
+        <Icon name="download" size={18} /> Xuất Tuần
+      </button>
+      <button className="btn-secondary" onClick={exportMonth}>
+        <Icon name="download" size={18} /> Xuất Tháng
+      </button>
+      {!selectedProject && (
+        <button className="btn-primary" disabled={!anyDraft || submitting} onClick={submit}>
+          <Icon name="send" size={18} /> Trình duyệt
+        </button>
+      )}
+    </div>
   );
 
   return (
@@ -83,6 +157,15 @@ export default function TimesheetPage() {
         <div className="flex items-center justify-between mb-lg">
           <h2 className="text-headline-md">Bảng chấm công</h2>
           <div className="flex items-center gap-sm">
+            <select
+              value={selectedProject}
+              onChange={(e) => setSelectedProject(e.target.value)}
+              className="text-body-sm border border-outline-variant rounded-md px-2 py-1 bg-white"
+            >
+              <option value="">Cá nhân (My Timesheet)</option>
+              {projects.map(p => <option key={p.id} value={p.id}>[Team] {p.name}</option>)}
+            </select>
+            <div className="w-px h-6 bg-outline-variant mx-2"></div>
             <button className="btn-ghost" onClick={() => setWeekStart((d) => addDays(d, -7))}>
               <Icon name="chevron_left" size={18} />
             </button>
@@ -100,6 +183,7 @@ export default function TimesheetPage() {
           <table className="w-full text-body-sm">
             <thead>
               <tr className="bg-surface-container-low text-on-surface-variant">
+                {selectedProject && <th className="text-left px-md py-2 font-medium">Thành viên</th>}
                 <th className="text-left px-md py-2 font-medium">Công việc</th>
                 {weekDays.map((d, i) => (
                   <th key={i} className="px-2 py-2 text-center font-medium w-16">
@@ -113,6 +197,9 @@ export default function TimesheetPage() {
             <tbody className="divide-y divide-outline-variant">
               {rows.map((r, ri) => (
                 <tr key={ri} className="hover:bg-surface-container-low">
+                  {selectedProject && (
+                    <td className="px-md py-2 font-medium">{r.user}</td>
+                  )}
                   <td className="px-md py-2">
                     <span className="chip bg-primary-container/10 text-primary mr-1">{r.projectKey}</span>
                     {r.title}
@@ -127,16 +214,16 @@ export default function TimesheetPage() {
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-md py-xl text-center text-on-surface-variant/60">
-                    Chưa có giờ nào trong tuần này. Mở một task và bấm “Log”.
+                  <td colSpan={selectedProject ? 10 : 9} className="px-md py-xl text-center text-on-surface-variant/60">
+                    Không có bản ghi worklog nào trong tuần này.
                   </td>
                 </tr>
               )}
             </tbody>
             {rows.length > 0 && (
-              <tfoot>
-                <tr className="bg-surface-container-low font-semibold">
-                  <td className="px-md py-2">Tổng ngày</td>
+              <tfoot className="bg-surface-container-low font-semibold">
+                <tr>
+                  <td colSpan={selectedProject ? 2 : 1} className="px-md py-2 text-right">Tổng ngày</td>
                   {dayTotals.map((h, i) => (
                     <td key={i} className={`px-2 py-2 text-center ${h > 8 ? "text-error" : "text-on-surface"}`}>
                       {h > 0 ? h.toFixed(1) : "·"}

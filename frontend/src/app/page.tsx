@@ -2,92 +2,73 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { api, DashboardStats, Workspace } from "@/lib/api";
 import AppShell from "@/components/AppShell";
 import Icon from "@/components/Icon";
 
-function StatCard({ icon, label, value, tint }: { icon: string; label: string; value: React.ReactNode; tint: string }) {
+function StatCard({ icon, label, value }: { icon: string; label: string; value: React.ReactNode }) {
   return (
-    <div className="card p-lg flex items-center gap-md">
-      <div className={`w-11 h-11 rounded-lg flex items-center justify-center ${tint}`}>
-        <Icon name={icon} size={22} />
+    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
+      <div className="w-12 h-12 rounded-xl bg-gray-100 text-gray-700 flex items-center justify-center shrink-0">
+        <Icon name={icon} size={24} />
       </div>
       <div>
-        <p className="text-headline-lg text-on-surface leading-tight">{value}</p>
-        <p className="text-body-sm text-on-surface-variant">{label}</p>
+        <p className="text-[24px] font-bold text-gray-900 leading-tight">{value}</p>
+        <p className="text-[14px] font-medium text-gray-500 mt-1">{label}</p>
       </div>
     </div>
   );
 }
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [newName, setNewName] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
-    api.dashboard().then(setStats).catch(() => {});
-    api.listWorkspaces().then(setWorkspaces).catch(() => {});
-  }, []);
-
-  async function createWorkspace(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    try {
-      const ws = await api.createWorkspace(newName.trim());
-      setWorkspaces((p) => [ws, ...p]);
-      setNewName("");
-      api.dashboard().then(setStats).catch(() => {});
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  }
+    api.listWorkspaces().then(res => {
+      const wss = res || [];
+      setWorkspaces(wss);
+      if (wss.length > 0) {
+        let activeId = localStorage.getItem('activeWorkspaceId');
+        if (!activeId || !wss.some(w => w.id === activeId)) {
+           activeId = wss[0].id;
+           localStorage.setItem('activeWorkspaceId', activeId);
+        }
+        router.replace(`/workspaces/${activeId}`);
+      }
+    }).catch(() => {});
+  }, [router]);
 
   return (
-    <AppShell title="Dashboard">
-      <div className="p-lg max-w-6xl">
-        <h2 className="text-headline-xl text-on-surface mb-lg">Chào mừng trở lại 👋</h2>
-
-        <div className="grid gap-md grid-cols-2 lg:grid-cols-4 mb-xl">
-          <StatCard icon="assignment" label="Việc đang mở" value={stats?.openTasks ?? "–"} tint="bg-primary-container/10 text-primary" />
-          <StatCard icon="event_upcoming" label="Sắp đến hạn (7 ngày)" value={stats?.dueSoon ?? "–"} tint="bg-tertiary-fixed text-tertiary" />
-          <StatCard icon="folder_open" label="Dự án" value={stats?.projectCount ?? "–"} tint="bg-success-container text-success" />
-          <StatCard icon="schedule" label="Giờ tuần này" value={stats ? `${stats.hoursThisWeek.toFixed(1)}h` : "–"} tint="bg-surface-container-high text-on-surface-variant" />
+    <AppShell title={null}>
+      <div className="p-8 max-w-[1400px] mx-auto mt-8">
+        <div className="text-center mb-12">
+          <h2 className="text-[32px] font-bold text-gray-900 mb-2">Chào mừng trở lại 👋</h2>
+          <p className="text-gray-500 text-[16px]">Vui lòng chọn một Không gian làm việc bên dưới để bắt đầu.</p>
         </div>
 
-        <div className="flex items-center justify-between mb-md">
-          <h3 className="text-headline-md">Không gian làm việc</h3>
-        </div>
-
-        <form onSubmit={createWorkspace} className="flex gap-sm mb-lg max-w-lg">
-          <input className="field" placeholder="Tên workspace mới…" value={newName} onChange={(e) => setNewName(e.target.value)} />
-          <button className="btn-primary whitespace-nowrap" disabled={!newName.trim()}>
-            <Icon name="add" size={20} /> Tạo
-          </button>
-        </form>
-        {error && <p className="text-error text-body-sm mb-md">{error}</p>}
-
-        <div className="grid gap-md grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 max-w-5xl mx-auto">
           {workspaces.map((ws) => (
             <Link key={ws.id} href={`/workspaces/${ws.id}`}>
-              <div className="card p-lg hover:border-primary/40 hover:shadow-popover transition-all">
-                <div className="flex items-center gap-md">
-                  <div className="w-10 h-10 rounded-lg bg-primary-container/10 text-primary flex items-center justify-center">
-                    <Icon name="workspaces" size={22} />
+              <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-gray-300 transition-all cursor-pointer group">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-gray-50 text-gray-600 group-hover:bg-gray-900 group-hover:text-white flex items-center justify-center shrink-0 transition-colors">
+                    <Icon name="workspaces" size={24} />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-headline-md text-on-surface truncate">{ws.name}</p>
-                    <p className="text-body-sm text-on-surface-variant">/{ws.slug}</p>
+                    <p className="text-[16px] font-bold text-gray-900 truncate">{ws.name}</p>
+                    <p className="text-[13px] font-medium text-gray-400 mt-1">/{ws.slug}</p>
                   </div>
                 </div>
               </div>
             </Link>
           ))}
           {workspaces.length === 0 && (
-            <div className="card p-xl text-center text-on-surface-variant col-span-full">
-              <Icon name="workspaces" size={40} className="text-outline mb-sm" />
-              <p>Chưa có workspace nào. Tạo cái đầu tiên ở trên.</p>
+            <div className="bg-gray-50 border border-dashed border-gray-200 rounded-2xl p-10 text-center text-gray-500 col-span-full">
+              <Icon name="workspaces" size={40} className="text-gray-300 mb-3 mx-auto" />
+              <p className="text-[15px] font-medium">Bạn chưa được phân quyền vào Không gian làm việc nào.</p>
+              <p className="text-[14px] mt-2">Vui lòng liên hệ Admin hệ thống để được cấp quyền.</p>
             </div>
           )}
         </div>

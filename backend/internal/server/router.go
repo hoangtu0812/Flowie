@@ -58,6 +58,16 @@ func NewRouter(cfg *config.Config, h *handlers.Handlers, sm *auth.SessionManager
 			r.Patch("/notifications/{notifID}/read", h.MarkNotificationRead)
 			r.Post("/me/timesheet/submit", h.SubmitTimesheet)
 			r.Patch("/worklogs/{worklogID}", h.SetWorklogState)
+			r.Post("/dev-make-admin", h.DevMakeAdmin)
+
+			r.Route("/admin", func(r chi.Router) {
+				r.Get("/users", h.AdminListUsers)
+				r.Post("/users/sync-azure", h.AdminSyncAzureUsers)
+				r.Put("/users/{userID}", h.AdminToggleUser)
+				r.Get("/workspaces", h.AdminListWorkspaces)
+				r.Post("/workspaces", h.AdminCreateWorkspace)
+				r.Delete("/workspaces/{workspaceID}", h.AdminDeleteWorkspace)
+			})
 
 			r.Route("/workspaces", func(r chi.Router) {
 				r.Get("/", h.ListWorkspaces)
@@ -78,6 +88,7 @@ func NewRouter(cfg *config.Config, h *handlers.Handlers, sm *auth.SessionManager
 				r.Get("/", h.GetProject)
 				r.Get("/tasks", h.ListTasks)
 				r.Post("/tasks", h.CreateTask)
+				r.Get("/timesheet", h.ProjectTimesheet)
 				r.Get("/labels", h.ListLabels)
 				r.Post("/labels", h.CreateLabel)
 				r.Get("/sprints", h.ListSprints)
@@ -95,6 +106,7 @@ func NewRouter(cfg *config.Config, h *handlers.Handlers, sm *auth.SessionManager
 			r.Route("/tasks/{taskID}", func(r chi.Router) {
 				r.Get("/", h.GetTask)
 				r.Patch("/", h.UpdateTask)
+				r.Delete("/", h.DeleteTask)
 				r.Patch("/status", h.UpdateTaskStatus)
 				r.Patch("/sprint", h.SetTaskSprint)
 				r.Post("/comments", h.AddComment)

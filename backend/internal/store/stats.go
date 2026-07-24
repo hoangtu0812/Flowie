@@ -95,3 +95,22 @@ func (s *TaskStore) DashboardStats(ctx context.Context, userID uuid.UUID) (*doma
 	}
 	return d, nil
 }
+
+// WorkspaceDashboardStats aggregates a user's metrics for a specific workspace.
+func (s *TaskStore) WorkspaceDashboardStats(ctx context.Context, userID, workspaceID uuid.UUID) (*domain.DashboardStats, error) {
+	d := &domain.DashboardStats{}
+	err := s.pool.QueryRow(ctx, `
+		SELECT
+		  1,
+		  (SELECT count(*) FROM projects p JOIN workspace_members m ON m.workspace_id=p.workspace_id WHERE m.user_id=$1 AND p.workspace_id=$2),
+		  (SELECT count(*) FROM tasks t JOIN projects p ON p.id=t.project_id JOIN workspace_members m ON m.workspace_id=p.workspace_id
+		     WHERE m.user_id=$1 AND p.workspace_id=$2 AND t.status <> 'done'),
+		  (SELECT count(*) FROM tasks t JOIN projects p ON p.id=t.project_id JOIN workspace_members m ON m.workspace_id=p.workspace_id
+		     WHERE m.user_id=$1 AND p.workspace_id=$2 AND t.status <> 'done' AND t.due_date IS NOT NULL AND t.due_date <= CURRENT_DATE + 7),
+		  (SELECT COALESCE(SUM(w.minutes),0)/60.0 FROM worklogs w JOIN tasks t ON t.id=w.task_id JOIN projects p ON p.id=t.project_id WHERE w.user_id=$1 AND p.workspace_id=$2 AND w.logged_on >= date_trunc('week', CURRENT_DATE))
+	`, userID, workspaceID).Scan(&d.WorkspaceCount, &d.ProjectCount, &d.OpenTasks, &d.DueSoon, &d.HoursThisWeek)
+	if err != nil {
+		return nil, err
+	}
+	return d, nil
+}

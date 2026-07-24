@@ -45,6 +45,7 @@ export default function TaskDrawer({
   const [worklogs, setWorklogs] = useState<Worklog[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [hoursDraft, setHoursDraft] = useState("");
+  const [showPartMenu, setShowPartMenu] = useState(false);
   const [workNote, setWorkNote] = useState("");
   const [commentDraft, setCommentDraft] = useState("");
   const [checkDraft, setCheckDraft] = useState("");
@@ -93,6 +94,16 @@ export default function TaskDrawer({
   async function setAssignee(assigneeId: string) {
     const u = await api.updateTask(task!.id, { assigneeId });
     setTask({ ...task!, assigneeId: u.assigneeId });
+    onChanged();
+  }
+  async function setReporter(reporterId: string) {
+    const u = await api.updateTask(task!.id, { reporterId });
+    setTask({ ...task!, reporterId: u.reporterId });
+    onChanged();
+  }
+  async function setParticipants(pids: string[]) {
+    const u = await api.updateTask(task!.id, { participantIds: pids });
+    setTask({ ...task!, participantIds: u.participantIds });
     onChanged();
   }
   async function setDates(patch: { startDate?: string; dueDate?: string }) {
@@ -152,6 +163,17 @@ export default function TaskDrawer({
     load();
   }
 
+  async function handleDelete() {
+    if (!window.confirm("Bạn có chắc chắn muốn xóa công việc này? Hành động này không thể hoàn tác.")) return;
+    try {
+      await api.deleteTask(task!.id);
+      onChanged();
+      onClose();
+    } catch (err: any) {
+      alert(`Lỗi khi xóa: ${err.message}`);
+    }
+  }
+
   return (
     <Overlay onClose={onClose}>
       <div className="flex items-center justify-between px-lg h-14 border-b border-outline-variant">
@@ -166,93 +188,165 @@ export default function TaskDrawer({
             ))}
           </select>
         </div>
-        <button onClick={onClose} className="p-2 rounded-full hover:bg-surface-container">
-          <Icon name="close" size={20} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={handleDelete} className="p-2 rounded-full hover:bg-red-50 text-red-500 transition-colors" title="Xóa công việc">
+            <Icon name="delete" size={20} />
+          </button>
+          <button onClick={onClose} className="p-2 rounded-full hover:bg-surface-container transition-colors">
+            <Icon name="close" size={20} />
+          </button>
+        </div>
       </div>
 
       <div className="overflow-y-auto p-lg flex flex-col gap-lg" style={{ height: "calc(100vh - 3.5rem)" }}>
         <h2 className="text-headline-lg text-on-surface">{task.title}</h2>
 
         {/* Meta row */}
-        <div className="flex flex-wrap gap-lg">
-          <div>
-            <p className="text-label-sm uppercase text-on-surface-variant mb-1">Priority</p>
-            <select
-              value={task.priority}
-              onChange={(e) => setPriority(e.target.value)}
-              className="text-body-sm border border-outline-variant rounded-md px-2 py-1"
-            >
-              {Object.entries(PRIORITIES).map(([k, v]) => (
-                <option key={k} value={k}>{v.label}</option>
-              ))}
-            </select>
+        <div className="flex flex-col gap-6">
+          {/* Row 1: Priority, Assignee, Reporter */}
+          <div className="flex flex-wrap gap-lg">
+            <div className="w-1/4 min-w-[120px]">
+              <p className="text-label-sm uppercase text-on-surface-variant mb-1">Priority</p>
+              <select
+                value={task.priority}
+                onChange={(e) => setPriority(e.target.value)}
+                className="text-body-sm border border-outline-variant rounded-md px-2 py-1 w-full"
+              >
+                {Object.entries(PRIORITIES).map(([k, v]) => (
+                  <option key={k} value={k}>{v.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="w-1/4 min-w-[160px]">
+              <p className="text-label-sm uppercase text-on-surface-variant mb-1">Người phụ trách</p>
+              <select
+                value={task.assigneeId ?? ""}
+                onChange={(e) => setAssignee(e.target.value)}
+                className="text-body-sm border border-outline-variant rounded-md px-2 py-1 w-full max-w-[200px]"
+              >
+                <option value="">Chưa gán</option>
+                {members.map((m) => (
+                  <option key={m.userId} value={m.userId}>{m.displayName || m.email}</option>
+                ))}
+              </select>
+            </div>
+            <div className="w-1/4 min-w-[160px]">
+              <p className="text-label-sm uppercase text-on-surface-variant mb-1">Người nhận thông tin</p>
+              <select
+                value={task.reporterId ?? ""}
+                onChange={(e) => setReporter(e.target.value)}
+                className="text-body-sm border border-outline-variant rounded-md px-2 py-1 w-full max-w-[200px]"
+              >
+                <option value="">Chưa gán</option>
+                {members.map((m) => (
+                  <option key={m.userId} value={m.userId}>{m.displayName || m.email}</option>
+                ))}
+              </select>
+            </div>
           </div>
-          <div>
-            <p className="text-label-sm uppercase text-on-surface-variant mb-1">Người phụ trách</p>
-            <select
-              value={task.assigneeId ?? ""}
-              onChange={(e) => setAssignee(e.target.value)}
-              className="text-body-sm border border-outline-variant rounded-md px-2 py-1 max-w-44"
-            >
-              <option value="">Chưa gán</option>
-              {members.map((m) => (
-                <option key={m.userId} value={m.userId}>{m.displayName || m.email}</option>
-              ))}
-            </select>
+          
+          <div className="flex flex-wrap gap-lg">
+            <div className="w-full min-w-[160px] relative">
+              <p className="text-label-sm uppercase text-on-surface-variant mb-1">Người cùng tham gia</p>
+              <div 
+                className="text-body-sm border border-outline-variant rounded-md px-2 py-1 w-full max-w-md cursor-pointer truncate bg-white flex flex-wrap gap-1"
+                onClick={() => setShowPartMenu(!showPartMenu)}
+              >
+                {task.participantIds && task.participantIds.length > 0 
+                  ? members.filter(m => task.participantIds?.includes(m.userId)).map(m => (
+                      <span key={m.userId} className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-sm text-xs font-medium border border-blue-100">
+                        {m.displayName || m.email}
+                      </span>
+                    ))
+                  : "Chưa gán"}
+              </div>
+              
+              {showPartMenu && (
+                <div className="absolute left-0 top-[100%] mt-1 bg-white border border-outline-variant rounded-md shadow-lg z-50 max-h-48 overflow-y-auto min-w-[200px]">
+                  {members.map(m => (
+                    <label key={m.userId} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="rounded"
+                        checked={task.participantIds?.includes(m.userId) || false}
+                        onChange={(e) => {
+                          const current = task.participantIds || [];
+                          if (e.target.checked) setParticipants([...current, m.userId]);
+                          else setParticipants(current.filter(id => id !== m.userId));
+                        }}
+                      />
+                      <span className="text-body-sm truncate">{m.displayName || m.email}</span>
+                    </label>
+                  ))}
+                  {members.length === 0 && <div className="px-3 py-1.5 text-body-sm text-gray-500">Không có thành viên</div>}
+                </div>
+              )}
+            </div>
           </div>
-          <div>
-            <p className="text-label-sm uppercase text-on-surface-variant mb-1">Bắt đầu</p>
-            <input
-              type="date"
-              value={task.startDate ? task.startDate.slice(0, 10) : ""}
-              onChange={(e) => setDates({ startDate: e.target.value })}
-              className="text-body-sm border border-outline-variant rounded-md px-2 py-1"
-            />
+
+          {/* Row 2: Expected Dates & Labels */}
+          <div className="flex flex-wrap gap-lg items-end">
+            <div className="flex gap-4">
+              <div>
+                <p className="text-label-sm uppercase text-on-surface-variant mb-1">Ngày bắt đầu dự kiến</p>
+                <input
+                  type="date"
+                  value={task.startDate ? task.startDate.slice(0, 10) : ""}
+                  onChange={(e) => setDates({ startDate: e.target.value })}
+                  className="text-body-sm border border-outline-variant rounded-md px-2 py-1 w-full"
+                />
+              </div>
+              <div>
+                <p className="text-label-sm uppercase text-on-surface-variant mb-1">Ngày kết thúc dự kiến</p>
+                <input
+                  type="date"
+                  value={task.dueDate ? task.dueDate.slice(0, 10) : ""}
+                  onChange={(e) => setDates({ dueDate: e.target.value })}
+                  className="text-body-sm border border-outline-variant rounded-md px-2 py-1 w-full"
+                />
+              </div>
+            </div>
+            
+            <div className="min-w-40 flex-1">
+              <p className="text-label-sm uppercase text-on-surface-variant mb-1">Labels</p>
+              <div className="flex flex-wrap gap-1">
+                {labels.length === 0 && <span className="text-body-sm text-on-surface-variant/60">Chưa có label</span>}
+                {labels.map((l) => {
+                  const on = activeLabelIds.has(l.id);
+                  return (
+                    <button
+                      key={l.id}
+                      onClick={() => toggleLabel(l)}
+                      className={`chip ${on ? labelColor(l.color) : "bg-surface-container-high text-on-surface-variant/60"} ${on ? "" : "opacity-60"}`}
+                    >
+                      {l.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
-          <div>
-            <p className="text-label-sm uppercase text-on-surface-variant mb-1">Hạn</p>
-            <input
-              type="date"
-              value={task.dueDate ? task.dueDate.slice(0, 10) : ""}
-              onChange={(e) => setDates({ dueDate: e.target.value })}
-              className="text-body-sm border border-outline-variant rounded-md px-2 py-1"
-            />
-          </div>
-          <div>
-            <p className="text-label-sm uppercase text-on-surface-variant mb-1">Lịch từ</p>
-            <input
-              type="datetime-local"
-              value={toLocalInput(task.startAt)}
-              onChange={(e) => setSchedule({ startAt: localToISO(e.target.value) })}
-              className="text-body-sm border border-outline-variant rounded-md px-2 py-1"
-            />
-          </div>
-          <div>
-            <p className="text-label-sm uppercase text-on-surface-variant mb-1">đến</p>
-            <input
-              type="datetime-local"
-              value={toLocalInput(task.endAt)}
-              onChange={(e) => setSchedule({ endAt: localToISO(e.target.value) })}
-              className="text-body-sm border border-outline-variant rounded-md px-2 py-1"
-            />
-          </div>
-          <div className="min-w-40">
-            <p className="text-label-sm uppercase text-on-surface-variant mb-1">Labels</p>
-            <div className="flex flex-wrap gap-1">
-              {labels.length === 0 && <span className="text-body-sm text-on-surface-variant/60">Chưa có label</span>}
-              {labels.map((l) => {
-                const on = activeLabelIds.has(l.id);
-                return (
-                  <button
-                    key={l.id}
-                    onClick={() => toggleLabel(l)}
-                    className={`chip ${on ? labelColor(l.color) : "bg-surface-container-high text-on-surface-variant/60"} ${on ? "" : "opacity-60"}`}
-                  >
-                    {l.name}
-                  </button>
-                );
-              })}
+
+          {/* Row 3: Calendar / Actual Schedule */}
+          <div className="flex gap-4 items-center">
+            <div>
+              <p className="text-label-sm uppercase text-on-surface-variant mb-1">Lịch từ</p>
+              <input
+                type="datetime-local"
+                value={toLocalInput(task.startAt)}
+                onChange={(e) => setSchedule({ startAt: localToISO(e.target.value) })}
+                className="text-body-sm border border-outline-variant rounded-md px-2 py-1 w-full"
+              />
+            </div>
+            <div className="mt-6 text-on-surface-variant px-2">đến</div>
+            <div>
+              <p className="text-label-sm uppercase text-on-surface-variant mb-1">&nbsp;</p>
+              <input
+                type="datetime-local"
+                value={toLocalInput(task.endAt)}
+                onChange={(e) => setSchedule({ endAt: localToISO(e.target.value) })}
+                className="text-body-sm border border-outline-variant rounded-md px-2 py-1 w-full"
+              />
             </div>
           </div>
         </div>

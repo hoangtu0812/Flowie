@@ -9,6 +9,7 @@ export interface User {
   email: string;
   displayName: string;
   avatarUrl: string;
+  isSystemAdmin: boolean;
 }
 
 export interface Workspace {
@@ -44,6 +45,8 @@ export interface Task {
   status: string;
   priority: string;
   assigneeId?: string;
+  reporterId?: string;
+  participantIds?: string[];
   storyPoints?: number;
   startDate?: string;
   dueDate?: string;
@@ -82,6 +85,7 @@ export interface Member {
   userId: string;
   displayName: string;
   email: string;
+  avatarUrl?: string;
   role: string;
   hourlyRate: number;
   currency: string;
@@ -116,6 +120,9 @@ export interface CalendarItem {
   startAt?: string;
   endAt?: string;
   assigneeId?: string;
+  assigneeName?: string;
+  assigneeAvatar?: string;
+  participantIds?: string[];
   projectId: string;
   projectKey: string;
   projectName: string;
@@ -174,6 +181,8 @@ export interface TimesheetEntry extends Worklog {
   projectId: string;
   projectName: string;
   projectKey: string;
+  userDisplayName?: string;
+  userEmail?: string;
 }
 
 export interface TaskDetail {
@@ -223,6 +232,19 @@ export const api = {
 
   listWorkspaces: () =>
     request<{ workspaces: Workspace[] }>("/workspaces").then((r) => r.workspaces),
+  devMakeAdmin: () => request<void>("/dev-make-admin", { method: "POST" }),
+  
+  // Admin
+  adminListUsers: () => request<User[]>("/admin/users"),
+  adminSyncAzureUsers: () => request<{ synced: number }>("/admin/users/sync-azure", { method: "POST" }),
+  adminToggleUser: (userId: string, isSystemAdmin: boolean) =>
+    request<void>(`/admin/users/${userId}`, { method: "PUT", body: JSON.stringify({ isSystemAdmin }) }),
+  adminListWorkspaces: () => request<Workspace[]>("/admin/workspaces"),
+  adminCreateWorkspace: (name: string, owner_id: string) => 
+    request<Workspace>("/admin/workspaces", { method: "POST", body: JSON.stringify({ name, owner_id }) }),
+  adminDeleteWorkspace: (id: string) => 
+    request<{status: string}>(`/admin/workspaces/${id}`, { method: "DELETE" }),
+
   createWorkspace: (name: string) =>
     request<Workspace>("/workspaces", {
       method: "POST",
@@ -247,7 +269,7 @@ export const api = {
     ),
   createTask: (
     projectId: string,
-    data: { title: string; priority?: string; status?: string },
+    data: { title: string; priority?: string; status?: string; assigneeId?: string; participantIds?: string[] },
   ) =>
     request<Task>(`/projects/${projectId}/tasks`, {
       method: "POST",
@@ -258,6 +280,8 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ status }),
     }),
+
+  deleteTask: (taskId: string) => request<void>(`/tasks/${taskId}`, { method: "DELETE" }),
 
   getTask: (taskId: string) => request<TaskDetail>(`/tasks/${taskId}`),
   updateTask: (
@@ -270,6 +294,8 @@ export const api = {
       startDate: string;
       dueDate: string;
       assigneeId: string;
+      reporterId: string;
+      participantIds: string[];
       startAt: string;
       endAt: string;
     }>,
@@ -378,7 +404,7 @@ export const api = {
   deleteAutomation: (ruleId: string) =>
     request<{ ok: boolean }>(`/automations/${ruleId}`, { method: "DELETE" }),
 
-  dashboard: () => request<DashboardStats>(`/me/dashboard`),
+  dashboard: (workspaceId?: string) => request<DashboardStats>(workspaceId ? `/me/dashboard?workspace_id=${workspaceId}` : `/me/dashboard`),
   projectStats: (projectId: string) => request<ProjectStats>(`/projects/${projectId}/stats`),
 
   myCalendar: (from: string, to: string) =>
@@ -387,6 +413,10 @@ export const api = {
   myTimesheet: (from: string, to: string) =>
     request<{ from: string; to: string; entries: TimesheetEntry[] }>(
       `/me/timesheet?from=${from}&to=${to}`,
+    ),
+  projectTimesheet: (projectId: string, from: string, to: string) =>
+    request<{ from: string; to: string; entries: TimesheetEntry[] }>(
+      `/projects/${projectId}/timesheet?from=${from}&to=${to}`,
     ),
   submitTimesheet: (from: string, to: string) =>
     request<{ submitted: number }>(`/me/timesheet/submit`, {

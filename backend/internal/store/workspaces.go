@@ -100,7 +100,7 @@ func (s *WorkspaceStore) ListForUser(ctx context.Context, userID uuid.UUID) ([]d
 // ListMembers returns a workspace's members with profile + billing rate.
 func (s *WorkspaceStore) ListMembers(ctx context.Context, workspaceID uuid.UUID) ([]domain.MemberInfo, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT u.id, u.display_name, u.email::text, m.role,
+		SELECT u.id, u.display_name, u.email::text, u.avatar_url, m.role,
 		       COALESCE(r.hourly_rate, 0), COALESCE(r.currency, 'USD')
 		FROM workspace_members m
 		JOIN users u ON u.id = m.user_id
@@ -114,7 +114,7 @@ func (s *WorkspaceStore) ListMembers(ctx context.Context, workspaceID uuid.UUID)
 	out := []domain.MemberInfo{}
 	for rows.Next() {
 		var m domain.MemberInfo
-		if err := rows.Scan(&m.UserID, &m.DisplayName, &m.Email, &m.Role, &m.HourlyRate, &m.Currency); err != nil {
+		if err := rows.Scan(&m.UserID, &m.DisplayName, &m.Email, &m.AvatarURL, &m.Role, &m.HourlyRate, &m.Currency); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
@@ -177,4 +177,28 @@ func (s *WorkspaceStore) RoleForUser(ctx context.Context, workspaceID, userID uu
 		return "", err
 	}
 	return role, nil
+}
+
+// ListAll returns all workspaces in the system.
+func (s *WorkspaceStore) ListAll(ctx context.Context) ([]domain.Workspace, error) {
+	rows, err := s.pool.Query(ctx, `SELECT `+workspaceColumns+` FROM workspaces ORDER BY created_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.Workspace
+	for rows.Next() {
+		w, err := scanWorkspace(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *w)
+	}
+	return out, rows.Err()
+}
+
+// Delete permanently removes a workspace and all its cascade dependencies.
+func (s *WorkspaceStore) Delete(ctx context.Context, id uuid.UUID) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM workspaces WHERE id = $1`, id)
+	return err
 }

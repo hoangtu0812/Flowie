@@ -22,6 +22,12 @@ type createWorkspaceRequest struct {
 func (h *Handlers) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
 	userID, _ := auth.UserID(r.Context())
 
+	user, err := h.Store.Users.GetByID(r.Context(), userID)
+	if err != nil || !user.IsSystemAdmin {
+		httpx.Error(w, http.StatusForbidden, "forbidden", "only admins can create workspaces")
+		return
+	}
+
 	var req createWorkspaceRequest
 	if err := httpx.Decode(r, &req); err != nil {
 		httpx.Error(w, http.StatusBadRequest, "invalid_body", err.Error())

@@ -10,14 +10,12 @@ slice — mỗi phase chạy được end-to-end (API + UI).
 
 **Chú thích trạng thái:** ✅ xong · 🟡 một phần · ⬜ chưa làm.
 
-> **Cập nhật 2026-07-24:** Đã triển khai & verify E2E: Phase 0, **Phase 2A/2B/2C**
-> (task nâng cao, sprints, worklog/timesheet), **Phase 3** (Calendar + Gantt),
-> **Phase 5** (Dashboard + Analytics), **Phase 1** (Team/Members/roles/rates/
-> assignee/Workload), **notifications** in-app, **automation MVP**, **CI + security
-> headers + rate limit**. UI theo design system "Luminous Professional".
-> Còn follow-up: WebSocket realtime thật (đang poll), chat, @mention, custom
-> fields/dependencies, file SharePoint chunked, Electron, SOC2/GDPR đầy đủ,
-> tách Python analytics. Azure/SharePoint chưa test creds thật.
+> **Cập nhật 2026-07-24 (Update 2):** Đã điều chỉnh toàn bộ UI theo thiết kế mới (Sidebar, Topbar, Project List View, Calendar View).
+> Đã khởi tạo cấu trúc DB (Migrations) cho các tính năng còn thiếu trong Roadmap:
+> - **Phase 1**: Custom Roles, Teams, User Sessions, User Rates (`0010_iam_advanced.sql`)
+> - **Phase 2 & 3**: Custom Fields, Task Dependencies (`0008_custom_fields_deps.sql`)
+> - **Phase 6 & 7**: Chat Channels, Chat Messages, WebSockets chuẩn bị (`0009_chat.sql`)
+> Còn follow-up: Đấu nối API Go handlers cho các module vừa migrate và hoàn thiện Frontend binding. Azure/SharePoint chưa test creds thật.
 
 ---
 

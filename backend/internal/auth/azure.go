@@ -2,7 +2,10 @@ package auth
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"io"
+	"net/http"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/flowie/backend/internal/config"
@@ -22,6 +25,7 @@ type AzureClaims struct {
 	Email             string `json:"email"` // may be empty depending on tenant
 	PreferredUsername string `json:"preferred_username"`
 	Name              string `json:"name"`
+	Picture           string `json:"picture"`
 }
 
 // ResolvedEmail returns the best available email for the user.
@@ -57,7 +61,7 @@ func NewAzureProvider(ctx context.Context, cfg config.AzureConfig) (*AzureProvid
 			ClientSecret: cfg.ClientSecret,
 			RedirectURL:  cfg.RedirectURL,
 			Endpoint:     provider.Endpoint(),
-			Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
+			Scopes:       []string{oidc.ScopeOpenID, "profile", "email", "User.Read"},
 		},
 		verifier: provider.Verifier(&oidc.Config{ClientID: cfg.ClientID}),
 	}, nil
@@ -90,5 +94,38 @@ func (p *AzureProvider) Exchange(ctx context.Context, code, nonce string) (*Azur
 	if err := idToken.Claims(&claims); err != nil {
 		return nil, fmt.Errorf("parse claims: %w", err)
 	}
+
+	// Fallback: If picture is missing in claims, fetch directly from Graph API
+	if claims.Picture == "" {
+		claims.Picture = fetchAzurePhoto(ctx, token.AccessToken)
+	}
+
 	return &claims, nil
+}
+
+// fetchAzurePhoto calls the Microsoft Graph API to download the user's profile photo.
+func fetchAzurePhoto(ctx context.Context, accessToken string) string {
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://graph.microsoft.com/v1.0/me/photo/$value", nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		return ""
+	}
+	defer resp.Body.Close()
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return ""
+	}
+	mime := resp.Header.Get("Content-Type")
+	if mime == "" {
+		mime = "image/jpeg"
+	}
+	return "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(b)
 }

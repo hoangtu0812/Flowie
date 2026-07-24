@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -19,6 +20,8 @@ type Config struct {
 
 	SessionSecret string
 	SessionTTL    time.Duration
+
+	SystemAdminEmails []string
 
 	Azure      AzureConfig
 	SharePoint SharePointConfig
@@ -61,6 +64,18 @@ func (s SharePointConfig) Configured() bool {
 func Load() (*Config, error) {
 	ttlHours := getInt("SESSION_TTL_HOURS", 24)
 
+	adminEmailsStr := getEnv("SYSTEM_ADMIN_EMAILS", "")
+	var adminEmails []string
+	if adminEmailsStr != "" {
+		for _, e := range strings.Split(adminEmailsStr, ",") {
+			e = strings.TrimSpace(e)
+			e = strings.Trim(e, `"'`)
+			if e != "" {
+				adminEmails = append(adminEmails, e)
+			}
+		}
+	}
+
 	cfg := &Config{
 		Env:         getEnv("APP_ENV", "development"),
 		Port:        getEnv("APP_PORT", "8080"),
@@ -70,6 +85,7 @@ func Load() (*Config, error) {
 
 		SessionSecret: getEnv("SESSION_SECRET", ""),
 		SessionTTL:    time.Duration(ttlHours) * time.Hour,
+		SystemAdminEmails: adminEmails,
 
 		Azure: AzureConfig{
 			TenantID:     getEnv("AZURE_AD_TENANT_ID", ""),

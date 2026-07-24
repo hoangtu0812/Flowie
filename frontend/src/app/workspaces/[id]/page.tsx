@@ -3,13 +3,28 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { api, Project, Workspace } from "@/lib/api";
+import { api, Project, Workspace, DashboardStats } from "@/lib/api";
 import AppShell from "@/components/AppShell";
 import Icon from "@/components/Icon";
+
+function StatCard({ icon, label, value }: { icon: string; label: string; value: React.ReactNode }) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
+      <div className="w-12 h-12 rounded-xl bg-gray-100 text-gray-700 flex items-center justify-center shrink-0">
+        <Icon name={icon} size={24} />
+      </div>
+      <div>
+        <p className="text-[24px] font-bold text-gray-900 leading-tight">{value}</p>
+        <p className="text-[14px] font-medium text-gray-500 mt-1">{label}</p>
+      </div>
+    </div>
+  );
+}
 
 export default function WorkspacePage() {
   const { id } = useParams<{ id: string }>();
   const [ws, setWs] = useState<Workspace | null>(null);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [form, setForm] = useState({ name: "", key: "", description: "" });
   const [open, setOpen] = useState(false);
@@ -17,6 +32,7 @@ export default function WorkspacePage() {
 
   useEffect(() => {
     api.getWorkspace(id).then(setWs).catch(() => {});
+    api.dashboard(id).then(setStats).catch(() => {});
     api.listProjects(id).then(setProjects).catch((e) => setError(e.message));
   }, [id]);
 
@@ -54,6 +70,15 @@ export default function WorkspacePage() {
         </div>
 
         {error && <p className="text-error text-body-sm mb-md">{error}</p>}
+
+        <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mb-10">
+          <StatCard icon="assignment" label="Việc đang mở" value={stats?.openTasks ?? "–"} />
+          <StatCard icon="event_upcoming" label="Sắp đến hạn (7 ngày)" value={stats?.dueSoon ?? "–"} />
+          <StatCard icon="folder_open" label="Dự án" value={stats?.projectCount ?? "–"} />
+          <StatCard icon="schedule" label="Giờ tuần này" value={stats ? `${stats.hoursThisWeek.toFixed(1)}h` : "–"} />
+        </div>
+
+        <h3 className="text-[20px] font-bold text-gray-900 mb-6">Danh sách Dự án</h3>
 
         <div className="grid gap-md grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {projects.map((p) => (

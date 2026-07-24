@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flowie/backend/internal/auth"
+	"github.com/flowie/backend/internal/domain"
 	"github.com/flowie/backend/internal/httpx"
 )
 
@@ -121,6 +122,30 @@ func (h *Handlers) MyTimesheet(w http.ResponseWriter, r *http.Request) {
 	userID, _ := auth.UserID(r.Context())
 	from, to := parseRange(r)
 	entries, err := h.Store.Worklogs.TimesheetForUser(r.Context(), userID, from, to)
+	if err != nil {
+		httpx.Error(w, http.StatusInternalServerError, "list_failed", err.Error())
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"from":    from.Format(dateFmt),
+		"to":      to.Format(dateFmt),
+		"entries": entries,
+	})
+}
+
+// ProjectTimesheet returns all worklogs in a project in a date range for owners.
+func (h *Handlers) ProjectTimesheet(w http.ResponseWriter, r *http.Request) {
+	userID, _ := auth.UserID(r.Context())
+	proj, role, ok := h.requireProjectAccess(w, r, userID)
+	if !ok {
+		return
+	}
+	if role != domain.WorkspaceRoleOwner {
+		httpx.Error(w, http.StatusForbidden, "forbidden", "only owners can view team timesheet")
+		return
+	}
+	from, to := parseRange(r)
+	entries, err := h.Store.Worklogs.TimesheetForProject(r.Context(), proj.ID, from, to)
 	if err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "list_failed", err.Error())
 		return
