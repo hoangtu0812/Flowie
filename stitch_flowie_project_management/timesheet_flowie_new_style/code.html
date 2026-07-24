@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Flowie - Timesheet &amp; Worklog</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+                "tertiary-fixed-dim": "#ffb596",
+                "on-surface-variant": "#434655",
+                "secondary-fixed-dim": "#c4c7c9",
+                "on-tertiary-container": "#ffede6",
+                "primary-container": "#2563eb",
+                "background": "#f8f9ff",
+                "on-error": "#ffffff",
+                "surface-container-low": "#eff4ff",
+                "surface-bright": "#f8f9ff",
+                "surface-container": "#e5eeff",
+                "on-secondary-fixed-variant": "#444749",
+                "tertiary": "#943700",
+                "secondary-container": "#e0e3e5",
+                "on-primary-fixed-variant": "#003ea8",
+                "on-primary": "#ffffff",
+                "tertiary-fixed": "#ffdbcd",
+                "on-tertiary-fixed": "#360f00",
+                "on-primary-fixed": "#00174b",
+                "inverse-on-surface": "#eaf1ff",
+                "surface-dim": "#cbdbf5",
+                "tertiary-container": "#bc4800",
+                "secondary-fixed": "#e0e3e5",
+                "error-container": "#ffdad6",
+                "surface-container-highest": "#d3e4fe",
+                "on-surface": "#0b1c30",
+                "outline": "#737686",
+                "surface": "#f8f9ff",
+                "on-secondary-container": "#626567",
+                "on-secondary": "#ffffff",
+                "on-background": "#0b1c30",
+                "inverse-surface": "#213145",
+                "surface-container-high": "#dce9ff",
+                "outline-variant": "#c3c6d7",
+                "on-error-container": "#93000a",
+                "on-tertiary": "#ffffff",
+                "secondary": "#5c5f61",
+                "primary-fixed-dim": "#b4c5ff",
+                "primary": "#004ac6",
+                "surface-container-lowest": "#ffffff",
+                "primary-fixed": "#dbe1ff",
+                "error": "#ba1a1a",
+                "on-secondary-fixed": "#191c1e",
+                "surface-tint": "#0053db",
+                "on-tertiary-fixed-variant": "#7d2d00",
+                "on-primary-container": "#eeefff",
+                "surface-variant": "#d3e4fe",
+                "inverse-primary": "#b4c5ff"
+        },
+        "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "full": "9999px"
+        },
+        "spacing": {
+                "base": "4px",
+                "margin-mobile": "16px",
+                "sm": "8px",
+                "lg": "24px",
+                "xl": "32px",
+                "margin-desktop": "32px",
+                "xs": "4px",
+                "md": "16px",
+                "gutter": "16px"
+        },
+        "fontFamily": {
+                "label-md": [
+                        "Inter"
+                ],
+                "headline-lg": [
+                        "Inter"
+                ],
+                "headline-xl": [
+                        "Inter"
+                ],
+                "body-lg": [
+                        "Inter"
+                ],
+                "headline-md": [
+                        "Inter"
+                ],
+                "body-sm": [
+                        "Inter"
+                ],
+                "label-sm": [
+                        "Inter"
+                ],
+                "body-md": [
+                        "Inter"
+                ]
+        },
+        "fontSize": {
+                "label-md": [
+                        "12px",
+                        {
+                                "lineHeight": "16px",
+                                "letterSpacing": "0.01em",
+                                "fontWeight": "500"
+                        }
+                ],
+                "headline-lg": [
+                        "20px",
+                        {
+                                "lineHeight": "28px",
+                                "letterSpacing": "-0.01em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "headline-xl": [
+                        "24px",
+                        {
+                                "lineHeight": "32px",
+                                "letterSpacing": "-0.02em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "body-lg": [
+                        "16px",
+                        {
+                                "lineHeight": "24px",
+                                "fontWeight": "400"
+                        }
+                ],
+                "headline-md": [
+                        "16px",
+                        {
+                                "lineHeight": "24px",
+                                "fontWeight": "600"
+                        }
+                ],
+                "body-sm": [
+                        "13px",
+                        {
+                                "lineHeight": "18px",
+                                "fontWeight": "400"
+                        }
+                ],
+                "label-sm": [
+                        "11px",
+                        {
+                                "lineHeight": "14px",
+                                "fontWeight": "600"
+                        }
+                ],
+                "body-md": [
+                        "14px",
+                        {
+                                "lineHeight": "20px",
+                                "fontWeight": "400"
+                        }
+                ]
+        }
+},
+    },
+  }
+</script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-background text-on-surface min-h-screen flex flex-col md:flex-row font-body-md">
+<!-- SideNavBar -->
+<aside class="hidden md:flex flex-col bg-surface-container-low border-r border-outline-variant docked left-0 h-screen w-64 py-lg px-md shadow-sm z-30 shrink-0">
+<div class="flex items-center gap-sm mb-xl px-sm">
+<span class="material-symbols-outlined text-primary text-3xl">all_inclusive</span>
+<div>
+<h1 class="font-headline-sm text-headline-sm font-black text-primary">Flowie</h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Professional Team</p>
+</div>
+</div>
+<button class="flex items-center justify-center gap-sm bg-primary text-on-primary rounded-lg py-sm px-md mb-xl hover:bg-surface-tint transition-colors w-full font-label-md text-label-md">
+<span class="material-symbols-outlined text-xl">add</span> Create New
+        </button>
+<nav class="flex-1 space-y-sm">
+<a class="flex items-center gap-md text-on-surface-variant px-md py-sm hover:bg-secondary-container hover:text-on-secondary-container transition-all rounded-lg font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">dashboard</span> Dashboard
+            </a>
+<a class="flex items-center gap-md text-on-surface-variant px-md py-sm hover:bg-secondary-container hover:text-on-secondary-container transition-all rounded-lg font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">folder_open</span> Projects
+            </a>
+<a class="flex items-center gap-md bg-primary-container text-on-primary-container rounded-lg px-md py-sm scale-[0.98] transition-all font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">assignment</span> Tasks
+            </a>
+<a class="flex items-center gap-md text-on-surface-variant px-md py-sm hover:bg-secondary-container hover:text-on-secondary-container transition-all rounded-lg font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">group</span> Team
+            </a>
+<a class="flex items-center gap-md text-on-surface-variant px-md py-sm hover:bg-secondary-container hover:text-on-secondary-container transition-all rounded-lg font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">calendar_today</span> Calendar
+            </a>
+<a class="flex items-center gap-md text-on-surface-variant px-md py-sm hover:bg-secondary-container hover:text-on-secondary-container transition-all rounded-lg font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">settings</span> Settings
+            </a>
+</nav>
+<div class="mt-auto pt-lg border-t border-outline-variant flex items-center gap-md px-sm">
+<img class="w-8 h-8 rounded-full object-cover" data-alt="A small circular avatar of a professional smiling slightly, neutral background, bright soft lighting, modern corporate style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAibvu4FGSri4TY9-2mdHF_xNSuKanvBUmig785LQPhKBk6tv7KJf5QGTjSJ6O2DC72WMmoghC9DzpAHyQHUr2RF5MjZ8cjvopNAj2qN7DfqeMB_Rm3hl4eXrvivAZDWbtmhj00gtpN6yhv1ZNSNj2NHF4QSqy8p863rGDN3Ha7qjfzdHQ9c0h7ntG6DyBtRJ0b76ZKJ6IQt6UINqj0sBSdKdEWKTvprIloL3XSjWT3GqUBI-24CAh4i6H3J1CgoYG30VIHVm9ett8"/>
+<div>
+<p class="font-label-md text-label-md text-on-surface">John Smith</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant text-xs">Admin</p>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col min-h-screen overflow-hidden">
+<!-- TopNavBar -->
+<header class="flex justify-between items-center w-full px-lg h-16 sticky top-0 z-40 bg-surface border-b border-outline-variant shrink-0">
+<div class="flex items-center gap-md flex-1">
+<div class="relative w-64 md:w-96 hidden md:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-surface-container rounded-lg border-none focus:ring-2 focus:ring-primary focus:bg-surface text-body-sm transition-all outline-none" placeholder="Search..." type="text"/>
+</div>
+<div class="md:hidden">
+<h1 class="font-headline-md text-headline-md font-bold text-primary">Flowie</h1>
+</div>
+</div>
+<nav class="hidden md:flex items-center gap-lg">
+<a class="text-on-surface-variant hover:bg-surface-container transition-colors py-1 px-2 rounded font-label-md text-label-md" href="#">Dashboard</a>
+<a class="text-on-surface-variant hover:bg-surface-container transition-colors py-1 px-2 rounded font-label-md text-label-md" href="#">News</a>
+<a class="text-on-surface-variant hover:bg-surface-container transition-colors py-1 px-2 rounded font-label-md text-label-md" href="#">Support</a>
+</nav>
+<div class="flex items-center gap-sm md:gap-md flex-1 justify-end">
+<button class="p-2 text-on-surface-variant hover:bg-surface-container rounded-full transition-colors relative">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-1 right-1 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<img class="w-8 h-8 rounded-full object-cover md:hidden" data-alt="A small circular avatar of a professional smiling slightly, neutral background, bright soft lighting, modern corporate style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAgFmkkv-QEv30tnIrPJF5pWU8v25LIEhAjLvMSBwCgI43tjc3IkBGDKT75Q6zZ4CyqSwChdvzb__EuL5gbKosw-KH18jK0adHu1zdA_lD9_iqkOYRmpYMwylTqoS_f6zUlu3ad2Qw2mCok08MwYPqSunsPbwGZiWjqKgFssNiK_G-qKYIr10-Y1MGyKjubbE418W5Lds4HLCtssWFfpPgxwqn6HhK2Eu-Ycyrm68SHTC2z82WkuBsK58fqWUn2uIhh_tNN2Ks3T5c"/>
+</div>
+</header>
+<!-- Canvas -->
+<div class="flex-1 overflow-y-auto p-md md:p-lg bg-background">
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-xl gap-md">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Timesheet &amp; Worklog</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Track time, manage logs, and view team capacity for Oct 24 - 30.</p>
+</div>
+<div class="flex items-center gap-sm w-full md:w-auto">
+<button class="flex items-center gap-xs bg-surface border border-outline-variant text-on-surface px-md py-2 rounded-lg hover:bg-surface-container transition-colors font-label-md text-label-md flex-1 md:flex-none justify-center">
+<span class="material-symbols-outlined text-[18px]">history</span> Manual Log
+                    </button>
+<button class="flex items-center gap-xs bg-primary text-on-primary px-md py-2 rounded-lg hover:bg-surface-tint transition-colors font-label-md text-label-md flex-1 md:flex-none justify-center shadow-sm">
+<span class="material-symbols-outlined text-[18px]">play_arrow</span> Start Timer
+                    </button>
+</div>
+</div>
+<!-- Summary Cards -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-lg mb-xl">
+<div class="bg-surface border border-outline-variant rounded-xl p-md shadow-sm flex flex-col justify-between">
+<div class="flex justify-between items-start mb-md">
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Total Hours This Week</p>
+<span class="material-symbols-outlined text-primary bg-primary-container p-1 rounded-md">schedule</span>
+</div>
+<div>
+<h3 class="font-display-lg text-display-lg text-on-surface">342<span class="text-headline-md text-on-surface-variant ml-1">hrs</span></h3>
+<div class="flex items-center gap-xs mt-2 text-tertiary-container">
+<span class="material-symbols-outlined text-[16px]">trending_up</span>
+<span class="font-label-sm text-label-sm">+5% from last week</span>
+</div>
+</div>
+</div>
+<div class="bg-surface border border-outline-variant rounded-xl p-md shadow-sm flex flex-col justify-between">
+<div class="flex justify-between items-start mb-md">
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Billable vs Non-Billable</p>
+<span class="material-symbols-outlined text-tertiary bg-tertiary-fixed p-1 rounded-md">payments</span>
+</div>
+<div>
+<div class="flex items-end gap-sm mb-2">
+<h3 class="font-headline-lg text-headline-lg text-on-surface">280<span class="text-body-md text-on-surface-variant ml-1">hrs</span></h3>
+<span class="text-body-sm text-on-surface-variant mb-1">/ 62 hrs</span>
+</div>
+<div class="w-full bg-surface-container-highest rounded-full h-2 flex overflow-hidden">
+<div class="bg-primary h-2" style="width: 82%"></div>
+<div class="bg-outline-variant h-2" style="width: 18%"></div>
+</div>
+<div class="flex justify-between mt-2 font-label-sm text-label-sm text-on-surface-variant">
+<span>82% Billable</span>
+<span>18% Admin</span>
+</div>
+</div>
+</div>
+<div class="bg-surface border border-outline-variant rounded-xl p-md shadow-sm flex flex-col justify-between">
+<div class="flex justify-between items-start mb-md">
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Team Capacity</p>
+<span class="material-symbols-outlined text-secondary bg-secondary-container p-1 rounded-md">group</span>
+</div>
+<div>
+<h3 class="font-headline-lg text-headline-lg text-on-surface">85%<span class="text-body-md text-on-surface-variant ml-1">Utilized</span></h3>
+<div class="flex items-center gap-2 mt-4">
+<div class="flex -space-x-2">
+<img class="w-8 h-8 rounded-full border-2 border-surface object-cover" data-alt="Small avatar photo of a woman in a business suit against a plain grey background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDyf0TPX9x9uPZXnyB7Nl1Rg1c0tY6rXwmxi_qugOc-pS751rBBnMFIy098nsFq0ViENK5WpPTaN4-Avt13KZUfcvrh5aXNftV4HuBR9pKYLu1xkeC_rRA6VEkyR-AhfJUsxhwiT0cRKukW968BLjvqYh0jPXNUZwYnNYBROvMZYdhDjQXrIGQLXkNdCIAz5gAjxT-mc0m9KJoRvSDvd3XbWZzaUZqCFcFyTyppO4w_tISUUXTY8mJfwi1kgUvtMuFgz_8YhDaDMvQ"/>
+<img class="w-8 h-8 rounded-full border-2 border-surface object-cover" data-alt="Small avatar photo of a man wearing glasses and a casual shirt against a plain white background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAVLbLcPY-G6t9MX6oqQ5xiSbrifiVEFi2A0Ww_ULhEBUpj64dK3dN4TrGhKdxFZmmntAQKgBFSUIykdbNoQha_cykIB5KQa4eJKYvaYh2GRVo3-lvQA5eZZ2kFDAJE_ASei42DOI628lejMEhUEKlagmUR_CC8HS4lN1qUa19Zwz8y8frc_bpsLBYIlN8M_vSxXBx-VVhmEKy7Y7oAA8y-shWOsyIIIunwn-Dz62mnKtaQ-ED_79I8I_KFC71SyXuYGSiQX4cquC0"/>
+<img class="w-8 h-8 rounded-full border-2 border-surface object-cover" data-alt="Small avatar photo of a woman with curly hair smiling against a soft blue background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDBQBIVeigchZ18aSwyKRGZDM5x1ryfEaA5M5xTd7xPQLH2Jx-IrmSGmJF5w0z50hmxrgMgi9pm9qCXnJLFuptFn0BEpqPf9cfKfJHYpAY597LSbaIZs3cq2OE6vl88FDOAnsUQWVHI6gVu2NUlOc96DQ3H_y2HWlRBvMHh3tucwSx1U2KHFnMB0ASjmnv6M16at7nAvT2CY4b9DEAaKGOoxGDiWX3GC07YKUtIqf4ypR97v7Pi0DhAmwuUKVzqFAFX5EoLC6UykJw"/>
+<div class="w-8 h-8 rounded-full border-2 border-surface bg-surface-container flex items-center justify-center font-label-sm text-label-sm text-on-surface-variant">+4</div>
+</div>
+<span class="font-body-sm text-body-sm text-on-surface-variant ml-2">Active this week</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Timesheet Table -->
+<div class="bg-surface border border-outline-variant rounded-xl shadow-sm overflow-hidden">
+<div class="px-md py-sm border-b border-outline-variant bg-surface-container-low flex justify-between items-center">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Weekly Log</h3>
+<div class="flex gap-2">
+<button class="p-1 hover:bg-surface-container rounded text-on-surface-variant transition-colors"><span class="material-symbols-outlined">chevron_left</span></button>
+<span class="font-label-md text-label-md py-1">Oct 24 - Oct 30</span>
+<button class="p-1 hover:bg-surface-container rounded text-on-surface-variant transition-colors"><span class="material-symbols-outlined">chevron_right</span></button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse min-w-[800px]">
+<thead>
+<tr class="border-b border-outline-variant bg-surface-bright font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">
+<th class="p-md font-semibold">Team Member</th>
+<th class="p-md font-semibold text-center">Mon 24</th>
+<th class="p-md font-semibold text-center">Tue 25</th>
+<th class="p-md font-semibold text-center">Wed 26</th>
+<th class="p-md font-semibold text-center">Thu 27</th>
+<th class="p-md font-semibold text-center">Fri 28</th>
+<th class="p-md font-semibold text-center bg-surface-container-lowest">Total</th>
+<th class="p-md font-semibold">Status</th>
+</tr>
+</thead>
+<tbody class="font-body-sm text-body-sm text-on-surface">
+<!-- Row 1 -->
+<tr class="border-b border-outline-variant hover:bg-surface-container-lowest transition-colors">
+<td class="p-md">
+<div class="flex items-center gap-sm">
+<img class="w-8 h-8 rounded-full object-cover" data-alt="Small circular profile picture of an Asian woman in a blue blouse, bright lighting, modern office setting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCzyHLrcWwowiGhdBx-JDEw1ouAXjtrA6GC15rVTBl_0u8GPsp0sHPr9JiCxSnSjWcA1Ci_c42FyaTa4Uj61oUo4LvE818LCaz2X5FuAgzjd4LUyGCzJv1rk2bDWNGzL-_322LBIFTiOomFIzDQLTjs7uGqDxC5yDUAGSfnSLbVN6_4ETueGiSnMqyZeFAoTOGpb4rzNh2k7F_PV08eMGpWU5VB-KASRxaZ-KhYjY2cjXht9hgTWhFOJ43dGgEj1kG0LF1ZGiIgxts"/>
+<div>
+<p class="font-label-md text-label-md">Sarah Chen</p>
+<p class="text-on-surface-variant text-xs">Design Lead</p>
+</div>
+</div>
+</td>
+<td class="p-md text-center"><div class="inline-block px-2 py-1 bg-primary-container text-on-primary-container rounded font-medium">8.0</div></td>
+<td class="p-md text-center"><div class="inline-block px-2 py-1 bg-primary-container text-on-primary-container rounded font-medium">7.5</div></td>
+<td class="p-md text-center"><div class="inline-block px-2 py-1 bg-primary-container text-on-primary-container rounded font-medium">8.0</div></td>
+<td class="p-md text-center"><div class="inline-block px-2 py-1 bg-primary-container text-on-primary-container rounded font-medium">8.5</div></td>
+<td class="p-md text-center"><div class="inline-block px-2 py-1 bg-primary-container text-on-primary-container rounded font-medium">8.0</div></td>
+<td class="p-md text-center font-bold bg-surface-container-lowest">40.0</td>
+<td class="p-md">
+<span class="inline-flex items-center gap-1 px-2 py-1 bg-surface-container text-on-surface rounded-full text-xs font-semibold">
+<span class="w-2 h-2 rounded-full bg-tertiary"></span> Approved
+                                    </span>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="border-b border-outline-variant hover:bg-surface-container-lowest transition-colors">
+<td class="p-md">
+<div class="flex items-center gap-sm">
+<img class="w-8 h-8 rounded-full object-cover" data-alt="Small circular profile picture of a young Black man wearing a yellow sweater, soft natural lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAw5UFN9CZ1ELnaoR08Ch7B5fqwjulSki3GqEwR4guDcjxITgHpSqd_QDkn1FlUDyvkAjgLBDgnqRVlv0qVGIOgcoy4D9HCs5DrR3mjomfMIqoYVinRq1ekZcQcOkZDnTuRAMGoFqy6p47Njfljx5ms0h9LKUL_0i6uNNrRCRs54MtiKX2qF0d56ba1uNY9Um4_2JmDVtv_2qs6nsm_Mq2UH34lVkW8a3ki9dEcaS9kqKvIJ3XRz8yZfZjCFXtU7cBTQAs-xMXNIp8"/>
+<div>
+<p class="font-label-md text-label-md">Marcus Johnson</p>
+<p class="text-on-surface-variant text-xs">Frontend Dev</p>
+</div>
+</div>
+</td>
+<td class="p-md text-center"><div class="inline-block px-2 py-1 bg-surface-container text-on-surface rounded">8.0</div></td>
+<td class="p-md text-center"><div class="inline-block px-2 py-1 bg-surface-container text-on-surface rounded">8.0</div></td>
+<td class="p-md text-center"><div class="inline-block px-2 py-1 bg-surface-container text-on-surface rounded">6.5</div></td>
+<td class="p-md text-center"><div class="inline-block px-2 py-1 bg-surface-container text-on-surface rounded">8.0</div></td>
+<td class="p-md text-center"><div class="inline-block px-2 py-1 bg-surface-container text-on-surface rounded">7.0</div></td>
+<td class="p-md text-center font-bold bg-surface-container-lowest">37.5</td>
+<td class="p-md">
+<span class="inline-flex items-center gap-1 px-2 py-1 bg-surface-container text-on-surface rounded-full text-xs font-semibold">
+<span class="w-2 h-2 rounded-full bg-outline"></span> Pending
+                                    </span>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-lowest transition-colors">
+<td class="p-md">
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full bg-tertiary-container text-on-tertiary-container flex items-center justify-center font-bold text-sm">JS</div>
+<div>
+<p class="font-label-md text-label-md">John Smith (You)</p>
+<p class="text-on-surface-variant text-xs">Product Manager</p>
+</div>
+</div>
+</td>
+<td class="p-md text-center"><div class="inline-block px-2 py-1 bg-surface-container text-on-surface rounded">9.0</div></td>
+<td class="p-md text-center"><div class="inline-block px-2 py-1 bg-surface-container text-on-surface rounded">8.5</div></td>
+<td class="p-md text-center"><div class="inline-block px-2 py-1 bg-surface-container text-on-surface rounded">8.0</div></td>
+<td class="p-md text-center">
+<div class="relative inline-block group cursor-pointer">
+<div class="inline-flex items-center gap-1 px-2 py-1 border-2 border-primary text-primary bg-primary-container rounded font-medium shadow-sm animate-pulse">
+                                            3.5 <span class="material-symbols-outlined text-[14px]">timer</span>
+</div>
+</div>
+</td>
+<td class="p-md text-center text-outline-variant">-</td>
+<td class="p-md text-center font-bold bg-surface-container-lowest">29.0</td>
+<td class="p-md">
+<span class="inline-flex items-center gap-1 px-2 py-1 bg-secondary-container text-on-secondary-container rounded-full text-xs font-semibold">
+<span class="w-2 h-2 rounded-full bg-secondary"></span> Active
+                                    </span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</main>
+</body></html>

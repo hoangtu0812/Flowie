@@ -97,6 +97,73 @@ func (s *WorkspaceStore) ListForUser(ctx context.Context, userID uuid.UUID) ([]d
 	return out, rows.Err()
 }
 
+// ListMembers returns a workspace's members with profile + billing rate.
+func (s *WorkspaceStore) ListMembers(ctx context.Context, workspaceID uuid.UUID) ([]domain.MemberInfo, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT u.id, u.display_name, u.email::text, m.role,
+		       COALESCE(r.hourly_rate, 0), COALESCE(r.currency, 'USD')
+		FROM workspace_members m
+		JOIN users u ON u.id = m.user_id
+		LEFT JOIN user_rates r ON r.user_id = u.id
+		WHERE m.workspace_id = $1
+		ORDER BY u.display_name`, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []domain.MemberInfo{}
+	for rows.Next() {
+		var m domain.MemberInfo
+		if err := rows.Scan(&m.UserID, &m.DisplayName, &m.Email, &m.Role, &m.HourlyRate, &m.Currency); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+// AddMemberByEmail adds an existing user (looked up by email) to a workspace.
+// Returns ErrNotFound if no user with that email exists yet.
+func (s *WorkspaceStore) AddMemberByEmail(ctx context.Context, workspaceID uuid.UUID, email string, role domain.WorkspaceRole) (*domain.MemberInfo, error) {
+	var userID uuid.UUID
+	var name, mail string
+	err := s.pool.QueryRow(ctx, `SELECT id, display_name, email::text FROM users WHERE email = $1`, email).
+		Scan(&userID, &name, &mail)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	_, err = s.pool.Exec(ctx, `
+		INSERT INTO workspace_members (workspace_id, user_id, role)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = EXCLUDED.role`,
+		workspaceID, userID, role)
+	if err != nil {
+		return nil, err
+	}
+	return &domain.MemberInfo{UserID: userID, DisplayName: name, Email: mail, Role: role, Currency: "USD"}, nil
+}
+
+// UpdateMemberRole changes a member's workspace role.
+func (s *WorkspaceStore) UpdateMemberRole(ctx context.Context, workspaceID, userID uuid.UUID, role domain.WorkspaceRole) error {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE workspace_members SET role=$3 WHERE workspace_id=$1 AND user_id=$2`,
+		workspaceID, userID, role)
+	return err
+}
+
+// SetRate upserts a user's hourly billing rate.
+func (s *WorkspaceStore) SetRate(ctx context.Context, userID uuid.UUID, rate float64, currency string) error {
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO user_rates (user_id, hourly_rate, currency, updated_at)
+		VALUES ($1, $2, $3, now())
+		ON CONFLICT (user_id) DO UPDATE SET hourly_rate=EXCLUDED.hourly_rate, currency=EXCLUDED.currency, updated_at=now()`,
+		userID, rate, currency)
+	return err
+}
+
 // RoleForUser returns the user's workspace role, or ErrNotFound if not a member.
 func (s *WorkspaceStore) RoleForUser(ctx context.Context, workspaceID, userID uuid.UUID) (domain.WorkspaceRole, error) {
 	var role domain.WorkspaceRole

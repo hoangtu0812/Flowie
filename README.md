@@ -35,7 +35,14 @@ cd backend && make migrate    # chạy migrations
 cd backend && make run        # chạy API server (http://localhost:8080)
 ```
 
-Xem [`backend/README.md`](./backend/README.md) để biết chi tiết.
+Trên Windows (không có `make`): dùng `backend\run.ps1` thay cho `make run`.
+
+## Tài liệu
+
+- [`docs/ROADMAP.md`](./docs/ROADMAP.md) — roadmap triển khai chi tiết theo phase.
+- [`docs/azure-sharepoint-setup.md`](./docs/azure-sharepoint-setup.md) — cấu hình Azure AD SSO & SharePoint.
+- [`backend/README.md`](./backend/README.md) — kiến trúc & API backend.
+- [`frontend/README.md`](./frontend/README.md) — frontend Next.js.
 
 ## Cấu trúc thư mục
 

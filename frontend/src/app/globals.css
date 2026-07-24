@@ -1,156 +1,57 @@
-:root {
-  --bg: #0f1115;
-  --surface: #191c22;
-  --surface-2: #21252d;
-  --border: #2c313b;
-  --text: #e6e8eb;
-  --muted: #9aa2ad;
-  --accent: #4f7cff;
-  --accent-hover: #3d6af0;
-  --danger: #e5484d;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body {
+    @apply bg-background text-on-surface;
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 14px;
+  }
+  * {
+    -webkit-font-smoothing: antialiased;
+  }
 }
 
-* {
-  box-sizing: border-box;
+.material-symbols-outlined {
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  user-select: none;
+}
+.material-symbols-outlined.filled {
+  font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 24;
 }
 
-html,
-body {
-  margin: 0;
-  padding: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  font-size: 14px;
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
-
-a {
-  color: var(--accent);
-  text-decoration: none;
+::-webkit-scrollbar-track {
+  background: transparent;
 }
-
-button {
-  font: inherit;
-  cursor: pointer;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 14px;
-  background: var(--accent);
-  color: white;
-}
-button:hover {
-  background: var(--accent-hover);
-}
-button.secondary {
-  background: var(--surface-2);
-  color: var(--text);
-  border: 1px solid var(--border);
-}
-
-input,
-textarea,
-select {
-  font: inherit;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: 6px;
-  padding: 8px 10px;
-  width: 100%;
-}
-
-.container {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 24px;
-}
-
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 24px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.brand {
-  font-weight: 700;
-  font-size: 18px;
-}
-
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
   border-radius: 10px;
-  padding: 16px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
-.grid {
-  display: grid;
-  gap: 14px;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-}
-
-.muted {
-  color: var(--muted);
-}
-
-.row {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.center-screen {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-}
-
-.kanban {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-  overflow-x: auto;
-  padding-bottom: 12px;
-}
-
-.kanban-col {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px;
-  min-width: 280px;
-  width: 280px;
-}
-
-.kanban-col h3 {
-  margin: 4px 4px 12px;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-
-.task-card {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 12px;
-  margin-bottom: 8px;
-}
-
-.badge {
-  display: inline-block;
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  color: var(--muted);
-}
-.badge.high {
-  color: #ffb4b4;
-  border-color: #5a2b2b;
+@layer components {
+  .btn-primary {
+    @apply bg-primary text-on-primary rounded-lg px-md py-2 text-label-md flex items-center justify-center gap-sm transition-transform active:scale-95 hover:bg-primary-container;
+  }
+  .btn-ghost {
+    @apply bg-surface border border-outline rounded-lg px-md py-1.5 text-label-md text-on-surface hover:bg-surface-container transition-all active:scale-95 flex items-center gap-sm;
+  }
+  .chip {
+    @apply px-2 py-0.5 rounded text-label-sm uppercase tracking-wider;
+  }
+  .field {
+    @apply bg-surface-container-lowest border border-outline-variant rounded-lg px-md py-2 text-body-md focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all w-full;
+  }
+  .card {
+    @apply bg-surface-container-lowest border border-outline-variant rounded-xl;
+  }
 }

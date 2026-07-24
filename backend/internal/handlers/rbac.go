@@ -61,6 +61,31 @@ func (h *Handlers) requireProjectAccess(w http.ResponseWriter, r *http.Request, 
 	return proj, role, true
 }
 
+// requireTaskAccess loads the task in the "taskID" URL param and verifies the
+// user is a member of its project's workspace.
+func (h *Handlers) requireTaskAccess(w http.ResponseWriter, r *http.Request, userID uuid.UUID) (*domain.Task, domain.WorkspaceRole, bool) {
+	taskID, ok := parseUUIDParam(w, r, "taskID")
+	if !ok {
+		return nil, "", false
+	}
+	task, err := h.Store.Tasks.GetByID(r.Context(), taskID)
+	if err != nil {
+		httpx.Error(w, http.StatusNotFound, "not_found", "task not found")
+		return nil, "", false
+	}
+	proj, err := h.Store.Projects.GetByID(r.Context(), task.ProjectID)
+	if err != nil {
+		httpx.Error(w, http.StatusNotFound, "not_found", "task not found")
+		return nil, "", false
+	}
+	role, err := h.Store.Workspaces.RoleForUser(r.Context(), proj.WorkspaceID, userID)
+	if err != nil {
+		httpx.Error(w, http.StatusNotFound, "not_found", "task not found")
+		return nil, "", false
+	}
+	return task, role, true
+}
+
 // canManageWorkspace reports whether a role may perform admin-level actions.
 func canManageWorkspace(role domain.WorkspaceRole) bool {
 	return role == domain.WorkspaceRoleOwner || role == domain.WorkspaceRoleAdmin

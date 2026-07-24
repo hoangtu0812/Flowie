@@ -100,6 +100,41 @@ func (h *Handlers) AzureCallback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, h.Cfg.FrontendURL, http.StatusFound)
 }
 
+// DevLogin is a DEVELOPMENT-ONLY endpoint that provisions a user and sets the
+// session cookie without Azure AD, so the UI can be exercised locally. It is a
+// no-op (404) unless APP_ENV=development.
+func (h *Handlers) DevLogin(w http.ResponseWriter, r *http.Request) {
+	if h.Cfg.Env != "development" {
+		httpx.Error(w, http.StatusNotFound, "not_found", "")
+		return
+	}
+	email := r.URL.Query().Get("email")
+	if email == "" {
+		email = "dev@flowie.local"
+	}
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		name = "Dev User"
+	}
+	user, err := h.Store.Users.UpsertFromAzure(r.Context(), "dev|"+email, email, name)
+	if err != nil {
+		httpx.Error(w, http.StatusInternalServerError, "provision_failed", err.Error())
+		return
+	}
+	token, err := h.Sessions.Issue(user.ID, user.Email, user.DisplayName)
+	if err != nil {
+		httpx.Error(w, http.StatusInternalServerError, "session_failed", err.Error())
+		return
+	}
+	h.Sessions.SetCookie(w, token)
+	// Redirect to the frontend if asked, else return JSON.
+	if r.URL.Query().Get("redirect") != "" {
+		http.Redirect(w, r, h.Cfg.FrontendURL, http.StatusFound)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, user)
+}
+
 // Logout clears the session cookie.
 func (h *Handlers) Logout(w http.ResponseWriter, r *http.Request) {
 	h.Sessions.ClearCookie(w)

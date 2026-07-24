@@ -18,6 +18,10 @@ type Store struct {
 	Workspaces *WorkspaceStore
 	Projects   *ProjectStore
 	Tasks      *TaskStore
+	Sprints       *SprintStore
+	Worklogs      *WorklogStore
+	Notifications *NotificationStore
+	Automations   *AutomationStore
 }
 
 // New builds a Store from a pgx pool.
@@ -28,5 +32,9 @@ func New(pool *pgxpool.Pool) *Store {
 		Workspaces: &WorkspaceStore{pool: pool},
 		Projects:   &ProjectStore{pool: pool},
 		Tasks:      &TaskStore{pool: pool},
+		Sprints:       &SprintStore{pool: pool},
+		Worklogs:      &WorklogStore{pool: pool},
+		Notifications: &NotificationStore{pool: pool},
+		Automations:   &AutomationStore{pool: pool},
 	}
 }

@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Flowie - Website Redesign Board</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind Configuration -->
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+                "tertiary-fixed-dim": "#ffb596",
+                "on-surface-variant": "#434655",
+                "secondary-fixed-dim": "#c4c7c9",
+                "on-tertiary-container": "#ffede6",
+                "primary-container": "#2563eb",
+                "background": "#f8f9ff",
+                "on-error": "#ffffff",
+                "surface-container-low": "#eff4ff",
+                "surface-bright": "#f8f9ff",
+                "surface-container": "#e5eeff",
+                "on-secondary-fixed-variant": "#444749",
+                "tertiary": "#943700",
+                "secondary-container": "#e0e3e5",
+                "on-primary-fixed-variant": "#003ea8",
+                "on-primary": "#ffffff",
+                "tertiary-fixed": "#ffdbcd",
+                "on-tertiary-fixed": "#360f00",
+                "on-primary-fixed": "#00174b",
+                "inverse-on-surface": "#eaf1ff",
+                "surface-dim": "#cbdbf5",
+                "tertiary-container": "#bc4800",
+                "secondary-fixed": "#e0e3e5",
+                "error-container": "#ffdad6",
+                "surface-container-highest": "#d3e4fe",
+                "on-surface": "#0b1c30",
+                "outline": "#737686",
+                "surface": "#f8f9ff",
+                "on-secondary-container": "#626567",
+                "on-secondary": "#ffffff",
+                "on-background": "#0b1c30",
+                "inverse-surface": "#213145",
+                "surface-container-high": "#dce9ff",
+                "outline-variant": "#c3c6d7",
+                "on-error-container": "#93000a",
+                "on-tertiary": "#ffffff",
+                "secondary": "#5c5f61",
+                "primary-fixed-dim": "#b4c5ff",
+                "primary": "#004ac6",
+                "surface-container-lowest": "#ffffff",
+                "primary-fixed": "#dbe1ff",
+                "error": "#ba1a1a",
+                "on-secondary-fixed": "#191c1e",
+                "surface-tint": "#0053db",
+                "on-tertiary-fixed-variant": "#7d2d00",
+                "on-primary-container": "#eeefff",
+                "surface-variant": "#d3e4fe",
+                "inverse-primary": "#b4c5ff"
+        },
+        "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "full": "9999px"
+        },
+        "spacing": {
+                "base": "4px",
+                "margin-mobile": "16px",
+                "sm": "8px",
+                "lg": "24px",
+                "xl": "32px",
+                "margin-desktop": "32px",
+                "xs": "4px",
+                "md": "16px",
+                "gutter": "16px"
+        },
+        "fontFamily": {
+                "label-md": [
+                        "Inter"
+                ],
+                "headline-lg": [
+                        "Inter"
+                ],
+                "headline-xl": [
+                        "Inter"
+                ],
+                "body-lg": [
+                        "Inter"
+                ],
+                "headline-md": [
+                        "Inter"
+                ],
+                "body-sm": [
+                        "Inter"
+                ],
+                "label-sm": [
+                        "Inter"
+                ],
+                "body-md": [
+                        "Inter"
+                ]
+        },
+        "fontSize": {
+                "label-md": [
+                        "12px",
+                        {
+                                "lineHeight": "16px",
+                                "letterSpacing": "0.01em",
+                                "fontWeight": "500"
+                        }
+                ],
+                "headline-lg": [
+                        "20px",
+                        {
+                                "lineHeight": "28px",
+                                "letterSpacing": "-0.01em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "headline-xl": [
+                        "24px",
+                        {
+                                "lineHeight": "32px",
+                                "letterSpacing": "-0.02em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "body-lg": [
+                        "16px",
+                        {
+                                "lineHeight": "24px",
+                                "fontWeight": "400"
+                        }
+                ],
+                "headline-md": [
+                        "16px",
+                        {
+                                "lineHeight": "24px",
+                                "fontWeight": "600"
+                        }
+                ],
+                "body-sm": [
+                        "13px",
+                        {
+                                "lineHeight": "18px",
+                                "fontWeight": "400"
+                        }
+                ],
+                "label-sm": [
+                        "11px",
+                        {
+                                "lineHeight": "14px",
+                                "fontWeight": "600"
+                        }
+                ],
+                "body-md": [
+                        "14px",
+                        {
+                                "lineHeight": "20px",
+                                "fontWeight": "400"
+                        }
+                ]
+        }
+},
+    },
+  }
+</script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .kanban-column {
+            min-width: 320px;
+            max-width: 320px;
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md selection:bg-primary-container selection:text-on-primary-container overflow-hidden">
+<!-- Sidebar (Shared Component: SideNavBar) -->
+<aside class="fixed left-0 top-0 h-full flex flex-col py-lg px-md border-r border-outline-variant dark:border-outline bg-surface-container-low dark:bg-inverse-surface w-64 z-50">
+<div class="flex items-center gap-md mb-xl px-sm">
+<img alt="Flowie Workspace Logo" class="w-10 h-10 rounded-lg object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDIL5YOLfDIUQ_-hkX9cIA-tUFabIlz2GyAmxirKiXl4CwQRyPjPaUdekjew6uojliozQKhtO5jkl8njdaC5j6ox__x-n6SxwjDwIZCpZoTV48OxHIzmu54YeokgY4u-IR7bonC0M5v0j1C8GNivwhu1Z_jy__kRzUV131ywPm61WaLbYDHG_pUzdPskvF2tq_B-30For8UoI7pkAPAtDjLi9maDeQ2QMrohKa6y0wMgM2NxlpDO3vDG3VmoFNULGSzE_BHbjGD3N8"/>
+<div>
+<h1 class="font-headline-md text-primary dark:text-primary-fixed-dim">Flowie</h1>
+<p class="font-body-sm text-on-surface-variant">Professional Team</p>
+</div>
+</div>
+<nav class="flex flex-col gap-xs flex-grow">
+<a class="flex items-center gap-md text-on-surface-variant dark:text-surface-variant px-md py-sm hover:bg-secondary-container dark:hover:bg-secondary-fixed-variant hover:text-on-secondary-container transition-all rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-label-md">Dashboard</span>
+</a>
+<!-- Projects is Active -->
+<a class="flex items-center gap-md bg-primary text-on-primary dark:bg-primary-fixed-variant dark:text-on-primary-fixed-variant rounded-lg px-md py-sm scale-[0.98] transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="folder_open">folder_open</span>
+<span class="font-label-md">Projects</span>
+</a>
+<a class="flex items-center gap-md text-on-surface-variant dark:text-surface-variant px-md py-sm hover:bg-secondary-container dark:hover:bg-secondary-fixed-variant hover:text-on-secondary-container transition-all rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="assignment">assignment</span>
+<span class="font-label-md">Tasks</span>
+</a>
+<a class="flex items-center gap-md text-on-surface-variant dark:text-surface-variant px-md py-sm hover:bg-secondary-container dark:hover:bg-secondary-fixed-variant hover:text-on-secondary-container transition-all rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-label-md">Team</span>
+</a>
+<a class="flex items-center gap-md text-on-surface-variant dark:text-surface-variant px-md py-sm hover:bg-secondary-container dark:hover:bg-secondary-fixed-variant hover:text-on-secondary-container transition-all rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="calendar_today">calendar_today</span>
+<span class="font-label-md">Calendar</span>
+</a>
+</nav>
+<div class="mt-auto border-t border-outline-variant pt-lg flex flex-col gap-md">
+<button class="bg-primary text-on-primary font-label-md py-sm px-md rounded-lg flex items-center justify-center gap-sm active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-[20px]" data-icon="add">add</span>
+<span>Create New</span>
+</button>
+<a class="flex items-center gap-md text-on-surface-variant dark:text-surface-variant px-md py-sm hover:bg-secondary-container dark:hover:bg-secondary-fixed-variant hover:text-on-secondary-container transition-all rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-label-md">Settings</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-64 flex flex-col h-screen">
+<!-- Top Bar (Shared Component: TopNavBar) -->
+<header class="flex justify-between items-center w-full px-lg h-16 sticky top-0 z-40 bg-surface dark:bg-surface-dim border-b border-outline-variant dark:border-outline">
+<div class="flex items-center gap-lg">
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" data-icon="search">search</span>
+<input class="bg-surface-container-low border-none rounded-lg pl-10 pr-md py-2 w-64 focus:ring-2 focus:ring-primary/20 transition-all font-body-sm text-body-sm" placeholder="Search tasks..." type="text"/>
+</div>
+<div class="h-6 w-[1px] bg-outline-variant"></div>
+<h2 class="font-headline-md text-on-surface">Website Redesign</h2>
+</div>
+<div class="flex items-center gap-md">
+<div class="flex -space-x-2 mr-4">
+<img class="w-8 h-8 rounded-full border-2 border-surface object-cover" data-alt="A professional portrait of a diverse team member with a warm smile, wearing modern office attire, captured in high-resolution with soft natural lighting in a contemporary studio setting. The aesthetic is clean and corporate, utilizing a bright light-mode color palette that emphasizes clarity and professionalism." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDzoe4wVY82-b9hhETtstOwqkBVdB0dHI8bQwXoKkHxe1zKfk1jN5cdIBcT-QSpPXqaDXp7UWmskLgKVy5myog5pTMili7ap-9BR3_LTQi_ScgMFnXL83MIRlMP0EuHHowlg_qstnpncwbke6z4dCvNnNRxLbE_sTrWugLHkvIcpblp8uHOOhpl_l9NWqEJidIC6Tm7-x56cIabzGWC7iYSLUc2g0ncI2nRbrF4c_zbjVYlbAmjTcSNG4g3TNlbYWRD1oaG9iFNOx4"/>
+<img class="w-8 h-8 rounded-full border-2 border-surface object-cover" data-alt="A professional portrait of a young creative professional with glasses, looking thoughtfully into the distance, set against a minimalist architectural background. The image uses a crisp, high-contrast lighting style with soft blue and grey tones to align with the Flowie brand identity and modern light-mode design system." src="https://lh3.googleusercontent.com/aida-public/AB6AXuChBboK-sV9SEegF-t53tqK4phoFon3njDd94sW5kkfQahbxMWa_o7Rcic35P8bzA2GWVIPQXG78EGy1Y2qr9ZKCX1V6MI4AdeNUSXLqibBhSO1HLb7MC34263lP1o5Wanjc7Jj9VKHwM8CSrFFEYVgrgqtRHYcr8cxIRYoscIMvB1rIurXFQUxdUio2XDt4Wdd3eCEtylydQ50tuDGsXL0I6Ka3xxaFWQHCtgFyPTpYghgJUWjY84f83ANXiVQpabpLxybXrHzRNM"/>
+<img class="w-8 h-8 rounded-full border-2 border-surface object-cover" data-alt="A smiling professional woman with curly hair in a business-casual navy blazer, set against a blurred, airy tech office environment. High-key lighting highlights her features, creating an energetic and reliable atmosphere consistent with a premium project management platform's user profile imagery." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC4l46ai67sBEE5LsG_pNI-BGrNw99SuGcnGAqOeM4iiQuFZxaEKpvurPXSzkWLK274_tZyyYke94OP8ORBoNYyn1k60eNU4B4wQmLcKDOhh3PAcVR0cwy8PbDEOHmC6J6C-O2_RzbO9ga5LoZxOEpTwqjQqt1I6nUPBsEjzR3FzTSi4-vY8cH0NKssEUUWQcDqkxYDZKbHLQ7etX_qwRiW3-Gz-Wy-PK1ItAC5AQTBb20ZS9eske-1pQE1J45aqyGOse3J_twrJ4g"/>
+<div class="w-8 h-8 rounded-full border-2 border-surface bg-primary text-on-primary flex items-center justify-center font-label-sm">+12</div>
+</div>
+<button class="p-2 rounded-full hover:bg-surface-container-highest transition-colors active:scale-95 text-on-surface-variant relative">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<div class="h-8 w-8 rounded-full bg-secondary-container overflow-hidden active:scale-95 transition-transform cursor-pointer">
+<img class="w-full h-full object-cover" data-alt="Close-up headshot of a software engineer with short hair, wearing a grey crew neck sweater, neutral expression, soft studio lighting with a slight cool blue tint to reflect the technological focus of the application. The background is a flat, soft light-grey surface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC1M96pKfG42vgFkeC1q3gmFhfkuM2XEDJHaX4jpNgV9TmilUme51tMsHhXI3z9brGtYZVi9UDBuiX4bDian9PIkrEPUOwYiqr5tpNxoEs3qFRK_xfaoB8rCdLLlP6eTaRFmIr0mw7RFwK78MpUaN0g4FVtIJBzpE6RRhNnKUevVJDWnCYzL8_kiRWtYXyc-wRbdJX7f5lpaKmwWS5LxdA7dCel0zOh0EuuD_mM_jFgzdU-sodnTchjin58iivVFfmvcBzuWJkXxqc"/>
+</div>
+</div>
+</header>
+<!-- Board Toolbar -->
+<section class="px-lg py-md flex justify-between items-center bg-surface border-b border-outline-variant">
+<div class="flex gap-md">
+<button class="flex items-center gap-sm px-md py-1.5 bg-surface border border-outline rounded-lg font-label-md text-on-surface hover:bg-surface-container transition-all active:scale-95">
+<span class="material-symbols-outlined text-[18px]" data-icon="filter_list">filter_list</span>
+                    Filter
+                </button>
+<button class="flex items-center gap-sm px-md py-1.5 bg-surface border border-outline rounded-lg font-label-md text-on-surface hover:bg-surface-container transition-all active:scale-95">
+<span class="material-symbols-outlined text-[18px]" data-icon="sort">sort</span>
+                    Sort
+                </button>
+</div>
+<div class="flex gap-sm">
+<button class="p-1.5 bg-primary text-on-primary rounded-md">
+<span class="material-symbols-outlined text-[20px]" data-icon="view_kanban">view_kanban</span>
+</button>
+<button class="p-1.5 text-on-surface-variant hover:bg-surface-container-highest rounded-md transition-colors">
+<span class="material-symbols-outlined text-[20px]" data-icon="list">list</span>
+</button>
+<button class="p-1.5 text-on-surface-variant hover:bg-surface-container-highest rounded-md transition-colors">
+<span class="material-symbols-outlined text-[20px]" data-icon="calendar_view_month">calendar_view_month</span>
+</button>
+</div>
+</section>
+<!-- Kanban Board Container -->
+<section class="flex-grow overflow-x-auto p-lg bg-surface">
+<div class="flex gap-lg h-full">
+<!-- Column: To Do -->
+<div class="kanban-column flex flex-col gap-md h-full">
+<div class="flex items-center justify-between px-xs">
+<div class="flex items-center gap-sm">
+<h3 class="font-headline-md text-on-surface">To Do</h3>
+<span class="bg-surface-container-high text-on-surface-variant px-2 py-0.5 rounded-full font-label-sm">3</span>
+</div>
+<button class="text-on-surface-variant hover:bg-surface-container rounded-md p-1">
+<span class="material-symbols-outlined text-[20px]" data-icon="more_horiz">more_horiz</span>
+</button>
+</div>
+<div class="flex flex-col gap-md overflow-y-auto pr-2 pb-8 custom-scrollbar">
+<!-- Task Card -->
+<div class="bg-surface-container-lowest p-md rounded-xl border border-outline-variant shadow-sm hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing group">
+<div class="flex gap-sm mb-sm">
+<span class="bg-tertiary-container/10 text-tertiary px-2 py-0.5 rounded font-label-sm uppercase tracking-wider">Design</span>
+<span class="bg-error-container text-on-error-container px-2 py-0.5 rounded font-label-sm uppercase tracking-wider">High</span>
+</div>
+<h4 class="font-body-md font-semibold text-on-surface mb-md">Hero Section Ideation</h4>
+<div class="flex justify-between items-center">
+<div class="flex items-center gap-xs text-on-surface-variant font-label-md">
+<span class="material-symbols-outlined text-[16px]" data-icon="schedule">schedule</span>
+<span>Oct 12</span>
+</div>
+<img class="w-6 h-6 rounded-full border border-surface shadow-sm" data-alt="A clean professional headshot of a creative director in their 30s with a trendy beard and casual modern office wear, blurred artistic office background. High-quality lighting, bright light-mode aesthetic, corporate minimalism style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDf_vbom376q76BNFPREMLkBXfSLgfU-0Bl-Cd2hQ5d2w1KVKfNn96_aj0pbH_KVywYov6iwPbQ9ggjLxvowuammab5CDQ3_-1IVTRuc9PhfVqmexBoCtgtk7yx6KJx7B90nKk1ImjYhwT5UI__3TjK9VIQcjsdXJPp_Qu4UJE2Y1aqUYoZFThKqpj0DGiSq_7OEFtwAHcdZ7BMFpVTLjLdto8lKGnzwn2CB9yzdfoFEKRoBbEnXi8W5J1j5xF9-AfbjoqDmfbRScU"/>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-md rounded-xl border border-outline-variant shadow-sm hover:shadow-md transition-shadow cursor-grab group">
+<div class="flex gap-sm mb-sm">
+<span class="bg-secondary-container text-on-secondary-container px-2 py-0.5 rounded font-label-sm uppercase tracking-wider">Content</span>
+</div>
+<h4 class="font-body-md font-semibold text-on-surface mb-md">Drafting Brand Guidelines</h4>
+<div class="flex justify-between items-center">
+<div class="flex items-center gap-xs text-on-surface-variant font-label-md">
+<span class="material-symbols-outlined text-[16px]" data-icon="chat_bubble_outline">chat_bubble_outline</span>
+<span>4</span>
+</div>
+<img class="w-6 h-6 rounded-full border border-surface shadow-sm" data-alt="Professional profile photo of a young woman with a friendly expression, wearing a stylish minimalist sweater, neutral grey background, professional studio lighting, part of a cohesive modern UI design system." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCLi-j2FBWXEKYyANpEPQg7PRbSWYopubROgSNehrpgHrSWuLTWl3DrVIU_lYqcpaxqasvF5FFE_3jT-0_9H3H0WYahR8zk6LcbhTXyFLTGKuWvWfXMTvLYxPxxoe8RHyaKwxq9tvx--0WNICGqF-X_w3w6ESIIlgTH2Zw-8CIkxSjuR3ZmF33eLcwurf2GNqeX_k4ipjbkJQbM_MebN9LJFvYFFxEtdYPBvYJIOdbh6e593-7ivqXr1WUg7HLqt6dml7WnrfinR38"/>
+</div>
+</div>
+<button class="w-full py-md border-2 border-dashed border-outline-variant/50 rounded-xl text-on-surface-variant hover:bg-surface-container-lowest hover:border-primary/40 hover:text-primary transition-all flex items-center justify-center gap-sm font-label-md">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+                            Add Task
+                        </button>
+</div>
+</div>
+<!-- Column: In Progress -->
+<div class="kanban-column flex flex-col gap-md h-full">
+<div class="flex items-center justify-between px-xs">
+<div class="flex items-center gap-sm">
+<h3 class="font-headline-md text-on-surface">In Progress</h3>
+<span class="bg-primary text-on-primary px-2 py-0.5 rounded-full font-label-sm">2</span>
+</div>
+<button class="text-on-surface-variant hover:bg-surface-container rounded-md p-1">
+<span class="material-symbols-outlined text-[20px]" data-icon="more_horiz">more_horiz</span>
+</button>
+</div>
+<div class="flex flex-col gap-md overflow-y-auto pr-2 pb-8">
+<div class="bg-surface-container-lowest p-md rounded-xl border border-outline-variant shadow-sm hover:shadow-md transition-shadow cursor-grab">
+<div class="flex gap-sm mb-sm">
+<span class="bg-primary-container/10 text-primary px-2 py-0.5 rounded font-label-sm uppercase tracking-wider">Frontend</span>
+</div>
+<h4 class="font-body-md font-semibold text-on-surface mb-md">Navigation Component Revamp</h4>
+<div class="mb-md">
+<div class="flex justify-between items-center font-label-sm text-on-surface-variant mb-1">
+<span>Progress</span>
+<span>75%</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1.5 rounded-full overflow-hidden">
+<div class="bg-primary h-full w-3/4 rounded-full"></div>
+</div>
+</div>
+<div class="flex justify-between items-center">
+<div class="flex -space-x-1.5">
+<img class="w-6 h-6 rounded-full border border-surface shadow-sm" data-alt="A profile of a software developer with a focused, professional look, wearing a black tech-brand shirt, soft indoor daylight lighting, minimal depth of field, high-end commercial aesthetic for a modern light-mode interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCgkZTPQtwcvFi6g9DIBTd3jaWzGiEtR1d7I0tfpTJ_ok0fWjGtZguqfhTJakZG4YenpFGGAlA_eWhRYXYeTnUhpqSNaOmoYimOkw62gfX-qmLaOZ4jp3Thg9a56q1rNumwYwMnmBO4mW6cSOv3xyOAgw3Zzi8fUzWP0GbUOOnU-4IgjScDpniC5D8eHJbZJtXE13eYCp1Jtul0TGVhNKnQKaWaq5BU9oXumCCWbDthffD6dHJQ1JdzwWp_iHU3Ub_I9Vxhc26sIMQ"/>
+<img class="w-6 h-6 rounded-full border border-surface shadow-sm" data-alt="Headshot of a smiling female engineer with glasses, vibrant yet soft lighting, modern workplace background, corporate minimalism style that is consistent and professional." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA45_t7hpsat2bIVZBKB4_k9NQSws0jYd1TEw-zSTx78h5btPDTocsAUWu-jOjKRbIORUAAf3SyIaMHlEdyhqsHRR5uzOSgSa1Y9pC5F3guZYqnVVAVJao_UHxE7Y-5pJrDuK4Z5rQd_hdyQslNK4xzdEVHddXJCE6GJzAV_w1A7onuwuFw3ZvcOYOKlyKuYAAboLNDLLIgmNmQ1dScBuk97EEufxfYw2y5KuZzhz440B_0oPkso4S1p2ApWin41AIWweaBvTAQm-M"/>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]" data-icon="attach_file">attach_file</span>
+</div>
+</div>
+<button class="w-full py-md border-2 border-dashed border-outline-variant/50 rounded-xl text-on-surface-variant hover:bg-surface-container-lowest hover:border-primary/40 hover:text-primary transition-all flex items-center justify-center gap-sm font-label-md">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+                            Add Task
+                        </button>
+</div>
+</div>
+<!-- Column: In Review -->
+<div class="kanban-column flex flex-col gap-md h-full">
+<div class="flex items-center justify-between px-xs">
+<div class="flex items-center gap-sm">
+<h3 class="font-headline-md text-on-surface">In Review</h3>
+<span class="bg-surface-container-high text-on-surface-variant px-2 py-0.5 rounded-full font-label-sm">1</span>
+</div>
+<button class="text-on-surface-variant hover:bg-surface-container rounded-md p-1">
+<span class="material-symbols-outlined text-[20px]" data-icon="more_horiz">more_horiz</span>
+</button>
+</div>
+<div class="flex flex-col gap-md overflow-y-auto pr-2 pb-8">
+<div class="bg-surface-container-lowest p-md rounded-xl border border-outline-variant shadow-sm hover:shadow-md transition-shadow cursor-grab">
+<div class="flex gap-sm mb-sm">
+<span class="bg-tertiary-container/10 text-tertiary px-2 py-0.5 rounded font-label-sm uppercase tracking-wider">Design</span>
+</div>
+<h4 class="font-body-md font-semibold text-on-surface mb-md">Typography System Overhaul</h4>
+<img class="w-full h-24 object-cover rounded-lg mb-md border border-outline-variant" data-alt="A clean screenshot showing a modern UI typography system with various font weights and sizes on a white background, demonstrating a professional design documentation style with blue and slate accents consistent with the Flowie branding." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD6YJRU-PswMA2LUbcD7JrKLNruZGi9tadhf99kjemrqIpNxeUtv76R-NMPZnZLEOwlw79WIToNwR1TQcpsm-oG88Cu7rwsD-o9Lz5Xjkex4Z6ADzWQgQ8buTF-C8pDh72FBrMXqtOVqT97NaEtdiIZkDltQB-MjOxSxWxCUvhWKZxyW5mtpYdpJngSv8ZwXc3RCrSQAoswNKQkKPJKRnr8FPhcOUgsYmOI4HYqfUhDttpoPVHrH-y0ImeHeLBVttxIwpqk4r5wSKk"/>
+<div class="flex justify-between items-center">
+<div class="flex items-center gap-xs text-on-surface-variant font-label-md">
+<span class="material-symbols-outlined text-[16px]" data-icon="rate_review">rate_review</span>
+<span>2 pending</span>
+</div>
+<img class="w-6 h-6 rounded-full border border-surface shadow-sm" data-alt="Close-up headshot of a professional UI/UX designer with a clean aesthetic, soft neutral lighting, focused and capable expression, minimalist studio environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCEUwl0Wcre69juoQUF8TXg2-CtoqR6X6LthDCq1CwKypJXu9uLzeseik1WVsIMvyByfISP-DHJMfGfTmV4ULmchTFclGfjb-ngBMPqM9UrxJxoj0wwmUovowx-edwEUGRqylqyM5yK-eop6dAtinC7aoJytrdX-JtNIrwrMdOE68X_abpMZrAmRCmyHWDM77D5NzIcVs2MWfI599jAWQLv9sejw39djbjT0xkq-5NxiXameLUIkJ4gi-lvpnmeuVrausx1UZ8vojk"/>
+</div>
+</div>
+<button class="w-full py-md border-2 border-dashed border-outline-variant/50 rounded-xl text-on-surface-variant hover:bg-surface-container-lowest hover:border-primary/40 hover:text-primary transition-all flex items-center justify-center gap-sm font-label-md">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+                            Add Task
+                        </button>
+</div>
+</div>
+<!-- Column: Done -->
+<div class="kanban-column flex flex-col gap-md h-full">
+<div class="flex items-center justify-between px-xs">
+<div class="flex items-center gap-sm">
+<h3 class="font-headline-md text-on-surface">Done</h3>
+<span class="bg-tertiary text-on-tertiary px-2 py-0.5 rounded-full font-label-sm">5</span>
+</div>
+<button class="text-on-surface-variant hover:bg-surface-container rounded-md p-1">
+<span class="material-symbols-outlined text-[20px]" data-icon="more_horiz">more_horiz</span>
+</button>
+</div>
+<div class="flex flex-col gap-md overflow-y-auto pr-2 pb-8">
+<div class="bg-surface-container-lowest/60 p-md rounded-xl border border-outline-variant/50 shadow-sm opacity-80 line-through decoration-on-surface-variant/20 transition-all hover:opacity-100">
+<div class="flex gap-sm mb-sm">
+<span class="bg-surface-container-highest text-on-surface-variant px-2 py-0.5 rounded font-label-sm uppercase tracking-wider">Research</span>
+</div>
+<h4 class="font-body-md font-semibold text-on-surface mb-md">Competitive Audit</h4>
+<div class="flex justify-between items-center">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-tertiary text-[20px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span class="font-label-md text-on-surface-variant">Completed Sep 30</span>
+</div>
+</div>
+</div>
+<button class="w-full py-md border-2 border-dashed border-outline-variant/50 rounded-xl text-on-surface-variant hover:bg-surface-container-lowest hover:border-primary/40 hover:text-primary transition-all flex items-center justify-center gap-sm font-label-md">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+                            Add Task
+                        </button>
+</div>
+</div>
+<!-- Add Column Button -->
+<div class="kanban-column">
+<button class="w-full py-md border-2 border-dashed border-outline-variant/30 rounded-xl text-on-surface-variant hover:border-outline hover:bg-surface-container-lowest transition-all flex items-center justify-center gap-sm font-label-md h-16 mt-12 opacity-60 hover:opacity-100">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+                        Add Column
+                    </button>
+</div>
+</div>
+</section>
+</main>
+<script>
+        // Micro-interactions for Kanban cards
+        document.querySelectorAll('.bg-surface-container-lowest, .bg-surface-container-lowest\\/60').forEach(card => {
+            card.addEventListener('mouseenter', () => {
+                card.style.transform = 'translateY(-2px)';
+                card.style.transition = 'all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+            });
+            card.addEventListener('mouseleave', () => {
+                card.style.transform = 'translateY(0)';
+            });
+        });
+
+        // Simple mock search highlighting
+        const searchInput = document.querySelector('input[type="text"]');
+        searchInput.addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            document.querySelectorAll('h4').forEach(title => {
+                const card = title.closest('.bg-surface-container-lowest, .bg-surface-container-lowest\\/60');
+                if (title.textContent.toLowerCase().includes(term)) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        });
+    </script>
+</body></html>
