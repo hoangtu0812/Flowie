@@ -1,0 +1,28 @@
+# Env / secrets
+.env
+.env.local
+*.local
+
+# Go
+/backend/bin/
+/backend/tmp/
+*.exe
+*.out
+*.test
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+dist/
+npm-debug.log*
+yarn-error.log*
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Docker volumes (local)
+/.data/

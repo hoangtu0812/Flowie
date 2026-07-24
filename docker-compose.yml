@@ -1,0 +1,63 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: flowie-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-flowie}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flowie_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-flowie}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - flowie_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-flowie} -d ${POSTGRES_DB:-flowie}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Redis dùng cho cache / real-time pub-sub (giai đoạn sau).
+  redis:
+    image: redis:7-alpine
+    container_name: flowie-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - flowie_redisdata:/data
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: flowie-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      APP_PORT: 8080
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      DATABASE_URL: postgres://${POSTGRES_USER:-flowie}:${POSTGRES_PASSWORD:-flowie_dev_password}@db:5432/${POSTGRES_DB:-flowie}?sslmode=disable
+      SESSION_SECRET: ${SESSION_SECRET}
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-24}
+      AZURE_AD_TENANT_ID: ${AZURE_AD_TENANT_ID}
+      AZURE_AD_CLIENT_ID: ${AZURE_AD_CLIENT_ID}
+      AZURE_AD_CLIENT_SECRET: ${AZURE_AD_CLIENT_SECRET}
+      AZURE_AD_REDIRECT_URL: ${AZURE_AD_REDIRECT_URL}
+      GRAPH_TENANT_ID: ${GRAPH_TENANT_ID}
+      GRAPH_CLIENT_ID: ${GRAPH_CLIENT_ID}
+      GRAPH_CLIENT_SECRET: ${GRAPH_CLIENT_SECRET}
+      SHAREPOINT_SITE_URL: ${SHAREPOINT_SITE_URL}
+      SHAREPOINT_ROOT_FOLDER: ${SHAREPOINT_ROOT_FOLDER:-/Flowie}
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    # Bật khi cần chạy backend trong container. Dev thường chạy `make run` ở host.
+    profiles: ["full"]
+
+volumes:
+  flowie_pgdata:
+  flowie_redisdata:
