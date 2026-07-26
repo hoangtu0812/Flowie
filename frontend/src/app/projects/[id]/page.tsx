@@ -1,19 +1,30 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import { api, Member, Project, Task } from "@/lib/api";
+import { useParams, useSearchParams } from "next/navigation";
+import { api, Member, Project, SavedView, Task, WorkflowStatus } from "@/lib/api";
 import AppShell from "@/components/layout/AppShell";
 import Icon from "@/components/ui/Icon";
-import Avatar from "@/components/ui/Avatar";
 import TaskDrawer from "@/components/task/TaskDrawer";
-import { STATUSES, PRIORITIES, labelColor } from "@/lib/status";
+import ProjectTabs from "@/components/layout/ProjectTabs";
+import { StatusDef, toStatusDefs } from "@/lib/status";
+import { useProjectEvents } from "@/lib/useProjectEvents";
+import TaskFilters, {
+  applyFilters,
+  groupTasks,
+  EMPTY_FILTERS,
+  FilterState,
+  GroupKey,
+  SortKey,
+} from "@/components/task/TaskFilters";
+import VirtualList from "@/components/ui/VirtualList";
 
 type View = "list" | "board";
 type Members = Record<string, { name: string; avatarUrl: string }>;
 
 export default function ProjectBoardPage() {
   const { id } = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const [project, setProject] = useState<Project | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [members, setMembers] = useState<Members>({});
@@ -22,9 +33,17 @@ export default function ProjectBoardPage() {
   const [draft, setDraft] = useState("");
   const [openTask, setOpenTask] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [statuses, setStatuses] = useState<WorkflowStatus[]>([]);
+  const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
+  const [sort, setSort] = useState<SortKey>("position");
+  const [group, setGroup] = useState<GroupKey>("status");
+  const [memberList, setMemberList] = useState<Member[]>([]);
+  const [labels, setLabels] = useState<{ id: string; name: string }[]>([]);
+  const [views, setViews] = useState<SavedView[]>([]);
 
   const reload = useCallback(() => {
     api.listTasks(id).then(setTasks).catch(() => {});
+    api.listStatuses(id).then(setStatuses).catch(() => setStatuses([]));
   }, [id]);
 
   useEffect(() => {
@@ -33,13 +52,24 @@ export default function ProjectBoardPage() {
       const map: Members = {};
       ms.forEach((m) => (map[m.userId] = { name: m.displayName || m.email, avatarUrl: m.avatarUrl || "" }));
       setMembers(map);
+      setMemberList(ms);
     }).catch(() => {});
+    api.listLabels(id).then(setLabels).catch(() => setLabels([]));
+    api.listViews(id).then(setViews).catch(() => setViews([]));
     reload();
   }, [id, reload]);
 
-  const filtered = tasks.filter((t) =>
-    (query ? t.title.toLowerCase().includes(query.toLowerCase()) : true)
-  );
+  // Live updates: refresh the board when someone else changes a task.
+  useProjectEvents(id, () => reload());
+
+  // Deep link: notifications point at /projects/{id}?task={taskId}, so opening
+  // one lands here and must open the drawer straight away.
+  const deepTask = searchParams.get("task");
+  useEffect(() => {
+    if (deepTask) setOpenTask(deepTask);
+  }, [deepTask]);
+
+  const filtered = applyFilters(tasks, filters, sort, query);
 
   async function addTask(status: string) {
     if (!draft.trim()) return;
@@ -49,52 +79,144 @@ export default function ProjectBoardPage() {
     reload();
   }
   async function move(task: Task, status: string) {
-    await api.updateTaskStatus(task.id, status);
+    try {
+      await api.updateTaskStatus(task.id, status);
+    } catch (err: any) {
+      // Surface WIP-limit rejections instead of silently doing nothing.
+      alert(err?.message || "Không thể chuyển trạng thái");
+    }
     reload();
   }
 
-  const shared = { tasks: filtered, members, adding, draft, setDraft, setAdding, onAdd: addTask, onMove: move, onOpen: setOpenTask };
+  async function saveCurrentView() {
+    const name = window.prompt("Đặt tên cho view này:");
+    if (!name?.trim()) return;
+    try {
+      await api.createView(id, name.trim(), { view, sort, filters });
+      api.listViews(id).then(setViews).catch(() => {});
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  }
+
+  /** Restores a saved view's filter/sort/mode. */
+  function applyView(v: SavedView) {
+    const cfg = v.config as {
+      view?: View;
+      sort?: SortKey;
+      filters?: FilterState;
+    };
+    if (cfg.view) setView(cfg.view);
+    if (cfg.sort) setSort(cfg.sort);
+    setFilters({ ...EMPTY_FILTERS, ...(cfg.filters ?? {}) });
+  }
+
+  const statusDefs = toStatusDefs(statuses);
+  const wipByKey: Record<string, { count: number; limit?: number }> = {};
+  statuses.forEach((s) => (wipByKey[s.key] = { count: s.taskCount, limit: s.wipLimit }));
+
+  const shared = {
+    tasks: filtered,
+    members,
+    adding,
+    draft,
+    setDraft,
+    setAdding,
+    onAdd: addTask,
+    onMove: move,
+    onOpen: setOpenTask,
+    statusDefs,
+    wipByKey,
+    group,
+    // Resolves a group key (user id, priority…) to a human label.
+    labelForGroup: (key: string) => {
+      if (key === "unassigned") return "Chưa gán";
+      if (key === "none") return "Chưa đặt";
+      return members[key]?.name ?? key;
+    },
+  };
 
   return (
     <AppShell title={
-      <div className="flex items-center gap-2 text-[14px]">
-        <Icon name="home" size={18} className="text-gray-400" />
-        <span className="text-gray-500 font-medium">Dashboard</span>
-      </div>
-    } actions={
-      <div className="flex items-center gap-6 text-[13px] font-medium text-gray-500 mr-4">
-        <a href="#" className="flex items-center gap-1.5 hover:text-gray-900"><Icon name="help_outline" size={18} /> Help Chat</a>
-        <a href="#" className="flex items-center gap-1.5 hover:text-gray-900"><Icon name="description" size={18} /> Docs</a>
-        <a href="#" className="flex items-center gap-1.5 hover:text-gray-900"><Icon name="print" size={18} /> Print</a>
+      // Header matches the other project pages so the project you're in is
+      // always named the same way, instead of saying "Dashboard".
+      <div className="flex items-center gap-sm">
+        {project && <span className="chip bg-primary-container/10 text-primary">{project.key}</span>}
+        <span>{project?.name || "Dự án"}</span>
       </div>
     }>
       <div className="p-8 max-w-[1400px] mx-auto">
+        {/* The board is the project's landing page, but it was the only project
+            page without the tab bar — so Sprints/Timeline/Reports were
+            unreachable once you clicked into a project. */}
+        <ProjectTabs projectId={id} />
+
         {/* Toolbar */}
         <div className="flex flex-wrap items-center justify-between mb-8 gap-4">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-blue-500 text-white flex items-center justify-center shadow-sm">
               <Icon name="folder_open" size={20} />
             </div>
-            <h1 className="text-[22px] font-bold text-gray-900">{project?.name || "Name Project"}</h1>
-            <button className="text-gray-400 hover:text-gray-600 transition-colors ml-1">
-              <Icon name="edit" size={18} />
-            </button>
+            <h1 className="text-[22px] font-bold text-gray-900">{project?.name || "Dự án"}</h1>
           </div>
-          
+
           <div className="flex flex-wrap items-center gap-3">
-            <button className="flex items-center gap-2 px-4 py-1.5 bg-white border border-gray-200 rounded-full text-[13px] font-semibold text-gray-700 shadow-sm hover:bg-gray-50 transition-colors">
-              <Icon name="filter_list" size={18} className="text-gray-400" /> Filter
+            {/* Saved views */}
+            {views.length > 0 && (
+              <select
+                className="bg-white border border-gray-200 rounded-full px-3 py-1.5 text-[13px] font-semibold text-gray-700 shadow-sm"
+                defaultValue=""
+                onChange={(e) => {
+                  const v = views.find((x) => x.id === e.target.value);
+                  if (v) applyView(v);
+                }}
+                title="Mở view đã lưu"
+              >
+                <option value="">Views đã lưu…</option>
+                {views.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.shared ? "👥 " : ""}{v.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button
+              onClick={saveCurrentView}
+              title="Lưu bộ lọc + kiểu hiển thị hiện tại thành view"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-full text-[13px] font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
+            >
+              <Icon name="bookmark_add" size={16} /> Lưu view
             </button>
-            <button className="flex items-center gap-2 px-4 py-1.5 bg-white border border-gray-200 rounded-full text-[13px] font-semibold text-gray-700 shadow-sm hover:bg-gray-50 transition-colors">
-              <Icon name="sort" size={18} className="text-gray-400" /> Sort
-            </button>
-            <button className="flex items-center gap-2 px-4 py-1.5 bg-white border border-gray-200 rounded-full text-[13px] font-semibold text-gray-700 shadow-sm hover:bg-gray-50 transition-colors">
-              <Icon name="check" size={18} className="text-gray-400" /> Closed
-            </button>
-            <button className="flex items-center gap-2 px-4 py-1.5 bg-white border border-gray-200 rounded-full text-[13px] font-semibold text-gray-700 shadow-sm hover:bg-gray-50 transition-colors">
-              <Icon name="group" size={18} className="text-gray-400" /> Assignee
-            </button>
-            
+
+            {/* List ↔ Board toggle */}
+            <div className="flex items-center bg-white border border-gray-200 rounded-full p-0.5 shadow-sm">
+              {(["list", "board"] as const).map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setView(v)}
+                  title={v === "list" ? "Dạng danh sách" : "Dạng bảng Kanban"}
+                  className={`flex items-center gap-1 px-3 py-1 rounded-full text-[13px] font-semibold transition-colors ${
+                    view === v ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  <Icon name={v === "list" ? "view_list" : "view_kanban"} size={16} />
+                  {v === "list" ? "List" : "Board"}
+                </button>
+              ))}
+            </div>
+
+            <TaskFilters
+              filters={filters}
+              setFilters={setFilters}
+              sort={sort}
+              setSort={setSort}
+              group={group}
+              setGroup={(g) => setGroup(g as GroupKey)}
+              members={memberList}
+              labels={labels}
+              resultCount={filtered.length}
+            />
+
             <div className="relative ml-1">
               <input
                 className="bg-white border border-gray-200 rounded-full pl-4 pr-12 py-1.5 w-[200px] text-[13px] outline-none placeholder-gray-400 focus:border-gray-300 shadow-sm"
@@ -107,7 +229,7 @@ export default function ProjectBoardPage() {
               </span>
             </div>
             
-            <button className="flex items-center gap-1.5 px-5 py-1.5 bg-gray-900 text-white rounded-full text-[13px] font-semibold hover:bg-gray-800 shadow-sm ml-1" onClick={() => { setView("list"); setDraft(""); setAdding(STATUSES[0].key); }}>
+            <button className="flex items-center gap-1.5 px-5 py-1.5 bg-gray-900 text-white rounded-full text-[13px] font-semibold hover:bg-gray-800 shadow-sm ml-1" onClick={() => { setView("list"); setDraft(""); setAdding(statusDefs[0]?.key ?? "todo"); }}>
               <Icon name="add" size={18} /> Add Task
             </button>
           </div>
@@ -119,6 +241,7 @@ export default function ProjectBoardPage() {
       {openTask && (
         <TaskDrawer
           taskId={openTask}
+          highlightCommentId={searchParams.get("comment") ?? undefined}
           onClose={() => setOpenTask(null)}
           onChanged={reload}
         />
@@ -137,19 +260,81 @@ interface ViewProps {
   onAdd: (status: string) => void;
   onMove: (t: Task, status: string) => void;
   onOpen: (id: string) => void;
+  statusDefs: StatusDef[];
+  wipByKey: Record<string, { count: number; limit?: number }>;
+  group: GroupKey;
+  labelForGroup: (key: string) => string;
 }
 
-function ListView({ tasks, members, adding, draft, setDraft, setAdding, onAdd, onMove, onOpen }: ViewProps) {
+/** Shows "count/limit" and turns red once a column is at or over its WIP limit. */
+function WipBadge({ wip }: { wip?: { count: number; limit?: number } }) {
+  if (!wip) return null;
+  if (!wip.limit) {
+    return (
+      <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full text-[11px] font-bold">
+        {wip.count}
+      </span>
+    );
+  }
+  const over = wip.count >= wip.limit;
+  return (
+    <span
+      title={`Giới hạn WIP: ${wip.limit}`}
+      className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+        over ? "bg-red-100 text-red-600" : "bg-gray-100 text-gray-500"
+      }`}
+    >
+      {wip.count}/{wip.limit}
+    </span>
+  );
+}
+
+function ListView(props: ViewProps) {
+  const { tasks, group, labelForGroup } = props;
+
+  // When grouping by something other than status, render one swimlane per
+  // group and reuse the status-column layout inside it.
+  if (group !== "status" && group !== "none") {
+    const lanes = groupTasks(tasks, group, labelForGroup);
+    return (
+      <div className="flex flex-col gap-10">
+        {lanes.map((lane) => (
+          <section key={lane.key}>
+            <div className="flex items-center gap-2 mb-4">
+              <h3 className="text-[15px] font-bold text-gray-900">{lane.label}</h3>
+              <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full text-[11px] font-bold">
+                {lane.tasks.length}
+              </span>
+              <div className="flex-grow h-px bg-gray-100" />
+            </div>
+            <StatusGroups {...props} tasks={lane.tasks} />
+          </section>
+        ))}
+        {lanes.length === 0 && (
+          <p className="text-center text-gray-500 py-10">Không có công việc nào khớp bộ lọc.</p>
+        )}
+      </div>
+    );
+  }
+
+  return <StatusGroups {...props} />;
+}
+
+/** Renders tasks grouped by their status column (the default layout). */
+function StatusGroups({ tasks, members, adding, draft, setDraft, setAdding, onAdd, onMove, onOpen, statusDefs, wipByKey }: ViewProps) {
   return (
     <div className="flex flex-col gap-10">
-      {STATUSES.map((s) => {
+      {statusDefs.map((s) => {
         const items = tasks.filter((t) => t.status === s.key);
         return (
           <div key={s.key} className="flex flex-col gap-3">
             {/* Group Header */}
             <div className="flex items-center justify-between">
-              <span className={`px-3 py-1 rounded-full text-[12px] font-bold ${s.chipBg} ${s.chipText}`}>
-                {s.label}
+              <span className="flex items-center gap-2">
+                <span className={`px-3 py-1 rounded-full text-[12px] font-bold ${s.chipBg} ${s.chipText}`} style={s.style}>
+                  {s.label}
+                </span>
+                <WipBadge wip={wipByKey[s.key]} />
               </span>
               <div className="flex items-center gap-1 text-gray-400">
                 <button className="p-1 hover:bg-gray-100 rounded-md"><Icon name="more_horiz" size={20} /></button>
@@ -158,9 +343,14 @@ function ListView({ tasks, members, adding, draft, setDraft, setAdding, onAdd, o
               </div>
             </div>
 
-            {/* Tasks List */}
-            <div className="flex flex-col gap-3">
-              {items.map((t) => (
+            {/* Tasks List — virtualised past ~60 rows so large backlogs stay smooth */}
+            <VirtualList
+              items={items}
+              rowHeight={58}
+              gap={12}
+              height={620}
+              className="flex flex-col gap-3"
+              renderRow={(t) => (
                 <div key={t.id} className="flex items-center bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)] hover:border-gray-300 transition-colors cursor-pointer group" onClick={() => onOpen(t.id)}>
                   <Icon name="drag_indicator" size={20} className="text-gray-300 mr-2 cursor-grab" />
                   
@@ -262,8 +452,10 @@ function ListView({ tasks, members, adding, draft, setDraft, setAdding, onAdd, o
                     )}
                   </div>
                 </div>
-              ))}
-              
+              )}
+            />
+
+            <div className="flex flex-col gap-3">
               {/* Add row */}
               {adding === s.key ? (
                 <div className="flex items-center bg-white border border-blue-400 rounded-xl px-4 py-3 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.05)]">
@@ -296,23 +488,65 @@ function ListView({ tasks, members, adding, draft, setDraft, setAdding, onAdd, o
   );
 }
 
-function BoardView({ tasks, members, adding, draft, setDraft, setAdding, onAdd, onMove, onOpen }: ViewProps) {
-  // Keeping simple board view for fallback, styling it slightly to match new aesthetic
+function BoardView({ tasks, members, adding, draft, setDraft, setAdding, onAdd, onMove, onOpen, statusDefs, wipByKey }: ViewProps) {
+  // Native HTML5 drag & drop — no extra dependency needed for column moves.
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overCol, setOverCol] = useState<string | null>(null);
+
+  function handleDrop(statusKey: string) {
+    const task = tasks.find((t) => t.id === dragId);
+    setDragId(null);
+    setOverCol(null);
+    if (task && task.status !== statusKey) onMove(task, statusKey);
+  }
+
   return (
     <div className="flex gap-lg overflow-x-auto pb-lg">
-      {STATUSES.map((s) => {
+      {statusDefs.map((s) => {
         const items = tasks.filter((t) => t.status === s.key);
+        const wip = wipByKey[s.key];
+        const full = !!wip?.limit && wip.count >= wip.limit;
         return (
-          <div key={s.key} className="flex flex-col gap-3 w-80 flex-shrink-0">
+          <div
+            key={s.key}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setOverCol(s.key);
+            }}
+            onDragLeave={() => setOverCol((c) => (c === s.key ? null : c))}
+            onDrop={() => handleDrop(s.key)}
+            className={`flex flex-col gap-3 w-80 flex-shrink-0 rounded-xl p-2 -m-2 transition-colors ${
+              overCol === s.key
+                ? full
+                  ? "bg-red-50 ring-2 ring-red-200"
+                  : "bg-blue-50 ring-2 ring-blue-200"
+                : ""
+            }`}
+          >
             <div className="flex items-center justify-between">
-              <span className={`px-3 py-1 rounded-full text-[12px] font-bold ${s.chipBg} ${s.chipText}`}>
+              <span className={`px-3 py-1 rounded-full text-[12px] font-bold ${s.chipBg} ${s.chipText}`} style={s.style}>
                 {s.label}
               </span>
-              <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full text-[11px] font-bold">{items.length}</span>
+              <WipBadge wip={wip ?? { count: items.length }} />
             </div>
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 min-h-[60px]">
               {items.map((t) => (
-                <button key={t.id} onClick={() => onOpen(t.id)} className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm hover:border-gray-300 transition-colors text-left flex flex-col gap-3">
+                <button
+                  key={t.id}
+                  draggable
+                  onDragStart={(e) => {
+                    setDragId(t.id);
+                    e.dataTransfer.effectAllowed = "move";
+                  }}
+                  onDragEnd={() => {
+                    setDragId(null);
+                    setOverCol(null);
+                  }}
+                  onClick={() => onOpen(t.id)}
+                  className={`bg-white border border-gray-200 p-4 rounded-xl shadow-sm hover:border-gray-300 transition-all text-left flex flex-col gap-3 cursor-grab active:cursor-grabbing ${
+                    dragId === t.id ? "opacity-40 scale-[0.98]" : ""
+                  }`}
+                >
                   <div className="flex items-start justify-between gap-2">
                     <h4 className="text-[14px] font-semibold text-gray-900 leading-snug">{t.title}</h4>
                     {t.priority && (

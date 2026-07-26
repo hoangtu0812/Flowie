@@ -9,6 +9,18 @@ export function monthLabel(ym: string): string {
   return MONTHS[idx] ?? ym;
 }
 
+/**
+ * Formats a trend bucket key for the x axis. The backend sends "2026-07" for
+ * monthly ranges and "2026-07-25" for the daily one, so the label follows suit:
+ * "Th7" vs "25/7".
+ */
+export function trendLabel(key: string): string {
+  const parts = key.split("-");
+  if (parts.length < 3) return monthLabel(key);
+  const [, m, d] = parts;
+  return `${parseInt(d, 10)}/${parseInt(m, 10)}`;
+}
+
 /** Formats a number as USD currency. */
 export function money(n: number): string {
   return n.toLocaleString(undefined, { style: "currency", currency: "USD" });

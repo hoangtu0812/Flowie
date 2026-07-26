@@ -31,6 +31,25 @@ func (m *SessionManager) RequireAuth(next http.Handler) http.Handler {
 			httpx.Error(w, http.StatusUnauthorized, "unauthenticated", "invalid subject")
 			return
 		}
+		// A half-authenticated session may only finish the MFA challenge.
+		if claims.MFAPending {
+			httpx.Error(w, http.StatusUnauthorized, "mfa_required", "two-factor verification required")
+			return
+		}
+		// Honour remote revocation when a session registry is configured.
+		if m.registry != nil {
+			hash := HashToken(tok)
+			revoked, err := m.registry.IsRevoked(r.Context(), hash)
+			if err != nil {
+				httpx.Error(w, http.StatusInternalServerError, "session_check_failed", err.Error())
+				return
+			}
+			if revoked {
+				httpx.Error(w, http.StatusUnauthorized, "session_revoked", "session has been revoked")
+				return
+			}
+			m.registry.Touch(r.Context(), hash)
+		}
 		ctx := context.WithValue(r.Context(), userIDKey, userID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

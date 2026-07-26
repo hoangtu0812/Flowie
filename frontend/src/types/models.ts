@@ -30,6 +30,52 @@ export interface Project {
   role?: string;
 }
 
+export interface SavedView {
+  id: string;
+  projectId: string;
+  ownerId?: string;
+  shared: boolean;
+  name: string;
+  config: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface APIKey {
+  id: string;
+  workspaceId: string;
+  name: string;
+  prefix: string;
+  scopes: string[];
+  active: boolean;
+  lastUsedAt?: string;
+  revokedAt?: string;
+  createdAt: string;
+}
+
+export interface Integration {
+  id: string;
+  projectId: string;
+  provider: string; // slack | teams
+  webhookUrl: string;
+  events: string[];
+  active: boolean;
+  lastStatus?: number;
+  lastError?: string;
+  createdAt: string;
+}
+
+export interface WorkflowStatus {
+  id: string;
+  projectId: string;
+  key: string;
+  name: string;
+  category: string; // todo | in_progress | done
+  color: string;
+  position: number;
+  wipLimit?: number;
+  taskCount: number;
+}
+
 export interface Label {
   id: string;
   projectId: string;
@@ -54,6 +100,13 @@ export interface Task {
   startAt?: string;
   endAt?: string;
   sprintId?: string;
+  // Backlog prioritisation (Module 3.2)
+  moscow?: string; // must | should | could | wont
+  riceReach?: number;
+  riceImpact?: number;
+  riceConfidence?: number;
+  riceEffort?: number;
+  riceScore?: number; // derived server-side
   // enriched (list endpoint)
   labels?: Label[];
   commentCount?: number;
@@ -78,6 +131,8 @@ export interface Notification {
   title: string;
   body: string;
   taskId?: string;
+  /** Frontend path to open when clicked, e.g. "/projects/{id}?task={id}". */
+  link?: string;
   readAt?: string;
   createdAt: string;
 }
@@ -90,6 +145,102 @@ export interface Member {
   role: string;
   hourlyRate: number;
   currency: string;
+}
+
+export interface UserSession {
+  id: string;
+  device: string;
+  ip: string;
+  lastSeen: string;
+  expiresAt: string;
+  createdAt: string;
+  current: boolean;
+}
+
+export interface Webhook {
+  id: string;
+  projectId: string;
+  url: string;
+  events: string[];
+  active: boolean;
+  hasSecret: boolean;
+  lastStatus?: number;
+  lastError?: string;
+  lastSentAt?: string;
+  createdAt: string;
+}
+
+export interface ScheduledReport {
+  id: string;
+  workspaceId: string;
+  projectId?: string;
+  name: string;
+  frequency: string;
+  channelUrl: string;
+  provider: string;
+  hourUtc: number;
+  active: boolean;
+  lastRunAt?: string;
+  lastStatus?: number;
+  lastError?: string;
+  createdAt: string;
+}
+
+export interface AuditEntry {
+  id: string;
+  actorId?: string;
+  actorEmail: string;
+  workspaceId?: string;
+  action: string;
+  target: string;
+  ip: string;
+  meta: Record<string, unknown>;
+  createdAt: string;
+}
+
+/** A file or folder returned by the SharePoint browser. */
+export interface DriveItem {
+  id: string;
+  name: string;
+  webUrl: string;
+  size?: number;
+  folder?: { childCount: number };
+  file?: { mimeType: string };
+  lastModifiedDateTime?: string;
+}
+
+export interface WorkspaceInvite {
+  id: string;
+  workspaceId: string;
+  email: string;
+  role: string;
+  invitedBy?: string;
+  expiresAt: string;
+  acceptedAt?: string;
+  expired: boolean;
+  createdAt: string;
+}
+
+export interface CustomRole {
+  id: string;
+  workspaceId: string;
+  name: string;
+  permissions: string[];
+  createdAt: string;
+}
+
+export interface TeamMember {
+  userId: string;
+  displayName: string;
+  email: string;
+}
+
+export interface Team {
+  id: string;
+  workspaceId: string;
+  name: string;
+  createdAt: string;
+  members: TeamMember[];
 }
 
 export interface DashboardStats {
@@ -111,8 +262,40 @@ export interface ProjectStats {
   costActual: number;
 }
 
+export interface DashboardWidget {
+  id: string;
+  dashboardId: string;
+  type: string;
+  title: string;
+  config: Record<string, unknown>;
+  position: number;
+  width: number;
+}
+
+export interface Dashboard {
+  id: string;
+  workspaceId: string;
+  ownerId?: string;
+  shared: boolean;
+  name: string;
+  createdAt: string;
+  widgets: DashboardWidget[];
+}
+
+/** Bucketing for the trend chart. */
+export type TrendRange = "30d" | "6m" | "12m";
+
+/** Display name + colour of a workflow column, so charts can render statuses
+ *  the project defined rather than only the four built-in ones. */
+export interface StatusMeta {
+  key: string;
+  label: string;
+  color: string; // hex, or a legacy palette name
+}
+
 export interface TrendPoint {
-  month: string; // "2026-07"
+  /** "2026-07" for monthly ranges, "2026-07-25" for the 30-day range. */
+  month: string;
   created: number;
   completed: number;
   inWork: number;
@@ -158,6 +341,7 @@ export interface WorkspaceOverview {
   byPriority: Record<string, number>;
   projects: ProjectSummary[];
   trend: TrendPoint[];
+  statusMeta: StatusMeta[];
 }
 
 export interface ProjectOverview extends ProjectStats {
@@ -165,6 +349,7 @@ export interface ProjectOverview extends ProjectStats {
   createdDelta: number;
   completedDelta: number;
   trend: TrendPoint[];
+  statusMeta: StatusMeta[];
   assignees: AssigneeLoad[];
 }
 
@@ -195,6 +380,52 @@ export interface Sprint {
   startDate?: string;
   endDate?: string;
   position: number;
+}
+
+export interface BurndownPoint {
+  date: string;
+  remaining: number;
+  remainingTasks: number;
+  ideal: number;
+}
+
+export interface SprintBurndown {
+  sprintId: string;
+  name: string;
+  startDate?: string;
+  endDate?: string;
+  totalPoints: number;
+  totalTasks: number;
+  donePoints: number;
+  doneTasks: number;
+  points: BurndownPoint[];
+}
+
+export interface VelocityPoint {
+  sprintId: string;
+  name: string;
+  state: string;
+  committed: number;
+  completed: number;
+  committedTasks: number;
+  completedTasks: number;
+}
+
+export interface AssigneeCapacity {
+  userId?: string;
+  displayName: string;
+  points: number;
+  tasks: number;
+  doneTasks: number;
+}
+
+export interface SprintCapacity {
+  sprintId: string;
+  totalPoints: number;
+  totalTasks: number;
+  donePoints: number;
+  doneTasks: number;
+  byAssignee: AssigneeCapacity[];
 }
 
 export interface Comment {
@@ -234,6 +465,17 @@ export interface Worklog {
   state: string;
 }
 
+export interface ActiveTimer {
+  userId: string;
+  taskId: string;
+  taskTitle: string;
+  projectId: string;
+  projectKey: string;
+  note: string;
+  startedAt: string;
+  elapsedSecs: number;
+}
+
 export interface TimesheetEntry extends Worklog {
   taskTitle: string;
   projectId: string;
@@ -241,6 +483,25 @@ export interface TimesheetEntry extends Worklog {
   projectKey: string;
   userDisplayName?: string;
   userEmail?: string;
+}
+
+export interface CriticalPathItem {
+  taskId: string;
+  title: string;
+  status: string;
+  duration: number;
+  earliestStart: number;
+  earliestFinish: number;
+  latestStart: number;
+  latestFinish: number;
+  slack: number;
+  critical: boolean;
+}
+
+export interface CriticalPath {
+  projectDurationDays: number;
+  criticalTaskIds: string[];
+  items: CriticalPathItem[];
 }
 
 export interface TaskDependencyItem {
@@ -254,6 +515,38 @@ export interface TaskDependencyItem {
 export interface TaskDependencies {
   blockedBy: TaskDependencyItem[];
   blocks: TaskDependencyItem[];
+}
+
+export interface Attachment {
+  id: string;
+  taskId: string;
+  uploadedBy?: string;
+  uploaderName: string;
+  name: string;
+  sizeBytes: number;
+  contentType: string;
+  driveItemId: string;
+  webUrl: string;
+  folderPath: string;
+  createdAt: string;
+}
+
+export interface ChatChannel {
+  id: string;
+  projectId: string;
+  name: string;
+  createdAt: string;
+  unread: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  channelId: string;
+  authorId?: string;
+  authorName: string;
+  authorEmail: string;
+  body: string;
+  createdAt: string;
 }
 
 export interface CustomFieldDef {

@@ -10,6 +10,10 @@ import (
 // ErrNotFound is returned when a queried row does not exist.
 var ErrNotFound = errors.New("not found")
 
+// ErrInviteEmailMismatch is returned when an invite link is redeemed by someone
+// other than the address it was issued to.
+var ErrInviteEmailMismatch = errors.New("invite was issued to a different email")
+
 // Store is the aggregate repository handle.
 type Store struct {
 	pool *pgxpool.Pool
@@ -22,6 +26,17 @@ type Store struct {
 	Worklogs      *WorklogStore
 	Notifications *NotificationStore
 	Automations   *AutomationStore
+	Chat          *ChatStore
+	Sessions      *SessionStore
+	Webhooks      *WebhookStore
+	Dashboards    *DashboardStore
+	APIKeys       *APIKeyStore
+	Integrations  *IntegrationStore
+	SavedViews    *SavedViewStore
+	Audit         *AuditStore
+	Reports       *ReportStore
+	Attachments   *AttachmentStore
+	Invites       *InviteStore
 }
 
 // New builds a Store from a pgx pool.
@@ -36,5 +51,16 @@ func New(pool *pgxpool.Pool) *Store {
 		Worklogs:      &WorklogStore{pool: pool},
 		Notifications: &NotificationStore{pool: pool},
 		Automations:   &AutomationStore{pool: pool},
+		Chat:          &ChatStore{pool: pool},
+		Sessions:      &SessionStore{pool: pool},
+		Webhooks:      &WebhookStore{pool: pool},
+		Dashboards:    &DashboardStore{pool: pool},
+		APIKeys:       &APIKeyStore{pool: pool},
+		Integrations:  &IntegrationStore{pool: pool},
+		SavedViews:    &SavedViewStore{pool: pool},
+		Audit:         &AuditStore{pool: pool},
+		Reports:       &ReportStore{pool: pool},
+		Attachments:   &AttachmentStore{pool: pool},
+		Invites:       &InviteStore{pool: pool},
 	}
 }

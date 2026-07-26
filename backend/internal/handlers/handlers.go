@@ -4,6 +4,7 @@ package handlers
 import (
 	"github.com/flowie/backend/internal/auth"
 	"github.com/flowie/backend/internal/config"
+	"github.com/flowie/backend/internal/realtime"
 	"github.com/flowie/backend/internal/storage/sharepoint"
 	"github.com/flowie/backend/internal/store"
 )
@@ -15,9 +16,10 @@ type Handlers struct {
 	Sessions   *auth.SessionManager
 	Azure      *auth.AzureProvider
 	SharePoint *sharepoint.Client // may be nil if not configured
+	Hub        *realtime.Hub      // fan-out for live updates
 }
 
 // New builds a Handlers value.
 func New(cfg *config.Config, st *store.Store, sm *auth.SessionManager, az *auth.AzureProvider, sp *sharepoint.Client) *Handlers {
-	return &Handlers{Cfg: cfg, Store: st, Sessions: sm, Azure: az, SharePoint: sp}
+	return &Handlers{Cfg: cfg, Store: st, Sessions: sm, Azure: az, SharePoint: sp, Hub: realtime.NewHub()}
 }

@@ -5,6 +5,7 @@ import (
 
 	"github.com/flowie/backend/internal/auth"
 	"github.com/flowie/backend/internal/httpx"
+	"github.com/flowie/backend/internal/store"
 	"github.com/google/uuid"
 )
 
@@ -30,7 +31,9 @@ func (h *Handlers) WorkspaceOverview(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ov, err := h.Store.Tasks.WorkspaceOverview(r.Context(), ws.ID)
+	// ?range=30d (default) | 6m | 12m — picks the trend chart's bucketing.
+	tr := store.ParseTrendRange(r.URL.Query().Get("range"))
+	ov, err := h.Store.Tasks.WorkspaceOverview(r.Context(), ws.ID, tr)
 	if err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "overview_failed", err.Error())
 		return
@@ -45,12 +48,28 @@ func (h *Handlers) ProjectOverview(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	ov, err := h.Store.Tasks.ProjectOverview(r.Context(), proj.ID)
+	tr := store.ParseTrendRange(r.URL.Query().Get("range"))
+	ov, err := h.Store.Tasks.ProjectOverview(r.Context(), proj.ID, tr)
 	if err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "overview_failed", err.Error())
 		return
 	}
 	httpx.JSON(w, http.StatusOK, ov)
+}
+
+// ProjectCriticalPath returns the CPM analysis for a project's timeline.
+func (h *Handlers) ProjectCriticalPath(w http.ResponseWriter, r *http.Request) {
+	userID, _ := auth.UserID(r.Context())
+	proj, _, ok := h.requireProjectAccess(w, r, userID)
+	if !ok {
+		return
+	}
+	cp, err := h.Store.Tasks.CriticalPath(r.Context(), proj.ID)
+	if err != nil {
+		httpx.Error(w, http.StatusInternalServerError, "cpm_failed", err.Error())
+		return
+	}
+	httpx.JSON(w, http.StatusOK, cp)
 }
 
 // Dashboard returns the caller's summary metrics.

@@ -1,6 +1,6 @@
 // Project endpoints (Module 2) + project-level stats (Module 5).
 import { request } from "./client";
-import type { Project, ProjectStats } from "@/types/models";
+import type { CriticalPath, Project, ProjectStats } from "@/types/models";
 
 export const projectsApi = {
   listProjects: (workspaceId: string) =>
@@ -18,4 +18,6 @@ export const projectsApi = {
   getProject: (id: string) => request<Project>(`/projects/${id}`),
   projectStats: (projectId: string) =>
     request<ProjectStats>(`/projects/${projectId}/stats`),
+  criticalPath: (projectId: string) =>
+    request<CriticalPath>(`/projects/${projectId}/critical-path`),
 };

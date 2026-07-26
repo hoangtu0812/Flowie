@@ -16,13 +16,15 @@ type TaskStore struct {
 	pool *pgxpool.Pool
 }
 
-const taskColumns = `id, project_id, parent_task_id, title, description, status, priority, assignee_id, reporter_id, participant_ids, story_points, start_date, due_date, position, sprint_id, start_at, end_at, created_at, updated_at`
+const taskColumns = `id, project_id, number, parent_task_id, title, description, status, priority, assignee_id, reporter_id, participant_ids, story_points, start_date, due_date, position, sprint_id, start_at, end_at, moscow, rice_reach, rice_impact, rice_confidence, rice_effort, rice_score, created_at, updated_at`
 
 func scanTask(row pgx.Row) (*domain.Task, error) {
 	var t domain.Task
-	err := row.Scan(&t.ID, &t.ProjectID, &t.ParentTaskID, &t.Title, &t.Description,
+	err := row.Scan(&t.ID, &t.ProjectID, &t.Number, &t.ParentTaskID, &t.Title, &t.Description,
 		&t.Status, &t.Priority, &t.AssigneeID, &t.ReporterID, &t.ParticipantIDs, &t.StoryPoints,
-		&t.StartDate, &t.DueDate, &t.Position, &t.SprintID, &t.StartAt, &t.EndAt, &t.CreatedAt, &t.UpdatedAt)
+		&t.StartDate, &t.DueDate, &t.Position, &t.SprintID, &t.StartAt, &t.EndAt,
+		&t.Moscow, &t.RiceReach, &t.RiceImpact, &t.RiceConfidence, &t.RiceEffort, &t.RiceScore,
+		&t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -64,11 +66,18 @@ func (s *TaskStore) Create(ctx context.Context, p CreateTaskParams) (*domain.Tas
 		p.ParticipantIDs = []uuid.UUID{}
 	}
 
+	// reporter_id is a nullable FK: a zero UUID means "no human reporter"
+	// (e.g. a task created through the public API) and must be stored as NULL.
+	var reporter *uuid.UUID
+	if p.ReporterID != uuid.Nil {
+		reporter = &p.ReporterID
+	}
+
 	row := s.pool.QueryRow(ctx, `
 		INSERT INTO tasks (project_id, parent_task_id, title, description, status, priority, assignee_id, reporter_id, participant_ids, position)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING `+taskColumns,
-		p.ProjectID, p.ParentTaskID, p.Title, p.Description, p.Status, p.Priority, p.AssigneeID, p.ReporterID, p.ParticipantIDs, position)
+		p.ProjectID, p.ParentTaskID, p.Title, p.Description, p.Status, p.Priority, p.AssigneeID, reporter, p.ParticipantIDs, position)
 	return scanTask(row)
 }
 
@@ -133,9 +142,11 @@ func (s *TaskStore) ListByProjectEnriched(ctx context.Context, projectID uuid.UU
 	for rows.Next() {
 		var t domain.Task
 		var li domain.TaskListItem
-		if err := rows.Scan(&t.ID, &t.ProjectID, &t.ParentTaskID, &t.Title, &t.Description,
+		if err := rows.Scan(&t.ID, &t.ProjectID, &t.Number, &t.ParentTaskID, &t.Title, &t.Description,
 			&t.Status, &t.Priority, &t.AssigneeID, &t.ReporterID, &t.ParticipantIDs, &t.StoryPoints,
-			&t.StartDate, &t.DueDate, &t.Position, &t.SprintID, &t.StartAt, &t.EndAt, &t.CreatedAt, &t.UpdatedAt,
+			&t.StartDate, &t.DueDate, &t.Position, &t.SprintID, &t.StartAt, &t.EndAt,
+			&t.Moscow, &t.RiceReach, &t.RiceImpact, &t.RiceConfidence, &t.RiceEffort, &t.RiceScore,
+			&t.CreatedAt, &t.UpdatedAt,
 			&li.CommentCount, &li.ChecklistTotal, &li.ChecklistDone, &li.SubtaskCount); err != nil {
 			return nil, err
 		}
@@ -231,7 +242,12 @@ func (s *TaskStore) Update(ctx context.Context, id uuid.UUID, f TaskUpdateFields
 		    due_date = CASE WHEN $13 THEN $14 ELSE due_date END,
 		    start_at = CASE WHEN $15 THEN $16 ELSE start_at END,
 		    end_at = CASE WHEN $17 THEN $18 ELSE end_at END,
-		    reporter_id = CASE WHEN $19 THEN $20 ELSE reporter_id END
+		    reporter_id = CASE WHEN $19 THEN $20 ELSE reporter_id END,
+		    moscow = CASE WHEN $21 THEN $22 ELSE moscow END,
+		    rice_reach = CASE WHEN $23 THEN $24 ELSE rice_reach END,
+		    rice_impact = CASE WHEN $23 THEN $25 ELSE rice_impact END,
+		    rice_confidence = CASE WHEN $23 THEN $26 ELSE rice_confidence END,
+		    rice_effort = CASE WHEN $23 THEN $27 ELSE rice_effort END
 		WHERE id = $1
 		RETURNING `+taskColumns,
 		id, f.Title, f.Description, f.Priority,
@@ -242,7 +258,9 @@ func (s *TaskStore) Update(ctx context.Context, id uuid.UUID, f TaskUpdateFields
 		f.SetDueDate, f.DueDate,
 		f.SetStartAt, f.StartAt,
 		f.SetEndAt, f.EndAt,
-		f.SetReporter, f.ReporterID)
+		f.SetReporter, f.ReporterID,
+		f.SetMoscow, f.Moscow,
+		f.SetRice, f.RiceReach, f.RiceImpact, f.RiceConfidence, f.RiceEffort)
 	return scanTask(row)
 }
 
@@ -276,6 +294,17 @@ type TaskUpdateFields struct {
 
 	SetReporter bool
 	ReporterID  *uuid.UUID
+
+	// Backlog prioritisation. RICE inputs are set as one group so a partial
+	// update never leaves a half-filled score.
+	SetMoscow bool
+	Moscow    *string
+
+	SetRice        bool
+	RiceReach      *float64
+	RiceImpact     *float64
+	RiceConfidence *float64
+	RiceEffort     *float64
 }
 
 // UpdateStatus moves a task to a new status column (used by Kanban drag/drop).

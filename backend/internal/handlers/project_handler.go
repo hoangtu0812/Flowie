@@ -60,6 +60,11 @@ func (h *Handlers) CreateProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Give the new project the default board columns.
+	if err := h.Store.Tasks.SeedDefaultStatuses(r.Context(), proj.ID); err != nil {
+		slog.Warn("seed workflow statuses failed", "project", proj.ID, "err", err)
+	}
+
 	// Provision SharePoint project folder + standard subfolders (best-effort).
 	if h.SharePoint != nil {
 		h.provisionProjectFolder(r, ws.Slug, proj)

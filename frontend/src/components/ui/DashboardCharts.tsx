@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Icon from "./Icon";
 
 // ── Stat tile ────────────────────────────────────────────────
@@ -188,12 +188,26 @@ export function TrendAreaChart({
   valueSuffix?: string;
 }) {
   const [hover, setHover] = useState<number | null>(null);
+  // The SVG used preserveAspectRatio="none" over a fixed 1000-unit viewBox, so
+  // a wider container stretched every glyph horizontally. Measuring the real
+  // width and drawing 1 unit = 1 pixel keeps text at its true proportions.
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
+    ro.observe(el);
+    setWidth(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
 
   if (rows.length === 0) {
     return <p className="text-body-sm text-on-surface-variant/60">Chưa có dữ liệu.</p>;
   }
 
-  const W = 1000;
+  const W = Math.max(320, Math.round(width) || 1000);
   const H = height;
   const padL = 46;
   const padR = 12;
@@ -215,8 +229,8 @@ export function TrendAreaChart({
   const yAt = (v: number) => padT + (1 - v / axisMax) * innerH;
 
   return (
-    <div className="relative w-full">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height }} preserveAspectRatio="none">
+    <div className="relative w-full" ref={wrapRef}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: "block" }}>
         <defs>
           {series.map((s) => (
             <linearGradient key={s.key} id={`grad-${s.key}`} x1="0" y1="0" x2="0" y2="1">
@@ -253,12 +267,20 @@ export function TrendAreaChart({
           );
         })}
 
-        {/* x labels */}
-        {labels.map((l, i) => (
-          <text key={i} x={xAt(i)} y={H - 10} textAnchor="middle" fontSize={13} fill="#6b7280" fontWeight={600}>
-            {l}
-          </text>
-        ))}
+        {/* x labels — thinned so 30 daily buckets don't collide, and the first
+            and last are always kept so the range reads unambiguously. */}
+        {labels.map((l, i) => {
+          const every = Math.max(1, Math.ceil(labels.length / Math.max(2, Math.floor(innerW / 70))));
+          const keep = i === 0 || i === labels.length - 1 || i % every === 0;
+          if (!keep) return null;
+          // Nudge the edge labels inward so they aren't clipped by the viewBox.
+          const anchor = i === 0 ? "start" : i === labels.length - 1 ? "end" : "middle";
+          return (
+            <text key={i} x={xAt(i)} y={H - 10} textAnchor={anchor} fontSize={12} fill="#6b7280" fontWeight={600}>
+              {l}
+            </text>
+          );
+        })}
 
         {/* hover guide + dots */}
         {hover !== null && (
@@ -310,6 +332,120 @@ export function TrendAreaChart({
       )}
 
       {/* legend */}
+      <div className="flex items-center justify-center gap-6 mt-2">
+        {series.map((s) => (
+          <span key={s.key} className="flex items-center gap-2 text-[13px] text-gray-600">
+            <span className="w-2.5 h-2.5 rounded-full" style={{ background: s.color }} />
+            {s.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Grouped bar chart (velocity: committed vs completed) ─────
+
+export function GroupedBarChart({
+  labels,
+  rows,
+  series,
+  height = 260,
+}: {
+  labels: string[];
+  rows: Record<string, number>[];
+  series: ChartSeries[];
+  height?: number;
+}) {
+  const [hover, setHover] = useState<number | null>(null);
+  if (rows.length === 0) {
+    return <p className="text-body-sm text-on-surface-variant/60">Chưa có dữ liệu.</p>;
+  }
+
+  const W = 1000;
+  const H = height;
+  const padL = 46;
+  const padR = 12;
+  const padT = 12;
+  const padB = 34;
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+
+  const maxVal = Math.max(1, ...rows.flatMap((r) => series.map((s) => r[s.key] ?? 0)));
+  const step = niceStep(maxVal / 4);
+  const axisMax = step * 4;
+  const yAt = (v: number) => padT + (1 - v / axisMax) * innerH;
+
+  const groupW = innerW / rows.length;
+  const barW = Math.min(28, (groupW * 0.6) / series.length);
+
+  return (
+    <div className="relative w-full">
+      {/* Same fix as TrendAreaChart: "none" stretched the labels horizontally. */}
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: "block" }}>
+        {[0, 1, 2, 3, 4].map((i) => {
+          const y = yAt(step * i);
+          return (
+            <g key={i}>
+              <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="#f1f3f5" strokeWidth={1} />
+              <text x={padL - 10} y={y + 4} textAnchor="end" fontSize={13} fill="#9aa2ad" fontWeight={600}>
+                {formatCompact(step * i)}
+              </text>
+            </g>
+          );
+        })}
+
+        {rows.map((r, i) => {
+          const cx = padL + groupW * i + groupW / 2;
+          const totalW = barW * series.length + 4 * (series.length - 1);
+          return (
+            <g key={i} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
+              <rect x={padL + groupW * i} y={padT} width={groupW} height={innerH} fill="transparent" />
+              {series.map((s, si) => {
+                const v = r[s.key] ?? 0;
+                const y = yAt(v);
+                return (
+                  <rect
+                    key={s.key}
+                    x={cx - totalW / 2 + si * (barW + 4)}
+                    y={y}
+                    width={barW}
+                    height={Math.max(1, padT + innerH - y)}
+                    rx={4}
+                    fill={s.color}
+                    opacity={hover === null || hover === i ? 1 : 0.5}
+                  />
+                );
+              })}
+              <text x={cx} y={H - 10} textAnchor="middle" fontSize={13} fill="#6b7280" fontWeight={600}>
+                {labels[i]}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+
+      {hover !== null && (
+        <div
+          className="absolute pointer-events-none bg-gray-900 text-white rounded-xl px-3 py-2 shadow-lg text-[13px] z-10"
+          style={{
+            left: `${((padL + groupW * hover + groupW / 2) / W) * 100}%`,
+            top: 8,
+            transform: "translateX(-50%)",
+            whiteSpace: "nowrap",
+          }}
+        >
+          <p className="font-semibold mb-1">{labels[hover]}</p>
+          {series.map((s) => (
+            <p key={s.key} className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full" style={{ background: s.color }} />
+              <span className="text-gray-300">{s.label}</span>
+              <span className="font-semibold ml-auto">{rows[hover][s.key] ?? 0}</span>
+            </p>
+          ))}
+        </div>
+      )}
+
       <div className="flex items-center justify-center gap-6 mt-2">
         {series.map((s) => (
           <span key={s.key} className="flex items-center gap-2 text-[13px] text-gray-600">

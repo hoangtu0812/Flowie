@@ -21,7 +21,7 @@ func pctDelta(cur, prev int) float64 {
 }
 
 // WorkspaceOverview aggregates every project in a workspace for the dashboard.
-func (s *TaskStore) WorkspaceOverview(ctx context.Context, workspaceID uuid.UUID) (*domain.WorkspaceOverview, error) {
+func (s *TaskStore) WorkspaceOverview(ctx context.Context, workspaceID uuid.UUID, tr TrendRange) (*domain.WorkspaceOverview, error) {
 	o := &domain.WorkspaceOverview{
 		ByStatus:   map[string]int{},
 		ByPriority: map[string]int{},
@@ -164,33 +164,101 @@ func (s *TaskStore) WorkspaceOverview(ctx context.Context, workspaceID uuid.UUID
 		return nil, err
 	}
 
-	trend, err := s.trend(ctx, "workspace", workspaceID)
+	trend, err := s.trend(ctx, "workspace", workspaceID, tr)
 	if err != nil {
 		return nil, err
 	}
 	o.Trend = trend
 
+	meta, err := s.statusMeta(ctx, "workspace", workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	o.StatusMeta = meta
+
 	return o, nil
 }
 
-// trend returns the last 6 months of created/completed/in-work/hours activity,
-// scoped either to a whole workspace or a single project.
+// statusMeta returns the display name and colour of every workflow column in
+// scope, so charts can label and colour project-defined statuses.
+//
+// Keys are unique per project, so a workspace with several projects can define
+// the same key twice; the first definition wins, which keeps one slice per key
+// in the charts.
+func (s *TaskStore) statusMeta(ctx context.Context, scope string, id uuid.UUID) ([]domain.StatusMeta, error) {
+	scopeCol := "p.workspace_id"
+	if scope == "project" {
+		scopeCol = "p.id"
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT ON (ws.key) ws.key, ws.name, ws.color
+		FROM workflow_statuses ws
+		JOIN projects p ON p.id = ws.project_id
+		WHERE `+scopeCol+` = $1
+		ORDER BY ws.key, ws.position`, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []domain.StatusMeta{}
+	for rows.Next() {
+		var m domain.StatusMeta
+		if err := rows.Scan(&m.Key, &m.Label, &m.Color); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+// TrendRange selects the bucket size and how many buckets the trend covers.
+type TrendRange struct {
+	Unit  string // "day" or "month"
+	Count int    // number of buckets, ending with the current one
+}
+
+// ParseTrendRange maps the API's `range` query value to a bucketing choice.
+// Unknown values fall back to 30 days, which is the dashboard default.
+func ParseTrendRange(s string) TrendRange {
+	switch s {
+	case "6m":
+		return TrendRange{Unit: "month", Count: 6}
+	case "12m":
+		return TrendRange{Unit: "month", Count: 12}
+	default: // "30d"
+		return TrendRange{Unit: "day", Count: 30}
+	}
+}
+
+// trend returns created/completed/in-work/hours activity per bucket, scoped
+// either to a whole workspace or a single project.
 //
 // A task's "reached status X" timestamp comes from its most recent
 // status_changed activity event, falling back to updated_at when the task was
 // created directly in that status (or predates activity logging). Each task is
 // therefore counted at most once per series.
-func (s *TaskStore) trend(ctx context.Context, scope string, id uuid.UUID) ([]domain.TrendPoint, error) {
+func (s *TaskStore) trend(ctx context.Context, scope string, id uuid.UUID, tr TrendRange) ([]domain.TrendPoint, error) {
 	// The scope predicate is chosen from a fixed set — never interpolated input.
 	scopeCol := "p.workspace_id"
 	if scope == "project" {
 		scopeCol = "p.id"
 	}
 
+	// Likewise the bucket unit: whitelisted here, so it is safe to inline into
+	// date_trunc (which cannot take the unit as a bind parameter cleanly).
+	unit, labelFmt := "month", "YYYY-MM"
+	if tr.Unit == "day" {
+		unit, labelFmt = "day", "YYYY-MM-DD"
+	}
+	count := tr.Count
+	if count < 1 || count > 366 {
+		count = 30
+	}
+
 	rows, err := s.pool.Query(ctx, `
-		WITH months AS (
-		    SELECT date_trunc('month', CURRENT_DATE) - (n || ' month')::interval AS m
-		    FROM generate_series(5, 0, -1) AS n
+		WITH buckets AS (
+		    SELECT date_trunc('`+unit+`', CURRENT_DATE) - (n || ' `+unit+`')::interval AS m
+		    FROM generate_series($2::int - 1, 0, -1) AS n
 		),
 		scoped AS (
 		    SELECT t.id, t.status, t.created_at, t.updated_at
@@ -204,14 +272,14 @@ func (s *TaskStore) trend(ctx context.Context, scope string, id uuid.UUID) ([]do
 		                        AND a.meta->>'to' = s.status), s.updated_at) AS at
 		    FROM scoped s
 		)
-		SELECT to_char(months.m, 'YYYY-MM'),
-		    (SELECT count(*) FROM scoped s WHERE date_trunc('month', s.created_at) = months.m),
-		    (SELECT count(*) FROM reached r WHERE r.status = 'done' AND date_trunc('month', r.at) = months.m),
-		    (SELECT count(*) FROM reached r WHERE r.status = 'in_progress' AND date_trunc('month', r.at) = months.m),
+		SELECT to_char(buckets.m, '`+labelFmt+`'),
+		    (SELECT count(*) FROM scoped s WHERE date_trunc('`+unit+`', s.created_at) = buckets.m),
+		    (SELECT count(*) FROM reached r WHERE r.status = 'done' AND date_trunc('`+unit+`', r.at) = buckets.m),
+		    (SELECT count(*) FROM reached r WHERE r.status = 'in_progress' AND date_trunc('`+unit+`', r.at) = buckets.m),
 		    (SELECT COALESCE(SUM(w.minutes),0)/60.0 FROM worklogs w JOIN tasks t ON t.id = w.task_id JOIN projects p ON p.id = t.project_id
-		       WHERE `+scopeCol+` = $1 AND date_trunc('month', w.logged_on) = months.m)
-		FROM months
-		ORDER BY months.m`, id)
+		       WHERE `+scopeCol+` = $1 AND date_trunc('`+unit+`', w.logged_on) = buckets.m)
+		FROM buckets
+		ORDER BY buckets.m`, id, count)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +297,7 @@ func (s *TaskStore) trend(ctx context.Context, scope string, id uuid.UUID) ([]do
 }
 
 // ProjectOverview extends ProjectStats with trend and per-assignee load.
-func (s *TaskStore) ProjectOverview(ctx context.Context, projectID uuid.UUID) (*domain.ProjectOverview, error) {
+func (s *TaskStore) ProjectOverview(ctx context.Context, projectID uuid.UUID, tr TrendRange) (*domain.ProjectOverview, error) {
 	base, err := s.ProjectStats(ctx, projectID)
 	if err != nil {
 		return nil, err
@@ -264,11 +332,17 @@ func (s *TaskStore) ProjectOverview(ctx context.Context, projectID uuid.UUID) (*
 	o.CreatedDelta = pctDelta(curCreated, prevCreated)
 	o.CompletedDelta = pctDelta(curDone, prevDone)
 
-	trend, err := s.trend(ctx, "project", projectID)
+	trend, err := s.trend(ctx, "project", projectID, tr)
 	if err != nil {
 		return nil, err
 	}
 	o.Trend = trend
+
+	meta, err := s.statusMeta(ctx, "project", projectID)
+	if err != nil {
+		return nil, err
+	}
+	o.StatusMeta = meta
 
 	// Per-assignee load (unassigned tasks collapse into a single bucket).
 	rows, err := s.pool.Query(ctx, `

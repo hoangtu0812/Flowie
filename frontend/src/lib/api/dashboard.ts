@@ -3,15 +3,17 @@ import { request } from "./client";
 import type {
   DashboardStats,
   CalendarItem,
+  TrendRange,
   WorkspaceOverview,
   ProjectOverview,
 } from "@/types/models";
 
 export const dashboardApi = {
-  workspaceOverview: (workspaceId: string) =>
-    request<WorkspaceOverview>(`/workspaces/${workspaceId}/overview`),
-  projectOverview: (projectId: string) =>
-    request<ProjectOverview>(`/projects/${projectId}/overview`),
+  /** `range` controls the trend chart's buckets: 30 daily, or 6/12 monthly. */
+  workspaceOverview: (workspaceId: string, range: TrendRange = "30d") =>
+    request<WorkspaceOverview>(`/workspaces/${workspaceId}/overview?range=${range}`),
+  projectOverview: (projectId: string, range: TrendRange = "30d") =>
+    request<ProjectOverview>(`/projects/${projectId}/overview?range=${range}`),
   dashboard: (workspaceId?: string) =>
     request<DashboardStats>(
       workspaceId

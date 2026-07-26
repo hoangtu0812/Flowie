@@ -15,8 +15,8 @@ import {
   RingProgress,
   TrendAreaChart,
 } from "@/components/ui/DashboardCharts";
-import { STATUS_HEX, PRIORITY_HEX, statusLabel } from "@/lib/status";
-import { monthLabel, money, hours } from "@/lib/format";
+import { PRIORITY_HEX, statusSegments } from "@/lib/status";
+import { trendLabel, money, hours } from "@/lib/format";
 
 export default function ProjectDashboardPage() {
   const { id } = useParams<{ id: string }>();
@@ -28,7 +28,7 @@ export default function ProjectDashboardPage() {
     api.projectOverview(id).then(setOv).catch(() => {});
   }, [id]);
 
-  const trendLabels = useMemo(() => (ov?.trend ?? []).map((t) => monthLabel(t.month)), [ov]);
+  const trendLabels = useMemo(() => (ov?.trend ?? []).map((t) => trendLabel(t.month)), [ov]);
   const trendRows = useMemo(
     () =>
       (ov?.trend ?? []).map((t) => ({
@@ -43,15 +43,10 @@ export default function ProjectDashboardPage() {
     [ov],
   );
 
-  const statusSegments = useMemo(
-    () =>
-      ov
-        ? Object.entries(ov.byStatus).map(([k, v]) => ({
-            label: statusLabel(k),
-            value: v,
-            color: STATUS_HEX[k] ?? "#9aa2ad",
-          }))
-        : [],
+  // Labels/colours from the project's own workflow columns, so a status added
+  // in Settings charts correctly rather than as an unnamed grey slice.
+  const segments = useMemo(
+    () => (ov ? statusSegments(ov.byStatus, ov.statusMeta ?? []) : []),
     [ov],
   );
   const prioBars = useMemo(
@@ -129,7 +124,7 @@ export default function ProjectDashboardPage() {
         <div className="grid gap-6 grid-cols-1 lg:grid-cols-2 mb-8">
           <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
             <h3 className="text-[17px] font-bold text-gray-900 mb-5">Theo trạng thái</h3>
-            {statusSegments.length > 0 ? <Donut segments={statusSegments} /> : <Empty />}
+            {segments.length > 0 ? <Donut segments={segments} /> : <Empty />}
           </div>
           <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
             <h3 className="text-[17px] font-bold text-gray-900 mb-5">Theo độ ưu tiên</h3>

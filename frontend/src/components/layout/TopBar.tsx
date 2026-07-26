@@ -5,6 +5,8 @@ import Link from "next/link";
 import { api, User, Workspace } from "@/lib/api";
 import Icon from "../ui/Icon";
 import NotificationBell from "./NotificationBell";
+import TimerWidget from "../task/TimerWidget";
+import ThemeToggle from "./ThemeToggle";
 
 export default function TopBar({
   title,
@@ -103,8 +105,10 @@ export default function TopBar({
 
         {/* Right: Actions & User */}
         <div className="flex items-center gap-4">
+          <TimerWidget />
           <div className="flex items-center gap-3 text-gray-400">
             <NotificationBell />
+            <ThemeToggle />
             <button className="hover:text-gray-600 transition-colors">
               <Icon name="help_outline" size={22} />
             </button>
@@ -150,6 +154,17 @@ export default function TopBar({
           )}
         </div>
       </div>
+
+      {/* Page header row.
+          `title` and `actions` were accepted as props but never rendered, so
+          every page-level button in the app (Dự án mới, Sprint mới, Tạo mới,
+          xuất CSV…) was invisible. */}
+      {(title || actions) && (
+        <div className="flex items-center justify-between gap-4 px-lg py-3 border-b border-outline-variant/30">
+          <div className="text-[18px] font-bold text-on-surface min-w-0 truncate">{title}</div>
+          {actions && <div className="flex items-center gap-sm shrink-0">{actions}</div>}
+        </div>
+      )}
     </header>
   );
 }

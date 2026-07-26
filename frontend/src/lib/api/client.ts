@@ -7,9 +7,13 @@ export const API_BASE =
 
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  /** Machine-readable code from the backend's `error` field, e.g. "no_folder".
+   *  Branch on this rather than matching the localised `message`. */
+  code: string;
+  constructor(status: number, message: string, code = "") {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -24,13 +28,15 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     let msg = res.statusText;
+    let code = "";
     try {
       const body = await res.json();
       msg = body.message || body.error || msg;
+      code = body.error || "";
     } catch {
       /* ignore */
     }
-    throw new ApiError(res.status, msg);
+    throw new ApiError(res.status, msg, code);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/flowie/backend/internal/auth"
@@ -31,12 +32,53 @@ func (h *Handlers) AdminListUsers(w http.ResponseWriter, r *http.Request) {
 	if !h.requireAdmin(w, r) {
 		return
 	}
-	users, err := h.Store.Users.ListAll(r.Context())
+	// Paginated + server-side search. Returning every user (a synced Azure
+	// tenant is thousands) made the admin page unusable.
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	limit := clampInt(atoiOr(r.URL.Query().Get("limit"), 50), 1, 200)
+	offset := atoiOr(r.URL.Query().Get("offset"), 0)
+	if offset < 0 {
+		offset = 0
+	}
+
+	users, err := h.Store.Users.Search(r.Context(), q, limit, offset)
 	if err != nil {
-		httpx.Error(w, http.StatusInternalServerError, "db_error", err.Error())
+		httpx.Error(w, http.StatusInternalServerError, "list_failed", err.Error())
 		return
 	}
-	httpx.JSON(w, http.StatusOK, users)
+	total, err := h.Store.Users.CountUsers(r.Context(), q)
+	if err != nil {
+		httpx.Error(w, http.StatusInternalServerError, "list_failed", err.Error())
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]any{
+		"users":  users,
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
+	})
+}
+
+// atoiOr parses a query-string integer, falling back to def when absent/invalid.
+func atoiOr(s string, def int) int {
+	if s == "" {
+		return def
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return def
+	}
+	return n
+}
+
+func clampInt(n, lo, hi int) int {
+	if n < lo {
+		return lo
+	}
+	if n > hi {
+		return hi
+	}
+	return n
 }
 
 func (h *Handlers) AdminToggleUser(w http.ResponseWriter, r *http.Request) {
@@ -90,7 +132,22 @@ func (h *Handlers) AdminCreateWorkspace(w http.ResponseWriter, r *http.Request) 
 		httpx.Error(w, http.StatusBadRequest, "invalid_body", err.Error())
 		return
 	}
-	slug := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(payload.Name), " ", "-"))
+	payload.Name = strings.TrimSpace(payload.Name)
+	if payload.Name == "" {
+		httpx.Error(w, http.StatusBadRequest, "validation", "name is required")
+		return
+	}
+	// An omitted owner used to reach Postgres as the zero UUID and surface as a
+	// raw foreign-key error; default to the admin doing the creating.
+	if payload.Owner == uuid.Nil {
+		actor, ok := auth.UserID(r.Context())
+		if !ok {
+			httpx.Error(w, http.StatusBadRequest, "validation", "owner_id is required")
+			return
+		}
+		payload.Owner = actor
+	}
+	slug := strings.ToLower(strings.ReplaceAll(payload.Name, " ", "-"))
 	ws, err := h.Store.Workspaces.Create(r.Context(), payload.Name, slug, payload.Owner)
 	if err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "db_error", err.Error())

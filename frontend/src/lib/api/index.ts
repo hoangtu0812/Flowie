@@ -14,12 +14,18 @@ import { tasksApi } from "./tasks";
 import { dependenciesApi } from "./dependencies";
 import { customFieldsApi } from "./customFields";
 import { labelsApi } from "./labels";
+import { workflowApi } from "./workflow";
 import { sprintsApi } from "./sprints";
 import { worklogsApi } from "./worklogs";
 import { membersApi } from "./members";
+import { iamApi } from "./iam";
+import { chatApi } from "./chat";
+import { integrationsApi } from "./integrations";
+import { opsApi } from "./ops";
 import { notificationsApi } from "./notifications";
 import { automationsApi } from "./automations";
 import { dashboardApi } from "./dashboard";
+import { dashboardsApi } from "./dashboards";
 import { timesheetApi } from "./timesheet";
 
 export const api = {
@@ -31,12 +37,18 @@ export const api = {
   ...dependenciesApi,
   ...customFieldsApi,
   ...labelsApi,
+  ...workflowApi,
   ...sprintsApi,
   ...worklogsApi,
   ...membersApi,
+  ...iamApi,
+  ...chatApi,
+  ...integrationsApi,
+  ...opsApi,
   ...notificationsApi,
   ...automationsApi,
   ...dashboardApi,
+  ...dashboardsApi,
   ...timesheetApi,
 };
 

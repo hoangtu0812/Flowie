@@ -29,6 +29,7 @@ export default function TimesheetPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
 
   const weekDays = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
@@ -84,11 +85,24 @@ export default function TimesheetPage() {
   const grand = dayTotals.reduce((a, b) => a + b, 0);
   const anyDraft = entries.some((e) => e.state === "draft");
 
+  /** Entries awaiting a decision — only meaningful in the team (project) view. */
+  const pending = useMemo(
+    () => entries.filter((e) => e.state === "submitted"),
+    [entries],
+  );
+
   async function submit() {
     setSubmitting(true);
     await api.submitTimesheet(from, to).catch(() => {});
     await load();
     setSubmitting(false);
+  }
+
+  async function review(worklogId: string, state: "approved" | "rejected") {
+    setReviewing(true);
+    await api.setWorklogState(worklogId, state).catch(() => {});
+    await load();
+    setReviewing(false);
   }
 
   function exportWeek() {
@@ -238,6 +252,60 @@ export default function TimesheetPage() {
         <p className="text-body-sm text-on-surface-variant/70 mt-sm">
           Ô ngày quá 8h được tô đỏ. “Trình duyệt” chuyển các bản ghi nháp sang chờ duyệt.
         </p>
+
+        {/* Approval queue. The submit half of this workflow already existed, but
+            there was no screen for the manager to act on what was submitted. */}
+        {selectedProject && (
+          <div className="mt-xl">
+            <h3 className="text-headline-md mb-md">
+              Chờ duyệt
+              {pending.length > 0 && (
+                <span className="chip bg-orange-50 text-orange-600 ml-sm">{pending.length}</span>
+              )}
+            </h3>
+            {pending.length === 0 ? (
+              <div className="card p-lg text-center text-on-surface-variant">
+                Không có bản ghi nào chờ duyệt trong tuần này.
+              </div>
+            ) : (
+              <div className="card divide-y divide-outline-variant/40">
+                {pending.map((e) => (
+                  <div key={e.id} className="p-md flex flex-wrap items-center gap-md">
+                    <div className="min-w-0 flex-grow">
+                      <p className="text-body-md font-medium text-on-surface truncate">
+                        {e.userDisplayName || e.userEmail} · {e.taskTitle}
+                      </p>
+                      <p className="text-body-sm text-on-surface-variant">
+                        {new Date(e.loggedOn).toLocaleDateString()} · {(e.minutes / 60).toFixed(2)}h
+                        {e.note ? ` · ${e.note}` : ""}
+                      </p>
+                    </div>
+                    <button className="btn-ghost text-green-600" onClick={() => review(e.id, "approved")}>
+                      <Icon name="check" size={18} /> Duyệt
+                    </button>
+                    <button className="btn-ghost text-red-500" onClick={() => review(e.id, "rejected")}>
+                      <Icon name="close" size={18} /> Từ chối
+                    </button>
+                  </div>
+                ))}
+                <div className="p-md flex justify-end">
+                  <button
+                    className="btn-primary"
+                    disabled={reviewing}
+                    onClick={async () => {
+                      setReviewing(true);
+                      await Promise.all(pending.map((e) => api.setWorklogState(e.id, "approved"))).catch(() => {});
+                      await load();
+                      setReviewing(false);
+                    }}
+                  >
+                    <Icon name="done_all" size={18} /> Duyệt tất cả ({pending.length})
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </AppShell>
   );

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { api, Project, Task } from "@/lib/api";
+import { api, CriticalPath, Project, Task } from "@/lib/api";
 import AppShell from "@/components/layout/AppShell";
 import ProjectTabs from "@/components/layout/ProjectTabs";
 import TaskDrawer from "@/components/task/TaskDrawer";
@@ -22,9 +22,12 @@ export default function TimelinePage() {
   const [project, setProject] = useState<Project | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [openTask, setOpenTask] = useState<string | null>(null);
+  const [cpm, setCpm] = useState<CriticalPath | null>(null);
+  const [showCritical, setShowCritical] = useState(true);
 
   const reload = useCallback(() => {
     api.listTasks(id).then(setTasks).catch(() => {});
+    api.criticalPath(id).then(setCpm).catch(() => setCpm(null));
   }, [id]);
 
   useEffect(() => {
@@ -72,7 +75,30 @@ export default function TimelinePage() {
     >
       <div className="p-lg">
         {project && <ProjectTabs projectId={id} />}
-        <h2 className="text-headline-md mb-lg">Timeline (Gantt)</h2>
+
+        <div className="flex flex-wrap items-center justify-between gap-md mb-lg">
+          <h2 className="text-headline-md">Timeline (Gantt)</h2>
+          {cpm && cpm.items.length > 0 && (
+            <div className="flex items-center gap-md">
+              <span className="text-body-sm text-on-surface-variant">
+                Đường găng: <b className="text-on-surface">{cpm.criticalTaskIds.length}</b> việc ·
+                dự kiến <b className="text-on-surface">{cpm.projectDurationDays}</b> ngày
+              </span>
+              <button
+                onClick={() => setShowCritical((v) => !v)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-semibold border shadow-sm transition-colors ${
+                  showCritical
+                    ? "bg-red-50 border-red-200 text-red-600"
+                    : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+                }`}
+                title="Tô đỏ các công việc không có thời gian trễ (slack = 0)"
+              >
+                <span className="w-2 h-2 rounded-full bg-red-500" />
+                Critical Path
+              </button>
+            </div>
+          )}
+        </div>
 
         {scheduled.length === 0 ? (
           <div className="card p-xl text-center text-on-surface-variant">
@@ -109,20 +135,39 @@ export default function TimelinePage() {
                 const offset = daysBetween(spanStart, s);
                 const len = Math.max(1, daysBetween(s, e) + 1);
                 const st = statusByKey(t.status);
+                const cpItem = cpm?.items.find((i) => i.taskId === t.id);
+                const isCritical = showCritical && !!cpItem?.critical;
                 return (
                   <div key={t.id} className="flex items-center border-b border-outline-variant/50 hover:bg-surface-container-low">
                     <button
-                      className="w-60 flex-shrink-0 px-md py-2 text-left text-body-sm truncate border-r border-outline-variant"
+                      className="w-60 flex-shrink-0 px-md py-2 text-left text-body-sm truncate border-r border-outline-variant flex items-center gap-1.5"
                       onClick={() => setOpenTask(t.id)}
                     >
-                      {t.title}
+                      {isCritical && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" title="Trên đường găng" />
+                      )}
+                      <span className="truncate">{t.title}</span>
                     </button>
                     <div className="relative flex-grow h-9" style={{ width: totalDays * DAY }}>
                       <button
                         onClick={() => setOpenTask(t.id)}
-                        className={`absolute top-1.5 h-6 rounded-md ${st.dot} opacity-90 hover:opacity-100 flex items-center px-2`}
-                        style={{ left: offset * DAY, width: len * DAY - 4 }}
-                        title={`${t.title}`}
+                        className={`absolute top-1.5 h-6 rounded-md flex items-center px-2 transition-all ${
+                          isCritical
+                            ? "bg-red-500 ring-2 ring-red-300"
+                            : `${st.dot} opacity-90 hover:opacity-100`
+                        }`}
+                        style={{
+                          left: offset * DAY,
+                          width: len * DAY - 4,
+                          // Custom columns carry arbitrary hex, which Tailwind
+                          // cannot express as a class — fill the bar inline.
+                          ...(isCritical || !st.hex ? {} : { backgroundColor: st.hex }),
+                        }}
+                        title={
+                          cpItem
+                            ? `${t.title}\nThời lượng ${cpItem.duration} ngày · slack ${cpItem.slack} ngày${cpItem.critical ? " (đường găng)" : ""}`
+                            : t.title
+                        }
                       >
                         <span className="text-on-primary text-label-sm truncate">{t.title}</span>
                       </button>

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { api, User } from "@/lib/api";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
+import KeyboardShortcuts from "./KeyboardShortcuts";
 
 export default function AppShell({
   title,
@@ -18,6 +19,22 @@ export default function AppShell({
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "anon">("loading");
+  const [collapsed, setCollapsed] = useState<boolean>(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("sidebar_collapsed");
+    if (saved === "true") {
+      setCollapsed(true);
+    }
+  }, []);
+
+  const toggleSidebar = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem("sidebar_collapsed", String(next));
+      return next;
+    });
+  };
 
   useEffect(() => {
     (async () => {
@@ -46,8 +63,9 @@ export default function AppShell({
 
   return (
     <div>
-      <Sidebar user={user} />
-      <main className="ml-[260px] flex flex-col min-h-screen bg-white">
+      <KeyboardShortcuts />
+      <Sidebar user={user} collapsed={collapsed} onToggle={toggleSidebar} />
+      <main className={`flex flex-col min-h-screen bg-white transition-all duration-300 ${collapsed ? "ml-[70px]" : "ml-[260px]"}`}>
         <TopBar title={title} user={user} actions={actions} />
         <div className="flex-grow">{children}</div>
       </main>

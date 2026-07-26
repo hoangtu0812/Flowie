@@ -14,17 +14,21 @@ type NotificationStore struct {
 }
 
 // Create inserts a notification for a user.
-func (s *NotificationStore) Create(ctx context.Context, userID uuid.UUID, ntype, title, body string, taskID *uuid.UUID) error {
+//
+// `link` is the frontend path to open when the notification is clicked. It is
+// computed at write time because the notification list must not need a lookup
+// per row just to become clickable.
+func (s *NotificationStore) Create(ctx context.Context, userID uuid.UUID, ntype, title, body string, taskID *uuid.UUID, link string) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO notifications (user_id, type, title, body, task_id)
-		VALUES ($1,$2,$3,$4,$5)`, userID, ntype, title, body, taskID)
+		INSERT INTO notifications (user_id, type, title, body, task_id, link)
+		VALUES ($1,$2,$3,$4,$5,$6)`, userID, ntype, title, body, taskID, link)
 	return err
 }
 
 // ListForUser returns a user's notifications (newest first) + unread count.
 func (s *NotificationStore) ListForUser(ctx context.Context, userID uuid.UUID, limit int) ([]domain.Notification, int, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, user_id, type, title, body, task_id, read_at, created_at
+		SELECT id, user_id, type, title, body, task_id, link, read_at, created_at
 		FROM notifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT $2`, userID, limit)
 	if err != nil {
 		return nil, 0, err
@@ -33,7 +37,7 @@ func (s *NotificationStore) ListForUser(ctx context.Context, userID uuid.UUID, l
 	out := []domain.Notification{}
 	for rows.Next() {
 		var n domain.Notification
-		if err := rows.Scan(&n.ID, &n.UserID, &n.Type, &n.Title, &n.Body, &n.TaskID, &n.ReadAt, &n.CreatedAt); err != nil {
+		if err := rows.Scan(&n.ID, &n.UserID, &n.Type, &n.Title, &n.Body, &n.TaskID, &n.Link, &n.ReadAt, &n.CreatedAt); err != nil {
 			return nil, 0, err
 		}
 		out = append(out, n)

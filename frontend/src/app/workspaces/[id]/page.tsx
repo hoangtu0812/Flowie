@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { api, Project, Workspace, WorkspaceOverview } from "@/lib/api";
+import { api, Project, TrendRange, Workspace, WorkspaceOverview } from "@/lib/api";
 import AppShell from "@/components/layout/AppShell";
 import Icon from "@/components/ui/Icon";
 import {
@@ -13,42 +13,33 @@ import {
   RingProgress,
   TrendAreaChart,
 } from "@/components/ui/DashboardCharts";
-import { monthLabel } from "@/lib/format";
+import NewProjectDialog from "@/components/project/NewProjectDialog";
+import NewTaskDialog from "@/components/task/NewTaskDialog";
+import { trendLabel } from "@/lib/format";
 
 export default function WorkspacePage() {
   const { id } = useParams<{ id: string }>();
   const [ws, setWs] = useState<Workspace | null>(null);
   const [ov, setOv] = useState<WorkspaceOverview | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [form, setForm] = useState({ name: "", key: "", description: "" });
-  const [open, setOpen] = useState(false);
+  /** null = closed; otherwise which creation dialog is open. */
+  const [dialog, setDialog] = useState<"project" | "task" | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Trend chart window. 30 days is the default — it's the horizon people act on. */
+  const [range, setRange] = useState<TrendRange>("30d");
+
+  const reload = useCallback(() => {
+    api.workspaceOverview(id, range).then(setOv).catch(() => {});
+    api.listProjects(id).then(setProjects).catch((e) => setError(e.message));
+  }, [id, range]);
 
   useEffect(() => {
     api.getWorkspace(id).then(setWs).catch(() => {});
-    api.workspaceOverview(id).then(setOv).catch(() => {});
-    api.listProjects(id).then(setProjects).catch((e) => setError(e.message));
-  }, [id]);
+    reload();
+  }, [id, reload]);
 
-  async function createProject(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    try {
-      const p = await api.createProject(id, {
-        name: form.name.trim(),
-        key: form.key.trim().toUpperCase(),
-        description: form.description.trim(),
-      });
-      setProjects((prev) => [p, ...prev]);
-      setForm({ name: "", key: "", description: "" });
-      setOpen(false);
-      api.workspaceOverview(id).then(setOv).catch(() => {});
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  }
-
-  const trendLabels = useMemo(() => (ov?.trend ?? []).map((t) => monthLabel(t.month)), [ov]);
+  const trendLabels = useMemo(() => (ov?.trend ?? []).map((t) => trendLabel(t.month)), [ov]);
   const trendRows = useMemo(
     () =>
       (ov?.trend ?? []).map((t) => ({
@@ -63,11 +54,43 @@ export default function WorkspacePage() {
   const openTasks = ov ? ov.totalTasks - ov.doneTasks : 0;
   const overduePct = openTasks > 0 && ov ? (ov.overdueTasks / openTasks) * 100 : 0;
 
+  // A single "Tạo mới" affordance on the dashboard — previously the only way
+  // to create anything was to already be inside a project.
   const actions = (
-    <button className="btn-primary" onClick={() => setOpen(true)}>
-      <Icon name="add" size={20} />
-      Dự án mới
-    </button>
+    <div className="relative">
+      <button className="btn-primary" onClick={() => setMenuOpen((v) => !v)}>
+        <Icon name="add" size={20} />
+        Tạo mới
+        <Icon name="expand_more" size={18} />
+      </button>
+      {menuOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+          <div className="absolute right-0 mt-1 z-50 w-52 card shadow-popover py-1">
+            <MenuItem
+              icon="folder_open"
+              label="Dự án mới"
+              onClick={() => { setMenuOpen(false); setDialog("project"); }}
+            />
+            <MenuItem
+              icon="check_circle"
+              label="Công việc mới"
+              onClick={() => { setMenuOpen(false); setDialog("task"); }}
+              disabled={projects.length === 0}
+              hint={projects.length === 0 ? "Cần có dự án trước" : undefined}
+            />
+            <Link
+              href="/calendar"
+              className="flex items-center gap-3 px-4 py-2 text-body-md text-on-surface hover:bg-surface-container"
+              onClick={() => setMenuOpen(false)}
+            >
+              <Icon name="event" size={18} className="text-on-surface-variant" />
+              Lịch họp / sự kiện
+            </Link>
+          </div>
+        </>
+      )}
+    </div>
   );
 
   return (
@@ -121,9 +144,27 @@ export default function WorkspacePage() {
 
         {/* Trend chart */}
         <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-8">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
             <h3 className="text-[17px] font-bold text-gray-900">Biểu đồ công việc</h3>
-            <span className="text-[13px] text-gray-400">6 tháng gần nhất</span>
+            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
+              {([
+                { key: "30d", label: "30 ngày" },
+                { key: "6m", label: "6 tháng" },
+                { key: "12m", label: "12 tháng" },
+              ] as const).map((r) => (
+                <button
+                  key={r.key}
+                  onClick={() => setRange(r.key)}
+                  className={`px-3 py-1 rounded-md text-[13px] font-medium transition-colors ${
+                    range === r.key
+                      ? "bg-white text-gray-900 shadow-sm"
+                      : "text-gray-500 hover:text-gray-900"
+                  }`}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
           </div>
           <TrendAreaChart
             labels={trendLabels}
@@ -160,7 +201,9 @@ export default function WorkspacePage() {
                   return (
                     <tr key={p.projectId} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60">
                       <td className="py-3 px-6">
-                        <Link href={`/projects/${p.projectId}/dashboard`} className="flex items-center gap-3 group">
+                        {/* Same destination as the sidebar's project list, so a
+                            project always opens the same way. */}
+                        <Link href={`/projects/${p.projectId}`} className="flex items-center gap-3 group">
                           <span className="chip bg-primary-container/10 text-primary">{p.key}</span>
                           <span className="font-semibold text-gray-900 group-hover:text-primary truncate">{p.name}</span>
                         </Link>
@@ -193,83 +236,61 @@ export default function WorkspacePage() {
           </div>
         </div>
 
-        <h3 className="text-[20px] font-bold text-gray-900 mb-6">Danh sách Dự án</h3>
-
-        <div className="grid gap-md grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-          {projects.map((p) => (
-            <Link key={p.id} href={`/projects/${p.id}`}>
-              <div className="card p-lg hover:border-primary/40 hover:shadow-popover transition-all h-full">
-                <div className="flex items-center justify-between mb-sm">
-                  <span className="chip bg-primary-container/10 text-primary">{p.key}</span>
-                  <span
-                    className={`chip ${
-                      p.status === "active"
-                        ? "bg-success-container text-success"
-                        : "bg-surface-container-highest text-on-surface-variant"
-                    }`}
-                  >
-                    {p.status}
-                  </span>
-                </div>
-                <p className="text-headline-md text-on-surface">{p.name}</p>
-                <p className="text-body-sm text-on-surface-variant mt-1 line-clamp-2">
-                  {p.description || "Không có mô tả"}
-                </p>
-              </div>
-            </Link>
-          ))}
-          {projects.length === 0 && (
-            <div className="card p-xl text-center text-on-surface-variant col-span-full">
-              <Icon name="folder_open" size={40} className="text-outline mb-sm" />
-              <p>Chưa có dự án nào. Nhấn “Dự án mới” để tạo.</p>
-            </div>
-          )}
-        </div>
+        {/* The rollup table above already lists every project with live numbers,
+            so the old duplicate card grid was removed in favour of one link. */}
+        {projects.length === 0 ? (
+          <div className="card p-xl text-center text-on-surface-variant">
+            <Icon name="folder_open" size={40} className="text-outline mb-sm" />
+            <p className="text-body-lg font-medium text-on-surface">Chưa có dự án nào</p>
+            <p className="text-body-sm mt-1 mb-md">Tạo dự án đầu tiên để bắt đầu theo dõi công việc.</p>
+            <button className="btn-primary mx-auto" onClick={() => setDialog("project")}>
+              <Icon name="add" size={18} /> Dự án mới
+            </button>
+          </div>
+        ) : (
+          <Link href="/projects" className="btn-ghost w-fit">
+            <Icon name="grid_view" size={18} /> Xem tất cả {projects.length} dự án
+          </Link>
+        )}
       </div>
 
-      {open && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/20 p-md" onClick={() => setOpen(false)}>
-          <form
-            onClick={(e) => e.stopPropagation()}
-            onSubmit={createProject}
-            className="card shadow-modal p-lg w-full max-w-md"
-          >
-            <h3 className="text-headline-lg text-on-surface mb-md">Tạo dự án</h3>
-            <label className="block text-label-md text-on-surface-variant mb-1">Tên dự án</label>
-            <input
-              className="field mb-md"
-              placeholder="Website Revamp"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              autoFocus
-            />
-            <label className="block text-label-md text-on-surface-variant mb-1">Mã (KEY)</label>
-            <input
-              className="field mb-md uppercase"
-              placeholder="WEB"
-              value={form.key}
-              onChange={(e) => setForm({ ...form, key: e.target.value })}
-            />
-            <label className="block text-label-md text-on-surface-variant mb-1">Mô tả</label>
-            <textarea
-              className="field mb-lg"
-              rows={3}
-              placeholder="Tuỳ chọn"
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-            />
-            <div className="flex justify-end gap-sm">
-              <button type="button" className="btn-ghost" onClick={() => setOpen(false)}>
-                Huỷ
-              </button>
-              <button className="btn-primary" disabled={!form.name.trim() || !form.key.trim()}>
-                Tạo dự án
-              </button>
-            </div>
-          </form>
-        </div>
+      {dialog === "project" && (
+        <NewProjectDialog
+          workspaceId={id}
+          onClose={() => setDialog(null)}
+          onCreated={() => { setDialog(null); reload(); }}
+        />
+      )}
+      {dialog === "task" && (
+        <NewTaskDialog
+          workspaceId={id}
+          onClose={() => setDialog(null)}
+          onCreated={() => { setDialog(null); reload(); }}
+        />
       )}
     </AppShell>
+  );
+}
+
+function MenuItem({
+  icon, label, onClick, disabled, hint,
+}: {
+  icon: string;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  hint?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={hint}
+      className="w-full flex items-center gap-3 px-4 py-2 text-body-md text-on-surface hover:bg-surface-container disabled:opacity-40 disabled:cursor-not-allowed"
+    >
+      <Icon name={icon} size={18} className="text-on-surface-variant" />
+      {label}
+    </button>
   );
 }
 

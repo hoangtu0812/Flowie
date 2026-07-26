@@ -6,7 +6,7 @@ import { api, AutomationRule, Member, Project } from "@/lib/api";
 import AppShell from "@/components/layout/AppShell";
 import Icon from "@/components/ui/Icon";
 import ProjectTabs from "@/components/layout/ProjectTabs";
-import { STATUSES } from "@/lib/status";
+import { STATUSES, StatusDef, toStatusDefs } from "@/lib/status";
 
 export default function AutomationsPage() {
   const { id } = useParams<{ id: string }>();
@@ -15,6 +15,9 @@ export default function AutomationsPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [form, setForm] = useState({ triggerStatus: "in_review", assigneeId: "", name: "" });
   const [error, setError] = useState<string | null>(null);
+  /** Columns configured for this project, not the built-in four. A status
+   *  added in Settings never showed up in the trigger dropdown before. */
+  const [statusDefs, setStatusDefs] = useState<StatusDef[]>(STATUSES);
 
   const load = useCallback(() => {
     api.listAutomations(id).then(setRules).catch(() => setRules([]));
@@ -26,11 +29,19 @@ export default function AutomationsPage() {
       setMembers(m);
       if (m.length > 0) setForm((f) => ({ ...f, assigneeId: m[0].userId }));
     }).catch(() => {});
+    api.listStatuses(id).then((ss) => {
+      const defs = toStatusDefs(ss);
+      setStatusDefs(defs);
+      // Default the trigger to a real column of this project.
+      setForm((f) => (defs.some((d) => d.key === f.triggerStatus)
+        ? f
+        : { ...f, triggerStatus: defs[0]?.key ?? f.triggerStatus }));
+    }).catch(() => {});
     load();
   }, [id, load]);
 
   const memberName = (uid?: string) => members.find((m) => m.userId === uid)?.displayName || "—";
-  const statusLabel = (k: string) => STATUSES.find((s) => s.key === k)?.label || k;
+  const statusLabel = (k: string) => statusDefs.find((s) => s.key === k)?.label || k;
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
@@ -64,7 +75,7 @@ export default function AutomationsPage() {
             <div>
               <label className="text-label-md text-on-surface-variant">Khi status →</label>
               <select className="field mt-1 w-40" value={form.triggerStatus} onChange={(e) => setForm({ ...form, triggerStatus: e.target.value })}>
-                {STATUSES.map((s) => (<option key={s.key} value={s.key}>{s.label}</option>))}
+                {statusDefs.map((s) => (<option key={s.key} value={s.key}>{s.label}</option>))}
               </select>
             </div>
             <div>

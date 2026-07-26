@@ -52,14 +52,21 @@ func (s *UserStore) GetByID(ctx context.Context, id uuid.UUID) (*domain.User, er
 	return scanUser(row)
 }
 
-// ListAll returns all users in the system.
-func (s *UserStore) ListAll(ctx context.Context) ([]domain.User, error) {
-	rows, err := s.pool.Query(ctx, `SELECT `+userColumns+` FROM users ORDER BY created_at DESC`)
+// Search returns a page of users, optionally filtered by name or email.
+//
+// This replaces an unbounded ListAll: an Azure tenant sync leaves thousands of
+// rows here, and shipping all of them to the admin page froze the browser.
+func (s *UserStore) Search(ctx context.Context, query string, limit, offset int) ([]domain.User, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT `+userColumns+` FROM users
+		WHERE ($1 = '' OR display_name ILIKE '%'||$1||'%' OR email ILIKE '%'||$1||'%')
+		ORDER BY is_system_admin DESC, display_name
+		LIMIT $2 OFFSET $3`, query, limit, offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []domain.User
+	out := []domain.User{}
 	for rows.Next() {
 		u, err := scanUser(rows)
 		if err != nil {
@@ -68,6 +75,17 @@ func (s *UserStore) ListAll(ctx context.Context) ([]domain.User, error) {
 		out = append(out, *u)
 	}
 	return out, rows.Err()
+}
+
+// CountUsers returns how many users match the same filter as Search, so the UI
+// can show a total and page through it.
+func (s *UserStore) CountUsers(ctx context.Context, query string) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx, `
+		SELECT count(*) FROM users
+		WHERE ($1 = '' OR display_name ILIKE '%'||$1||'%' OR email ILIKE '%'||$1||'%')`,
+		query).Scan(&n)
+	return n, err
 }
 
 // SetSystemAdmin sets the is_system_admin flag for a user.

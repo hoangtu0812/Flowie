@@ -73,7 +73,11 @@ func run() error {
 	}
 
 	sessions := auth.NewSessionManager(cfg.SessionSecret, cfg.SessionTTL, cfg.Env != "development")
+	// Enables remote session revocation (device list / "log out everywhere").
+	sessions.UseRegistry(st.Sessions)
 	h := handlers.New(cfg, st, sessions, azure, sp)
+	// Background loop that posts daily/weekly digests to Slack/Teams.
+	h.StartReportScheduler(ctx)
 	router := server.NewRouter(cfg, h, sessions)
 
 	srv := &http.Server{

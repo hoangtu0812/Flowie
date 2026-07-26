@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -25,7 +26,7 @@ func parseMentions(body string) map[string]bool {
 }
 
 // notifyMentions notifies workspace members mentioned in a comment body.
-func (h *Handlers) notifyMentions(r *http.Request, task *domain.Task, body string, notified map[uuid.UUID]bool) {
+func (h *Handlers) notifyMentions(r *http.Request, task *domain.Task, body string, notified map[uuid.UUID]bool, commentID uuid.UUID) {
 	tokens := parseMentions(body)
 	if len(tokens) == 0 {
 		return
@@ -53,7 +54,8 @@ func (h *Handlers) notifyMentions(r *http.Request, task *domain.Task, body strin
 		}
 		if tokens[email] || tokens[local] || (first != "" && tokens[first]) {
 			_ = h.Store.Notifications.Create(r.Context(), m.UserID, "mentioned",
-				"Bạn được nhắc đến trong một bình luận", task.Title, &task.ID)
+				"Bạn được nhắc đến trong một bình luận", task.Title, &task.ID,
+				commentLink(task.ProjectID, task.ID, commentID))
 			notified[m.UserID] = true
 		}
 	}
@@ -76,8 +78,7 @@ func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if role == domain.WorkspaceRoleGuest {
-		httpx.Error(w, http.StatusForbidden, "forbidden", "guests cannot create tasks")
+	if !h.requirePermission(w, r, proj.WorkspaceID, userID, role, "task.create") {
 		return
 	}
 
@@ -108,6 +109,7 @@ func (h *Handlers) CreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = h.Store.Tasks.RecordActivity(r.Context(), task.ID, userID, "created", map[string]any{"title": task.Title})
+	h.emit(proj.ID, userID, "task.created", map[string]any{"taskId": task.ID})
 	httpx.JSON(w, http.StatusCreated, task)
 }
 
@@ -118,14 +120,19 @@ func (h *Handlers) DeleteTask(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if role == domain.WorkspaceRoleGuest {
-		httpx.Error(w, http.StatusForbidden, "forbidden", "guests cannot delete tasks")
+	proj, err := h.Store.Projects.GetByID(r.Context(), task.ProjectID)
+	if err != nil {
+		httpx.Error(w, http.StatusNotFound, "not_found", "project not found")
+		return
+	}
+	if !h.requirePermission(w, r, proj.WorkspaceID, userID, role, "task.delete") {
 		return
 	}
 	if err := h.Store.Tasks.Delete(r.Context(), task.ID); err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "delete_failed", err.Error())
 		return
 	}
+	h.emit(task.ProjectID, userID, "task.deleted", map[string]any{"taskId": task.ID})
 	httpx.JSON(w, http.StatusNoContent, nil)
 }
 
@@ -170,6 +177,17 @@ func (h *Handlers) UpdateTaskStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Enforce the target column's WIP limit (only when actually moving).
+	if task.Status != req.Status {
+		if proj, err := h.Store.Projects.GetByID(r.Context(), task.ProjectID); err == nil {
+			if over, limit, count := h.checkWIPLimit(r, proj, req.Status); over {
+				httpx.Error(w, http.StatusConflict, "wip_limit_exceeded",
+					fmt.Sprintf("cột này giới hạn %d công việc (hiện có %d)", limit, count))
+				return
+			}
+		}
+	}
+
 	updated, err := h.Store.Tasks.UpdateStatus(r.Context(), task.ID, req.Status)
 	if err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "update_failed", err.Error())
@@ -179,6 +197,8 @@ func (h *Handlers) UpdateTaskStatus(w http.ResponseWriter, r *http.Request) {
 		_ = h.Store.Tasks.RecordActivity(r.Context(), task.ID, userID, "status_changed",
 			map[string]any{"from": task.Status, "to": req.Status})
 		h.runAutomations(r, updated, userID)
+		h.emit(task.ProjectID, userID, "task.status_changed",
+			map[string]any{"taskId": task.ID, "from": task.Status, "to": req.Status})
 	}
 	httpx.JSON(w, http.StatusOK, updated)
 }
@@ -220,7 +240,17 @@ type updateTaskRequest struct {
 	ParticipantIDs *[]string `json:"participantIds"`
 	StartAt        *string   `json:"startAt"` // datetime, or "" to clear
 	EndAt          *string   `json:"endAt"`
+
+	// Backlog prioritisation (Module 3.2)
+	Moscow         *string  `json:"moscow"` // "" clears
+	RiceReach      *float64 `json:"riceReach"`
+	RiceImpact     *float64 `json:"riceImpact"`
+	RiceConfidence *float64 `json:"riceConfidence"`
+	RiceEffort     *float64 `json:"riceEffort"`
 }
+
+// validMoscow lists the accepted MoSCoW buckets.
+var validMoscow = map[string]bool{"must": true, "should": true, "could": true, "wont": true}
 
 // UpdateTask patches editable task fields.
 func (h *Handlers) UpdateTask(w http.ResponseWriter, r *http.Request) {
@@ -229,9 +259,10 @@ func (h *Handlers) UpdateTask(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if role == domain.WorkspaceRoleGuest {
-		httpx.Error(w, http.StatusForbidden, "forbidden", "guests cannot edit tasks")
-		return
+	if proj, pErr := h.Store.Projects.GetByID(r.Context(), task.ProjectID); pErr == nil {
+		if !h.requirePermission(w, r, proj.WorkspaceID, userID, role, "task.edit") {
+			return
+		}
 	}
 	var req updateTaskRequest
 	if err := httpx.Decode(r, &req); err != nil {
@@ -291,18 +322,37 @@ func (h *Handlers) UpdateTask(w http.ResponseWriter, r *http.Request) {
 			f.EndAt = d
 		}
 	}
-	updated, err := h.Store.Tasks.Update(r.Context(), task.ID, f)
-	if req.AssigneeID != nil && f.AssigneeID != nil {
-		_ = h.Store.Tasks.RecordActivity(r.Context(), task.ID, userID, "assigned", map[string]any{"assigneeId": f.AssigneeID.String()})
-		if *f.AssigneeID != userID {
-			_ = h.Store.Notifications.Create(r.Context(), *f.AssigneeID, "assigned",
-				"Bạn được giao một công việc", task.Title, &task.ID)
+	if req.Moscow != nil {
+		m := strings.ToLower(strings.TrimSpace(*req.Moscow))
+		if m != "" && !validMoscow[m] {
+			httpx.Error(w, http.StatusBadRequest, "validation", "moscow must be must, should, could or wont")
+			return
+		}
+		f.SetMoscow = true
+		if m != "" {
+			f.Moscow = &m
 		}
 	}
+	// RICE inputs travel together so the generated score stays consistent.
+	if req.RiceReach != nil || req.RiceImpact != nil || req.RiceConfidence != nil || req.RiceEffort != nil {
+		f.SetRice = true
+		f.RiceReach, f.RiceImpact = req.RiceReach, req.RiceImpact
+		f.RiceConfidence, f.RiceEffort = req.RiceConfidence, req.RiceEffort
+	}
+	updated, err := h.Store.Tasks.Update(r.Context(), task.ID, f)
 	if err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "update_failed", err.Error())
 		return
 	}
+	// `task` is the pre-update snapshot, so the diff can report from → to for
+	// every field, not just the assignee.
+	h.recordTaskDiff(r.Context(), userID, task, updated)
+
+	if req.AssigneeID != nil && f.AssigneeID != nil && *f.AssigneeID != userID {
+		_ = h.Store.Notifications.Create(r.Context(), *f.AssigneeID, "assigned",
+			"Bạn được giao một công việc", task.Title, &task.ID, taskLink(task.ProjectID, task.ID))
+	}
+	h.emit(task.ProjectID, userID, "task.updated", map[string]any{"taskId": task.ID})
 	httpx.JSON(w, http.StatusOK, updated)
 }
 
@@ -338,11 +388,13 @@ func (h *Handlers) AddComment(w http.ResponseWriter, r *http.Request) {
 	// Notify the assignee (if any, and not the commenter).
 	if task.AssigneeID != nil && !notified[*task.AssigneeID] {
 		_ = h.Store.Notifications.Create(r.Context(), *task.AssigneeID, "commented",
-			"Bình luận mới trên công việc của bạn", task.Title, &task.ID)
+			"Bình luận mới trên công việc của bạn", task.Title, &task.ID,
+			commentLink(task.ProjectID, task.ID, c.ID))
 		notified[*task.AssigneeID] = true
 	}
 	// Notify @mentioned members.
-	h.notifyMentions(r, task, req.Body, notified)
+	h.notifyMentions(r, task, req.Body, notified, c.ID)
+	h.emit(task.ProjectID, userID, "task.commented", map[string]any{"taskId": task.ID})
 
 	httpx.JSON(w, http.StatusCreated, c)
 }
@@ -475,5 +527,12 @@ func (h *Handlers) SetTaskLabel(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusInternalServerError, "update_failed", err.Error())
 		return
 	}
+	verb := "label_removed"
+	if req.On {
+		verb = "label_added"
+	}
+	_ = h.Store.Tasks.RecordActivity(r.Context(), task.ID, userID, verb, map[string]any{
+		"label": h.labelName(r.Context(), task.ProjectID, req.LabelID),
+	})
 	httpx.JSON(w, http.StatusOK, map[string]any{"ok": true})
 }

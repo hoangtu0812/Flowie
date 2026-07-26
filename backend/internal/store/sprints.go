@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/flowie/backend/internal/domain"
 	"github.com/google/uuid"
@@ -64,11 +65,18 @@ func (s *SprintStore) GetByID(ctx context.Context, id uuid.UUID) (*domain.Sprint
 	return scanSprint(row)
 }
 
-// UpdateFields carries optional sprint edits.
+// UpdateFields carries optional sprint edits. Set* flags allow clearing the
+// nullable date columns.
 type SprintUpdateFields struct {
 	Name  *string
 	Goal  *string
 	State *string
+
+	SetStartDate bool
+	StartDate    *time.Time
+
+	SetEndDate bool
+	EndDate    *time.Time
 }
 
 // Update patches a sprint's editable fields.
@@ -77,8 +85,11 @@ func (s *SprintStore) Update(ctx context.Context, id uuid.UUID, f SprintUpdateFi
 		UPDATE sprints SET
 		    name = COALESCE($2, name),
 		    goal = COALESCE($3, goal),
-		    state = COALESCE($4::sprint_state, state)
+		    state = COALESCE($4::sprint_state, state),
+		    start_date = CASE WHEN $5 THEN $6 ELSE start_date END,
+		    end_date = CASE WHEN $7 THEN $8 ELSE end_date END
 		WHERE id = $1
-		RETURNING `+sprintColumns, id, f.Name, f.Goal, f.State)
+		RETURNING `+sprintColumns, id, f.Name, f.Goal, f.State,
+		f.SetStartDate, f.StartDate, f.SetEndDate, f.EndDate)
 	return scanSprint(row)
 }
