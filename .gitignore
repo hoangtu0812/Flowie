@@ -1,28 +1,51 @@
-# Env / secrets
+# Environment & Secrets (Never commit credentials)
 .env
-.env.local
+.env.*
+!.env.example
+*.env
+*.pem
+*.key
+*.pfx
+*.p12
+*.crt
+*.cert
 *.local
 
-# Go
+# Go Binaries & Caches
 /backend/bin/
 /backend/tmp/
 *.exe
 *.out
 *.test
+*.prof
 
-# Node / Next.js
+# Node / Next.js / TypeScript Build Artifacts
 node_modules/
 .next/
 out/
 dist/
+*.tsbuildinfo
+tsconfig.tsbuildinfo
 npm-debug.log*
+yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 
-# Editor / OS
+# Test Reports & Playwright Caches
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+blob-report/
+.cache/
+
+# Editor & OS Metadata
 .vscode/
 .idea/
+.claude/
+.gemini/
 .DS_Store
 Thumbs.db
 
-# Docker volumes (local)
+# Docker Local Storage
 /.data/
