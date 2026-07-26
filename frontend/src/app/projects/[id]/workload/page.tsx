@@ -52,9 +52,10 @@ export default function WorkloadPage() {
         </div>
       }
     >
-      <div className="p-lg max-w-5xl">
+      <div className="p-lg">
         {project && <ProjectTabs projectId={id} />}
-        <div className="flex items-center justify-between mb-lg">
+        <div className="max-w-5xl">
+          <div className="flex items-center justify-between mb-lg">
           <h2 className="text-headline-md">Workload</h2>
           <span className="text-body-sm text-on-surface-variant">Capacity giả định: {CAPACITY} pts</span>
         </div>
@@ -99,8 +100,9 @@ export default function WorkloadPage() {
           )}
         </div>
       </div>
+    </div>
 
-      {openTask && <TaskDrawer taskId={openTask} onClose={() => setOpenTask(null)} onChanged={reload} />}
+    {openTask && <TaskDrawer taskId={openTask} onClose={() => setOpenTask(null)} onChanged={reload} />}
     </AppShell>
   );
 }

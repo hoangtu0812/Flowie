@@ -63,53 +63,53 @@ export default function AutomationsPage() {
         </div>
       }
     >
-      <div className="p-lg max-w-3xl">
+      <div className="p-lg">
         {project && <ProjectTabs projectId={id} />}
-        <h2 className="text-headline-md mb-md">Automation</h2>
-        <p className="text-body-sm text-on-surface-variant mb-lg">
-          Quy tắc <b>Trigger → Action</b>: khi task chuyển sang một trạng thái, tự động gán cho người phụ trách (và gửi thông báo).
-        </p>
+        <div className="max-w-3xl">
+          <h2 className="text-headline-md mb-md">Automation</h2>
+          <p className="text-body-sm text-on-surface-variant mb-lg">
+            Quy tắc <b>Trigger → Action</b>: khi task chuyển sang một trạng thái, tự động gán cho người phụ trách (và gửi thông báo).
+          </p>
 
-        <form onSubmit={create} className="card p-lg mb-lg">
-          <div className="flex flex-wrap items-end gap-sm">
-            <div>
-              <label className="text-label-md text-on-surface-variant">Khi status →</label>
-              <select className="field mt-1 w-40" value={form.triggerStatus} onChange={(e) => setForm({ ...form, triggerStatus: e.target.value })}>
-                {statusDefs.map((s) => (<option key={s.key} value={s.key}>{s.label}</option>))}
-              </select>
-            </div>
-            <div>
-              <label className="text-label-md text-on-surface-variant">Gán cho</label>
-              <select className="field mt-1 w-48" value={form.assigneeId} onChange={(e) => setForm({ ...form, assigneeId: e.target.value })}>
-                {members.map((m) => (<option key={m.userId} value={m.userId}>{m.displayName || m.email}</option>))}
-              </select>
-            </div>
-            <button className="btn-primary" disabled={!form.assigneeId}>
-              <Icon name="add" size={18} /> Thêm quy tắc
-            </button>
-          </div>
-          {error && <p className="text-error text-body-sm mt-sm">{error}</p>}
-        </form>
-
-        <div className="flex flex-col gap-sm">
-          {rules.map((r) => (
-            <div key={r.id} className="card p-md flex items-center justify-between">
-              <div className="flex items-center gap-sm text-body-md">
-                <Icon name="bolt" size={18} className="text-primary" />
-                <span>Khi status →</span>
-                <span className="chip bg-primary-fixed text-on-primary-fixed-variant">{statusLabel(r.triggerStatus)}</span>
-                <Icon name="arrow_forward" size={16} className="text-on-surface-variant" />
-                <span>gán cho</span>
-                <span className="font-medium">{memberName(r.actionAssigneeId)}</span>
+          <form onSubmit={create} className="card p-lg mb-lg">
+            <div className="flex flex-wrap items-end gap-sm">
+              <div>
+                <label className="text-label-md text-on-surface-variant">Khi status →</label>
+                <select className="field mt-1 w-40" value={form.triggerStatus} onChange={(e) => setForm({ ...form, triggerStatus: e.target.value })}>
+                  {statusDefs.map((s) => (<option key={s.key} value={s.key}>{s.label}</option>))}
+                </select>
               </div>
-              <button className="text-on-surface-variant hover:text-error" onClick={async () => { await api.deleteAutomation(r.id).catch(() => {}); load(); }}>
-                <Icon name="delete" size={18} />
+              <span className="text-body-lg text-on-surface-variant mb-2">tự động gán cho</span>
+              <div>
+                <label className="text-label-md text-on-surface-variant">Thành viên</label>
+                <select className="field mt-1 w-48" value={form.assigneeId} onChange={(e) => setForm({ ...form, assigneeId: e.target.value })}>
+                  <option value="">-- Chọn --</option>
+                  {members.map((m) => (<option key={m.userId} value={m.userId}>{m.displayName || m.email}</option>))}
+                </select>
+              </div>
+              <button className="btn-primary" type="submit" disabled={!form.assigneeId}>
+                <Icon name="add" size={18} /> Thêm rule
               </button>
             </div>
-          ))}
-          {rules.length === 0 && (
-            <div className="card p-xl text-center text-on-surface-variant">Chưa có quy tắc nào.</div>
-          )}
+          </form>
+
+          <div className="flex flex-col gap-sm">
+            {rules.map((r) => (
+              <div key={r.id} className="card p-md flex items-center justify-between">
+                <div className="flex items-center gap-sm">
+                  <span className="chip bg-secondary-container text-on-secondary-container">{statusLabel(r.triggerStatus)}</span>
+                  <span className="text-body-sm text-on-surface-variant">→ Gán cho</span>
+                  <span className="text-body-sm font-medium text-on-surface">{memberName(r.actionAssigneeId)}</span>
+                </div>
+                <button className="text-on-surface-variant hover:text-error" onClick={async () => { await api.deleteAutomation(r.id).catch(() => {}); load(); }}>
+                  <Icon name="delete" size={18} />
+                </button>
+              </div>
+            ))}
+            {rules.length === 0 && (
+              <div className="card p-xl text-center text-on-surface-variant">Chưa có quy tắc nào.</div>
+            )}
+          </div>
         </div>
       </div>
     </AppShell>

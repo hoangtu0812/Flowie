@@ -97,8 +97,10 @@ export default function ProjectChatPage() {
 
   return (
     <AppShell title={project ? `${project.key} · Chat` : "Chat"}>
-      <div className="p-lg max-w-[1400px]">
+      <div className="p-lg">
         <ProjectTabs projectId={id} />
+
+        <div className="max-w-[1400px]">
 
         {error && <p className="text-error text-body-sm mb-md">{error}</p>}
 
@@ -201,6 +203,7 @@ export default function ProjectChatPage() {
               </div>
             )}
           </section>
+        </div>
         </div>
       </div>
     </AppShell>

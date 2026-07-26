@@ -67,8 +67,10 @@ export default function ProjectDashboardPage() {
 
   return (
     <AppShell title={project ? `${project.key} · Dashboard` : "Dashboard"}>
-      <div className="p-lg max-w-[1400px]">
+      <div className="p-lg">
         <ProjectTabs projectId={id} />
+
+        <div className="max-w-[1400px]">
 
         {/* KPI tiles */}
         <div className="grid gap-5 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 mb-6">
@@ -196,6 +198,7 @@ export default function ProjectDashboardPage() {
               </tbody>
             </table>
           </div>
+        </div>
         </div>
       </div>
     </AppShell>

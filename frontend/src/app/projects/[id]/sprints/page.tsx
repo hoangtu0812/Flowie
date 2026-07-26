@@ -92,100 +92,102 @@ export default function SprintPlanningPage() {
       }
       actions={actions}
     >
-      <div className="p-lg max-w-7xl">
+      <div className="p-lg">
         {project && <ProjectTabs projectId={id} />}
 
-        <div className="flex items-baseline justify-between mb-lg">
-          <h2 className="text-headline-md">Lập kế hoạch Sprint</h2>
-          <p className="text-body-sm text-on-surface-variant">
-            {sprints.length} sprint · {backlog.length} việc trong backlog
-          </p>
-        </div>
-
-        {error && <p className="text-error text-body-sm mb-md">{error}</p>}
-
-        {sprints.length === 0 && !creating && (
-          <div className="card p-xl text-center text-on-surface-variant mb-lg">
-            <Icon name="sprint" size={40} className="text-outline mb-sm" />
-            <p className="text-body-lg font-medium text-on-surface">Chưa có sprint nào</p>
-            <p className="text-body-sm mt-1 mb-md">
-              Mọi công việc đang nằm ở backlog. Tạo sprint đầu tiên rồi kéo việc vào.
+        <div className="max-w-7xl">
+          <div className="flex items-baseline justify-between mb-lg">
+            <h2 className="text-headline-md">Lập kế hoạch Sprint</h2>
+            <p className="text-body-sm text-on-surface-variant">
+              {sprints.length} sprint · {backlog.length} việc trong backlog
             </p>
-            <button className="btn-primary mx-auto" onClick={() => setCreating(true)}>
-              <Icon name="add" size={18} /> Tạo sprint đầu tiên
-            </button>
           </div>
-        )}
 
-        <div className="flex flex-col gap-lg">
-          {sprints.map((s) => {
-            const items = tasks.filter((t) => t.sprintId === s.id);
-            return (
-              <SprintSection
-                key={s.id}
-                sprint={s}
-                count={items.length}
-                pts={points(items)}
-                onState={(st) => setState(s, st)}
-                onRename={async (name, goal) => {
-                  await api.updateSprint(s.id, { name, goal }).catch((e) => setError(e.message));
-                  reload();
-                }}
-                onDates={async (startDate, endDate) => {
-                  await api.updateSprint(s.id, { startDate, endDate }).catch((e) => setError(e.message));
-                  reload();
-                }}
-              >
+          {error && <p className="text-error text-body-sm mb-md">{error}</p>}
+
+          {sprints.length === 0 && !creating && (
+            <div className="card p-xl text-center text-on-surface-variant mb-lg">
+              <Icon name="sprint" size={40} className="text-outline mb-sm" />
+              <p className="text-body-lg font-medium text-on-surface">Chưa có sprint nào</p>
+              <p className="text-body-sm mt-1 mb-md">
+                Mọi công việc đang nằm ở backlog. Tạo sprint đầu tiên rồi kéo việc vào.
+              </p>
+              <button className="btn-primary mx-auto" onClick={() => setCreating(true)}>
+                <Icon name="add" size={18} /> Tạo sprint đầu tiên
+              </button>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-lg">
+            {sprints.map((s) => {
+              const items = tasks.filter((t) => t.sprintId === s.id);
+              return (
+                <SprintSection
+                  key={s.id}
+                  sprint={s}
+                  count={items.length}
+                  pts={points(items)}
+                  onState={(st) => setState(s, st)}
+                  onRename={async (name, goal) => {
+                    await api.updateSprint(s.id, { name, goal }).catch((e) => setError(e.message));
+                    reload();
+                  }}
+                  onDates={async (startDate, endDate) => {
+                    await api.updateSprint(s.id, { startDate, endDate }).catch((e) => setError(e.message));
+                    reload();
+                  }}
+                >
+                  <TaskRows
+                    items={items}
+                    sprints={sprints}
+                    onOpen={setOpenTask}
+                    onMove={moveTask}
+                    onPoints={setPoints}
+                  />
+                </SprintSection>
+              );
+            })}
+
+            {/* Backlog */}
+            <section>
+              <div className="flex flex-wrap justify-between items-center gap-sm mb-sm">
+                <div className="flex items-center gap-sm">
+                  <span className="chip bg-surface-container-high text-on-surface-variant">Backlog</span>
+                  <span className="text-body-sm text-on-surface-variant">
+                    {backlog.length} việc · {points(backlog)} pts
+                  </span>
+                </div>
+                {picked.size > 0 && sprints.length > 0 && (
+                  <div className="flex items-center gap-sm">
+                    <span className="text-body-sm text-on-surface-variant">Đã chọn {picked.size}</span>
+                    <select
+                      className="field w-auto"
+                      defaultValue=""
+                      onChange={(e) => { if (e.target.value) moveSelected(e.target.value); }}
+                    >
+                      <option value="">Chuyển vào sprint…</option>
+                      {sprints.filter((s) => s.state !== "completed").map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                    <button className="btn-ghost" onClick={() => setPicked(new Set())}>Bỏ chọn</button>
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
                 <TaskRows
-                  items={items}
+                  items={backlog}
                   sprints={sprints}
                   onOpen={setOpenTask}
                   onMove={moveTask}
                   onPoints={setPoints}
+                  backlog
+                  picked={picked}
+                  onPick={togglePick}
                 />
-              </SprintSection>
-            );
-          })}
-
-          {/* Backlog */}
-          <section>
-            <div className="flex flex-wrap justify-between items-center gap-sm mb-sm">
-              <div className="flex items-center gap-sm">
-                <span className="chip bg-surface-container-high text-on-surface-variant">Backlog</span>
-                <span className="text-body-sm text-on-surface-variant">
-                  {backlog.length} việc · {points(backlog)} pts
-                </span>
               </div>
-              {picked.size > 0 && sprints.length > 0 && (
-                <div className="flex items-center gap-sm">
-                  <span className="text-body-sm text-on-surface-variant">Đã chọn {picked.size}</span>
-                  <select
-                    className="field w-auto"
-                    defaultValue=""
-                    onChange={(e) => { if (e.target.value) moveSelected(e.target.value); }}
-                  >
-                    <option value="">Chuyển vào sprint…</option>
-                    {sprints.filter((s) => s.state !== "completed").map((s) => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
-                  <button className="btn-ghost" onClick={() => setPicked(new Set())}>Bỏ chọn</button>
-                </div>
-              )}
-            </div>
-            <div className="flex flex-col gap-2">
-              <TaskRows
-                items={backlog}
-                sprints={sprints}
-                onOpen={setOpenTask}
-                onMove={moveTask}
-                onPoints={setPoints}
-                backlog
-                picked={picked}
-                onPick={togglePick}
-              />
-            </div>
-          </section>
+            </section>
+          </div>
         </div>
       </div>
 

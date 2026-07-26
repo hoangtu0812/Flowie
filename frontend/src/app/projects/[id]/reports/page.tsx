@@ -81,8 +81,10 @@ export default function ProjectReportsPage() {
       title={project ? `${project.key} · Agile Reports` : "Agile Reports"}
       actions={actions || undefined}
     >
-      <div className="p-lg max-w-[1400px]">
+      <div className="p-lg">
         <ProjectTabs projectId={id} />
+
+        <div className="max-w-[1400px]">
 
         {sprints.length === 0 ? (
           <div className="card p-xl text-center text-on-surface-variant">
@@ -212,6 +214,7 @@ export default function ProjectReportsPage() {
             </div>
           </>
         )}
+        </div>
       </div>
     </AppShell>
   );

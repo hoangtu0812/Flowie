@@ -56,8 +56,9 @@ export default function ProjectFilesPage() {
         </div>
       }
     >
-      <div className="p-lg max-w-5xl">
+      <div className="p-lg">
         {project && <ProjectTabs projectId={id} />}
+        <div className="max-w-5xl">
 
         <div className="flex items-center justify-between gap-md mb-lg">
           <h2 className="text-headline-md">Tệp trên SharePoint</h2>
@@ -157,6 +158,7 @@ export default function ProjectFilesPage() {
             )}
           </div>
         )}
+        </div>
       </div>
     </AppShell>
   );

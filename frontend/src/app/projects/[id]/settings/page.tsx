@@ -87,8 +87,48 @@ export default function ProjectSettingsPage() {
       <div className="p-lg">
         <ProjectTabs projectId={id} />
 
+        <div className="max-w-4xl">
+          <div className="card p-lg mb-lg">
+            <h3 className="text-headline-md mb-1">Cột trạng thái (Workflow)</h3>
+            <p className="text-body-sm text-on-surface-variant mb-md">
+              Các cột hiển thị trên Board/List của dự án này. Đặt <b>WIP limit</b> để chặn
+              đưa quá nhiều việc vào một cột cùng lúc.
+            </p>
 
-                  <select
+            {error && <p className="text-error text-body-sm mb-sm">{error}</p>}
+
+            <div className="flex flex-col gap-sm mb-lg">
+              {statuses.map((s, i) => {
+                return (
+                  <div key={s.id} className="flex flex-wrap items-center gap-sm p-sm border border-outline-variant rounded-xl">
+                    <div className="flex flex-col">
+                      <button
+                        className="text-on-surface-variant hover:text-primary disabled:opacity-30 leading-none"
+                        onClick={() => moveCol(s, -1)}
+                        disabled={i === 0}
+                        title="Lên"
+                      >
+                        <Icon name="keyboard_arrow_up" size={18} />
+                      </button>
+                      <button
+                        className="text-on-surface-variant hover:text-primary disabled:opacity-30 leading-none"
+                        onClick={() => moveCol(s, 1)}
+                        disabled={i === statuses.length - 1}
+                        title="Xuống"
+                      >
+                        <Icon name="keyboard_arrow_down" size={18} />
+                      </button>
+                    </div>
+
+                    <span
+                      className="px-3 py-1 rounded-full text-[12px] font-bold"
+                      style={statusChipStyle(s.color)}
+                    >
+                      {s.name}
+                    </span>
+                    <span className="text-body-sm text-on-surface-variant/60 font-mono">{s.key}</span>
+
+                    <select
                     className="text-body-sm border border-outline-variant rounded-md px-2 py-1"
                     value={s.category}
                     onChange={(e) => patch(s, { category: e.target.value })}
@@ -168,7 +208,8 @@ export default function ProjectSettingsPage() {
         <IntegrationsCard projectId={id} />
         <WebhooksCard projectId={id} />
       </div>
-    </AppShell>
+    </div>
+  </AppShell>
   );
 }
 

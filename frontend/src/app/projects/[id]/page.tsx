@@ -439,11 +439,11 @@ function StatusGroups({ tasks, members, adding, draft, setDraft, setAdding, onAd
                   </div>
                   
                   {/* Dates */}
-                  <div className="flex items-center gap-2 text-gray-500 text-[12px] font-medium ml-6 shrink-0 w-32 justify-end">
+                  <div className="flex items-center gap-2 text-gray-500 text-[12px] font-medium ml-6 shrink-0 w-auto justify-end">
                     {(t.startDate || t.dueDate) && (
-                      <div className="flex items-center gap-1.5 border border-gray-100 rounded-md px-2 py-1">
-                        <Icon name="calendar_today" size={14} />
-                        <span>
+                      <div className="flex items-center gap-1.5 border border-gray-100 rounded-md px-2 py-1 whitespace-nowrap shrink-0">
+                        <Icon name="calendar_today" size={14} className="shrink-0 text-gray-400" />
+                        <span className="whitespace-nowrap">
                           {t.startDate ? new Date(t.startDate).toLocaleDateString('vi-VN', { month: 'short', day: 'numeric' }) : ""} 
                           {t.startDate && t.dueDate ? " - " : ""}
                           {t.dueDate ? new Date(t.dueDate).toLocaleDateString('vi-VN', { month: 'short', day: 'numeric' }) : ""}
@@ -563,7 +563,7 @@ function BoardView({ tasks, members, adding, draft, setDraft, setAdding, onAdd, 
                   <div className="flex justify-between items-center w-full mt-auto pt-2">
                     <div className="flex gap-2">
                       {t.dueDate ? (
-                        <span className="text-[12px] text-gray-500 font-medium flex items-center gap-1">
+                        <span className="text-[12px] text-gray-500 font-medium flex items-center gap-1 whitespace-nowrap">
                           <Icon name="calendar_today" size={14} />
                           {new Date(t.dueDate).toLocaleDateString('vi-VN', { month: 'short', day: 'numeric' })}
                         </span>
