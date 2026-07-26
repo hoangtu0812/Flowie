@@ -120,13 +120,13 @@ export default function Sidebar({
       {/* Top Header */}
       {collapsed ? (
         <div className="flex flex-col items-center gap-2 mb-6 px-2">
-          <div
-            className="w-8 h-8 rounded-full bg-black flex items-center justify-center shrink-0 cursor-pointer"
+          <img
+            src="/logo.svg"
+            alt="Flowie Logo"
+            className="w-8 h-8 rounded-lg cursor-pointer shadow-sm"
             onClick={onToggle}
             title="Mở rộng thanh bên"
-          >
-            <div className="w-2.5 h-2.5 bg-white rounded-full"></div>
-          </div>
+          />
           <button
             onClick={onToggle}
             className="p-1.5 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors text-gray-400"
@@ -139,10 +139,8 @@ export default function Sidebar({
       ) : (
         <div className="flex items-center justify-between px-lg mb-lg">
           <div className="flex items-center gap-sm min-w-0">
-            <div className="w-8 h-8 rounded-full bg-black flex items-center justify-center shrink-0">
-              <div className="w-2.5 h-2.5 bg-white rounded-full"></div>
-            </div>
-            <span className="font-semibold text-[15px] text-gray-900 truncate">Flowie</span>
+            <img src="/logo.svg" alt="Flowie Logo" className="w-8 h-8 rounded-lg shadow-sm shrink-0" />
+            <span className="font-bold text-[16px] text-gray-900 tracking-tight truncate">Flowie</span>
           </div>
           <div className="flex items-center gap-1 text-gray-400">
             <button
