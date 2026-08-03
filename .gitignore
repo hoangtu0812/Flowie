@@ -11,6 +11,9 @@
 *.cert
 *.local
 
+# Dev runner state (PID của backend/frontend do dev.ps1 khởi động)
+.dev.pids.json
+
 # Go Binaries & Caches
 /backend/bin/
 /backend/tmp/

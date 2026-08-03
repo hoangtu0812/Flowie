@@ -12,11 +12,14 @@
     "e2e:ui": "playwright test --ui"
   },
   "dependencies": {
+    "@astryxdesign/core": "^0.2.0",
+    "@astryxdesign/theme-neutral": "^0.2.0",
     "next": "^16.2.11",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@astryxdesign/cli": "^0.2.0",
     "@playwright/test": "^1.62.0",
     "@types/node": "20.14.10",
     "@types/react": "^19.2.17",

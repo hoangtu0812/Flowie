@@ -1,8 +1,75 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
+import { Center } from "@astryxdesign/core/Center";
+import { Card } from "@astryxdesign/core/Card";
+import { Grid } from "@astryxdesign/core/Grid";
+import { Section } from "@astryxdesign/core/Section";
+import { VStack, HStack, StackItem } from "@astryxdesign/core/Layout";
+import { Text } from "@astryxdesign/core/Text";
+import { Heading } from "@astryxdesign/core/Heading";
+import { Button } from "@astryxdesign/core/Button";
 import { api } from "@/lib/api";
+
+// Grid phát ra minmax(MIN, 1fr); MIN cộng inset của grid và padding trang phải
+// vừa màn hình hẹp nhất, nếu không cột bị cắt. 320 − 2×24 − 2×16 = 240.
+const COLUMN_MIN_WIDTH = 240;
+
+const pageStyle: CSSProperties = {
+  minHeight: "100vh",
+  backgroundColor: "var(--color-background-body)",
+  padding: "var(--spacing-6)",
+};
+
+// Container query nằm trong thẻ <style> thường nên KHÔNG cần CSS compiler.
+// repeat:'fit' gộp hai cột thành một dưới 2×MIN + gap; query đảo thứ tự và
+// siết inset đúng tại điểm đó, khoá theo bề rộng card (không phải cửa sổ).
+const LOGIN_CSS = `
+.flowie-login-grid {
+  container-type: inline-size;
+  container-name: flowie-login;
+  padding: var(--spacing-8);
+}
+.flowie-login-aside { order: 0; }
+@container flowie-login (max-width: 511px) {
+  .flowie-login-grid { padding: var(--spacing-4); }
+  .flowie-login-aside { display: none; }
+}
+`;
+
+/** Logo Microsoft — brand mark, giữ nguyên màu gốc theo brand guideline. */
+function MicrosoftLogo() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 21 21" aria-hidden="true">
+      <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+      <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+      <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+      <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+    </svg>
+  );
+}
+
+/** Ô số liệu cho cột phải. Card ở đây là widget KPI — đúng vai trò của Card. */
+function StatTile({ label, value, unit, delta }: {
+  label: string;
+  value: string;
+  unit?: string;
+  delta?: string;
+}) {
+  return (
+    <Card padding={4} variant="muted">
+      <VStack gap={2}>
+        <Text type="label" color="secondary">{label}</Text>
+        <HStack gap={1} vAlign="end">
+          <Text type="display-3" weight="bold">{value}</Text>
+          {unit ? <Text type="supporting">{unit}</Text> : null}
+        </HStack>
+        {delta ? <Text type="supporting" color="accent">{delta}</Text> : null}
+      </VStack>
+    </Card>
+  );
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,85 +80,66 @@ export default function LoginPage() {
   }, [router]);
 
   return (
-    <div className="min-h-screen flex w-full bg-white">
-      {/* Left Column: Login Form */}
-      <div className="w-full lg:w-1/2 flex flex-col justify-center items-center p-8 lg:p-24 relative">
-        <div className="w-full max-w-sm mx-auto">
-          {/* Header */}
-          <div className="mb-10 text-center lg:text-left">
-            <h1 className="text-[32px] font-bold text-gray-900 mb-2 tracking-tight">Đăng nhập</h1>
-            <p className="text-gray-500 text-[15px]">Nền tảng quản lý dự án doanh nghiệp Flowie</p>
-          </div>
+    <Center axis="both" style={pageStyle}>
+      <style>{LOGIN_CSS}</style>
+      <VStack width="100%" maxWidth={1000} hAlign="stretch">
+        <Card padding={0} width="100%">
+          <Grid
+            columns={{ minWidth: COLUMN_MIN_WIDTH, repeat: "fit" }}
+            gap={8}
+            align="stretch"
+            className="flowie-login-grid">
 
-          {/* Login Button */}
-          <a href={api.loginUrl()} className="block w-full">
-            <button className="w-full flex items-center justify-center gap-3 px-4 py-3.5 border border-gray-200 rounded-xl text-gray-700 font-semibold hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 21 21">
-                <rect x="1" y="1" width="9" height="9" fill="#f25022" />
-                <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
-                <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
-                <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
-              </svg>
-              Đăng nhập với Microsoft
-            </button>
-          </a>
+            {/* ── Cột trái: form đăng nhập ── */}
+            <Section variant="transparent" padding={0} height="100%">
+              <VStack gap={6} height="100%">
+                <StackItem size="fill">
+                  <Center axis="vertical" height="100%">
+                    <VStack gap={6} hAlign="stretch" width="100%">
+                      <VStack gap={1}>
+                        <Heading level={1}>Đăng nhập</Heading>
+                        <Text type="body" color="secondary">
+                          Nền tảng quản lý dự án doanh nghiệp Flowie
+                        </Text>
+                      </VStack>
 
-          {/* Footer Note */}
-          <p className="text-center text-gray-400 text-[13px] mt-8">
-            Hệ thống chỉ hỗ trợ xác thực qua hệ sinh thái Azure Active Directory nội bộ.
-          </p>
-        </div>
-      </div>
+                      <Button
+                        label="Đăng nhập với Microsoft"
+                        variant="secondary"
+                        size="lg"
+                        width="100%"
+                        icon={<MicrosoftLogo />}
+                        clickAction={() => { window.location.href = api.loginUrl(); }}
+                      />
 
-      {/* Right Column: Hero Image with Glassmorphism Cards */}
-      <div className="hidden lg:flex w-1/2 relative bg-gray-100 overflow-hidden items-center justify-center p-12">
-        <div 
-          className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: "url('https://images.unsplash.com/photo-1497366216548-37526070297c?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&q=80')" }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-        
-        {/* Floating Glass Cards to mimic the design */}
-        <div className="relative z-10 w-full max-w-lg">
-          <h2 className="text-white text-3xl font-bold mb-8">Tính năng nổi bật</h2>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white/70 backdrop-blur-md border border-white/20 p-6 rounded-2xl shadow-xl">
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-[13px] font-bold text-gray-700">Tổng công việc</span>
-                <span className="text-gray-400">•••</span>
-              </div>
-              <div className="text-[32px] font-black text-gray-900">425</div>
-              <div className="text-[12px] font-bold text-green-600 mt-1 flex items-center gap-1">
-                ↗ +2.45%
-              </div>
-            </div>
+                      <Text type="supporting" justify="center">
+                        Hệ thống chỉ hỗ trợ xác thực qua hệ sinh thái Azure Active
+                        Directory nội bộ.
+                      </Text>
+                    </VStack>
+                  </Center>
+                </StackItem>
+              </VStack>
+            </Section>
 
-            <div className="bg-white/70 backdrop-blur-md border border-white/20 p-6 rounded-2xl shadow-xl">
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-[13px] font-bold text-gray-700">Hoàn thành</span>
-                <span className="text-gray-400">•••</span>
-              </div>
-              <div className="text-[32px] font-black text-gray-900">87</div>
-              <div className="text-[12px] font-bold text-green-600 mt-1 flex items-center gap-1">
-                ↗ +21%
-              </div>
-            </div>
-
-            <div className="bg-white/70 backdrop-blur-md border border-white/20 p-6 rounded-2xl shadow-xl col-span-2 flex items-center justify-between">
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-[13px] font-bold text-gray-700">Tiến độ dự án</span>
-                </div>
-                <div className="text-[32px] font-black text-gray-900">72,550 <span className="text-sm font-medium text-gray-500">giờ</span></div>
-              </div>
-              <div className="w-16 h-16 rounded-full border-4 border-blue-600 border-r-gray-200 flex items-center justify-center text-sm font-bold text-blue-600">
-                64%
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+            {/* ── Cột phải: điểm nhấn sản phẩm (ẩn khi hẹp) ── */}
+            <Section
+              variant="transparent"
+              padding={0}
+              height="100%"
+              className="flowie-login-aside">
+              <VStack gap={4} height="100%" vAlign="center">
+                <Heading level={2}>Tính năng nổi bật</Heading>
+                <Grid columns={{ minWidth: 140, repeat: "fit" }} gap={3}>
+                  <StatTile label="Tổng công việc" value="425" delta="↗ +2,45%" />
+                  <StatTile label="Hoàn thành" value="87" delta="↗ +21%" />
+                </Grid>
+                <StatTile label="Tiến độ dự án" value="72.550" unit="giờ" delta="64% kế hoạch" />
+              </VStack>
+            </Section>
+          </Grid>
+        </Card>
+      </VStack>
+    </Center>
   );
 }

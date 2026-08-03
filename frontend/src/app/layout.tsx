@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
+// Sau globals.css: style component Astryx thắng Tailwind preflight khi trùng.
+import "./astryx.css";
+import AstryxProvider from "@/components/providers/AstryxProvider";
 
 export const metadata: Metadata = {
   title: "Flowie",
@@ -43,7 +46,9 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <AstryxProvider>{children}</AstryxProvider>
+      </body>
     </html>
   );
 }

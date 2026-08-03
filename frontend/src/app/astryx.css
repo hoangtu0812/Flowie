@@ -1,0 +1,20 @@
+/*
+ * Astryx design system — điểm nạp CSS.
+ *
+ * Nạp SAU globals.css (xem layout.tsx) để style component Astryx thắng
+ * Tailwind preflight khi hai bên chạm nhau.
+ *
+ * CHÚ Ý — cố tình BỎ QUA "@astryxdesign/core/reset.css":
+ *   reset của Astryx normalize toàn bộ element HTML thô và sẽ chồng lên
+ *   Tailwind preflight, làm đổi hình 24 trang chưa migrate. Component Astryx
+ *   tự mang class .xds-* nên vẫn render đúng mà không cần reset. Bật lại dòng
+ *   dưới khi toàn bộ trang đã chuyển sang component Astryx.
+ *
+ *   @import "@astryxdesign/core/reset.css";
+ *
+ * Bridge Tailwind (@astryxdesign/core/tailwind-theme.css) cũng chưa nạp:
+ * nó yêu cầu Tailwind v4, dự án đang v3.4.19.
+ */
+
+@import "@astryxdesign/core/astryx.css";
+@import "@astryxdesign/theme-neutral/theme.css";
