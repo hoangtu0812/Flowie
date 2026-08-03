@@ -2,6 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { Section } from "@astryxdesign/core/Section";
+import { VStack, HStack, StackItem } from "@astryxdesign/core/Layout";
+import { List, ListItem } from "@astryxdesign/core/List";
+import { Breadcrumbs, BreadcrumbItem } from "@astryxdesign/core/Breadcrumbs";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { Banner } from "@astryxdesign/core/Banner";
+import { Token } from "@astryxdesign/core/Token";
+import { Text } from "@astryxdesign/core/Text";
+import { Heading } from "@astryxdesign/core/Heading";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { ApiError, api, DriveItem, Project } from "@/lib/api";
 import AppShell from "@/components/layout/AppShell";
 import Icon from "@/components/ui/Icon";
@@ -25,20 +35,28 @@ export default function ProjectFilesPage() {
   /** The project simply has no SharePoint folder yet — not a failure. */
   const [noFolder, setNoFolder] = useState(false);
 
-  const load = useCallback((p: string) => {
-    setLoading(true);
-    setError(null);
-    setNoFolder(false);
-    api.browseFiles(id, p)
-      .then((r) => { setItems(r.items); setRoot(r.root); setPath(r.path); })
-      .catch((e) => {
-        const err = e as ApiError;
-        if (err.code === "no_folder") setNoFolder(true);
-        else setError(err.message);
-        setItems([]);
-      })
-      .finally(() => setLoading(false));
-  }, [id]);
+  const load = useCallback(
+    (p: string) => {
+      setLoading(true);
+      setError(null);
+      setNoFolder(false);
+      api
+        .browseFiles(id, p)
+        .then((r) => {
+          setItems(r.items);
+          setRoot(r.root);
+          setPath(r.path);
+        })
+        .catch((e) => {
+          const err = e as ApiError;
+          if (err.code === "no_folder") setNoFolder(true);
+          else setError(err.message);
+          setItems([]);
+        })
+        .finally(() => setLoading(false));
+    },
+    [id],
+  );
 
   useEffect(() => {
     api.getProject(id).then(setProject).catch(() => {});
@@ -50,116 +68,102 @@ export default function ProjectFilesPage() {
   return (
     <AppShell
       title={
-        <div className="flex items-center gap-sm">
-          {project && <span className="chip bg-primary-container/10 text-primary">{project.key}</span>}
-          <span>{project?.name || "Project"}</span>
-        </div>
-      }
-    >
-      <div className="p-lg">
-        {project && <ProjectTabs projectId={id} />}
-        <div className="max-w-5xl">
+        <HStack gap={2} vAlign="center">
+          {project && <Token label={project.key} />}
+          <Text weight="bold">{project?.name || "Project"}</Text>
+        </HStack>
+      }>
+      <Section variant="transparent" padding={5}>
+        <VStack gap={5} hAlign="stretch">
+          {project && <ProjectTabs projectId={id} />}
 
-        <div className="flex items-center justify-between gap-md mb-lg">
-          <h2 className="text-headline-md">Tệp trên SharePoint</h2>
-          <button className="btn-ghost" onClick={() => load(path)} title="Tải lại">
-            <Icon name="refresh" size={18} />
-          </button>
-        </div>
+          <VStack gap={4} hAlign="stretch" maxWidth={1024}>
+            <HStack gap={4} vAlign="center">
+              <Heading level={2}>Tệp trên SharePoint</Heading>
+              <StackItem size="fill" />
+              <IconButton
+                label="Tải lại"
+                tooltip="Tải lại"
+                variant="ghost"
+                icon={<Icon name="refresh" size={18} />}
+                onClick={() => load(path)}
+              />
+            </HStack>
 
-        {/* Breadcrumb */}
-        <div className="flex flex-wrap items-center gap-xs text-body-sm mb-md">
-          <button className="text-primary hover:underline" onClick={() => load("")}>
-            {root || "Thư mục dự án"}
-          </button>
-          {segments.map((seg, i) => (
-            <span key={i} className="flex items-center gap-xs">
-              <Icon name="chevron_right" size={16} className="text-on-surface-variant" />
-              <button
-                className="text-primary hover:underline"
-                onClick={() => load(segments.slice(0, i + 1).join("/"))}
-              >
-                {seg}
-              </button>
-            </span>
-          ))}
-        </div>
+            <Breadcrumbs label="Đường dẫn thư mục">
+              <BreadcrumbItem onClick={() => load("")}>{root || "Thư mục dự án"}</BreadcrumbItem>
+              {segments.map((seg, i) => (
+                <BreadcrumbItem
+                  key={i}
+                  isCurrent={i === segments.length - 1}
+                  onClick={() => load(segments.slice(0, i + 1).join("/"))}>
+                  {seg}
+                </BreadcrumbItem>
+              ))}
+            </Breadcrumbs>
 
-        {noFolder && (
-          <div className="card p-xl text-center text-on-surface-variant">
-            <Icon name="folder_off" size={40} className="text-outline mb-sm" />
-            <p className="text-body-lg font-medium text-on-surface">Dự án chưa có thư mục SharePoint</p>
-            <p className="text-body-sm mt-1">
-              Thư mục sẽ được tạo tự động khi có tệp đính kèm đầu tiên, hoặc bạn có thể
-              đặt đường dẫn trong phần Cài đặt dự án.
-            </p>
-          </div>
-        )}
-
-        {error && (
-          <div className="card p-lg text-body-sm text-error mb-md">
-            Không đọc được thư mục: {error}
-            <p className="text-on-surface-variant mt-1">
-              Kiểm tra cấu hình SHAREPOINT_SITE_URL và quyền Microsoft Graph.
-            </p>
-          </div>
-        )}
-
-        {loading && <p className="text-on-surface-variant">Đang tải…</p>}
-
-        {!loading && !error && !noFolder && (
-          <div className="card divide-y divide-outline-variant/40">
-            {path && (
-              <button
-                className="w-full flex items-center gap-md p-md text-left hover:bg-surface-container-low"
-                onClick={() => load(segments.slice(0, -1).join("/"))}
-              >
-                <Icon name="drive_folder_upload" size={20} className="text-on-surface-variant" />
-                <span className="text-body-md text-on-surface-variant">..</span>
-              </button>
+            {noFolder && (
+              <EmptyState
+                title="Dự án chưa có thư mục SharePoint"
+                description="Thư mục sẽ được tạo tự động khi có tệp đính kèm đầu tiên, hoặc bạn có thể đặt đường dẫn trong phần Cài đặt dự án."
+                icon={<Icon name="folder_off" size={40} />}
+              />
             )}
-            {items.map((it) => {
-              const isFolder = !!it.folder;
-              return (
-                <div key={it.id} className="flex items-center gap-md p-md hover:bg-surface-container-low">
-                  <Icon
-                    name={isFolder ? "folder" : "description"}
-                    size={20}
-                    className={isFolder ? "text-orange-600" : "text-on-surface-variant"}
+
+            {error && (
+              <Banner
+                status="error"
+                title={`Không đọc được thư mục: ${error}`}
+                description="Kiểm tra cấu hình SHAREPOINT_SITE_URL và quyền Microsoft Graph."
+              />
+            )}
+
+            {loading && <Text color="secondary">Đang tải…</Text>}
+
+            {!loading && !error && !noFolder && (
+              // Danh sách tệp = dữ liệu quét bằng mắt → rows edge-to-edge.
+              <List hasDividers>
+                {path && (
+                  <ListItem
+                    startContent={<Icon name="drive_folder_upload" size={20} />}
+                    label=".."
+                    onClick={() => load(segments.slice(0, -1).join("/"))}
                   />
-                  {isFolder ? (
-                    <button
-                      className="text-body-md text-on-surface font-medium hover:text-primary truncate flex-grow text-left"
-                      onClick={() => load(path ? `${path}/${it.name}` : it.name)}
-                    >
-                      {it.name}
-                    </button>
-                  ) : (
-                    <a
-                      href={it.webUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-body-md text-on-surface hover:text-primary truncate flex-grow"
-                    >
-                      {it.name}
-                    </a>
-                  )}
-                  <span className="text-body-sm text-on-surface-variant whitespace-nowrap">
-                    {isFolder ? `${it.folder!.childCount} mục` : humanSize(it.size)}
-                  </span>
-                  <span className="text-body-sm text-on-surface-variant/70 whitespace-nowrap hidden sm:inline">
-                    {it.lastModifiedDateTime ? new Date(it.lastModifiedDateTime).toLocaleDateString() : ""}
-                  </span>
-                </div>
-              );
-            })}
-            {items.length === 0 && (
-              <p className="p-xl text-center text-on-surface-variant">Thư mục trống.</p>
+                )}
+                {items.map((it) => {
+                  const isFolder = !!it.folder;
+                  return (
+                    <ListItem
+                      key={it.id}
+                      startContent={
+                        <Icon name={isFolder ? "folder" : "description"} size={20} />
+                      }
+                      label={it.name}
+                      onClick={isFolder ? () => load(path ? `${path}/${it.name}` : it.name) : undefined}
+                      href={isFolder ? undefined : it.webUrl}
+                      target={isFolder ? undefined : "_blank"}
+                      rel={isFolder ? undefined : "noreferrer"}
+                      endContent={
+                        <HStack gap={4} vAlign="center">
+                          <Text type="supporting">
+                            {isFolder ? `${it.folder!.childCount} mục` : humanSize(it.size)}
+                          </Text>
+                          <Text type="supporting">
+                            {it.lastModifiedDateTime
+                              ? new Date(it.lastModifiedDateTime).toLocaleDateString()
+                              : ""}
+                          </Text>
+                        </HStack>
+                      }
+                    />
+                  );
+                })}
+                {items.length === 0 && <EmptyState title="Thư mục trống." isCompact />}
+              </List>
             )}
-          </div>
-        )}
-        </div>
-      </div>
+          </VStack>
+        </VStack>
+      </Section>
     </AppShell>
   );
 }
@@ -169,6 +173,9 @@ function humanSize(bytes?: number): string {
   const units = ["B", "KB", "MB", "GB"];
   let n = bytes;
   let u = 0;
-  while (n >= 1024 && u < units.length - 1) { n /= 1024; u++; }
+  while (n >= 1024 && u < units.length - 1) {
+    n /= 1024;
+    u++;
+  }
   return `${n.toFixed(u === 0 ? 0 : 1)} ${units[u]}`;
 }

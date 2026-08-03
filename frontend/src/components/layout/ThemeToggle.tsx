@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { IconButton } from "@astryxdesign/core/IconButton";
 import Icon from "../ui/Icon";
 
 export type Theme = "light" | "dark" | "system";
@@ -43,6 +44,8 @@ export default function ThemeToggle() {
     setTheme(next);
     localStorage.setItem(STORAGE_KEY, next);
     apply(next);
+    // AstryxProvider nghe key này để đồng bộ `mode` của Theme provider.
+    window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY, newValue: next }));
   }
 
   const icon = theme === "light" ? "light_mode" : theme === "dark" ? "dark_mode" : "contrast";
@@ -50,13 +53,13 @@ export default function ThemeToggle() {
     theme === "light" ? "Giao diện sáng" : theme === "dark" ? "Giao diện tối" : "Theo hệ thống";
 
   return (
-    <button
+    <IconButton
+      label={label}
+      tooltip={`${label} — nhấn để đổi`}
+      variant="ghost"
+      icon={<Icon name={icon} size={22} />}
       onClick={cycle}
-      title={`${label} — nhấn để đổi`}
       data-testid="theme-toggle"
-      className="hover:text-gray-600 transition-colors"
-    >
-      <Icon name={icon} size={22} />
-    </button>
+    />
   );
 }

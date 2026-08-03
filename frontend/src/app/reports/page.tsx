@@ -1,6 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { Section } from "@astryxdesign/core/Section";
+import { VStack } from "@astryxdesign/core/Layout";
+import { Selector } from "@astryxdesign/core/Selector";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { Text } from "@astryxdesign/core/Text";
 import AppShell from "@/components/layout/AppShell";
 import TabStrip from "@/components/ui/TabStrip";
 import AnalyticsTab from "@/components/reports/AnalyticsTab";
@@ -31,33 +36,41 @@ export default function ReportsPage() {
 
   const actions =
     workspaces.length > 1 ? (
-      <select className="field w-auto" value={workspaceId} onChange={(e) => setWorkspaceId(e.target.value)}>
-        {workspaces.map((w) => (<option key={w.id} value={w.id}>{w.name}</option>))}
-      </select>
+      <Selector
+        label="Không gian làm việc"
+        isLabelHidden
+        value={workspaceId}
+        onChange={setWorkspaceId}
+        options={workspaces.map((w) => ({ value: w.id, label: w.name }))}
+        size="sm"
+      />
     ) : undefined;
 
   return (
     <AppShell title="Báo cáo" actions={actions}>
-      <div className="p-lg max-w-[1400px]">
-        <TabStrip tabs={TABS} active={tab} onChange={setTab} className="mb-lg" />
+      <Section variant="transparent" padding={5} maxWidth={1400}>
+        <VStack gap={5} hAlign="stretch">
+          <TabStrip tabs={TABS} active={tab} onChange={setTab} />
 
-        {loading && <p className="text-on-surface-variant">Đang tải…</p>}
+          {loading && <Text color="secondary">Đang tải…</Text>}
 
-        {!loading && !workspaceId && (
-          <div className="card p-xl text-center text-on-surface-variant">
-            Bạn chưa thuộc không gian làm việc nào.
-          </div>
-        )}
+          {!loading && !workspaceId && (
+            <EmptyState
+              title="Bạn chưa thuộc không gian làm việc nào"
+              description="Liên hệ quản trị viên để được cấp quyền."
+            />
+          )}
 
-        {!loading && workspaceId && (
-          <>
-            {tab === "analytics" && <AnalyticsTab workspaceId={workspaceId} />}
-            {tab === "custom" && <CustomDashboardsTab workspaceId={workspaceId} />}
-            {tab === "scheduled" && <ScheduledReportsTab workspaceId={workspaceId} />}
-            {tab === "audit" && <AuditLogTab workspaceId={workspaceId} />}
-          </>
-        )}
-      </div>
+          {!loading && workspaceId && (
+            <>
+              {tab === "analytics" && <AnalyticsTab workspaceId={workspaceId} />}
+              {tab === "custom" && <CustomDashboardsTab workspaceId={workspaceId} />}
+              {tab === "scheduled" && <ScheduledReportsTab workspaceId={workspaceId} />}
+              {tab === "audit" && <AuditLogTab workspaceId={workspaceId} />}
+            </>
+          )}
+        </VStack>
+      </Section>
     </AppShell>
   );
 }

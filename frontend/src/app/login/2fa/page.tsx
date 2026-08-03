@@ -1,9 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
+import { Center } from "@astryxdesign/core/Center";
+import { Card } from "@astryxdesign/core/Card";
+import { VStack } from "@astryxdesign/core/Layout";
+import { Heading } from "@astryxdesign/core/Heading";
+import { Text } from "@astryxdesign/core/Text";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { Button } from "@astryxdesign/core/Button";
 import { api } from "@/lib/api";
 import Icon from "@/components/ui/Icon";
+
+const pageStyle: CSSProperties = {
+  minHeight: "100vh",
+  backgroundColor: "var(--color-background-body)",
+  padding: "var(--spacing-4)",
+};
 
 /** Second step of login: the user proves possession of their authenticator. */
 export default function TwoFactorChallengePage() {
@@ -12,8 +25,7 @@ export default function TwoFactorChallengePage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  async function submit() {
     setBusy(true);
     setError(null);
     try {
@@ -27,40 +39,46 @@ export default function TwoFactorChallengePage() {
     }
   }
 
+  const canSubmit = !busy && code.trim().length >= 6;
+
   return (
-    <div className="min-h-screen grid place-items-center bg-background p-md">
-      <form onSubmit={submit} className="card p-xl w-full max-w-sm">
-        <div className="flex flex-col items-center text-center mb-lg">
-          <div className="w-14 h-14 rounded-2xl bg-primary-container/15 text-primary flex items-center justify-center mb-md">
+    <Center axis="both" style={pageStyle}>
+      <Card padding={8} width="100%" maxWidth={400}>
+        <VStack gap={6} hAlign="stretch">
+          <VStack gap={2} hAlign="center">
             <Icon name="shield_lock" size={28} />
-          </div>
-          <h1 className="text-headline-lg text-on-surface">Xác thực hai lớp</h1>
-          <p className="text-body-sm text-on-surface-variant mt-1">
-            Nhập mã 6 chữ số từ ứng dụng xác thực của bạn.
-          </p>
-        </div>
+            <Heading level={1}>Xác thực hai lớp</Heading>
+            <Text type="supporting" justify="center">
+              Nhập mã 6 chữ số từ ứng dụng xác thực của bạn.
+            </Text>
+          </VStack>
 
-        <input
-          autoFocus
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          className="field text-center text-headline-md tracking-[0.4em] font-mono"
-          placeholder="000000"
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          maxLength={32}
-        />
+          <TextInput
+            label="Mã xác thực"
+            isLabelHidden
+            hasAutoFocus
+            placeholder="000000"
+            value={code}
+            onChange={setCode}
+            onEnter={() => { if (canSubmit) submit(); }}
+            size="lg"
+            status={error ? { type: "error", message: error } : undefined}
+          />
 
-        {error && <p className="text-error text-body-sm mt-sm text-center">{error}</p>}
+          <Button
+            label={busy ? "Đang kiểm tra…" : "Xác nhận"}
+            variant="primary"
+            width="100%"
+            isLoading={busy}
+            isDisabled={!canSubmit}
+            clickAction={submit}
+          />
 
-        <button className="btn-primary w-full mt-lg" disabled={busy || code.trim().length < 6}>
-          {busy ? "Đang kiểm tra…" : "Xác nhận"}
-        </button>
-
-        <p className="text-body-sm text-on-surface-variant/70 mt-md text-center">
-          Mất thiết bị? Nhập một <b>mã khôi phục</b> vào ô trên.
-        </p>
-      </form>
-    </div>
+          <Text type="supporting" justify="center">
+            Mất thiết bị? Nhập một mã khôi phục vào ô trên.
+          </Text>
+        </VStack>
+      </Card>
+    </Center>
   );
 }

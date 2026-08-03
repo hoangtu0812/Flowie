@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
+import { Popover } from "@astryxdesign/core/Popover";
+import { Button } from "@astryxdesign/core/Button";
+import { Grid } from "@astryxdesign/core/Grid";
+import { VStack, HStack, StackItem } from "@astryxdesign/core/Layout";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { Divider } from "@astryxdesign/core/Divider";
 import Icon from "./Icon";
 import { STATUS_SWATCHES, statusHex } from "@/lib/status";
 
@@ -10,6 +16,10 @@ import { STATUS_SWATCHES, statusHex } from "@/lib/status";
  * The colour was a <select> of six palette names ("blue", "purple") — you had
  * to guess what each looked like and couldn't use anything else. This offers a
  * swatch grid plus the OS colour picker, so any colour is reachable.
+ *
+ * Ô màu và input type=color buộc phải dùng `style`/element gốc: giá trị là màu
+ * người dùng chọn lúc chạy, không phải token thiết kế, và Astryx không có
+ * component chọn màu.
  */
 export default function ColorPicker({
   value,
@@ -20,82 +30,99 @@ export default function ColorPicker({
   onChange: (hex: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
   const hex = statusHex(value);
   const [draft, setDraft] = useState(hex);
 
   useEffect(() => setDraft(hex), [hex]);
 
-  // Click-outside to dismiss, so the popover doesn't trap the page.
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
-
   function commit(next: string) {
     if (/^#[0-9a-fA-F]{6}$/.test(next)) onChange(next.toLowerCase());
   }
 
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        title="Đổi màu"
-        className="flex items-center gap-1.5 border border-outline-variant rounded-md pl-1.5 pr-1 py-1 hover:border-primary transition-colors"
-      >
-        <span
-          className="w-4 h-4 rounded-full border border-black/10"
-          style={{ backgroundColor: hex }}
-        />
-        <span className="text-body-sm text-on-surface-variant font-mono">{hex}</span>
-        <Icon name="expand_more" size={16} className="text-on-surface-variant" />
-      </button>
+  const swatch = (color: string, size: number): CSSProperties => ({
+    width: size,
+    height: size,
+    borderRadius: "50%",
+    backgroundColor: color,
+    border: "1px solid var(--color-border)",
+    display: "grid",
+    placeItems: "center",
+  });
 
-      {open && (
-        <div className="absolute left-0 top-full mt-1 z-50 card shadow-popover p-3 w-56">
-          <div className="grid grid-cols-8 gap-1.5 mb-3">
+  const nativePicker: CSSProperties = {
+    width: 32,
+    height: 32,
+    padding: 0,
+    background: "transparent",
+    border: "1px solid var(--color-border)",
+    borderRadius: "var(--radius-md, 4px)",
+    cursor: "pointer",
+  };
+
+  return (
+    <Popover
+      isOpen={open}
+      onOpenChange={setOpen}
+      label="Chọn màu"
+      width={224}
+      content={
+        <VStack gap={3} hAlign="stretch">
+          <Grid columns={8} gap={1.5}>
             {STATUS_SWATCHES.map((c) => (
               <button
                 key={c}
                 type="button"
                 title={c}
-                onClick={() => { onChange(c); setOpen(false); }}
-                className="w-5 h-5 rounded-full border border-black/10 flex items-center justify-center hover:scale-110 transition-transform"
-                style={{ backgroundColor: c }}
-              >
-                {c === hex && <Icon name="check" size={12} className="text-white" />}
+                aria-label={`Màu ${c}`}
+                onClick={() => {
+                  onChange(c);
+                  setOpen(false);
+                }}
+                style={swatch(c, 20)}>
+                {c === hex && <Icon name="check" size={12} />}
               </button>
             ))}
-          </div>
+          </Grid>
 
-          <div className="flex items-center gap-2 border-t border-outline-variant pt-2">
+          <Divider />
+
+          <HStack gap={2} vAlign="center">
             {/* The OS picker covers everything the swatches don't. */}
             <input
               type="color"
               value={hex}
-              onChange={(e) => { setDraft(e.target.value); commit(e.target.value); }}
-              className="w-8 h-8 rounded cursor-pointer border border-outline-variant bg-transparent p-0"
-              title="Chọn màu tự do"
-            />
-            <input
-              className="field flex-grow font-mono text-body-sm py-1"
-              value={draft}
-              maxLength={7}
               onChange={(e) => {
-                const v = e.target.value.startsWith("#") ? e.target.value : `#${e.target.value}`;
-                setDraft(v);
-                commit(v);
+                setDraft(e.target.value);
+                commit(e.target.value);
               }}
-              placeholder="#3b82f6"
+              style={nativePicker}
+              title="Chọn màu tự do"
+              aria-label="Chọn màu tự do"
             />
-          </div>
-        </div>
-      )}
-    </div>
+            <StackItem size="fill">
+              <TextInput
+                label="Mã màu"
+                isLabelHidden
+                size="sm"
+                value={draft}
+                placeholder="#3b82f6"
+                onChange={(v) => {
+                  const next = v.startsWith("#") ? v : `#${v}`;
+                  setDraft(next);
+                  commit(next);
+                }}
+              />
+            </StackItem>
+          </HStack>
+        </VStack>
+      }>
+      <Button
+        label={hex}
+        variant="secondary"
+        size="sm"
+        icon={<span aria-hidden="true" style={swatch(hex, 16)} />}
+        endContent={<Icon name="expand_more" size={16} />}
+      />
+    </Popover>
   );
 }

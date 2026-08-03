@@ -22,12 +22,35 @@
   font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 24;
 }
 
-/* Glyph Material Symbols khi được truyền vào prop `icon` của Astryx: thừa kế
-   size/color từ phần tử bao ngoài do Astryx dựng (xem ui/materialIcon.tsx). */
+/* Glyph Material Symbols khi được truyền vào prop `icon` của Astryx
+   (xem ui/materialIcon.tsx).
+
+   Astryx set kích thước icon bằng width/height vì nó chờ một <svg>. Font icon
+   thì lại co giãn theo font-size, nên nếu chỉ để `font-size: 1em` glyph sẽ bám
+   vào cỡ chữ xung quanh và render sai (đo được 12.25px ở chỗ đáng lẽ 20px).
+
+   Astryx truyền class cỡ của nó xuống thẳng component con, nên span này nhận
+   được `astryx-icon` + một trong xsm/sm/md/lg. Bám vào đó để đặt font-size cho
+   khớp đúng thang 12/16/20/24 của Astryx. */
 .material-symbols-outlined.astryx-glyph {
-  font-size: 1em;
   line-height: 1;
   color: currentColor;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+}
+.material-symbols-outlined.astryx-glyph.xsm {
+  font-size: 12px;
+}
+.material-symbols-outlined.astryx-glyph.sm {
+  font-size: 16px;
+}
+.material-symbols-outlined.astryx-glyph.md {
+  font-size: 20px;
+}
+.material-symbols-outlined.astryx-glyph.lg {
+  font-size: 24px;
 }
 
 /* Scrollbars */

@@ -1,6 +1,10 @@
 "use client";
 
 import { useMemo } from "react";
+import { HStack } from "@astryxdesign/core/Layout";
+import { Selector } from "@astryxdesign/core/Selector";
+import { ToggleButton } from "@astryxdesign/core/ToggleButton";
+import { Button } from "@astryxdesign/core/Button";
 import { Member } from "@/lib/api";
 import Icon from "../ui/Icon";
 import {
@@ -44,121 +48,125 @@ export default function TaskFilters({
   const active = useMemo(() => hasActiveFilters(filters), [filters]);
   const set = (patch: Partial<FilterState>) => setFilters({ ...filters, ...patch });
 
-  const selectCls =
-    "bg-white border border-gray-200 rounded-full px-3 py-1.5 text-[13px] font-semibold text-gray-700 shadow-sm";
-
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <select
-        className={selectCls}
+    <HStack gap={2} vAlign="center" wrap="wrap">
+      <Selector
+        label="Người phụ trách"
+        isLabelHidden
+        size="sm"
         value={filters.assignee}
-        onChange={(e) => set({ assignee: e.target.value })}
-        title="Lọc theo người phụ trách"
-      >
-        <option value="">Mọi người</option>
-        <option value="none">Chưa gán</option>
-        {members.map((m) => (
-          <option key={m.userId} value={m.userId}>{m.displayName || m.email}</option>
-        ))}
-      </select>
+        onChange={(v) => set({ assignee: v ?? "" })}
+        placeholder="Mọi người"
+        options={[
+          { value: "", label: "Mọi người" },
+          { value: "none", label: "Chưa gán" },
+          ...members.map((m) => ({ value: m.userId, label: m.displayName || m.email })),
+        ]}
+      />
 
-      <select
-        className={selectCls}
+      <Selector
+        label="Độ ưu tiên"
+        isLabelHidden
+        size="sm"
         value={filters.priority}
-        onChange={(e) => set({ priority: e.target.value })}
-        title="Lọc theo độ ưu tiên"
-      >
-        <option value="">Mọi ưu tiên</option>
-        <option value="urgent">Urgent</option>
-        <option value="high">High</option>
-        <option value="medium">Medium</option>
-        <option value="low">Low</option>
-      </select>
+        onChange={(v) => set({ priority: v ?? "" })}
+        placeholder="Mọi ưu tiên"
+        options={[
+          { value: "", label: "Mọi ưu tiên" },
+          { value: "urgent", label: "Urgent" },
+          { value: "high", label: "High" },
+          { value: "medium", label: "Medium" },
+          { value: "low", label: "Low" },
+        ]}
+      />
 
       {labels.length > 0 && (
-        <select
-          className={selectCls}
+        <Selector
+          label="Nhãn"
+          isLabelHidden
+          size="sm"
           value={filters.label}
-          onChange={(e) => set({ label: e.target.value })}
-          title="Lọc theo nhãn"
-        >
-          <option value="">Mọi nhãn</option>
-          {labels.map((l) => (
-            <option key={l.id} value={l.id}>{l.name}</option>
-          ))}
-        </select>
+          onChange={(v) => set({ label: v ?? "" })}
+          placeholder="Mọi nhãn"
+          options={[
+            { value: "", label: "Mọi nhãn" },
+            ...labels.map((l) => ({ value: l.id, label: l.name })),
+          ]}
+        />
       )}
 
-      <select
-        className={selectCls}
+      <Selector
+        label="MoSCoW"
+        isLabelHidden
+        size="sm"
         value={filters.moscow}
-        onChange={(e) => set({ moscow: e.target.value })}
-        title="Lọc theo MoSCoW"
-      >
-        <option value="">Mọi MoSCoW</option>
-        <option value="must">Must</option>
-        <option value="should">Should</option>
-        <option value="could">Could</option>
-        <option value="wont">Won&apos;t</option>
-      </select>
+        onChange={(v) => set({ moscow: v ?? "" })}
+        placeholder="Mọi MoSCoW"
+        options={[
+          { value: "", label: "Mọi MoSCoW" },
+          { value: "must", label: "Must" },
+          { value: "should", label: "Should" },
+          { value: "could", label: "Could" },
+          { value: "wont", label: "Won't" },
+        ]}
+      />
 
-      <button
-        onClick={() => set({ overdue: !filters.overdue })}
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-semibold shadow-sm border transition-colors ${
-          filters.overdue
-            ? "bg-red-50 border-red-200 text-red-600"
-            : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
-        }`}
-      >
-        <Icon name="event_busy" size={16} /> Quá hạn
-      </button>
+      <ToggleButton
+        label="Quá hạn"
+        size="sm"
+        icon={<Icon name="event_busy" size={16} />}
+        isPressed={filters.overdue}
+        onPressedChange={(v) => set({ overdue: v })}
+      />
 
-      <button
-        onClick={() => set({ hideDone: !filters.hideDone })}
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-semibold shadow-sm border transition-colors ${
-          filters.hideDone
-            ? "bg-green-50 border-green-200 text-green-700"
-            : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
-        }`}
-      >
-        <Icon name="check_circle" size={16} /> Ẩn việc xong
-      </button>
+      <ToggleButton
+        label="Ẩn việc xong"
+        size="sm"
+        icon={<Icon name="check_circle" size={16} />}
+        isPressed={filters.hideDone}
+        onPressedChange={(v) => set({ hideDone: v })}
+      />
 
-      <select
-        className={selectCls}
+      <Selector
+        label="Sắp xếp"
+        isLabelHidden
+        size="sm"
         value={sort}
-        onChange={(e) => setSort(e.target.value as SortKey)}
-        title="Sắp xếp"
-      >
-        <option value="position">Thứ tự thủ công</option>
-        <option value="due">Hạn gần nhất</option>
-        <option value="priority">Ưu tiên cao trước</option>
-        <option value="points">Story points</option>
-        <option value="rice">Điểm RICE</option>
-        <option value="title">Tên A→Z</option>
-      </select>
+        onChange={(v) => setSort((v ?? "position") as SortKey)}
+        options={[
+          { value: "position", label: "Thứ tự thủ công" },
+          { value: "due", label: "Hạn gần nhất" },
+          { value: "priority", label: "Ưu tiên cao trước" },
+          { value: "points", label: "Story points" },
+          { value: "rice", label: "Điểm RICE" },
+          { value: "title", label: "Tên A→Z" },
+        ]}
+      />
 
-      <select
-        className={selectCls}
+      <Selector
+        label="Nhóm thành các làn"
+        isLabelHidden
+        size="sm"
         value={group}
-        onChange={(e) => setGroup(e.target.value)}
-        title="Nhóm thành các làn (swimlane)"
-      >
-        <option value="status">Nhóm: Trạng thái</option>
-        <option value="assignee">Nhóm: Người phụ trách</option>
-        <option value="priority">Nhóm: Ưu tiên</option>
-        <option value="moscow">Nhóm: MoSCoW</option>
-        <option value="none">Không nhóm</option>
-      </select>
+        onChange={(v) => setGroup(v ?? "status")}
+        options={[
+          { value: "status", label: "Nhóm: Trạng thái" },
+          { value: "assignee", label: "Nhóm: Người phụ trách" },
+          { value: "priority", label: "Nhóm: Ưu tiên" },
+          { value: "moscow", label: "Nhóm: MoSCoW" },
+          { value: "none", label: "Không nhóm" },
+        ]}
+      />
 
       {active && (
-        <button
+        <Button
+          label={`Xoá lọc (${resultCount})`}
+          variant="ghost"
+          size="sm"
+          icon={<Icon name="close" size={16} />}
           onClick={() => setFilters(EMPTY_FILTERS)}
-          className="flex items-center gap-1 px-3 py-1.5 text-[13px] font-semibold text-gray-500 hover:text-gray-900"
-        >
-          <Icon name="close" size={16} /> Xoá lọc ({resultCount})
-        </button>
+        />
       )}
-    </div>
+    </HStack>
   );
 }

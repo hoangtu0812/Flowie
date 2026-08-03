@@ -2,11 +2,22 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
+import { Section } from "@astryxdesign/core/Section";
+import { Layout, LayoutPanel, LayoutContent } from "@astryxdesign/core/Layout";
+import { VStack, HStack, StackItem } from "@astryxdesign/core/Layout";
+import { List, ListItem } from "@astryxdesign/core/List";
+import { ChatMessageList, ChatMessage as ChatBubbleRow, ChatMessageBubble } from "@astryxdesign/core/Chat";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { Badge } from "@astryxdesign/core/Badge";
+import { Banner } from "@astryxdesign/core/Banner";
+import { Text } from "@astryxdesign/core/Text";
+import { Avatar } from "@astryxdesign/core/Avatar";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { api, ChatChannel, ChatMessage, Project, User } from "@/lib/api";
 import AppShell from "@/components/layout/AppShell";
 import Icon from "@/components/ui/Icon";
 import ProjectTabs from "@/components/layout/ProjectTabs";
-import Avatar from "@/components/ui/Avatar";
 import { useProjectEvents } from "@/lib/useProjectEvents";
 
 // Fallback poll: realtime (SSE) drives updates, this only covers a dropped
@@ -36,7 +47,9 @@ export default function ProjectChatPage() {
     setActive((cur) => cur || (cs.length > 0 ? cs[0].id : ""));
   }, [id]);
 
-  useEffect(() => { loadChannels(); }, [loadChannels]);
+  useEffect(() => {
+    loadChannels();
+  }, [loadChannels]);
 
   const loadMessages = useCallback(async () => {
     if (!active) return;
@@ -44,7 +57,9 @@ export default function ProjectChatPage() {
     setMessages(ms);
   }, [active]);
 
-  useEffect(() => { loadMessages(); }, [loadMessages]);
+  useEffect(() => {
+    loadMessages();
+  }, [loadMessages]);
 
   // Poll the open channel so other people's messages show up.
   useEffect(() => {
@@ -97,115 +112,133 @@ export default function ProjectChatPage() {
 
   return (
     <AppShell title={project ? `${project.key} · Chat` : "Chat"}>
-      <div className="p-lg">
-        <ProjectTabs projectId={id} />
+      <Section variant="transparent" padding={5}>
+        <VStack gap={5} hAlign="stretch">
+          <ProjectTabs projectId={id} />
 
-        <div className="max-w-[1400px]">
+          {error && <Banner status="error" title={error} isDismissable onDismiss={() => setError(null)} />}
 
-        {error && <p className="text-error text-body-sm mb-md">{error}</p>}
-
-        <div className="flex gap-lg" style={{ height: "calc(100vh - 220px)" }}>
-          {/* Channel list */}
-          <aside className="w-60 shrink-0 card p-sm flex flex-col">
-            <p className="text-label-sm uppercase text-on-surface-variant px-2 py-1">Kênh</p>
-            <div className="flex-grow overflow-y-auto flex flex-col gap-1">
-              {channels.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => setActive(c.id)}
-                  className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-left transition-colors ${
-                    active === c.id
-                      ? "bg-primary-container/10 text-primary font-medium"
-                      : "text-on-surface-variant hover:bg-surface-container-low"
-                  }`}
-                >
-                  <span className="flex items-center gap-2 min-w-0">
-                    <Icon name="tag" size={16} />
-                    <span className="truncate text-body-sm">{c.name}</span>
-                  </span>
-                  {c.unread > 0 && active !== c.id && (
-                    <span className="min-w-5 h-5 px-1 bg-error text-on-error rounded-full text-label-sm flex items-center justify-center">
-                      {c.unread > 9 ? "9+" : c.unread}
-                    </span>
+          {/* Frame kiểu messaging: rail kênh 240px + luồng tin nhắn.
+              Rows và bubble, không Card trong luồng (xem `astryx docs layout`). */}
+          <Layout height="fill">
+            <LayoutPanel width={240} hasDivider isScrollable label="Kênh">
+              <VStack gap={2} hAlign="stretch" padding={2} height="100%">
+                <Text type="label" color="secondary">
+                  Kênh
+                </Text>
+                <StackItem size="fill">
+                  {channels.length === 0 ? (
+                    <Text type="supporting">Chưa có kênh nào.</Text>
+                  ) : (
+                    <List>
+                      {channels.map((c) => (
+                        <ListItem
+                          key={c.id}
+                          startContent={<Icon name="tag" size={16} />}
+                          label={c.name}
+                          isSelected={active === c.id}
+                          onClick={() => setActive(c.id)}
+                          endContent={
+                            c.unread > 0 && active !== c.id ? (
+                              <Badge variant="error" label={c.unread > 9 ? "9+" : c.unread} />
+                            ) : undefined
+                          }
+                        />
+                      ))}
+                    </List>
                   )}
-                </button>
-              ))}
-              {channels.length === 0 && (
-                <p className="px-3 py-2 text-body-sm text-on-surface-variant/60">Chưa có kênh nào.</p>
-              )}
-            </div>
-            <div className="flex gap-1 mt-sm pt-sm border-t border-outline-variant">
-              <input
-                className="field text-body-sm"
-                placeholder="Kênh mới…"
-                value={newChannel}
-                onChange={(e) => setNewChannel(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && createChannel()}
-              />
-              <button className="btn-ghost" onClick={createChannel} title="Tạo kênh">
-                <Icon name="add" size={18} />
-              </button>
-            </div>
-          </aside>
-
-          {/* Messages */}
-          <section className="flex-grow card flex flex-col min-w-0">
-            {active ? (
-              <>
-                <div className="flex-grow overflow-y-auto p-lg flex flex-col gap-md">
-                  {messages.map((m) => {
-                    const mine = me?.id && m.authorId === me.id;
-                    return (
-                      <div key={m.id} className={`flex gap-sm ${mine ? "flex-row-reverse" : ""}`}>
-                        <Avatar name={m.authorName || m.authorEmail} size={32} />
-                        <div className={`max-w-[70%] ${mine ? "items-end text-right" : ""} flex flex-col`}>
-                          <p className="text-label-sm text-on-surface-variant/70">
-                            {mine ? "Bạn" : m.authorName || m.authorEmail}{" "}
-                            · {new Date(m.createdAt).toLocaleString()}
-                          </p>
-                          <div
-                            className={`px-3 py-2 rounded-2xl text-body-md whitespace-pre-wrap break-words ${
-                              mine
-                                ? "bg-primary text-on-primary rounded-br-sm"
-                                : "bg-surface-container-high text-on-surface rounded-bl-sm"
-                            }`}
-                          >
-                            {m.body}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {messages.length === 0 && (
-                    <p className="text-body-sm text-on-surface-variant/60 m-auto">
-                      Chưa có tin nhắn. Hãy bắt đầu cuộc trò chuyện.
-                    </p>
-                  )}
-                  <div ref={bottomRef} />
-                </div>
-                <div className="flex gap-sm p-md border-t border-outline-variant">
-                  <input
-                    className="field flex-grow"
-                    placeholder="Nhắn tin… (dùng @ để nhắc tên)"
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && send()}
+                </StackItem>
+                <HStack gap={1} vAlign="center">
+                  <StackItem size="fill">
+                    <TextInput
+                      label="Kênh mới"
+                      isLabelHidden
+                      size="sm"
+                      placeholder="Kênh mới…"
+                      value={newChannel}
+                      onChange={setNewChannel}
+                      onEnter={createChannel}
+                    />
+                  </StackItem>
+                  <IconButton
+                    label="Tạo kênh"
+                    tooltip="Tạo kênh"
+                    variant="ghost"
+                    size="sm"
+                    icon={<Icon name="add" size={18} />}
+                    clickAction={createChannel}
                   />
-                  <button className="btn-primary" onClick={send} disabled={!draft.trim()}>
-                    <Icon name="send" size={18} />
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="m-auto text-center text-on-surface-variant/60 p-xl">
-                <Icon name="forum" size={40} className="text-outline mb-sm" />
-                <p>Tạo một kênh để bắt đầu trò chuyện.</p>
-              </div>
-            )}
-          </section>
-        </div>
-        </div>
-      </div>
+                </HStack>
+              </VStack>
+            </LayoutPanel>
+
+            <LayoutContent>
+              {active ? (
+                <VStack gap={0} hAlign="stretch" height="100%">
+                  <StackItem size="fill">
+                    <ChatMessageList
+                      emptyState={
+                        <EmptyState
+                          title="Chưa có tin nhắn"
+                          description="Hãy bắt đầu cuộc trò chuyện."
+                          isCompact
+                        />
+                      }>
+                      {messages.map((m) => {
+                        const mine = !!me?.id && m.authorId === me.id;
+                        // `sender` của Astryx điều khiển căn trái/phải của bong
+                        // bóng. Ánh xạ: tin của mình → 'user' (phải), của người
+                        // khác → 'assistant' (trái).
+                        return (
+                          <ChatBubbleRow
+                            key={m.id}
+                            sender={mine ? "user" : "assistant"}
+                            avatar={
+                              <Avatar name={m.authorName || m.authorEmail} size={32} tooltip={false} />
+                            }
+                            name={mine ? "Bạn" : m.authorName || m.authorEmail}
+                            metadata={new Date(m.createdAt).toLocaleString()}>
+                            <ChatMessageBubble>{m.body}</ChatMessageBubble>
+                          </ChatBubbleRow>
+                        );
+                      })}
+                      <div ref={bottomRef} />
+                    </ChatMessageList>
+                  </StackItem>
+
+                  <Section variant="transparent" padding={4} dividers={["top"]}>
+                    <HStack gap={2} vAlign="center">
+                      <StackItem size="fill">
+                        <TextInput
+                          label="Nội dung tin nhắn"
+                          isLabelHidden
+                          placeholder="Nhắn tin… (dùng @ để nhắc tên)"
+                          value={draft}
+                          onChange={setDraft}
+                          onEnter={send}
+                        />
+                      </StackItem>
+                      <IconButton
+                        label="Gửi"
+                        tooltip="Gửi"
+                        variant="primary"
+                        icon={<Icon name="send" size={18} />}
+                        isDisabled={!draft.trim()}
+                        clickAction={send}
+                      />
+                    </HStack>
+                  </Section>
+                </VStack>
+              ) : (
+                <EmptyState
+                  title="Tạo một kênh để bắt đầu trò chuyện."
+                  icon={<Icon name="forum" size={40} />}
+                />
+              )}
+            </LayoutContent>
+          </Layout>
+        </VStack>
+      </Section>
     </AppShell>
   );
 }

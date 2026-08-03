@@ -2,6 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Popover } from "@astryxdesign/core/Popover";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { Badge } from "@astryxdesign/core/Badge";
+import { Button } from "@astryxdesign/core/Button";
+import { Toolbar } from "@astryxdesign/core/Toolbar";
+import { List, ListItem } from "@astryxdesign/core/List";
+import { VStack, HStack } from "@astryxdesign/core/Layout";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { Text } from "@astryxdesign/core/Text";
 import { api, Notification } from "@/lib/api";
 import Icon from "../ui/Icon";
 
@@ -37,12 +46,6 @@ export default function NotificationBell() {
     };
   }, []);
 
-  // Opening the panel used to mark everything read, which made it impossible to
-  // come back to something later. Reading is now per-item (or "Đọc hết").
-  function toggle() {
-    setOpen((v) => !v);
-  }
-
   async function markRead(n: Notification) {
     if (n.readAt) return;
     setItems((p) => p.map((x) => (x.id === n.id ? { ...x, readAt: new Date().toISOString() } : x)));
@@ -51,69 +54,80 @@ export default function NotificationBell() {
   }
 
   return (
-    <div className="relative">
-      <button
-        onClick={toggle}
-        className="p-2 rounded-full hover:bg-surface-container-highest transition-colors active:scale-95 text-on-surface-variant relative"
-      >
-        <Icon name="notifications" size={22} />
-        {unread > 0 && (
-          <span className="absolute top-1 right-1 min-w-4 h-4 px-1 bg-error text-on-error rounded-full text-label-sm flex items-center justify-center">
-            {unread > 9 ? "9+" : unread}
-          </span>
-        )}
-      </button>
-      {open && (
-        <div className="absolute right-0 mt-2 w-80 card shadow-popover z-50 overflow-hidden" onMouseLeave={() => setOpen(false)}>
-          <div className="px-md py-2 border-b border-outline-variant flex items-center justify-between">
-            <span className="text-label-md text-on-surface">Thông báo</span>
-            <button className="text-body-sm text-primary" onClick={() => api.markAllNotificationsRead().then(load)}>
-              Đọc hết
-            </button>
-          </div>
-          <div className="max-h-96 overflow-y-auto">
-            {items.length === 0 && (
-              <p className="px-md py-lg text-center text-body-sm text-on-surface-variant/60">Không có thông báo.</p>
-            )}
-            {items.map((n) => (
-              <div
-                key={n.id}
-                className={`group flex gap-sm px-md py-2.5 border-b border-outline-variant/50 ${n.readAt ? "" : "bg-primary-container/5"}`}
-              >
-                <Icon name={TYPE_ICON[n.type] ?? "notifications"} size={18} className="text-primary mt-0.5 shrink-0" />
-                {/* Notifications were dead text — being assigned a task or
-                    mentioned gave you no way to reach it. `link` comes from the
-                    backend and opens the task (and the comment, for mentions). */}
-                <button
-                  className="min-w-0 flex-grow text-left disabled:cursor-default"
-                  disabled={!n.link}
+    <Popover
+      isOpen={open}
+      onOpenChange={setOpen}
+      placement="below"
+      alignment="end"
+      width={340}
+      label="Thông báo"
+      content={
+        <VStack gap={0} hAlign="stretch">
+          <Toolbar
+            label="Thông báo"
+            size="sm"
+            startContent={<Text type="label">Thông báo</Text>}
+            endContent={
+              <Button
+                label="Đọc hết"
+                variant="ghost"
+                size="sm"
+                clickAction={() => api.markAllNotificationsRead().then(load)}
+              />
+            }
+          />
+          {/* Dense, scannable records → rows edge-to-edge, không bọc Card. */}
+          {items.length === 0 ? (
+            <EmptyState title="Không có thông báo." isCompact />
+          ) : (
+            <VStack isScrollable height={384} hAlign="stretch">
+            <List hasDividers>
+              {items.map((n) => (
+                <ListItem
+                  key={n.id}
+                  isSelected={!n.readAt}
+                  startContent={<Icon name={TYPE_ICON[n.type] ?? "notifications"} size={18} />}
+                  label={n.title}
+                  description={n.body || new Date(n.createdAt).toLocaleString()}
+                  // Notifications were dead text — being assigned a task or
+                  // mentioned gave you no way to reach it. `link` comes from the
+                  // backend and opens the task (and the comment, for mentions).
+                  isDisabled={!n.link}
                   onClick={() => {
                     if (!n.link) return;
                     markRead(n);
                     setOpen(false);
                     router.push(n.link);
                   }}
-                >
-                  <p className={`text-body-sm font-medium ${n.link ? "text-on-surface group-hover:text-primary" : "text-on-surface"}`}>
-                    {n.title}
-                  </p>
-                  {n.body && <p className="text-body-sm text-on-surface-variant truncate">{n.body}</p>}
-                  <p className="text-label-sm text-on-surface-variant/60">{new Date(n.createdAt).toLocaleString()}</p>
-                </button>
-                {!n.readAt && (
-                  <button
-                    onClick={() => markRead(n)}
-                    title="Đánh dấu đã đọc"
-                    className="self-start p-1 rounded-full text-on-surface-variant opacity-0 group-hover:opacity-100 hover:bg-surface-container transition-opacity"
-                  >
-                    <Icon name="done" size={16} />
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+                  endContent={
+                    !n.readAt ? (
+                      <IconButton
+                        label="Đánh dấu đã đọc"
+                        tooltip="Đánh dấu đã đọc"
+                        variant="ghost"
+                        size="sm"
+                        icon={<Icon name="done" size={16} />}
+                        onClick={() => markRead(n)}
+                      />
+                    ) : undefined
+                  }
+                />
+              ))}
+            </List>
+            </VStack>
+          )}
+        </VStack>
+      }>
+      {/* IconButton không có endContent, nên badge đếm nằm cạnh nút thay vì
+          đè lên góc. Badge ở đây đúng vai trò: một con số đếm. */}
+      <HStack gap={0.5} vAlign="center">
+        <IconButton
+          label="Thông báo"
+          variant="ghost"
+          icon={<Icon name="notifications" size={22} />}
+        />
+        {unread > 0 && <Badge variant="error" label={unread > 9 ? "9+" : unread} />}
+      </HStack>
+    </Popover>
   );
 }

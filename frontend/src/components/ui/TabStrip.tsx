@@ -1,5 +1,6 @@
 "use client";
 
+import { TabList, Tab } from "@astryxdesign/core/TabList";
 import Icon from "./Icon";
 
 export interface TabDef {
@@ -9,36 +10,29 @@ export interface TabDef {
 }
 
 /**
- * In-page tab strip. Matches the look of ProjectTabs (which navigates between
- * routes) so switching sections feels the same everywhere in the app.
+ * Tab trong trang — nay dựng bằng TabList/Tab của Astryx thay vì tự vẽ border
+ * và trạng thái active bằng Tailwind. Giữ API cũ (`tabs`, `active`, `onChange`)
+ * để chỗ gọi không phải sửa.
  */
 export default function TabStrip({
   tabs,
   active,
   onChange,
-  className = "",
 }: {
   tabs: TabDef[];
   active: string;
   onChange: (key: string) => void;
-  className?: string;
 }) {
   return (
-    <div className={`flex flex-wrap gap-xs border-b border-outline-variant ${className}`}>
+    <TabList value={active} onChange={onChange} hasDivider>
       {tabs.map((t) => (
-        <button
+        <Tab
           key={t.key}
-          onClick={() => onChange(t.key)}
-          className={`flex items-center gap-xs px-md py-2 text-body-md border-b-2 -mb-px transition-colors ${
-            active === t.key
-              ? "border-primary text-primary font-medium"
-              : "border-transparent text-on-surface-variant hover:text-on-surface"
-          }`}
-        >
-          {t.icon && <Icon name={t.icon} size={18} />}
-          {t.label}
-        </button>
+          value={t.key}
+          label={t.label}
+          icon={t.icon ? <Icon name={t.icon} size={18} /> : undefined}
+        />
       ))}
-    </div>
+    </TabList>
   );
 }

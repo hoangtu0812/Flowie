@@ -2,6 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import { FormLayout } from "@astryxdesign/core/FormLayout";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { TextArea } from "@astryxdesign/core/TextArea";
+import { Button } from "@astryxdesign/core/Button";
+import { Section } from "@astryxdesign/core/Section";
+import { VStack, HStack } from "@astryxdesign/core/Layout";
 import { api, Project } from "@/lib/api";
 
 /**
@@ -36,8 +43,7 @@ export default function NewProjectDialog({
     if (!keyTouched) setKey(suggestKey(v));
   }
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  async function submit() {
     setBusy(true);
     setError(null);
     try {
@@ -54,58 +60,56 @@ export default function NewProjectDialog({
     }
   }
 
+  const canSubmit = !busy && !!name.trim() && !!key.trim();
+
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-md"
-      onClick={onClose}
-    >
-      <form
-        onClick={(e) => e.stopPropagation()}
-        onSubmit={submit}
-        className="card shadow-modal p-lg w-full max-w-md"
-      >
-        <h3 className="text-headline-lg text-on-surface mb-md">Tạo dự án</h3>
-
-        <label className="block text-label-md text-on-surface-variant mb-1">Tên dự án</label>
-        <input
-          className="field mb-md"
-          placeholder="Website Revamp"
-          value={name}
-          onChange={(e) => onName(e.target.value)}
-          autoFocus
-        />
-
-        <label className="block text-label-md text-on-surface-variant mb-1">Mã (KEY)</label>
-        <input
-          className="field mb-1 uppercase"
-          placeholder="WEB"
-          value={key}
-          maxLength={10}
-          onChange={(e) => { setKeyTouched(true); setKey(e.target.value); }}
-        />
-        <p className="text-body-sm text-on-surface-variant/70 mb-md">
-          Dùng làm tiền tố mã công việc, ví dụ {key.trim().toUpperCase() || "WEB"}-12.
-        </p>
-
-        <label className="block text-label-md text-on-surface-variant mb-1">Mô tả</label>
-        <textarea
-          className="field mb-lg"
-          rows={3}
-          placeholder="Tuỳ chọn"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-
-        {error && <p className="text-error text-body-sm mb-md">{error}</p>}
-
-        <div className="flex justify-end gap-sm">
-          <button type="button" className="btn-ghost" onClick={onClose}>Huỷ</button>
-          <button className="btn-primary" disabled={busy || !name.trim() || !key.trim()}>
-            {busy ? "Đang tạo…" : "Tạo dự án"}
-          </button>
-        </div>
-      </form>
-    </div>
+    <Dialog isOpen onOpenChange={(open) => { if (!open) onClose(); }} purpose="form" width={480}>
+      <DialogHeader title="Tạo dự án" onOpenChange={(open) => { if (!open) onClose(); }} />
+      <VStack gap={4} hAlign="stretch">
+        <Section variant="transparent" padding={4}>
+          <FormLayout>
+          <TextInput
+            label="Tên dự án"
+            placeholder="Website Revamp"
+            value={name}
+            onChange={onName}
+            hasAutoFocus
+          />
+          <TextInput
+            label="Mã (KEY)"
+            placeholder="WEB"
+            value={key}
+            onChange={(v) => {
+              setKeyTouched(true);
+              setKey(v);
+            }}
+            description={`Dùng làm tiền tố mã công việc, ví dụ ${key.trim().toUpperCase() || "WEB"}-12.`}
+            status={error ? { type: "error", message: error } : undefined}
+          />
+          <TextArea
+            label="Mô tả"
+            placeholder="Tuỳ chọn"
+            value={description}
+            onChange={setDescription}
+            isOptional
+            rows={3}
+          />
+          </FormLayout>
+        </Section>
+        <Section variant="transparent" padding={4} dividers={["top"]}>
+          <HStack gap={2} justify="end">
+            <Button label="Huỷ" variant="ghost" onClick={onClose} />
+            <Button
+              label={busy ? "Đang tạo…" : "Tạo dự án"}
+              variant="primary"
+              isLoading={busy}
+              isDisabled={!canSubmit}
+              clickAction={submit}
+            />
+          </HStack>
+        </Section>
+      </VStack>
+    </Dialog>
   );
 }
 

@@ -1,12 +1,46 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Section } from "@astryxdesign/core/Section";
+import { Card } from "@astryxdesign/core/Card";
+import { VStack, HStack, StackItem } from "@astryxdesign/core/Layout";
+import { Table, pixel, proportional } from "@astryxdesign/core/Table";
+import { TabList, Tab } from "@astryxdesign/core/TabList";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { Typeahead } from "@astryxdesign/core/Typeahead";
+import { Button } from "@astryxdesign/core/Button";
+import { Pagination } from "@astryxdesign/core/Pagination";
+import { Badge } from "@astryxdesign/core/Badge";
+import { Banner } from "@astryxdesign/core/Banner";
+import { Avatar } from "@astryxdesign/core/Avatar";
+import { Text } from "@astryxdesign/core/Text";
+import { Heading } from "@astryxdesign/core/Heading";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { api, User, Workspace } from "@/lib/api";
 import AppShell from "@/components/layout/AppShell";
 import Icon from "@/components/ui/Icon";
-import Avatar from "@/components/ui/Avatar";
 
 const PAGE_SIZE = 50;
+
+interface UserRow extends Record<string, unknown> {
+  id: string;
+  displayName: string;
+  email: string;
+  isSystemAdmin: boolean;
+}
+
+interface WorkspaceRow extends Record<string, unknown> {
+  id: string;
+  name: string;
+  slug: string;
+  createdBy: string;
+}
+
+/** Typeahead nhận item dạng { id, label }. */
+interface OwnerItem {
+  id: string;
+  label: string;
+}
 
 export default function AdminPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -19,11 +53,8 @@ export default function AdminPage() {
 
   const [newWsName, setNewWsName] = useState("");
   const [newWsOwner, setNewWsOwner] = useState("");
-  const [selectedOwner, setSelectedOwner] = useState<User | null>(null);
   const [wsError, setWsError] = useState("");
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [searchOwner, setSearchOwner] = useState("");
-  const [ownerResults, setOwnerResults] = useState<User[]>([]);
+  const [selectedOwner, setSelectedOwner] = useState<OwnerItem | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -31,8 +62,14 @@ export default function AdminPage() {
     setLoadingUsers(true);
     api
       .adminListUsers({ q: search, limit: PAGE_SIZE, offset: page * PAGE_SIZE })
-      .then((res) => { setUsers(res.users); setTotal(res.total); })
-      .catch(() => { setUsers([]); setTotal(0); })
+      .then((res) => {
+        setUsers(res.users);
+        setTotal(res.total);
+      })
+      .catch(() => {
+        setUsers([]);
+        setTotal(0);
+      })
       .finally(() => setLoadingUsers(false));
   }, [search, page]);
 
@@ -43,29 +80,37 @@ export default function AdminPage() {
   }, [loadUsers]);
 
   useEffect(() => {
-    api.adminListWorkspaces().then(res => setWorkspaces(res || [])).catch(() => {});
+    api.adminListWorkspaces().then((res) => setWorkspaces(res || [])).catch(() => {});
   }, []);
 
   // The owner picker searches the server too — it used to filter a full
-  // in-memory copy of every user in the tenant.
-  useEffect(() => {
-    if (!dropdownOpen) return;
-    const t = setTimeout(() => {
-      api
-        .adminListUsers({ q: searchOwner, limit: 20 })
-        .then((res) => setOwnerResults(res.users))
-        .catch(() => setOwnerResults([]));
-    }, 250);
-    return () => clearTimeout(t);
-  }, [dropdownOpen, searchOwner]);
+  // in-memory copy of every user in the tenant. Typeahead gọi `search` khi gõ,
+  // `bootstrap` khi mở lần đầu, nên phần debounce/ARIA/bàn phím do nó lo.
+  const ownerSource = {
+    search: async (query: string): Promise<OwnerItem[]> => {
+      const res = await api.adminListUsers({ q: query, limit: 20 }).catch(() => null);
+      return (res?.users ?? []).map((u) => ({
+        id: u.id,
+        label: `${u.displayName} (${u.email})`,
+      }));
+    },
+    bootstrap: async (): Promise<OwnerItem[]> => {
+      const res = await api.adminListUsers({ limit: 20 }).catch(() => null);
+      return (res?.users ?? []).map((u) => ({
+        id: u.id,
+        label: `${u.displayName} (${u.email})`,
+      }));
+    },
+  };
 
-  async function toggleAdmin(u: User) {
+  async function toggleAdmin(u: UserRow) {
     await api.adminToggleUser(u.id, !u.isSystemAdmin);
-    setUsers((prev) => prev.map(x => x.id === u.id ? { ...x, isSystemAdmin: !x.isSystemAdmin } : x));
+    setUsers((prev) =>
+      prev.map((x) => (x.id === u.id ? { ...x, isSystemAdmin: !x.isSystemAdmin } : x)),
+    );
   }
 
-  async function handleCreateWorkspace(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleCreateWorkspace() {
     if (!newWsName.trim() || !newWsOwner || isCreating) return;
     try {
       setIsCreating(true);
@@ -75,281 +120,270 @@ export default function AdminPage() {
       setNewWsName("");
       setNewWsOwner("");
       setSelectedOwner(null);
-    } catch (err: any) {
-      setWsError(err.message);
+    } catch (err) {
+      setWsError((err as Error).message);
     } finally {
       setIsCreating(false);
     }
   }
 
   async function handleDeleteWorkspace(id: string, name: string) {
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa không gian làm việc "${name}"? Hành động này sẽ xóa tất cả dự án, công việc liên quan và không thể hoàn tác.`)) return;
+    if (
+      !window.confirm(
+        `Bạn có chắc chắn muốn xóa không gian làm việc "${name}"? Hành động này sẽ xóa tất cả dự án, công việc liên quan và không thể hoàn tác.`,
+      )
+    )
+      return;
     try {
       setDeletingId(id);
       await api.adminDeleteWorkspace(id);
-      setWorkspaces((workspaces || []).filter(w => w.id !== id));
+      setWorkspaces((workspaces || []).filter((w) => w.id !== id));
       // Nếu workspace đang được chọn bị xóa, xóa khỏi localStorage
-      if (localStorage.getItem('activeWorkspaceId') === id) {
-        localStorage.removeItem('activeWorkspaceId');
+      if (localStorage.getItem("activeWorkspaceId") === id) {
+        localStorage.removeItem("activeWorkspaceId");
       }
-    } catch (err: any) {
-      alert(`Lỗi khi xóa: ${err.message}`);
+    } catch (err) {
+      setWsError(`Lỗi khi xóa: ${(err as Error).message}`);
     } finally {
       setDeletingId(null);
     }
   }
 
+  const userRows: UserRow[] = users.map((u) => ({
+    id: u.id,
+    displayName: u.displayName,
+    email: u.email,
+    isSystemAdmin: !!u.isSystemAdmin,
+  }));
+
+  const wsRows: WorkspaceRow[] = (workspaces || []).map((w) => ({
+    id: w.id,
+    name: w.name,
+    slug: w.slug,
+    createdBy: w.createdBy,
+  }));
+
   return (
     <AppShell title={null}>
-      <div className="p-8 max-w-[1400px] mx-auto bg-white min-h-screen">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h2 className="text-[28px] font-bold text-gray-900">Admin Panel</h2>
-            <p className="text-[14px] text-gray-500 mt-1">Quản lý người dùng và không gian làm việc trên toàn hệ thống.</p>
-          </div>
-          {tab === "users" && (
-            <button
-              onClick={async () => {
-                const res = await api.adminSyncAzureUsers();
-                alert(`Đã đồng bộ ${res.synced} người dùng từ Microsoft Azure!`);
-                loadUsers();
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg text-[13px] font-semibold hover:bg-gray-800 transition-colors shadow-sm"
-            >
-              <Icon name="sync" size={16} />
-              Đồng bộ từ Azure
-            </button>
-          )}
-        </div>
-
-        <div className="flex gap-4 border-b border-gray-100 mb-6">
-          <button 
-            className={`pb-3 px-2 text-[14px] font-bold border-b-2 transition-colors ${tab === "users" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-900"}`}
-            onClick={() => setTab("users")}
-          >
-            Người dùng ({total})
-          </button>
-          <button 
-            className={`pb-3 px-2 text-[14px] font-bold border-b-2 transition-colors ${tab === "workspaces" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-900"}`}
-            onClick={() => setTab("workspaces")}
-          >
-            Workspaces ({(workspaces || []).length})
-          </button>
-        </div>
-
-        {tab === "users" && (
-          <>
-            <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-              <input
-                className="field w-80"
-                placeholder="Tìm theo tên hoặc email…"
-                value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+      <Section variant="transparent" padding={8} maxWidth={1400}>
+        <VStack gap={6} hAlign="stretch">
+          <HStack gap={4} vAlign="center" wrap="wrap">
+            <VStack gap={1}>
+              <Heading level={2}>Admin Panel</Heading>
+              <Text type="supporting">
+                Quản lý người dùng và không gian làm việc trên toàn hệ thống.
+              </Text>
+            </VStack>
+            <StackItem size="fill" />
+            {tab === "users" && (
+              <Button
+                label="Đồng bộ từ Azure"
+                variant="primary"
+                icon={<Icon name="sync" size={16} />}
+                clickAction={async () => {
+                  const res = await api.adminSyncAzureUsers();
+                  setWsError("");
+                  loadUsers();
+                  window.alert(`Đã đồng bộ ${res.synced} người dùng từ Microsoft Azure!`);
+                }}
               />
-              <span className="text-[13px] text-gray-500">
-                {total === 0 ? "Không có kết quả" : `${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, total)} trên ${total}`}
-              </span>
-            </div>
-
-            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200 text-[12px] font-bold text-gray-500 uppercase">
-                    <th className="py-4 px-6">User</th>
-                    <th className="py-4 px-6">Email</th>
-                    <th className="py-4 px-6">Admin Status</th>
-                    <th className="py-4 px-6 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {loadingUsers && (
-                    <tr><td colSpan={4} className="py-10 text-center text-gray-500">Đang tải…</td></tr>
-                  )}
-                  {!loadingUsers && users.length === 0 && (
-                    <tr><td colSpan={4} className="py-10 text-center text-gray-500">Không tìm thấy người dùng nào.</td></tr>
-                  )}
-                  {!loadingUsers && users.map(u => (
-                    <tr key={u.id} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-3">
-                          {/* Initials, not an <img>. This used to hit
-                              ui-avatars.com once per row — thousands of external
-                              requests that froze the page and kept running after
-                              you navigated away. */}
-                          <Avatar name={u.displayName || u.email} size={32} />
-                          <span className="font-semibold text-[14px] text-gray-900">{u.displayName}</span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-6 text-[14px] text-gray-500">{u.email}</td>
-                      <td className="py-4 px-6">
-                        {u.isSystemAdmin ? (
-                          <span className="px-2.5 py-1 bg-purple-50 text-purple-600 text-[12px] font-bold rounded-full border border-purple-100">System Admin</span>
-                        ) : (
-                          <span className="px-2.5 py-1 bg-gray-100 text-gray-600 text-[12px] font-bold rounded-full border border-gray-200">User</span>
-                        )}
-                      </td>
-                      <td className="py-4 px-6 text-right">
-                        <button
-                          onClick={() => toggleAdmin(u)}
-                          className={`px-3 py-1.5 rounded-lg text-[13px] font-bold transition-colors shadow-sm ${u.isSystemAdmin ? "bg-white border border-red-200 text-red-600 hover:bg-red-50" : "bg-white border border-blue-200 text-blue-600 hover:bg-blue-50"}`}
-                        >
-                          {u.isSystemAdmin ? "Revoke Admin" : "Make Admin"}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {total > PAGE_SIZE && (
-              <div className="flex items-center justify-center gap-4 mt-4">
-                <button className="btn-ghost" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
-                  <Icon name="chevron_left" size={18} /> Trước
-                </button>
-                <span className="text-[13px] text-gray-500">
-                  Trang {page + 1} / {Math.ceil(total / PAGE_SIZE)}
-                </span>
-                <button
-                  className="btn-ghost"
-                  disabled={(page + 1) * PAGE_SIZE >= total}
-                  onClick={() => setPage(p => p + 1)}
-                >
-                  Sau <Icon name="chevron_right" size={18} />
-                </button>
-              </div>
             )}
-          </>
-        )}
+          </HStack>
 
-        {tab === "workspaces" && (
-          <div className="space-y-6">
-            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6">
-              <h3 className="text-[16px] font-bold text-gray-900 mb-4">Tạo Không gian làm việc mới</h3>
-              <form onSubmit={handleCreateWorkspace} className="flex gap-4 items-start max-w-3xl">
-                <div className="flex-1">
-                  <input
-                    className="w-full bg-white border border-gray-200 rounded-lg px-4 py-2 text-[14px] outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-500 transition-all shadow-sm"
-                    placeholder="Tên workspace..."
-                    value={newWsName}
-                    onChange={(e) => setNewWsName(e.target.value)}
+          <TabList value={tab} onChange={(v) => setTab(v as "users" | "workspaces")} hasDivider>
+            <Tab value="users" label={`Người dùng (${total})`} />
+            <Tab value="workspaces" label={`Workspaces (${wsRows.length})`} />
+          </TabList>
+
+          {wsError && <Banner status="error" title={wsError} isDismissable onDismiss={() => setWsError("")} />}
+
+          {tab === "users" && (
+            <VStack gap={4} hAlign="stretch">
+              <HStack gap={4} vAlign="center" wrap="wrap">
+                <TextInput
+                  label="Tìm người dùng"
+                  isLabelHidden
+                  width={320}
+                  placeholder="Tìm theo tên hoặc email…"
+                  value={search}
+                  onChange={(v) => {
+                    setSearch(v);
+                    setPage(0);
+                  }}
+                />
+                <StackItem size="fill" />
+                <Text type="supporting">
+                  {total === 0
+                    ? "Không có kết quả"
+                    : `${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, total)} trên ${total}`}
+                </Text>
+              </HStack>
+
+              <Card padding={0}>
+                {loadingUsers ? (
+                  <Section variant="transparent" padding={8}>
+                    <Text color="secondary" justify="center">
+                      Đang tải…
+                    </Text>
+                  </Section>
+                ) : userRows.length === 0 ? (
+                  <EmptyState title="Không tìm thấy người dùng nào." />
+                ) : (
+                  // Dữ liệu cột dày → Table, không bọc từng dòng trong Card.
+                  <Table<UserRow>
+                    data={userRows}
+                    idKey="id"
+                    density="compact"
+                    hasHover
+                    columns={[
+                      {
+                        key: "displayName",
+                        header: "User",
+                        width: proportional(1),
+                        renderCell: (u) => (
+                          <HStack gap={3} vAlign="center">
+                            {/* Initials, not an <img>. This used to hit
+                                ui-avatars.com once per row — thousands of external
+                                requests that froze the page and kept running after
+                                you navigated away. */}
+                            <Avatar name={u.displayName || u.email} size={32} tooltip={false} />
+                            <Text weight="semibold" maxLines={1}>
+                              {u.displayName}
+                            </Text>
+                          </HStack>
+                        ),
+                      },
+                      { key: "email", header: "Email", width: proportional(1) },
+                      {
+                        key: "isSystemAdmin",
+                        header: "Admin Status",
+                        width: pixel(150),
+                        renderCell: (u) =>
+                          u.isSystemAdmin ? (
+                            <Badge variant="purple" label="System Admin" />
+                          ) : (
+                            <Badge label="User" />
+                          ),
+                      },
+                      {
+                        key: "id",
+                        header: "Actions",
+                        width: pixel(150),
+                        renderCell: (u) => (
+                          <Button
+                            label={u.isSystemAdmin ? "Revoke Admin" : "Make Admin"}
+                            variant={u.isSystemAdmin ? "destructive" : "secondary"}
+                            size="sm"
+                            clickAction={() => toggleAdmin(u)}
+                          />
+                        ),
+                      },
+                    ]}
                   />
-                </div>
-                <div className="flex-1 relative">
-                  <div 
-                    className="w-full bg-white border border-gray-200 rounded-lg px-4 py-2 text-[14px] cursor-pointer shadow-sm flex items-center justify-between hover:border-gray-300 transition-colors"
-                    onClick={() => setDropdownOpen(!dropdownOpen)}
-                  >
-                    <span className={selectedOwner ? "text-gray-900 font-medium" : "text-gray-500"}>
-                      {selectedOwner ? `${selectedOwner.displayName} (${selectedOwner.email})` : "-- Chọn Chủ sở hữu (Owner) --"}
-                    </span>
-                    <Icon name="expand_more" size={18} className="text-gray-400" />
-                  </div>
-                  {dropdownOpen && (
-                    <div className="absolute top-full left-0 w-full bg-white border border-gray-200 shadow-xl rounded-lg mt-1 z-50 max-h-64 flex flex-col overflow-hidden">
-                      <div className="p-2 border-b border-gray-100 bg-gray-50">
-                        <input
-                          type="text"
-                          autoFocus
-                          className="w-full bg-white border border-gray-200 rounded px-3 py-1.5 text-[13px] outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-sm"
-                          placeholder="Nhập tên hoặc email để tìm..."
-                          value={searchOwner}
-                          onChange={(e) => setSearchOwner(e.target.value)}
-                        />
-                      </div>
-                      <div className="overflow-y-auto">
-                        {ownerResults.length === 0 && (
-                          <div className="p-4 text-center text-[13px] text-gray-500">
-                            {searchOwner ? "Không tìm thấy người dùng phù hợp" : "Gõ để tìm người dùng…"}
-                          </div>
-                        )}
-                        {ownerResults.map(u => (
-                          <div
-                            key={u.id}
-                            className="px-4 py-2.5 text-[13px] hover:bg-blue-50 cursor-pointer border-b border-gray-50 last:border-0 transition-colors"
-                            onClick={() => {
-                              setNewWsOwner(u.id);
-                              setSelectedOwner(u);
-                              setDropdownOpen(false);
-                              setSearchOwner("");
-                            }}
-                          >
-                            <span className="font-semibold text-gray-900">{u.displayName}</span>
-                            <span className="text-gray-500 ml-1">({u.email})</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <button
-                  type="submit"
-                  disabled={!newWsName.trim() || !newWsOwner || isCreating}
-                  className="px-6 py-2 bg-gray-900 text-white rounded-lg text-[14px] font-bold hover:bg-black transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex items-center gap-2"
-                >
-                  {isCreating ? (
-                    <>
-                      <Icon name="sync" size={16} className="animate-spin" />
-                      Đang tạo...
-                    </>
-                  ) : (
-                    "Tạo mới"
-                  )}
-                </button>
-              </form>
-              {wsError && <p className="text-red-500 text-[13px] mt-2">{wsError}</p>}
-            </div>
+                )}
+              </Card>
 
-            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-              <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-200 text-[12px] font-bold text-gray-500 uppercase">
-                  <th className="py-4 px-6">Workspace Name</th>
-                  <th className="py-4 px-6">Slug</th>
-                  <th className="py-4 px-6">Created By (ID)</th>
-                  <th className="py-4 px-6 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {(workspaces || []).map(w => (
-                  <tr key={w.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="py-4 px-6">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-                          <Icon name="workspaces" size={16} />
-                        </div>
-                        <span className="font-semibold text-[14px] text-gray-900">{w.name}</span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-6 text-[14px] text-gray-500">{w.slug}</td>
-                    <td className="py-4 px-6 text-[13px] text-gray-400 font-mono">{w.createdBy}</td>
-                    <td className="py-4 px-6 text-right">
-                      <button
-                        onClick={() => handleDeleteWorkspace(w.id, w.name)}
-                        disabled={deletingId === w.id}
-                        className="px-3 py-1.5 rounded-lg text-[13px] font-bold transition-colors shadow-sm bg-white border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 ml-auto"
-                      >
-                        {deletingId === w.id ? (
-                          <>
-                            <Icon name="sync" size={16} className="animate-spin" />
-                            Đang xóa...
-                          </>
-                        ) : (
-                          <>
-                            <Icon name="delete" size={16} />
-                            Xóa
-                          </>
-                        )}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-    </div>
-  </AppShell>
+              {total > PAGE_SIZE && (
+                <HStack justify="center">
+                  <Pagination
+                    page={page + 1}
+                    totalPages={Math.ceil(total / PAGE_SIZE)}
+                    onChange={(p: number) => setPage(p - 1)}
+                  />
+                </HStack>
+              )}
+            </VStack>
+          )}
+
+          {tab === "workspaces" && (
+            <VStack gap={6} hAlign="stretch">
+              {/* Card gom một nhóm điều khiển tạo mới — đúng vai trò Card. */}
+              <Card padding={6}>
+                <VStack gap={4} hAlign="stretch">
+                  <Heading level={3}>Tạo Không gian làm việc mới</Heading>
+                  <HStack gap={4} vAlign="end" wrap="wrap">
+                    <StackItem size="fill">
+                      <TextInput
+                        label="Tên workspace"
+                        placeholder="Tên workspace..."
+                        value={newWsName}
+                        onChange={setNewWsName}
+                      />
+                    </StackItem>
+                    <StackItem size="fill">
+                      {/* Typeahead thay cho dropdown tự chế: nó lo sẵn bàn phím,
+                          ARIA và click-outside. */}
+                      <Typeahead<OwnerItem>
+                        label="Chủ sở hữu (Owner)"
+                        placeholder="Nhập tên hoặc email để tìm..."
+                        value={selectedOwner}
+                        onChange={(item) => {
+                          setSelectedOwner(item);
+                          setNewWsOwner(item?.id ?? "");
+                        }}
+                        searchSource={ownerSource}
+                      />
+                    </StackItem>
+                    <Button
+                      label={isCreating ? "Đang tạo..." : "Tạo mới"}
+                      variant="primary"
+                      isLoading={isCreating}
+                      isDisabled={!newWsName.trim() || !newWsOwner || isCreating}
+                      clickAction={handleCreateWorkspace}
+                    />
+                  </HStack>
+                </VStack>
+              </Card>
+
+              <Card padding={0}>
+                {wsRows.length === 0 ? (
+                  <EmptyState title="Chưa có không gian làm việc nào." />
+                ) : (
+                  <Table<WorkspaceRow>
+                    data={wsRows}
+                    idKey="id"
+                    density="compact"
+                    hasHover
+                    columns={[
+                      {
+                        key: "name",
+                        header: "Workspace Name",
+                        width: proportional(1),
+                        renderCell: (w) => (
+                          <HStack gap={3} vAlign="center">
+                            <Icon name="workspaces" size={16} />
+                            <Text weight="semibold" maxLines={1}>
+                              {w.name}
+                            </Text>
+                          </HStack>
+                        ),
+                      },
+                      { key: "slug", header: "Slug", width: proportional(1) },
+                      { key: "createdBy", header: "Created By (ID)", width: proportional(1) },
+                      {
+                        key: "id",
+                        header: "Actions",
+                        width: pixel(120),
+                        renderCell: (w) => (
+                          <Button
+                            label={deletingId === w.id ? "Đang xóa..." : "Xóa"}
+                            variant="destructive"
+                            size="sm"
+                            icon={<Icon name="delete" size={16} />}
+                            isLoading={deletingId === w.id}
+                            isDisabled={deletingId === w.id}
+                            clickAction={() => handleDeleteWorkspace(w.id, w.name)}
+                          />
+                        ),
+                      },
+                    ]}
+                  />
+                )}
+              </Card>
+            </VStack>
+          )}
+        </VStack>
+      </Section>
+    </AppShell>
   );
 }

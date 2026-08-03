@@ -1,6 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Card } from "@astryxdesign/core/Card";
+import { Grid } from "@astryxdesign/core/Grid";
+import { VStack, HStack, StackItem } from "@astryxdesign/core/Layout";
+import { Table, pixel, proportional } from "@astryxdesign/core/Table";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { Selector } from "@astryxdesign/core/Selector";
+import { CheckboxInput } from "@astryxdesign/core/CheckboxInput";
+import { Button } from "@astryxdesign/core/Button";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { ToggleButton } from "@astryxdesign/core/ToggleButton";
+import { Banner } from "@astryxdesign/core/Banner";
+import { ProgressBar } from "@astryxdesign/core/ProgressBar";
+import { Text } from "@astryxdesign/core/Text";
+import { Heading } from "@astryxdesign/core/Heading";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
 import {
   api,
   Dashboard,
@@ -34,6 +49,13 @@ const KPI_METRICS = [
   { key: "costActual", label: "Chi phí thực tế" },
 ];
 
+interface WidgetProjectRow extends Record<string, unknown> {
+  projectId: string;
+  key: string;
+  pct: number;
+  overdue: number;
+}
+
 /**
  * User-built dashboards.
  *
@@ -62,10 +84,13 @@ export default function CustomDashboardsTab({ workspaceId }: { workspaceId: stri
 
   const loadDashboards = useCallback(() => {
     if (!workspaceId) return;
-    api.listDashboards(workspaceId).then((ds) => {
-      setDashboards(ds);
-      setActiveId((cur) => (ds.some((d) => d.id === cur) ? cur : ds[0]?.id ?? ""));
-    }).catch(() => setDashboards([]));
+    api
+      .listDashboards(workspaceId)
+      .then((ds) => {
+        setDashboards(ds);
+        setActiveId((cur) => (ds.some((d) => d.id === cur) ? cur : ds[0]?.id ?? ""));
+      })
+      .catch(() => setDashboards([]));
   }, [workspaceId]);
 
   useEffect(() => {
@@ -90,14 +115,16 @@ export default function CustomDashboardsTab({ workspaceId }: { workspaceId: stri
     [overview],
   );
   const trendRows = useMemo(
-    () => (overview?.trend ?? []).map((t) => ({
-      created: t.created, inWork: t.inWork, completed: t.completed,
-    })),
+    () =>
+      (overview?.trend ?? []).map((t) => ({
+        created: t.created,
+        inWork: t.inWork,
+        completed: t.completed,
+      })),
     [overview],
   );
 
-  async function createDashboard(e: React.FormEvent) {
-    e.preventDefault();
+  async function createDashboard() {
     if (!newName.trim()) return;
     try {
       const d = await api.createDashboard(workspaceId, newName.trim(), newShared);
@@ -107,14 +134,17 @@ export default function CustomDashboardsTab({ workspaceId }: { workspaceId: stri
       setNewName("");
       setNewShared(false);
       setEditing(true);
-    } catch (err) { setError((err as Error).message); }
+    } catch (err) {
+      setError((err as Error).message);
+    }
   }
 
   async function addWidget() {
     if (!active) return;
     const config: Record<string, unknown> = {};
     if (wType === "kpi") config.metric = wMetric;
-    if ((wType === "velocity" || wType === "status_donut") && wProject) config.projectId = wProject;
+    if ((wType === "velocity" || wType === "status_donut") && wProject)
+      config.projectId = wProject;
     try {
       await api.addWidget(active.id, {
         type: wType,
@@ -124,162 +154,208 @@ export default function CustomDashboardsTab({ workspaceId }: { workspaceId: stri
       });
       setWTitle("");
       loadDashboards();
-    } catch (err) { setError((err as Error).message); }
+    } catch (err) {
+      setError((err as Error).message);
+    }
   }
 
   return (
-    <>
-      {error && <p className="text-error text-body-sm mb-md">{error}</p>}
+    <VStack gap={5} hAlign="stretch">
+      {error && <Banner status="error" title={error} isDismissable onDismiss={() => setError(null)} />}
 
-      <div className="flex flex-wrap items-center gap-sm mb-lg">
+      <HStack gap={2} vAlign="center" wrap="wrap">
         {dashboards.map((d) => (
-          <button
+          <ToggleButton
             key={d.id}
-            onClick={() => setActiveId(d.id)}
-            className={`flex items-center gap-xs px-3 py-1.5 rounded-md text-body-md transition-colors ${
-              activeId === d.id
-                ? "bg-surface-container-high text-on-surface font-medium"
-                : "text-on-surface-variant hover:bg-surface-container"
-            }`}
-          >
-            {d.shared && <Icon name="group" size={16} />}
-            {d.name}
-          </button>
+            label={d.name}
+            size="sm"
+            icon={d.shared ? <Icon name="group" size={16} /> : undefined}
+            isPressed={activeId === d.id}
+            onPressedChange={() => setActiveId(d.id)}
+          />
         ))}
-        <button className="btn-ghost" onClick={() => setCreating(true)}>
-          <Icon name="add" size={18} /> Dashboard mới
-        </button>
+        <Button
+          label="Dashboard mới"
+          variant="ghost"
+          size="sm"
+          icon={<Icon name="add" size={18} />}
+          onClick={() => setCreating(true)}
+        />
+        <StackItem size="fill" />
         {active && (
-          <button className="btn-ghost ml-auto" onClick={() => setEditing((v) => !v)}>
-            <Icon name={editing ? "done" : "edit"} size={18} /> {editing ? "Xong" : "Sửa"}
-          </button>
+          <Button
+            label={editing ? "Xong" : "Sửa"}
+            variant="ghost"
+            size="sm"
+            icon={<Icon name={editing ? "done" : "edit"} size={18} />}
+            onClick={() => setEditing((v) => !v)}
+          />
         )}
-      </div>
+      </HStack>
 
       {creating && (
-        <form onSubmit={createDashboard} className="card p-lg mb-lg flex flex-wrap items-end gap-sm">
-          <div className="flex-grow min-w-[220px]">
-            <label className="block text-label-md text-on-surface-variant mb-1">Tên dashboard</label>
-            <input
-              className="field"
-              placeholder="Báo cáo tuần cho ban lãnh đạo"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              autoFocus
+        <Card padding={5}>
+          <HStack gap={3} vAlign="end" wrap="wrap">
+            <StackItem size="fill">
+              <TextInput
+                label="Tên dashboard"
+                placeholder="Báo cáo tuần cho ban lãnh đạo"
+                value={newName}
+                onChange={setNewName}
+                hasAutoFocus
+                onEnter={createDashboard}
+              />
+            </StackItem>
+            <CheckboxInput
+              label="Chia sẻ cho cả nhóm"
+              value={newShared}
+              onChange={setNewShared}
             />
-          </div>
-          <label className="flex items-center gap-2 text-body-md py-2">
-            <input type="checkbox" checked={newShared} onChange={(e) => setNewShared(e.target.checked)} />
-            Chia sẻ cho cả nhóm
-          </label>
-          <button className="btn-primary" disabled={!newName.trim()}>Tạo</button>
-          <button type="button" className="btn-ghost" onClick={() => setCreating(false)}>Huỷ</button>
-        </form>
+            <Button
+              label="Tạo"
+              variant="primary"
+              isDisabled={!newName.trim()}
+              clickAction={createDashboard}
+            />
+            <Button label="Huỷ" variant="ghost" onClick={() => setCreating(false)} />
+          </HStack>
+        </Card>
       )}
 
       {dashboards.length === 0 && !creating ? (
-        <div className="card p-xl text-center text-on-surface-variant">
-          <Icon name="dashboard_customize" size={40} className="text-outline mb-sm" />
-          <p className="text-body-lg text-on-surface font-medium">Chưa có dashboard tuỳ chỉnh</p>
-          <p className="text-body-sm mt-1">
-            Tab “Phân tích” đã có sẵn số liệu chuẩn. Tạo dashboard riêng khi bạn cần
-            ghép các chỉ số theo cách khác.
-          </p>
-        </div>
+        <EmptyState
+          title="Chưa có dashboard tuỳ chỉnh"
+          description="Tab “Phân tích” đã có sẵn số liệu chuẩn. Tạo dashboard riêng khi bạn cần ghép các chỉ số theo cách khác."
+          icon={<Icon name="dashboard_customize" size={40} />}
+        />
       ) : (
         <>
           {editing && active && (
-            <div className="card p-lg mb-lg">
-              <h3 className="text-headline-md mb-md">Thêm widget</h3>
-              <div className="flex flex-wrap gap-sm items-end">
-                <select className="field w-52" value={wType} onChange={(e) => setWType(e.target.value)}>
-                  {WIDGET_TYPES.map((t) => (<option key={t.key} value={t.key}>{t.label}</option>))}
-                </select>
-                {wType === "kpi" && (
-                  <select className="field w-44" value={wMetric} onChange={(e) => setWMetric(e.target.value)}>
-                    {KPI_METRICS.map((m) => (<option key={m.key} value={m.key}>{m.label}</option>))}
-                  </select>
-                )}
-                {wType === "velocity" && (
-                  <select className="field w-52" value={wProject} onChange={(e) => setWProject(e.target.value)}>
-                    <option value="">Chọn dự án…</option>
-                    {projects.map((p) => (<option key={p.id} value={p.id}>{p.key} · {p.name}</option>))}
-                  </select>
-                )}
-                <input
-                  className="field w-48"
-                  placeholder="Tiêu đề (tuỳ chọn)"
-                  value={wTitle}
-                  onChange={(e) => setWTitle(e.target.value)}
-                />
-                <select className="field w-28" value={wWidth} onChange={(e) => setWWidth(Number(e.target.value))}>
-                  <option value={1}>Rộng 1</option>
-                  <option value={2}>Rộng 2</option>
-                  <option value={3}>Rộng 3</option>
-                </select>
-                <button className="btn-primary" onClick={addWidget}>
-                  <Icon name="add" size={18} /> Thêm
-                </button>
-                <button
-                  className="btn-ghost text-red-500 ml-auto"
-                  onClick={async () => {
-                    if (!window.confirm(`Xoá dashboard "${active.name}"?`)) return;
-                    await api.deleteDashboard(active.id).catch((e) => setError(e.message));
-                    loadDashboards();
-                  }}
-                >
-                  <Icon name="delete" size={18} /> Xoá dashboard
-                </button>
-              </div>
-            </div>
+            <Card padding={5}>
+              <VStack gap={4} hAlign="stretch">
+                <Heading level={3}>Thêm widget</Heading>
+                <HStack gap={3} vAlign="end" wrap="wrap">
+                  <Selector
+                    label="Loại widget"
+                    value={wType}
+                    onChange={(v) => setWType(v ?? "kpi")}
+                    options={WIDGET_TYPES.map((t) => ({ value: t.key, label: t.label }))}
+                  />
+                  {wType === "kpi" && (
+                    <Selector
+                      label="Chỉ số"
+                      value={wMetric}
+                      onChange={(v) => setWMetric(v ?? "totalTasks")}
+                      options={KPI_METRICS.map((m) => ({ value: m.key, label: m.label }))}
+                    />
+                  )}
+                  {wType === "velocity" && (
+                    <Selector
+                      label="Dự án"
+                      value={wProject}
+                      onChange={(v) => setWProject(v ?? "")}
+                      placeholder="Chọn dự án…"
+                      options={projects.map((p) => ({
+                        value: p.id,
+                        label: `${p.key} · ${p.name}`,
+                      }))}
+                    />
+                  )}
+                  <TextInput
+                    label="Tiêu đề"
+                    isOptional
+                    placeholder="Tiêu đề (tuỳ chọn)"
+                    value={wTitle}
+                    onChange={setWTitle}
+                  />
+                  <Selector
+                    label="Độ rộng"
+                    value={String(wWidth)}
+                    onChange={(v) => setWWidth(Number(v ?? 1))}
+                    options={[
+                      { value: "1", label: "Rộng 1" },
+                      { value: "2", label: "Rộng 2" },
+                      { value: "3", label: "Rộng 3" },
+                    ]}
+                  />
+                  <Button
+                    label="Thêm"
+                    variant="primary"
+                    icon={<Icon name="add" size={18} />}
+                    clickAction={addWidget}
+                  />
+                  <StackItem size="fill" />
+                  <Button
+                    label="Xoá dashboard"
+                    variant="destructive"
+                    icon={<Icon name="delete" size={18} />}
+                    clickAction={async () => {
+                      if (!window.confirm(`Xoá dashboard "${active.name}"?`)) return;
+                      await api.deleteDashboard(active.id).catch((e) => setError(e.message));
+                      loadDashboards();
+                    }}
+                  />
+                </HStack>
+              </VStack>
+            </Card>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {(active?.widgets ?? []).map((wdg) => (
-              <div
-                key={wdg.id}
-                className={`card p-6 ${
-                  wdg.width === 3 ? "lg:col-span-3" : wdg.width === 2 ? "lg:col-span-2" : ""
-                }`}
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-[17px] font-bold text-on-surface">{wdg.title}</h3>
-                  {editing && (
-                    <button
-                      className="p-1 rounded-full hover:bg-red-50 text-red-500"
-                      onClick={async () => {
-                        await api.deleteWidget(active!.id, wdg.id).catch(() => {});
-                        loadDashboards();
-                      }}
-                    >
-                      <Icon name="close" size={18} />
-                    </button>
-                  )}
+          {/* Widget dashboard → card grid là đúng vai trò của Card. */}
+          {active && active.widgets.length === 0 ? (
+            <EmptyState title="Dashboard trống" description="Bật “Sửa” để thêm widget." />
+          ) : (
+            <Grid columns={3} gap={6}>
+              {(active?.widgets ?? []).map((wdg) => (
+                <div
+                  key={wdg.id}
+                  // Widget tự khai độ rộng 1–3 cột; giá trị đến từ dữ liệu người
+                  // dùng lưu nên phải đặt lúc chạy, không token hoá được.
+                  style={{ gridColumn: `span ${Math.min(3, Math.max(1, wdg.width))}` }}>
+                  <Card padding={6} height="100%">
+                    <VStack gap={4} hAlign="stretch">
+                      <HStack gap={2} vAlign="center">
+                        <Heading level={3}>{wdg.title}</Heading>
+                        <StackItem size="fill" />
+                        {editing && (
+                          <IconButton
+                            label="Xoá widget"
+                            tooltip="Xoá widget"
+                            variant="ghost"
+                            size="sm"
+                            icon={<Icon name="close" size={18} />}
+                            clickAction={async () => {
+                              await api.deleteWidget(active!.id, wdg.id).catch(() => {});
+                              loadDashboards();
+                            }}
+                          />
+                        )}
+                      </HStack>
+                      <WidgetBody
+                        widget={wdg}
+                        overview={overview}
+                        trendLabels={trendLabels}
+                        trendRows={trendRows}
+                        velocity={velocity}
+                      />
+                    </VStack>
+                  </Card>
                 </div>
-                <WidgetBody
-                  widget={wdg}
-                  overview={overview}
-                  trendLabels={trendLabels}
-                  trendRows={trendRows}
-                  velocity={velocity}
-                />
-              </div>
-            ))}
-            {active && active.widgets.length === 0 && (
-              <div className="card p-xl text-center text-on-surface-variant lg:col-span-3">
-                Dashboard trống. Bật “Sửa” để thêm widget.
-              </div>
-            )}
-          </div>
+              ))}
+            </Grid>
+          )}
         </>
       )}
-    </>
+    </VStack>
   );
 }
 
 /** Renders one widget according to its type + config. */
 function WidgetBody({
-  widget, overview, trendLabels, trendRows, velocity,
+  widget,
+  overview,
+  trendLabels,
+  trendRows,
+  velocity,
 }: {
   widget: DashboardWidget;
   overview: WorkspaceOverview | null;
@@ -287,16 +363,24 @@ function WidgetBody({
   trendRows: Record<string, number>[];
   velocity: VelocityPoint[];
 }) {
-  if (!overview) return <p className="text-body-sm text-on-surface-variant/60">Đang tải…</p>;
+  if (!overview) return <Text type="supporting">Đang tải…</Text>;
 
   switch (widget.type) {
     case "kpi": {
       const metric = String(widget.config?.metric ?? "totalTasks");
       const raw = (overview as unknown as Record<string, number>)[metric] ?? 0;
       const value =
-        metric === "costActual" ? money(raw) : metric === "hoursLogged" ? hours(raw) : raw.toLocaleString();
+        metric === "costActual"
+          ? money(raw)
+          : metric === "hoursLogged"
+            ? hours(raw)
+            : raw.toLocaleString();
       const delta =
-        metric === "doneTasks" ? overview.completedDelta : metric === "totalTasks" ? overview.createdDelta : undefined;
+        metric === "doneTasks"
+          ? overview.completedDelta
+          : metric === "totalTasks"
+            ? overview.createdDelta
+            : undefined;
       return (
         <StatTile
           title={KPI_METRICS.find((m) => m.key === metric)?.label ?? metric}
@@ -313,7 +397,9 @@ function WidgetBody({
     }
     case "priority_bar": {
       const items = Object.entries(overview.byPriority).map(([k, v]) => ({
-        label: k, value: v, color: PRIORITY_HEX[k] ?? "#2563eb",
+        label: k,
+        value: v,
+        color: PRIORITY_HEX[k] ?? "var(--color-accent)",
       }));
       return items.length > 0 ? <BarList items={items} /> : <Empty />;
     }
@@ -324,9 +410,9 @@ function WidgetBody({
           rows={trendRows}
           height={240}
           series={[
-            { key: "created", label: "Tạo mới", color: "#6366f1" },
-            { key: "inWork", label: "Đang làm", color: "#22c55e" },
-            { key: "completed", label: "Hoàn thành", color: "#8b5cf6" },
+            { key: "created", label: "Tạo mới", color: "var(--color-icon-purple)" },
+            { key: "inWork", label: "Đang làm", color: "var(--color-icon-green)" },
+            { key: "completed", label: "Hoàn thành", color: "var(--color-icon-blue)" },
           ]}
         />
       );
@@ -337,56 +423,76 @@ function WidgetBody({
           rows={velocity.map((v) => ({ committed: v.committed, completed: v.completed }))}
           height={220}
           series={[
-            { key: "committed", label: "Cam kết", color: "#c7d2fe" },
-            { key: "completed", label: "Hoàn thành", color: "#4f46e5" },
+            { key: "committed", label: "Cam kết", color: "var(--color-background-blue)" },
+            { key: "completed", label: "Hoàn thành", color: "var(--color-icon-blue)" },
           ]}
         />
       ) : (
-        <p className="text-body-sm text-on-surface-variant/60">Chọn dự án có sprint để xem velocity.</p>
+        <Text type="supporting">Chọn dự án có sprint để xem velocity.</Text>
       );
-    case "project_table":
+    case "project_table": {
+      const rows: WidgetProjectRow[] = overview.projects.map((p) => ({
+        projectId: p.projectId,
+        key: p.key,
+        pct: p.total > 0 ? (p.done / p.total) * 100 : 0,
+        overdue: p.overdue,
+      }));
+      if (rows.length === 0) return <EmptyState title="Chưa có dự án." isCompact />;
       return (
-        <div className="overflow-x-auto">
-          <table className="w-full text-[14px]">
-            <thead>
-              <tr className="text-left text-on-surface-variant border-b border-outline-variant">
-                <th className="py-2 font-semibold">Dự án</th>
-                <th className="py-2 font-semibold">Tiến độ</th>
-                <th className="py-2 font-semibold text-right">Quá hạn</th>
-              </tr>
-            </thead>
-            <tbody>
-              {overview.projects.map((p) => {
-                const pct = p.total > 0 ? (p.done / p.total) * 100 : 0;
-                return (
-                  <tr key={p.projectId} className="border-b border-outline-variant/40 last:border-0">
-                    <td className="py-2 font-semibold text-on-surface">{p.key}</td>
-                    <td className="py-2">
-                      <div className="flex items-center gap-2">
-                        <div className="flex-grow bg-surface-container-high rounded-full h-2 overflow-hidden">
-                          <div className="h-full bg-green-500 rounded-full" style={{ width: `${pct}%` }} />
-                        </div>
-                        <span className="text-[12px] text-on-surface-variant w-9 text-right">{Math.round(pct)}%</span>
-                      </div>
-                    </td>
-                    <td className={`py-2 text-right font-semibold ${p.overdue > 0 ? "text-red-500" : "text-on-surface-variant"}`}>
-                      {p.overdue}
-                    </td>
-                  </tr>
-                );
-              })}
-              {overview.projects.length === 0 && (
-                <tr><td colSpan={3} className="py-6 text-center text-on-surface-variant">Chưa có dự án.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <Table<WidgetProjectRow>
+          data={rows}
+          idKey="projectId"
+          density="compact"
+          columns={[
+            {
+              key: "key",
+              header: "Dự án",
+              width: pixel(90),
+              renderCell: (r) => <Text weight="semibold">{r.key}</Text>,
+            },
+            {
+              key: "pct",
+              header: "Tiến độ",
+              width: proportional(1),
+              renderCell: (r) => (
+                <HStack gap={2} vAlign="center">
+                  <StackItem size="fill">
+                    <ProgressBar
+                      label={`Tiến độ ${r.key}`}
+                      isLabelHidden
+                      value={r.pct}
+                      variant={r.pct === 100 ? "success" : "accent"}
+                    />
+                  </StackItem>
+                  <Text type="supporting" hasTabularNumbers>
+                    {Math.round(r.pct)}%
+                  </Text>
+                </HStack>
+              ),
+            },
+            {
+              key: "overdue",
+              header: "Quá hạn",
+              width: pixel(90),
+              renderCell: (r) => (
+                <Text
+                  weight="semibold"
+                  hasTabularNumbers
+                  justify="end"
+                  color={r.overdue > 0 ? "accent" : "secondary"}>
+                  {r.overdue}
+                </Text>
+              ),
+            },
+          ]}
+        />
       );
+    }
     default:
-      return <p className="text-body-sm text-on-surface-variant/60">Loại widget chưa hỗ trợ.</p>;
+      return <Text type="supporting">Loại widget chưa hỗ trợ.</Text>;
   }
 }
 
 function Empty() {
-  return <p className="text-body-sm text-on-surface-variant/60">Chưa có dữ liệu.</p>;
+  return <Text type="supporting">Chưa có dữ liệu.</Text>;
 }

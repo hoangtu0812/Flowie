@@ -1,9 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { Center } from "@astryxdesign/core/Center";
+import { Card } from "@astryxdesign/core/Card";
+import { VStack } from "@astryxdesign/core/Layout";
+import { Spinner } from "@astryxdesign/core/Spinner";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { Text } from "@astryxdesign/core/Text";
+import { Button } from "@astryxdesign/core/Button";
 import { api } from "@/lib/api";
 import Icon from "@/components/ui/Icon";
+
+const pageStyle: CSSProperties = {
+  minHeight: "100vh",
+  backgroundColor: "var(--color-background-body)",
+  padding: "var(--spacing-4)",
+};
 
 /**
  * Landing page for an invitation link.
@@ -34,50 +47,59 @@ export default function AcceptInvitePage() {
     }
   }, [token, router]);
 
-  useEffect(() => { accept(); }, [accept]);
+  useEffect(() => {
+    accept();
+  }, [accept]);
 
   return (
-    <div className="min-h-screen grid place-items-center bg-background p-md">
-      <div className="card p-xl w-full max-w-sm text-center">
+    <Center axis="both" style={pageStyle}>
+      <Card padding={8} width="100%" maxWidth={400}>
         {state === "working" && (
-          <>
-            <Icon name="hourglass_top" size={32} className="text-primary mb-sm animate-pulse" />
-            <p className="text-body-md text-on-surface">Đang xử lý lời mời…</p>
-          </>
+          <VStack gap={3} hAlign="center">
+            <Spinner size="md" />
+            <Text>Đang xử lý lời mời…</Text>
+          </VStack>
         )}
 
         {state === "done" && (
-          <>
-            <Icon name="check_circle" size={32} className="text-success mb-sm" />
-            <h1 className="text-headline-md text-on-surface">Đã tham gia workspace</h1>
-            <p className="text-body-sm text-on-surface-variant mt-1">Đang chuyển hướng…</p>
-          </>
+          <EmptyState
+            title="Đã tham gia workspace"
+            description="Đang chuyển hướng…"
+            icon={<Icon name="check_circle" size={32} />}
+            isCompact
+          />
         )}
 
         {state === "anon" && (
-          <>
-            <Icon name="login" size={32} className="text-primary mb-sm" />
-            <h1 className="text-headline-md text-on-surface">Cần đăng nhập</h1>
-            <p className="text-body-sm text-on-surface-variant mt-1 mb-lg">
-              Hãy đăng nhập bằng đúng email đã được mời, rồi mở lại liên kết này.
-            </p>
-            <a className="btn-primary w-full" href={api.loginUrl()}>
-              Đăng nhập với Microsoft
-            </a>
-          </>
+          <EmptyState
+            title="Cần đăng nhập"
+            description="Hãy đăng nhập bằng đúng email đã được mời, rồi mở lại liên kết này."
+            icon={<Icon name="login" size={32} />}
+            isCompact
+            actions={
+              <Button
+                label="Đăng nhập với Microsoft"
+                variant="primary"
+                clickAction={() => {
+                  window.location.href = api.loginUrl();
+                }}
+              />
+            }
+          />
         )}
 
         {state === "error" && (
-          <>
-            <Icon name="error" size={32} className="text-error mb-sm" />
-            <h1 className="text-headline-md text-on-surface">Không thể tham gia</h1>
-            <p className="text-body-sm text-error mt-1">{message}</p>
-            <button className="btn-ghost mt-lg" onClick={() => router.replace("/")}>
-              Về trang chủ
-            </button>
-          </>
+          <EmptyState
+            title="Không thể tham gia"
+            description={message}
+            icon={<Icon name="error" size={32} />}
+            isCompact
+            actions={
+              <Button label="Về trang chủ" variant="ghost" clickAction={() => router.replace("/")} />
+            }
+          />
         )}
-      </div>
-    </div>
+      </Card>
+    </Center>
   );
 }

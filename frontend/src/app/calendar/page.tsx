@@ -1,19 +1,54 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, CalendarItem, Project, Workspace } from "@/lib/api";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { Section } from "@astryxdesign/core/Section";
+import { Card } from "@astryxdesign/core/Card";
+import { Grid } from "@astryxdesign/core/Grid";
+import { VStack, HStack, StackItem } from "@astryxdesign/core/Layout";
+import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import { FormLayout } from "@astryxdesign/core/FormLayout";
+import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { TextArea } from "@astryxdesign/core/TextArea";
+import { DateInput } from "@astryxdesign/core/DateInput";
+import { TimeInput } from "@astryxdesign/core/TimeInput";
+import { createISOTimeString } from "@astryxdesign/core/utils";
+import { Selector } from "@astryxdesign/core/Selector";
+import { MultiSelector } from "@astryxdesign/core/MultiSelector";
+import { Button } from "@astryxdesign/core/Button";
+import { Avatar } from "@astryxdesign/core/Avatar";
+import { AvatarGroup } from "@astryxdesign/core/AvatarGroup";
+import { Text } from "@astryxdesign/core/Text";
+import { Heading } from "@astryxdesign/core/Heading";
+import { api, CalendarItem, Member, Project, Workspace } from "@/lib/api";
 import AppShell from "@/components/layout/AppShell";
-import Icon from "@/components/ui/Icon";
 import TaskDrawer from "@/components/task/TaskDrawer";
 import {
-  START_HOUR, ROW_H, hours, fmtHour, fmtTime, startOfWeek, addDays, sameDay, ymd,
-  eventColor, eventBox,
+  START_HOUR, hours, fmtHour, fmtTime, startOfWeek, addDays, sameDay, ymd,
 } from "@/lib/calendar";
+
+/** Kiểu ngày/giờ Astryx yêu cầu ở mức template literal. */
+type DateValue = `${number}${number}${number}${number}-${number}${number}-${number}${number}`;
+const asDate = (s: string) => (s || undefined) as DateValue | undefined;
+const asTime = (s: string) => (s ? createISOTimeString(s) ?? undefined : undefined);
 
 type View = "day" | "week" | "month" | "year";
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
 
+/** Chiều cao một giờ trong lưới, tính bằng px. */
+const HOUR_H = 80;
+
+/**
+ * NGOẠI LỆ CÓ CHỦ ĐÍCH: lưới lịch bên dưới dùng `style` cho toạ độ.
+ * `top`/`height` của mỗi sự kiện suy ra từ giờ bắt đầu/kết thúc
+ * (`(phút / 60) * HOUR_H`), là dữ liệu lúc chạy chứ không phải giá trị thiết
+ * kế — không token nào diễn đạt được, và Astryx không có component lịch.
+ * Màu sắc, chữ, khoảng cách ở phần còn lại vẫn đi qua token/component.
+ */
 export default function CalendarPage() {
   const [view, setView] = useState<View>("week");
   const [cursor, setCursor] = useState(() => new Date());
@@ -28,7 +63,8 @@ export default function CalendarPage() {
       return { from: gridStart, to: addDays(gridStart, 42), days: 42 };
     }
     if (view === "day") {
-      const d = new Date(cursor); d.setHours(0, 0, 0, 0);
+      const d = new Date(cursor);
+      d.setHours(0, 0, 0, 0);
       return { from: d, to: addDays(d, 1), days: 1 };
     }
     const ws = startOfWeek(cursor);
@@ -38,7 +74,9 @@ export default function CalendarPage() {
   const load = useCallback(() => {
     api.myCalendar(ymd(range.from), ymd(range.to)).then(setTasks).catch(() => setTasks([]));
   }, [range.from, range.to]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const days = useMemo(
     () => Array.from({ length: range.days }, (_, i) => addDays(range.from, i)),
@@ -46,206 +84,347 @@ export default function CalendarPage() {
   );
   const today = new Date();
 
-  function shift(dir: number) {
-    if (view === "month") setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + dir, 1));
-    else setCursor(addDays(cursor, dir * (view === "week" ? 7 : 1)));
-  }
-
   const title = `${MONTHS[cursor.getMonth()]} ${cursor.getFullYear()}`;
 
-  const actions = (
-    <div className="flex items-center gap-6">
-      <div className="flex bg-white border border-gray-200 rounded-full p-1 shadow-sm">
-        {(["day", "week", "month", "year"] as View[]).map((v) => (
-          <button key={v} onClick={() => setView(v)}
-            className={`px-5 py-1.5 rounded-full text-[13px] font-semibold capitalize transition-colors ${view === v ? "bg-gray-100 text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
-            {v}
-          </button>
-        ))}
-      </div>
-      <div className="flex items-center gap-3">
-        <button className="px-5 py-2 bg-white border border-gray-200 rounded-full text-[13px] font-semibold text-gray-700 shadow-sm hover:bg-gray-50" onClick={() => setCursor(new Date())}>
-          Today
-        </button>
-        <button className="flex items-center gap-2 px-5 py-2 bg-gray-900 text-white rounded-full text-[13px] font-semibold hover:bg-gray-800 shadow-sm" onClick={() => { const d = new Date(); d.setMinutes(0, 0, 0); setNewAt(d); }}>
-          Add Event
-        </button>
-      </div>
-    </div>
-  );
-
   return (
-    <AppShell title={null} actions={null}>
-      <div className="p-8 max-w-[1400px] mx-auto bg-white">
-        {/* Custom Header for Calendar */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <h2 className="text-[22px] font-bold text-gray-900">{title}</h2>
-          </div>
-          {actions}
-        </div>
+    <AppShell title={null}>
+      <Section variant="transparent" padding={8} maxWidth={1400}>
+        <VStack gap={6} hAlign="stretch">
+          <HStack gap={4} vAlign="center" wrap="wrap">
+            <Heading level={2}>{title}</Heading>
+            <StackItem size="fill" />
+            <SegmentedControl
+              label="Chế độ xem"
+              size="sm"
+              value={view}
+              onChange={(v) => setView(v as View)}>
+              <SegmentedControlItem value="day" label="Day" />
+              <SegmentedControlItem value="week" label="Week" />
+              <SegmentedControlItem value="month" label="Month" />
+              <SegmentedControlItem value="year" label="Year" />
+            </SegmentedControl>
+            <Button label="Today" variant="secondary" size="sm" onClick={() => setCursor(new Date())} />
+            <Button
+              label="Add Event"
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                const d = new Date();
+                d.setMinutes(0, 0, 0);
+                setNewAt(d);
+              }}
+            />
+          </HStack>
 
-        {view === "month" || view === "year" ? (
-          <MonthGrid days={days} cursor={cursor} tasks={tasks} onOpen={setOpenTask} today={today} />
-        ) : (
-          <TimeGrid days={days} tasks={tasks} onOpen={setOpenTask} onSlot={(d) => setNewAt(d)} today={today} />
-        )}
-      </div>
+          {view === "month" || view === "year" ? (
+            <MonthGrid days={days} cursor={cursor} today={today} />
+          ) : (
+            <TimeGrid
+              days={days}
+              tasks={tasks}
+              onOpen={setOpenTask}
+              onSlot={(d) => setNewAt(d)}
+              today={today}
+            />
+          )}
+        </VStack>
+      </Section>
 
-      {openTask && <TaskDrawer taskId={openTask} onClose={() => setOpenTask(null)} onChanged={load} />}
-      {newAt && <NewEventModal at={newAt} onClose={() => setNewAt(null)} onCreated={() => { setNewAt(null); load(); }} />}
+      {openTask && (
+        <TaskDrawer taskId={openTask} onClose={() => setOpenTask(null)} onChanged={load} />
+      )}
+      {newAt && (
+        <NewEventModal
+          at={newAt}
+          onClose={() => setNewAt(null)}
+          onCreated={() => {
+            setNewAt(null);
+            load();
+          }}
+        />
+      )}
     </AppShell>
   );
 }
 
-function TimeGrid({ days, tasks, onOpen, onSlot, today }: {
-  days: Date[]; tasks: CalendarItem[];
-  onOpen: (id: string) => void; onSlot: (d: Date) => void; today: Date;
+function TimeGrid({
+  days,
+  tasks,
+  onOpen,
+  onSlot,
+  today,
+}: {
+  days: Date[];
+  tasks: CalendarItem[];
+  onOpen: (id: string) => void;
+  onSlot: (d: Date) => void;
+  today: Date;
 }) {
   const timed = (d: Date) => tasks.filter((t) => t.startAt && sameDay(new Date(t.startAt), d));
 
-  return (
-    <div className="border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm h-[calc(100vh-160px)] overflow-y-auto relative">
-      {/* Day headers */}
-      <div className="sticky top-0 z-30 flex border-b border-gray-200 bg-white">
-        <div className="w-16 flex-shrink-0 border-r border-gray-200" />
-        {days.map((d, i) => {
-          const isToday = sameDay(d, today);
-          return (
-            <div key={i} className="flex-1 text-center py-4 border-r border-gray-200 last:border-r-0">
-              <div className="text-[14px] font-semibold flex items-center justify-center gap-1.5">
-                <span className={isToday ? "text-blue-600" : "text-gray-500"}>{WEEKDAYS[(d.getDay() + 6) % 7]}</span>
-                <span className={isToday ? "text-blue-600" : "text-gray-900"}>{d.getDate()}</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+  const scroller: CSSProperties = { height: "calc(100vh - 220px)", overflowY: "auto" };
+  const headRow: CSSProperties = {
+    display: "flex",
+    position: "sticky",
+    top: 0,
+    zIndex: 30,
+    background: "var(--color-background-surface)",
+    borderBottom: "1px solid var(--color-border)",
+  };
+  const gutter: CSSProperties = {
+    width: 64,
+    flexShrink: 0,
+    borderInlineEnd: "1px solid var(--color-border)",
+  };
 
-      {/* Hour rows */}
-      <div className="flex">
-        <div className="w-16 flex-shrink-0 bg-white border-r border-gray-200 z-10">
-          {hours().map((h) => (
-            <div key={h} className="text-[12px] font-medium text-gray-500 border-b border-gray-200 flex items-center justify-center" style={{ height: 80 }}>
-              <span>{fmtHour(h)}</span>
+  return (
+    <Card padding={0}>
+      <div style={scroller}>
+        <div style={headRow}>
+          <div style={gutter} />
+          {days.map((d, i) => {
+            const isToday = sameDay(d, today);
+            return (
+              <div
+                key={i}
+                style={{
+                  flex: 1,
+                  textAlign: "center",
+                  padding: "var(--spacing-4) 0",
+                  borderInlineEnd: "1px solid var(--color-border)",
+                }}>
+                <HStack gap={1.5} vAlign="center" justify="center">
+                  <Text weight="semibold" color={isToday ? "accent" : "secondary"}>
+                    {WEEKDAYS[(d.getDay() + 6) % 7]}
+                  </Text>
+                  <Text weight="semibold" color={isToday ? "accent" : "primary"}>
+                    {d.getDate()}
+                  </Text>
+                </HStack>
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ display: "flex" }}>
+          <div style={{ ...gutter, background: "var(--color-background-surface)" }}>
+            {hours().map((h) => (
+              <div
+                key={h}
+                style={{
+                  height: HOUR_H,
+                  display: "grid",
+                  placeItems: "center",
+                  borderBottom: "1px solid var(--color-border)",
+                }}>
+                <Text type="supporting">{fmtHour(h)}</Text>
+              </div>
+            ))}
+          </div>
+
+          {days.map((d, di) => (
+            <div
+              key={di}
+              style={{
+                flex: 1,
+                position: "relative",
+                borderInlineEnd: "1px solid var(--color-border)",
+              }}>
+              {hours().map((h) => (
+                <div
+                  key={h}
+                  onClick={() => {
+                    const dd = new Date(d);
+                    dd.setHours(h, 0, 0, 0);
+                    onSlot(dd);
+                  }}
+                  style={{
+                    height: HOUR_H,
+                    cursor: "pointer",
+                    borderBottom: "1px solid var(--color-border)",
+                  }}
+                />
+              ))}
+
+              {sameDay(d, today) && <NowLine />}
+
+              {timed(d).map((t) => {
+                const startDt = new Date(t.startAt!);
+                const endDt = t.endAt
+                  ? new Date(t.endAt)
+                  : new Date(startDt.getTime() + 3600000 * 2); // default 2 hrs for display
+
+                const startMin = (startDt.getHours() - START_HOUR) * 60 + startDt.getMinutes();
+                const top = (startMin / 60) * HOUR_H;
+                const durationMins = (endDt.getTime() - startDt.getTime()) / 60000;
+                const height = (durationMins / 60) * HOUR_H;
+
+                // Màu phân loại lấy từ token của theme (đổi theo dark mode),
+                // chọn ổn định theo id để cùng một việc luôn cùng màu.
+                const TINTS = ["blue", "green", "orange", "pink", "purple"] as const;
+                const tint = TINTS[(t.id.charCodeAt(0) + t.id.charCodeAt(1)) % TINTS.length];
+
+                return (
+                  <button
+                    key={t.id}
+                    onClick={(ev) => {
+                      ev.stopPropagation();
+                      onOpen(t.id);
+                    }}
+                    style={{
+                      position: "absolute",
+                      insetInline: 6,
+                      top: Math.max(0, top),
+                      height: Math.max(40, height),
+                      overflow: "hidden",
+                      textAlign: "start",
+                      padding: "var(--spacing-3)",
+                      borderRadius: "var(--radius-lg, 12px)",
+                      background: `var(--color-background-${tint})`,
+                      color: `var(--color-text-${tint})`,
+                      border: "1px solid var(--color-border)",
+                    }}>
+                    <VStack gap={2} hAlign="stretch" height="100%">
+                      <Text weight="bold" type="supporting" color="inherit" maxLines={2}>
+                        {t.title}
+                      </Text>
+                      {height > 60 && (
+                        <>
+                          <StackItem size="fill" />
+                          <HStack gap={1.5} vAlign="center">
+                            <Text type="supporting" color="inherit">
+                              {fmtTime(startDt)} – {fmtTime(endDt)}
+                            </Text>
+                          </HStack>
+                        </>
+                      )}
+                      {height >= 80 && t.assigneeId && (
+                        <AvatarGroup size="xsm">
+                          <Avatar
+                            name={t.assigneeName || "User"}
+                            src={t.assigneeAvatar || undefined}
+                            size="xsm"
+                          />
+                          {(t.participantIds ?? []).map((pid) => (
+                            <Avatar key={pid} name="P" size="xsm" />
+                          ))}
+                        </AvatarGroup>
+                      )}
+                    </VStack>
+                  </button>
+                );
+              })}
             </div>
           ))}
         </div>
-        
-        {/* Grid Background Lines removed in favor of borders on slots */}
-
-        {days.map((d, di) => (
-          <div key={di} className="flex-1 relative border-r border-gray-200 last:border-r-0">
-            {hours().map((h) => (
-              <div key={h} onClick={() => { const dd = new Date(d); dd.setHours(h, 0, 0, 0); onSlot(dd); }}
-                className="cursor-pointer hover:bg-gray-50/50 transition-colors border-b border-gray-200" style={{ height: 80 }} />
-            ))}
-            
-            {/* Now line */}
-            {sameDay(d, today) && <NowLine />}
-            
-            {/* Events */}
-            {timed(d).map((t) => {
-              const startDt = new Date(t.startAt!);
-              const endDt = t.endAt ? new Date(t.endAt) : new Date(startDt.getTime() + 3600000 * 2); // default 2 hrs for display
-              
-              const startMin = (startDt.getHours() - START_HOUR) * 60 + startDt.getMinutes();
-              const top = (startMin / 60) * 80;
-              const durationMins = (endDt.getTime() - startDt.getTime()) / 60000;
-              const height = (durationMins / 60) * 80;
-              
-              // Map colors loosely based on status or random
-              const bgColors = ["bg-[#e8f0fe] text-blue-600", "bg-[#e6f4ea] text-green-700", "bg-[#fff3e0] text-orange-600", "bg-[#fce8e6] text-red-600", "bg-[#f3e8fd] text-purple-600"];
-              const randomColor = bgColors[(t.id.charCodeAt(0) + t.id.charCodeAt(1)) % bgColors.length];
-
-              return (
-                <button key={t.id} onClick={(ev) => { ev.stopPropagation(); onOpen(t.id); }}
-                  className={`absolute left-1.5 right-1.5 rounded-xl p-3 text-left overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col gap-2 border border-white/50 ${randomColor}`}
-                  style={{ top: Math.max(0, top), height: Math.max(40, height) }}>
-                  <div className="text-[13px] font-bold leading-tight">{t.title}</div>
-                  
-                  {height > 60 && (
-                    <div className="flex items-center gap-1.5 mt-auto">
-                      <span className="px-2 py-0.5 rounded-full bg-white/60 text-[10px] font-bold">{fmtTime(startDt)}</span>
-                      <span className="px-2 py-0.5 rounded-full bg-white/60 text-[10px] font-bold">{fmtTime(endDt)}</span>
-                    </div>
-                  )}
-                  
-                  {height >= 80 && (t.assigneeId || (t.participantIds && t.participantIds.length > 0)) && (
-                    <div className="flex items-center -space-x-1.5 mt-1">
-                      {t.assigneeId && (
-                        <img 
-                          src={t.assigneeAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(t.assigneeName || 'User')}&background=random`} 
-                          className="w-5 h-5 rounded-full border border-white relative z-10" 
-                          alt={t.assigneeName || 'Avatar'} 
-                          title={t.assigneeName}
-                        />
-                      )}
-                      {t.participantIds && t.participantIds.map((pid, idx) => (
-                        <img 
-                          key={pid}
-                          src={`https://ui-avatars.com/api/?name=P&background=random`} 
-                          className="w-5 h-5 rounded-full border border-white" 
-                          style={{ zIndex: 9 - idx }}
-                          alt="Participant" 
-                          title="Participant"
-                        />
-                      ))}
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        ))}
       </div>
-    </div>
+    </Card>
   );
 }
 
 function NowLine() {
   const now = new Date();
-  const min = (now.getHours() - 11) * 60 + now.getMinutes(); // assume 11 start
-  if (now.getHours() < 11) return null;
-  const top = (min / 60) * 80;
+  if (now.getHours() < START_HOUR) return null;
+  const min = (now.getHours() - START_HOUR) * 60 + now.getMinutes();
+  const top = (min / 60) * HOUR_H;
   return (
-    <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top }}>
-      <div className="h-[2px] bg-red-500 relative"><span className="absolute -left-1 -top-1 w-2.5 h-2.5 rounded-full bg-red-500" /></div>
+    <div
+      style={{
+        position: "absolute",
+        insetInline: 0,
+        top,
+        zIndex: 20,
+        pointerEvents: "none",
+        height: 2,
+        background: "var(--color-error)",
+      }}>
+      <span
+        style={{
+          position: "absolute",
+          insetInlineStart: -4,
+          top: -4,
+          width: 10,
+          height: 10,
+          borderRadius: "50%",
+          background: "var(--color-error)",
+        }}
+      />
     </div>
   );
 }
 
-function MonthGrid({ days, cursor, tasks, onOpen, today }: {
-  days: Date[]; cursor: Date; tasks: CalendarItem[]; onOpen: (id: string) => void; today: Date;
-}) {
+function MonthGrid({ days, cursor, today }: { days: Date[]; cursor: Date; today: Date }) {
   return (
-    <div className="border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm">
-      <div className="grid grid-cols-7 border-b border-gray-200">
-        {WEEKDAYS.map((d) => (<div key={d} className="py-4 text-[14px] font-semibold text-gray-500 text-center">{d}</div>))}
-      </div>
-      <div className="grid grid-cols-7">
+    <Card padding={0}>
+      <Grid columns={7} gap={0}>
+        {WEEKDAYS.map((d) => (
+          <div
+            key={d}
+            style={{
+              padding: "var(--spacing-4) 0",
+              textAlign: "center",
+              borderBottom: "1px solid var(--color-border)",
+            }}>
+            <Text weight="semibold" color="secondary">
+              {d}
+            </Text>
+          </div>
+        ))}
         {days.map((d, i) => {
           const inMonth = d.getMonth() === cursor.getMonth();
           const isToday = sameDay(d, today);
           return (
-            <div key={i} className={`min-h-[120px] border-b border-r border-gray-200 p-2 ${inMonth ? "bg-white" : "bg-gray-50/50"}`}>
-              <div className={`text-[13px] font-semibold mb-2 w-7 h-7 mx-auto flex items-center justify-center rounded-full ${isToday ? "bg-blue-600 text-white" : inMonth ? "text-gray-900" : "text-gray-400"}`}>{d.getDate()}</div>
+            <div
+              key={i}
+              style={{
+                minHeight: 120,
+                padding: "var(--spacing-2)",
+                borderBottom: "1px solid var(--color-border)",
+                borderInlineEnd: "1px solid var(--color-border)",
+                background: inMonth ? undefined : "var(--color-background-muted)",
+              }}>
+              <div
+                style={{
+                  width: 28,
+                  height: 28,
+                  marginInline: "auto",
+                  display: "grid",
+                  placeItems: "center",
+                  borderRadius: "50%",
+                  background: isToday ? "var(--color-accent)" : undefined,
+                }}>
+                <Text
+                  weight="semibold"
+                  type="supporting"
+                  color={isToday ? "inherit" : inMonth ? "primary" : "disabled"}>
+                  {d.getDate()}
+                </Text>
+              </div>
             </div>
           );
         })}
-      </div>
-    </div>
+      </Grid>
+    </Card>
   );
 }
 
-function NewEventModal({ at, onClose, onCreated }: { at: Date; onClose: () => void; onCreated: () => void }) {
+function NewEventModal({
+  at,
+  onClose,
+  onCreated,
+}: {
+  at: Date;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
   const [projects, setProjects] = useState<(Project & { wsName: string })[]>([]);
   const [projectId, setProjectId] = useState("");
-  const [members, setMembers] = useState<any[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
   const [assigneeId, setAssigneeId] = useState("");
   const [participantIds, setParticipantIds] = useState<string[]>([]);
-  const [showPartMenu, setShowPartMenu] = useState(false);
   const [titleV, setTitleV] = useState("");
+  const [place, setPlace] = useState("");
+  const [notes, setNotes] = useState("");
   const [date, setDate] = useState(ymd(at));
   const [start, setStart] = useState(fmtTime(at));
   const [end, setEnd] = useState(() => {
@@ -270,126 +449,94 @@ function NewEventModal({ at, onClose, onCreated }: { at: Date; onClose: () => vo
 
   useEffect(() => {
     if (!projectId) return;
-    api.projectMembers(projectId).then(res => {
-      setMembers(res);
-    }).catch(() => setMembers([]));
+    api.projectMembers(projectId).then(setMembers).catch(() => setMembers([]));
   }, [projectId]);
 
-  async function create(e: React.FormEvent) {
-    e.preventDefault();
+  async function create() {
     if (!projectId || !titleV.trim()) return;
     setBusy(true);
     try {
-      const t = await api.createTask(projectId, { 
-        title: titleV.trim(), 
+      const t = await api.createTask(projectId, {
+        title: titleV.trim(),
         assigneeId: assigneeId || undefined,
-        participantIds: participantIds
+        participantIds,
       });
       await api.updateTask(t.id, {
         startAt: new Date(`${date}T${start}`).toISOString(),
         endAt: new Date(`${date}T${end}`).toISOString(),
       });
       onCreated();
-    } catch (err) {
+    } catch {
       setBusy(false);
     }
   }
 
+  const close = (open: boolean) => {
+    if (!open) onClose();
+  };
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/10 backdrop-blur-[2px]" onClick={onClose}>
-      <form onClick={(e) => e.stopPropagation()} onSubmit={create} className="bg-white rounded-[24px] shadow-2xl p-6 w-full max-w-sm border border-gray-100 relative">
-        <button type="button" onClick={onClose} className="absolute right-6 top-6 text-gray-400 hover:text-gray-600 transition-colors">
-          <Icon name="close" size={20} />
-        </button>
-        
-        <h3 className="text-[18px] font-bold text-gray-900 mb-6">New Event</h3>
-        
-        <div className="flex flex-col gap-4">
-          <input className="w-full bg-white border border-gray-200 rounded-full px-4 py-3 text-[14px] font-medium placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all shadow-sm" placeholder="Event Title" value={titleV} onChange={(e) => setTitleV(e.target.value)} autoFocus />
-          
-          <div className="relative">
-            <div className="absolute left-4 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-green-500" />
-            <select className="w-full bg-white border border-gray-200 rounded-full pl-10 pr-4 py-3 text-[14px] font-medium text-gray-700 appearance-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all shadow-sm" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-              {projects.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
-              {projects.length === 0 && <option value="">Emerald</option>}
-            </select>
-            <Icon name="unfold_more" size={20} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-          </div>
-
-          <div className="relative">
-            <Icon name="location_on" size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input className="w-full bg-white border border-gray-200 rounded-full pl-10 pr-4 py-3 text-[14px] font-medium placeholder-gray-500 outline-none shadow-sm" placeholder="Add Place" />
-          </div>
-
-          <div className="relative">
-            <Icon name="calendar_today" size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input type="date" className="w-full bg-white border border-gray-200 rounded-full pl-10 pr-4 py-3 text-[14px] font-medium text-gray-700 outline-none shadow-sm" value={date} onChange={(e) => setDate(e.target.value)} />
-          </div>
-          
-          <div className="flex gap-3">
-            <div className="relative flex-1">
-              <Icon name="schedule" size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input type="time" className="w-full bg-white border border-gray-200 rounded-full pl-10 pr-2 py-3 text-[14px] font-medium text-gray-700 outline-none shadow-sm" value={start} onChange={(e) => setStart(e.target.value)} />
-            </div>
-            <div className="relative flex-1">
-              <Icon name="schedule" size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input type="time" className="w-full bg-white border border-gray-200 rounded-full pl-10 pr-2 py-3 text-[14px] font-medium text-gray-700 outline-none shadow-sm" value={end} onChange={(e) => setEnd(e.target.value)} />
-            </div>
-          </div>
-
-          <div className="flex gap-3">
-            <div className="relative flex-1">
-              <Icon name="person" size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-              <select className="w-full bg-white border border-gray-200 rounded-full pl-10 pr-4 py-3 text-[14px] font-medium text-gray-700 appearance-none outline-none shadow-sm" value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
-                <option value="">Người phụ trách (Chưa gán)</option>
-                {members.map((m) => (
-                  <option key={m.userId} value={m.userId}>{m.displayName || m.email}</option>
-                ))}
-              </select>
-              <Icon name="unfold_more" size={20} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-            </div>
-            
-            <div className="relative flex-1">
-              <Icon name="groups" size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-              <div 
-                className="w-full bg-white border border-gray-200 rounded-full pl-10 pr-10 py-3 text-[14px] font-medium text-gray-700 outline-none shadow-sm cursor-pointer truncate select-none"
-                onClick={() => setShowPartMenu(!showPartMenu)}
-              >
-                {participantIds.length > 0 
-                  ? members.filter(m => participantIds.includes(m.userId)).map(m => m.displayName || m.email).join(", ") 
-                  : "Người cùng tham gia"}
-              </div>
-              <Icon name="unfold_more" size={20} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-              
-              {showPartMenu && (
-                <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-gray-100 rounded-xl shadow-lg z-50 max-h-48 overflow-y-auto py-1">
-                  {members.map(m => (
-                    <label key={m.userId} className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 cursor-pointer">
-                      <input 
-                        type="checkbox" 
-                        className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4"
-                        checked={participantIds.includes(m.userId)}
-                        onChange={(e) => {
-                          if (e.target.checked) setParticipantIds([...participantIds, m.userId]);
-                          else setParticipantIds(participantIds.filter(id => id !== m.userId));
-                        }}
-                      />
-                      <span className="text-[14px] text-gray-700 truncate">{m.displayName || m.email}</span>
-                    </label>
-                  ))}
-                  {members.length === 0 && <div className="px-4 py-2 text-[13px] text-gray-500">Không có thành viên</div>}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <textarea className="w-full bg-white border border-gray-200 rounded-2xl px-4 py-3 text-[14px] font-medium placeholder-gray-500 outline-none shadow-sm min-h-[100px] resize-none" placeholder="Add Notes" />
-
-          <button className="w-full py-4 bg-gray-900 text-white rounded-full text-[15px] font-bold hover:bg-black transition-colors shadow-md mt-2" disabled={busy || !projectId || !titleV.trim()}>
-            Add Event
-          </button>
-        </div>
-      </form>
-    </div>
+    <Dialog isOpen onOpenChange={close} purpose="form" width={420}>
+      <DialogHeader title="New Event" onOpenChange={close} />
+      <VStack gap={0} hAlign="stretch">
+        <Section variant="transparent" padding={4}>
+          <FormLayout>
+            <TextInput
+              label="Event Title"
+              placeholder="Event Title"
+              value={titleV}
+              onChange={setTitleV}
+              hasAutoFocus
+            />
+            <Selector
+              label="Dự án"
+              value={projectId}
+              onChange={(v) => setProjectId(v ?? "")}
+              options={projects.map((p) => ({ value: p.id, label: p.name }))}
+            />
+            <TextInput label="Địa điểm" isOptional placeholder="Add Place" value={place} onChange={setPlace} />
+            <DateInput label="Ngày" value={asDate(date)} onChange={(v) => setDate(v ?? "")} />
+            <Grid columns={2} gap={3}>
+              <TimeInput label="Bắt đầu" value={asTime(start)} onChange={(v) => setStart(v ?? "")} />
+              <TimeInput label="Kết thúc" value={asTime(end)} onChange={(v) => setEnd(v ?? "")} />
+            </Grid>
+            <Selector
+              label="Người phụ trách"
+              value={assigneeId}
+              onChange={(v) => setAssigneeId(v ?? "")}
+              placeholder="Chưa gán"
+              hasClear
+              options={members.map((m) => ({
+                value: m.userId,
+                label: m.displayName || m.email,
+              }))}
+            />
+            {/* MultiSelector thay cho dropdown checkbox tự chế: nó lo sẵn bàn
+                phím, ARIA và click-outside. */}
+            <MultiSelector
+              label="Người cùng tham gia"
+              value={participantIds}
+              onChange={setParticipantIds}
+              placeholder="Người cùng tham gia"
+              options={members.map((m) => ({
+                value: m.userId,
+                label: m.displayName || m.email,
+              }))}
+            />
+            <TextArea label="Ghi chú" isOptional placeholder="Add Notes" rows={4} value={notes} onChange={setNotes} />
+          </FormLayout>
+        </Section>
+        <Section variant="transparent" padding={4} dividers={["top"]}>
+          <Button
+            label="Add Event"
+            variant="primary"
+            width="100%"
+            isLoading={busy}
+            isDisabled={busy || !projectId || !titleV.trim()}
+            clickAction={create}
+          />
+        </Section>
+      </VStack>
+    </Dialog>
   );
 }

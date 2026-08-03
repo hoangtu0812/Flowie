@@ -1,7 +1,40 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Card } from "@astryxdesign/core/Card";
+import { VStack, HStack, StackItem } from "@astryxdesign/core/Layout";
+import { Text } from "@astryxdesign/core/Text";
 import Icon from "./Icon";
+
+/**
+ * NGOẠI LỆ CÓ CHỦ ĐÍCH cho cả file này.
+ *
+ * Đây là các biểu đồ vẽ bằng SVG thuần — Astryx không có component chart nào.
+ * Mọi toạ độ (`x`, `y`, `cx`, `width`, `strokeDasharray`…) đều suy ra từ dữ
+ * liệu lúc chạy nên không token hoá được, và chúng là thuộc tính SVG chứ không
+ * phải CSS.
+ *
+ * Cái ĐÃ chuẩn hoá: khung ngoài (StatTile, tooltip, legend) dùng component
+ * Astryx, và mọi màu — kể cả màu bên trong SVG — nay lấy từ token `var(--color-*)`
+ * thay vì hex hardcode, nên biểu đồ đổi theo dark mode.
+ */
+
+/** Chấm màu chú giải: màu đến từ series nên phải đặt lúc chạy. */
+function dot(color: string, size: number): React.CSSProperties {
+  return { width: size, height: size, borderRadius: "50%", background: color, flexShrink: 0 };
+}
+
+/** Tooltip nổi trên biểu đồ — nền/chữ lấy từ token đảo màu của theme. */
+const tooltipStyle: React.CSSProperties = {
+  position: "absolute",
+  pointerEvents: "none",
+  zIndex: 10,
+  background: "var(--color-background-inverted)",
+  color: "var(--color-on-dark)",
+  borderRadius: "var(--radius-lg, 12px)",
+  padding: "var(--spacing-2) var(--spacing-3)",
+  boxShadow: "0 4px 12px var(--color-shadow)",
+};
 
 // ── Stat tile ────────────────────────────────────────────────
 // Big number + period delta, with an optional visual on the right
@@ -24,24 +57,38 @@ export function StatTile({
   const up = (delta ?? 0) >= 0;
   const good = invertDelta ? !up : up;
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between mb-4">
-        <p className="text-[15px] font-semibold text-gray-700">{title}</p>
-        <Icon name="more_horiz" size={18} className="text-gray-300" />
-      </div>
-      <div className="flex items-end justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[30px] leading-none font-bold text-gray-900 tracking-tight">{value}</p>
-          {delta !== undefined && (
-            <p className={`flex items-center gap-1 mt-3 text-[13px] font-semibold ${good ? "text-green-600" : "text-red-500"}`}>
-              <Icon name={up ? "trending_up" : "trending_down"} size={18} />
-              {up ? "+" : ""}{delta.toFixed(2)}%
-            </p>
+    <Card padding={5}>
+      <VStack gap={4} hAlign="stretch">
+        <Text weight="semibold" color="secondary">
+          {title}
+        </Text>
+        <HStack gap={3} vAlign="end">
+          <VStack gap={3}>
+            <Text type="display-2" weight="bold">
+              {value}
+            </Text>
+            {delta !== undefined && (
+              <HStack gap={1} vAlign="center">
+                <Icon name={up ? "trending_up" : "trending_down"} size={18} />
+                <Text
+                  type="supporting"
+                  weight="semibold"
+                  color={good ? "accent" : "primary"}>
+                  {up ? "+" : ""}
+                  {delta.toFixed(2)}%
+                </Text>
+              </HStack>
+            )}
+          </VStack>
+          {visual && (
+            <>
+              <StackItem size="fill" />
+              {visual}
+            </>
           )}
-        </div>
-        {visual && <div className="shrink-0">{visual}</div>}
-      </div>
-    </div>
+        </HStack>
+      </VStack>
+    </Card>
   );
 }
 
@@ -51,7 +98,7 @@ export function BarSparkline({
   values,
   width = 130,
   height = 60,
-  color = "#3b82f6",
+  color = "var(--color-icon-blue)",
 }: {
   values: number[];
   width?: number;
@@ -89,7 +136,7 @@ export function AreaSparkline({
   values,
   width = 150,
   height = 60,
-  color = "#8b5cf6",
+  color = "var(--color-icon-purple)",
 }: {
   values: number[];
   width?: number;
@@ -128,8 +175,8 @@ export function RingProgress({
   percent,
   size = 92,
   stroke = 8,
-  color = "#f97316",
-  track = "#fdeee2",
+  color = "var(--color-icon-orange)",
+  track = "var(--color-track)",
 }: {
   percent: number;
   size?: number;
@@ -141,8 +188,8 @@ export function RingProgress({
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   return (
-    <div className="relative" style={{ width: size, height: size }}>
-      <svg width={size} height={size} className="-rotate-90">
+    <div style={{ position: "relative", width: size, height: size }}>
+      <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={track} strokeWidth={stroke} />
         <circle
           cx={size / 2}
@@ -156,8 +203,14 @@ export function RingProgress({
         />
       </svg>
       <span
-        className="absolute inset-0 flex items-center justify-center text-[15px] font-bold"
-        style={{ color }}
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "grid",
+          placeItems: "center",
+          fontWeight: 700,
+          color,
+        }}
       >
         {Math.round(pct)}%
       </span>
@@ -204,7 +257,7 @@ export function TrendAreaChart({
   }, []);
 
   if (rows.length === 0) {
-    return <p className="text-body-sm text-on-surface-variant/60">Chưa có dữ liệu.</p>;
+    return <Text type="supporting">Chưa có dữ liệu.</Text>;
   }
 
   const W = Math.max(320, Math.round(width) || 1000);
@@ -229,7 +282,7 @@ export function TrendAreaChart({
   const yAt = (v: number) => padT + (1 - v / axisMax) * innerH;
 
   return (
-    <div className="relative w-full" ref={wrapRef}>
+    <div style={{ position: "relative", width: "100%" }} ref={wrapRef}>
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: "block" }}>
         <defs>
           {series.map((s) => (
@@ -246,8 +299,8 @@ export function TrendAreaChart({
           const y = yAt(v);
           return (
             <g key={i}>
-              <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="#f1f3f5" strokeWidth={1} />
-              <text x={padL - 10} y={y + 4} textAnchor="end" fontSize={13} fill="#9aa2ad" fontWeight={600}>
+              <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="var(--color-border)" strokeWidth={1} />
+              <text x={padL - 10} y={y + 4} textAnchor="end" fontSize={13} fill="var(--color-text-secondary)" fontWeight={600}>
                 {formatCompact(v)}
               </text>
             </g>
@@ -276,7 +329,7 @@ export function TrendAreaChart({
           // Nudge the edge labels inward so they aren't clipped by the viewBox.
           const anchor = i === 0 ? "start" : i === labels.length - 1 ? "end" : "middle";
           return (
-            <text key={i} x={xAt(i)} y={H - 10} textAnchor={anchor} fontSize={12} fill="#6b7280" fontWeight={600}>
+            <text key={i} x={xAt(i)} y={H - 10} textAnchor={anchor} fontSize={12} fill="var(--color-text-secondary)" fontWeight={600}>
               {l}
             </text>
           );
@@ -285,9 +338,9 @@ export function TrendAreaChart({
         {/* hover guide + dots */}
         {hover !== null && (
           <g>
-            <line x1={xAt(hover)} y1={padT} x2={xAt(hover)} y2={padT + innerH} stroke="#d1d5db" strokeWidth={1} strokeDasharray="4 4" />
+            <line x1={xAt(hover)} y1={padT} x2={xAt(hover)} y2={padT + innerH} stroke="var(--color-border-emphasized)" strokeWidth={1} strokeDasharray="4 4" />
             {series.map((s) => (
-              <circle key={s.key} cx={xAt(hover)} cy={yAt(rows[hover][s.key] ?? 0)} r={4.5} fill="#fff" stroke={s.color} strokeWidth={2.5} />
+              <circle key={s.key} cx={xAt(hover)} cy={yAt(rows[hover][s.key] ?? 0)} r={4.5} fill="var(--color-background-surface)" stroke={s.color} strokeWidth={2.5} />
             ))}
           </g>
         )}
@@ -310,36 +363,37 @@ export function TrendAreaChart({
       {/* tooltip */}
       {hover !== null && (
         <div
-          className="absolute pointer-events-none bg-gray-900 text-white rounded-xl px-3 py-2 shadow-lg text-[13px] z-10"
           style={{
+            ...tooltipStyle,
             left: `${(xAt(hover) / W) * 100}%`,
             top: 8,
             transform: "translateX(-50%)",
             whiteSpace: "nowrap",
           }}
         >
-          <p className="font-semibold mb-1">{labels[hover]}</p>
+          <Text weight="semibold" color="inherit">{labels[hover]}</Text>
           {series.map((s) => (
-            <p key={s.key} className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full" style={{ background: s.color }} />
-              <span className="text-gray-300">{s.label}</span>
-              <span className="font-semibold ml-auto">
+            <HStack key={s.key} gap={2} vAlign="center">
+              <span style={dot(s.color, 8)} />
+              <Text type="supporting" color="inherit">{s.label}</Text>
+              <StackItem size="fill" />
+              <Text weight="semibold" color="inherit">
                 {(rows[hover][s.key] ?? 0).toLocaleString()}{valueSuffix}
-              </span>
-            </p>
+              </Text>
+            </HStack>
           ))}
         </div>
       )}
 
       {/* legend */}
-      <div className="flex items-center justify-center gap-6 mt-2">
+      <HStack gap={6} vAlign="center" justify="center">
         {series.map((s) => (
-          <span key={s.key} className="flex items-center gap-2 text-[13px] text-gray-600">
-            <span className="w-2.5 h-2.5 rounded-full" style={{ background: s.color }} />
-            {s.label}
-          </span>
+          <HStack key={s.key} gap={2} vAlign="center">
+            <span style={dot(s.color, 10)} />
+            <Text type="supporting">{s.label}</Text>
+          </HStack>
         ))}
-      </div>
+      </HStack>
     </div>
   );
 }
@@ -359,7 +413,7 @@ export function GroupedBarChart({
 }) {
   const [hover, setHover] = useState<number | null>(null);
   if (rows.length === 0) {
-    return <p className="text-body-sm text-on-surface-variant/60">Chưa có dữ liệu.</p>;
+    return <Text type="supporting">Chưa có dữ liệu.</Text>;
   }
 
   const W = 1000;
@@ -380,15 +434,15 @@ export function GroupedBarChart({
   const barW = Math.min(28, (groupW * 0.6) / series.length);
 
   return (
-    <div className="relative w-full">
+    <div style={{ position: "relative", width: "100%" }}>
       {/* Same fix as TrendAreaChart: "none" stretched the labels horizontally. */}
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: "block" }}>
         {[0, 1, 2, 3, 4].map((i) => {
           const y = yAt(step * i);
           return (
             <g key={i}>
-              <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="#f1f3f5" strokeWidth={1} />
-              <text x={padL - 10} y={y + 4} textAnchor="end" fontSize={13} fill="#9aa2ad" fontWeight={600}>
+              <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="var(--color-border)" strokeWidth={1} />
+              <text x={padL - 10} y={y + 4} textAnchor="end" fontSize={13} fill="var(--color-text-secondary)" fontWeight={600}>
                 {formatCompact(step * i)}
               </text>
             </g>
@@ -417,7 +471,7 @@ export function GroupedBarChart({
                   />
                 );
               })}
-              <text x={cx} y={H - 10} textAnchor="middle" fontSize={13} fill="#6b7280" fontWeight={600}>
+              <text x={cx} y={H - 10} textAnchor="middle" fontSize={13} fill="var(--color-text-secondary)" fontWeight={600}>
                 {labels[i]}
               </text>
             </g>
@@ -427,33 +481,34 @@ export function GroupedBarChart({
 
       {hover !== null && (
         <div
-          className="absolute pointer-events-none bg-gray-900 text-white rounded-xl px-3 py-2 shadow-lg text-[13px] z-10"
           style={{
+            ...tooltipStyle,
             left: `${((padL + groupW * hover + groupW / 2) / W) * 100}%`,
             top: 8,
             transform: "translateX(-50%)",
             whiteSpace: "nowrap",
           }}
         >
-          <p className="font-semibold mb-1">{labels[hover]}</p>
+          <Text weight="semibold" color="inherit">{labels[hover]}</Text>
           {series.map((s) => (
-            <p key={s.key} className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full" style={{ background: s.color }} />
-              <span className="text-gray-300">{s.label}</span>
-              <span className="font-semibold ml-auto">{rows[hover][s.key] ?? 0}</span>
-            </p>
+            <HStack key={s.key} gap={2} vAlign="center">
+              <span style={dot(s.color, 8)} />
+              <Text type="supporting" color="inherit">{s.label}</Text>
+              <StackItem size="fill" />
+              <Text weight="semibold" color="inherit">{rows[hover][s.key] ?? 0}</Text>
+            </HStack>
           ))}
         </div>
       )}
 
-      <div className="flex items-center justify-center gap-6 mt-2">
+      <HStack gap={6} vAlign="center" justify="center">
         {series.map((s) => (
-          <span key={s.key} className="flex items-center gap-2 text-[13px] text-gray-600">
-            <span className="w-2.5 h-2.5 rounded-full" style={{ background: s.color }} />
-            {s.label}
-          </span>
+          <HStack key={s.key} gap={2} vAlign="center">
+            <span style={dot(s.color, 10)} />
+            <Text type="supporting">{s.label}</Text>
+          </HStack>
         ))}
-      </div>
+      </HStack>
     </div>
   );
 }

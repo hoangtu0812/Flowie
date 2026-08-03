@@ -2,11 +2,20 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import { Section } from "@astryxdesign/core/Section";
+import { Card } from "@astryxdesign/core/Card";
+import { Grid } from "@astryxdesign/core/Grid";
+import { VStack, HStack, StackItem } from "@astryxdesign/core/Layout";
+import { Table, pixel, proportional } from "@astryxdesign/core/Table";
+import { ProgressBar } from "@astryxdesign/core/ProgressBar";
+import { Avatar } from "@astryxdesign/core/Avatar";
+import { Text } from "@astryxdesign/core/Text";
+import { Heading } from "@astryxdesign/core/Heading";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { api, Project, ProjectOverview } from "@/lib/api";
 import AppShell from "@/components/layout/AppShell";
 import Icon from "@/components/ui/Icon";
 import ProjectTabs from "@/components/layout/ProjectTabs";
-import Avatar from "@/components/ui/Avatar";
 import { Donut, BarList } from "@/components/ui/Charts";
 import {
   StatTile,
@@ -17,6 +26,16 @@ import {
 } from "@/components/ui/DashboardCharts";
 import { PRIORITY_HEX, statusSegments } from "@/lib/status";
 import { trendLabel, money, hours } from "@/lib/format";
+
+interface AssigneeRow extends Record<string, unknown> {
+  userId: string;
+  displayName: string;
+  pct: number;
+  done: number;
+  total: number;
+  overdue: number;
+  hoursLogged: number;
+}
 
 export default function ProjectDashboardPage() {
   const { id } = useParams<{ id: string }>();
@@ -45,17 +64,14 @@ export default function ProjectDashboardPage() {
 
   // Labels/colours from the project's own workflow columns, so a status added
   // in Settings charts correctly rather than as an unnamed grey slice.
-  const segments = useMemo(
-    () => (ov ? statusSegments(ov.byStatus, ov.statusMeta ?? []) : []),
-    [ov],
-  );
+  const segments = useMemo(() => (ov ? statusSegments(ov.byStatus, ov.statusMeta ?? []) : []), [ov]);
   const prioBars = useMemo(
     () =>
       ov
         ? Object.entries(ov.byPriority).map(([k, v]) => ({
             label: k,
             value: v,
-            color: PRIORITY_HEX[k] ?? "#2563eb",
+            color: PRIORITY_HEX[k] ?? "var(--color-accent)",
           }))
         : [],
     [ov],
@@ -65,160 +81,229 @@ export default function ProjectDashboardPage() {
   const openTasks = ov ? ov.total - ov.done : 0;
   const overduePct = ov && openTasks > 0 ? (ov.overdueTasks / openTasks) * 100 : 0;
 
+  const assigneeRows: AssigneeRow[] = (ov?.assignees ?? []).map((a) => ({
+    userId: a.userId ?? "unassigned",
+    displayName: a.displayName,
+    pct: a.total > 0 ? (a.done / a.total) * 100 : 0,
+    done: a.done,
+    total: a.total,
+    overdue: a.overdue,
+    hoursLogged: a.hoursLogged,
+  }));
+
   return (
     <AppShell title={project ? `${project.key} · Dashboard` : "Dashboard"}>
-      <div className="p-lg">
-        <ProjectTabs projectId={id} />
+      <Section variant="transparent" padding={5} maxWidth={1400}>
+        <VStack gap={6} hAlign="stretch">
+          <ProjectTabs projectId={id} />
 
-        <div className="max-w-[1400px]">
+          {/* KPI tiles — dashboard widget, đúng vai trò của Card. */}
+          <Grid columns={{ minWidth: 260, repeat: "fit" }} gap={5}>
+            <StatTile
+              title="Tổng công việc"
+              value={(ov?.total ?? 0).toLocaleString()}
+              delta={ov?.createdDelta}
+              visual={<BarSparkline values={(ov?.trend ?? []).map((t) => t.created)} />}
+            />
+            <StatTile
+              title="Đã hoàn thành"
+              value={(ov?.done ?? 0).toLocaleString()}
+              delta={ov?.completedDelta}
+              visual={<AreaSparkline values={(ov?.trend ?? []).map((t) => t.completed)} />}
+            />
+            <StatTile
+              title="Chưa hoàn thành"
+              value={openTasks.toLocaleString()}
+              visual={
+                <RingProgress
+                  percent={100 - donePct}
+                  color="var(--color-icon-orange)"
+                  track="var(--color-track)"
+                />
+              }
+            />
+            <StatTile
+              title="Quá hạn"
+              value={(ov?.overdueTasks ?? 0).toLocaleString()}
+              visual={
+                <RingProgress
+                  percent={overduePct}
+                  color="var(--color-error)"
+                  track="var(--color-track)"
+                />
+              }
+            />
+          </Grid>
 
-        {/* KPI tiles */}
-        <div className="grid gap-5 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 mb-6">
-          <StatTile
-            title="Tổng công việc"
-            value={(ov?.total ?? 0).toLocaleString()}
-            delta={ov?.createdDelta}
-            visual={<BarSparkline values={(ov?.trend ?? []).map((t) => t.created)} />}
-          />
-          <StatTile
-            title="Đã hoàn thành"
-            value={(ov?.done ?? 0).toLocaleString()}
-            delta={ov?.completedDelta}
-            visual={<AreaSparkline values={(ov?.trend ?? []).map((t) => t.completed)} />}
-          />
-          <StatTile
-            title="Chưa hoàn thành"
-            value={openTasks.toLocaleString()}
-            visual={<RingProgress percent={100 - donePct} color="#f97316" track="#fdeee2" />}
-          />
-          <StatTile
-            title="Quá hạn"
-            value={(ov?.overdueTasks ?? 0).toLocaleString()}
-            visual={<RingProgress percent={overduePct} color="#e11d48" track="#fee2e6" />}
-          />
-        </div>
+          <Grid columns={{ minWidth: 200, repeat: "fit" }} gap={5}>
+            <MiniStat
+              icon="data_usage"
+              label="Story points"
+              value={`${ov?.storyPointsDone ?? 0}/${ov?.storyPointsTotal ?? 0}`}
+            />
+            <MiniStat icon="task_alt" label="Hoàn thành" value={`${Math.round(donePct)}%`} />
+            <MiniStat icon="schedule" label="Giờ đã log" value={hours(ov?.hoursLogged ?? 0)} />
+            <MiniStat icon="payments" label="Chi phí thực tế" value={money(ov?.costActual ?? 0)} />
+          </Grid>
 
-        {/* Secondary KPIs */}
-        <div className="grid gap-5 grid-cols-2 xl:grid-cols-4 mb-8">
-          <MiniStat icon="data_usage" label="Story points" value={`${ov?.storyPointsDone ?? 0}/${ov?.storyPointsTotal ?? 0}`} />
-          <MiniStat icon="task_alt" label="Hoàn thành" value={`${Math.round(donePct)}%`} />
-          <MiniStat icon="schedule" label="Giờ đã log" value={hours(ov?.hoursLogged ?? 0)} />
-          <MiniStat icon="payments" label="Chi phí thực tế" value={money(ov?.costActual ?? 0)} />
-        </div>
+          <Card padding={6}>
+            <VStack gap={2} hAlign="stretch">
+              <HStack gap={2} vAlign="center">
+                <Heading level={3}>Biểu đồ công việc</Heading>
+                <StackItem size="fill" />
+                <Text type="supporting">6 tháng gần nhất</Text>
+              </HStack>
+              <TrendAreaChart
+                labels={trendLabels}
+                rows={trendRows}
+                series={[
+                  { key: "created", label: "Tạo mới", color: "var(--color-icon-purple)" },
+                  { key: "inWork", label: "Đang làm", color: "var(--color-icon-green)" },
+                  { key: "completed", label: "Hoàn thành", color: "var(--color-icon-blue)" },
+                ]}
+              />
+            </VStack>
+          </Card>
 
-        {/* Trend */}
-        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-8">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-[17px] font-bold text-gray-900">Biểu đồ công việc</h3>
-            <span className="text-[13px] text-gray-400">6 tháng gần nhất</span>
-          </div>
-          <TrendAreaChart
-            labels={trendLabels}
-            rows={trendRows}
-            series={[
-              { key: "created", label: "Tạo mới", color: "#6366f1" },
-              { key: "inWork", label: "Đang làm", color: "#22c55e" },
-              { key: "completed", label: "Hoàn thành", color: "#8b5cf6" },
-            ]}
-          />
-        </div>
+          <Grid columns={{ minWidth: 360, repeat: "fit" }} gap={6}>
+            <Card padding={6}>
+              <VStack gap={5} hAlign="stretch">
+                <Heading level={3}>Theo trạng thái</Heading>
+                {segments.length > 0 ? <Donut segments={segments} /> : <Empty />}
+              </VStack>
+            </Card>
+            <Card padding={6}>
+              <VStack gap={5} hAlign="stretch">
+                <Heading level={3}>Theo độ ưu tiên</Heading>
+                {prioBars.length > 0 ? <BarList items={prioBars} /> : <Empty />}
+              </VStack>
+            </Card>
+          </Grid>
 
-        <div className="grid gap-6 grid-cols-1 lg:grid-cols-2 mb-8">
-          <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-            <h3 className="text-[17px] font-bold text-gray-900 mb-5">Theo trạng thái</h3>
-            {segments.length > 0 ? <Donut segments={segments} /> : <Empty />}
-          </div>
-          <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-            <h3 className="text-[17px] font-bold text-gray-900 mb-5">Theo độ ưu tiên</h3>
-            {prioBars.length > 0 ? <BarList items={prioBars} /> : <Empty />}
-          </div>
-        </div>
+          <Card padding={6}>
+            <VStack gap={2} hAlign="stretch">
+              <HStack gap={2} vAlign="center">
+                <Heading level={3}>Giờ làm việc theo tháng</Heading>
+                <StackItem size="fill" />
+                <Text type="supporting">Từ worklog</Text>
+              </HStack>
+              <TrendAreaChart
+                labels={trendLabels}
+                rows={hoursRows}
+                height={220}
+                valueSuffix="h"
+                series={[{ key: "hours", label: "Giờ đã log", color: "var(--color-icon-cyan)" }]}
+              />
+            </VStack>
+          </Card>
 
-        {/* Hours trend */}
-        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-8">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-[17px] font-bold text-gray-900">Giờ làm việc theo tháng</h3>
-            <span className="text-[13px] text-gray-400">Từ worklog</span>
-          </div>
-          <TrendAreaChart
-            labels={trendLabels}
-            rows={hoursRows}
-            height={220}
-            valueSuffix="h"
-            series={[{ key: "hours", label: "Giờ đã log", color: "#0ea5e9" }]}
-          />
-        </div>
-
-        {/* Assignee load */}
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100">
-            <h3 className="text-[17px] font-bold text-gray-900">Phân bổ theo nhân sự</h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-[14px]">
-              <thead>
-                <tr className="text-left text-gray-500 border-b border-gray-100">
-                  <th className="py-3 px-6 font-semibold">Thành viên</th>
-                  <th className="py-3 px-4 font-semibold">Tiến độ</th>
-                  <th className="py-3 px-4 font-semibold text-right">Việc</th>
-                  <th className="py-3 px-4 font-semibold text-right">Quá hạn</th>
-                  <th className="py-3 px-6 font-semibold text-right">Giờ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(ov?.assignees ?? []).map((a) => {
-                  const pct = a.total > 0 ? (a.done / a.total) * 100 : 0;
-                  return (
-                    <tr key={a.userId ?? "unassigned"} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60">
-                      <td className="py-3 px-6">
-                        <div className="flex items-center gap-3">
-                          <Avatar name={a.displayName} size={32} />
-                          <span className="font-semibold text-gray-900 truncate">{a.displayName}</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 min-w-[160px]">
-                        <div className="flex items-center gap-2">
-                          <div className="flex-grow bg-gray-100 rounded-full h-2 overflow-hidden">
-                            <div className="h-full rounded-full bg-green-500" style={{ width: `${pct}%` }} />
-                          </div>
-                          <span className="text-[12px] font-semibold text-gray-500 w-9 text-right">{Math.round(pct)}%</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 text-right text-gray-700">{a.done}/{a.total}</td>
-                      <td className={`py-3 px-4 text-right font-semibold ${a.overdue > 0 ? "text-red-500" : "text-gray-400"}`}>{a.overdue}</td>
-                      <td className="py-3 px-6 text-right text-gray-700">{hours(a.hoursLogged)}</td>
-                    </tr>
-                  );
-                })}
-                {(ov?.assignees ?? []).length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="py-10 text-center text-gray-500">Chưa có công việc nào.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-        </div>
-      </div>
+          <Card padding={0}>
+            <VStack gap={0} hAlign="stretch">
+              <Section variant="transparent" padding={5} dividers={["bottom"]}>
+                <Heading level={3}>Phân bổ theo nhân sự</Heading>
+              </Section>
+              {assigneeRows.length === 0 ? (
+                <EmptyState title="Chưa có công việc nào." />
+              ) : (
+                // Dữ liệu cột dày → Table, không bọc từng dòng trong Card.
+                <Table<AssigneeRow>
+                  data={assigneeRows}
+                  idKey="userId"
+                  density="compact"
+                  hasHover
+                  columns={[
+                    {
+                      key: "displayName",
+                      header: "Thành viên",
+                      width: proportional(1.5),
+                      renderCell: (r) => (
+                        <HStack gap={3} vAlign="center">
+                          <Avatar name={r.displayName} size={32} tooltip={false} />
+                          <Text weight="semibold" maxLines={1}>
+                            {r.displayName}
+                          </Text>
+                        </HStack>
+                      ),
+                    },
+                    {
+                      key: "pct",
+                      header: "Tiến độ",
+                      width: proportional(1),
+                      renderCell: (r) => (
+                        <HStack gap={2} vAlign="center">
+                          <StackItem size="fill">
+                            <ProgressBar
+                              label={`Tiến độ ${r.displayName}`}
+                              isLabelHidden
+                              value={r.pct}
+                              variant={r.pct === 100 ? "success" : "accent"}
+                            />
+                          </StackItem>
+                          <Text type="supporting" hasTabularNumbers>
+                            {Math.round(r.pct)}%
+                          </Text>
+                        </HStack>
+                      ),
+                    },
+                    {
+                      key: "done",
+                      header: "Việc",
+                      width: pixel(90),
+                      align: "end",
+                      renderCell: (r) => (
+                        <Text hasTabularNumbers>
+                          {r.done}/{r.total}
+                        </Text>
+                      ),
+                    },
+                    {
+                      key: "overdue",
+                      header: "Quá hạn",
+                      width: pixel(90),
+                      align: "end",
+                      renderCell: (r) => (
+                        <Text
+                          weight="semibold"
+                          hasTabularNumbers
+                          color={r.overdue > 0 ? "accent" : "secondary"}>
+                          {r.overdue}
+                        </Text>
+                      ),
+                    },
+                    {
+                      key: "hoursLogged",
+                      header: "Giờ",
+                      width: pixel(90),
+                      align: "end",
+                      renderCell: (r) => <Text hasTabularNumbers>{hours(r.hoursLogged)}</Text>,
+                    },
+                  ]}
+                />
+              )}
+            </VStack>
+          </Card>
+        </VStack>
+      </Section>
     </AppShell>
   );
 }
 
 function MiniStat({ icon, label, value }: { icon: string; label: string; value: string }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm flex items-center gap-4">
-      <div className="w-11 h-11 rounded-xl bg-gray-100 text-gray-700 flex items-center justify-center shrink-0">
+    <Card padding={5}>
+      <HStack gap={4} vAlign="center">
         <Icon name={icon} size={22} />
-      </div>
-      <div className="min-w-0">
-        <p className="text-[20px] font-bold text-gray-900 leading-tight truncate">{value}</p>
-        <p className="text-[13px] font-medium text-gray-500 mt-0.5">{label}</p>
-      </div>
-    </div>
+        <VStack gap={0.5}>
+          <Text type="large" weight="bold" maxLines={1}>
+            {value}
+          </Text>
+          <Text type="supporting">{label}</Text>
+        </VStack>
+      </HStack>
+    </Card>
   );
 }
 
 function Empty() {
-  return <p className="text-body-sm text-on-surface-variant/60">Chưa có dữ liệu.</p>;
+  return <Text type="supporting">Chưa có dữ liệu.</Text>;
 }

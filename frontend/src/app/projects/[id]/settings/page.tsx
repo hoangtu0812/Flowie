@@ -1,7 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { useParams } from "next/navigation";
+import { Section } from "@astryxdesign/core/Section";
+import { Card } from "@astryxdesign/core/Card";
+import { VStack, HStack, StackItem } from "@astryxdesign/core/Layout";
+import { List, ListItem } from "@astryxdesign/core/List";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { NumberInput } from "@astryxdesign/core/NumberInput";
+import { Selector } from "@astryxdesign/core/Selector";
+import { Button } from "@astryxdesign/core/Button";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { ToggleButton } from "@astryxdesign/core/ToggleButton";
+import { Badge } from "@astryxdesign/core/Badge";
+import { Banner } from "@astryxdesign/core/Banner";
+import { Code } from "@astryxdesign/core/Code";
+import { Text } from "@astryxdesign/core/Text";
+import { Heading } from "@astryxdesign/core/Heading";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { api, Integration, Project, Webhook, WorkflowStatus } from "@/lib/api";
 import AppShell from "@/components/layout/AppShell";
 import Icon from "@/components/ui/Icon";
@@ -14,6 +30,20 @@ const CATEGORIES = [
   { key: "in_progress", label: "Đang làm" },
   { key: "done", label: "Hoàn thành" },
 ];
+
+/** Chip màu cột: màu do người dùng chọn (hex bất kỳ), nên phải đặt lúc chạy. */
+function StatusChip({ name, color }: { name: string; color: string }) {
+  const style: CSSProperties = {
+    ...statusChipStyle(color),
+    paddingInline: "var(--spacing-3)",
+    paddingBlock: "var(--spacing-1)",
+    borderRadius: "999px",
+    fontWeight: 700,
+    fontSize: "0.75rem",
+    whiteSpace: "nowrap",
+  };
+  return <span style={style}>{name}</span>;
+}
 
 export default function ProjectSettingsPage() {
   const { id } = useParams<{ id: string }>();
@@ -42,7 +72,8 @@ export default function ProjectSettingsPage() {
     try {
       const limit = wip.trim() === "" ? null : Number(wip);
       await api.createStatus(id, { name: n, category, color, wipLimit: limit });
-      setName(""); setWip("");
+      setName("");
+      setWip("");
       load();
     } catch (err) {
       setError((err as Error).message);
@@ -60,9 +91,12 @@ export default function ProjectSettingsPage() {
   }
 
   async function remove(s: WorkflowStatus) {
-    if (!window.confirm(
-      `Xoá cột "${s.name}"?\nCác công việc trong cột này sẽ được chuyển sang cột đầu tiên.`,
-    )) return;
+    if (
+      !window.confirm(
+        `Xoá cột "${s.name}"?\nCác công việc trong cột này sẽ được chuyển sang cột đầu tiên.`,
+      )
+    )
+      return;
     setError(null);
     try {
       await api.deleteStatus(id, s.id);
@@ -84,132 +118,145 @@ export default function ProjectSettingsPage() {
 
   return (
     <AppShell title={project ? `${project.key} · Cài đặt` : "Cài đặt dự án"}>
-      <div className="p-lg">
-        <ProjectTabs projectId={id} />
+      {/* Archetype "Settings / forms": Section + FormLayout, Card để gom nhóm. */}
+      <Section variant="transparent" padding={5} maxWidth={896}>
+        <VStack gap={5} hAlign="stretch">
+          <ProjectTabs projectId={id} />
 
-        <div className="max-w-4xl">
-          <div className="card p-lg mb-lg">
-            <h3 className="text-headline-md mb-1">Cột trạng thái (Workflow)</h3>
-            <p className="text-body-sm text-on-surface-variant mb-md">
-              Các cột hiển thị trên Board/List của dự án này. Đặt <b>WIP limit</b> để chặn
-              đưa quá nhiều việc vào một cột cùng lúc.
-            </p>
+          <Card padding={5}>
+            <VStack gap={4} hAlign="stretch">
+              <VStack gap={1}>
+                <Heading level={3}>Cột trạng thái (Workflow)</Heading>
+                <Text type="supporting">
+                  Các cột hiển thị trên Board/List của dự án này. Đặt WIP limit để chặn đưa quá
+                  nhiều việc vào một cột cùng lúc.
+                </Text>
+              </VStack>
 
-            {error && <p className="text-error text-body-sm mb-sm">{error}</p>}
+              {error && (
+                <Banner status="error" title={error} isDismissable onDismiss={() => setError(null)} />
+              )}
 
-            <div className="flex flex-col gap-sm mb-lg">
-              {statuses.map((s, i) => {
-                return (
-                  <div key={s.id} className="flex flex-wrap items-center gap-sm p-sm border border-outline-variant rounded-xl">
-                    <div className="flex flex-col">
-                      <button
-                        className="text-on-surface-variant hover:text-primary disabled:opacity-30 leading-none"
-                        onClick={() => moveCol(s, -1)}
-                        disabled={i === 0}
-                        title="Lên"
-                      >
-                        <Icon name="keyboard_arrow_up" size={18} />
-                      </button>
-                      <button
-                        className="text-on-surface-variant hover:text-primary disabled:opacity-30 leading-none"
-                        onClick={() => moveCol(s, 1)}
-                        disabled={i === statuses.length - 1}
-                        title="Xuống"
-                      >
-                        <Icon name="keyboard_arrow_down" size={18} />
-                      </button>
-                    </div>
-
-                    <span
-                      className="px-3 py-1 rounded-full text-[12px] font-bold"
-                      style={statusChipStyle(s.color)}
-                    >
-                      {s.name}
-                    </span>
-                    <span className="text-body-sm text-on-surface-variant/60 font-mono">{s.key}</span>
-
-                    <select
-                    className="text-body-sm border border-outline-variant rounded-md px-2 py-1"
-                    value={s.category}
-                    onChange={(e) => patch(s, { category: e.target.value })}
-                  >
-                    {CATEGORIES.map((c) => (<option key={c.key} value={c.key}>{c.label}</option>))}
-                  </select>
-
-                  <ColorPicker value={s.color} onChange={(c) => patch(s, { color: c })} />
-
-                  <div className="flex items-center gap-1">
-                    <span className="text-body-sm text-on-surface-variant">WIP</span>
-                    <input
-                      type="number"
-                      min={0}
-                      placeholder="—"
-                      defaultValue={s.wipLimit ?? ""}
-                      onBlur={(e) => {
-                        const v = e.target.value.trim();
-                        if (v === "" && s.wipLimit != null) patch(s, { clearWip: true });
-                        else if (v !== "" && Number(v) !== s.wipLimit) patch(s, { wipLimit: Number(v) });
-                      }}
-                      className="w-20 text-body-sm border border-outline-variant rounded-md px-2 py-1"
+              {/* Danh sách cột = record quét bằng mắt → rows, không Card từng dòng. */}
+              {statuses.length === 0 ? (
+                <EmptyState
+                  title="Dự án chưa có cột tuỳ chỉnh"
+                  description="Board đang dùng bộ cột mặc định."
+                  isCompact
+                />
+              ) : (
+                <List hasDividers>
+                  {statuses.map((s, i) => (
+                    <ListItem
+                      key={s.id}
+                      startContent={
+                        <VStack gap={0}>
+                          <IconButton
+                            label="Lên"
+                            tooltip="Lên"
+                            variant="ghost"
+                            size="sm"
+                            icon={<Icon name="keyboard_arrow_up" size={18} />}
+                            isDisabled={i === 0}
+                            onClick={() => moveCol(s, -1)}
+                          />
+                          <IconButton
+                            label="Xuống"
+                            tooltip="Xuống"
+                            variant="ghost"
+                            size="sm"
+                            icon={<Icon name="keyboard_arrow_down" size={18} />}
+                            isDisabled={i === statuses.length - 1}
+                            onClick={() => moveCol(s, 1)}
+                          />
+                        </VStack>
+                      }
+                      label={<StatusChip name={s.name} color={s.color} />}
+                      description={`${s.key} · ${s.taskCount} việc`}
+                      endContent={
+                        <HStack gap={2} vAlign="center" wrap="wrap">
+                          <Selector
+                            label="Nhóm"
+                            isLabelHidden
+                            size="sm"
+                            value={s.category}
+                            onChange={(v) => patch(s, { category: v })}
+                            options={CATEGORIES.map((c) => ({ value: c.key, label: c.label }))}
+                          />
+                          <ColorPicker value={s.color} onChange={(c) => patch(s, { color: c })} />
+                          <NumberInput
+                            label="WIP limit"
+                            isLabelHidden
+                            size="sm"
+                            width={96}
+                            min={0}
+                            placeholder="WIP"
+                            value={s.wipLimit ?? undefined}
+                            onChange={(v) => {
+                              if (v == null && s.wipLimit != null) patch(s, { clearWip: true });
+                              else if (v != null && v !== s.wipLimit) patch(s, { wipLimit: v });
+                            }}
+                          />
+                          <IconButton
+                            label="Xoá cột"
+                            tooltip="Xoá cột"
+                            variant="ghost"
+                            size="sm"
+                            icon={<Icon name="delete" size={18} />}
+                            onClick={() => remove(s)}
+                          />
+                        </HStack>
+                      }
                     />
-                  </div>
+                  ))}
+                </List>
+              )}
 
-                  <span className="text-body-sm text-on-surface-variant/70">
-                    {s.taskCount} việc
-                  </span>
+              <Section variant="transparent" padding={0} dividers={["top"]}>
+                <VStack gap={3} hAlign="stretch" paddingBlock={3}>
+                  <Text type="label" color="secondary">
+                    Thêm cột mới
+                  </Text>
+                  <HStack gap={3} vAlign="end" wrap="wrap">
+                    <TextInput
+                      label="Tên cột"
+                      placeholder="Tên cột (VD: Blocked)"
+                      value={name}
+                      onChange={setName}
+                    />
+                    <Selector
+                      label="Nhóm"
+                      value={category}
+                      onChange={(v) => setCategory(v ?? "todo")}
+                      options={CATEGORIES.map((c) => ({ value: c.key, label: c.label }))}
+                    />
+                    <ColorPicker value={color} onChange={setColor} />
+                    <NumberInput
+                      label="WIP limit"
+                      isOptional
+                      width={120}
+                      min={0}
+                      value={wip === "" ? undefined : Number(wip)}
+                      onChange={(v) => setWip(v == null ? "" : String(v))}
+                    />
+                    <Button
+                      label="Thêm cột"
+                      variant="primary"
+                      icon={<Icon name="add" size={18} />}
+                      isDisabled={!name.trim()}
+                      clickAction={addStatus}
+                    />
+                  </HStack>
+                </VStack>
+              </Section>
+            </VStack>
+          </Card>
 
-                  <button
-                    className="ml-auto p-2 rounded-full hover:bg-red-50 text-red-500"
-                    onClick={() => remove(s)}
-                    title="Xoá cột"
-                  >
-                    <Icon name="delete" size={18} />
-                  </button>
-                </div>
-              );
-            })}
-            {statuses.length === 0 && (
-              <p className="text-body-sm text-on-surface-variant/60">
-                Dự án chưa có cột tuỳ chỉnh — Board đang dùng bộ cột mặc định.
-              </p>
-            )}
-          </div>
-
-          <div className="border-t border-outline-variant pt-md">
-            <p className="text-label-md text-on-surface-variant mb-sm">Thêm cột mới</p>
-            <div className="flex flex-wrap gap-sm items-end">
-              <input
-                className="field w-48"
-                placeholder="Tên cột (VD: Blocked)"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-              <select className="field w-36" value={category} onChange={(e) => setCategory(e.target.value)}>
-                {CATEGORIES.map((c) => (<option key={c.key} value={c.key}>{c.label}</option>))}
-              </select>
-              <div className="pb-1">
-                <ColorPicker value={color} onChange={setColor} />
-              </div>
-              <input
-                className="field w-28"
-                type="number"
-                min={0}
-                placeholder="WIP limit"
-                value={wip}
-                onChange={(e) => setWip(e.target.value)}
-              />
-              <button className="btn-primary" onClick={addStatus} disabled={!name.trim()}>
-                <Icon name="add" size={18} /> Thêm cột
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <IntegrationsCard projectId={id} />
-        <WebhooksCard projectId={id} />
-      </div>
-    </div>
-  </AppShell>
+          <IntegrationsCard projectId={id} />
+          <WebhooksCard projectId={id} />
+        </VStack>
+      </Section>
+    </AppShell>
   );
 }
 
@@ -238,7 +285,9 @@ function WebhooksCard({ projectId }: { projectId: string }) {
   const load = useCallback(() => {
     api.listWebhooks(projectId).then(setList).catch(() => setList([]));
   }, [projectId]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   function toggleEvent(key: string) {
     setEvents((prev) => (prev.includes(key) ? prev.filter((e) => e !== key) : [...prev, key]));
@@ -255,90 +304,112 @@ function WebhooksCard({ projectId }: { projectId: string }) {
       setUrl("");
       setSecret("");
       load();
-    } catch (e) { setErr((e as Error).message); }
+    } catch (e) {
+      setErr((e as Error).message);
+    }
   }
 
   return (
-    <div className="card p-lg">
-      <h3 className="text-headline-md mb-1">Webhook ra ngoài</h3>
-      <p className="text-body-sm text-on-surface-variant mb-md">
-        Gửi sự kiện dự án dưới dạng JSON POST tới hệ thống của bạn. Nếu đặt secret,
-        mỗi request kèm chữ ký <b>HMAC-SHA256</b> ở header <code>X-Flowie-Signature</code>.
-      </p>
-      {err && <p className="text-error text-body-sm mb-sm">{err}</p>}
+    <Card padding={5}>
+      <VStack gap={4} hAlign="stretch">
+        <VStack gap={1}>
+          <Heading level={3}>Webhook ra ngoài</Heading>
+          <Text type="supporting">
+            Gửi sự kiện dự án dưới dạng JSON POST tới hệ thống của bạn. Nếu đặt secret, mỗi
+            request kèm chữ ký HMAC-SHA256 ở header <Code>X-Flowie-Signature</Code>.
+          </Text>
+        </VStack>
 
-      <div className="flex flex-col gap-sm mb-md">
-        {list.map((w) => (
-          <div key={w.id} className="flex flex-wrap items-center gap-sm p-sm border border-outline-variant rounded-lg">
-            <span className="text-body-sm text-on-surface truncate flex-grow min-w-0">{w.url}</span>
-            {w.hasSecret && (
-              <span className="chip bg-green-50 text-green-600" title="Có chữ ký HMAC">
-                <Icon name="lock" size={14} /> ký
-              </span>
-            )}
-            {w.lastStatus != null && (
-              <span className={`chip ${w.lastStatus < 300 ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"}`}>
-                {w.lastStatus}
-              </span>
-            )}
-            <span className="text-body-sm text-on-surface-variant w-full sm:w-auto">
-              {w.events.length === 0 ? "mọi sự kiện" : `${w.events.length} sự kiện`}
-            </span>
-            <button
-              className="p-2 rounded-full hover:bg-red-50 text-red-500"
-              onClick={async () => {
-                if (!window.confirm("Xoá webhook này?")) return;
-                await api.deleteWebhook(projectId, w.id).catch((e) => setErr(e.message));
-                load();
-              }}
-            >
-              <Icon name="delete" size={18} />
-            </button>
-            {w.lastError && (
-              <p className="w-full text-body-sm text-red-500">Lỗi lần gửi cuối: {w.lastError}</p>
-            )}
-          </div>
-        ))}
-        {list.length === 0 && (
-          <p className="text-body-sm text-on-surface-variant/60">Chưa có webhook nào.</p>
+        {err && <Banner status="error" title={err} isDismissable onDismiss={() => setErr(null)} />}
+
+        {list.length === 0 ? (
+          <EmptyState title="Chưa có webhook nào." isCompact />
+        ) : (
+          <List hasDividers>
+            {list.map((w) => (
+              <ListItem
+                key={w.id}
+                label={w.url}
+                description={[
+                  w.events.length === 0 ? "mọi sự kiện" : `${w.events.length} sự kiện`,
+                  w.lastError ? `Lỗi lần gửi cuối: ${w.lastError}` : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+                endContent={
+                  <HStack gap={2} vAlign="center">
+                    {w.hasSecret && (
+                      <Badge variant="success" label="ký" icon={<Icon name="lock" size={14} />} />
+                    )}
+                    {w.lastStatus != null && (
+                      <Badge
+                        variant={w.lastStatus < 300 ? "success" : "error"}
+                        label={w.lastStatus}
+                      />
+                    )}
+                    <IconButton
+                      label="Xoá webhook"
+                      tooltip="Xoá webhook"
+                      variant="ghost"
+                      size="sm"
+                      icon={<Icon name="delete" size={18} />}
+                      clickAction={async () => {
+                        if (!window.confirm("Xoá webhook này?")) return;
+                        await api.deleteWebhook(projectId, w.id).catch((e) => setErr(e.message));
+                        load();
+                      }}
+                    />
+                  </HStack>
+                }
+              />
+            ))}
+          </List>
         )}
-      </div>
 
-      <div className="border-t border-outline-variant pt-md flex flex-col gap-sm">
-        <div className="flex flex-wrap gap-sm">
-          <input
-            className="field flex-grow min-w-60"
-            placeholder="https://api.congty.vn/flowie-hook"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-          />
-          <input
-            className="field w-52"
-            placeholder="Secret (tuỳ chọn)"
-            value={secret}
-            onChange={(e) => setSecret(e.target.value)}
-          />
-        </div>
-        <div className="flex flex-wrap gap-xs">
-          {WEBHOOK_EVENTS.map((e) => (
-            <button
-              key={e.key}
-              onClick={() => toggleEvent(e.key)}
-              className={`chip ${
-                events.includes(e.key)
-                  ? "bg-blue-50 text-blue-600"
-                  : "bg-surface-container-high text-on-surface-variant opacity-60"
-              }`}
-            >
-              {e.label}
-            </button>
-          ))}
-        </div>
-        <button className="btn-primary w-fit" onClick={add} disabled={!url.trim()}>
-          <Icon name="add" size={18} /> Thêm webhook
-        </button>
-      </div>
-    </div>
+        <Section variant="transparent" padding={0} dividers={["top"]}>
+          <VStack gap={3} hAlign="stretch" paddingBlock={3}>
+            <HStack gap={3} wrap="wrap" vAlign="end">
+              <StackItem size="fill">
+                <TextInput
+                  label="URL nhận webhook"
+                  placeholder="https://api.congty.vn/flowie-hook"
+                  value={url}
+                  onChange={setUrl}
+                />
+              </StackItem>
+              <TextInput
+                label="Secret"
+                isOptional
+                width={208}
+                placeholder="Secret (tuỳ chọn)"
+                value={secret}
+                onChange={setSecret}
+              />
+            </HStack>
+            <HStack gap={1} wrap="wrap">
+              {WEBHOOK_EVENTS.map((e) => (
+                <ToggleButton
+                  key={e.key}
+                  label={e.label}
+                  size="sm"
+                  isPressed={events.includes(e.key)}
+                  onPressedChange={() => toggleEvent(e.key)}
+                />
+              ))}
+            </HStack>
+            <HStack>
+              <Button
+                label="Thêm webhook"
+                variant="primary"
+                icon={<Icon name="add" size={18} />}
+                isDisabled={!url.trim()}
+                clickAction={add}
+              />
+            </HStack>
+          </VStack>
+        </Section>
+      </VStack>
+    </Card>
   );
 }
 
@@ -352,7 +423,9 @@ function IntegrationsCard({ projectId }: { projectId: string }) {
   const load = useCallback(() => {
     api.listIntegrations(projectId).then(setList).catch(() => setList([]));
   }, [projectId]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   async function add() {
     setErr(null);
@@ -360,64 +433,92 @@ function IntegrationsCard({ projectId }: { projectId: string }) {
       await api.createIntegration(projectId, { provider, webhookUrl: url.trim() });
       setUrl("");
       load();
-    } catch (e) { setErr((e as Error).message); }
+    } catch (e) {
+      setErr((e as Error).message);
+    }
   }
 
   return (
-    <div className="card p-lg">
-      <h3 className="text-headline-md mb-1">Tích hợp Chat</h3>
-      <p className="text-body-sm text-on-surface-variant mb-md">
-        Gửi thông báo sự kiện dự án sang Slack hoặc Microsoft Teams qua
-        <b> Incoming Webhook</b>.
-      </p>
-      {err && <p className="text-error text-body-sm mb-sm">{err}</p>}
+    <Card padding={5}>
+      <VStack gap={4} hAlign="stretch">
+        <VStack gap={1}>
+          <Heading level={3}>Tích hợp Chat</Heading>
+          <Text type="supporting">
+            Gửi thông báo sự kiện dự án sang Slack hoặc Microsoft Teams qua Incoming Webhook.
+          </Text>
+        </VStack>
 
-      <div className="flex flex-col gap-sm mb-md">
-        {list.map((i) => (
-          <div key={i.id} className="flex items-center gap-sm p-sm border border-outline-variant rounded-xl">
-            <span className={`chip ${i.provider === "slack" ? "bg-[#4a154b] text-white" : "bg-[#4b53bc] text-white"}`}>
-              {i.provider}
-            </span>
-            <span className="text-body-sm text-on-surface-variant truncate flex-grow">
-              {i.webhookUrl.slice(0, 48)}…
-            </span>
-            {i.lastStatus != null && (
-              <span className={`chip ${i.lastStatus < 300 ? "bg-success-container text-success" : "bg-error-container text-on-error-container"}`}>
-                {i.lastStatus}
-              </span>
-            )}
-            <button
-              className="p-2 rounded-full hover:bg-red-50 text-red-500"
-              onClick={async () => {
-                if (!window.confirm("Xoá tích hợp này?")) return;
-                await api.deleteIntegration(projectId, i.id).catch((e) => setErr(e.message));
-                load();
-              }}
-            >
-              <Icon name="delete" size={18} />
-            </button>
-          </div>
-        ))}
-        {list.length === 0 && (
-          <p className="text-body-sm text-on-surface-variant/60">Chưa có tích hợp nào.</p>
+        {err && <Banner status="error" title={err} isDismissable onDismiss={() => setErr(null)} />}
+
+        {list.length === 0 ? (
+          <EmptyState title="Chưa có tích hợp nào." isCompact />
+        ) : (
+          <List hasDividers>
+            {list.map((i) => (
+              <ListItem
+                key={i.id}
+                startContent={
+                  <Badge variant={i.provider === "slack" ? "purple" : "blue"} label={i.provider} />
+                }
+                label={`${i.webhookUrl.slice(0, 48)}…`}
+                endContent={
+                  <HStack gap={2} vAlign="center">
+                    {i.lastStatus != null && (
+                      <Badge
+                        variant={i.lastStatus < 300 ? "success" : "error"}
+                        label={i.lastStatus}
+                      />
+                    )}
+                    <IconButton
+                      label="Xoá tích hợp"
+                      tooltip="Xoá tích hợp"
+                      variant="ghost"
+                      size="sm"
+                      icon={<Icon name="delete" size={18} />}
+                      clickAction={async () => {
+                        if (!window.confirm("Xoá tích hợp này?")) return;
+                        await api
+                          .deleteIntegration(projectId, i.id)
+                          .catch((e) => setErr(e.message));
+                        load();
+                      }}
+                    />
+                  </HStack>
+                }
+              />
+            ))}
+          </List>
         )}
-      </div>
 
-      <div className="flex flex-wrap gap-sm items-end border-t border-outline-variant pt-md">
-        <select className="field w-32" value={provider} onChange={(e) => setProvider(e.target.value)}>
-          <option value="slack">Slack</option>
-          <option value="teams">MS Teams</option>
-        </select>
-        <input
-          className="field flex-grow min-w-60"
-          placeholder="https://hooks.slack.com/services/…"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-        />
-        <button className="btn-primary" onClick={add} disabled={!url.trim()}>
-          <Icon name="add" size={18} /> Kết nối
-        </button>
-      </div>
-    </div>
+        <Section variant="transparent" padding={0} dividers={["top"]}>
+          <HStack gap={3} vAlign="end" wrap="wrap" paddingBlock={3}>
+            <Selector
+              label="Nền tảng"
+              value={provider}
+              onChange={(v) => setProvider(v ?? "slack")}
+              options={[
+                { value: "slack", label: "Slack" },
+                { value: "teams", label: "MS Teams" },
+              ]}
+            />
+            <StackItem size="fill">
+              <TextInput
+                label="Incoming webhook URL"
+                placeholder="https://hooks.slack.com/services/…"
+                value={url}
+                onChange={setUrl}
+              />
+            </StackItem>
+            <Button
+              label="Kết nối"
+              variant="primary"
+              icon={<Icon name="add" size={18} />}
+              isDisabled={!url.trim()}
+              clickAction={add}
+            />
+          </HStack>
+        </Section>
+      </VStack>
+    </Card>
   );
 }

@@ -1,6 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Card } from "@astryxdesign/core/Card";
+import { Grid } from "@astryxdesign/core/Grid";
+import { VStack, HStack, StackItem } from "@astryxdesign/core/Layout";
+import { List, ListItem } from "@astryxdesign/core/List";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { Selector } from "@astryxdesign/core/Selector";
+import { Button } from "@astryxdesign/core/Button";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { Banner } from "@astryxdesign/core/Banner";
+import { Text } from "@astryxdesign/core/Text";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { api, Project, ScheduledReport } from "@/lib/api";
 import Icon from "@/components/ui/Icon";
 
@@ -40,10 +51,11 @@ export default function ScheduledReportsTab({ workspaceId }: { workspaceId: stri
     api.listProjects(workspaceId).then(setProjects).catch(() => setProjects([]));
   }, [workspaceId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  async function create(e: React.FormEvent) {
-    e.preventDefault();
+  async function create() {
     setError(null);
     try {
       await api.createReport(workspaceId, {
@@ -58,7 +70,9 @@ export default function ScheduledReportsTab({ workspaceId }: { workspaceId: stri
       setName("");
       setChannelUrl("");
       load();
-    } catch (err) { setError((err as Error).message); }
+    } catch (err) {
+      setError((err as Error).message);
+    }
   }
 
   async function runNow(r: ScheduledReport) {
@@ -68,118 +82,145 @@ export default function ScheduledReportsTab({ workspaceId }: { workspaceId: stri
       await api.runReportNow(workspaceId, r.id);
       setNotice(`Đã gửi thử “${r.name}”.`);
       load();
-    } catch (err) { setError((err as Error).message); }
+    } catch (err) {
+      setError((err as Error).message);
+    }
   }
 
   return (
-    <>
-      <div className="flex items-start justify-between gap-md mb-lg">
-        <p className="text-body-sm text-on-surface-variant max-w-xl">
-          Tự động gửi bản tóm tắt tiến độ vào Slack/Teams theo lịch. Giờ tính theo
-          UTC — Việt Nam là UTC+7.
-        </p>
-        <button className="btn-primary shrink-0" onClick={() => setCreating((v) => !v)}>
-          <Icon name="add" size={18} /> Lịch gửi mới
-        </button>
-      </div>
+    <VStack gap={5} hAlign="stretch">
+      <HStack gap={4} vAlign="start">
+        <Text type="supporting">
+          Tự động gửi bản tóm tắt tiến độ vào Slack/Teams theo lịch. Giờ tính theo UTC — Việt
+          Nam là UTC+7.
+        </Text>
+        <StackItem size="fill" />
+        <Button
+          label="Lịch gửi mới"
+          variant="primary"
+          icon={<Icon name="add" size={18} />}
+          onClick={() => setCreating((v) => !v)}
+        />
+      </HStack>
 
-      {error && <p className="text-error text-body-sm mb-md">{error}</p>}
-      {notice && <p className="text-green-600 text-body-sm mb-md">{notice}</p>}
+      {error && <Banner status="error" title={error} />}
+      {notice && <Banner status="success" title={notice} isDismissable onDismiss={() => setNotice(null)} />}
 
       {creating && (
-        <form onSubmit={create} className="card p-lg mb-lg grid gap-md sm:grid-cols-2">
-          <div>
-            <label className="block text-label-md text-on-surface-variant mb-1">Tên</label>
-            <input className="field" placeholder="Tóm tắt tuần" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-          </div>
-          <div>
-            <label className="block text-label-md text-on-surface-variant mb-1">Phạm vi</label>
-            <select className="field" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-              <option value="">Toàn bộ workspace</option>
-              {projects.map((p) => (<option key={p.id} value={p.id}>{p.key} · {p.name}</option>))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-label-md text-on-surface-variant mb-1">Tần suất</label>
-            <select className="field" value={frequency} onChange={(e) => setFrequency(e.target.value)}>
-              {FREQUENCIES.map((f) => (<option key={f.key} value={f.key}>{f.label}</option>))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-label-md text-on-surface-variant mb-1">
-              Giờ gửi (UTC) — {String(hourUtc).padStart(2, "0")}:00 UTC = {String((hourUtc + 7) % 24).padStart(2, "0")}:00 giờ VN
-            </label>
-            <select className="field" value={hourUtc} onChange={(e) => setHourUtc(Number(e.target.value))}>
-              {Array.from({ length: 24 }, (_, h) => (
-                <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-label-md text-on-surface-variant mb-1">Kênh</label>
-            <select className="field" value={provider} onChange={(e) => setProvider(e.target.value)}>
-              {PROVIDERS.map((p) => (<option key={p.key} value={p.key}>{p.label}</option>))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-label-md text-on-surface-variant mb-1">Incoming webhook URL</label>
-            <input
-              className="field"
-              placeholder="https://hooks.slack.com/services/…"
-              value={channelUrl}
-              onChange={(e) => setChannelUrl(e.target.value)}
-            />
-          </div>
-          <div className="sm:col-span-2 flex justify-end gap-sm">
-            <button type="button" className="btn-ghost" onClick={() => setCreating(false)}>Huỷ</button>
-            <button className="btn-primary" disabled={!name.trim() || !channelUrl.trim()}>Tạo lịch</button>
-          </div>
-        </form>
+        <Card padding={5}>
+          <VStack gap={4} hAlign="stretch">
+            <Grid columns={{ minWidth: 240, repeat: "fit" }} gap={4}>
+              <TextInput
+                label="Tên"
+                placeholder="Tóm tắt tuần"
+                value={name}
+                onChange={setName}
+                hasAutoFocus
+              />
+              <Selector
+                label="Phạm vi"
+                value={projectId}
+                onChange={(v) => setProjectId(v ?? "")}
+                placeholder="Toàn bộ workspace"
+                options={[
+                  { value: "", label: "Toàn bộ workspace" },
+                  ...projects.map((p) => ({ value: p.id, label: `${p.key} · ${p.name}` })),
+                ]}
+              />
+              <Selector
+                label="Tần suất"
+                value={frequency}
+                onChange={(v) => setFrequency(v ?? "weekly")}
+                options={FREQUENCIES.map((f) => ({ value: f.key, label: f.label }))}
+              />
+              <Selector
+                label="Giờ gửi (UTC)"
+                description={`${String(hourUtc).padStart(2, "0")}:00 UTC = ${String((hourUtc + 7) % 24).padStart(2, "0")}:00 giờ VN`}
+                value={String(hourUtc)}
+                onChange={(v) => setHourUtc(Number(v ?? 0))}
+                options={Array.from({ length: 24 }, (_, h) => ({
+                  value: String(h),
+                  label: `${String(h).padStart(2, "0")}:00`,
+                }))}
+              />
+              <Selector
+                label="Kênh"
+                value={provider}
+                onChange={(v) => setProvider(v ?? "slack")}
+                options={PROVIDERS.map((p) => ({ value: p.key, label: p.label }))}
+              />
+              <TextInput
+                label="Incoming webhook URL"
+                placeholder="https://hooks.slack.com/services/…"
+                value={channelUrl}
+                onChange={setChannelUrl}
+              />
+            </Grid>
+            <HStack gap={2} justify="end">
+              <Button label="Huỷ" variant="ghost" onClick={() => setCreating(false)} />
+              <Button
+                label="Tạo lịch"
+                variant="primary"
+                isDisabled={!name.trim() || !channelUrl.trim()}
+                clickAction={create}
+              />
+            </HStack>
+          </VStack>
+        </Card>
       )}
 
       {reports.length === 0 ? (
-        <div className="card p-xl text-center text-on-surface-variant">
-          <Icon name="schedule_send" size={40} className="text-outline mb-sm" />
-          <p>Chưa có lịch gửi báo cáo nào.</p>
-        </div>
+        <EmptyState
+          title="Chưa có lịch gửi báo cáo nào."
+          icon={<Icon name="schedule_send" size={40} />}
+        />
       ) : (
-        <div className="card divide-y divide-outline-variant/40">
+        // Danh sách lịch = record quét bằng mắt → rows edge-to-edge.
+        <List hasDividers>
           {reports.map((r) => (
-            <div key={r.id} className="p-lg flex flex-wrap items-center gap-md">
-              <div className="min-w-0 flex-grow">
-                <p className="text-body-lg font-semibold text-on-surface truncate">{r.name}</p>
-                <p className="text-body-sm text-on-surface-variant truncate">
-                  {FREQUENCIES.find((f) => f.key === r.frequency)?.label ?? r.frequency}
-                  {" · "}{String(r.hourUtc).padStart(2, "0")}:00 UTC
-                  {" · "}{PROVIDERS.find((p) => p.key === r.provider)?.label ?? r.provider}
-                  {r.projectId
-                    ? ` · ${projects.find((p) => p.id === r.projectId)?.key ?? "dự án"}`
-                    : " · toàn workspace"}
-                </p>
-                {r.lastRunAt && (
-                  <p className={`text-body-sm mt-1 ${r.lastError ? "text-red-500" : "text-on-surface-variant/70"}`}>
-                    Lần gửi cuối: {new Date(r.lastRunAt).toLocaleString()}
-                    {r.lastError ? ` — lỗi: ${r.lastError}` : ` — HTTP ${r.lastStatus}`}
-                  </p>
-                )}
-              </div>
-              <button className="btn-ghost" onClick={() => runNow(r)}>
-                <Icon name="send" size={18} /> Gửi thử
-              </button>
-              <button
-                className="btn-ghost text-red-500"
-                onClick={async () => {
-                  if (!window.confirm(`Xoá lịch "${r.name}"?`)) return;
-                  await api.deleteReport(workspaceId, r.id).catch((e) => setError(e.message));
-                  load();
-                }}
-              >
-                <Icon name="delete" size={18} />
-              </button>
-            </div>
+            <ListItem
+              key={r.id}
+              label={r.name}
+              description={[
+                FREQUENCIES.find((f) => f.key === r.frequency)?.label ?? r.frequency,
+                `${String(r.hourUtc).padStart(2, "0")}:00 UTC`,
+                PROVIDERS.find((p) => p.key === r.provider)?.label ?? r.provider,
+                r.projectId
+                  ? projects.find((p) => p.id === r.projectId)?.key ?? "dự án"
+                  : "toàn workspace",
+                r.lastRunAt
+                  ? `Lần gửi cuối: ${new Date(r.lastRunAt).toLocaleString()}${r.lastError ? ` — lỗi: ${r.lastError}` : ` — HTTP ${r.lastStatus}`}`
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+              endContent={
+                <HStack gap={1} vAlign="center">
+                  <Button
+                    label="Gửi thử"
+                    variant="ghost"
+                    size="sm"
+                    icon={<Icon name="send" size={18} />}
+                    clickAction={() => runNow(r)}
+                  />
+                  <IconButton
+                    label="Xoá lịch"
+                    tooltip="Xoá lịch"
+                    variant="ghost"
+                    size="sm"
+                    icon={<Icon name="delete" size={18} />}
+                    clickAction={async () => {
+                      if (!window.confirm(`Xoá lịch "${r.name}"?`)) return;
+                      await api.deleteReport(workspaceId, r.id).catch((e) => setError(e.message));
+                      load();
+                    }}
+                  />
+                </HStack>
+              }
+            />
           ))}
-        </div>
+        </List>
       )}
-    </>
+    </VStack>
   );
 }

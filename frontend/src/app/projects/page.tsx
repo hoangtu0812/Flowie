@@ -1,7 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { Section } from "@astryxdesign/core/Section";
+import { Grid } from "@astryxdesign/core/Grid";
+import { VStack, HStack, StackItem } from "@astryxdesign/core/Layout";
+import { ClickableCard } from "@astryxdesign/core/ClickableCard";
+import { Selector } from "@astryxdesign/core/Selector";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { Button } from "@astryxdesign/core/Button";
+import { Badge } from "@astryxdesign/core/Badge";
+import { Token } from "@astryxdesign/core/Token";
+import { Text } from "@astryxdesign/core/Text";
+import { ProgressBar } from "@astryxdesign/core/ProgressBar";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { api, ProjectSummary, WorkspaceOverview } from "@/lib/api";
 import AppShell from "@/components/layout/AppShell";
 import Icon from "@/components/ui/Icon";
@@ -27,77 +38,99 @@ export default function ProjectsPage() {
     api.workspaceOverview(workspaceId).then(setOverview).catch(() => setOverview(null));
   }, [workspaceId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const projects = (overview?.projects ?? []).filter((p) =>
     query ? (p.name + p.key).toLowerCase().includes(query.toLowerCase()) : true,
   );
 
   const actions = (
-    <div className="flex items-center gap-sm">
+    <HStack gap={2} vAlign="center">
       {workspaces.length > 1 && (
-        <select
-          className="field w-auto"
+        <Selector
+          label="Không gian làm việc"
+          isLabelHidden
+          size="sm"
           value={workspaceId}
-          onChange={(e) => setWorkspaceId(e.target.value)}
-        >
-          {workspaces.map((w) => (<option key={w.id} value={w.id}>{w.name}</option>))}
-        </select>
+          onChange={setWorkspaceId}
+          options={workspaces.map((w) => ({ value: w.id, label: w.name }))}
+        />
       )}
-      <button className="btn-primary" onClick={() => setOpen(true)} disabled={!workspaceId}>
-        <Icon name="add" size={18} /> Dự án mới
-      </button>
-    </div>
+      <Button
+        label="Dự án mới"
+        variant="primary"
+        size="sm"
+        icon={<Icon name="add" size={18} />}
+        isDisabled={!workspaceId}
+        onClick={() => setOpen(true)}
+      />
+    </HStack>
   );
 
   return (
     <AppShell title="Dự án" actions={actions}>
-      <div className="p-lg max-w-[1400px]">
-        {loading && <p className="text-on-surface-variant">Đang tải…</p>}
+      <Section variant="transparent" padding={5} maxWidth={1400}>
+        {loading && <Text color="secondary">Đang tải…</Text>}
 
         {!loading && !workspace && (
-          <EmptyWorkspace />
+          <EmptyState
+            title="Chưa có không gian làm việc"
+            description="Bạn chưa thuộc workspace nào. Liên hệ quản trị viên để được thêm vào."
+            icon={<Icon name="workspaces" size={40} />}
+          />
         )}
 
         {!loading && workspace && (
-          <>
-            <div className="flex flex-wrap items-center justify-between gap-md mb-lg">
-              <div className="flex items-center gap-2 text-body-sm text-on-surface-variant">
-                <Icon name="workspaces" size={18} />
-                <span>{workspace.name}</span>
-                <span className="chip bg-surface-container-high text-on-surface-variant">
-                  {overview?.projects.length ?? 0} dự án
-                </span>
-              </div>
-              <input
-                className="field w-64"
+          <VStack gap={5} hAlign="stretch">
+            <HStack gap={4} vAlign="center" wrap="wrap">
+              <Icon name="workspaces" size={18} />
+              <Text type="supporting">{workspace.name}</Text>
+              <Badge label={`${overview?.projects.length ?? 0} dự án`} />
+              <StackItem size="fill" />
+              <TextInput
+                label="Tìm dự án"
+                isLabelHidden
+                size="sm"
+                width={256}
                 placeholder="Tìm dự án…"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={setQuery}
               />
-            </div>
+            </HStack>
 
-            <div className="grid gap-5 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
-              {projects.map((p) => <ProjectCard key={p.projectId} p={p} />)}
+            {/* Gallery chọn dự án → card grid là đúng vai trò của Card. */}
+            <Grid columns={{ minWidth: 300, repeat: "fit" }} gap={5}>
+              {projects.map((p) => (
+                <ProjectCard key={p.projectId} p={p} />
+              ))}
 
               {/* Creating a project is a first-class card, not a hidden button. */}
-              <button
-                onClick={() => setOpen(true)}
-                className="border border-dashed border-outline-variant rounded-lg p-6 flex flex-col items-center justify-center gap-2 text-on-surface-variant hover:border-primary hover:text-primary transition-colors min-h-[168px]"
-              >
-                <Icon name="add_circle" size={28} />
-                <span className="text-body-md font-medium">Tạo dự án mới</span>
-              </button>
-            </div>
-          </>
+              <ClickableCard
+                label="Tạo dự án mới"
+                variant="muted"
+                padding={6}
+                height={168}
+                onClick={() => setOpen(true)}>
+                <VStack gap={2} hAlign="center" vAlign="center" height="100%">
+                  <Icon name="add_circle" size={28} />
+                  <Text weight="medium">Tạo dự án mới</Text>
+                </VStack>
+              </ClickableCard>
+            </Grid>
+          </VStack>
         )}
-      </div>
+      </Section>
 
       {open && workspaceId && (
         <NewProjectDialog
           workspaceId={workspaceId}
           onClose={() => setOpen(false)}
-          onCreated={() => { setOpen(false); load(); }}
+          onCreated={() => {
+            setOpen(false);
+            load();
+          }}
         />
       )}
     </AppShell>
@@ -107,45 +140,41 @@ export default function ProjectsPage() {
 function ProjectCard({ p }: { p: ProjectSummary }) {
   const pct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0;
   return (
-    <Link href={`/projects/${p.projectId}`} className="block">
-      <div className="card p-5 hover:border-primary/40 hover:shadow-md transition-all h-full">
-        <div className="flex items-center justify-between mb-3">
-          <span className="chip bg-primary-container/10 text-primary">{p.key}</span>
-          {p.overdue > 0 && (
-            <span className="chip bg-error-container text-on-error-container">
-              {p.overdue} quá hạn
-            </span>
-          )}
-        </div>
+    <ClickableCard label={p.name} href={`/projects/${p.projectId}`} padding={5} height="100%">
+      <VStack gap={3} hAlign="stretch">
+        <HStack gap={2} vAlign="center">
+          <Token label={p.key} />
+          <StackItem size="fill" />
+          {p.overdue > 0 && <Badge variant="error" label={`${p.overdue} quá hạn`} />}
+        </HStack>
 
-        <p className="text-[17px] font-bold text-on-surface mb-3 truncate">{p.name}</p>
+        <Text type="large" weight="bold" maxLines={1}>
+          {p.name}
+        </Text>
 
-        <div className="flex items-center gap-2 mb-3">
-          <div className="flex-grow bg-surface-container-high rounded-full h-2 overflow-hidden">
-            <div className="h-full rounded-full bg-green-500" style={{ width: `${pct}%` }} />
-          </div>
-          <span className="text-[12px] font-semibold text-on-surface-variant w-9 text-right">{pct}%</span>
-        </div>
+        <HStack gap={2} vAlign="center">
+          <StackItem size="fill">
+            <ProgressBar
+              label={`Tiến độ ${p.name}`}
+              isLabelHidden
+              value={pct}
+              variant={pct === 100 ? "success" : "accent"}
+            />
+          </StackItem>
+          <Text type="supporting" weight="semibold" hasTabularNumbers>
+            {pct}%
+          </Text>
+        </HStack>
 
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-body-sm text-on-surface-variant">
-          <span>{p.done}/{p.total} việc</span>
-          <span>{p.inProgress} đang làm</span>
-          <span>{p.hoursLogged.toFixed(1)}h</span>
-          {p.costActual > 0 && <span>{money(p.costActual)}</span>}
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-function EmptyWorkspace() {
-  return (
-    <div className="card p-xl text-center text-on-surface-variant">
-      <Icon name="workspaces" size={40} className="text-outline mb-sm" />
-      <p className="text-body-lg font-medium text-on-surface">Chưa có không gian làm việc</p>
-      <p className="text-body-sm mt-1">
-        Bạn chưa thuộc workspace nào. Liên hệ quản trị viên để được thêm vào.
-      </p>
-    </div>
+        <HStack gap={4} wrap="wrap">
+          <Text type="supporting">
+            {p.done}/{p.total} việc
+          </Text>
+          <Text type="supporting">{p.inProgress} đang làm</Text>
+          <Text type="supporting">{p.hoursLogged.toFixed(1)}h</Text>
+          {p.costActual > 0 && <Text type="supporting">{money(p.costActual)}</Text>}
+        </HStack>
+      </VStack>
+    </ClickableCard>
   );
 }

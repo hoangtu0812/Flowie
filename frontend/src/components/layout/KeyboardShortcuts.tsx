@@ -2,12 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Icon from "../ui/Icon";
+import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import { Section } from "@astryxdesign/core/Section";
+import { List, ListItem } from "@astryxdesign/core/List";
+import { Kbd } from "@astryxdesign/core/Kbd";
 
 interface Shortcut {
   keys: string;
+  /** Chuỗi cho Kbd (dùng "+" ngăn phím); bỏ trống thì hiện `keys` như nhãn. */
+  kbd?: string;
   label: string;
-  run?: (router: ReturnType<typeof useRouter>) => void;
 }
 
 // `g` then a letter navigates, mirroring Gmail/Linear conventions.
@@ -31,7 +35,7 @@ const SHORTCUTS: Shortcut[] = [
   { keys: "g rồi r", label: "Đi tới Báo cáo" },
   { keys: "g rồi m", label: "Đi tới Team" },
   { keys: "g rồi s", label: "Đi tới Cài đặt" },
-  { keys: "Esc", label: "Đóng hộp thoại / bỏ tiêu điểm" },
+  { keys: "Esc", kbd: "escape", label: "Đóng hộp thoại / bỏ tiêu điểm" },
 ];
 
 /** Returns true when focus is inside an editable control. */
@@ -112,31 +116,20 @@ export default function KeyboardShortcuts() {
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[60] grid place-items-center bg-black/30 p-md"
-      onClick={() => setOpen(false)}
-    >
-      <div
-        className="card shadow-modal p-lg w-full max-w-md"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-md">
-          <h3 className="text-headline-md text-on-surface">Phím tắt</h3>
-          <button className="p-1 rounded-full hover:bg-surface-container" onClick={() => setOpen(false)}>
-            <Icon name="close" size={20} />
-          </button>
-        </div>
-        <div className="flex flex-col gap-1">
+    <Dialog isOpen onOpenChange={setOpen} width={480}>
+      <DialogHeader title="Phím tắt" onOpenChange={setOpen} />
+      <Section variant="transparent" padding={4}>
+        {/* Danh sách dày, quét bằng mắt → rows, không bọc Card từng dòng. */}
+        <List>
           {SHORTCUTS.map((s) => (
-            <div key={s.keys} className="flex items-center justify-between py-1.5 text-body-sm">
-              <span className="text-on-surface-variant">{s.label}</span>
-              <kbd className="px-2 py-0.5 rounded border border-outline-variant bg-surface-container text-on-surface font-mono text-[12px]">
-                {s.keys}
-              </kbd>
-            </div>
+            <ListItem
+              key={s.keys}
+              label={s.label}
+              endContent={s.kbd ? <Kbd keys={s.kbd} /> : <Kbd keys={s.keys} />}
+            />
           ))}
-        </div>
-      </div>
-    </div>
+        </List>
+      </Section>
+    </Dialog>
   );
 }

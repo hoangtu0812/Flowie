@@ -2,12 +2,32 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { Card } from "@astryxdesign/core/Card";
+import { Grid } from "@astryxdesign/core/Grid";
+import { VStack, HStack, StackItem } from "@astryxdesign/core/Layout";
+import { Table, pixel, proportional } from "@astryxdesign/core/Table";
+import { Selector } from "@astryxdesign/core/Selector";
+import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
+import { ProgressBar } from "@astryxdesign/core/ProgressBar";
+import { Link as AstryxLink } from "@astryxdesign/core/Link";
+import { Text } from "@astryxdesign/core/Text";
+import { Heading } from "@astryxdesign/core/Heading";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { api, ProjectStats, TrendRange, WorkspaceOverview } from "@/lib/api";
 import Icon from "@/components/ui/Icon";
 import { Donut, BarList } from "@/components/ui/Charts";
 import { TrendAreaChart } from "@/components/ui/DashboardCharts";
 import { PRIORITY_HEX, statusSegments } from "@/lib/status";
 import { trendLabel, money, hours } from "@/lib/format";
+
+interface ProjectRow extends Record<string, unknown> {
+  projectId: string;
+  key: string;
+  name: string;
+  pct: number;
+  hoursLogged: number;
+  overdue: number;
+}
 
 /**
  * Built-in workspace analytics — the numbers everyone needs, with no setup.
@@ -28,7 +48,10 @@ export default function AnalyticsTab({ workspaceId }: { workspaceId: string }) {
   }, [workspaceId, range]);
 
   useEffect(() => {
-    if (!scope) { setStats(null); return; }
+    if (!scope) {
+      setStats(null);
+      return;
+    }
     api.projectStats(scope).then(setStats).catch(() => setStats(null));
   }, [scope]);
 
@@ -62,9 +85,12 @@ export default function AnalyticsTab({ workspaceId }: { workspaceId: string }) {
     [overview],
   );
   const trendRows = useMemo(
-    () => (overview?.trend ?? []).map((t) => ({
-      created: t.created, inWork: t.inWork, completed: t.completed,
-    })),
+    () =>
+      (overview?.trend ?? []).map((t) => ({
+        created: t.created,
+        inWork: t.inWork,
+        completed: t.completed,
+      })),
     [overview],
   );
 
@@ -75,149 +101,197 @@ export default function AnalyticsTab({ workspaceId }: { workspaceId: string }) {
     [view, overview],
   );
   const prioBars = useMemo(
-    () => Object.entries(view?.byPriority ?? {}).map(([k, v]) => ({
-      label: k, value: v, color: PRIORITY_HEX[k] ?? "#2563eb",
-    })),
+    () =>
+      Object.entries(view?.byPriority ?? {}).map(([k, v]) => ({
+        label: k,
+        value: v,
+        color: PRIORITY_HEX[k] ?? "var(--color-accent)",
+      })),
     [view],
   );
 
-  if (!overview) return <p className="text-on-surface-variant">Đang tải…</p>;
+  if (!overview) return <Text color="secondary">Đang tải…</Text>;
 
   const completion = view && view.total > 0 ? Math.round((view.done / view.total) * 100) : 0;
 
+  const projectRows: ProjectRow[] = overview.projects.map((p) => ({
+    projectId: p.projectId,
+    key: p.key,
+    name: p.name,
+    pct: p.total > 0 ? (p.done / p.total) * 100 : 0,
+    hoursLogged: p.hoursLogged,
+    overdue: p.overdue,
+  }));
+
   return (
-    <>
-      <div className="flex items-center justify-between gap-md mb-lg">
-        <p className="text-body-sm text-on-surface-variant">
+    <VStack gap={5} hAlign="stretch">
+      <HStack gap={4} vAlign="center">
+        <Text type="supporting">
           {scope ? "Số liệu của một dự án" : "Số liệu tổng hợp toàn không gian làm việc"}
-        </p>
-        <select className="field w-auto" value={scope} onChange={(e) => setScope(e.target.value)}>
-          <option value="">Tất cả dự án</option>
-          {overview.projects.map((p) => (
-            <option key={p.projectId} value={p.projectId}>{p.key} · {p.name}</option>
-          ))}
-        </select>
-      </div>
+        </Text>
+        <StackItem size="fill" />
+        <Selector
+          label="Phạm vi"
+          isLabelHidden
+          size="sm"
+          value={scope}
+          onChange={(v) => setScope(v ?? "")}
+          placeholder="Tất cả dự án"
+          options={[
+            { value: "", label: "Tất cả dự án" },
+            ...overview.projects.map((p) => ({
+              value: p.projectId,
+              label: `${p.key} · ${p.name}`,
+            })),
+          ]}
+        />
+      </HStack>
 
-      <div className="grid gap-md grid-cols-2 lg:grid-cols-4 mb-lg">
-        <Kpi icon="task_alt" label="Hoàn thành" value={`${completion}%`} tint="bg-green-50 text-green-600" />
-        <Kpi icon="checklist" label="Việc" value={`${view?.done ?? 0}/${view?.total ?? 0}`} tint="bg-blue-50 text-blue-600" />
-        <Kpi icon="schedule" label="Giờ đã log" value={hours(view?.hoursLogged ?? 0)} tint="bg-surface-container-high text-on-surface-variant" />
-        <Kpi icon="payments" label="Chi phí thực tế" value={money(view?.costActual ?? 0)} tint="bg-orange-50 text-orange-600" />
-      </div>
+      {/* KPI tiles — đúng vai trò của Card theo `astryx docs layout`. */}
+      <Grid columns={{ minWidth: 200, repeat: "fit" }} gap={4}>
+        <Kpi icon="task_alt" label="Hoàn thành" value={`${completion}%`} />
+        <Kpi icon="checklist" label="Việc" value={`${view?.done ?? 0}/${view?.total ?? 0}`} />
+        <Kpi icon="schedule" label="Giờ đã log" value={hours(view?.hoursLogged ?? 0)} />
+        <Kpi icon="payments" label="Chi phí thực tế" value={money(view?.costActual ?? 0)} />
+      </Grid>
 
-      <div className="grid gap-lg grid-cols-1 lg:grid-cols-2">
-        <div className="card p-lg">
-          <h3 className="text-headline-md mb-lg">Theo trạng thái</h3>
-          {segments.length > 0 ? <Donut segments={segments} /> : <Empty />}
-        </div>
-        <div className="card p-lg">
-          <h3 className="text-headline-md mb-lg">Theo độ ưu tiên</h3>
-          {prioBars.length > 0 ? <BarList items={prioBars} /> : <Empty />}
-        </div>
+      <Grid columns={{ minWidth: 360, repeat: "fit" }} gap={5}>
+        <Card padding={5}>
+          <VStack gap={5} hAlign="stretch">
+            <Heading level={3}>Theo trạng thái</Heading>
+            {segments.length > 0 ? <Donut segments={segments} /> : <Empty />}
+          </VStack>
+        </Card>
+        <Card padding={5}>
+          <VStack gap={5} hAlign="stretch">
+            <Heading level={3}>Theo độ ưu tiên</Heading>
+            {prioBars.length > 0 ? <BarList items={prioBars} /> : <Empty />}
+          </VStack>
+        </Card>
+      </Grid>
 
-        {!scope && (
-          <div className="card p-lg lg:col-span-2">
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-md">
-              <h3 className="text-headline-md">Xu hướng công việc</h3>
-              <div className="flex items-center gap-1 bg-surface-container rounded-lg p-0.5">
-                {([
-                  { key: "30d", label: "30 ngày" },
-                  { key: "6m", label: "6 tháng" },
-                  { key: "12m", label: "12 tháng" },
-                ] as const).map((r) => (
-                  <button
-                    key={r.key}
-                    onClick={() => setRange(r.key)}
-                    className={`px-3 py-1 rounded-md text-body-sm font-medium transition-colors ${
-                      range === r.key
-                        ? "bg-surface-container-lowest text-on-surface shadow-sm"
-                        : "text-on-surface-variant hover:text-on-surface"
-                    }`}
-                  >
-                    {r.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+      {!scope && (
+        <Card padding={5}>
+          <VStack gap={4} hAlign="stretch">
+            <HStack gap={2} vAlign="center" wrap="wrap">
+              <Heading level={3}>Xu hướng công việc</Heading>
+              <StackItem size="fill" />
+              <SegmentedControl
+                label="Khoảng thời gian"
+                size="sm"
+                value={range}
+                onChange={(v) => setRange(v as TrendRange)}>
+                <SegmentedControlItem value="30d" label="30 ngày" />
+                <SegmentedControlItem value="6m" label="6 tháng" />
+                <SegmentedControlItem value="12m" label="12 tháng" />
+              </SegmentedControl>
+            </HStack>
             <TrendAreaChart
               labels={trendLabels}
               rows={trendRows}
               height={240}
               series={[
-                { key: "created", label: "Tạo mới", color: "#6366f1" },
-                { key: "inWork", label: "Đang làm", color: "#22c55e" },
-                { key: "completed", label: "Hoàn thành", color: "#8b5cf6" },
+                { key: "created", label: "Tạo mới", color: "var(--color-icon-purple)" },
+                { key: "inWork", label: "Đang làm", color: "var(--color-icon-green)" },
+                { key: "completed", label: "Hoàn thành", color: "var(--color-icon-blue)" },
               ]}
             />
-          </div>
-        )}
+          </VStack>
+        </Card>
+      )}
 
-        {!scope && (
-          <div className="card p-lg lg:col-span-2">
-            <h3 className="text-headline-md mb-md">Tiến độ theo dự án</h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-body-md">
-                <thead>
-                  <tr className="text-left text-on-surface-variant border-b border-outline-variant">
-                    <th className="py-2 font-semibold">Dự án</th>
-                    <th className="py-2 font-semibold w-1/3">Tiến độ</th>
-                    <th className="py-2 font-semibold text-right">Giờ</th>
-                    <th className="py-2 font-semibold text-right">Quá hạn</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {overview.projects.map((p) => {
-                    const pct = p.total > 0 ? (p.done / p.total) * 100 : 0;
-                    return (
-                      <tr key={p.projectId} className="border-b border-outline-variant/40 last:border-0">
-                        <td className="py-2">
-                          <Link href={`/projects/${p.projectId}`} className="font-semibold text-on-surface hover:text-primary">
-                            {p.key} · {p.name}
-                          </Link>
-                        </td>
-                        <td className="py-2">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-grow bg-surface-container-high rounded-full h-2 overflow-hidden">
-                              <div className="h-full bg-green-500 rounded-full" style={{ width: `${pct}%` }} />
-                            </div>
-                            <span className="text-[12px] text-on-surface-variant w-9 text-right">{Math.round(pct)}%</span>
-                          </div>
-                        </td>
-                        <td className="py-2 text-right text-on-surface-variant">{p.hoursLogged.toFixed(1)}</td>
-                        <td className={`py-2 text-right font-semibold ${p.overdue > 0 ? "text-red-500" : "text-on-surface-variant"}`}>
-                          {p.overdue}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {overview.projects.length === 0 && (
-                    <tr><td colSpan={4} className="py-6 text-center text-on-surface-variant">Chưa có dự án.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </div>
-    </>
+      {!scope && (
+        <Card padding={0}>
+          <VStack gap={0} hAlign="stretch">
+            <Heading level={3}>Tiến độ theo dự án</Heading>
+            {projectRows.length === 0 ? (
+              <EmptyState title="Chưa có dự án." isCompact />
+            ) : (
+              // Dữ liệu cột dày → Table, không bọc từng dòng trong Card.
+              <Table<ProjectRow>
+                data={projectRows}
+                idKey="projectId"
+                density="compact"
+                hasHover
+                columns={[
+                  {
+                    key: "name",
+                    header: "Dự án",
+                    width: proportional(2),
+                    renderCell: (r) => (
+                      <AstryxLink href={`/projects/${r.projectId}`} as={Link}>
+                        {r.key} · {r.name}
+                      </AstryxLink>
+                    ),
+                  },
+                  {
+                    key: "pct",
+                    header: "Tiến độ",
+                    width: proportional(1),
+                    renderCell: (r) => (
+                      <HStack gap={2} vAlign="center">
+                        <StackItem size="fill">
+                          <ProgressBar
+                            label={`Tiến độ ${r.name}`}
+                            isLabelHidden
+                            value={r.pct}
+                            variant={r.pct === 100 ? "success" : "accent"}
+                          />
+                        </StackItem>
+                        <Text type="supporting" hasTabularNumbers>
+                          {Math.round(r.pct)}%
+                        </Text>
+                      </HStack>
+                    ),
+                  },
+                  {
+                    key: "hoursLogged",
+                    header: "Giờ",
+                    width: pixel(90),
+                    align: "end",
+                    renderCell: (r) => (
+                      <Text type="supporting" hasTabularNumbers>
+                        {r.hoursLogged.toFixed(1)}
+                      </Text>
+                    ),
+                  },
+                  {
+                    key: "overdue",
+                    header: "Quá hạn",
+                    width: pixel(90),
+                    align: "end",
+                    renderCell: (r) => (
+                      <Text weight="semibold" hasTabularNumbers color={r.overdue > 0 ? "accent" : "secondary"}>
+                        {r.overdue}
+                      </Text>
+                    ),
+                  },
+                ]}
+              />
+            )}
+          </VStack>
+        </Card>
+      )}
+    </VStack>
   );
 }
 
-function Kpi({ icon, label, value, tint }: { icon: string; label: string; value: string; tint: string }) {
+function Kpi({ icon, label, value }: { icon: string; label: string; value: string }) {
   return (
-    <div className="card p-lg flex items-center gap-md">
-      <div className={`w-11 h-11 rounded-lg flex items-center justify-center shrink-0 ${tint}`}>
+    <Card padding={5}>
+      <HStack gap={4} vAlign="center">
         <Icon name={icon} size={22} />
-      </div>
-      <div className="min-w-0">
-        <p className="text-headline-lg text-on-surface leading-tight truncate">{value}</p>
-        <p className="text-body-sm text-on-surface-variant">{label}</p>
-      </div>
-    </div>
+        <VStack gap={0.5}>
+          <Text type="display-3" weight="bold" maxLines={1}>
+            {value}
+          </Text>
+          <Text type="supporting">{label}</Text>
+        </VStack>
+      </HStack>
+    </Card>
   );
 }
 
 function Empty() {
-  return <p className="text-body-sm text-on-surface-variant/60">Chưa có dữ liệu.</p>;
+  return <Text type="supporting">Chưa có dữ liệu.</Text>;
 }

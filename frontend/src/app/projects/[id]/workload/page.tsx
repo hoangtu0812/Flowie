@@ -2,6 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import { Section } from "@astryxdesign/core/Section";
+import { VStack, HStack, StackItem } from "@astryxdesign/core/Layout";
+import { Card } from "@astryxdesign/core/Card";
+import { Avatar } from "@astryxdesign/core/Avatar";
+import { Token } from "@astryxdesign/core/Token";
+import { Text } from "@astryxdesign/core/Text";
+import { Heading } from "@astryxdesign/core/Heading";
+import { ProgressBar } from "@astryxdesign/core/ProgressBar";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { api, Member, Project, Task } from "@/lib/api";
 import AppShell from "@/components/layout/AppShell";
 import ProjectTabs from "@/components/layout/ProjectTabs";
@@ -46,63 +55,71 @@ export default function WorkloadPage() {
   return (
     <AppShell
       title={
-        <div className="flex items-center gap-sm">
-          {project && <span className="chip bg-primary-container/10 text-primary">{project.key}</span>}
-          <span>{project?.name || "Project"}</span>
-        </div>
-      }
-    >
-      <div className="p-lg">
-        {project && <ProjectTabs projectId={id} />}
-        <div className="max-w-5xl">
-          <div className="flex items-center justify-between mb-lg">
-          <h2 className="text-headline-md">Workload</h2>
-          <span className="text-body-sm text-on-surface-variant">Capacity giả định: {CAPACITY} pts</span>
-        </div>
+        <HStack gap={2} vAlign="center">
+          {project && <Token label={project.key} />}
+          <Text weight="bold">{project?.name || "Project"}</Text>
+        </HStack>
+      }>
+      <Section variant="transparent" padding={5}>
+        <VStack gap={5} hAlign="stretch">
+          {project && <ProjectTabs projectId={id} />}
 
-        <div className="flex flex-col gap-md">
-          {rows.map((r) => {
-            const pct = Math.min(100, (r.points / CAPACITY) * 100);
-            const over = r.points > CAPACITY;
-            return (
-              <div key={r.userId || "unassigned"} className="card p-lg">
-                <div className="flex items-center justify-between mb-sm">
-                  <div className="flex items-center gap-sm">
-                    <div className="w-8 h-8 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center text-label-sm">
-                      {r.name.slice(0, 1).toUpperCase()}
-                    </div>
-                    <span className="text-body-md font-medium text-on-surface">{r.name}</span>
-                    <span className="text-body-sm text-on-surface-variant">{r.tasks.length} việc</span>
-                  </div>
-                  <span className={`text-body-md font-semibold ${over ? "text-error" : "text-on-surface"}`}>
-                    {r.points} / {CAPACITY} pts
-                  </span>
-                </div>
-                <div className="bg-surface-container-high rounded-full h-2.5 overflow-hidden mb-md">
-                  <div className={`h-full rounded-full ${over ? "bg-error" : "bg-primary"}`} style={{ width: `${pct}%` }} />
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {r.tasks.map((t) => (
-                    <button
-                      key={t.id}
-                      onClick={() => setOpenTask(t.id)}
-                      className="chip bg-surface-container-high text-on-surface-variant hover:text-primary"
-                    >
-                      {t.title}{t.storyPoints ? ` · ${t.storyPoints}` : ""}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-          {rows.length === 0 && (
-            <div className="card p-xl text-center text-on-surface-variant">Chưa có thành viên hoặc công việc.</div>
-          )}
-        </div>
-      </div>
-    </div>
+          <VStack gap={4} hAlign="stretch" maxWidth={1024}>
+            <HStack gap={4} vAlign="center">
+              <Heading level={2}>Workload</Heading>
+              <StackItem size="fill" />
+              <Text type="supporting">Capacity giả định: {CAPACITY} pts</Text>
+            </HStack>
 
-    {openTask && <TaskDrawer taskId={openTask} onClose={() => setOpenTask(null)} onChanged={reload} />}
+            {/* Card ở đây là widget tổng hợp theo người, không phải bọc từng
+                record — mỗi thẻ gộp tiến độ + danh sách việc của một người. */}
+            {rows.length === 0 ? (
+              <EmptyState title="Chưa có thành viên hoặc công việc." />
+            ) : (
+              rows.map((r) => {
+                const over = r.points > CAPACITY;
+                return (
+                  <Card key={r.userId || "unassigned"} padding={5}>
+                    <VStack gap={3} hAlign="stretch">
+                      <HStack gap={2} vAlign="center">
+                        <Avatar name={r.name} size={32} />
+                        <Text weight="medium">{r.name}</Text>
+                        <Text type="supporting">{r.tasks.length} việc</Text>
+                        <StackItem size="fill" />
+                        <Text weight="semibold" hasTabularNumbers color={over ? "accent" : "primary"}>
+                          {r.points} / {CAPACITY} pts
+                        </Text>
+                      </HStack>
+
+                      <ProgressBar
+                        label={`Workload ${r.name}`}
+                        isLabelHidden
+                        value={Math.min(r.points, CAPACITY)}
+                        max={CAPACITY}
+                        variant={over ? "error" : "accent"}
+                      />
+
+                      <HStack gap={1} wrap="wrap">
+                        {r.tasks.map((t) => (
+                          <Token
+                            key={t.id}
+                            label={`${t.title}${t.storyPoints ? ` · ${t.storyPoints}` : ""}`}
+                            onClick={() => setOpenTask(t.id)}
+                          />
+                        ))}
+                      </HStack>
+                    </VStack>
+                  </Card>
+                );
+              })
+            )}
+          </VStack>
+        </VStack>
+      </Section>
+
+      {openTask && (
+        <TaskDrawer taskId={openTask} onClose={() => setOpenTask(null)} onChanged={reload} />
+      )}
     </AppShell>
   );
 }

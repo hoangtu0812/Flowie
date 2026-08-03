@@ -1,6 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Card } from "@astryxdesign/core/Card";
+import { HStack } from "@astryxdesign/core/Layout";
+import { Text } from "@astryxdesign/core/Text";
+import { StatusDot } from "@astryxdesign/core/StatusDot";
+import { IconButton } from "@astryxdesign/core/IconButton";
 import { api, ActiveTimer } from "@/lib/api";
 import Icon from "../ui/Icon";
 
@@ -61,8 +66,6 @@ export default function TimerWidget() {
   const { timer, elapsed, refresh } = useActiveTimer();
   const [busy, setBusy] = useState(false);
 
-  if (!timer) return null;
-
   async function stop() {
     setBusy(true);
     try {
@@ -88,37 +91,39 @@ export default function TimerWidget() {
     }
   }
 
+  if (!timer) return null;
+
+  // StatusDot thay cho chấm xanh tự vẽ; Card variant="green" thay cho
+  // bg-green-50/border-green-200 hardcode.
   return (
-    <div
-      className="flex items-center gap-2 pl-3 pr-1.5 py-1 rounded-full bg-green-50 border border-green-200"
-      title={`${timer.projectKey} · ${timer.taskTitle}`}
-    >
-      <span className="relative flex h-2 w-2">
-        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
-      </span>
-      <span className="text-[13px] font-semibold text-green-800 tabular-nums">
-        {formatElapsed(elapsed)}
-      </span>
-      <span className="text-[12px] text-green-700 max-w-[140px] truncate hidden lg:inline">
-        {timer.taskTitle}
-      </span>
-      <button
-        onClick={stop}
-        disabled={busy}
-        className="p-1 rounded-full hover:bg-green-100 text-green-700 disabled:opacity-50"
-        title="Dừng và ghi giờ"
-      >
-        <Icon name="stop_circle" size={20} />
-      </button>
-      <button
-        onClick={cancel}
-        disabled={busy}
-        className="p-1 rounded-full hover:bg-red-50 text-green-700 hover:text-red-600 disabled:opacity-50"
-        title="Huỷ, không ghi giờ"
-      >
-        <Icon name="cancel" size={18} />
-      </button>
-    </div>
+    <Card variant="green" padding={1.5}>
+      <HStack gap={2} vAlign="center">
+        <StatusDot variant="success" label="Đang chạy" />
+        <Text type="label" weight="semibold" hasTabularNumbers>
+          {formatElapsed(elapsed)}
+        </Text>
+        <Text type="supporting" maxLines={1}>
+          {timer.taskTitle}
+        </Text>
+        <IconButton
+          label="Dừng và ghi giờ"
+          tooltip="Dừng và ghi giờ"
+          variant="ghost"
+          size="sm"
+          isDisabled={busy}
+          icon={<Icon name="stop_circle" size={20} />}
+          clickAction={stop}
+        />
+        <IconButton
+          label="Huỷ, không ghi giờ"
+          tooltip="Huỷ, không ghi giờ"
+          variant="ghost"
+          size="sm"
+          isDisabled={busy}
+          icon={<Icon name="cancel" size={18} />}
+          clickAction={cancel}
+        />
+      </HStack>
+    </Card>
   );
 }

@@ -14,6 +14,50 @@ import {
   TaskDependencies,
   Worklog,
 } from "@/lib/api";
+import { Dialog } from "@astryxdesign/core/Dialog";
+import { Selector } from "@astryxdesign/core/Selector";
+import { MultiSelector } from "@astryxdesign/core/MultiSelector";
+import { Section } from "@astryxdesign/core/Section";
+import { Grid } from "@astryxdesign/core/Grid";
+import { VStack, HStack } from "@astryxdesign/core/Layout";
+import { Text } from "@astryxdesign/core/Text";
+import { Heading } from "@astryxdesign/core/Heading";
+import { Token } from "@astryxdesign/core/Token";
+import { Banner } from "@astryxdesign/core/Banner";
+import { List, ListItem } from "@astryxdesign/core/List";
+import { Card } from "@astryxdesign/core/Card";
+import { Avatar } from "@astryxdesign/core/Avatar";
+import { StatusDot } from "@astryxdesign/core/StatusDot";
+import { Badge } from "@astryxdesign/core/Badge";
+
+/** Chip trạng thái: màu do dự án đặt cho cột nên tính lúc chạy. */
+function StatusChip({ s }: { s: StatusDef }) {
+  return (
+    <span
+      style={{
+        ...s.style,
+        paddingInline: "var(--spacing-2)",
+        paddingBlock: "var(--spacing-0-5, 2px)",
+        borderRadius: "999px",
+        fontSize: "0.75rem",
+        fontWeight: 700,
+        whiteSpace: "nowrap",
+      }}>
+      {s.label}
+    </span>
+  );
+}
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { TextArea } from "@astryxdesign/core/TextArea";
+import { DateInput } from "@astryxdesign/core/DateInput";
+import { DateTimeInput, type ISODateTimeString } from "@astryxdesign/core/DateTimeInput";
+import { CheckboxInput } from "@astryxdesign/core/CheckboxInput";
+import { FileInput } from "@astryxdesign/core/FileInput";
+import { Button } from "@astryxdesign/core/Button";
+import { NumberInput } from "@astryxdesign/core/NumberInput";
+import { StackItem } from "@astryxdesign/core/Layout";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { ToggleButton } from "@astryxdesign/core/ToggleButton";
 import Icon from "../ui/Icon";
 import {
   LABEL_COLOR_KEYS,
@@ -66,6 +110,12 @@ function toLocalInput(iso?: string) {
 }
 const localToISO = (v: string) => (v ? new Date(v).toISOString() : "");
 
+/** Kiểu ngày Astryx yêu cầu: chuỗi "YYYY-MM-DD" ở mức template literal. */
+type DateValue = `${number}${number}${number}${number}-${number}${number}-${number}${number}`;
+const asDate = (v: string) => (v || undefined) as DateValue | undefined;
+/** DateTimeInput dùng chuỗi branded; ép kiểu ở ranh giới vì API nhận ISO thường. */
+const asDateTime = (v: string) => (v || undefined) as ISODateTimeString | undefined;
+
 export default function TaskDrawer({
   taskId,
   onClose,
@@ -89,6 +139,7 @@ export default function TaskDrawer({
   const [projectTasks, setProjectTasks] = useState<Task[]>([]);
   const [depPick, setDepPick] = useState("");
   const [addingLabel, setAddingLabel] = useState(false);
+  const [labelDraft, setLabelDraft] = useState("");
   /** The project's own workflow columns, not the built-in four. */
   const [statusDefs, setStatusDefs] = useState<StatusDef[]>(STATUSES);
   /** Resolves a status key against this project's columns. */
@@ -145,7 +196,9 @@ export default function TaskDrawer({
   if (!task) {
     return (
       <Overlay onClose={onClose}>
-        <div className="p-lg text-on-surface-variant">Đang tải…</div>
+        <Section variant="transparent" padding={5}>
+          <Text color="secondary">Đang tải…</Text>
+        </Section>
       </Overlay>
     );
   }
@@ -280,16 +333,15 @@ export default function TaskDrawer({
     const cls = "text-body-sm border border-outline-variant rounded-md px-2 py-1 flex-grow max-w-xs";
     if (cf.fieldType === "dropdown") {
       return (
-        <select
-          className={cls}
+        <Selector
+          label={cf.name}
+          isLabelHidden
+          size="sm"
           value={val}
-          onChange={(e) => saveFieldValue(cf.fieldId, e.target.value, cf.fieldType)}
-        >
-          <option value="">—</option>
-          {(cf.options ?? []).map((o) => (
-            <option key={o} value={o}>{o}</option>
-          ))}
-        </select>
+          placeholder="—"
+          onChange={(v) => saveFieldValue(cf.fieldId, v ?? "", cf.fieldType)}
+          options={[{ value: "", label: "—" }, ...(cf.options ?? []).map((o) => ({ value: o, label: o }))]}
+        />
       );
     }
     const type =
@@ -301,12 +353,14 @@ export default function TaskDrawer({
             ? "url"
             : "text";
     return (
-      <input
+      <TextInput
         key={`${cf.fieldId}:${val}`}
-        type={type}
-        className={cls}
-        defaultValue={val}
-        onBlur={(e) => saveFieldValue(cf.fieldId, e.target.value, cf.fieldType)}
+        label={cf.name}
+        isLabelHidden
+        size="sm"
+        type={type === "number" ? "text" : "text"}
+        value={val}
+        onChange={(v) => saveFieldValue(cf.fieldId, v, cf.fieldType)}
       />
     );
   }
@@ -431,166 +485,121 @@ export default function TaskDrawer({
 
   return (
     <Overlay onClose={onClose}>
-      <div className="flex items-center justify-between px-lg h-14 border-b border-outline-variant">
-        <div className="flex items-center gap-sm">
-          <select
+      <Section variant="transparent" padding={4} dividers={["bottom"]}>
+        <HStack gap={2} vAlign="center">
+          <Selector
+            label="Trạng thái"
+            isLabelHidden
+            size="sm"
             value={task.status}
-            onChange={(e) => moveStatus(e.target.value)}
-            className="text-body-sm border border-outline-variant rounded-md px-2 py-1 text-on-surface-variant"
-          >
-            {statusDefs.map((s) => (
-              <option key={s.key} value={s.key}>{s.label}</option>
-            ))}
-          </select>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={handleDelete} className="p-2 rounded-full hover:bg-red-50 text-red-500 transition-colors" title="Xóa công việc">
-            <Icon name="delete" size={20} />
-          </button>
-          <button onClick={onClose} className="p-2 rounded-full hover:bg-surface-container transition-colors">
-            <Icon name="close" size={20} />
-          </button>
-        </div>
-      </div>
+            onChange={(v) => moveStatus(v ?? "")}
+            options={statusDefs.map((s) => ({ value: s.key, label: s.label }))}
+          />
+          <StackItem size="fill" />
+          <IconButton label="Xóa công việc" tooltip="Xóa công việc" variant="ghost" icon={<Icon name="delete" size={20} />} clickAction={handleDelete} />
+          <IconButton label="Đóng" variant="ghost" icon={<Icon name="close" size={20} />} onClick={onClose} />
+        </HStack>
+      </Section>
 
-      <div className="overflow-y-auto p-lg flex flex-col gap-lg" style={{ height: "calc(100vh - 3.5rem)" }}>
-        <h2 className="text-headline-lg text-on-surface">{task.title}</h2>
+      <VStack gap={5} hAlign="stretch" isScrollable height="calc(100vh - 3.5rem)" padding={5}>
+        <Heading level={2}>{task.title}</Heading>
 
         {/* Meta row */}
-        <div className="flex flex-col gap-6">
-          {/* Row 1: Priority, Assignee, Reporter */}
-          <div className="flex flex-wrap gap-lg">
-            <div className="w-1/4 min-w-[120px]">
-              <p className="text-label-sm uppercase text-on-surface-variant mb-1">Priority</p>
-              <select
+        <VStack gap={6} hAlign="stretch">
+          {/* Row 1: Priority, Assignee, Reporter — Selector tự render nhãn,
+              nên bỏ được nhãn thủ công và phần tử bọc quanh mỗi ô. */}
+          <Grid columns={{ minWidth: 160, repeat: "fit" }} gap={5}>
+              <Selector
+                label="Priority"
+                size="sm"
                 value={task.priority}
-                onChange={(e) => setPriority(e.target.value)}
-                className="text-body-sm border border-outline-variant rounded-md px-2 py-1 w-full"
-              >
-                {Object.entries(PRIORITIES).map(([k, v]) => (
-                  <option key={k} value={k}>{v.label}</option>
-                ))}
-              </select>
-            </div>
-            <div className="w-1/4 min-w-[160px]">
-              <p className="text-label-sm uppercase text-on-surface-variant mb-1">Người phụ trách</p>
-              <select
+                onChange={(v) => setPriority(v ?? "")}
+                options={Object.entries(PRIORITIES).map(([k, v]) => ({ value: k, label: v.label }))}
+              />
+              <Selector
+                label="Người phụ trách"
+                size="sm"
                 value={task.assigneeId ?? ""}
-                onChange={(e) => setAssignee(e.target.value)}
-                className="text-body-sm border border-outline-variant rounded-md px-2 py-1 w-full max-w-[200px]"
-              >
-                <option value="">Chưa gán</option>
-                {members.map((m) => (
-                  <option key={m.userId} value={m.userId}>{m.displayName || m.email}</option>
-                ))}
-              </select>
-            </div>
-            <div className="w-1/4 min-w-[160px]">
-              <p className="text-label-sm uppercase text-on-surface-variant mb-1">Người nhận thông tin</p>
-              <select
+                placeholder="Chưa gán"
+                onChange={(v) => setAssignee(v ?? "")}
+                options={[{ value: "", label: "Chưa gán" }, ...members.map((m) => ({ value: m.userId, label: m.displayName || m.email }))]}
+              />
+              <Selector
+                label="Người nhận thông tin"
+                size="sm"
                 value={task.reporterId ?? ""}
-                onChange={(e) => setReporter(e.target.value)}
-                className="text-body-sm border border-outline-variant rounded-md px-2 py-1 w-full max-w-[200px]"
-              >
-                <option value="">Chưa gán</option>
-                {members.map((m) => (
-                  <option key={m.userId} value={m.userId}>{m.displayName || m.email}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          
-          <div className="flex flex-wrap gap-lg">
-            <div className="w-full min-w-[160px] relative">
-              <p className="text-label-sm uppercase text-on-surface-variant mb-1">Người cùng tham gia</p>
-              <div 
-                className="text-body-sm border border-outline-variant rounded-md px-2 py-1 w-full max-w-md cursor-pointer truncate bg-white flex flex-wrap gap-1"
-                onClick={() => setShowPartMenu(!showPartMenu)}
-              >
-                {task.participantIds && task.participantIds.length > 0 
-                  ? members.filter(m => task.participantIds?.includes(m.userId)).map(m => (
-                      <span key={m.userId} className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-sm text-xs font-medium border border-blue-100">
-                        {m.displayName || m.email}
-                      </span>
-                    ))
-                  : "Chưa gán"}
-              </div>
-              
-              {showPartMenu && (
-                <div className="absolute left-0 top-[100%] mt-1 bg-white border border-outline-variant rounded-md shadow-lg z-50 max-h-48 overflow-y-auto min-w-[200px]">
-                  {members.map(m => (
-                    <label key={m.userId} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer">
-                      <input 
-                        type="checkbox" 
-                        className="rounded"
-                        checked={task.participantIds?.includes(m.userId) || false}
-                        onChange={(e) => {
-                          const current = task.participantIds || [];
-                          if (e.target.checked) setParticipants([...current, m.userId]);
-                          else setParticipants(current.filter(id => id !== m.userId));
-                        }}
-                      />
-                      <span className="text-body-sm truncate">{m.displayName || m.email}</span>
-                    </label>
-                  ))}
-                  {members.length === 0 && <div className="px-3 py-1.5 text-body-sm text-gray-500">Không có thành viên</div>}
-                </div>
-              )}
-            </div>
-          </div>
+                placeholder="Chưa gán"
+                onChange={(v) => setReporter(v ?? "")}
+                options={[{ value: "", label: "Chưa gán" }, ...members.map((m) => ({ value: m.userId, label: m.displayName || m.email }))]}
+              />
+          </Grid>
 
+          {/* MultiSelector thay cho dropdown checkbox tự chế: lo sẵn bàn phím,
+              ARIA và click-outside — bản cũ thiếu cả ba. */}
+          <MultiSelector
+            label="Người cùng tham gia"
+            value={task.participantIds ?? []}
+            onChange={setParticipants}
+            placeholder="Chưa gán"
+            options={members.map((m) => ({
+              value: m.userId,
+              label: m.displayName || m.email,
+            }))}
+          />
           {/* Row 2: Expected Dates & Labels */}
-          <div className="flex flex-wrap gap-lg items-end">
-            <div className="flex gap-4">
-              <div>
-                <p className="text-label-sm uppercase text-on-surface-variant mb-1">Ngày bắt đầu dự kiến</p>
-                <input
-                  type="date"
-                  value={task.startDate ? task.startDate.slice(0, 10) : ""}
-                  onChange={(e) => setDates({ startDate: e.target.value })}
-                  className="text-body-sm border border-outline-variant rounded-md px-2 py-1 w-full"
+          <HStack gap={5} vAlign="end" wrap="wrap">
+              <DateInput
+                  label="Ngày bắt đầu dự kiến"
+                  size="sm"
+                  value={asDate(task.startDate ? task.startDate.slice(0, 10) : "")}
+                  onChange={(v) => setDates({ startDate: v ?? "" })}
                 />
-              </div>
-              <div>
-                <p className="text-label-sm uppercase text-on-surface-variant mb-1">Ngày kết thúc dự kiến</p>
-                <input
-                  type="date"
-                  value={task.dueDate ? task.dueDate.slice(0, 10) : ""}
-                  onChange={(e) => setDates({ dueDate: e.target.value })}
-                  className="text-body-sm border border-outline-variant rounded-md px-2 py-1 w-full"
+              <DateInput
+                  label="Ngày kết thúc dự kiến"
+                  size="sm"
+                  value={asDate(task.dueDate ? task.dueDate.slice(0, 10) : "")}
+                  onChange={(v) => setDates({ dueDate: v ?? "" })}
                 />
-              </div>
-            </div>
-            
-            <div className="min-w-40 flex-1">
-              <p className="text-label-sm uppercase text-on-surface-variant mb-1">Labels</p>
-              <div className="flex flex-wrap gap-1">
-                {labels.length === 0 && <span className="text-body-sm text-on-surface-variant/60">Chưa có label</span>}
+            <VStack gap={1} hAlign="stretch">
+              <Text type="label" color="secondary">Labels</Text>
+              <HStack gap={1} wrap="wrap">
+                {labels.length === 0 && <Text type="supporting">Chưa có label</Text>}
                 {labels.map((l) => {
                   const on = activeLabelIds.has(l.id);
                   return (
-                    <button
+                    <ToggleButton
                       key={l.id}
-                      onClick={() => toggleLabel(l)}
-                      className={`chip ${on ? labelColor(l.color) : "bg-surface-container-high text-on-surface-variant/60"} ${on ? "" : "opacity-60"}`}
-                    >
-                      {l.name}
-                    </button>
+                      label={l.name}
+                      size="sm"
+                      isPressed={on}
+                      onPressedChange={() => toggleLabel(l)}
+                    />
                   );
                 })}
                 {/* Labels could be applied but never created — the project would
                     stay stuck at "Chưa có label" forever. */}
                 {addingLabel ? (
-                  <input
-                    autoFocus
-                    className="field w-32 py-0.5 text-body-sm"
+                  <TextInput
+                    label="Tên label"
+                    isLabelHidden
+                    size="sm"
+                    width={128}
+                    hasAutoFocus
                     placeholder="Tên label"
-                    onBlur={() => setAddingLabel(false)}
-                    onKeyDown={async (e) => {
-                      if (e.key === "Escape") { setAddingLabel(false); return; }
-                      if (e.key !== "Enter") return;
-                      const name = e.currentTarget.value.trim();
-                      if (!name) { setAddingLabel(false); return; }
+                    value={labelDraft}
+                    onChange={setLabelDraft}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        setLabelDraft("");
+                        setAddingLabel(false);
+                      }
+                    }}
+                    onEnter={async () => {
+                      const name = labelDraft.trim();
+                      if (!name) {
+                        setAddingLabel(false);
+                        return;
+                      }
                       const l = await api
                         .createLabel(task!.projectId, name, LABEL_COLOR_KEYS[labels.length % LABEL_COLOR_KEYS.length])
                         .catch(() => null);
@@ -598,464 +607,460 @@ export default function TaskDrawer({
                         setLabels((prev) => [...prev, l]);
                         await toggleLabel(l);
                       }
+                      setLabelDraft("");
                       setAddingLabel(false);
                     }}
                   />
                 ) : (
-                  <button
-                    onClick={() => setAddingLabel(true)}
-                    className="chip border border-dashed border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary"
-                  >
-                    + Label
-                  </button>
+                  <Button label="+ Label" variant="ghost" size="sm" onClick={() => setAddingLabel(true)} />
                 )}
-              </div>
-            </div>
-          </div>
+              </HStack>
+            </VStack>
+          </HStack>
 
           {/* Row 3: Calendar / Actual Schedule */}
-          <div className="flex gap-4 items-center">
-            <div>
-              <p className="text-label-sm uppercase text-on-surface-variant mb-1">Lịch từ</p>
-              <input
-                type="datetime-local"
-                value={toLocalInput(task.startAt)}
-                onChange={(e) => setSchedule({ startAt: localToISO(e.target.value) })}
-                className="text-body-sm border border-outline-variant rounded-md px-2 py-1 w-full"
+          <HStack gap={4} vAlign="end">
+              <DateTimeInput
+                label="Lịch từ"
+                size="sm"
+                value={asDateTime(toLocalInput(task.startAt))}
+                onChange={(v) => setSchedule({ startAt: localToISO(v ?? "") })}
               />
-            </div>
-            <div className="mt-6 text-on-surface-variant px-2">đến</div>
-            <div>
-              <p className="text-label-sm uppercase text-on-surface-variant mb-1">&nbsp;</p>
-              <input
-                type="datetime-local"
-                value={toLocalInput(task.endAt)}
-                onChange={(e) => setSchedule({ endAt: localToISO(e.target.value) })}
-                className="text-body-sm border border-outline-variant rounded-md px-2 py-1 w-full"
+              <Text type="supporting">đến</Text>
+              <DateTimeInput
+                label="Lịch đến"
+                size="sm"
+                value={asDateTime(toLocalInput(task.endAt))}
+                onChange={(v) => setSchedule({ endAt: localToISO(v ?? "") })}
               />
-            </div>
-          </div>
-        </div>
+          </HStack>
+        </VStack>
 
         {/* Description */}
-        <section>
-          <p className="text-label-sm uppercase text-on-surface-variant mb-1">Mô tả</p>
+        <VStack gap={2} hAlign="stretch" as="section">
+          <Text type="label" color="secondary">Mô tả</Text>
           {editingDesc ? (
-            <div>
-              <textarea
-                className="field"
+            <VStack gap={2} hAlign="stretch">
+              <TextArea
+                label="Mô tả"
+                isLabelHidden
                 rows={4}
                 value={descDraft}
-                onChange={(e) => setDescDraft(e.target.value)}
-                autoFocus
+                onChange={setDescDraft}
+                hasAutoFocus
               />
-              <div className="flex gap-sm mt-sm">
-                <button className="btn-primary" onClick={saveDesc}>Lưu</button>
-                <button className="btn-ghost" onClick={() => setEditingDesc(false)}>Huỷ</button>
-              </div>
-            </div>
+              <HStack gap={2}>
+                <Button label="Lưu" variant="primary" size="sm" clickAction={saveDesc} />
+                <Button label="Huỷ" variant="ghost" size="sm" onClick={() => setEditingDesc(false)} />
+              </HStack>
+            </VStack>
           ) : (
-            <div
-              className="text-body-md text-on-surface-variant whitespace-pre-wrap min-h-10 cursor-text hover:bg-surface-container-low rounded-lg p-sm -m-sm"
-              onClick={() => setEditingDesc(true)}
-            >
+            <Text color="secondary" onClick={() => setEditingDesc(true)}>
               {task.description || "Nhấn để thêm mô tả…"}
-            </div>
+            </Text>
           )}
-        </section>
+        </VStack>
 
         {/* Backlog prioritisation */}
-        <section>
-          <p className="text-label-sm uppercase text-on-surface-variant mb-sm">Ưu tiên backlog</p>
-          <div className="flex flex-wrap items-end gap-lg">
-            <div>
-              <p className="text-body-sm text-on-surface-variant mb-1">MoSCoW</p>
-              <div className="flex gap-1">
+        <VStack gap={3} hAlign="stretch" as="section">
+          <Text type="label" color="secondary">Ưu tiên backlog</Text>
+          <HStack gap={5} vAlign="end" wrap="wrap">
+            <VStack gap={1}>
+              <Text type="supporting">MoSCoW</Text>
+              <HStack gap={1}>
                 {MOSCOW.map((m) => {
                   const on = task.moscow === m.key;
                   return (
-                    <button
+                    <ToggleButton
                       key={m.key}
-                      onClick={() => setMoscow(on ? "" : m.key)}
-                      className={`chip ${on ? m.cls : "bg-surface-container-high text-on-surface-variant/60"}`}
-                      title={m.hint}
-                    >
-                      {m.label}
-                    </button>
+                      label={m.label}
+                      size="sm"
+                      tooltip={m.hint}
+                      isPressed={on}
+                      onPressedChange={() => setMoscow(on ? "" : m.key)}
+                    />
                   );
                 })}
-              </div>
-            </div>
+              </HStack>
+            </VStack>
 
-            <div className="flex items-end gap-2">
+            <HStack gap={2} vAlign="end">
               {RICE_FIELDS.map((f) => (
-                <div key={f.key}>
-                  <p className="text-body-sm text-on-surface-variant mb-1" title={f.hint}>{f.label}</p>
-                  <input
-                    type="number"
+                  <NumberInput
+                    key={f.key}
+                    label={f.label}
+                    description={f.hint}
+                    size="sm"
+                    width={80}
                     min={0}
                     step={f.step}
-                    defaultValue={(task as any)[f.key] ?? ""}
-                    onBlur={(e) => {
-                      const v = e.target.value.trim();
-                      if (v === "") return;
-                      setRice({ [f.key]: Number(v) } as any);
+                    value={(task as unknown as Record<string, number | undefined>)[f.key]}
+                    onChange={(v) => {
+                      if (v == null) return;
+                      setRice({ [f.key]: v } as Partial<Task>);
                     }}
-                    className="w-20 text-body-sm border border-outline-variant rounded-md px-2 py-1"
                   />
-                </div>
               ))}
-              <div className="pb-1">
-                <p className="text-body-sm text-on-surface-variant mb-1">RICE</p>
-                <span className="chip bg-primary-container/10 text-primary text-body-md">
-                  {task.riceScore != null ? task.riceScore.toFixed(1) : "—"}
-                </span>
-              </div>
-            </div>
-          </div>
-          <p className="text-body-sm text-on-surface-variant/60 mt-1">
+              <VStack gap={1}>
+                <Text type="supporting">RICE</Text>
+                <Token label={task.riceScore != null ? task.riceScore.toFixed(1) : "—"} />
+              </VStack>
+            </HStack>
+          </HStack>
+          <Text type="supporting">
             RICE = Reach × Impact × Confidence% ÷ Effort (tính tự động).
-          </p>
-        </section>
+          </Text>
+        </VStack>
 
         {/* Dependencies */}
-        <section>
-          <p className="text-label-sm uppercase text-on-surface-variant mb-sm">Phụ thuộc</p>
+        <VStack gap={3} hAlign="stretch" as="section">
+          <Text type="label" color="secondary">Phụ thuộc</Text>
           {unfinishedBlockers.length > 0 && (
-            <div className="flex items-start gap-sm mb-sm px-sm py-2 rounded-lg bg-error-container/40 text-on-error-container text-body-sm">
-              <Icon name="block" size={16} className="mt-0.5" />
-              <span>Đang bị chặn bởi {unfinishedBlockers.length} công việc chưa hoàn thành.</span>
-            </div>
+            <Banner
+              status="error"
+              icon={<Icon name="block" size={16} />}
+              title={`Đang bị chặn bởi ${unfinishedBlockers.length} công việc chưa hoàn thành.`}
+            />
           )}
-          <div className="flex flex-col gap-3">
-            <div>
-              <p className="text-body-sm text-on-surface-variant mb-1">Bị chặn bởi (Blocked by)</p>
-              {deps.blockedBy.length === 0 && (
-                <p className="text-body-sm text-on-surface-variant/60">Không có.</p>
+          <VStack gap={3} hAlign="stretch">
+            <VStack gap={1} hAlign="stretch">
+              <Text type="supporting">Bị chặn bởi (Blocked by)</Text>
+              {deps.blockedBy.length === 0 ? (
+                <Text type="supporting">Không có.</Text>
+              ) : (
+                <List hasDividers>
+                  {deps.blockedBy.map((d) => (
+                    <ListItem
+                      key={d.id}
+                      startContent={<StatusChip s={statusOf(d.status)} />}
+                      label={d.title}
+                      endContent={
+                        <IconButton label="Gỡ phụ thuộc" tooltip="Gỡ phụ thuộc" variant="ghost" size="sm" icon={<Icon name="close" size={16} />} clickAction={() => removeDep(d.id)} />
+                      }
+                    />
+                  ))}
+                </List>
               )}
-              <div className="flex flex-col gap-1">
-                {deps.blockedBy.map((d) => (
-                  <div key={d.id} className="flex items-center justify-between gap-sm text-body-sm border border-outline-variant/50 rounded-md px-2 py-1">
-                    <span className="flex items-center gap-sm min-w-0">
-                      <span className={`chip ${statusOf(d.status).chipBg} ${statusOf(d.status).chipText}`} style={statusOf(d.status).style}>{statusOf(d.status).label}</span>
-                      <span className="truncate">{d.title}</span>
-                    </span>
-                    <button onClick={() => removeDep(d.id)} className="p-1 rounded-full hover:bg-surface-container text-on-surface-variant" title="Gỡ phụ thuộc">
-                      <Icon name="close" size={16} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <div className="flex gap-sm mt-sm">
-                <select className="field flex-grow" value={depPick} onChange={(e) => setDepPick(e.target.value)}>
-                  <option value="">Chọn công việc chặn…</option>
-                  {depOptions.map((t) => (
-                    <option key={t.id} value={t.id}>{t.title}</option>
-                  ))}
-                </select>
-                <button className="btn-ghost" onClick={addDep}><Icon name="add" size={18} /></button>
-              </div>
-            </div>
+              <HStack gap={2} vAlign="center">
+                <StackItem size="fill">
+                  <Selector
+                    label="Công việc chặn"
+                    isLabelHidden
+                    size="sm"
+                    value={depPick}
+                    placeholder="Chọn công việc chặn…"
+                    onChange={(v) => setDepPick(v ?? "")}
+                    options={depOptions.map((t) => ({ value: t.id, label: t.title }))}
+                  />
+                </StackItem>
+                <IconButton label="Thêm phụ thuộc" variant="ghost" size="sm" icon={<Icon name="add" size={18} />} clickAction={addDep} />
+              </HStack>
+            </VStack>
             {deps.blocks.length > 0 && (
-              <div>
-                <p className="text-body-sm text-on-surface-variant mb-1">Đang chặn (Blocks)</p>
-                <div className="flex flex-col gap-1">
+              <VStack gap={1} hAlign="stretch">
+                <Text type="supporting">Đang chặn (Blocks)</Text>
+                <List hasDividers>
                   {deps.blocks.map((d) => (
-                    <div key={d.id} className="flex items-center gap-sm text-body-sm border border-outline-variant/50 rounded-md px-2 py-1">
-                      <span className={`chip ${statusOf(d.status).chipBg} ${statusOf(d.status).chipText}`} style={statusOf(d.status).style}>{statusOf(d.status).label}</span>
-                      <span className="truncate">{d.title}</span>
-                    </div>
+                    <ListItem
+                      key={d.id}
+                      startContent={<StatusChip s={statusOf(d.status)} />}
+                      label={d.title}
+                    />
                   ))}
-                </div>
-              </div>
+                </List>
+              </VStack>
             )}
-          </div>
-        </section>
+          </VStack>
+        </VStack>
 
         {/* Custom fields */}
-        <section>
-          <div className="flex items-center justify-between mb-sm">
-            <p className="text-label-sm uppercase text-on-surface-variant">Trường tùy chỉnh</p>
-            <button
-              className="text-body-sm text-primary flex items-center gap-1"
-              onClick={() => setShowFieldManager((v) => !v)}
-            >
-              <Icon name="tune" size={16} /> Quản lý
-            </button>
-          </div>
-          <div className="flex flex-col gap-2">
+        <VStack gap={3} hAlign="stretch" as="section">
+          <HStack gap={2} vAlign="center">
+            <Text type="label" color="secondary">Trường tùy chỉnh</Text>
+            <StackItem size="fill" />
+            <Button label="Quản lý" variant="ghost" size="sm" icon={<Icon name="tune" size={16} />} onClick={() => setShowFieldManager((v) => !v)} />
+          </HStack>
+          <VStack gap={2} hAlign="stretch">
             {customFields.length === 0 && !showFieldManager && (
-              <p className="text-body-sm text-on-surface-variant/60">Chưa có trường tùy chỉnh.</p>
+              <Text type="supporting">Chưa có trường tùy chỉnh.</Text>
             )}
             {customFields.map((cf) => (
-              <div key={cf.fieldId} className="flex items-center gap-sm">
-                <span className="w-32 text-body-sm text-on-surface-variant truncate">{cf.name}</span>
-                {renderFieldInput(cf)}
+              <HStack key={cf.fieldId} gap={2} vAlign="center">
+                <VStack width={128}>
+                  <Text type="supporting" maxLines={1}>{cf.name}</Text>
+                </VStack>
+                <StackItem size="fill">{renderFieldInput(cf)}</StackItem>
                 {showFieldManager && (
-                  <button
-                    onClick={() => deleteFieldDef(cf.fieldId)}
-                    className="p-1 rounded-full hover:bg-red-50 text-red-500"
-                    title="Xóa trường khỏi dự án"
-                  >
-                    <Icon name="delete" size={16} />
-                  </button>
+                  <IconButton label="Xóa trường khỏi dự án" tooltip="Xóa trường khỏi dự án" variant="ghost" size="sm" icon={<Icon name="delete" size={16} />} clickAction={() => deleteFieldDef(cf.fieldId)} />
                 )}
-              </div>
+              </HStack>
             ))}
-          </div>
+          </VStack>
           {showFieldManager && (
-            <div className="mt-sm flex flex-wrap gap-sm items-center border-t border-outline-variant/50 pt-sm">
-              <input
-                className="field w-40"
+            <HStack gap={2} vAlign="center" wrap="wrap">
+              <TextInput
+                label="Tên trường"
+                isLabelHidden
+                size="sm"
+                width={160}
                 placeholder="Tên trường"
                 value={newFieldName}
-                onChange={(e) => setNewFieldName(e.target.value)}
+                onChange={setNewFieldName}
               />
-              <select
-                className="field w-32"
+              <Selector
+                label="Kiểu trường"
+                isLabelHidden
+                size="sm"
                 value={newFieldType}
-                onChange={(e) => setNewFieldType(e.target.value)}
-              >
-                <option value="text">Text</option>
-                <option value="number">Number</option>
-                <option value="date">Date</option>
-                <option value="url">URL</option>
-                <option value="dropdown">Dropdown</option>
-              </select>
+                onChange={(v) => setNewFieldType(v ?? "text")}
+                options={[
+                  { value: "text", label: "Text" },
+                  { value: "number", label: "Number" },
+                  { value: "date", label: "Date" },
+                  { value: "url", label: "URL" },
+                  { value: "dropdown", label: "Dropdown" },
+                ]}
+              />
               {newFieldType === "dropdown" && (
-                <input
-                  className="field flex-grow"
+                <TextInput
+                  label="Lựa chọn"
+                  isLabelHidden
+                  size="sm"
                   placeholder="Lựa chọn, cách nhau bởi dấu phẩy"
                   value={newFieldOptions}
-                  onChange={(e) => setNewFieldOptions(e.target.value)}
+                  onChange={setNewFieldOptions}
                 />
               )}
-              <button className="btn-primary" onClick={createField}>Thêm trường</button>
-            </div>
+              <Button label="Thêm trường" variant="primary" size="sm" clickAction={createField} />
+            </HStack>
           )}
-        </section>
+        </VStack>
 
         {/* Checklist */}
-        <section>
-          <p className="text-label-sm uppercase text-on-surface-variant mb-sm">
-            Checklist {checklist.length > 0 && <span className="text-on-surface-variant/60">({checkedCount}/{checklist.length})</span>}
-          </p>
-          <div className="flex flex-col gap-1">
+        <VStack gap={3} hAlign="stretch" as="section">
+          <Text type="label" color="secondary">
+            Checklist {checklist.length > 0 ? `(${checkedCount}/${checklist.length})` : ""}
+          </Text>
+          <VStack gap={1} hAlign="stretch">
             {checklist.map((it) => (
-              <label key={it.id} className="flex items-center gap-sm py-1 cursor-pointer">
-                <input type="checkbox" checked={it.done} onChange={() => toggleCheck(it)} className="w-4 h-4 accent-primary" />
-                <span className={`text-body-md ${it.done ? "line-through text-on-surface-variant/60" : ""}`}>{it.title}</span>
-              </label>
+              <CheckboxInput
+                key={it.id}
+                label={it.title}
+                value={it.done}
+                onChange={() => toggleCheck(it)}
+              />
             ))}
-          </div>
-          <div className="flex gap-sm mt-sm">
-            <input
-              className="field"
+          </VStack>
+          <HStack gap={2} vAlign="center">
+            <StackItem size="fill">
+            <TextInput
+              label="Mục checklist mới"
+              isLabelHidden
+              size="sm"
               placeholder="Thêm mục checklist…"
               value={checkDraft}
-              onChange={(e) => setCheckDraft(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addCheck()}
+              onChange={setCheckDraft}
+              onEnter={addCheck}
             />
-            <button className="btn-ghost" onClick={addCheck}><Icon name="add" size={18} /></button>
-          </div>
-        </section>
+            </StackItem>
+            <IconButton label="Thêm mục checklist" variant="ghost" size="sm" icon={<Icon name="add" size={18} />} clickAction={addCheck} />
+          </HStack>
+        </VStack>
 
         {/* Attachments */}
-        <section>
-          <p className="text-label-sm uppercase text-on-surface-variant mb-sm">
-            Tệp đính kèm
-            {attachments.length > 0 && (
-              <span className="text-on-surface-variant/60"> ({attachments.length})</span>
-            )}
-          </p>
-          {uploadErr && <p className="text-error text-body-sm mb-sm">{uploadErr}</p>}
-          <div className="flex flex-col gap-1 mb-sm">
-            {attachments.map((a) => (
-              <div key={a.id} className="flex items-center gap-sm text-body-sm border border-outline-variant/50 rounded-md px-2 py-1.5">
-                <Icon name="attach_file" size={16} className="text-on-surface-variant shrink-0" />
-                <a
-                  href={a.webUrl || "#"}
+        <VStack gap={3} hAlign="stretch" as="section">
+          <Text type="label" color="secondary">
+            Tệp đính kèm {attachments.length > 0 ? `(${attachments.length})` : ""}
+          </Text>
+          {uploadErr && <Banner status="error" title={uploadErr} isDismissable onDismiss={() => setUploadErr(null)} />}
+          {attachments.length === 0 ? (
+            <Text type="supporting">Chưa có tệp nào.</Text>
+          ) : (
+            <List hasDividers>
+              {attachments.map((a) => (
+                <ListItem
+                  key={a.id}
+                  startContent={<Icon name="attach_file" size={16} />}
+                  label={a.name}
+                  href={a.webUrl || undefined}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-primary hover:underline truncate flex-grow"
-                  title={a.name}
-                >
-                  {a.name}
-                </a>
-                <span className="text-on-surface-variant/60 shrink-0">{formatBytes(a.sizeBytes)}</span>
-                <button
-                  onClick={() => removeAttachment(a.id)}
-                  className="p-1 rounded-full hover:bg-red-50 text-red-500 shrink-0"
-                  title="Gỡ khỏi công việc"
-                >
-                  <Icon name="close" size={16} />
-                </button>
-              </div>
-            ))}
-            {attachments.length === 0 && (
-              <p className="text-body-sm text-on-surface-variant/60">Chưa có tệp nào.</p>
-            )}
-          </div>
-          <label className="btn-ghost inline-flex cursor-pointer">
-            <Icon name="upload_file" size={18} />
-            {uploading ? "Đang tải lên…" : "Tải tệp lên"}
-            <input
-              type="file"
-              className="hidden"
-              disabled={uploading}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) uploadFile(f);
-                e.target.value = "";
-              }}
-            />
-          </label>
-          <p className="text-body-sm text-on-surface-variant/60 mt-1">
-            Tệp được lưu vào thư mục SharePoint của dự án.
-          </p>
-        </section>
+                  endContent={
+                    <HStack gap={2} vAlign="center">
+                      <Text type="supporting">{formatBytes(a.sizeBytes)}</Text>
+                      <IconButton label="Gỡ khỏi công việc" tooltip="Gỡ khỏi công việc" variant="ghost" size="sm" icon={<Icon name="close" size={16} />} clickAction={() => removeAttachment(a.id)} />
+                    </HStack>
+                  }
+                />
+              ))}
+            </List>
+          )}
+          {/* FileInput thay cho <label> bọc <input type="file" class="hidden">:
+              nó lo sẵn nhãn, trạng thái disabled và thông báo cho screen reader. */}
+          <FileInput
+            label={uploading ? "Đang tải lên…" : "Tải tệp lên"}
+            value={null}
+            isDisabled={uploading}
+            onChange={(f) => {
+              const file = Array.isArray(f) ? f[0] : f;
+              if (file) uploadFile(file);
+            }}
+          />
+          <Text type="supporting">Tệp được lưu vào thư mục SharePoint của dự án.</Text>
+        </VStack>
 
         {/* Comments */}
-        <section>
-          <p className="text-label-sm uppercase text-on-surface-variant mb-sm">Bình luận</p>
-          <div className="flex flex-col gap-md">
+        <VStack gap={3} hAlign="stretch" as="section">
+          <Text type="label" color="secondary">Bình luận</Text>
+          <VStack gap={4} hAlign="stretch">
             {comments.map((c) => {
               // A "you were mentioned" notification links straight to its
               // comment; highlight it so the reason for opening is obvious.
               const highlighted = c.id === highlightCommentId;
               return (
-                <div
-                  key={c.id}
-                  id={`comment-${c.id}`}
-                  ref={highlighted ? highlightRef : undefined}
-                  className={`flex gap-sm rounded-lg transition-colors ${
-                    highlighted ? "bg-blue-50 -mx-2 px-2 py-2 ring-1 ring-blue-200" : ""
-                  }`}
-                >
-                  <div className="w-8 h-8 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center text-label-sm flex-shrink-0">
-                    {(c.authorName || c.authorEmail || "?").slice(0, 1).toUpperCase()}
-                  </div>
-                  <div className="flex-grow">
-                    <p className="text-body-sm">
-                      <span className="font-semibold text-on-surface">{c.authorName || c.authorEmail}</span>{" "}
-                      <span className="text-on-surface-variant/60">{timeAgo(c.createdAt)}</span>
-                    </p>
-                    <p className="text-body-md text-on-surface whitespace-pre-wrap">{c.body}</p>
-                  </div>
-                </div>
+                  <Card
+                    key={c.id}
+                    id={`comment-${c.id}`}
+                    ref={highlighted ? highlightRef : undefined}
+                    padding={highlighted ? 3 : 0}
+                    variant={highlighted ? "blue" : "transparent"}>
+                    <HStack gap={2} vAlign="start">
+                      <Avatar name={c.authorName || c.authorEmail || "?"} size={32} tooltip={false} />
+                      <VStack gap={0.5} hAlign="stretch">
+                        <HStack gap={1} vAlign="center" wrap="wrap">
+                          <Text type="supporting" weight="semibold">{c.authorName || c.authorEmail}</Text>
+                          <Text type="supporting">{timeAgo(c.createdAt)}</Text>
+                        </HStack>
+                        <Text>{c.body}</Text>
+                      </VStack>
+                    </HStack>
+                  </Card>
               );
             })}
-            {comments.length === 0 && <p className="text-body-sm text-on-surface-variant/60">Chưa có bình luận.</p>}
-          </div>
-          <div className="flex gap-sm mt-md">
-            <input
-              className="field"
-              placeholder="Viết bình luận…"
-              value={commentDraft}
-              onChange={(e) => setCommentDraft(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addComment()}
-            />
-            <button className="btn-primary" onClick={addComment}><Icon name="send" size={18} /></button>
-          </div>
-        </section>
+            {comments.length === 0 && <Text type="supporting">Chưa có bình luận.</Text>}
+          </VStack>
+          <HStack gap={2} vAlign="center">
+            <StackItem size="fill">
+              <TextInput
+                label="Bình luận"
+                isLabelHidden
+                size="sm"
+                placeholder="Viết bình luận…"
+                value={commentDraft}
+                onChange={setCommentDraft}
+                onEnter={addComment}
+              />
+            </StackItem>
+            <IconButton label="Gửi bình luận" variant="primary" size="sm" icon={<Icon name="send" size={18} />} clickAction={addComment} />
+          </HStack>
+        </VStack>
 
         {/* Worklog */}
-        <section>
-          <p className="text-label-sm uppercase text-on-surface-variant mb-sm">
+        <VStack gap={3} hAlign="stretch" as="section">
+          <Text type="label" color="secondary">
             Thời gian
-            {worklogs.length > 0 && (
-              <span className="text-on-surface-variant/60">
-                {" "}· tổng {(worklogs.reduce((s, w) => s + w.minutes, 0) / 60).toFixed(1)}h
-              </span>
-            )}
-          </p>
+            {worklogs.length > 0
+              ? ` · tổng ${(worklogs.reduce((s, w) => s + w.minutes, 0) / 60).toFixed(1)}h`
+              : ""}
+          </Text>
           {/* Stopwatch */}
-          <div className="flex items-center gap-sm mb-sm p-sm rounded-lg bg-surface-container-low border border-outline-variant/60">
+          <Card variant="muted" padding={3}>
+            <HStack gap={2} vAlign="center">
             {timerOnThisTask ? (
               <>
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
-                </span>
-                <span className="text-body-md font-semibold text-green-700 tabular-nums">
+                <StatusDot variant="success" label="Đang chạy" />
+                <Text weight="semibold" hasTabularNumbers>
                   {formatElapsed(elapsed)}
-                </span>
-                <button className="btn-primary ml-auto" onClick={stopTimer} disabled={timerBusy}>
-                  <Icon name="stop_circle" size={18} /> Dừng &amp; ghi giờ
-                </button>
+                </Text>
+                <StackItem size="fill" />
+                <Button label="Dừng & ghi giờ" variant="primary" size="sm" icon={<Icon name="stop_circle" size={18} />} isDisabled={timerBusy} clickAction={stopTimer} />
               </>
             ) : (
               <>
-                <Icon name="timer" size={18} className="text-on-surface-variant" />
-                <span className="text-body-sm text-on-surface-variant">
+                <Icon name="timer" size={18} />
+                <Text type="supporting">
                   {timer
                     ? `Đang đếm giờ ở: ${timer.taskTitle}`
                     : "Bấm giờ trực tiếp cho công việc này"}
-                </span>
-                <button
-                  className="btn-ghost ml-auto"
-                  onClick={startTimer}
-                  disabled={timerBusy || !!timer}
-                  title={timer ? "Hãy dừng bộ đếm đang chạy trước" : "Bắt đầu"}
-                >
-                  <Icon name="play_circle" size={18} /> Bắt đầu
-                </button>
+                </Text>
+                <StackItem size="fill" />
+                <Button
+                  label="Bắt đầu"
+                  variant="ghost"
+                  size="sm"
+                  icon={<Icon name="play_circle" size={18} />}
+                  isDisabled={timerBusy || !!timer}
+                  tooltip={timer ? "Hãy dừng bộ đếm đang chạy trước" : undefined}
+                  clickAction={startTimer}
+                />
               </>
             )}
-          </div>
+            </HStack>
+          </Card>
 
-          <div className="flex gap-sm mb-sm">
-            <input
-              className="field w-24"
-              type="number"
-              step="0.25"
+          <HStack gap={2} vAlign="center">
+            <NumberInput
+              label="Giờ"
+              isLabelHidden
+              size="sm"
+              width={96}
               min={0}
+              step={0.25}
               placeholder="Giờ"
-              value={hoursDraft}
-              onChange={(e) => setHoursDraft(e.target.value)}
+              value={hoursDraft === "" ? undefined : Number(hoursDraft)}
+              onChange={(v) => setHoursDraft(v == null ? "" : String(v))}
             />
-            <input
-              className="field flex-grow"
-              placeholder="Ghi chú (đã làm gì)…"
-              value={workNote}
-              onChange={(e) => setWorkNote(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && logTime()}
-            />
-            <button className="btn-ghost" onClick={logTime}><Icon name="timer" size={18} /> Log</button>
-          </div>
-          <div className="flex flex-col gap-1">
+            <StackItem size="fill">
+              <TextInput
+                label="Ghi chú worklog"
+                isLabelHidden
+                size="sm"
+                placeholder="Ghi chú (đã làm gì)…"
+                value={workNote}
+                onChange={setWorkNote}
+                onEnter={logTime}
+              />
+            </StackItem>
+            <Button label="Log" variant="ghost" size="sm" icon={<Icon name="timer" size={18} />} clickAction={logTime} />
+          </HStack>
+          <List hasDividers>
             {worklogs.map((wl) => (
-              <div key={wl.id} className="flex items-center justify-between text-body-sm py-1 border-b border-outline-variant/50 last:border-0">
-                <span className="text-on-surface">{(wl.minutes / 60).toFixed(2)}h {wl.note && <span className="text-on-surface-variant">· {wl.note}</span>}</span>
-                <span className="flex items-center gap-sm">
-                  <span className="text-on-surface-variant/60">{new Date(wl.loggedOn).toLocaleDateString()}</span>
-                  <span className={`chip ${wl.state === "approved" ? "bg-success-container text-success" : wl.state === "submitted" ? "bg-primary-fixed text-on-primary-fixed-variant" : "bg-surface-container-high text-on-surface-variant"}`}>{wl.state}</span>
-                </span>
-              </div>
+              <ListItem
+                key={wl.id}
+                label={`${(wl.minutes / 60).toFixed(2)}h${wl.note ? ` · ${wl.note}` : ""}`}
+                endContent={
+                  <HStack gap={2} vAlign="center">
+                    <Text type="supporting">{new Date(wl.loggedOn).toLocaleDateString()}</Text>
+                    <Badge
+                      variant={wl.state === "approved" ? "success" : wl.state === "submitted" ? "info" : "neutral"}
+                      label={wl.state}
+                    />
+                  </HStack>
+                }
+              />
             ))}
-          </div>
-        </section>
+          </List>
+        </VStack>
 
         {/* Activity */}
-        <section>
-          <p className="text-label-sm uppercase text-on-surface-variant mb-sm">Hoạt động</p>
-          <div className="flex flex-col gap-2">
+        <VStack gap={3} hAlign="stretch" as="section">
+          <Text type="label" color="secondary">Hoạt động</Text>
+          <VStack gap={2} hAlign="stretch">
             {activity.map((a) => (
-              // items-start + wrapping: diff entries ("đổi hạn chót: … → …") are
+              // vAlign="start" + wrap: diff entries ("đổi hạn chót: … → …") are
               // longer than the old one-word verbs and must not overflow.
-              <div key={a.id} className="flex items-start gap-sm text-body-sm text-on-surface-variant">
-                <Icon name="history" size={16} className="mt-0.5 shrink-0" />
-                <span className="min-w-0">
-                  <span className="font-medium text-on-surface">{a.actorName || "Ai đó"}</span>{" "}
-                  <span>{verbText(a)}</span>{" "}
-                  <span className="text-on-surface-variant/50 whitespace-nowrap">· {timeAgo(a.createdAt)}</span>
-                </span>
-              </div>
+              <HStack key={a.id} gap={2} vAlign="start">
+                <Icon name="history" size={16} />
+                <Text type="supporting">
+                  <Text type="supporting" weight="medium">{a.actorName || "Ai đó"}</Text>{" "}
+                  {verbText(a)} · {timeAgo(a.createdAt)}
+                </Text>
+              </HStack>
             ))}
-            {activity.length === 0 && <p className="text-body-sm text-on-surface-variant/60">Chưa có hoạt động.</p>}
-          </div>
-        </section>
-      </div>
+            {activity.length === 0 && <Text type="supporting">Chưa có hoạt động.</Text>}
+          </VStack>
+        </VStack>
+      </VStack>
     </Overlay>
   );
 }
@@ -1125,15 +1130,24 @@ function verbText(a: ActivityEvent): string {
   }
 }
 
+/**
+ * Khung drawer trượt từ mép phải.
+ *
+ * Dùng Dialog của Astryx với `position="end"` thay vì tự dựng backdrop
+ * `fixed inset-0 z-50`: Dialog lo sẵn focus trap, Escape, khoá cuộn nền và
+ * `aria-modal` — những thứ bản tự chế đều thiếu.
+ */
 function Overlay({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/20" onClick={onClose}>
-      <div
-        className="w-full max-w-xl bg-surface-container-lowest h-full shadow-modal animate-[slidein_0.2s_ease]"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {children}
-      </div>
-    </div>
+    <Dialog
+      isOpen
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      position={{ top: 0, right: 0 }}
+      width={576}
+      maxHeight="100vh">
+      {children}
+    </Dialog>
   );
 }

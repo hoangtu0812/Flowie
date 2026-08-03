@@ -1,6 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { VStack, HStack, StackItem } from "@astryxdesign/core/Layout";
+import { Table, pixel, proportional } from "@astryxdesign/core/Table";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { Badge } from "@astryxdesign/core/Badge";
+import { Text } from "@astryxdesign/core/Text";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { api, AuditEntry } from "@/lib/api";
 import Icon from "@/components/ui/Icon";
 
@@ -16,16 +22,27 @@ const ACTION_LABELS: Record<string, string> = {
   "member.role": "Đổi vai trò",
   "apikey.create": "Tạo API key",
   "apikey.revoke": "Thu hồi API key",
-  "login": "Đăng nhập",
-  "logout": "Đăng xuất",
+  login: "Đăng nhập",
+  logout: "Đăng xuất",
 };
 
 /** Colour by risk: destructive actions should be findable at a glance. */
-function tintFor(action: string): string {
-  if (/(delete|remove|revoke)/.test(action)) return "bg-red-50 text-red-600";
-  if (/(create|add)/.test(action)) return "bg-green-50 text-green-600";
-  if (/(login|logout|session)/.test(action)) return "bg-blue-50 text-blue-600";
-  return "bg-surface-container-high text-on-surface-variant";
+type BadgeVariant = "error" | "success" | "info" | "neutral";
+function variantFor(action: string): BadgeVariant {
+  if (/(delete|remove|revoke)/.test(action)) return "error";
+  if (/(create|add)/.test(action)) return "success";
+  if (/(login|logout|session)/.test(action)) return "info";
+  return "neutral";
+}
+
+// Table yêu cầu hàng mở rộng Record<string, unknown>.
+interface AuditRow extends Record<string, unknown> {
+  id: string;
+  createdAt: string;
+  actorEmail: string;
+  action: string;
+  target: string;
+  ip: string;
 }
 
 export default function AuditLogTab({ workspaceId }: { workspaceId: string }) {
@@ -37,7 +54,8 @@ export default function AuditLogTab({ workspaceId }: { workspaceId: string }) {
   useEffect(() => {
     if (!workspaceId) return;
     setLoading(true);
-    api.listAuditLog(workspaceId, 200)
+    api
+      .listAuditLog(workspaceId, 200)
       .then(setEntries)
       .catch((e) => setError((e as Error).message))
       .finally(() => setLoading(false));
@@ -51,60 +69,79 @@ export default function AuditLogTab({ workspaceId }: { workspaceId: string }) {
     );
   }, [entries, query]);
 
+  const rows: AuditRow[] = filtered.map((e) => ({
+    id: e.id,
+    createdAt: e.createdAt,
+    actorEmail: e.actorEmail || "—",
+    action: e.action,
+    target: e.target || "—",
+    ip: e.ip || "—",
+  }));
+
   return (
-    <>
-      <div className="flex flex-wrap items-center justify-between gap-md mb-lg">
-        <p className="text-body-sm text-on-surface-variant">
-          200 hoạt động gần nhất trong không gian làm việc này.
-        </p>
-        <input
-          className="field w-64"
+    <VStack gap={5} hAlign="stretch">
+      <HStack gap={4} vAlign="center" wrap="wrap">
+        <Text type="supporting">200 hoạt động gần nhất trong không gian làm việc này.</Text>
+        <StackItem size="fill" />
+        <TextInput
+          label="Lọc nhật ký"
+          isLabelHidden
+          size="sm"
+          width={256}
           placeholder="Lọc theo người, hành động, IP…"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={setQuery}
+          status={error ? { type: "error", message: error } : undefined}
         />
-      </div>
+      </HStack>
 
-      {error && <p className="text-error text-body-sm mb-md">{error}</p>}
-      {loading && <p className="text-on-surface-variant">Đang tải…</p>}
+      {loading && <Text color="secondary">Đang tải…</Text>}
 
-      {!loading && filtered.length === 0 ? (
-        <div className="card p-xl text-center text-on-surface-variant">
-          <Icon name="history" size={40} className="text-outline mb-sm" />
-          <p>{entries.length === 0 ? "Chưa có hoạt động nào được ghi nhận." : "Không có kết quả phù hợp."}</p>
-        </div>
+      {!loading && rows.length === 0 ? (
+        <EmptyState
+          title={
+            entries.length === 0
+              ? "Chưa có hoạt động nào được ghi nhận."
+              : "Không có kết quả phù hợp."
+          }
+          icon={<Icon name="history" size={40} />}
+        />
       ) : (
-        <div className="card overflow-x-auto">
-          <table className="w-full text-body-md">
-            <thead>
-              <tr className="text-left text-on-surface-variant border-b border-outline-variant">
-                <th className="py-3 px-lg font-semibold">Thời gian</th>
-                <th className="py-3 px-lg font-semibold">Người thực hiện</th>
-                <th className="py-3 px-lg font-semibold">Hành động</th>
-                <th className="py-3 px-lg font-semibold">Đối tượng</th>
-                <th className="py-3 px-lg font-semibold">IP</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((e) => (
-                <tr key={e.id} className="border-b border-outline-variant/40 last:border-0">
-                  <td className="py-2.5 px-lg whitespace-nowrap text-on-surface-variant">
-                    {new Date(e.createdAt).toLocaleString()}
-                  </td>
-                  <td className="py-2.5 px-lg text-on-surface truncate max-w-[220px]">{e.actorEmail || "—"}</td>
-                  <td className="py-2.5 px-lg">
-                    <span className={`chip ${tintFor(e.action)}`}>
-                      {ACTION_LABELS[e.action] ?? e.action}
-                    </span>
-                  </td>
-                  <td className="py-2.5 px-lg text-on-surface-variant truncate max-w-[260px]">{e.target || "—"}</td>
-                  <td className="py-2.5 px-lg text-on-surface-variant whitespace-nowrap">{e.ip || "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        !loading && (
+          // Dữ liệu dạng cột, dày → Table edge-to-edge, không bọc Card.
+          <Table<AuditRow>
+            data={rows}
+            idKey="id"
+            density="compact"
+            hasHover
+            textOverflow="truncate"
+            columns={[
+              {
+                key: "createdAt",
+                header: "Thời gian",
+                width: pixel(170),
+                renderCell: (r) => (
+                  <Text type="supporting">{new Date(r.createdAt).toLocaleString()}</Text>
+                ),
+              },
+              { key: "actorEmail", header: "Người thực hiện", width: proportional(1) },
+              {
+                key: "action",
+                header: "Hành động",
+                width: pixel(160),
+                renderCell: (r) => (
+                  <Badge
+                    variant={variantFor(r.action)}
+                    label={ACTION_LABELS[r.action] ?? r.action}
+                  />
+                ),
+              },
+              { key: "target", header: "Đối tượng", width: proportional(1) },
+              { key: "ip", header: "IP", width: pixel(130) },
+            ]}
+          />
+        )
       )}
-    </>
+    </VStack>
   );
 }

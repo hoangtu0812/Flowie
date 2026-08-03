@@ -1,6 +1,28 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Section } from "@astryxdesign/core/Section";
+import { Card } from "@astryxdesign/core/Card";
+import { VStack, HStack, StackItem } from "@astryxdesign/core/Layout";
+import {
+  Table,
+  TableHeader,
+  TableHeaderCell,
+  TableBody,
+  TableFooter,
+  TableRow,
+  TableCell,
+} from "@astryxdesign/core/Table";
+import { List, ListItem } from "@astryxdesign/core/List";
+import { Selector } from "@astryxdesign/core/Selector";
+import { Button } from "@astryxdesign/core/Button";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { Badge } from "@astryxdesign/core/Badge";
+import { Divider } from "@astryxdesign/core/Divider";
+import { Token } from "@astryxdesign/core/Token";
+import { Text } from "@astryxdesign/core/Text";
+import { Heading } from "@astryxdesign/core/Heading";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { api, TimesheetEntry, Project } from "@/lib/api";
 import AppShell from "@/components/layout/AppShell";
 import Icon from "@/components/ui/Icon";
@@ -23,6 +45,13 @@ function addDays(d: Date, n: number) {
 
 const DAYS = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 
+interface MonthRow {
+  user: string;
+  project: string;
+  task: string;
+  total: number;
+}
+
 export default function TimesheetPage() {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
   const [entries, setEntries] = useState<TimesheetEntry[]>([]);
@@ -39,35 +68,49 @@ export default function TimesheetPage() {
   const to = fmt(addDays(weekStart, 6));
 
   useEffect(() => {
-    api.listWorkspaces().then(wss => {
-      if (wss.length > 0) {
-        api.listProjects(wss[0].id).then(ps => setProjects(ps.filter(p => p.role === "owner")));
-      }
-    }).catch(() => {});
+    api
+      .listWorkspaces()
+      .then((wss) => {
+        if (wss.length > 0) {
+          api.listProjects(wss[0].id).then((ps) =>
+            setProjects(ps.filter((p) => p.role === "owner")),
+          );
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const load = useCallback(() => {
     if (!selectedProject) {
       api.myTimesheet(from, to).then((r) => setEntries(r.entries)).catch(() => setEntries([]));
     } else {
-      api.projectTimesheet(selectedProject, from, to).then((r) => setEntries(r.entries)).catch(() => setEntries([]));
+      api
+        .projectTimesheet(selectedProject, from, to)
+        .then((r) => setEntries(r.entries))
+        .catch(() => setEntries([]));
     }
   }, [from, to, selectedProject]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   // Gộp theo task (và user nếu xem team)
   const rows = useMemo(() => {
-    const map = new Map<string, { title: string; projectKey: string; user: string; days: number[]; total: number }>();
+    const map = new Map<
+      string,
+      { title: string; projectKey: string; user: string; days: number[]; total: number }
+    >();
     for (const e of entries) {
       const key = selectedProject ? e.userId + "|" + e.taskId : e.taskId;
-      if (!map.has(key)) map.set(key, { 
-        title: e.taskTitle, 
-        projectKey: e.projectKey, 
-        user: e.userDisplayName || e.userEmail || "Unknown",
-        days: [0, 0, 0, 0, 0, 0, 0], 
-        total: 0 
-      });
+      if (!map.has(key))
+        map.set(key, {
+          title: e.taskTitle,
+          projectKey: e.projectKey,
+          user: e.userDisplayName || e.userEmail || "Unknown",
+          days: [0, 0, 0, 0, 0, 0, 0],
+          total: 0,
+        });
       const row = map.get(key)!;
       const di = (new Date(e.loggedOn).getDay() + 6) % 7;
       const h = e.minutes / 60;
@@ -75,7 +118,7 @@ export default function TimesheetPage() {
       row.total += h;
     }
     return Array.from(map.values());
-  }, [entries]);
+  }, [entries, selectedProject]);
 
   const dayTotals = useMemo(() => {
     const t = [0, 0, 0, 0, 0, 0, 0];
@@ -86,10 +129,7 @@ export default function TimesheetPage() {
   const anyDraft = entries.some((e) => e.state === "draft");
 
   /** Entries awaiting a decision — only meaningful in the team (project) view. */
-  const pending = useMemo(
-    () => entries.filter((e) => e.state === "submitted"),
-    [entries],
-  );
+  const pending = useMemo(() => entries.filter((e) => e.state === "submitted"), [entries]);
 
   async function submit() {
     setSubmitting(true);
@@ -109,9 +149,10 @@ export default function TimesheetPage() {
     const lines = [];
     if (selectedProject) lines.push("Thành viên,Dự án,Công việc,T2,T3,T4,T5,T6,T7,CN,Tổng (giờ)");
     else lines.push("Dự án,Công việc,T2,T3,T4,T5,T6,T7,CN,Tổng (giờ)");
-    rows.forEach(r => {
-      const d = r.days.map(x => (x > 0 ? x.toFixed(2) : "")).join(",");
-      if (selectedProject) lines.push(`"${r.user}","${r.projectKey}","${r.title}",${d},${r.total.toFixed(2)}`);
+    rows.forEach((r) => {
+      const d = r.days.map((x) => (x > 0 ? x.toFixed(2) : "")).join(",");
+      if (selectedProject)
+        lines.push(`"${r.user}","${r.projectKey}","${r.title}",${d},${r.total.toFixed(2)}`);
       else lines.push(`"${r.projectKey}","${r.title}",${d},${r.total.toFixed(2)}`);
     });
     downloadCSV(lines, `timesheet_${from}_${to}.csv`);
@@ -122,27 +163,36 @@ export default function TimesheetPage() {
     const mEnd = new Date(weekStart.getFullYear(), weekStart.getMonth() + 1, 0);
     const f = fmt(mStart);
     const t = fmt(mEnd);
-    const r = selectedProject ? await api.projectTimesheet(selectedProject, f, t) : await api.myTimesheet(f, t);
-    
-    const map = new Map<string, any>();
+    const r = selectedProject
+      ? await api.projectTimesheet(selectedProject, f, t)
+      : await api.myTimesheet(f, t);
+
+    const map = new Map<string, MonthRow>();
     for (const e of r.entries) {
       const key = selectedProject ? e.userId + "|" + e.taskId : e.taskId;
-      if (!map.has(key)) map.set(key, { user: e.userDisplayName || e.userEmail || "Unknown", project: e.projectKey, task: e.taskTitle, total: 0 });
-      map.get(key).total += e.minutes / 60;
+      if (!map.has(key))
+        map.set(key, {
+          user: e.userDisplayName || e.userEmail || "Unknown",
+          project: e.projectKey,
+          task: e.taskTitle,
+          total: 0,
+        });
+      map.get(key)!.total += e.minutes / 60;
     }
-    
+
     const lines = [];
     if (selectedProject) lines.push("Thành viên,Dự án,Công việc,Tổng (giờ)");
     else lines.push("Dự án,Công việc,Tổng (giờ)");
-    for (const r of Array.from(map.values())) {
-      if (selectedProject) lines.push(`"${r.user}","${r.project}","${r.task}",${r.total.toFixed(2)}`);
-      else lines.push(`"${r.project}","${r.task}",${r.total.toFixed(2)}`);
+    for (const row of Array.from(map.values())) {
+      if (selectedProject)
+        lines.push(`"${row.user}","${row.project}","${row.task}",${row.total.toFixed(2)}`);
+      else lines.push(`"${row.project}","${row.task}",${row.total.toFixed(2)}`);
     }
     downloadCSV(lines, `timesheet_thang_${f.slice(0, 7)}.csv`);
   }
 
   function downloadCSV(lines: string[], filename: string) {
-    const csv = "\uFEFF" + lines.join("\n");
+    const csv = "﻿" + lines.join("\n");
     const link = document.createElement("a");
     link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
     link.download = filename;
@@ -150,163 +200,220 @@ export default function TimesheetPage() {
   }
 
   const actions = (
-    <div className="flex items-center gap-2">
-      <button className="btn-secondary" onClick={exportWeek}>
-        <Icon name="download" size={18} /> Xuất Tuần
-      </button>
-      <button className="btn-secondary" onClick={exportMonth}>
-        <Icon name="download" size={18} /> Xuất Tháng
-      </button>
+    <HStack gap={2} vAlign="center">
+      <Button
+        label="Xuất Tuần"
+        variant="secondary"
+        size="sm"
+        icon={<Icon name="download" size={18} />}
+        onClick={exportWeek}
+      />
+      <Button
+        label="Xuất Tháng"
+        variant="secondary"
+        size="sm"
+        icon={<Icon name="download" size={18} />}
+        clickAction={exportMonth}
+      />
       {!selectedProject && (
-        <button className="btn-primary" disabled={!anyDraft || submitting} onClick={submit}>
-          <Icon name="send" size={18} /> Trình duyệt
-        </button>
+        <Button
+          label="Trình duyệt"
+          variant="primary"
+          size="sm"
+          icon={<Icon name="send" size={18} />}
+          isDisabled={!anyDraft || submitting}
+          isLoading={submitting}
+          clickAction={submit}
+        />
       )}
-    </div>
+    </HStack>
   );
 
   return (
     <AppShell title="Timesheet" actions={actions}>
-      <div className="p-lg max-w-6xl">
-        <div className="flex items-center justify-between mb-lg">
-          <h2 className="text-headline-md">Bảng chấm công</h2>
-          <div className="flex items-center gap-sm">
-            <select
+      <Section variant="transparent" padding={5} maxWidth={1152}>
+        <VStack gap={5} hAlign="stretch">
+          <HStack gap={4} vAlign="center" wrap="wrap">
+            <Heading level={2}>Bảng chấm công</Heading>
+            <StackItem size="fill" />
+            <Selector
+              label="Phạm vi"
+              isLabelHidden
+              size="sm"
               value={selectedProject}
-              onChange={(e) => setSelectedProject(e.target.value)}
-              className="text-body-sm border border-outline-variant rounded-md px-2 py-1 bg-white"
-            >
-              <option value="">Cá nhân (My Timesheet)</option>
-              {projects.map(p => <option key={p.id} value={p.id}>[Team] {p.name}</option>)}
-            </select>
-            <div className="w-px h-6 bg-outline-variant mx-2"></div>
-            <button className="btn-ghost" onClick={() => setWeekStart((d) => addDays(d, -7))}>
-              <Icon name="chevron_left" size={18} />
-            </button>
-            <span className="text-body-md text-on-surface-variant">
+              onChange={(v) => setSelectedProject(v ?? "")}
+              options={[
+                { value: "", label: "Cá nhân (My Timesheet)" },
+                ...projects.map((p) => ({ value: p.id, label: `[Team] ${p.name}` })),
+              ]}
+            />
+            <Divider orientation="vertical" />
+            <IconButton
+              label="Tuần trước"
+              variant="ghost"
+              size="sm"
+              icon={<Icon name="chevron_left" size={18} />}
+              onClick={() => setWeekStart((d) => addDays(d, -7))}
+            />
+            <Text type="supporting">
               {weekStart.toLocaleDateString()} – {addDays(weekStart, 6).toLocaleDateString()}
-            </span>
-            <button className="btn-ghost" onClick={() => setWeekStart((d) => addDays(d, 7))}>
-              <Icon name="chevron_right" size={18} />
-            </button>
-            <button className="btn-ghost" onClick={() => setWeekStart(startOfWeek(new Date()))}>Tuần này</button>
-          </div>
-        </div>
+            </Text>
+            <IconButton
+              label="Tuần sau"
+              variant="ghost"
+              size="sm"
+              icon={<Icon name="chevron_right" size={18} />}
+              onClick={() => setWeekStart((d) => addDays(d, 7))}
+            />
+            <Button
+              label="Tuần này"
+              variant="ghost"
+              size="sm"
+              onClick={() => setWeekStart(startOfWeek(new Date()))}
+            />
+          </HStack>
 
-        <div className="card overflow-hidden">
-          <table className="w-full text-body-sm">
-            <thead>
-              <tr className="bg-surface-container-low text-on-surface-variant">
-                {selectedProject && <th className="text-left px-md py-2 font-medium">Thành viên</th>}
-                <th className="text-left px-md py-2 font-medium">Công việc</th>
-                {weekDays.map((d, i) => (
-                  <th key={i} className="px-2 py-2 text-center font-medium w-16">
-                    <div>{DAYS[i]}</div>
-                    <div className="text-label-sm text-on-surface-variant/60">{d.getDate()}</div>
-                  </th>
-                ))}
-                <th className="px-md py-2 text-right font-medium w-20">Tổng</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-outline-variant">
-              {rows.map((r, ri) => (
-                <tr key={ri} className="hover:bg-surface-container-low">
-                  {selectedProject && (
-                    <td className="px-md py-2 font-medium">{r.user}</td>
-                  )}
-                  <td className="px-md py-2">
-                    <span className="chip bg-primary-container/10 text-primary mr-1">{r.projectKey}</span>
-                    {r.title}
-                  </td>
-                  {r.days.map((h, i) => (
-                    <td key={i} className="px-2 py-2 text-center text-on-surface-variant">
-                      {h > 0 ? h.toFixed(2) : "·"}
-                    </td>
-                  ))}
-                  <td className="px-md py-2 text-right font-semibold">{r.total.toFixed(2)}</td>
-                </tr>
-              ))}
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={selectedProject ? 10 : 9} className="px-md py-xl text-center text-on-surface-variant/60">
-                    Không có bản ghi worklog nào trong tuần này.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-            {rows.length > 0 && (
-              <tfoot className="bg-surface-container-low font-semibold">
-                <tr>
-                  <td colSpan={selectedProject ? 2 : 1} className="px-md py-2 text-right">Tổng ngày</td>
-                  {dayTotals.map((h, i) => (
-                    <td key={i} className={`px-2 py-2 text-center ${h > 8 ? "text-error" : "text-on-surface"}`}>
-                      {h > 0 ? h.toFixed(1) : "·"}
-                    </td>
-                  ))}
-                  <td className="px-md py-2 text-right text-primary">{grand.toFixed(1)}h</td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
-        <p className="text-body-sm text-on-surface-variant/70 mt-sm">
-          Ô ngày quá 8h được tô đỏ. “Trình duyệt” chuyển các bản ghi nháp sang chờ duyệt.
-        </p>
-
-        {/* Approval queue. The submit half of this workflow already existed, but
-            there was no screen for the manager to act on what was submitted. */}
-        {selectedProject && (
-          <div className="mt-xl">
-            <h3 className="text-headline-md mb-md">
-              Chờ duyệt
-              {pending.length > 0 && (
-                <span className="chip bg-orange-50 text-orange-600 ml-sm">{pending.length}</span>
-              )}
-            </h3>
-            {pending.length === 0 ? (
-              <div className="card p-lg text-center text-on-surface-variant">
-                Không có bản ghi nào chờ duyệt trong tuần này.
-              </div>
+          {/* Bảng cột động (7 ngày) + dòng tổng → Table ở chế độ children. */}
+          <Card padding={0}>
+            {rows.length === 0 ? (
+              <EmptyState title="Không có bản ghi worklog nào trong tuần này." />
             ) : (
-              <div className="card divide-y divide-outline-variant/40">
-                {pending.map((e) => (
-                  <div key={e.id} className="p-md flex flex-wrap items-center gap-md">
-                    <div className="min-w-0 flex-grow">
-                      <p className="text-body-md font-medium text-on-surface truncate">
-                        {e.userDisplayName || e.userEmail} · {e.taskTitle}
-                      </p>
-                      <p className="text-body-sm text-on-surface-variant">
-                        {new Date(e.loggedOn).toLocaleDateString()} · {(e.minutes / 60).toFixed(2)}h
-                        {e.note ? ` · ${e.note}` : ""}
-                      </p>
-                    </div>
-                    <button className="btn-ghost text-green-600" onClick={() => review(e.id, "approved")}>
-                      <Icon name="check" size={18} /> Duyệt
-                    </button>
-                    <button className="btn-ghost text-red-500" onClick={() => review(e.id, "rejected")}>
-                      <Icon name="close" size={18} /> Từ chối
-                    </button>
-                  </div>
-                ))}
-                <div className="p-md flex justify-end">
-                  <button
-                    className="btn-primary"
-                    disabled={reviewing}
-                    onClick={async () => {
-                      setReviewing(true);
-                      await Promise.all(pending.map((e) => api.setWorklogState(e.id, "approved"))).catch(() => {});
-                      await load();
-                      setReviewing(false);
-                    }}
-                  >
-                    <Icon name="done_all" size={18} /> Duyệt tất cả ({pending.length})
-                  </button>
-                </div>
-              </div>
+              <Table density="compact" hasHover>
+                <TableHeader>
+                  <TableRow>
+                    {selectedProject && <TableHeaderCell>Thành viên</TableHeaderCell>}
+                    <TableHeaderCell>Công việc</TableHeaderCell>
+                    {weekDays.map((d, i) => (
+                      <TableHeaderCell key={i}>
+                        {DAYS[i]} {d.getDate()}
+                      </TableHeaderCell>
+                    ))}
+                    <TableHeaderCell>Tổng</TableHeaderCell>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.map((r, ri) => (
+                    <TableRow key={ri}>
+                      {selectedProject && (
+                        <TableCell>
+                          <Text weight="medium">{r.user}</Text>
+                        </TableCell>
+                      )}
+                      <TableCell>
+                        <HStack gap={2} vAlign="center">
+                          <Token label={r.projectKey} />
+                          <Text maxLines={1}>{r.title}</Text>
+                        </HStack>
+                      </TableCell>
+                      {r.days.map((h, i) => (
+                        <TableCell key={i}>
+                          <Text type="supporting" hasTabularNumbers justify="center">
+                            {h > 0 ? h.toFixed(2) : "·"}
+                          </Text>
+                        </TableCell>
+                      ))}
+                      <TableCell>
+                        <Text weight="semibold" hasTabularNumbers justify="end">
+                          {r.total.toFixed(2)}
+                        </Text>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+                <TableFooter>
+                  <TableRow>
+                    <TableCell>
+                      <Text weight="semibold" justify="end">Tổng ngày</Text>
+                    </TableCell>
+                    {selectedProject && <TableCell />}
+                    {dayTotals.map((h, i) => (
+                      <TableCell key={i}>
+                        <Text
+                          weight="semibold"
+                          hasTabularNumbers
+                          justify="center"
+                          color={h > 8 ? "accent" : "primary"}>
+                          {h > 0 ? h.toFixed(1) : "·"}
+                        </Text>
+                      </TableCell>
+                    ))}
+                    <TableCell>
+                      <Text weight="semibold" color="accent" hasTabularNumbers justify="end">
+                        {grand.toFixed(1)}h
+                      </Text>
+                    </TableCell>
+                  </TableRow>
+                </TableFooter>
+              </Table>
             )}
-          </div>
-        )}
-      </div>
+          </Card>
+
+          <Text type="supporting">
+            Ô ngày quá 8h được tô đỏ. “Trình duyệt” chuyển các bản ghi nháp sang chờ duyệt.
+          </Text>
+
+          {/* Approval queue. The submit half of this workflow already existed, but
+              there was no screen for the manager to act on what was submitted. */}
+          {selectedProject && (
+            <VStack gap={4} hAlign="stretch">
+              <HStack gap={2} vAlign="center">
+                <Heading level={3}>Chờ duyệt</Heading>
+                {pending.length > 0 && <Badge variant="warning" label={pending.length} />}
+              </HStack>
+              {pending.length === 0 ? (
+                <EmptyState title="Không có bản ghi nào chờ duyệt trong tuần này." isCompact />
+              ) : (
+                <VStack gap={3} hAlign="stretch">
+                  <List hasDividers>
+                    {pending.map((e) => (
+                      <ListItem
+                        key={e.id}
+                        label={`${e.userDisplayName || e.userEmail} · ${e.taskTitle}`}
+                        description={`${new Date(e.loggedOn).toLocaleDateString()} · ${(e.minutes / 60).toFixed(2)}h${e.note ? ` · ${e.note}` : ""}`}
+                        endContent={
+                          <HStack gap={1} vAlign="center">
+                            <Button
+                              label="Duyệt"
+                              variant="ghost"
+                              size="sm"
+                              icon={<Icon name="check" size={18} />}
+                              clickAction={() => review(e.id, "approved")}
+                            />
+                            <Button
+                              label="Từ chối"
+                              variant="ghost"
+                              size="sm"
+                              icon={<Icon name="close" size={18} />}
+                              clickAction={() => review(e.id, "rejected")}
+                            />
+                          </HStack>
+                        }
+                      />
+                    ))}
+                  </List>
+                  <HStack justify="end">
+                    <Button
+                      label={`Duyệt tất cả (${pending.length})`}
+                      variant="primary"
+                      icon={<Icon name="done_all" size={18} />}
+                      isDisabled={reviewing}
+                      isLoading={reviewing}
+                      clickAction={async () => {
+                        setReviewing(true);
+                        await Promise.all(
+                          pending.map((e) => api.setWorklogState(e.id, "approved")),
+                        ).catch(() => {});
+                        await load();
+                        setReviewing(false);
+                      }}
+                    />
+                  </HStack>
+                </VStack>
+              )}
+            </VStack>
+          )}
+        </VStack>
+      </Section>
     </AppShell>
   );
 }

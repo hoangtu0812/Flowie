@@ -2,6 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { Section } from "@astryxdesign/core/Section";
+import { Card } from "@astryxdesign/core/Card";
+import { VStack, HStack, StackItem } from "@astryxdesign/core/Layout";
+import { List, ListItem } from "@astryxdesign/core/List";
+import { Selector } from "@astryxdesign/core/Selector";
+import { Button } from "@astryxdesign/core/Button";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { Token } from "@astryxdesign/core/Token";
+import { Text } from "@astryxdesign/core/Text";
+import { Heading } from "@astryxdesign/core/Heading";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { api, AutomationRule, Member, Project } from "@/lib/api";
 import AppShell from "@/components/layout/AppShell";
 import Icon from "@/components/ui/Icon";
@@ -25,26 +36,33 @@ export default function AutomationsPage() {
 
   useEffect(() => {
     api.getProject(id).then(setProject).catch(() => {});
-    api.projectMembers(id).then((m) => {
-      setMembers(m);
-      if (m.length > 0) setForm((f) => ({ ...f, assigneeId: m[0].userId }));
-    }).catch(() => {});
-    api.listStatuses(id).then((ss) => {
-      const defs = toStatusDefs(ss);
-      setStatusDefs(defs);
-      // Default the trigger to a real column of this project.
-      setForm((f) => (defs.some((d) => d.key === f.triggerStatus)
-        ? f
-        : { ...f, triggerStatus: defs[0]?.key ?? f.triggerStatus }));
-    }).catch(() => {});
+    api
+      .projectMembers(id)
+      .then((m) => {
+        setMembers(m);
+        if (m.length > 0) setForm((f) => ({ ...f, assigneeId: m[0].userId }));
+      })
+      .catch(() => {});
+    api
+      .listStatuses(id)
+      .then((ss) => {
+        const defs = toStatusDefs(ss);
+        setStatusDefs(defs);
+        // Default the trigger to a real column of this project.
+        setForm((f) =>
+          defs.some((d) => d.key === f.triggerStatus)
+            ? f
+            : { ...f, triggerStatus: defs[0]?.key ?? f.triggerStatus },
+        );
+      })
+      .catch(() => {});
     load();
   }, [id, load]);
 
   const memberName = (uid?: string) => members.find((m) => m.userId === uid)?.displayName || "—";
   const statusLabel = (k: string) => statusDefs.find((s) => s.key === k)?.label || k;
 
-  async function create(e: React.FormEvent) {
-    e.preventDefault();
+  async function create() {
     setError(null);
     try {
       await api.createAutomation(id, form);
@@ -57,61 +75,84 @@ export default function AutomationsPage() {
   return (
     <AppShell
       title={
-        <div className="flex items-center gap-sm">
-          {project && <span className="chip bg-primary-container/10 text-primary">{project.key}</span>}
-          <span>{project?.name || "Project"}</span>
-        </div>
-      }
-    >
-      <div className="p-lg">
-        {project && <ProjectTabs projectId={id} />}
-        <div className="max-w-3xl">
-          <h2 className="text-headline-md mb-md">Automation</h2>
-          <p className="text-body-sm text-on-surface-variant mb-lg">
-            Quy tắc <b>Trigger → Action</b>: khi task chuyển sang một trạng thái, tự động gán cho người phụ trách (và gửi thông báo).
-          </p>
+        <HStack gap={2} vAlign="center">
+          {project && <Token label={project.key} />}
+          <Text weight="bold">{project?.name || "Project"}</Text>
+        </HStack>
+      }>
+      <Section variant="transparent" padding={5}>
+        <VStack gap={5} hAlign="stretch">
+          {project && <ProjectTabs projectId={id} />}
 
-          <form onSubmit={create} className="card p-lg mb-lg">
-            <div className="flex flex-wrap items-end gap-sm">
-              <div>
-                <label className="text-label-md text-on-surface-variant">Khi status →</label>
-                <select className="field mt-1 w-40" value={form.triggerStatus} onChange={(e) => setForm({ ...form, triggerStatus: e.target.value })}>
-                  {statusDefs.map((s) => (<option key={s.key} value={s.key}>{s.label}</option>))}
-                </select>
-              </div>
-              <span className="text-body-lg text-on-surface-variant mb-2">tự động gán cho</span>
-              <div>
-                <label className="text-label-md text-on-surface-variant">Thành viên</label>
-                <select className="field mt-1 w-48" value={form.assigneeId} onChange={(e) => setForm({ ...form, assigneeId: e.target.value })}>
-                  <option value="">-- Chọn --</option>
-                  {members.map((m) => (<option key={m.userId} value={m.userId}>{m.displayName || m.email}</option>))}
-                </select>
-              </div>
-              <button className="btn-primary" type="submit" disabled={!form.assigneeId}>
-                <Icon name="add" size={18} /> Thêm rule
-              </button>
-            </div>
-          </form>
+          <VStack gap={4} hAlign="stretch" maxWidth={768}>
+            <VStack gap={1}>
+              <Heading level={2}>Automation</Heading>
+              <Text type="supporting">
+                Quy tắc Trigger → Action: khi task chuyển sang một trạng thái, tự động gán cho
+                người phụ trách (và gửi thông báo).
+              </Text>
+            </VStack>
 
-          <div className="flex flex-col gap-sm">
-            {rules.map((r) => (
-              <div key={r.id} className="card p-md flex items-center justify-between">
-                <div className="flex items-center gap-sm">
-                  <span className="chip bg-secondary-container text-on-secondary-container">{statusLabel(r.triggerStatus)}</span>
-                  <span className="text-body-sm text-on-surface-variant">→ Gán cho</span>
-                  <span className="text-body-sm font-medium text-on-surface">{memberName(r.actionAssigneeId)}</span>
-                </div>
-                <button className="text-on-surface-variant hover:text-error" onClick={async () => { await api.deleteAutomation(r.id).catch(() => {}); load(); }}>
-                  <Icon name="delete" size={18} />
-                </button>
-              </div>
-            ))}
-            {rules.length === 0 && (
-              <div className="card p-xl text-center text-on-surface-variant">Chưa có quy tắc nào.</div>
+            {/* Card ở đây gom một nhóm điều khiển tạo mới — đúng vai trò Card. */}
+            <Card padding={5}>
+              <HStack gap={3} vAlign="end" wrap="wrap">
+                <Selector
+                  label="Khi status →"
+                  value={form.triggerStatus}
+                  onChange={(v) => setForm({ ...form, triggerStatus: v ?? "" })}
+                  options={statusDefs.map((s) => ({ value: s.key, label: s.label }))}
+                />
+                <Selector
+                  label="Tự động gán cho"
+                  value={form.assigneeId}
+                  onChange={(v) => setForm({ ...form, assigneeId: v ?? "" })}
+                  placeholder="-- Chọn --"
+                  options={members.map((m) => ({
+                    value: m.userId,
+                    label: m.displayName || m.email,
+                  }))}
+                  status={error ? { type: "error", message: error } : undefined}
+                />
+                <Button
+                  label="Thêm rule"
+                  variant="primary"
+                  icon={<Icon name="add" size={18} />}
+                  isDisabled={!form.assigneeId}
+                  clickAction={create}
+                />
+              </HStack>
+            </Card>
+
+            {/* Danh sách quy tắc = record quét bằng mắt → rows, không Card. */}
+            {rules.length === 0 ? (
+              <EmptyState title="Chưa có quy tắc nào." />
+            ) : (
+              <List hasDividers>
+                {rules.map((r) => (
+                  <ListItem
+                    key={r.id}
+                    startContent={<Token label={statusLabel(r.triggerStatus)} />}
+                    label={`→ Gán cho ${memberName(r.actionAssigneeId)}`}
+                    endContent={
+                      <IconButton
+                        label="Xoá quy tắc"
+                        tooltip="Xoá quy tắc"
+                        variant="ghost"
+                        size="sm"
+                        icon={<Icon name="delete" size={18} />}
+                        clickAction={async () => {
+                          await api.deleteAutomation(r.id).catch(() => {});
+                          load();
+                        }}
+                      />
+                    }
+                  />
+                ))}
+              </List>
             )}
-          </div>
-        </div>
-      </div>
+          </VStack>
+        </VStack>
+      </Section>
     </AppShell>
   );
 }

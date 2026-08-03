@@ -1,6 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { Section } from "@astryxdesign/core/Section";
+import { Card } from "@astryxdesign/core/Card";
+import { Grid } from "@astryxdesign/core/Grid";
+import { VStack, HStack, StackItem } from "@astryxdesign/core/Layout";
+import { List, ListItem } from "@astryxdesign/core/List";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { Button } from "@astryxdesign/core/Button";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { Badge } from "@astryxdesign/core/Badge";
+import { Banner } from "@astryxdesign/core/Banner";
+import { Token } from "@astryxdesign/core/Token";
+import { Code } from "@astryxdesign/core/Code";
+import { Avatar } from "@astryxdesign/core/Avatar";
+import { Text } from "@astryxdesign/core/Text";
+import { Heading } from "@astryxdesign/core/Heading";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { api, User, UserSession } from "@/lib/api";
 import AppShell from "@/components/layout/AppShell";
 import Icon from "@/components/ui/Icon";
@@ -31,30 +47,42 @@ function PrivacyCard({ email }: { email?: string }) {
   }
 
   return (
-    <div className="card p-lg mb-lg">
-      <h3 className="text-headline-md mb-1">Dữ liệu cá nhân</h3>
-      <p className="text-body-sm text-on-surface-variant mb-md">
-        Quyền truy cập, mang theo và xoá dữ liệu theo GDPR.
-      </p>
-      {err && <p className="text-error text-body-sm mb-sm">{err}</p>}
-      <div className="flex flex-wrap gap-sm">
-        <a className="btn-ghost" href={api.exportMyDataUrl()} download>
-          <Icon name="download" size={18} /> Tải bản sao dữ liệu (JSON)
-        </a>
-        <button className="btn-ghost text-red-500" onClick={erase} disabled={busy}>
-          <Icon name="delete_forever" size={18} /> Xoá tài khoản của tôi
-        </button>
-      </div>
-      <p className="text-body-sm text-on-surface-variant/70 mt-sm">
-        {email ? `Xác nhận bằng email: ${email}` : ""}
-      </p>
-    </div>
+    <Card padding={5}>
+      <VStack gap={4} hAlign="stretch">
+        <VStack gap={1}>
+          <Heading level={3}>Dữ liệu cá nhân</Heading>
+          <Text type="supporting">Quyền truy cập, mang theo và xoá dữ liệu theo GDPR.</Text>
+        </VStack>
+
+        {err && <Banner status="error" title={err} isDismissable onDismiss={() => setErr(null)} />}
+
+        <HStack gap={2} wrap="wrap">
+          <Button
+            label="Tải bản sao dữ liệu (JSON)"
+            variant="ghost"
+            icon={<Icon name="download" size={18} />}
+            href={api.exportMyDataUrl()}
+          />
+          <Button
+            label="Xoá tài khoản của tôi"
+            variant="destructive"
+            icon={<Icon name="delete_forever" size={18} />}
+            isDisabled={busy}
+            clickAction={erase}
+          />
+        </HStack>
+
+        {email && <Text type="supporting">Xác nhận bằng email: {email}</Text>}
+      </VStack>
+    </Card>
   );
 }
 
 /** Enrol / manage TOTP two-factor authentication. */
 function TwoFactorCard() {
-  const [status, setStatus] = useState<{ enabled: boolean; recoveryCodesLeft: number } | null>(null);
+  const [status, setStatus] = useState<{ enabled: boolean; recoveryCodesLeft: number } | null>(
+    null,
+  );
   const [uri, setUri] = useState<string | null>(null);
   const [secret, setSecret] = useState("");
   const [code, setCode] = useState("");
@@ -65,112 +93,149 @@ function TwoFactorCard() {
   const load = useCallback(() => {
     api.twoFactorStatus().then(setStatus).catch(() => setStatus(null));
   }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   async function start() {
-    setBusy(true); setErr(null);
+    setBusy(true);
+    setErr(null);
     try {
       const r = await api.startTwoFactor();
       setUri(r.provisioningUri);
       setSecret(r.secret);
-    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function enable() {
-    setBusy(true); setErr(null);
+    setBusy(true);
+    setErr(null);
     try {
       const r = await api.enableTwoFactor(code.trim());
       setCodes(r.recoveryCodes);
-      setUri(null); setCode("");
+      setUri(null);
+      setCode("");
       load();
-    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function disable() {
     const c = window.prompt("Nhập mã 2FA (hoặc mã khôi phục) để tắt xác thực hai lớp:");
     if (!c) return;
-    setBusy(true); setErr(null);
+    setBusy(true);
+    setErr(null);
     try {
       await api.disableTwoFactor(c.trim());
       setCodes(null);
       load();
-    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
-    <div className="card p-lg mb-lg">
-      <div className="flex items-start justify-between mb-md">
-        <div>
-          <h3 className="text-headline-md">Xác thực hai lớp (2FA)</h3>
-          <p className="text-body-sm text-on-surface-variant mt-1">
-            Dùng ứng dụng như Google Authenticator / Microsoft Authenticator.
-          </p>
-        </div>
-        {status?.enabled && (
-          <span className="chip bg-success-container text-success">Đang bật</span>
+    <Card padding={5}>
+      <VStack gap={4} hAlign="stretch">
+        <HStack gap={4} vAlign="start">
+          <VStack gap={1}>
+            <Heading level={3}>Xác thực hai lớp (2FA)</Heading>
+            <Text type="supporting">
+              Dùng ứng dụng như Google Authenticator / Microsoft Authenticator.
+            </Text>
+          </VStack>
+          <StackItem size="fill" />
+          {status?.enabled && <Badge variant="success" label="Đang bật" />}
+        </HStack>
+
+        {err && <Banner status="error" title={err} isDismissable onDismiss={() => setErr(null)} />}
+
+        {codes && (
+          <Card variant="blue" padding={4}>
+            <VStack gap={2} hAlign="stretch">
+              <Text weight="semibold">
+                Lưu lại các mã khôi phục này — chúng chỉ hiện một lần:
+              </Text>
+              <Grid columns={{ minWidth: 120, repeat: "fit" }} gap={1}>
+                {codes.map((c) => (
+                  <Code key={c}>{c}</Code>
+                ))}
+              </Grid>
+            </VStack>
+          </Card>
         )}
-      </div>
 
-      {err && <p className="text-error text-body-sm mb-sm">{err}</p>}
-
-      {codes && (
-        <div className="mb-md p-md rounded-xl border border-primary/30 bg-primary-container/5">
-          <p className="text-body-sm font-semibold text-on-surface mb-sm">
-            Lưu lại các mã khôi phục này — chúng chỉ hiện một lần:
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 font-mono text-body-sm">
-            {codes.map((c) => (
-              <span key={c} className="px-2 py-1 rounded bg-surface-container text-on-surface">{c}</span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {!status?.enabled && !uri && (
-        <button className="btn-primary" onClick={start} disabled={busy}>
-          <Icon name="shield_lock" size={18} /> Thiết lập 2FA
-        </button>
-      )}
-
-      {uri && (
-        <div className="flex flex-col gap-sm">
-          <p className="text-body-sm text-on-surface-variant">
-            Quét mã QR bằng ứng dụng xác thực, hoặc nhập khoá thủ công:
-          </p>
-          {/* QR rendered by a public chart service; the secret is short-lived
-              and not yet active until confirmed below. */}
-          <img
-            alt="QR 2FA"
-            className="w-40 h-40 rounded-lg border border-outline-variant bg-white p-1"
-            src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(uri)}`}
-          />
-          <code className="text-body-sm bg-surface-container px-2 py-1 rounded break-all">{secret}</code>
-          <div className="flex gap-sm items-center">
-            <input
-              className="field w-40 font-mono tracking-widest"
-              placeholder="000000"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              inputMode="numeric"
+        {!status?.enabled && !uri && (
+          <HStack>
+            <Button
+              label="Thiết lập 2FA"
+              variant="primary"
+              icon={<Icon name="shield_lock" size={18} />}
+              isDisabled={busy}
+              clickAction={start}
             />
-            <button className="btn-primary" onClick={enable} disabled={busy || code.trim().length < 6}>
-              Bật 2FA
-            </button>
-          </div>
-        </div>
-      )}
+          </HStack>
+        )}
 
-      {status?.enabled && (
-        <div className="flex items-center gap-md">
-          <span className="text-body-sm text-on-surface-variant">
-            Còn <b className="text-on-surface">{status.recoveryCodesLeft}</b> mã khôi phục
-          </span>
-          <button className="btn-ghost text-red-500" onClick={disable} disabled={busy}>
-            <Icon name="shield" size={18} /> Tắt 2FA
-          </button>
-        </div>
-      )}
-    </div>
+        {uri && (
+          <VStack gap={3} hAlign="start">
+            <Text type="supporting">
+              Quét mã QR bằng ứng dụng xác thực, hoặc nhập khoá thủ công:
+            </Text>
+            {/* QR rendered by a public chart service; the secret is short-lived
+                and not yet active until confirmed below. */}
+            <img
+              alt="QR 2FA"
+              width={160}
+              height={160}
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(uri)}`}
+            />
+            <Code>{secret}</Code>
+            <HStack gap={2} vAlign="end">
+              <TextInput
+                label="Mã xác thực"
+                isLabelHidden
+                width={160}
+                placeholder="000000"
+                value={code}
+                onChange={setCode}
+                onEnter={() => {
+                  if (code.trim().length >= 6) enable();
+                }}
+              />
+              <Button
+                label="Bật 2FA"
+                variant="primary"
+                isDisabled={busy || code.trim().length < 6}
+                clickAction={enable}
+              />
+            </HStack>
+          </VStack>
+        )}
+
+        {status?.enabled && (
+          <HStack gap={4} vAlign="center">
+            <Text type="supporting">Còn {status.recoveryCodesLeft} mã khôi phục</Text>
+            <Button
+              label="Tắt 2FA"
+              variant="destructive"
+              icon={<Icon name="shield" size={18} />}
+              isDisabled={busy}
+              clickAction={disable}
+            />
+          </HStack>
+        )}
+      </VStack>
+    </Card>
   );
 }
 
@@ -210,7 +275,8 @@ export default function SettingsPage() {
 
   async function revoke(s: UserSession) {
     if (s.current) {
-      if (!window.confirm("Đây là phiên hiện tại. Thu hồi sẽ đăng xuất bạn ngay. Tiếp tục?")) return;
+      if (!window.confirm("Đây là phiên hiện tại. Thu hồi sẽ đăng xuất bạn ngay. Tiếp tục?"))
+        return;
     } else if (!window.confirm("Thu hồi phiên đăng nhập này?")) {
       return;
     }
@@ -231,89 +297,98 @@ export default function SettingsPage() {
 
   return (
     <AppShell title="Cài đặt">
-      <div className="p-lg max-w-3xl">
-        {/* Account */}
-        <div className="card p-lg mb-lg">
-          <h3 className="text-headline-md mb-md">Tài khoản</h3>
-          <div className="flex items-center gap-md">
-            {me?.avatarUrl ? (
-              <img src={me.avatarUrl} alt="" className="w-14 h-14 rounded-full object-cover border border-outline-variant" />
-            ) : (
-              <div className="w-14 h-14 rounded-full bg-primary-container/20 text-primary flex items-center justify-center text-headline-md font-bold">
-                {(me?.displayName || me?.email || "?").charAt(0).toUpperCase()}
-              </div>
-            )}
-            <div className="min-w-0">
-              <p className="text-on-surface font-semibold text-body-lg">{me?.displayName || "—"}</p>
-              <p className="text-on-surface-variant text-body-sm truncate">{me?.email}</p>
-              {me?.isSystemAdmin && (
-                <span className="chip bg-primary text-on-primary mt-1 inline-block">System Admin</span>
+      {/* Settings → FormLayout/Section, Card chỉ để gom nhóm — đúng archetype
+          "Settings / forms" trong `astryx docs layout`. */}
+      <Section variant="transparent" padding={5} maxWidth={768}>
+        <VStack gap={5} hAlign="stretch">
+          <Card padding={5}>
+            <VStack gap={4} hAlign="stretch">
+              <Heading level={3}>Tài khoản</Heading>
+              <HStack gap={4} vAlign="center">
+                <Avatar
+                  name={me?.displayName || me?.email || "?"}
+                  src={me?.avatarUrl || undefined}
+                  size={48}
+                  tooltip={false}
+                />
+                <VStack gap={0.5}>
+                  <Text type="large" weight="semibold">
+                    {me?.displayName || "—"}
+                  </Text>
+                  <Text type="supporting" maxLines={1}>
+                    {me?.email}
+                  </Text>
+                  {me?.isSystemAdmin && <Token label="System Admin" />}
+                </VStack>
+              </HStack>
+            </VStack>
+          </Card>
+
+          <TwoFactorCard />
+          <PrivacyCard email={me?.email} />
+
+          <Card padding={5}>
+            <VStack gap={4} hAlign="stretch">
+              <HStack gap={4} vAlign="start">
+                <VStack gap={1}>
+                  <Heading level={3}>Thiết bị đang đăng nhập</Heading>
+                  <Text type="supporting">Thu hồi để đăng xuất thiết bị đó ngay lập tức.</Text>
+                </VStack>
+                <StackItem size="fill" />
+                <IconButton
+                  label="Tải lại"
+                  tooltip="Tải lại"
+                  variant="ghost"
+                  icon={<Icon name="refresh" size={18} />}
+                  onClick={load}
+                />
+              </HStack>
+
+              {error && (
+                <Banner status="error" title={error} isDismissable onDismiss={() => setError(null)} />
               )}
-            </div>
-          </div>
-        </div>
 
-        <TwoFactorCard />
-        <PrivacyCard email={me?.email} />
-
-        {/* Sessions */}
-        <div className="card p-lg">
-          <div className="flex items-start justify-between mb-md">
-            <div>
-              <h3 className="text-headline-md">Thiết bị đang đăng nhập</h3>
-              <p className="text-body-sm text-on-surface-variant mt-1">
-                Thu hồi để đăng xuất thiết bị đó ngay lập tức.
-              </p>
-            </div>
-            <button className="btn-ghost" onClick={load} title="Tải lại">
-              <Icon name="refresh" size={18} />
-            </button>
-          </div>
-
-          {error && <p className="text-error text-body-sm mb-sm">{error}</p>}
-
-          <div className="flex flex-col gap-sm">
-            {sessions.map((s) => {
-              const d = deviceLabel(s.device);
-              return (
-                <div
-                  key={s.id}
-                  className={`flex items-center gap-md p-md rounded-xl border ${
-                    s.current ? "border-primary/40 bg-primary-container/5" : "border-outline-variant"
-                  }`}
-                >
-                  <div className="w-10 h-10 rounded-lg bg-surface-container-high text-on-surface-variant flex items-center justify-center shrink-0">
-                    <Icon name={d.icon} size={20} />
-                  </div>
-                  <div className="min-w-0 flex-grow">
-                    <p className="text-on-surface font-medium">
-                      {d.label}
-                      {s.current && <span className="chip bg-primary text-on-primary ml-2">Phiên hiện tại</span>}
-                    </p>
-                    <p className="text-body-sm text-on-surface-variant/70 truncate">
-                      IP {s.ip} · hoạt động {new Date(s.lastSeen).toLocaleString()}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => revoke(s)}
-                    disabled={busy === s.id}
-                    className="btn-ghost text-red-500 hover:bg-red-50 disabled:opacity-50 shrink-0"
-                  >
-                    <Icon name="logout" size={18} />
-                    {busy === s.id ? "Đang thu hồi…" : "Thu hồi"}
-                  </button>
-                </div>
-              );
-            })}
-            {sessions.length === 0 && (
-              <p className="text-body-sm text-on-surface-variant/60 py-lg text-center">
-                Không có phiên nào được ghi nhận. Các phiên tạo trước khi bật tính năng này
-                vẫn hoạt động nhưng không hiển thị ở đây.
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
+              {/* Danh sách thiết bị = record quét bằng mắt → rows, không Card. */}
+              {sessions.length === 0 ? (
+                <EmptyState
+                  title="Không có phiên nào được ghi nhận"
+                  description="Các phiên tạo trước khi bật tính năng này vẫn hoạt động nhưng không hiển thị ở đây."
+                  isCompact
+                />
+              ) : (
+                <List hasDividers>
+                  {sessions.map((s) => {
+                    const d = deviceLabel(s.device);
+                    return (
+                      <ListItem
+                        key={s.id}
+                        isSelected={s.current}
+                        startContent={<Icon name={d.icon} size={20} />}
+                        label={d.label}
+                        description={`IP ${s.ip} · hoạt động ${new Date(s.lastSeen).toLocaleString()}`}
+                        endContent={
+                          <HStack gap={2} vAlign="center">
+                            {s.current && <Badge variant="info" label="Phiên hiện tại" />}
+                            <Button
+                              label={busy === s.id ? "Đang thu hồi…" : "Thu hồi"}
+                              variant="destructive"
+                              size="sm"
+                              icon={<Icon name="logout" size={18} />}
+                              isDisabled={busy === s.id}
+                              isLoading={busy === s.id}
+                              clickAction={() => revoke(s)}
+                            />
+                          </HStack>
+                        }
+                      />
+                    );
+                  })}
+                </List>
+              )}
+            </VStack>
+          </Card>
+        </VStack>
+      </Section>
     </AppShell>
   );
 }

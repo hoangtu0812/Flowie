@@ -2,6 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import { Section } from "@astryxdesign/core/Section";
+import { FormLayout } from "@astryxdesign/core/FormLayout";
+import { Grid } from "@astryxdesign/core/Grid";
+import { VStack, HStack } from "@astryxdesign/core/Layout";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { Selector } from "@astryxdesign/core/Selector";
+import { DateInput } from "@astryxdesign/core/DateInput";
+
+/** Kiểu ngày Astryx yêu cầu: chuỗi "YYYY-MM-DD" ở mức template literal. */
+type DateValue = `${number}${number}${number}${number}-${number}${number}-${number}${number}`;
+import { Button } from "@astryxdesign/core/Button";
 import { api, Member, Project } from "@/lib/api";
 import { PRIORITIES } from "@/lib/status";
 
@@ -35,15 +47,17 @@ export default function NewTaskDialog({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.listProjects(workspaceId).then((ps) => {
-      setProjects(ps);
-      setProjectId((cur) => cur || ps[0]?.id || "");
-    }).catch(() => {});
+    api
+      .listProjects(workspaceId)
+      .then((ps) => {
+        setProjects(ps);
+        setProjectId((cur) => cur || ps[0]?.id || "");
+      })
+      .catch(() => {});
     api.listMembers(workspaceId).then(setMembers).catch(() => setMembers([]));
   }, [workspaceId]);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  async function submit() {
     setBusy(true);
     setError(null);
     try {
@@ -62,59 +76,77 @@ export default function NewTaskDialog({
     }
   }
 
+  const close = (open: boolean) => {
+    if (!open) onClose();
+  };
+  const canSubmit = !busy && !!title.trim() && !!projectId;
+
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-md" onClick={onClose}>
-      <form onClick={(e) => e.stopPropagation()} onSubmit={submit} className="card shadow-modal p-lg w-full max-w-md">
-        <h3 className="text-headline-lg text-on-surface mb-md">Công việc mới</h3>
-
-        <label className="block text-label-md text-on-surface-variant mb-1">Dự án</label>
-        <select className="field mb-md" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-          {projects.length === 0 && <option value="">Chưa có dự án nào</option>}
-          {projects.map((p) => (<option key={p.id} value={p.id}>{p.key} · {p.name}</option>))}
-        </select>
-
-        <label className="block text-label-md text-on-surface-variant mb-1">Tiêu đề</label>
-        <input
-          className="field mb-md"
-          placeholder="Rà soát bản thiết kế trang chủ"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          autoFocus
-        />
-
-        <div className="grid grid-cols-2 gap-md mb-lg">
-          <div>
-            <label className="block text-label-md text-on-surface-variant mb-1">Độ ưu tiên</label>
-            <select className="field" value={priority} onChange={(e) => setPriority(e.target.value)}>
-              {Object.entries(PRIORITIES).map(([key, p]) => (
-                <option key={key} value={key}>{p.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-label-md text-on-surface-variant mb-1">Hạn chót</label>
-            <input type="date" className="field" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-          </div>
-          <div className="col-span-2">
-            <label className="block text-label-md text-on-surface-variant mb-1">Người thực hiện</label>
-            <select className="field" value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
-              <option value="">Chưa giao</option>
-              {members.map((m) => (
-                <option key={m.userId} value={m.userId}>{m.displayName || m.email}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {error && <p className="text-error text-body-sm mb-md">{error}</p>}
-
-        <div className="flex justify-end gap-sm">
-          <button type="button" className="btn-ghost" onClick={onClose}>Huỷ</button>
-          <button className="btn-primary" disabled={busy || !title.trim() || !projectId}>
-            {busy ? "Đang tạo…" : "Tạo công việc"}
-          </button>
-        </div>
-      </form>
-    </div>
+    <Dialog isOpen onOpenChange={close} purpose="form" width={480}>
+      <DialogHeader title="Công việc mới" onOpenChange={close} />
+      <VStack gap={0} hAlign="stretch">
+        <Section variant="transparent" padding={4}>
+          <FormLayout>
+            <Selector
+              label="Dự án"
+              value={projectId}
+              onChange={setProjectId}
+              placeholder={projects.length === 0 ? "Chưa có dự án nào" : "Chọn dự án"}
+              options={projects.map((p) => ({ value: p.id, label: `${p.key} · ${p.name}` }))}
+            />
+            <TextInput
+              label="Tiêu đề"
+              placeholder="Rà soát bản thiết kế trang chủ"
+              value={title}
+              onChange={setTitle}
+              hasAutoFocus
+              status={error ? { type: "error", message: error } : undefined}
+            />
+            <Grid columns={2} gap={4}>
+              <Selector
+                label="Độ ưu tiên"
+                value={priority}
+                onChange={setPriority}
+                options={Object.entries(PRIORITIES).map(([key, p]) => ({
+                  value: key,
+                  label: p.label,
+                }))}
+              />
+              {/* DateInput gõ kiểu chặt theo mẫu "YYYY-MM-DD"; state ở đây là
+                  string thường vì API nhận string, nên ép kiểu ở ranh giới. */}
+              <DateInput
+                label="Hạn chót"
+                value={(dueDate || undefined) as DateValue | undefined}
+                onChange={(v) => setDueDate(v ?? "")}
+                isOptional
+              />
+            </Grid>
+            <Selector
+              label="Người thực hiện"
+              value={assigneeId}
+              onChange={(v) => setAssigneeId(v ?? "")}
+              placeholder="Chưa giao"
+              hasClear
+              options={members.map((m) => ({
+                value: m.userId,
+                label: m.displayName || m.email,
+              }))}
+            />
+          </FormLayout>
+        </Section>
+        <Section variant="transparent" padding={4} dividers={["top"]}>
+          <HStack gap={2} justify="end">
+            <Button label="Huỷ" variant="ghost" onClick={onClose} />
+            <Button
+              label={busy ? "Đang tạo…" : "Tạo công việc"}
+              variant="primary"
+              isLoading={busy}
+              isDisabled={!canSubmit}
+              clickAction={submit}
+            />
+          </HStack>
+        </Section>
+      </VStack>
+    </Dialog>
   );
 }
