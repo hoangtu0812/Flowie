@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AppShell as AstryxAppShell } from "@astryxdesign/core/AppShell";
+import { Center } from "@astryxdesign/core/Center";
+import { HStack } from "@astryxdesign/core/Layout";
+import { Spinner } from "@astryxdesign/core/Spinner";
+import { Text } from "@astryxdesign/core/Text";
 import { api, User } from "@/lib/api";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
@@ -19,22 +24,6 @@ export default function AppShell({
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "anon">("loading");
-  const [collapsed, setCollapsed] = useState<boolean>(false);
-
-  useEffect(() => {
-    const saved = localStorage.getItem("sidebar_collapsed");
-    if (saved === "true") {
-      setCollapsed(true);
-    }
-  }, []);
-
-  const toggleSidebar = () => {
-    setCollapsed((prev) => {
-      const next = !prev;
-      localStorage.setItem("sidebar_collapsed", String(next));
-      return next;
-    });
-  };
 
   useEffect(() => {
     (async () => {
@@ -51,24 +40,28 @@ export default function AppShell({
 
   if (state === "loading") {
     return (
-      <div className="min-h-screen grid place-items-center text-on-surface-variant">
-        <div className="flex items-center gap-sm">
-          <span className="material-symbols-outlined animate-spin">progress_activity</span>
-          Đang tải…
-        </div>
-      </div>
+      <Center axis="both" height="100vh">
+        <HStack gap={2} vAlign="center">
+          <Spinner size="sm" />
+          <Text color="secondary">Đang tải…</Text>
+        </HStack>
+      </Center>
     );
   }
   if (state === "anon") return null;
 
   return (
-    <div>
+    <>
       <KeyboardShortcuts />
-      <Sidebar user={user} collapsed={collapsed} onToggle={toggleSidebar} />
-      <main className={`flex flex-col min-h-screen bg-white transition-all duration-300 ${collapsed ? "ml-[70px]" : "ml-[260px]"}`}>
-        <TopBar title={title} user={user} actions={actions} />
-        <div className="flex-grow">{children}</div>
-      </main>
-    </div>
+      {/* contentPadding=0: nội dung chủ đạo của Flowie là bảng/board dày đặc,
+          từng trang tự quyết inset bằng Section (xem `astryx docs layout`).
+          Trạng thái thu gọn sidebar do SideNav tự giữ, không cần shell chỉnh lề. */}
+      <AstryxAppShell
+        sideNav={<Sidebar user={user} />}
+        topNav={<TopBar title={title} user={user} actions={actions} />}
+        contentPadding={0}>
+        {children}
+      </AstryxAppShell>
+    </>
   );
 }

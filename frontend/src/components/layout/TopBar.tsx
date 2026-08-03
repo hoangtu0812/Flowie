@@ -1,12 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { TopNav } from "@astryxdesign/core/TopNav";
+import { Toolbar } from "@astryxdesign/core/Toolbar";
+import { HStack } from "@astryxdesign/core/Layout";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { Kbd } from "@astryxdesign/core/Kbd";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
+import { Avatar } from "@astryxdesign/core/Avatar";
+import { Icon } from "@astryxdesign/core/Icon";
+import { Text } from "@astryxdesign/core/Text";
 import { api, User, Workspace } from "@/lib/api";
-import Icon from "../ui/Icon";
+import { materialIcon } from "../ui/materialIcon";
 import NotificationBell from "./NotificationBell";
 import TimerWidget from "../task/TimerWidget";
 import ThemeToggle from "./ThemeToggle";
+
+const HelpIcon = materialIcon("help_outline");
+const SettingsIcon = materialIcon("settings");
+const WorkspaceIcon = materialIcon("workspaces");
+const LogoutIcon = materialIcon("logout");
 
 export default function TopBar({
   title,
@@ -17,154 +32,123 @@ export default function TopBar({
   user: User | null;
   actions?: React.ReactNode;
 }) {
-  const [menu, setMenu] = useState(false);
-  const [wsMenu, setWsMenu] = useState(false);
+  const router = useRouter();
+  const [search, setSearch] = useState("");
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
 
   useEffect(() => {
-    setActiveWorkspaceId(localStorage.getItem('activeWorkspaceId'));
+    setActiveWorkspaceId(localStorage.getItem("activeWorkspaceId"));
     if (user) {
-      api.listWorkspaces().then(res => setWorkspaces(res || [])).catch(() => {});
+      api.listWorkspaces().then((res) => setWorkspaces(res || [])).catch(() => {});
     }
   }, [user]);
 
+  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
+
+  const workspaceItems =
+    workspaces.length === 0
+      ? [{ label: "Chưa có không gian làm việc", isDisabled: true }]
+      : workspaces.map((ws) => ({
+          label: ws.name,
+          onClick: () => {
+            localStorage.setItem("activeWorkspaceId", ws.id);
+            setActiveWorkspaceId(ws.id);
+            router.push(`/workspaces/${ws.id}`);
+          },
+        }));
+
   return (
-    <header className="flex flex-col w-full sticky top-0 z-40 bg-white">
-      <div className="flex justify-between items-center px-lg h-16 border-b border-outline-variant/30">
-        {/* Left: Search Bar */}
-        <div className="flex items-center gap-6">
-          <div className="relative flex items-center">
-            <Icon
-              name="search"
-              size={18}
-              className="absolute left-3 text-gray-400"
-            />
-            <input
-              className="bg-gray-50/80 border border-gray-100 rounded-full pl-9 pr-12 py-2 w-64 text-[13px] outline-none placeholder-gray-400 focus:bg-white focus:border-gray-200 transition-all shadow-sm"
-              placeholder="Search ..."
+    <>
+      <TopNav
+        label="Thanh điều hướng chính"
+        startContent={
+          <HStack gap={3} vAlign="center">
+            <TextInput
+              label="Tìm kiếm"
+              isLabelHidden
               type="text"
+              placeholder="Tìm kiếm…"
+              value={search}
+              onChange={setSearch}
+              width={240}
             />
-            <div className="absolute right-3 flex items-center">
-              <span className="bg-white border border-gray-200 text-gray-500 rounded px-1.5 py-0.5 text-[10px] font-medium shadow-sm">
-                ⌘K
-              </span>
-            </div>
-          </div>
-          
-          {/* Workspace Selector */}
-          <div className="relative">
-            <button 
-              onClick={() => setWsMenu(!wsMenu)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-[13px] font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
-            >
-              <Icon name="workspaces" size={16} className="text-gray-700" />
-              <span className="max-w-[150px] truncate">
-                {workspaces.find(w => w.id === activeWorkspaceId)?.name || "Select Workspace"}
-              </span>
-              <Icon name="unfold_more" size={16} className="text-gray-400" />
-            </button>
-            {wsMenu && (
-              <div className="absolute left-0 mt-2 w-64 bg-white border border-gray-100 rounded-xl shadow-lg p-2 z-50">
-                <div className="px-3 py-2 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
-                  Your Workspaces
-                </div>
-                {workspaces.length === 0 ? (
-                  <div className="px-3 py-4 text-center text-[13px] text-gray-500">No workspaces found</div>
-                ) : (
-                  <div className="flex flex-col gap-1 max-h-60 overflow-y-auto">
-                    {workspaces.map(ws => (
-                      <Link 
-                        key={ws.id} 
-                        href={`/workspaces/${ws.id}`}
-                        onClick={() => {
-                          setWsMenu(false);
-                          localStorage.setItem('activeWorkspaceId', ws.id);
-                          setActiveWorkspaceId(ws.id);
-                        }}
-                        className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-50 group transition-colors"
-                      >
-                        <div className="w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-white flex items-center justify-center text-gray-500 group-hover:text-gray-900 shrink-0">
-                           <Icon name="folder" size={16} />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[13px] font-semibold text-gray-900 truncate">{ws.name}</p>
-                          <p className="text-[11px] text-gray-500 truncate">/{ws.slug}</p>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Center: Empty Space for clean look */}
-        <div className="flex-1"></div>
-
-        {/* Right: Actions & User */}
-        <div className="flex items-center gap-4">
-          <TimerWidget />
-          <div className="flex items-center gap-3 text-gray-400">
+            <Kbd keys="mod+k" />
+            <DropdownMenu
+              button={{
+                label: activeWorkspace?.name || "Chọn không gian làm việc",
+                icon: <Icon icon={WorkspaceIcon} />,
+                variant: "secondary",
+              }}
+              items={[{ type: "section", title: "Không gian làm việc", items: workspaceItems }]}
+            />
+          </HStack>
+        }
+        endContent={
+          <HStack gap={1} vAlign="center">
+            <TimerWidget />
             <NotificationBell />
             <ThemeToggle />
-            <button className="hover:text-gray-600 transition-colors">
-              <Icon name="help_outline" size={22} />
-            </button>
-            <button className="hover:text-gray-600 transition-colors">
-              <Icon name="settings" size={22} />
-            </button>
-          </div>
+            <IconButton label="Trợ giúp" icon={<Icon icon={HelpIcon} />} variant="ghost" />
+            <IconButton
+              label="Cài đặt"
+              icon={<Icon icon={SettingsIcon} />}
+              variant="ghost"
+              onClick={() => router.push("/settings")}
+            />
+            {user && (
+              <DropdownMenu
+                hasChevron={false}
+                button={{
+                  label: user.displayName || user.email,
+                  isIconOnly: true,
+                  variant: "ghost",
+                  icon: (
+                    <Avatar
+                      name={user.displayName || user.email}
+                      src={user.avatarUrl || undefined}
+                      size="sm"
+                      tooltip={false}
+                    />
+                  ),
+                }}
+                menuWidth={224}
+                items={[
+                  {
+                    type: "section",
+                    title: user.email,
+                    items: [
+                      {
+                        label: "Đăng xuất",
+                        icon: <Icon icon={LogoutIcon} />,
+                        onClick: async () => {
+                          await api.logout();
+                          window.location.href = "/login";
+                        },
+                      },
+                    ],
+                  },
+                ]}
+              />
+            )}
+          </HStack>
+        }
+      />
 
-          {user && (
-            <div className="relative">
-              <button
-                onClick={() => setMenu((m) => !m)}
-                className="w-9 h-9 rounded-full overflow-hidden border border-gray-200 focus:ring-2 focus:ring-gray-200 transition-all bg-gray-50 flex items-center justify-center"
-              >
-                <img 
-                  src={user.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || user.email)}&background=random`} 
-                  alt="Avatar" 
-                  className="w-full h-full object-cover" 
-                />
-              </button>
-              {menu && (
-                <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-100 rounded-xl shadow-lg p-2 z-50">
-                  <div className="px-3 py-2">
-                    <p className="text-[14px] font-semibold text-gray-900 truncate">{user.displayName || "Thành viên"}</p>
-                    <p className="text-[12px] text-gray-500 truncate">
-                      {user.email}
-                    </p>
-                  </div>
-                  <div className="h-px bg-gray-100 my-1" />
-                  <button
-                    onClick={async () => {
-                      await api.logout();
-                      window.location.href = "/login";
-                    }}
-                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 text-[13px] font-medium text-gray-700 flex items-center gap-2"
-                  >
-                    <Icon name="logout" size={18} />
-                    Đăng xuất
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Page header row.
-          `title` and `actions` were accepted as props but never rendered, so
-          every page-level button in the app (Dự án mới, Sprint mới, Tạo mới,
-          xuất CSV…) was invisible. */}
+      {/* Hàng tiêu đề trang. `title` và `actions` từng được nhận làm prop nhưng
+          không hề render, khiến mọi nút cấp trang (Dự án mới, Sprint mới, Tạo
+          mới, xuất CSV…) trở nên vô hình. Giữ nguyên hành vi đã sửa. */}
       {(title || actions) && (
-        <div className="flex items-center justify-between gap-4 px-lg py-3 border-b border-outline-variant/30">
-          <div className="text-[18px] font-bold text-on-surface min-w-0 truncate">{title}</div>
-          {actions && <div className="flex items-center gap-sm shrink-0">{actions}</div>}
-        </div>
+        <Toolbar
+          label="Hành động của trang"
+          startContent={
+            <Text type="large" weight="bold" maxLines={1}>
+              {title}
+            </Text>
+          }
+          endContent={actions}
+        />
       )}
-    </header>
+    </>
   );
 }

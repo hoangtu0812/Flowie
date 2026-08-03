@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { Theme } from "@astryxdesign/core";
+import { InternationalizationProvider } from "@astryxdesign/core/i18n";
 import { neutralTheme } from "@astryxdesign/theme-neutral/built";
 import { readStoredTheme, type Theme as ThemeChoice } from "@/components/layout/ThemeToggle";
+import { astryxVi } from "@/lib/astryxLocaleVi";
 
 /**
  * Cầu nối giữa cơ chế theme sẵn có của Flowie và Theme provider của Astryx.
@@ -30,9 +32,13 @@ export default function AstryxProvider({ children }: { children: React.ReactNode
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
+  // Astryx không ship catalog `vi`; overrides là bản vá thưa đặt lên trên `en`,
+  // nên chuỗi chưa dịch vẫn hiển thị (bằng tiếng Anh) thay vì vỡ.
   return (
-    <Theme theme={neutralTheme} mode={mode}>
-      {children}
-    </Theme>
+    <InternationalizationProvider locale="vi" overrides={{ vi: astryxVi }}>
+      <Theme theme={neutralTheme} mode={mode}>
+        {children}
+      </Theme>
+    </InternationalizationProvider>
   );
 }

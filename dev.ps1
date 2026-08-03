@@ -22,6 +22,16 @@
 .PARAMETER Force
     Bỏ qua bước xác nhận cho -Reset / -ResetData.
 
+.PARAMETER Docker
+    Chạy TẤT CẢ trong Docker (db + backend + frontend) qua profile "full".
+    Mặc định (không có cờ này) chỉ db chạy Docker, backend/frontend chạy trên
+    host để sửa code thấy ngay — không phải rebuild image.
+
+.PARAMETER Rebuild
+    Chỉ dùng với -Docker: build lại image, không dùng cache lớp cũ.
+    Bắt buộc dùng khi đổi APP_BASE_URL, vì NEXT_PUBLIC_API_BASE được nhúng
+    vào bundle frontend lúc build.
+
 .PARAMETER DbPort
     Cổng host map vào Postgres. Mặc định lấy POSTGRES_PORT trong .env (5432).
     Dùng khi 5432 đã bị project khác chiếm — script tự đồng bộ cổng vào DATABASE_URL.
@@ -64,6 +74,9 @@ param(
     [switch]$Reset,
     [switch]$ResetData,
     [switch]$Force,
+
+    [switch]$Docker,
+    [switch]$Rebuild,
 
     [int]$DbPort = 0,
 
@@ -142,6 +155,39 @@ function Stop-ProcessTree {
     return $count
 }
 
+# Chờ backend trả lời /healthz. Dùng chung cho cả chế độ host lẫn Docker
+# (Docker cần lâu hơn vì còn build image + chạy migration lần đầu).
+function Wait-Backend {
+    param([string]$BaseUrl, [int]$TimeoutSec = 60)
+    for ($i = 0; $i -lt $TimeoutSec; $i++) {
+        try {
+            $resp = Invoke-WebRequest -Uri "$BaseUrl/healthz" -UseBasicParsing -TimeoutSec 2
+            if ($resp.StatusCode -eq 200) { return $true }
+        } catch {
+            # backend chưa lên — thử lại
+        }
+        Start-Sleep -Seconds 1
+    }
+    return $false
+}
+
+# Provision admin ảo qua endpoint dev-login (chỉ sống khi APP_ENV=development).
+function New-MockAdmin {
+    param([string]$BaseUrl, [string]$Email, [string]$Name)
+    $q = "email=$([uri]::EscapeDataString($Email))&name=$([uri]::EscapeDataString($Name))"
+    try {
+        $r = Invoke-WebRequest -Uri "$BaseUrl/api/v1/auth/dev-login?$q" -UseBasicParsing -TimeoutSec 10
+        $user = $r.Content | ConvertFrom-Json
+        if ($user.mfaRequired) {
+            Write-Warn "User $Email đã bật 2FA — cần mã TOTP khi đăng nhập"
+        } else {
+            Write-Ok "Đã provision $Email (system admin)"
+        }
+    } catch {
+        Write-Warn "Không provision được admin ảo: $($_.Exception.Message)"
+    }
+}
+
 function Stop-DevEnv {
     Write-Step 'Dừng môi trường dev'
     if (Test-Path $PidFile) {
@@ -159,8 +205,10 @@ function Stop-DevEnv {
     } else {
         Write-Note 'Không có tiến trình nào do script này khởi động'
     }
-    docker compose -f (Join-Path $RepoRoot 'docker-compose.yml') stop db
-    if ($LASTEXITCODE -eq 0) { Write-Ok 'Đã stop container db' }
+    # --profile full để lệnh chạm được cả backend/frontend nếu chúng đang chạy
+    # trong container; không có cờ này compose bỏ qua service sau profile.
+    docker compose -f (Join-Path $RepoRoot 'docker-compose.yml') --profile full stop
+    if ($LASTEXITCODE -eq 0) { Write-Ok 'Đã stop container (db + backend/frontend nếu có)' }
     exit 0
 }
 
@@ -179,8 +227,11 @@ Write-Host '  ──────────────────────
 
 Write-Step 'Kiểm tra công cụ'
 Assert-Command 'docker' 'Cài Docker Desktop.'
-if (-not $NoBackend -and -not $DbOnly)  { Assert-Command 'go' 'Cài Go 1.22+.' }
-if (-not $NoFrontend -and -not $DbOnly) { Assert-Command 'npm' 'Cài Node.js 20+.' }
+# Ở chế độ -Docker mọi thứ build trong container, host không cần go/npm.
+if (-not $Docker) {
+    if (-not $NoBackend -and -not $DbOnly)  { Assert-Command 'go' 'Cài Go 1.22+.' }
+    if (-not $NoFrontend -and -not $DbOnly) { Assert-Command 'npm' 'Cài Node.js 20+.' }
+}
 Write-Ok 'Đủ công cụ'
 
 Write-Step 'Nạp cấu hình'
@@ -328,9 +379,42 @@ if ($DbOnly) {
     exit 0
 }
 
-# ── Khởi động backend ────────────────────────────────────────
 $started = @()
 
+# ═══ Chế độ Docker: db + backend + frontend đều trong container ═══
+if ($Docker) {
+    Write-Step 'Build & khởi động backend + frontend trong Docker'
+
+    $upArgs = @('compose', '-f', $ComposeFile, '--profile', 'full', 'up', '-d')
+    if ($Rebuild) {
+        $upArgs += @('--build', '--force-recreate')
+        Write-Note 'Rebuild image, bỏ qua cache'
+    } else {
+        $upArgs += '--build'
+    }
+
+    # Build image frontend mất vài phút lần đầu (npm ci + next build).
+    & docker @upArgs
+    if ($LASTEXITCODE -ne 0) { Fail 'docker compose up thất bại — xem log phía trên' }
+    Write-Ok 'Container đã lên'
+
+    Write-Note 'Đợi backend /healthz…'
+    $healthy = Wait-Backend -BaseUrl $ApiBase -TimeoutSec 120
+    if ($healthy) {
+        Write-Ok "Backend sẵn sàng tại $ApiBase (migration đã áp dụng)"
+    } else {
+        Write-Warn 'Backend chưa trả lời /healthz sau 120s'
+        Write-Note 'Xem log:  docker compose --profile full logs backend'
+    }
+
+    if ($Mode -eq 'mock' -and $healthy) {
+        Write-Step 'Tạo admin ảo'
+        New-MockAdmin -BaseUrl $ApiBase -Email $AdminEmail -Name $AdminName
+    }
+}
+else {
+
+# ── Khởi động backend (host) ─────────────────────────────────
 if (-not $NoBackend) {
     Write-Step 'Khởi động backend (go run ./cmd/api)'
     $backendProc = Start-Process -FilePath 'powershell' -PassThru -ArgumentList @(
@@ -341,37 +425,17 @@ if (-not $NoBackend) {
     Write-Ok "Backend đang khởi động (PID $($backendProc.Id))"
 
     Write-Note 'Đợi /healthz…'
-    $healthy = $false
-    for ($i = 0; $i -lt 60; $i++) {
-        try {
-            $resp = Invoke-WebRequest -Uri "$ApiBase/healthz" -UseBasicParsing -TimeoutSec 2
-            if ($resp.StatusCode -eq 200) { $healthy = $true; break }
-        } catch {
-            # backend chưa lên — thử lại
-        }
-        Start-Sleep -Seconds 1
-    }
+    $healthy = Wait-Backend -BaseUrl $ApiBase -TimeoutSec 60
     if ($healthy) {
         Write-Ok "Backend sẵn sàng tại $ApiBase (migration đã áp dụng)"
     } else {
-        Write-Warn "Backend chưa trả lời /healthz sau 60s — xem cửa sổ backend để biết lỗi"
+        Write-Warn 'Backend chưa trả lời /healthz sau 60s — xem cửa sổ backend để biết lỗi'
     }
 
     # ── Cấp admin ảo ─────────────────────────────────────────
     if ($Mode -eq 'mock' -and $healthy) {
         Write-Step 'Tạo admin ảo'
-        $q = "email=$([uri]::EscapeDataString($AdminEmail))&name=$([uri]::EscapeDataString($AdminName))"
-        try {
-            $r = Invoke-WebRequest -Uri "$ApiBase/api/v1/auth/dev-login?$q" -UseBasicParsing -TimeoutSec 10
-            $user = $r.Content | ConvertFrom-Json
-            if ($user.mfaRequired) {
-                Write-Warn "User $AdminEmail đã bật 2FA — cần mã TOTP khi đăng nhập"
-            } else {
-                Write-Ok "Đã provision $AdminEmail (system admin)"
-            }
-        } catch {
-            Write-Warn "Không provision được admin ảo: $($_.Exception.Message)"
-        }
+        New-MockAdmin -BaseUrl $ApiBase -Email $AdminEmail -Name $AdminName
     }
 }
 
@@ -391,6 +455,8 @@ if (-not $NoFrontend) {
     $started += [pscustomobject]@{ Name = 'frontend'; Pid = $frontendProc.Id }
     Write-Ok "Frontend đang khởi động (PID $($frontendProc.Id))"
 }
+
+} # hết nhánh chạy trên host
 
 if ($started.Count -gt 0) {
     $started | ConvertTo-Json -Depth 3 | Out-File -FilePath $PidFile -Encoding utf8
@@ -417,5 +483,10 @@ if ($Mode -eq 'mock') {
 }
 
 Write-Host ''
+if ($Docker) {
+    Write-Host '  Chạy trong Docker (profile "full")' -ForegroundColor DarkGray
+    Write-Host '  Xem log:      docker compose --profile full logs -f' -ForegroundColor DarkGray
+    Write-Host '  Sửa code xong phải build lại:  .\dev.ps1 -Docker -Rebuild' -ForegroundColor DarkGray
+}
 Write-Host '  Dừng tất cả:  .\dev.ps1 -Stop' -ForegroundColor DarkGray
 Write-Host ''

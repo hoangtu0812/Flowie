@@ -44,6 +44,9 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-flowie}:${POSTGRES_PASSWORD:-flowie_dev_password}@db:5432/${POSTGRES_DB:-flowie}?sslmode=disable
       SESSION_SECRET: ${SESSION_SECRET}
       SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-24}
+      # Bắt buộc cho chế độ admin ảo: DevLogin chỉ cấp quyền system admin khi
+      # email nằm trong danh sách này (xem handlers.DevLogin).
+      SYSTEM_ADMIN_EMAILS: ${SYSTEM_ADMIN_EMAILS}
       AZURE_AD_TENANT_ID: ${AZURE_AD_TENANT_ID}
       AZURE_AD_CLIENT_ID: ${AZURE_AD_CLIENT_ID}
       AZURE_AD_CLIENT_SECRET: ${AZURE_AD_CLIENT_SECRET}
@@ -55,7 +58,29 @@ services:
       SHAREPOINT_ROOT_FOLDER: ${SHAREPOINT_ROOT_FOLDER:-/Flowie}
     ports:
       - "${APP_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
     # Bật khi cần chạy backend trong container. Dev thường chạy `make run` ở host.
+    profiles: ["full"]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # NEXT_PUBLIC_* nhúng lúc build => phải là URL trình duyệt gọi được.
+        # Dùng APP_BASE_URL (http://localhost:8080), KHÔNG dùng http://backend:8080.
+        NEXT_PUBLIC_API_BASE: ${APP_BASE_URL:-http://localhost:8080}
+    container_name: flowie-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
     profiles: ["full"]
 
 volumes:

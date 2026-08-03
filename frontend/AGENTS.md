@@ -62,16 +62,39 @@ Phần này viết tay, nằm ngoài vùng `ASTRYX:START/END` nên `astryx upgra
       2. `xstyle` + `stylex.create()` (StyleX 0.19 đã có sẵn)
       3. class Tailwind v3 hiện có — chấp nhận tạm, không thêm mới
 
+### Hai tiện ích dùng chung — đọc trước khi viết UI mới
+
+- **`src/lib/astryxLocaleVi.ts`** — Astryx chỉ ship `en` / `fr-FR`. App bọc
+  trong `InternationalizationProvider locale="vi"` với overrides thưa. Thấy chữ
+  tiếng Anh lọt ra từ component Astryx → tra key trong
+  `node_modules/@astryxdesign/core/locales/en.json` rồi thêm vào file này.
+  **Đừng** vá bằng prop label ở từng chỗ gọi (sẽ thành hai nguồn sự thật).
+- **`src/components/ui/materialIcon.tsx`** — registry semantic của Astryx chỉ
+  có 26 tên, không đủ cho nav. Hàm này bọc glyph Material Symbols sẵn có thành
+  component khớp `IconType`. Dùng `materialIcon("dashboard")` cho prop `icon`.
+
 ### Tiến độ migrate
 
-| Trang | Trạng thái |
+| Vùng | Trạng thái |
 |---|---|
-| `src/app/login/page.tsx` | ✅ đã chuyển — dùng làm bản mẫu tham chiếu |
-| 24 trang còn lại trong `src/app/**` | ⬜ chưa chuyển (Tailwind v3 + div thô) |
-| `src/components/**` | ⬜ chưa chuyển |
+| `components/layout/AppShell.tsx` | ✅ Astryx `AppShell` |
+| `components/layout/Sidebar.tsx` | ✅ `SideNav` + `SideNavSection` + `SideNavItem` |
+| `components/layout/TopBar.tsx` | ✅ `TopNav` + `Toolbar` + `DropdownMenu` |
+| `app/login/page.tsx` | ✅ theo template `login-split` |
+| 23 trang còn lại trong `app/**` | ⬜ chưa chuyển (Tailwind v3 + div thô) |
+| `components/task/**`, `components/reports/**`, `components/ui/**` | ⬜ chưa chuyển |
 
 Khi migrate một trang: chạy `npx astryx build "<mô tả trang>"` trước để lấy
 template/block gợi ý, đừng tự đoán component.
+
+### Bẫy đã gặp
+
+- Next dev-tools badge mặc định ở góc dưới TRÁI, đè lên nút thu gọn SideNav và
+  nuốt click. Đã dời sang phải bằng `devIndicators.position` trong
+  `next.config.mjs`. Chỉ ảnh hưởng dev, nhưng đừng dời lại.
+- `TextInput` không nhận `type="search"` (chỉ text/password/email).
+  `Kbd` cần prop `keys` (`<Kbd keys="mod+k" />`), không nhận children.
+  `Item` dùng `startContent`, không phải `start`.
 
 ### Archetype của Flowie
 
