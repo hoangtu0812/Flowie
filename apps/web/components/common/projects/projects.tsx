@@ -2,14 +2,16 @@
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { projects as allProjects, Project } from '@/mock-data/projects';
-import { teams } from '@/mock-data/teams';
+import { health as healthOptions, Project } from '@/mock-data/projects';
+import { priorities } from '@/mock-data/priorities';
+import { status as statuses } from '@/mock-data/status';
+import { FolderKanban } from 'lucide-react';
 import { useProjectsFilterStore } from '@/store/projects-filter-store';
 import { useProjectsDisplayStore } from '@/store/projects-display-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { BarChart3 } from 'lucide-react';
 import { parseAsStringLiteral, useQueryState } from 'nuqs';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Filter } from '@/components/layout/headers/projects/filter';
 import ProjectsBoard from './projects-board';
 import { ProjectsDisplayOptions } from './projects-display-options';
@@ -23,6 +25,93 @@ export interface ProjectGroup {
    icon?: string;
    projects: Project[];
 }
+
+type ApiProject = {
+   id: string;
+   name: string;
+   status: string;
+   priority: string;
+   health: string;
+   startDate: string | null;
+   targetDate: string | null;
+   createdAt: string;
+   teamId: string | null;
+   team: { id: string; name: string; icon: string | null } | null;
+   lead: { id: string; name: string; avatarUrl: string | null } | null;
+   issues: Array<{
+      id: string;
+      status: { category: string };
+      assignee: { id: string; name: string; avatarUrl: string | null } | null;
+   }>;
+   _count: { issues: number };
+};
+
+const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+
+const mapStatus = (value: string) => {
+   const normalized = value.toLowerCase();
+   const category =
+      normalized === 'completed' || normalized === 'done'
+         ? 'completed'
+         : normalized === 'canceled' || normalized === 'cancelled'
+           ? 'canceled'
+           : normalized === 'started' || normalized === 'in-progress' || normalized === 'active'
+             ? 'started'
+             : normalized === 'backlog'
+               ? 'backlog'
+               : 'unstarted';
+   return statuses.find((status) => status.category === category) ?? statuses[0];
+};
+
+const mapProject = (project: ApiProject): Project & { issueCount: number } => {
+   const completed = project.issues.filter((issue) => issue.status.category === 'COMPLETED').length;
+   const lead = project.lead
+      ? {
+           id: project.lead.id,
+           name: project.lead.name,
+           avatarUrl: project.lead.avatarUrl ?? '',
+           email: '',
+           status: 'offline' as const,
+           role: 'Member' as const,
+           joinedDate: project.createdAt,
+           teamIds: [],
+           timezone: 'UTC',
+        }
+      : {
+           id: `unassigned-${project.id}`,
+           name: 'Unassigned',
+           avatarUrl: '',
+           email: '',
+           status: 'offline' as const,
+           role: 'Member' as const,
+           joinedDate: project.createdAt,
+           teamIds: [],
+           timezone: 'UTC',
+        };
+   const priority =
+      priorities.find(
+         (item) => item.id === (project.priority === 'none' ? 'no-priority' : project.priority)
+      ) ?? priorities[0];
+   const health = healthOptions.find((item) => item.id === project.health) ?? healthOptions[0];
+
+   return {
+      id: project.id,
+      name: project.name,
+      status: mapStatus(project.status),
+      icon: FolderKanban,
+      percentComplete: project.issues.length
+         ? Math.round((completed / project.issues.length) * 100)
+         : 0,
+      startDate: project.startDate ?? project.createdAt,
+      targetDate: project.targetDate ?? undefined,
+      lead,
+      priority,
+      health,
+      teamId: project.teamId ?? '',
+      labels: [],
+      issueCount: project._count.issues,
+   };
+};
 
 const TABS = ['all', 'active'] as const;
 
@@ -46,7 +135,45 @@ export default function Projects({ teamId }: { teamId?: string }) {
       useProjectsDisplayStore();
    const { openPanel, togglePanel } = useRightPanelStore();
    const [tab, setTab] = useQueryState('tab', parseAsStringLiteral(TABS).withDefault('all'));
+   const [allProjects, setAllProjects] = useState<Array<Project & { issueCount: number }>>([]);
+   const [teamGroups, setTeamGroups] = useState<Array<{ id: string; name: string; icon?: string }>>(
+      []
+   );
+   const [loadError, setLoadError] = useState<string>();
    const viewType = viewTypes[tab];
+
+   useEffect(() => {
+      void (async () => {
+         const workspacesResponse = await fetch(`${api}/workspaces/me`, { credentials: 'include' });
+         if (!workspacesResponse.ok) throw new Error('Could not load the current workspace.');
+         const workspaces = (await workspacesResponse.json()) as {
+            data: Array<{ workspace: { id: string } }>;
+         };
+         const workspaceId = workspaces.data[0]?.workspace.id;
+         if (!workspaceId) throw new Error('No workspace is available for this account.');
+         const response = await fetch(`${api}/projects?workspaceId=${workspaceId}`, {
+            credentials: 'include',
+         });
+         if (!response.ok) throw new Error('Could not load projects.');
+         const payload = (await response.json()) as { data: ApiProject[] };
+         setAllProjects(payload.data.map(mapProject));
+         setTeamGroups(
+            Array.from(
+               new Map(
+                  payload.data
+                     .map((project) => project.team)
+                     .filter((team): team is NonNullable<typeof team> => Boolean(team))
+                     .map((team) => [
+                        team.id,
+                        { id: team.id, name: team.name, icon: team.icon ?? undefined },
+                     ])
+               ).values()
+            )
+         );
+      })().catch((error: unknown) =>
+         setLoadError(error instanceof Error ? error.message : 'Could not load projects.')
+      );
+   }, []);
 
    const displayed = useMemo(() => {
       let list = allProjects.slice();
@@ -81,13 +208,13 @@ export default function Projects({ teamId }: { teamId?: string }) {
          }
       };
       return list.sort(compare);
-   }, [tab, closedProjects, filters, ordering, teamId]);
+   }, [allProjects, tab, closedProjects, filters, ordering, teamId]);
 
    const groups = useMemo<ProjectGroup[]>(() => {
       if (grouping === 'none') {
          return [{ id: 'all', name: 'All projects', projects: displayed }];
       }
-      return teams
+      const grouped = teamGroups
          .map((team) => ({
             id: team.id,
             name: team.name,
@@ -95,7 +222,17 @@ export default function Projects({ teamId }: { teamId?: string }) {
             projects: displayed.filter((project) => project.teamId === team.id),
          }))
          .filter((group) => showEmptyGroups || group.projects.length > 0);
-   }, [displayed, grouping, showEmptyGroups]);
+      const unassigned = displayed.filter((project) => !project.teamId);
+      if (unassigned.length > 0 || showEmptyGroups) {
+         grouped.push({
+            id: 'unassigned',
+            name: 'Unassigned',
+            icon: undefined,
+            projects: unassigned,
+         });
+      }
+      return grouped;
+   }, [displayed, grouping, showEmptyGroups, teamGroups]);
 
    return (
       <div className="w-full h-full flex flex-col overflow-hidden">
@@ -144,10 +281,11 @@ export default function Projects({ teamId }: { teamId?: string }) {
 
             {openPanel === 'insights' && (
                <aside className="hidden lg:flex w-[360px] shrink-0 border-l h-full overflow-hidden bg-container">
-                  <ProjectsInsightsPanel projects={displayed} />
+                  <ProjectsInsightsPanel projects={displayed} groups={groups} />
                </aside>
             )}
          </div>
+         {loadError && <p className="px-6 py-3 text-sm text-destructive">{loadError}</p>}
       </div>
    );
 }

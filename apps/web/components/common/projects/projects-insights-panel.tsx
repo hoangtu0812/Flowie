@@ -5,15 +5,15 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { health as healthList, Project } from '@/mock-data/projects';
-import { teams } from '@/mock-data/teams';
-import { users } from '@/mock-data/users';
 import { useProjectsFilterStore } from '@/store/projects-filter-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { X } from 'lucide-react';
 import { useMemo } from 'react';
+import { ProjectGroup } from './projects';
 
 interface ProjectsInsightsPanelProps {
    projects: Project[];
+   groups: ProjectGroup[];
 }
 
 interface CountRow {
@@ -63,7 +63,7 @@ function CountList({ rows }: { rows: CountRow[] }) {
 }
 
 /** Right panel of the Projects page: counters by health / team / lead. */
-export default function ProjectsInsightsPanel({ projects }: ProjectsInsightsPanelProps) {
+export default function ProjectsInsightsPanel({ projects, groups }: ProjectsInsightsPanelProps) {
    const { closePanel } = useRightPanelStore();
    const { filters, toggleFilter } = useProjectsFilterStore();
 
@@ -87,27 +87,27 @@ export default function ProjectsInsightsPanel({ projects }: ProjectsInsightsPane
 
    const teamRows = useMemo<CountRow[]>(
       () =>
-         teams
-            .map((team) => ({
-               key: team.id,
-               label: team.name,
-               leading: <span className="text-sm shrink-0">{team.icon}</span>,
-               count: projects.filter((project) => project.teamId === team.id).length,
+         groups
+            .map((group) => ({
+               key: group.id,
+               label: group.name,
+               leading: <span className="text-sm shrink-0">{group.icon}</span>,
+               count: projects.filter((project) => project.teamId === group.id).length,
             }))
             .filter((row) => row.count > 0)
             .sort((a, b) => b.count - a.count),
-      [projects]
+      [groups, projects]
    );
 
    const leadRows = useMemo<CountRow[]>(
       () =>
-         users
+         Array.from(new Map(projects.map((project) => [project.lead.id, project.lead])).values())
             .map((user) => ({
                key: user.id,
                label: user.name,
                leading: (
                   <Avatar className="size-5 shrink-0">
-                     <AvatarImage src={user.avatarUrl} alt={user.name} />
+                     <AvatarImage src={user.avatarUrl || undefined} alt={user.name} />
                      <AvatarFallback>{user.name[0]}</AvatarFallback>
                   </Avatar>
                ),

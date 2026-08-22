@@ -1,12 +1,9 @@
 'use client';
 
-import { Issue } from '@/mock-data/issues';
 import { Project } from '@/mock-data/projects';
-import { useIssuesStore } from '@/store/issues-store';
 import { useProjectsDisplayStore } from '@/store/projects-display-store';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useMemo } from 'react';
 import { HealthPopover } from './health-popover';
 import { PrioritySelector } from './priority-selector';
 import { LeadSelector } from './lead-selector';
@@ -14,17 +11,13 @@ import { StatusWithPercent } from './status-with-percent';
 import { DatePicker } from './date-picker';
 
 interface ProjectLineProps {
-   project: Project;
+   project: Project & { issueCount?: number };
 }
-
-const countIssues = (issues: Issue[], projectId: string) =>
-   issues.filter((issue) => issue.project?.id === projectId).length;
 
 export default function ProjectLine({ project }: ProjectLineProps) {
    const { orgId } = useParams<{ orgId: string }>();
-   const { issues } = useIssuesStore();
    const { displayProperties } = useProjectsDisplayStore();
-   const issueCount = useMemo(() => countIssues(issues, project.id), [issues, project.id]);
+   const issueCount = project.issueCount ?? 0;
 
    return (
       <div className="w-full flex items-center py-3 px-6 border-b hover:bg-sidebar/50 border-muted-foreground/5 text-sm">
