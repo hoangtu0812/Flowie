@@ -17,7 +17,15 @@ export class TeamsService {
       await this.authorize(workspaceId, userId);
       return this.prisma.team.findMany({
          where: { workspaceId, archivedAt: null, members: { some: { userId } } },
-         include: { members: { include: { user: true } } },
+         include: {
+            members: {
+               select: {
+                  role: true,
+                  user: { select: { id: true, name: true, avatarUrl: true } },
+               },
+            },
+            _count: { select: { projects: true, cycles: true } },
+         },
          orderBy: { name: 'asc' },
       });
    }
