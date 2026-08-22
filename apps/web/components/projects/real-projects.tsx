@@ -11,6 +11,7 @@ type Project = {
    name: string;
    status: string;
    priority: string;
+   type: string;
    team: { name: string } | null;
 };
 type Team = { id: string; name: string; identifier: string };
@@ -29,6 +30,7 @@ export function RealProjects({ teamId }: { teamId?: string }) {
    const [name, setName] = useState('');
    const [identifier, setIdentifier] = useState('');
    const [selectedTeamId, setSelectedTeamId] = useState(teamId ?? '');
+   const [projectType, setProjectType] = useState('GENERAL');
 
    const load = useCallback(async () => {
       const workspaceResponse = await fetch(`${api}/workspaces/me`, { credentials: 'include' });
@@ -76,6 +78,7 @@ export function RealProjects({ teamId }: { teamId?: string }) {
                workspaceId,
                name: name.trim(),
                identifier: identifier.trim().toUpperCase(),
+               type: projectType,
                ...(selectedTeamId ? { teamId: selectedTeamId } : {}),
             }),
          });
@@ -89,6 +92,7 @@ export function RealProjects({ teamId }: { teamId?: string }) {
          }
          setName('');
          setIdentifier('');
+         setProjectType('GENERAL');
          setCreating(false);
          await load();
       } catch (caught) {
@@ -151,6 +155,26 @@ export function RealProjects({ teamId }: { teamId?: string }) {
                   />
                </div>
                <div>
+                  <label className="text-sm font-medium" htmlFor="project-type">
+                     Loại dự án
+                  </label>
+                  <select
+                     id="project-type"
+                     className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                     value={projectType}
+                     onChange={(event) => setProjectType(event.target.value)}
+                  >
+                     <option value="GENERAL">Tổng quát</option>
+                     <option value="PRODUCT">Sản phẩm</option>
+                     <option value="MARKETING">Marketing</option>
+                     <option value="OPERATIONS">Vận hành</option>
+                     <option value="EVENT">Sự kiện</option>
+                     <option value="CLIENT">Khách hàng</option>
+                     <option value="RESEARCH">Nghiên cứu</option>
+                     <option value="CUSTOM">Tùy chỉnh</option>
+                  </select>
+               </div>
+               <div>
                   <label className="text-sm font-medium" htmlFor="project-team">
                      Team
                   </label>
@@ -208,6 +232,9 @@ export function RealProjects({ teamId }: { teamId?: string }) {
                         </p>
                      </div>
                      <span className="rounded bg-muted px-2 py-1 text-xs">{project.status}</span>
+                     <span className="text-xs text-muted-foreground">
+                        {project.type.toLowerCase()}
+                     </span>
                      <span className="text-xs text-muted-foreground">{project.priority}</span>
                   </Link>
                ))}

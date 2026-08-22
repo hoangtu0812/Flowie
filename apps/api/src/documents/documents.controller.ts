@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+   Body,
+   Controller,
+   Delete,
+   Get,
+   Param,
+   Patch,
+   Post,
+   Query,
+   Req,
+   UseGuards,
+} from '@nestjs/common';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
@@ -33,5 +44,14 @@ export class DocumentsController {
       return {
          data: await this.documents.update(documentId, workspaceId, dto, request.auth!.userId),
       };
+   }
+
+   @Delete(':documentId')
+   async archive(
+      @Param('documentId') documentId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.documents.archive(documentId, workspaceId, request.auth!.userId) };
    }
 }

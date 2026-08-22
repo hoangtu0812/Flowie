@@ -44,6 +44,9 @@ importers:
       argon2:
         specifier: ^0.45.1
         version: 0.45.1
+      bullmq:
+        specifier: ^5.51.8
+        version: 5.81.3
       class-transformer:
         specifier: ^0.5.1
         version: 0.5.1
@@ -295,6 +298,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@circle/database':
+        specifier: workspace:^
+        version: link:../../packages/database
       bullmq:
         specifier: ^5.51.8
         version: 5.81.3

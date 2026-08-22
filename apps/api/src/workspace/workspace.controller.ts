@@ -1,7 +1,10 @@
-import { Controller, Get, Param, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiCookieAuth, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { WorkspaceService } from './workspace.service';
+import { CreateWorkspaceDto } from './dto/create-workspace.dto';
+import { InviteMemberDto } from './dto/invite-member.dto';
+import { UpdateMemberDto } from './dto/update-member.dto';
 
 @ApiTags('workspaces')
 @ApiCookieAuth('flowie_access')
@@ -16,8 +19,60 @@ export class WorkspaceController {
       return { data: await this.workspaces.listForUser(request.auth!.userId) };
    }
 
+   @Get('invitations')
+   async invitations(@Req() request: AuthenticatedRequest) {
+      return { data: await this.workspaces.pendingInvitations(request.auth!.userId) };
+   }
+
+   @Post()
+   async create(@Body() dto: CreateWorkspaceDto, @Req() request: AuthenticatedRequest) {
+      return { data: await this.workspaces.create(dto, request.auth!.userId) };
+   }
+
    @Get(':workspaceId/members')
    async members(@Param('workspaceId') workspaceId: string, @Req() request: AuthenticatedRequest) {
       return { data: await this.workspaces.members(workspaceId, request.auth!.userId) };
+   }
+
+   @Post(':workspaceId/invitations')
+   async invite(
+      @Param('workspaceId') workspaceId: string,
+      @Body() dto: InviteMemberDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.workspaces.invite(workspaceId, dto, request.auth!.userId) };
+   }
+
+   @Post('invitations/:memberId/accept')
+   async accept(@Param('memberId') memberId: string, @Req() request: AuthenticatedRequest) {
+      return { data: await this.workspaces.acceptInvitation(memberId, request.auth!.userId) };
+   }
+
+   @Delete('invitations/:memberId')
+   async decline(@Param('memberId') memberId: string, @Req() request: AuthenticatedRequest) {
+      return { data: await this.workspaces.declineInvitation(memberId, request.auth!.userId) };
+   }
+
+   @Patch(':workspaceId/members/:memberId')
+   async updateMember(
+      @Param('workspaceId') workspaceId: string,
+      @Param('memberId') memberId: string,
+      @Body() dto: UpdateMemberDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.workspaces.updateMember(memberId, workspaceId, dto, request.auth!.userId),
+      };
+   }
+
+   @Delete(':workspaceId/members/:memberId')
+   async removeMember(
+      @Param('workspaceId') workspaceId: string,
+      @Param('memberId') memberId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.workspaces.removeMember(memberId, workspaceId, request.auth!.userId),
+      };
    }
 }

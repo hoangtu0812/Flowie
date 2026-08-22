@@ -1,31 +1,73 @@
-import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
+import { JobsService } from '../jobs/jobs.service';
 
 @Injectable()
 export class IntegrationsService {
-   private readonly logger = new Logger(IntegrationsService.name);
-   constructor(private readonly prisma: PrismaService) {}
+   constructor(
+      private readonly prisma: PrismaService,
+      private readonly jobs: JobsService
+   ) {}
 
    async discord(workspaceId: string, userId: string) {
-      await this.authorize(workspaceId, userId);
-      return this.prisma.discordWebhook.findUnique({ where: { workspaceId }, select: { enabled: true, webhookUrl: true, updatedAt: true } });
+      await this.authorizeManager(workspaceId, userId);
+      const webhook = await this.prisma.discordWebhook.findUnique({
+         where: { workspaceId },
+         select: { enabled: true, webhookUrl: true, updatedAt: true },
+      });
+      return webhook
+         ? {
+              enabled: webhook.enabled,
+              webhookUrlMasked: this.maskWebhook(webhook.webhookUrl),
+              updatedAt: webhook.updatedAt,
+           }
+         : null;
    }
-   async saveDiscord(workspaceId: string, userId: string, webhookUrl: string, enabled: boolean) {
-      await this.authorize(workspaceId, userId);
-      return this.prisma.discordWebhook.upsert({ where: { workspaceId }, create: { workspaceId, webhookUrl, enabled }, update: { webhookUrl, enabled }, select: { enabled: true, webhookUrl: true, updatedAt: true } });
+   async saveDiscord(
+      workspaceId: string,
+      userId: string,
+      webhookUrl: string | undefined,
+      enabled: boolean
+   ) {
+      await this.authorizeManager(workspaceId, userId);
+      const existing = await this.prisma.discordWebhook.findUnique({ where: { workspaceId } });
+      if (!existing && !webhookUrl)
+         throw new BadRequestException('A Discord webhook URL is required.');
+      const webhook = existing
+         ? await this.prisma.discordWebhook.update({
+              where: { workspaceId },
+              data: { ...(webhookUrl ? { webhookUrl } : {}), enabled },
+           })
+         : await this.prisma.discordWebhook.create({
+              data: { workspaceId, webhookUrl: webhookUrl!, enabled },
+           });
+      return {
+         enabled: webhook.enabled,
+         webhookUrlMasked: this.maskWebhook(webhook.webhookUrl),
+         updatedAt: webhook.updatedAt,
+      };
    }
    async testDiscord(workspaceId: string, userId: string) {
-      await this.authorize(workspaceId, userId);
-      return this.publish(workspaceId, '✅ Flowie đã kết nối Discord thành công.');
+      await this.authorizeManager(workspaceId, userId);
+      await this.publish(workspaceId, '✅ Flowie đã kết nối Discord thành công.');
+      return true;
    }
    async publish(workspaceId: string, content: string) {
-      const webhook = await this.prisma.discordWebhook.findUnique({ where: { workspaceId } });
+      const webhook = await this.prisma.discordWebhook.findUnique({
+         where: { workspaceId },
+         select: { enabled: true },
+      });
       if (!webhook?.enabled) return false;
-      try { const response = await fetch(webhook.webhookUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content }) }); return response.ok; }
-      catch (error) { this.logger.warn(`Discord delivery failed: ${error instanceof Error ? error.message : 'unknown error'}`); return false; }
+      await this.jobs.enqueueDiscord({ workspaceId, content });
+      return true;
    }
-   private async authorize(workspaceId: string, userId: string) {
-      const membership = await this.prisma.workspaceMember.findFirst({ where: { workspaceId, userId, status: 'ACTIVE' } });
-      if (!membership) throw new ForbiddenException('You do not have access to this workspace.');
+   private async authorizeManager(workspaceId: string, userId: string) {
+      const membership = await this.prisma.workspaceMember.findFirst({
+         where: { workspaceId, userId, status: 'ACTIVE', role: { in: ['OWNER', 'ADMIN'] } },
+      });
+      if (!membership) throw new ForbiddenException('Workspace administrator access is required.');
+   }
+   private maskWebhook(url: string) {
+      return `${url.slice(0, 32)}••••${url.slice(-6)}`;
    }
 }

@@ -1,11 +1,5 @@
-import MainLayout from '@/components/layout/main-layout';
-import AccountCodeReviews from '@/components/common/settings/account-code-reviews';
-import Header from '@/components/layout/headers/settings/header';
+import { FeatureUnavailable } from '@/components/common/feature-unavailable';
 
 export default function Page() {
-   return (
-      <MainLayout header={<Header />} headersNumber={1}>
-         <AccountCodeReviews />
-      </MainLayout>
-   );
+   return <FeatureUnavailable />;
 }

@@ -26,6 +26,10 @@ export function RealDocuments({ teamId }: { teamId: string }) {
    const [creating, setCreating] = useState(false);
    const [title, setTitle] = useState('');
    const [createError, setCreateError] = useState<string>();
+   const [editingId, setEditingId] = useState<string>();
+   const [editingTitle, setEditingTitle] = useState('');
+   const [editingContent, setEditingContent] = useState('');
+   const [actionError, setActionError] = useState<string>();
    const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
    const loadDocuments = async () => {
@@ -43,6 +47,38 @@ export function RealDocuments({ teamId }: { teamId: string }) {
       );
       if (!response.ok) throw new Error('Could not load documents.');
       setDocuments(((await response.json()) as { data: Document[] }).data);
+   };
+
+   const editDocument = async (document: Document) => {
+      if (!workspaceId || editingTitle.trim().length < 2) return;
+      setActionError(undefined);
+      const response = await fetch(`${api}/documents/${document.id}?workspaceId=${workspaceId}`, {
+         method: 'PATCH',
+         credentials: 'include',
+         headers: { 'content-type': 'application/json' },
+         body: JSON.stringify({ title: editingTitle.trim(), content: editingContent }),
+      });
+      if (!response.ok) {
+         setActionError('Could not save the document.');
+         return;
+      }
+      setEditingId(undefined);
+      await loadDocuments();
+   };
+
+   const archiveDocument = async (documentId: string) => {
+      if (!workspaceId || !window.confirm('Archive this document?')) return;
+      setActionError(undefined);
+      const response = await fetch(`${api}/documents/${documentId}?workspaceId=${workspaceId}`, {
+         method: 'DELETE',
+         credentials: 'include',
+      });
+      if (!response.ok) {
+         setActionError('Could not archive the document.');
+         return;
+      }
+      if (editingId === documentId) setEditingId(undefined);
+      await loadDocuments();
    };
 
    useEffect(() => {
@@ -123,23 +159,79 @@ export function RealDocuments({ teamId }: { teamId: string }) {
          ) : (
             <div className="overflow-hidden rounded-md border">
                {documents.map((document) => (
-                  <article
-                     className="flex items-center gap-3 border-b px-4 py-3 last:border-0"
-                     key={document.id}
-                  >
-                     <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{document.title}</p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">
-                           Updated {relativeDate(document.updatedAt)} by {document.updatedBy.name}
-                        </p>
-                     </div>
-                     <span className="grid h-7 w-7 place-items-center rounded-full bg-muted text-xs font-medium">
-                        {document.updatedBy.name.slice(0, 1).toUpperCase()}
-                     </span>
+                  <article className="border-b px-4 py-3 last:border-0" key={document.id}>
+                     {editingId === document.id ? (
+                        <form
+                           className="space-y-2"
+                           onSubmit={(event) => {
+                              event.preventDefault();
+                              void editDocument(document);
+                           }}
+                        >
+                           <input
+                              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                              onChange={(event) => setEditingTitle(event.target.value)}
+                              value={editingTitle}
+                           />
+                           <textarea
+                              className="min-h-28 w-full resize-y rounded-md border bg-background px-3 py-2 text-sm"
+                              onChange={(event) => setEditingContent(event.target.value)}
+                              placeholder="Document content"
+                              value={editingContent}
+                           />
+                           <div className="flex justify-end gap-2">
+                              <button
+                                 className="rounded-md border px-3 py-1.5 text-xs"
+                                 onClick={() => setEditingId(undefined)}
+                                 type="button"
+                              >
+                                 Cancel
+                              </button>
+                              <button
+                                 className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+                                 type="submit"
+                              >
+                                 Save
+                              </button>
+                           </div>
+                        </form>
+                     ) : (
+                        <div className="flex items-center gap-3">
+                           <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium">{document.title}</p>
+                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                 Updated {relativeDate(document.updatedAt)} by{' '}
+                                 {document.updatedBy.name}
+                              </p>
+                           </div>
+                           <button
+                              className="rounded-md border px-2 py-1 text-xs"
+                              onClick={() => {
+                                 setEditingId(document.id);
+                                 setEditingTitle(document.title);
+                                 setEditingContent(document.content);
+                              }}
+                              type="button"
+                           >
+                              Edit
+                           </button>
+                           <button
+                              className="rounded-md border px-2 py-1 text-xs text-destructive"
+                              onClick={() => void archiveDocument(document.id)}
+                              type="button"
+                           >
+                              Archive
+                           </button>
+                           <span className="grid h-7 w-7 place-items-center rounded-full bg-muted text-xs font-medium">
+                              {document.updatedBy.name.slice(0, 1).toUpperCase()}
+                           </span>
+                        </div>
+                     )}
                   </article>
                ))}
             </div>
          )}
+         {actionError && <p className="mt-3 text-xs text-destructive">{actionError}</p>}
       </section>
    );
 }

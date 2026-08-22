@@ -1,0 +1,10 @@
+import { IsEnum, IsObject, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { ProjectType } from '@circle/database';
+
+export class CreateProjectTemplateDto {
+   @IsString() workspaceId!: string;
+   @IsString() @MinLength(2) @MaxLength(120) name!: string;
+   @IsOptional() @IsString() @MaxLength(2000) description?: string;
+   @IsOptional() @IsEnum(ProjectType) type?: ProjectType;
+   @IsOptional() @IsObject() config?: Record<string, unknown>;
+}

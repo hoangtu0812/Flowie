@@ -110,8 +110,11 @@ services:
       environment:
          NODE_ENV: production
          REDIS_URL: redis://redis:6379
+         DATABASE_URL: postgresql://${POSTGRES_USER:-circle}:${POSTGRES_PASSWORD:-circle}@postgres:5432/${POSTGRES_DB:-circle}?schema=public
       depends_on:
          redis:
+            condition: service_healthy
+         postgres:
             condition: service_healthy
 
 volumes:

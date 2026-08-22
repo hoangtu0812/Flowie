@@ -4,8 +4,8 @@ import {
    Box,
    Compass,
    ContactRound,
-   Layers,
    LayoutList,
+   Layers,
    LucideIcon,
    MoreHorizontal,
    UserRound,
@@ -45,8 +45,8 @@ interface WorkspaceNavItem {
 }
 
 const WORKSPACE_NAV: WorkspaceNavItem[] = [
-   { key: 'initiatives', name: 'Initiatives', icon: Compass, url: '/initiatives' },
    { key: 'projects', name: 'Projects', icon: Box, url: '/projects' },
+   { key: 'initiatives', name: 'Initiatives', icon: Compass, url: '/initiatives' },
    { key: 'views', name: 'Views', icon: Layers, url: '/views' },
    { key: 'teams', name: 'Teams', icon: ContactRound, url: '/teams' },
    { key: 'members', name: 'Members', icon: UserRound, url: '/members' },

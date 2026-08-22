@@ -10,6 +10,7 @@ export function DiscordIntegration() {
    const [enabled, setEnabled] = useState(true);
    const [message, setMessage] = useState<string>();
    const [saving, setSaving] = useState(false);
+   const [configured, setConfigured] = useState(false);
    useEffect(() => {
       void fetch(`${api}/workspaces/me`, { credentials: 'include' })
          .then((r) => (r.ok ? r.json() : Promise.reject()))
@@ -22,9 +23,11 @@ export function DiscordIntegration() {
          })
          .then(async (r) => {
             if (!r?.ok) return;
-            const p = (await r.json()) as { data: { webhookUrl: string; enabled: boolean } | null };
+            const p = (await r.json()) as {
+               data: { webhookUrlMasked: string; enabled: boolean } | null;
+            };
             if (p.data) {
-               setUrl(p.data.webhookUrl);
+               setConfigured(true);
                setEnabled(p.data.enabled);
             }
          })
@@ -72,9 +75,12 @@ export function DiscordIntegration() {
                   className="mt-1"
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
-                  placeholder="https://discord.com/api/webhooks/…"
+                  placeholder={
+                     configured
+                        ? 'Đã cấu hình — nhập URL mới để thay thế'
+                        : 'https://discord.com/api/webhooks/…'
+                  }
                   type="url"
-                  required
                />
             </div>
             <label className="flex items-center gap-2 text-sm">
@@ -90,7 +96,12 @@ export function DiscordIntegration() {
                <Button type="submit" disabled={saving}>
                   {saving ? 'Đang lưu…' : 'Lưu cấu hình'}
                </Button>
-               <Button type="button" variant="outline" onClick={() => void test()} disabled={!url}>
+               <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void test()}
+                  disabled={!url && !configured}
+               >
                   Gửi thử
                </Button>
             </div>

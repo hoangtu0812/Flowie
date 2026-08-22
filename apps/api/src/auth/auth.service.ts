@@ -72,6 +72,7 @@ export class AuthService {
                         create: {
                            userId: createdUser.id,
                            status: 'ACTIVE',
+                           role: 'OWNER',
                            joinedAt: new Date(),
                         },
                      },

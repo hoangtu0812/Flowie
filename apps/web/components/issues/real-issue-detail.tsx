@@ -1,5 +1,6 @@
 'use client';
 
+import { useParams, useRouter } from 'next/navigation';
 import { FormEvent, useEffect, useState } from 'react';
 
 type Issue = {
@@ -9,7 +10,7 @@ type Issue = {
    description: string | null;
    priority: string;
    status: { name: string; color: string };
-   team: { name: string; identifier: string };
+   team: { id: string; name: string; identifier: string };
    project: { name: string; identifier: string } | null;
    creator: { name: string };
    assignee: { name: string } | null;
@@ -42,6 +43,12 @@ export function RealIssueDetail({ issueId }: { issueId: string }) {
    const [commentError, setCommentError] = useState<string>();
    const [file, setFile] = useState<File>();
    const [attachmentError, setAttachmentError] = useState<string>();
+   const [editing, setEditing] = useState(false);
+   const [title, setTitle] = useState('');
+   const [description, setDescription] = useState('');
+   const [actionError, setActionError] = useState<string>();
+   const router = useRouter();
+   const { orgId } = useParams<{ orgId: string }>();
    const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
    const load = async () => {
@@ -129,6 +136,38 @@ export function RealIssueDetail({ issueId }: { issueId: string }) {
       await load();
    };
 
+   const saveIssue = async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!workspaceId || title.trim().length < 2) return;
+      setActionError(undefined);
+      const response = await fetch(`${api}/issues/${issueId}?workspaceId=${workspaceId}`, {
+         method: 'PATCH',
+         credentials: 'include',
+         headers: { 'content-type': 'application/json' },
+         body: JSON.stringify({ title: title.trim(), description }),
+      });
+      if (!response.ok) {
+         setActionError('Could not save issue changes.');
+         return;
+      }
+      setIssue(((await response.json()) as { data: Issue }).data);
+      setEditing(false);
+   };
+
+   const archiveIssue = async () => {
+      if (!workspaceId || !issue || !window.confirm('Archive this issue?')) return;
+      setActionError(undefined);
+      const response = await fetch(`${api}/issues/${issueId}?workspaceId=${workspaceId}`, {
+         method: 'DELETE',
+         credentials: 'include',
+      });
+      if (!response.ok) {
+         setActionError('Could not archive this issue.');
+         return;
+      }
+      router.replace(`/${orgId}/team/${issue.team.id}/all`);
+   };
+
    if (state === 'loading')
       return <p className="p-6 text-sm text-muted-foreground">Loading issue…</p>;
    if (state === 'error' || !issue)
@@ -140,12 +179,66 @@ export function RealIssueDetail({ issueId }: { issueId: string }) {
             <p className="mb-2 text-sm text-muted-foreground">
                {issue.identifier} · {issue.team.name}
             </p>
-            <h1 className="text-xl font-semibold">{issue.title}</h1>
-            {issue.description && (
-               <p className="mt-4 whitespace-pre-wrap text-sm text-muted-foreground">
-                  {issue.description}
-               </p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+               <h1 className="text-xl font-semibold">{issue.title}</h1>
+               <div className="flex gap-2">
+                  <button
+                     className="rounded-md border px-2 py-1 text-xs"
+                     onClick={() => {
+                        setEditing(true);
+                        setTitle(issue.title);
+                        setDescription(issue.description ?? '');
+                     }}
+                     type="button"
+                  >
+                     Edit
+                  </button>
+                  <button
+                     className="rounded-md border px-2 py-1 text-xs text-destructive"
+                     onClick={() => void archiveIssue()}
+                     type="button"
+                  >
+                     Archive
+                  </button>
+               </div>
+            </div>
+            {editing ? (
+               <form className="mt-4 space-y-2" onSubmit={saveIssue}>
+                  <input
+                     className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                     onChange={(event) => setTitle(event.target.value)}
+                     value={title}
+                  />
+                  <textarea
+                     className="min-h-32 w-full resize-y rounded-md border bg-background px-3 py-2 text-sm"
+                     onChange={(event) => setDescription(event.target.value)}
+                     placeholder="Issue description"
+                     value={description}
+                  />
+                  <div className="flex justify-end gap-2">
+                     <button
+                        className="rounded-md border px-3 py-1.5 text-xs"
+                        onClick={() => setEditing(false)}
+                        type="button"
+                     >
+                        Cancel
+                     </button>
+                     <button
+                        className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground"
+                        type="submit"
+                     >
+                        Save
+                     </button>
+                  </div>
+               </form>
+            ) : (
+               issue.description && (
+                  <p className="mt-4 whitespace-pre-wrap text-sm text-muted-foreground">
+                     {issue.description}
+                  </p>
+               )
             )}
+            {actionError && <p className="mt-2 text-xs text-destructive">{actionError}</p>}
             <div className="mt-8">
                <h2 className="mb-3 font-medium">Attachments</h2>
                {attachments.length ? (

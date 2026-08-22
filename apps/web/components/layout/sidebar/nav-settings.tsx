@@ -7,16 +7,7 @@ import {
    SidebarMenuButton,
    SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import {
-   Bell,
-   Blocks,
-   ContactRound,
-   FileText,
-   LucideIcon,
-   Tag,
-   UserRound,
-   Settings,
-} from 'lucide-react';
+import { Bell, Blocks, ContactRound, LucideIcon, Tag, UserRound, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 
@@ -46,7 +37,6 @@ export const settingsNav: SettingsNavGroup[] = [
       items: [
          { name: 'Teams', url: '/teams', icon: ContactRound },
          { name: 'Issue labels', url: '/settings/issue-labels', icon: Tag },
-         { name: 'Documents', url: '/settings/documents', icon: FileText },
          { name: 'Integrations', url: '/settings/integrations', icon: Blocks },
       ],
    },

@@ -8,6 +8,7 @@
       "start": "node dist/main.js"
    },
    "dependencies": {
+      "@circle/database": "workspace:^",
       "bullmq": "^5.51.8"
    },
    "devDependencies": {

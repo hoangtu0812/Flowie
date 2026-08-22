@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { FlowieLogo } from '@/components/brand/flowie-logo';
 
 export default function Home() {
    const router = useRouter();
@@ -11,7 +12,8 @@ export default function Home() {
       void Promise.all([
          fetch(`${api}/workspaces/me`, { credentials: 'include' }),
          fetch(`${api}/admin/overview`, { credentials: 'include' }),
-      ]).then(async ([workspacesResponse, adminResponse]) => {
+         fetch(`${api}/workspaces/invitations`, { credentials: 'include' }),
+      ]).then(async ([workspacesResponse, adminResponse, invitationsResponse]) => {
          if (adminResponse.ok) {
             router.replace('/admin');
             return;
@@ -24,13 +26,20 @@ export default function Home() {
             data: Array<{ workspace: { slug: string } }>;
          };
          const workspace = payload.data[0]?.workspace;
-         router.replace(workspace ? `/${workspace.slug}/teams` : '/auth/login');
+         if (workspace) {
+            router.replace(`/${workspace.slug}/teams`);
+            return;
+         }
+         const invitations = invitationsResponse.ok
+            ? ((await invitationsResponse.json()) as { data: unknown[] }).data
+            : [];
+         router.replace(invitations.length ? '/invitations' : '/auth/login');
       });
    }, [router]);
 
    return (
       <main className="grid min-h-svh place-items-center text-sm text-muted-foreground">
-         Đang mở Flowie…
+         <FlowieLogo loading label />
       </main>
    );
 }

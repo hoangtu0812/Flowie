@@ -1,7 +1,19 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+   Body,
+   Controller,
+   Delete,
+   Get,
+   Param,
+   Patch,
+   Post,
+   Query,
+   Req,
+   UseGuards,
+} from '@nestjs/common';
 import { IssueStatusCategory } from '@circle/database';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { CreateIssueDto } from './dto/create-issue.dto';
+import { UpdateIssueDto } from './dto/update-issue.dto';
 import { IssuesService } from './issues.service';
 
 @UseGuards(AuthGuard)
@@ -39,5 +51,24 @@ export class IssuesController {
       @Req() request: AuthenticatedRequest
    ) {
       return { data: await this.issues.get(issueId, workspaceId, request.auth!.userId) };
+   }
+
+   @Patch(':issueId')
+   async update(
+      @Param('issueId') issueId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Body() dto: UpdateIssueDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.issues.update(issueId, workspaceId, dto, request.auth!.userId) };
+   }
+
+   @Delete(':issueId')
+   async archive(
+      @Param('issueId') issueId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.issues.archive(issueId, workspaceId, request.auth!.userId) };
    }
 }

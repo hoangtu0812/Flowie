@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+   Body,
+   Controller,
+   Delete,
+   Get,
+   Param,
+   Patch,
+   Post,
+   Query,
+   Req,
+   UseGuards,
+} from '@nestjs/common';
 import { CycleStatus } from '@circle/database';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { AddIssueToCycleDto } from './dto/add-issue-to-cycle.dto';
@@ -43,6 +54,27 @@ export class CyclesController {
       @Req() request: AuthenticatedRequest
    ) {
       return { data: await this.cycles.addIssue(cycleId, dto, request.auth!.userId) };
+   }
+
+   @Delete(':cycleId/issues/:issueId')
+   async removeIssue(
+      @Param('cycleId') cycleId: string,
+      @Param('issueId') issueId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.cycles.removeIssue(cycleId, issueId, workspaceId, request.auth!.userId),
+      };
+   }
+
+   @Delete(':cycleId')
+   async remove(
+      @Param('cycleId') cycleId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.cycles.remove(cycleId, workspaceId, request.auth!.userId) };
    }
 
    @Get(':cycleId/issues')

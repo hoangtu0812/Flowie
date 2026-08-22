@@ -2,7 +2,8 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { IssueStatusCategory } from '@circle/database';
 import { PrismaService } from '../database/prisma.service';
 import { CreateIssueDto } from './dto/create-issue.dto';
-import { IntegrationsService } from '../integrations/integrations.service';
+import { UpdateIssueDto } from './dto/update-issue.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const issueInclude = {
    team: { select: { id: true, name: true, identifier: true } },
@@ -14,7 +15,10 @@ const issueInclude = {
 
 @Injectable()
 export class IssuesService {
-   constructor(private readonly prisma: PrismaService, private readonly integrations: IntegrationsService) {}
+   constructor(
+      private readonly prisma: PrismaService,
+      private readonly notifications: NotificationsService
+   ) {}
 
    async list(
       workspaceId: string,
@@ -88,7 +92,15 @@ export class IssuesService {
          });
          return issue;
       });
-      void this.integrations.publish(dto.workspaceId, `🆕 Issue ${issue.identifier}: ${issue.title}`);
+      void this.notifications.notifyWorkspace(
+         dto.workspaceId,
+         userId,
+         'issue.created',
+         'issue',
+         issue.id,
+         { title: issue.title, identifier: issue.identifier },
+         `🆕 Issue ${issue.identifier}: ${issue.title}`
+      );
       return issue;
    }
 
@@ -105,6 +117,69 @@ export class IssuesService {
       return issue;
    }
 
+   async update(issueId: string, workspaceId: string, dto: UpdateIssueDto, userId: string) {
+      const issue = await this.get(issueId, workspaceId, userId);
+      const status = dto.statusId
+         ? await this.prisma.issueStatus.findFirst({ where: { id: dto.statusId, workspaceId } })
+         : undefined;
+      if (dto.statusId && !status) throw new NotFoundException('Issue status not found.');
+      if (dto.projectId) {
+         const project = await this.prisma.project.findFirst({
+            where: { id: dto.projectId, workspaceId, archivedAt: null },
+         });
+         if (!project || (project.teamId && project.teamId !== issue.teamId)) {
+            throw new NotFoundException('Project not found for this team.');
+         }
+      }
+      if (dto.assigneeId) {
+         const assignee = await this.prisma.workspaceMember.findFirst({
+            where: { workspaceId, userId: dto.assigneeId, status: 'ACTIVE' },
+         });
+         if (!assignee) throw new NotFoundException('Assignee is not a workspace member.');
+      }
+      return this.prisma.$transaction(async (tx) => {
+         const updated = await tx.issue.update({
+            where: { id: issueId },
+            data: {
+               ...dto,
+               ...(status
+                  ? {
+                       completedAt: status.category === 'COMPLETED' ? new Date() : null,
+                       canceledAt: status.category === 'CANCELED' ? new Date() : null,
+                    }
+                  : {}),
+            },
+            include: issueInclude,
+         });
+         await tx.activity.create({
+            data: {
+               workspaceId,
+               issueId,
+               actorId: userId,
+               type: 'issue.updated',
+               data: { fields: Object.keys(dto) },
+            },
+         });
+         return updated;
+      });
+   }
+
+   async archive(issueId: string, workspaceId: string, userId: string) {
+      await this.get(issueId, workspaceId, userId);
+      return this.prisma.$transaction(async (tx) => {
+         const archivedAt = new Date();
+         const archived = await tx.issue.update({
+            where: { id: issueId },
+            data: { archivedAt },
+            include: issueInclude,
+         });
+         await tx.activity.create({
+            data: { workspaceId, issueId, actorId: userId, type: 'issue.archived', data: {} },
+         });
+         return archived;
+      });
+   }
+
    private async authorize(workspaceId: string, userId: string, teamId?: string) {
       const membership = await this.prisma.workspaceMember.findFirst({
          where: { workspaceId, userId, status: 'ACTIVE' },
@@ -112,7 +187,7 @@ export class IssuesService {
       if (!membership) throw new ForbiddenException('You do not have access to this workspace.');
       if (!teamId) return;
       const team = await this.prisma.team.findFirst({
-         where: { id: teamId, workspaceId, members: { some: { userId } } },
+         where: { id: teamId, workspaceId, archivedAt: null, members: { some: { userId } } },
       });
       if (!team) throw new ForbiddenException('You do not have access to this team.');
    }

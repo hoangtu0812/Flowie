@@ -19,6 +19,9 @@ export function RealLabelsSettings() {
    const [name, setName] = useState('');
    const [color, setColor] = useState('#6366f1');
    const [error, setError] = useState<string>();
+   const [editingId, setEditingId] = useState<string>();
+   const [editingName, setEditingName] = useState('');
+   const [editingColor, setEditingColor] = useState('#6366f1');
    const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
    const load = useCallback(async () => {
@@ -58,6 +61,38 @@ export function RealLabelsSettings() {
       }
       setName('');
       setShowForm(false);
+      await load();
+   };
+
+   const update = async (label: Label) => {
+      if (!workspaceId || !editingName.trim()) return;
+      setError(undefined);
+      const response = await fetch(`${api}/labels/${label.id}?workspaceId=${workspaceId}`, {
+         method: 'PATCH',
+         credentials: 'include',
+         headers: { 'content-type': 'application/json' },
+         body: JSON.stringify({ name: editingName.trim(), color: editingColor }),
+      });
+      if (!response.ok) {
+         setError('Could not update label. Workspace administrator permission is required.');
+         return;
+      }
+      setEditingId(undefined);
+      await load();
+   };
+
+   const remove = async (labelId: string) => {
+      if (!workspaceId || !window.confirm('Delete this label? It will be removed from all issues.'))
+         return;
+      setError(undefined);
+      const response = await fetch(`${api}/labels/${labelId}?workspaceId=${workspaceId}`, {
+         method: 'DELETE',
+         credentials: 'include',
+      });
+      if (!response.ok) {
+         setError('Could not delete label. Workspace administrator permission is required.');
+         return;
+      }
       await load();
    };
 
@@ -118,23 +153,78 @@ export function RealLabelsSettings() {
          ) : (
             <div className="overflow-hidden rounded-md border">
                {labels.map((label) => (
-                  <div
-                     className="flex items-center gap-3 border-b px-4 py-3 last:border-0"
-                     key={label.id}
-                  >
-                     <span
-                        className="h-3 w-3 rounded-full"
-                        style={{ backgroundColor: label.color }}
-                     />
-                     <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium">{label.name}</p>
-                        {label.description && (
-                           <p className="text-xs text-muted-foreground">{label.description}</p>
-                        )}
-                     </div>
-                     <span className="text-xs text-muted-foreground">
-                        {label._count.issueLinks} issues
-                     </span>
+                  <div className="border-b px-4 py-3 last:border-0" key={label.id}>
+                     {editingId === label.id ? (
+                        <form
+                           className="flex flex-wrap items-center gap-2"
+                           onSubmit={(event) => {
+                              event.preventDefault();
+                              void update(label);
+                           }}
+                        >
+                           <input
+                              className="rounded-md border bg-background px-3 py-2 text-sm"
+                              onChange={(event) => setEditingName(event.target.value)}
+                              value={editingName}
+                           />
+                           <input
+                              aria-label="Label color"
+                              className="h-9 w-12 rounded border bg-background p-1"
+                              onChange={(event) => setEditingColor(event.target.value)}
+                              type="color"
+                              value={editingColor}
+                           />
+                           <button
+                              className="rounded-md border px-3 py-2 text-xs"
+                              onClick={() => setEditingId(undefined)}
+                              type="button"
+                           >
+                              Cancel
+                           </button>
+                           <button
+                              className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground"
+                              type="submit"
+                           >
+                              Save
+                           </button>
+                        </form>
+                     ) : (
+                        <div className="flex items-center gap-3">
+                           <span
+                              className="h-3 w-3 rounded-full"
+                              style={{ backgroundColor: label.color }}
+                           />
+                           <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium">{label.name}</p>
+                              {label.description && (
+                                 <p className="text-xs text-muted-foreground">
+                                    {label.description}
+                                 </p>
+                              )}
+                           </div>
+                           <span className="text-xs text-muted-foreground">
+                              {label._count.issueLinks} issues
+                           </span>
+                           <button
+                              className="rounded-md border px-2 py-1 text-xs"
+                              onClick={() => {
+                                 setEditingId(label.id);
+                                 setEditingName(label.name);
+                                 setEditingColor(label.color);
+                              }}
+                              type="button"
+                           >
+                              Edit
+                           </button>
+                           <button
+                              className="rounded-md border px-2 py-1 text-xs text-destructive"
+                              onClick={() => void remove(label.id)}
+                              type="button"
+                           >
+                              Delete
+                           </button>
+                        </div>
+                     )}
                   </div>
                ))}
             </div>

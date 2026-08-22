@@ -1,6 +1,20 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+   Body,
+   Controller,
+   Delete,
+   Get,
+   Param,
+   Patch,
+   Post,
+   Query,
+   Req,
+   UseGuards,
+} from '@nestjs/common';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { CreateTeamDto } from './dto/create-team.dto';
+import { AddTeamMemberDto } from './dto/add-team-member.dto';
+import { UpdateTeamMemberDto } from './dto/update-team-member.dto';
+import { UpdateTeamDto } from './dto/update-team.dto';
 import { TeamsService } from './teams.service';
 
 @UseGuards(AuthGuard)
@@ -22,5 +36,54 @@ export class TeamsController {
       @Req() request: AuthenticatedRequest
    ) {
       return { data: await this.teams.get(teamId, workspaceId, request.auth!.userId) };
+   }
+   @Patch(':teamId') async update(
+      @Param('teamId') teamId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Body() dto: UpdateTeamDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.teams.update(teamId, workspaceId, dto, request.auth!.userId) };
+   }
+   @Delete(':teamId') async archive(
+      @Param('teamId') teamId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.teams.archive(teamId, workspaceId, request.auth!.userId) };
+   }
+   @Post(':teamId/members') async addMember(
+      @Param('teamId') teamId: string,
+      @Body() dto: AddTeamMemberDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.teams.addMember(teamId, dto, request.auth!.userId) };
+   }
+   @Patch(':teamId/members/:userId') async updateMember(
+      @Param('teamId') teamId: string,
+      @Param('userId') userId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Body() dto: UpdateTeamMemberDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.teams.updateMember(
+            teamId,
+            userId,
+            workspaceId,
+            dto.role,
+            request.auth!.userId
+         ),
+      };
+   }
+   @Delete(':teamId/members/:userId') async removeMember(
+      @Param('teamId') teamId: string,
+      @Param('userId') userId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.teams.removeMember(teamId, userId, workspaceId, request.auth!.userId),
+      };
    }
 }

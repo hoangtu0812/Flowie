@@ -19,16 +19,20 @@ import { WorkspaceModule } from './workspace/workspace.module';
 import { AdminModule } from './admin/admin.module';
 import { UsersModule } from './users/users.module';
 import { IntegrationsModule } from './integrations/integrations.module';
+import { PortfolioModule } from './portfolio/portfolio.module';
+import { JobsModule } from './jobs/jobs.module';
 
 @Module({
    imports: [
       ConfigModule.forRoot({ isGlobal: true }),
+      JobsModule,
       DatabaseModule,
       HealthModule,
       AuthModule,
       AdminModule,
       UsersModule,
       IntegrationsModule,
+      PortfolioModule,
       WorkspaceModule,
       TeamsModule,
       ProjectsModule,

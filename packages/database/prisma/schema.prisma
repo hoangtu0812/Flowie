@@ -28,6 +28,12 @@ enum WorkspaceMemberStatus {
   SUSPENDED
 }
 
+enum WorkspaceMemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
 enum TeamMemberRole {
   LEAD
   MEMBER
@@ -48,6 +54,27 @@ enum IssuePriority {
   MEDIUM
   HIGH
   URGENT
+}
+
+enum ProjectType {
+  GENERAL
+  PRODUCT
+  MARKETING
+  OPERATIONS
+  EVENT
+  CLIENT
+  RESEARCH
+  CUSTOM
+}
+
+enum ProjectCustomFieldType {
+  TEXT
+  NUMBER
+  DATE
+  SELECT
+  MULTI_SELECT
+  BOOLEAN
+  URL
 }
 
 enum CycleStatus {
@@ -76,6 +103,7 @@ model User {
   passwordResetTokens PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
   memberships   WorkspaceMember[]
+  sentWorkspaceInvitations WorkspaceMember[] @relation("WorkspaceInvitationSender")
   teamMemberships TeamMember[]
   organizations Organization[] @relation("OrganizationOwner")
   createdIssues Issue[] @relation("IssueCreator")
@@ -86,6 +114,7 @@ model User {
   activities Activity[] @relation("ActivityActor")
   notifications Notification[]
   uploadedAttachments Attachment[]
+  savedViews SavedView[] @relation("SavedViewCreator")
 
   @@map("users")
 }
@@ -193,6 +222,11 @@ model Workspace {
   attachments  Attachment[]
   activities   Activity[]
   discordWebhook DiscordWebhook?
+  projectCustomFields ProjectCustomField[]
+  projectTemplates ProjectTemplate[]
+  projectMilestones ProjectMilestone[]
+  savedViews SavedView[]
+  initiatives Initiative[]
 
   @@index([organizationId])
   @@map("workspaces")
@@ -219,6 +253,7 @@ model Team {
   description String?
   icon        String?  @default("👥")
   color       String?  @default("#6366f1")
+  archivedAt  DateTime? @map("archived_at")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -242,6 +277,7 @@ model Project {
   name        String
   identifier  String
   description String?
+  type        ProjectType @default(GENERAL)
   status      String   @default("planned")
   priority    String   @default("none")
   health      String   @default("no-update")
@@ -256,10 +292,133 @@ model Project {
   team Team? @relation(fields: [teamId], references: [id], onDelete: SetNull)
   issues Issue[]
   activities Activity[]
+  milestones ProjectMilestone[]
+  customFieldValues ProjectCustomFieldValue[]
+  initiativeLinks InitiativeProject[]
 
   @@unique([workspaceId, identifier])
   @@index([workspaceId, teamId])
   @@map("projects")
+}
+
+model ProjectCustomField {
+  id          String                 @id @default(cuid())
+  workspaceId String                 @map("workspace_id")
+  name        String
+  type        ProjectCustomFieldType
+  description String?
+  options     Json?
+  required    Boolean                @default(false)
+  position    Int                    @default(0)
+  createdAt   DateTime               @default(now()) @map("created_at")
+  updatedAt   DateTime               @updatedAt @map("updated_at")
+
+  workspace Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  values    ProjectCustomFieldValue[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId, position])
+  @@map("project_custom_fields")
+}
+
+model ProjectCustomFieldValue {
+  projectId String @map("project_id")
+  fieldId   String @map("field_id")
+  value     Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  project Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  field   ProjectCustomField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, fieldId])
+  @@index([fieldId])
+  @@map("project_custom_field_values")
+}
+
+model ProjectMilestone {
+  id          String    @id @default(cuid())
+  workspaceId String    @map("workspace_id")
+  projectId   String    @map("project_id")
+  title       String
+  description String?
+  targetDate  DateTime? @map("target_date")
+  completedAt DateTime? @map("completed_at")
+  position    Int       @default(0)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, position])
+  @@map("project_milestones")
+}
+
+model ProjectTemplate {
+  id          String      @id @default(cuid())
+  workspaceId String      @map("workspace_id")
+  name        String
+  description String?
+  type        ProjectType @default(GENERAL)
+  config      Json        @default("{}")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@map("project_templates")
+}
+
+model SavedView {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  createdById String   @map("created_by")
+  name        String
+  entityType  String   @map("entity_type")
+  filters     Json     @default("{}")
+  isShared    Boolean  @default(false) @map("is_shared")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy User      @relation("SavedViewCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, entityType])
+  @@map("saved_views")
+}
+
+model Initiative {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  name        String
+  description String?
+  status      String   @default("planned")
+  targetDate  DateTime? @map("target_date")
+  archivedAt  DateTime? @map("archived_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projectLinks InitiativeProject[]
+
+  @@index([workspaceId, archivedAt])
+  @@map("initiatives")
+}
+
+model InitiativeProject {
+  initiativeId String @map("initiative_id")
+  projectId    String @map("project_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  initiative Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  project    Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([initiativeId, projectId])
+  @@index([projectId])
+  @@map("initiative_projects")
 }
 
 model TeamMember {
@@ -496,6 +655,7 @@ model WorkspaceMember {
   workspaceId String                @map("workspace_id")
   userId      String                @map("user_id")
   status      WorkspaceMemberStatus @default(INVITED)
+  role        WorkspaceMemberRole   @default(MEMBER)
   joinedAt    DateTime?             @map("joined_at")
   invitedById String?               @map("invited_by")
   createdAt   DateTime              @default(now()) @map("created_at")
@@ -503,6 +663,7 @@ model WorkspaceMember {
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invitedBy User?     @relation("WorkspaceInvitationSender", fields: [invitedById], references: [id], onDelete: SetNull)
 
   @@unique([workspaceId, userId])
   @@index([userId])

@@ -1,19 +1,22 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
+import { FlowieLogo } from '@/components/brand/flowie-logo';
+import { useParams, usePathname, useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
 export function FeatureUnavailable() {
    const pathname = usePathname();
-   const label = pathname.split('/').filter(Boolean).at(-1)?.replace(/-/g, ' ') ?? 'Feature';
+   const router = useRouter();
+   const { orgId } = useParams<{ orgId: string }>();
+
+   useEffect(() => {
+      if (!orgId) return;
+      router.replace(pathname.includes('/settings/') ? `/${orgId}/settings` : `/${orgId}/projects`);
+   }, [orgId, pathname, router]);
+
    return (
-      <section className="mx-auto grid min-h-[360px] w-full max-w-3xl place-items-center p-6 text-center">
-         <div>
-            <h1 className="text-xl font-semibold">{label[0]?.toUpperCase() + label.slice(1)}</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-               This area has no server-backed data configured yet. It intentionally shows no sample
-               data.
-            </p>
-         </div>
+      <section className="grid min-h-[360px] place-items-center p-6" aria-live="polite">
+         <FlowieLogo loading label />
       </section>
    );
 }

@@ -88,6 +88,22 @@ export class CyclesService {
       return links.map((link) => link.issue);
    }
 
+   async removeIssue(cycleId: string, issueId: string, workspaceId: string, userId: string) {
+      const cycle = await this.findAuthorizedCycle(cycleId, workspaceId, userId);
+      const link = await this.prisma.issueCycle.findFirst({
+         where: { cycleId: cycle.id, issueId },
+      });
+      if (!link) throw new NotFoundException('Issue is not in this cycle.');
+      await this.prisma.issueCycle.delete({ where: { issueId_cycleId: { issueId, cycleId } } });
+      return { issueId, cycleId, removed: true };
+   }
+
+   async remove(cycleId: string, workspaceId: string, userId: string) {
+      await this.findAuthorizedCycle(cycleId, workspaceId, userId);
+      await this.prisma.cycle.delete({ where: { id: cycleId } });
+      return { id: cycleId, deleted: true };
+   }
+
    private async findAuthorizedCycle(cycleId: string, workspaceId: string, userId: string) {
       const cycle = await this.prisma.cycle.findFirst({ where: { id: cycleId, workspaceId } });
       if (!cycle) throw new NotFoundException('Cycle not found.');
@@ -101,7 +117,7 @@ export class CyclesService {
       });
       if (!allowed) throw new ForbiddenException('You do not have access to this workspace.');
       const team = await this.prisma.team.findFirst({
-         where: { id: teamId, workspaceId, members: { some: { userId } } },
+         where: { id: teamId, workspaceId, archivedAt: null, members: { some: { userId } } },
       });
       if (!team) throw new ForbiddenException('You do not have access to this team.');
    }

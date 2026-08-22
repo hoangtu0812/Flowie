@@ -1,10 +1,10 @@
-import { FeatureUnavailable } from '@/components/common/feature-unavailable';
 import MainLayout from '@/components/layout/main-layout';
+import { RealViews } from '@/components/portfolio/real-views';
 
 export default function ViewsPage() {
    return (
       <MainLayout>
-         <FeatureUnavailable />
+         <RealViews />
       </MainLayout>
    );
 }

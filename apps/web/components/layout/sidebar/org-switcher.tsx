@@ -8,23 +8,32 @@ import {
    DropdownMenuContent,
    DropdownMenuGroup,
    DropdownMenuItem,
-   DropdownMenuLabel,
-   DropdownMenuPortal,
    DropdownMenuSeparator,
    DropdownMenuShortcut,
-   DropdownMenuSub,
-   DropdownMenuSubContent,
-   DropdownMenuSubTrigger,
    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { ThemeToggle } from '../theme-toggle';
+import { FlowieLogo } from '@/components/brand/flowie-logo';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 
 export function OrgSwitcher() {
    const { orgId } = useParams<{ orgId: string }>();
+   const router = useRouter();
    const [workspaceName, setWorkspaceName] = React.useState('Flowie');
+
+   async function logout() {
+      await fetch(
+         `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'}/auth/logout`,
+         {
+            method: 'POST',
+            credentials: 'include',
+         }
+      );
+      router.replace('/login');
+      router.refresh();
+   }
 
    React.useEffect(() => {
       void fetch(
@@ -53,9 +62,7 @@ export function OrgSwitcher() {
                         size="lg"
                         className="h-8 p-1 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                      >
-                        <div className="flex aspect-square size-6 items-center justify-center rounded bg-orange-500 text-sidebar-primary-foreground">
-                           F
-                        </div>
+                        <FlowieLogo />
                         <div className="grid flex-1 text-left text-sm leading-tight">
                            <span className="truncate font-semibold">{workspaceName}</span>
                         </div>
@@ -78,32 +85,12 @@ export function OrgSwitcher() {
                            <DropdownMenuShortcut>G then S</DropdownMenuShortcut>
                         </Link>
                      </DropdownMenuItem>
-                     <DropdownMenuItem>Invite and manage members</DropdownMenuItem>
+                     <DropdownMenuItem asChild>
+                        <Link href={`/${orgId}/teams`}>Teams and members</Link>
+                     </DropdownMenuItem>
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator />
-                  <DropdownMenuGroup>
-                     <DropdownMenuItem>Download desktop app</DropdownMenuItem>
-                  </DropdownMenuGroup>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuSub>
-                     <DropdownMenuSubTrigger>Switch Workspace</DropdownMenuSubTrigger>
-                     <DropdownMenuPortal>
-                        <DropdownMenuSubContent>
-                           <DropdownMenuLabel>Your workspaces</DropdownMenuLabel>
-                           <DropdownMenuSeparator />
-                           <DropdownMenuItem>
-                              <div className="flex aspect-square size-6 items-center justify-center rounded bg-orange-500 text-sidebar-primary-foreground">
-                                 F
-                              </div>
-                              {workspaceName}
-                           </DropdownMenuItem>
-                           <DropdownMenuSeparator />
-                           <DropdownMenuItem>Create or join workspace</DropdownMenuItem>
-                           <DropdownMenuItem>Add an account</DropdownMenuItem>
-                        </DropdownMenuSubContent>
-                     </DropdownMenuPortal>
-                  </DropdownMenuSub>
-                  <DropdownMenuItem>
+                  <DropdownMenuItem onSelect={logout}>
                      Log out
                      <DropdownMenuShortcut>⌥⇧Q</DropdownMenuShortcut>
                   </DropdownMenuItem>
