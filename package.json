@@ -1,0 +1,29 @@
+{
+   "name": "circle-platform",
+   "version": "0.1.0",
+   "private": true,
+   "packageManager": "pnpm@9.15.9",
+   "scripts": {
+      "dev": "pnpm --parallel --filter @circle/web --filter @circle/api --filter @circle/worker dev",
+      "dev:web": "pnpm --filter @circle/web dev",
+      "dev:api": "pnpm --filter @circle/api dev",
+      "dev:worker": "pnpm --filter @circle/worker dev",
+      "build": "pnpm --filter @circle/contracts build && pnpm --filter @circle/database generate && pnpm --filter @circle/web build && pnpm --filter @circle/api build && pnpm --filter @circle/worker build",
+      "lint": "pnpm --filter @circle/web lint && pnpm --filter @circle/api lint",
+      "format": "prettier --write .",
+      "format:check": "prettier --check .",
+      "db:generate": "pnpm --filter @circle/database generate",
+      "db:migrate": "pnpm --filter @circle/database migrate",
+      "infra:up": "docker compose up -d --no-build --pull never postgres redis minio",
+      "infra:down": "docker compose down",
+      "docker:up": "docker compose --profile app up -d --no-build --pull never",
+      "docker:down": "docker compose --profile app down",
+      "docker:logs": "docker compose --profile app logs -f",
+      "docker:build": "docker compose --profile app build",
+      "docker:rebuild": "docker compose --profile app up -d --build"
+   },
+   "devDependencies": {
+      "prettier": "^3.5.3",
+      "typescript": "^5.8.3"
+   }
+}

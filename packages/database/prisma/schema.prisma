@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+  DISABLED
+}
+
+enum IdentityProvider {
+  LOCAL
+  GOOGLE
+  MICROSOFT
+  OIDC
+  SAML
+}
+
+enum WorkspaceMemberStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+}
+
+model User {
+  id            String       @id @default(cuid())
+  email         String       @unique
+  name          String
+  username      String?      @unique
+  avatarUrl     String?      @map("avatar_url")
+  passwordHash  String?      @map("password_hash")
+  emailVerifiedAt DateTime?  @map("email_verified_at")
+  status        UserStatus   @default(ACTIVE)
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  lastLoginAt   DateTime?    @map("last_login_at")
+
+  identities    UserIdentity[]
+  memberships   WorkspaceMember[]
+  organizations Organization[] @relation("OrganizationOwner")
+
+  @@map("users")
+}
+
+model UserIdentity {
+  id                String           @id @default(cuid())
+  userId            String           @map("user_id")
+  provider          IdentityProvider
+  providerAccountId String           @map("provider_account_id")
+  email             String?
+  tenantId          String?          @map("tenant_id")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("user_identities")
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  logoUrl   String?  @map("logo_url")
+  ownerId   String   @map("owner_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  owner      User        @relation("OrganizationOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  workspaces Workspace[]
+
+  @@index([ownerId])
+  @@map("organizations")
+}
+
+model Workspace {
+  id             String            @id @default(cuid())
+  organizationId String            @map("organization_id")
+  name           String
+  slug           String            @unique
+  description    String?
+  timezone       String            @default("UTC")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members      WorkspaceMember[]
+
+  @@index([organizationId])
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String                @id @default(cuid())
+  workspaceId String                @map("workspace_id")
+  userId      String                @map("user_id")
+  status      WorkspaceMemberStatus @default(INVITED)
+  joinedAt    DateTime?             @map("joined_at")
+  invitedById String?               @map("invited_by")
+  createdAt   DateTime              @default(now()) @map("created_at")
+  updatedAt   DateTime              @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+  @@map("workspace_members")
+}

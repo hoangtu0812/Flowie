@@ -1,0 +1,1 @@
+pnpm --dir apps/web exec lint-staged
