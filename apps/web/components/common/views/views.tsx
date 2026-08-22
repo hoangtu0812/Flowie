@@ -1,7 +1,16 @@
 'use client';
 
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import {
+   Dialog,
+   DialogContent,
+   DialogDescription,
+   DialogFooter,
+   DialogHeader,
+   DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
    Select,
@@ -11,39 +20,24 @@ import {
    SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { issueViews, projectViews, View } from '@/mock-data/views';
-import { teams } from '@/mock-data/teams';
+import { useLiveTeam } from '@/components/common/teams/use-live-team';
 import { useViewsDisplayStore, ViewsOrdering } from '@/store/views-display-store';
-import { ArrowDown, Plus, SlidersHorizontal } from 'lucide-react';
+import { ArrowDown, FolderKanban, ListTodo, Plus, SlidersHorizontal } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { parseAsStringLiteral, useQueryState } from 'nuqs';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { LiveView, useLiveViews } from './use-live-views';
 
 const TABS = ['issues', 'projects'] as const;
-
-const formatDate = (iso: string): string => {
-   const [year, month, day] = iso.split('-').map(Number);
-   const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-   ];
-   return `${months[(month ?? 1) - 1]} ${day}, ${year}`;
-};
+const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+const formatDate = (value: string) =>
+   new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(
+      new Date(value)
+   );
 
 function DisplayOptions() {
    const { ordering, displayProperties, setOrdering, toggleProperty } = useViewsDisplayStore();
-
    return (
       <Popover>
          <PopoverTrigger asChild>
@@ -68,49 +62,49 @@ function DisplayOptions() {
                   </SelectContent>
                </Select>
             </div>
-            <div className="flex flex-col gap-2">
-               <span className="text-xs text-muted-foreground">Display properties</span>
-               <div className="flex flex-wrap gap-1.5">
-                  {(
-                     [
-                        ['created', 'Created'],
-                        ['updated', 'Updated'],
-                        ['owner', 'Owner'],
-                     ] as const
-                  ).map(([key, label]) => (
-                     <button
-                        key={key}
-                        onClick={() => toggleProperty(key)}
-                        className={cn(
-                           'px-2 py-0.5 rounded-md border text-xs transition-colors',
-                           displayProperties[key]
-                              ? 'bg-accent border-transparent'
-                              : 'text-muted-foreground hover:bg-accent/50'
-                        )}
-                     >
-                        {label}
-                     </button>
-                  ))}
-               </div>
+            <div className="flex flex-wrap gap-1.5">
+               {(
+                  [
+                     ['created', 'Created'],
+                     ['updated', 'Updated'],
+                     ['owner', 'Owner'],
+                  ] as const
+               ).map(([key, label]) => (
+                  <button
+                     key={key}
+                     onClick={() => toggleProperty(key)}
+                     className={cn(
+                        'px-2 py-0.5 rounded-md border text-xs transition-colors',
+                        displayProperties[key]
+                           ? 'bg-accent border-transparent'
+                           : 'text-muted-foreground hover:bg-accent/50'
+                     )}
+                  >
+                     {label}
+                  </button>
+               ))}
             </div>
          </PopoverContent>
       </Popover>
    );
 }
 
-function ViewRow({ view, orgId }: { view: View; orgId: string }) {
+function ViewRow({ view, orgId }: { view: LiveView; orgId: string }) {
    const { displayProperties } = useViewsDisplayStore();
+   const isIssue = view.entityType === 'issue';
    return (
       <Link
          href={`/${orgId}/view/${view.id}`}
          className="flex items-center gap-3 px-6 py-2.5 border-b border-border/50 hover:bg-sidebar/50 transition-colors"
       >
          <span className="inline-flex size-6 items-center justify-center rounded bg-muted/50 text-sm shrink-0">
-            {view.icon}
+            {isIssue ? <ListTodo className="size-4" /> : <FolderKanban className="size-4" />}
          </span>
          <span className="flex flex-col min-w-0 flex-1">
             <span className="text-sm font-medium truncate">{view.name}</span>
-            <span className="text-xs text-muted-foreground truncate">{view.description}</span>
+            <span className="text-xs text-muted-foreground truncate">
+               {view.isShared ? 'Shared workspace view' : 'Private saved view'}
+            </span>
          </span>
          {displayProperties.created && (
             <span className="hidden sm:block text-xs text-muted-foreground w-24 shrink-0">
@@ -125,11 +119,10 @@ function ViewRow({ view, orgId }: { view: View; orgId: string }) {
          {displayProperties.owner && (
             <span className="flex items-center gap-1.5 w-32 shrink-0 justify-end">
                <Avatar className="size-5">
-                  <AvatarImage src={view.owner.avatarUrl} alt={view.owner.name} />
-                  <AvatarFallback className="text-[9px]">{view.owner.name[0]}</AvatarFallback>
+                  <AvatarFallback className="text-[9px]">{view.createdBy.name[0]}</AvatarFallback>
                </Avatar>
                <span className="text-xs text-muted-foreground truncate max-w-24">
-                  {view.owner.name}
+                  {view.createdBy.name}
                </span>
             </span>
          )}
@@ -137,27 +130,70 @@ function ViewRow({ view, orgId }: { view: View; orgId: string }) {
    );
 }
 
-/**
- * "Views" page: saved issue / project views. With a `teamId`, only that
- * team's views are listed (team sidebar "Views" entry); otherwise the whole
- * workspace is shown.
- */
 export default function Views({ teamId }: { teamId?: string }) {
    const { orgId } = useParams<{ orgId: string }>();
    const [tab, setTab] = useQueryState('tab', parseAsStringLiteral(TABS).withDefault('issues'));
    const { ordering } = useViewsDisplayStore();
-   const team = teamId ? teams.find((entry) => entry.id === teamId) : undefined;
-
-   const list = useMemo(() => {
-      let source = tab === 'issues' ? issueViews : projectViews;
-      if (teamId) source = source.filter((view) => view.teamId === teamId);
-      return [...source].sort((a, b) => {
-         if (ordering === 'created') return b.createdAt.localeCompare(a.createdAt);
-         if (ordering === 'updated') return b.updatedAt.localeCompare(a.updatedAt);
-         return a.name.localeCompare(b.name);
-      });
-   }, [tab, ordering, teamId]);
-
+   const { workspaceId, views, loading, error, reload } = useLiveViews();
+   const { team } = useLiveTeam(teamId ?? '');
+   const [open, setOpen] = useState(false);
+   const [name, setName] = useState('');
+   const [submitting, setSubmitting] = useState(false);
+   const [formError, setFormError] = useState<string>();
+   const list = useMemo(
+      () =>
+         views
+            .filter((view) =>
+               tab === 'issues' ? view.entityType === 'issue' : view.entityType === 'project'
+            )
+            .filter((view) => !teamId || view.filters.teamId === team?.id)
+            .sort((a, b) =>
+               ordering === 'created'
+                  ? b.createdAt.localeCompare(a.createdAt)
+                  : ordering === 'updated'
+                    ? b.updatedAt.localeCompare(a.updatedAt)
+                    : a.name.localeCompare(b.name)
+            ),
+      [ordering, tab, team?.id, teamId, views]
+   );
+   const create = async () => {
+      if (!workspaceId || name.trim().length < 2) {
+         setFormError('View name must contain at least 2 characters.');
+         return;
+      }
+      setSubmitting(true);
+      setFormError(undefined);
+      try {
+         const response = await fetch(`${api}/views`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+               workspaceId,
+               name: name.trim(),
+               entityType: tab === 'issues' ? 'issue' : 'project',
+               filters: team ? { teamId: team.id } : {},
+               isShared: true,
+            }),
+         });
+         if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as {
+               message?: string;
+            } | null;
+            throw new Error(payload?.message ?? 'Could not create view.');
+         }
+         setOpen(false);
+         setName('');
+         reload();
+      } catch (caught) {
+         setFormError(caught instanceof Error ? caught.message : 'Could not create view.');
+      } finally {
+         setSubmitting(false);
+      }
+   };
+   if (loading)
+      return <div className="px-8 py-10 text-sm text-muted-foreground">Loading views…</div>;
+   if (error) return <div className="px-8 py-10 text-sm text-destructive">{error}</div>;
    return (
       <div className="w-full h-full overflow-y-auto">
          <div className="flex items-center justify-between px-6 pt-3 pb-2">
@@ -179,33 +215,23 @@ export default function Views({ teamId }: { teamId?: string }) {
             </div>
             <DisplayOptions />
          </div>
-
          <div className="flex items-center gap-1 px-6 py-1.5 text-xs text-muted-foreground border-b">
-            Name
-            <ArrowDown className="size-3" />
+            Name <ArrowDown className="size-3" />
          </div>
-
          <div className="flex items-center justify-between px-6 py-2 bg-sidebar/60 border-b border-border/50">
             <span className="flex items-center gap-2 text-sm">
-               {team ? (
-                  <span className="inline-flex size-5 items-center justify-center rounded bg-muted/50 text-xs">
-                     {team.icon}
-                  </span>
-               ) : (
-                  <span className="inline-flex size-5 items-center justify-center rounded bg-primary text-primary-foreground text-[10px] font-semibold">
-                     LN
-                  </span>
-               )}
-               <span className="font-medium">{team ? team.name : 'LNDev UI'}</span>
+               <span className="inline-flex size-5 items-center justify-center rounded bg-muted/50 text-xs">
+                  {team?.icon ?? '◌'}
+               </span>
+               <span className="font-medium">{team?.name ?? 'Workspace'}</span>
                <span className="text-muted-foreground text-xs">
                   · {team ? 'Team' : 'Workspace'}
                </span>
             </span>
-            <Button size="xs" variant="ghost">
+            <Button size="xs" variant="ghost" onClick={() => setOpen(true)}>
                <Plus className="size-3.5" />
             </Button>
          </div>
-
          {list.map((view) => (
             <ViewRow key={view.id} view={view} orgId={orgId} />
          ))}
@@ -214,6 +240,32 @@ export default function Views({ teamId }: { teamId?: string }) {
                No views yet
             </div>
          )}
+         <Dialog open={open} onOpenChange={setOpen}>
+            <DialogContent>
+               <DialogHeader>
+                  <DialogTitle>New saved view</DialogTitle>
+                  <DialogDescription>
+                     Create a {tab === 'issues' ? 'issue' : 'project'} view in{' '}
+                     {team?.name ?? 'this workspace'}.
+                  </DialogDescription>
+               </DialogHeader>
+               <Input
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="View name"
+                  autoFocus
+               />
+               {formError && <p className="text-sm text-destructive">{formError}</p>}
+               <DialogFooter>
+                  <Button variant="outline" onClick={() => setOpen(false)}>
+                     Cancel
+                  </Button>
+                  <Button onClick={() => void create()} disabled={submitting}>
+                     {submitting ? 'Creating…' : 'Create view'}
+                  </Button>
+               </DialogFooter>
+            </DialogContent>
+         </Dialog>
       </div>
    );
 }
