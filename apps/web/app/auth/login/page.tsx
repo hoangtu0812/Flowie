@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 type AuthPayload = {
-   data: { workspace: { slug: string } | null };
+   data: { workspace: { slug: string } | null; user: { isPlatformAdmin: boolean } };
 };
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
@@ -39,7 +39,11 @@ export default function LoginPage() {
          if (!response.ok) {
             throw new Error(Array.isArray(payload.message) ? payload.message[0] : payload.message);
          }
-         router.replace(`/${payload.data.workspace?.slug ?? 'flowie'}/team/CORE/all`);
+         router.replace(
+            payload.data.user.isPlatformAdmin
+               ? '/admin'
+               : `/${payload.data.workspace?.slug ?? 'flowie'}/team/CORE/all`
+         );
       } catch (caughtError) {
          setError(caughtError instanceof Error ? caughtError.message : 'Không thể đăng nhập.');
       } finally {

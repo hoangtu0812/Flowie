@@ -64,6 +64,7 @@ model User {
   username      String?      @unique
   avatarUrl     String?      @map("avatar_url")
   passwordHash  String?      @map("password_hash")
+  isPlatformAdmin Boolean    @default(false) @map("is_platform_admin")
   emailVerifiedAt DateTime?  @map("email_verified_at")
   status        UserStatus   @default(ACTIVE)
   createdAt     DateTime     @default(now()) @map("created_at")

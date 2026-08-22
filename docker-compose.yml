@@ -65,6 +65,10 @@ services:
          API_PORT: 4000
          API_CORS_ORIGIN: http://localhost:3000
          AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+         ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-}
+         ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}
+         ADMIN_BOOTSTRAP_NAME: ${ADMIN_BOOTSTRAP_NAME:-Flowie Administrator}
+         ADMIN_RESET_PASSWORD: ${ADMIN_RESET_PASSWORD:-false}
          DATABASE_URL: postgresql://${POSTGRES_USER:-circle}:${POSTGRES_PASSWORD:-circle}@postgres:5432/${POSTGRES_DB:-circle}?schema=public
          REDIS_URL: redis://redis:6379
          S3_ENDPOINT: http://minio:9000

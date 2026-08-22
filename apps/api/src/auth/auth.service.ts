@@ -201,6 +201,7 @@ export class AuthService {
          username: user.username,
          avatarUrl: user.avatarUrl,
          emailVerified: Boolean(user.emailVerifiedAt),
+         isPlatformAdmin: user.isPlatformAdmin,
       };
    }
 

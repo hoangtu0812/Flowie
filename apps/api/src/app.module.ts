@@ -16,6 +16,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { StorageModule } from './storage/storage.module';
 import { WorkspaceModule } from './workspace/workspace.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
    imports: [
@@ -23,6 +24,7 @@ import { WorkspaceModule } from './workspace/workspace.module';
       DatabaseModule,
       HealthModule,
       AuthModule,
+      AdminModule,
       WorkspaceModule,
       TeamsModule,
       ProjectsModule,

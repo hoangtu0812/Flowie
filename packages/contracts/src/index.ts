@@ -11,6 +11,7 @@ export interface AuthenticatedUser {
    username: string | null;
    avatarUrl: string | null;
    emailVerified: boolean;
+   isPlatformAdmin: boolean;
 }
 
 export interface AuthResponse {
