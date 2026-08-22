@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { CreateTeamDto } from './dto/create-team.dto';
 
@@ -19,6 +19,18 @@ export class TeamsService {
          data: { ...dto, members: { create: { userId, role: 'LEAD' } } },
          include: { members: { include: { user: true } } },
       });
+   }
+   async get(teamId: string, workspaceId: string, userId: string) {
+      await this.authorize(workspaceId, userId);
+      const team = await this.prisma.team.findFirst({
+         where: { id: teamId, workspaceId, members: { some: { userId } } },
+         include: {
+            members: { include: { user: true } },
+            _count: { select: { issues: true, projects: true, cycles: true } },
+         },
+      });
+      if (!team) throw new NotFoundException('Team not found.');
+      return team;
    }
    private async authorize(workspaceId: string, userId: string) {
       const membership = await this.prisma.workspaceMember.findFirst({

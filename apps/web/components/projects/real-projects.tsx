@@ -11,7 +11,7 @@ type Project = {
    health: string;
    team: { name: string } | null;
 };
-export function RealProjects() {
+export function RealProjects({ teamId }: { teamId?: string }) {
    const { orgId } = useParams<{ orgId: string }>();
    const [projects, setProjects] = useState<Project[]>([]);
    const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -20,9 +20,12 @@ export function RealProjects() {
       void fetch(`${api}/workspaces/me`, { credentials: 'include' })
          .then((r) => (r.ok ? r.json() : Promise.reject()))
          .then((w: { data: Array<{ workspace: { id: string } }> }) =>
-            fetch(`${api}/projects?workspaceId=${w.data[0]?.workspace.id}`, {
-               credentials: 'include',
-            })
+            fetch(
+               `${api}/projects?${new URLSearchParams({ workspaceId: w.data[0]?.workspace.id ?? '', ...(teamId ? { teamId } : {}) })}`,
+               {
+                  credentials: 'include',
+               }
+            )
          )
          .then((r) => (r.ok ? r.json() : Promise.reject()))
          .then((p: { data: Project[] }) => {
@@ -30,7 +33,7 @@ export function RealProjects() {
             setState('ready');
          })
          .catch(() => setState('error'));
-   }, []);
+   }, [teamId]);
    if (state === 'loading')
       return <p className="p-6 text-sm text-muted-foreground">Loading projects…</p>;
    if (state === 'error')

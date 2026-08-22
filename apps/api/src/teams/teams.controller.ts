@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { CreateTeamDto } from './dto/create-team.dto';
 import { TeamsService } from './teams.service';
@@ -15,5 +15,12 @@ export class TeamsController {
    }
    @Post() async create(@Body() dto: CreateTeamDto, @Req() request: AuthenticatedRequest) {
       return { data: await this.teams.create(dto, request.auth!.userId) };
+   }
+   @Get(':teamId') async get(
+      @Param('teamId') teamId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.teams.get(teamId, workspaceId, request.auth!.userId) };
    }
 }

@@ -1,5 +1,4 @@
-import TeamProjects from '@/components/common/teams/team-projects';
-import Header from '@/components/layout/headers/team-projects/header';
+import { RealProjects } from '@/components/projects/real-projects';
 import MainLayout from '@/components/layout/main-layout';
 
 export default async function TeamProjectsPage({
@@ -9,8 +8,11 @@ export default async function TeamProjectsPage({
 }) {
    const { teamId } = await params;
    return (
-      <MainLayout header={<Header />} headersNumber={1}>
-         <TeamProjects teamId={teamId} />
+      <MainLayout
+         header={<div className="w-full border-b px-6 py-3 font-medium">Team projects</div>}
+         headersNumber={1}
+      >
+         <RealProjects teamId={teamId} />
       </MainLayout>
    );
 }
