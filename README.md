@@ -64,7 +64,17 @@ Lần build Docker đầu tiên dùng `pnpm docker:build`; các lần chạy sau
 
 ## Current scope
 
-The foundation is complete, including local infrastructure, API versioning, Swagger,
-Prisma and the first authentication slice: register, login, refresh-token rotation,
-logout and the matching web screens. Google/Microsoft login, email verification,
-password reset, authorization and real workspace data migration remain upcoming work.
+Flowie now has real, server-backed workspaces (owner/admin/member roles), teams,
+projects, issues, cycles, documents, comments, labels, invitations, initiatives,
+saved views, profile and a platform-admin console. Projects support multiple types,
+milestones, custom fields and templates. Archived records are retained rather than
+silently deleted.
+
+Discord notifications are delivered through Redis/BullMQ with retry in the worker;
+the UI never returns the saved webhook URL. The API also stores an audit trail for
+platform-admin changes at `GET /api/v1/admin/audit` and workspace managers can read
+their audit stream at `GET /api/v1/audit?workspaceId=...`.
+
+For a new local setup, configure `ADMIN_BOOTSTRAP_EMAIL`,
+`ADMIN_BOOTSTRAP_PASSWORD` and `ADMIN_BOOTSTRAP_NAME` in `.env` before the first
+API start. Keep `.env` private: it is ignored by Git.

@@ -29,6 +29,11 @@ export class AdminController {
       return { data: await this.admin.workspaces() };
    }
 
+   @Get('audit')
+   async audit(): Promise<{ data: unknown }> {
+      return { data: await this.admin.auditLogs() };
+   }
+
    @Patch('users/:userId')
    async updateUser(
       @Param('userId') userId: string,

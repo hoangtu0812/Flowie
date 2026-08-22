@@ -245,6 +245,21 @@ model DiscordWebhook {
   @@map("discord_webhooks")
 }
 
+model AuditLog {
+  id         String   @id @default(cuid())
+  workspaceId String? @map("workspace_id")
+  actorId    String?  @map("actor_id")
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id")
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([workspaceId, createdAt])
+  @@index([actorId, createdAt])
+  @@map("audit_logs")
+}
+
 model Team {
   id          String   @id @default(cuid())
   workspaceId String   @map("workspace_id")

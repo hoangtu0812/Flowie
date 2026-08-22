@@ -2,11 +2,19 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { UserStatus } from '@circle/database';
 
 import { PrismaService } from '../database/prisma.service';
+import { AuditService } from '../audit/audit.service';
 import { UpdateAdminUserDto } from './dto/update-admin-user.dto';
 
 @Injectable()
 export class AdminService {
-   constructor(private readonly prisma: PrismaService) {}
+   constructor(
+      private readonly prisma: PrismaService,
+      private readonly audit: AuditService
+   ) {}
+
+   async auditLogs(): Promise<unknown> {
+      return this.audit.platformLogs();
+   }
 
    async overview() {
       const [users, activeUsers, organizations, workspaces, projects, issues] = await this.prisma.$transaction([
@@ -91,6 +99,13 @@ export class AdminService {
             data: { revokedAt: new Date() },
          });
       }
+      await this.audit.record({
+         actorId,
+         action: 'admin.user.updated',
+         entityType: 'user',
+         entityId: userId,
+         metadata: { status: dto.status, isPlatformAdmin: dto.isPlatformAdmin },
+      });
       return updated;
    }
 }

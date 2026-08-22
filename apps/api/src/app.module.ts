@@ -21,11 +21,13 @@ import { UsersModule } from './users/users.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { PortfolioModule } from './portfolio/portfolio.module';
 import { JobsModule } from './jobs/jobs.module';
+import { AuditModule } from './audit/audit.module';
 
 @Module({
    imports: [
       ConfigModule.forRoot({ isGlobal: true }),
       JobsModule,
+      AuditModule,
       DatabaseModule,
       HealthModule,
       AuthModule,
