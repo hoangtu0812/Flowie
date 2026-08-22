@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
-import { getProjectById } from '@/mock-data/projects';
+import { useLiveProject } from '@/components/common/projects/details/use-live-project';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { BarChart3, ChevronRight, Link2, MoreHorizontal, PanelRight, Star } from 'lucide-react';
 import Link from 'next/link';
@@ -71,8 +71,7 @@ function PanelToggles() {
 
 export default function Header({ projectId }: { projectId: string }) {
    const { orgId } = useParams<{ orgId: string }>();
-   const project = getProjectById(projectId);
-   if (!project) return null;
+   const { project } = useLiveProject(projectId);
 
    return (
       <>
@@ -88,9 +87,9 @@ export default function Header({ projectId }: { projectId: string }) {
                   </Link>
                   <ChevronRight className="size-3.5 text-muted-foreground shrink-0" />
                   <span className="inline-flex size-5 bg-muted/50 items-center justify-center rounded shrink-0">
-                     <project.icon className="size-3.5" />
+                     <span className="text-xs">📁</span>
                   </span>
-                  <span className="font-medium truncate">{project.name}</span>
+                  <span className="font-medium truncate">{project?.name ?? 'Project'}</span>
                   <Button variant="ghost" size="icon" className="size-6 text-muted-foreground">
                      <Star className="size-3.5" />
                   </Button>
@@ -106,7 +105,7 @@ export default function Header({ projectId }: { projectId: string }) {
             </div>
          </div>
          <div className="w-full flex justify-between items-center border-b py-1.5 px-6 h-10">
-            <ProjectTabs projectId={project.id} />
+            <ProjectTabs projectId={projectId} />
             <PanelToggles />
          </div>
       </>
