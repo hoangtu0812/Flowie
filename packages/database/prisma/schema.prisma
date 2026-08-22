@@ -89,6 +89,7 @@ model User {
   email         String       @unique
   name          String
   username      String?      @unique
+  title         String?
   avatarUrl     String?      @map("avatar_url")
   passwordHash  String?      @map("password_hash")
   isPlatformAdmin Boolean    @default(false) @map("is_platform_admin")

@@ -9,9 +9,13 @@ export class UpdateProfileDto {
 
    @IsOptional()
    @IsString()
-   @MinLength(2)
    @MaxLength(48)
    username?: string;
+
+   @IsOptional()
+   @IsString()
+   @MaxLength(120)
+   title?: string;
 
    @IsOptional()
    @IsUrl({ require_tld: false })
