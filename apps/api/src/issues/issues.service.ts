@@ -25,6 +25,7 @@ const issueInclude = {
    creator: { select: { id: true, name: true, avatarUrl: true } },
    assignee: { select: { id: true, name: true, avatarUrl: true } },
    labelLinks: { include: { label: { select: { id: true, name: true, color: true } } } },
+   cycleLinks: { select: { cycleId: true } },
 } as const;
 
 @Injectable()

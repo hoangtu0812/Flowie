@@ -44,6 +44,7 @@ type ApiIssue = {
    assignee: ApiPerson | null;
    creator: ApiPerson;
    labelLinks: Array<{ label: ApiLabel }>;
+   cycleLinks: Array<{ cycleId: string }>;
 };
 type ApiIssueOptions = {
    statuses: ApiStatus[];
@@ -190,7 +191,7 @@ const mapIssue = (issue: ApiIssue): Issue => ({
    priority: mapPriority(issue.priority),
    labels: issue.labelLinks.map(({ label }) => mapLabel(label)),
    createdAt: issue.createdAt,
-   cycleId: '',
+   cycleId: issue.cycleLinks[0]?.cycleId ?? '',
    project: issue.project ? mapProject(issue.project) : undefined,
    rank: issue.createdAt,
    dueDate: issue.dueDate ?? undefined,
