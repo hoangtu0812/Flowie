@@ -7,6 +7,7 @@ import {
    ChevronRight,
    CopyMinus,
    Home,
+   Layers,
    Link as LinkIcon,
    MoreHorizontal,
    Settings,
@@ -161,6 +162,14 @@ export function NavTeams() {
                                  <Link href={`/${orgId}/team/${item.id}/projects`}>
                                     <Box size={14} />
                                     <span>Projects</span>
+                                 </Link>
+                              </SidebarMenuSubButton>
+                           </SidebarMenuSubItem>
+                           <SidebarMenuSubItem>
+                              <SidebarMenuSubButton asChild>
+                                 <Link href={`/${orgId}/team/${item.id}/views`}>
+                                    <Layers size={14} />
+                                    <span>Views</span>
                                  </Link>
                               </SidebarMenuSubButton>
                            </SidebarMenuSubItem>

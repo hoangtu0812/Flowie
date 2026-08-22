@@ -1,6 +1,6 @@
 'use client';
 
-import { ClipboardList, Inbox } from 'lucide-react';
+import { ClipboardList, Inbox, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
@@ -13,6 +13,7 @@ import {
 const items = [
    { label: 'Inbox', path: '/inbox', icon: Inbox },
    { label: 'My issues', path: '/my-issues', icon: ClipboardList },
+   { label: 'Agent', path: '/agent', icon: Sparkles },
 ];
 
 export function NavInbox() {
