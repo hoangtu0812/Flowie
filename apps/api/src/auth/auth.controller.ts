@@ -88,7 +88,7 @@ export class AuthController {
    private cookieOptions() {
       return {
          httpOnly: true,
-         secure: this.config.get<string>('NODE_ENV') === 'production',
+         secure: this.config.get<string>('AUTH_COOKIE_SECURE', 'false') === 'true',
          sameSite: 'lax' as const,
          path: '/api/v1/auth',
       };
