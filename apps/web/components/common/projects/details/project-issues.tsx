@@ -1,35 +1,36 @@
 'use client';
 
 import { GroupedIssuesView } from '@/components/common/issues/grouped-issues-view';
+import { InsightsPanel } from '@/components/common/issues/insights-panel';
 import { applyIssueFilters } from '@/components/common/issues/issue-filter-columns';
 import { IssueFilterBar } from '@/components/common/issues/issue-filter-bar';
-import { getProjectDetail } from '@/mock-data/project-details';
-import { getProjectById } from '@/mock-data/projects';
-import { displayOrderedStatus } from '@/mock-data/status';
 import { useFilterStore } from '@/store/filter-store';
 import { useIssuesStore } from '@/store/issues-store';
-import { useMemo } from 'react';
-import { ProjectSidePanel } from './project-side-panel';
+import { useRightPanelStore } from '@/store/right-panel-store';
+import { useEffect, useMemo } from 'react';
 
 interface ProjectIssuesProps {
    projectId: string;
 }
 
-/** Project "Issues" tab: the project's issues grouped by status. */
+/** Project Issues retains the original grouped Circle list, scoped to API issues. */
 export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
-   const project = getProjectById(projectId)!;
-   const detail = getProjectDetail(projectId);
-   const { issues: allIssues } = useIssuesStore();
+   const { issues: allIssues, statuses, loadIssues, isLoading } = useIssuesStore();
    const { filters } = useFilterStore();
+   const { openPanel } = useRightPanelStore();
+
+   useEffect(() => {
+      void loadIssues();
+   }, [loadIssues]);
 
    const issues = useMemo(
-      () => allIssues.filter((issue) => issue.project?.id === project.id),
-      [allIssues, project.id]
+      () => allIssues.filter((issue) => issue.project?.id === projectId),
+      [allIssues, projectId]
    );
-
-   // Filters (filter bar + click-to-filter from the insights panel) apply
-   // on top of the project scope.
    const displayedIssues = useMemo(() => applyIssueFilters(issues, filters), [issues, filters]);
+
+   if (isLoading)
+      return <div className="px-6 py-4 text-sm text-muted-foreground">Loading project issues…</div>;
 
    return (
       <div className="w-full h-full flex flex-col overflow-hidden">
@@ -39,16 +40,15 @@ export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
                <GroupedIssuesView
                   issues={displayedIssues}
                   totalIssues={issues}
-                  statuses={displayOrderedStatus}
+                  statuses={statuses}
                   isViewTypeGrid={false}
                />
             </div>
-            <ProjectSidePanel
-               project={project}
-               detail={detail}
-               issues={issues}
-               insightsIssues={displayedIssues}
-            />
+            {openPanel === 'insights' && (
+               <aside className="hidden xl:flex w-[380px] shrink-0 border-l h-full overflow-hidden bg-container">
+                  <InsightsPanel issues={displayedIssues} />
+               </aside>
+            )}
          </div>
       </div>
    );
