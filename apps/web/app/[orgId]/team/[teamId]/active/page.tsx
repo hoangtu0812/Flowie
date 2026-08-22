@@ -1,4 +1,5 @@
 import { RealIssues } from '@/components/issues/real-issues';
+import Header from '@/components/layout/headers/issues/header';
 import MainLayout from '@/components/layout/main-layout';
 
 export default async function ActiveIssuesPage({
@@ -8,9 +9,7 @@ export default async function ActiveIssuesPage({
 }) {
    const { teamId } = await params;
    return (
-      <MainLayout
-         header={<div className="w-full border-b px-6 py-3 font-medium">Active issues</div>}
-      >
+      <MainLayout header={<Header />}>
          <RealIssues categories={['UNSTARTED', 'STARTED']} teamId={teamId} />
       </MainLayout>
    );
