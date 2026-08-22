@@ -5,6 +5,27 @@ import { CreateSavedViewDto } from './dto/create-saved-view.dto';
 import { CreateInitiativeDto } from './dto/create-initiative.dto';
 import { UpdateInitiativeDto } from './dto/update-initiative.dto';
 
+const initiativeInclude = {
+   owner: { select: { id: true, name: true, avatarUrl: true } },
+   projectLinks: {
+      include: {
+         project: {
+            select: {
+               id: true,
+               name: true,
+               identifier: true,
+               status: true,
+               priority: true,
+               health: true,
+               targetDate: true,
+               lead: { select: { id: true, name: true, avatarUrl: true } },
+            },
+         },
+      },
+   },
+   _count: { select: { projectLinks: true } },
+} as const;
+
 @Injectable()
 export class PortfolioService {
    constructor(private readonly prisma: PrismaService) {}
@@ -46,34 +67,28 @@ export class PortfolioService {
       await this.authorize(workspaceId, userId);
       return this.prisma.initiative.findMany({
          where: { workspaceId, archivedAt: null },
-         include: {
-            projectLinks: {
-               include: {
-                  project: {
-                     select: { id: true, name: true, identifier: true, status: true, health: true },
-                  },
-               },
-            },
-            _count: { select: { projectLinks: true } },
-         },
+         include: initiativeInclude,
          orderBy: { updatedAt: 'desc' },
       });
    }
 
    async createInitiative(dto: CreateInitiativeDto, userId: string) {
       await this.authorizeManager(dto.workspaceId, userId);
+      const ownerId = dto.ownerId ?? userId;
+      await this.assertWorkspaceOwner(dto.workspaceId, ownerId);
       return this.prisma.initiative.create({
          data: {
             workspaceId: dto.workspaceId,
             name: dto.name.trim(),
             description: dto.description,
             status: dto.status ?? 'planned',
+            priority: dto.priority ?? 'none',
+            health: dto.health ?? 'no-update',
+            icon: dto.icon,
+            ownerId,
             targetDate: dto.targetDate ? new Date(dto.targetDate) : undefined,
          },
-         include: {
-            projectLinks: { include: { project: true } },
-            _count: { select: { projectLinks: true } },
-         },
+         include: initiativeInclude,
       });
    }
 
@@ -88,9 +103,11 @@ export class PortfolioService {
          where: { id: initiativeId, workspaceId, archivedAt: null },
       });
       if (!initiative) throw new NotFoundException('Initiative not found.');
+      if (dto.ownerId !== undefined) await this.assertWorkspaceOwner(workspaceId, dto.ownerId);
       return this.prisma.initiative.update({
          where: { id: initiativeId },
          data: { ...dto, targetDate: dto.targetDate ? new Date(dto.targetDate) : undefined },
+         include: initiativeInclude,
       });
    }
 
@@ -150,5 +167,12 @@ export class PortfolioService {
          where: { workspaceId, userId, status: 'ACTIVE', role: { in: ['OWNER', 'ADMIN'] } },
       });
       if (!membership) throw new ForbiddenException('Workspace administrator access is required.');
+   }
+
+   private async assertWorkspaceOwner(workspaceId: string, userId: string) {
+      const member = await this.prisma.workspaceMember.findFirst({
+         where: { workspaceId, userId, status: 'ACTIVE' },
+      });
+      if (!member) throw new NotFoundException('Initiative owner must be an active workspace member.');
    }
 }

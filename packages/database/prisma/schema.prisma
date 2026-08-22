@@ -117,6 +117,7 @@ model User {
   uploadedAttachments Attachment[]
   savedViews SavedView[] @relation("SavedViewCreator")
   ledProjects Project[] @relation("ProjectLead")
+  ownedInitiatives Initiative[] @relation("InitiativeOwner")
 
   @@map("users")
 }
@@ -414,15 +415,21 @@ model Initiative {
   name        String
   description String?
   status      String   @default("planned")
+  priority    String   @default("none")
+  health      String   @default("no-update")
+  icon        String?  @default("🎯")
+  ownerId     String?  @map("owner_id")
   targetDate  DateTime? @map("target_date")
   archivedAt  DateTime? @map("archived_at")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   workspace Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  owner     User?                @relation("InitiativeOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   projectLinks InitiativeProject[]
 
   @@index([workspaceId, archivedAt])
+  @@index([ownerId])
   @@map("initiatives")
 }
 
