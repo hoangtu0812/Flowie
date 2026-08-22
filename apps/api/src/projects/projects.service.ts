@@ -1,9 +1,10 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
+import { IntegrationsService } from '../integrations/integrations.service';
 @Injectable()
 export class ProjectsService {
-   constructor(private readonly prisma: PrismaService) {}
+   constructor(private readonly prisma: PrismaService, private readonly integrations: IntegrationsService) {}
    async list(workspaceId: string, userId: string, teamId?: string) {
       await this.authorize(workspaceId, userId);
       return this.prisma.project.findMany({
@@ -14,7 +15,8 @@ export class ProjectsService {
    }
    async create(dto: CreateProjectDto, userId: string) {
       await this.authorize(dto.workspaceId, userId);
-      return this.prisma.$transaction(async (tx) => {
+      if (dto.teamId) await this.authorizeTeam(dto.workspaceId, dto.teamId, userId);
+      const project = await this.prisma.$transaction(async (tx) => {
          const project = await tx.project.create({
             data: { ...dto, identifier: dto.identifier.toUpperCase() },
             include: { team: true, _count: { select: { issues: true } } },
@@ -30,6 +32,8 @@ export class ProjectsService {
          });
          return project;
       });
+      void this.integrations.publish(dto.workspaceId, `📁 Project created: ${project.name} (${project.identifier})`);
+      return project;
    }
    async get(projectId: string, workspaceId: string, userId: string) {
       await this.authorize(workspaceId, userId);

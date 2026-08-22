@@ -74,7 +74,17 @@ export function RealIssues({ teamId, categories }: { teamId: string; categories?
       return <p className="p-6 text-sm text-muted-foreground">Loading issues…</p>;
    }
    if (state === 'error') {
-      return <p className="p-6 text-sm text-destructive">Could not load issues for this team.</p>;
+      return (
+         <div className="space-y-3 p-6 text-sm">
+            <p className="text-destructive">
+               Không thể tải issues của team này. Team có thể không tồn tại hoặc bạn không còn quyền
+               truy cập.
+            </p>
+            <Link className="font-medium text-primary underline" href={`/${orgId}/teams`}>
+               Quay về danh sách team
+            </Link>
+         </div>
+      );
    }
 
    return (

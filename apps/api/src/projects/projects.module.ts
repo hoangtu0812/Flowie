@@ -2,5 +2,6 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
-@Module({ imports: [AuthModule], controllers: [ProjectsController], providers: [ProjectsService] })
+import { IntegrationsModule } from '../integrations/integrations.module';
+@Module({ imports: [AuthModule, IntegrationsModule], controllers: [ProjectsController], providers: [ProjectsService] })
 export class ProjectsModule {}

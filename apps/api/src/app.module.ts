@@ -17,6 +17,8 @@ import { AttachmentsModule } from './attachments/attachments.module';
 import { StorageModule } from './storage/storage.module';
 import { WorkspaceModule } from './workspace/workspace.module';
 import { AdminModule } from './admin/admin.module';
+import { UsersModule } from './users/users.module';
+import { IntegrationsModule } from './integrations/integrations.module';
 
 @Module({
    imports: [
@@ -25,6 +27,8 @@ import { AdminModule } from './admin/admin.module';
       HealthModule,
       AuthModule,
       AdminModule,
+      UsersModule,
+      IntegrationsModule,
       WorkspaceModule,
       TeamsModule,
       ProjectsModule,

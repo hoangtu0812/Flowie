@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { IssueStatusCategory } from '@circle/database';
 import { PrismaService } from '../database/prisma.service';
 import { CreateIssueDto } from './dto/create-issue.dto';
+import { IntegrationsService } from '../integrations/integrations.service';
 
 const issueInclude = {
    team: { select: { id: true, name: true, identifier: true } },
@@ -13,7 +14,7 @@ const issueInclude = {
 
 @Injectable()
 export class IssuesService {
-   constructor(private readonly prisma: PrismaService) {}
+   constructor(private readonly prisma: PrismaService, private readonly integrations: IntegrationsService) {}
 
    async list(
       workspaceId: string,
@@ -39,7 +40,7 @@ export class IssuesService {
 
    async create(dto: CreateIssueDto, userId: string) {
       await this.authorize(dto.workspaceId, userId, dto.teamId);
-      return this.prisma.$transaction(async (tx) => {
+      const issue = await this.prisma.$transaction(async (tx) => {
          const team = await tx.team.update({
             where: { id: dto.teamId },
             data: { issueSequence: { increment: 1 } },
@@ -87,6 +88,8 @@ export class IssuesService {
          });
          return issue;
       });
+      void this.integrations.publish(dto.workspaceId, `🆕 Issue ${issue.identifier}: ${issue.title}`);
+      return issue;
    }
 
    async get(issueId: string, workspaceId: string, userId: string) {

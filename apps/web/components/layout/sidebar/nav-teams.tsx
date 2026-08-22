@@ -35,10 +35,12 @@ import {
 } from '@/components/ui/sidebar';
 import { RiDonutChartFill } from '@remixicon/react';
 import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
 
 type Team = { id: string; identifier: string; name: string; icon: string | null };
 
 export function NavTeams() {
+   const { orgId } = useParams<{ orgId: string }>();
    const [joinedTeams, setJoinedTeams] = useState<Team[]>([]);
    useEffect(() => {
       const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
@@ -117,7 +119,7 @@ export function NavTeams() {
                         <SidebarMenuSub>
                            <SidebarMenuSubItem>
                               <SidebarMenuSubButton asChild>
-                                 <Link href={`/lndev-ui/team/${item.id}/overview`}>
+                                 <Link href={`/${orgId}/team/${item.id}/overview`}>
                                     <Home size={14} />
                                     <span>Home</span>
                                  </Link>
@@ -125,7 +127,7 @@ export function NavTeams() {
                            </SidebarMenuSubItem>
                            <SidebarMenuSubItem>
                               <SidebarMenuSubButton asChild>
-                                 <Link href={`/lndev-ui/team/${item.id}/all`}>
+                                 <Link href={`/${orgId}/team/${item.id}/all`}>
                                     <CopyMinus size={14} />
                                     <span>Issues</span>
                                  </Link>
@@ -133,7 +135,7 @@ export function NavTeams() {
                            </SidebarMenuSubItem>
                            <SidebarMenuSubItem>
                               <SidebarMenuSubButton asChild>
-                                 <Link href={`/lndev-ui/team/${item.id}/cycles`}>
+                                 <Link href={`/${orgId}/team/${item.id}/cycles`}>
                                     <RiDonutChartFill size={14} />
                                     <span>Cycles</span>
                                  </Link>
@@ -141,14 +143,14 @@ export function NavTeams() {
                               <SidebarMenuSub className="mr-0 pr-0">
                                  <SidebarMenuSubItem>
                                     <SidebarMenuSubButton asChild>
-                                       <Link href={`/lndev-ui/team/${item.id}/cycle/active`}>
+                                       <Link href={`/${orgId}/team/${item.id}/cycle/active`}>
                                           <span>Current</span>
                                        </Link>
                                     </SidebarMenuSubButton>
                                  </SidebarMenuSubItem>
                                  <SidebarMenuSubItem>
                                     <SidebarMenuSubButton asChild>
-                                       <Link href={`/lndev-ui/team/${item.id}/cycle/upcoming`}>
+                                       <Link href={`/${orgId}/team/${item.id}/cycle/upcoming`}>
                                           <span>Upcoming</span>
                                        </Link>
                                     </SidebarMenuSubButton>
@@ -157,7 +159,7 @@ export function NavTeams() {
                            </SidebarMenuSubItem>
                            <SidebarMenuSubItem>
                               <SidebarMenuSubButton asChild>
-                                 <Link href={`/lndev-ui/team/${item.id}/projects`}>
+                                 <Link href={`/${orgId}/team/${item.id}/projects`}>
                                     <Box size={14} />
                                     <span>Projects</span>
                                  </Link>
@@ -165,7 +167,7 @@ export function NavTeams() {
                            </SidebarMenuSubItem>
                            <SidebarMenuSubItem>
                               <SidebarMenuSubButton asChild>
-                                 <Link href={`/lndev-ui/team/${item.id}/views`}>
+                                 <Link href={`/${orgId}/team/${item.id}/views`}>
                                     <Layers size={14} />
                                     <span>Views</span>
                                  </Link>

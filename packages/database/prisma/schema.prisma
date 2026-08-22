@@ -192,9 +192,23 @@ model Workspace {
   labels       Label[]
   attachments  Attachment[]
   activities   Activity[]
+  discordWebhook DiscordWebhook?
 
   @@index([organizationId])
   @@map("workspaces")
+}
+
+model DiscordWebhook {
+  id          String   @id @default(cuid())
+  workspaceId String   @unique @map("workspace_id")
+  webhookUrl  String   @map("webhook_url")
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("discord_webhooks")
 }
 
 model Team {

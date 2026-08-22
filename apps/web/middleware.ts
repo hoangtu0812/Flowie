@@ -5,10 +5,17 @@ const publicPaths = ['/auth/login', '/auth/register'];
 export function middleware(request: NextRequest) {
    const { pathname } = request.nextUrl;
    const hasSession = Boolean(request.cookies.get('flowie_access')?.value);
+   const legacyTeamRoute = pathname.match(/^\/([^/]+)\/team\/CORE(?:\/|$)/);
+
+   // CORE was the hard-coded team ID in the original UI. Preserve old bookmarks without
+   // sending users to a team that cannot exist in the database.
+   if (legacyTeamRoute) {
+      return NextResponse.redirect(new URL(`/${legacyTeamRoute[1]}/teams`, request.url));
+   }
 
    if (publicPaths.includes(pathname)) {
       if (!hasSession) return NextResponse.next();
-      return NextResponse.redirect(new URL('/lndev-ui/team/CORE/all', request.url));
+      return NextResponse.redirect(new URL('/', request.url));
    }
 
    if (!hasSession) {

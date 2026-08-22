@@ -75,6 +75,14 @@ export class AuthService {
                            joinedAt: new Date(),
                         },
                      },
+                     teams: {
+                        create: {
+                           name: 'General',
+                           identifier: 'GEN',
+                           description: 'Default team for this workspace.',
+                           members: { create: { userId: createdUser.id, role: 'LEAD' } },
+                        },
+                     },
                      issueStatuses: {
                         create: [
                            { name: 'Triage', category: 'TRIAGE', color: '#94a3b8', position: 0 },

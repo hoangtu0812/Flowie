@@ -50,7 +50,7 @@ export default function RegisterPage() {
          router.replace(
             payload.data.user.isPlatformAdmin
                ? '/admin'
-               : `/${payload.data.workspace?.slug ?? 'flowie'}/team/CORE/all`
+               : `/${payload.data.workspace?.slug ?? 'flowie'}/teams`
          );
       } catch (caughtError) {
          setError(caughtError instanceof Error ? caughtError.message : 'Không thể tạo tài khoản.');
