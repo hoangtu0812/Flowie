@@ -13,44 +13,41 @@ const geistMono = Geist_Mono({
    subsets: ['latin'],
 });
 
-const siteUrl = 'https://circle.lndev.me';
+const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
 
 export const metadata: Metadata = {
    title: {
-      template: '%s | Circle by lndev-ui',
-      default: 'Circle by lndev-ui',
+      template: '%s | Flowie',
+      default: 'Flowie',
    },
    description:
-      'Project management interface inspired by Linear. Built with Next.js and shadcn/ui, this application allows tracking of issues, projects and teams with a modern, responsive UI.',
+      'Flowie is a collaborative project management platform for teams, projects, and issues.',
    openGraph: {
       type: 'website',
       locale: 'en_US',
       url: siteUrl,
-      siteName: 'Circle',
+      siteName: 'Flowie',
       images: [
          {
             url: `${siteUrl}/banner.png`,
             width: 2560,
             height: 1440,
-            alt: 'lndev/ui',
+            alt: 'Flowie',
          },
       ],
    },
    twitter: {
       card: 'summary_large_image',
-      site: '@ln_dev7',
-      creator: '@ln_dev7',
       images: [
          {
             url: `${siteUrl}/banner.png`,
             width: 2560,
             height: 1440,
-            alt: 'Circle',
+            alt: 'Flowie',
          },
       ],
    },
-   authors: [{ name: 'Leonel NGOYA', url: 'https://lndev.me/' }],
-   keywords: ['ui', 'lndev', 'components', 'template'],
+   keywords: ['project management', 'issues', 'teams', 'workspaces'],
 };
 
 import { ThemeProvider } from '@/components/layout/theme-provider';
