@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
+import { TeamsModule } from './teams/teams.module';
 import { WorkspaceModule } from './workspace/workspace.module';
 
 @Module({
@@ -13,6 +14,7 @@ import { WorkspaceModule } from './workspace/workspace.module';
       HealthModule,
       AuthModule,
       WorkspaceModule,
+      TeamsModule,
    ],
 })
 export class AppModule {}

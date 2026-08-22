@@ -28,6 +28,20 @@ enum WorkspaceMemberStatus {
   SUSPENDED
 }
 
+enum TeamMemberRole {
+  LEAD
+  MEMBER
+}
+
+enum IssueStatusCategory {
+  TRIAGE
+  BACKLOG
+  UNSTARTED
+  STARTED
+  COMPLETED
+  CANCELED
+}
+
 model User {
   id            String       @id @default(cuid())
   email         String       @unique
@@ -46,6 +60,7 @@ model User {
   passwordResetTokens PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
   memberships   WorkspaceMember[]
+  teamMemberships TeamMember[]
   organizations Organization[] @relation("OrganizationOwner")
 
   @@map("users")
@@ -144,9 +159,62 @@ model Workspace {
 
   organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   members      WorkspaceMember[]
+  teams        Team[]
+  issueStatuses IssueStatus[]
 
   @@index([organizationId])
   @@map("workspaces")
+}
+
+model Team {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  name        String
+  identifier  String
+  description String?
+  icon        String?  @default("👥")
+  color       String?  @default("#6366f1")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  members   TeamMember[]
+
+  @@unique([workspaceId, identifier])
+  @@index([workspaceId])
+  @@map("teams")
+}
+
+model TeamMember {
+  teamId String         @map("team_id")
+  userId String         @map("user_id")
+  role   TeamMemberRole @default(MEMBER)
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([teamId, userId])
+  @@index([userId])
+  @@map("team_members")
+}
+
+model IssueStatus {
+  id          String              @id @default(cuid())
+  workspaceId String              @map("workspace_id")
+  teamId      String?             @map("team_id")
+  name        String
+  category    IssueStatusCategory
+  color       String
+  icon        String?
+  position    Int                 @default(0)
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, teamId])
+  @@map("issue_statuses")
 }
 
 model WorkspaceMember {
