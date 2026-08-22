@@ -11,6 +11,7 @@ import { CyclesModule } from './cycles/cycles.module';
 import { DocumentsModule } from './documents/documents.module';
 import { CommentsModule } from './comments/comments.module';
 import { ActivitiesModule } from './activities/activities.module';
+import { LabelsModule } from './labels/labels.module';
 import { WorkspaceModule } from './workspace/workspace.module';
 
 @Module({
@@ -27,6 +28,7 @@ import { WorkspaceModule } from './workspace/workspace.module';
       DocumentsModule,
       CommentsModule,
       ActivitiesModule,
+      LabelsModule,
    ],
 })
 export class AppModule {}
