@@ -160,6 +160,7 @@ model Workspace {
   organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   members      WorkspaceMember[]
   teams        Team[]
+  projects     Project[]
   issueStatuses IssueStatus[]
 
   @@index([organizationId])
@@ -179,10 +180,36 @@ model Team {
 
   workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   members   TeamMember[]
+  projects  Project[]
 
   @@unique([workspaceId, identifier])
   @@index([workspaceId])
   @@map("teams")
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  teamId      String?  @map("team_id")
+  name        String
+  identifier  String
+  description String?
+  status      String   @default("planned")
+  priority    String   @default("none")
+  health      String   @default("no-update")
+  leadId      String?  @map("lead_id")
+  startDate   DateTime? @map("start_date")
+  targetDate  DateTime? @map("target_date")
+  archivedAt  DateTime? @map("archived_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  team Team? @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, identifier])
+  @@index([workspaceId, teamId])
+  @@map("projects")
 }
 
 model TeamMember {

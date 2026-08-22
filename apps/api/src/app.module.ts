@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { DatabaseModule } from './database/database.module';
 import { HealthModule } from './health/health.module';
 import { TeamsModule } from './teams/teams.module';
+import { ProjectsModule } from './projects/projects.module';
 import { WorkspaceModule } from './workspace/workspace.module';
 
 @Module({
@@ -15,6 +16,7 @@ import { WorkspaceModule } from './workspace/workspace.module';
       AuthModule,
       WorkspaceModule,
       TeamsModule,
+      ProjectsModule,
    ],
 })
 export class AppModule {}
