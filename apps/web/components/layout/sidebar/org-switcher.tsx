@@ -23,6 +23,25 @@ import { ThemeToggle } from '../theme-toggle';
 import Link from 'next/link';
 
 export function OrgSwitcher() {
+   const [workspaceName, setWorkspaceName] = React.useState('Flowie');
+
+   React.useEffect(() => {
+      void fetch(
+         `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'}/workspaces/me`,
+         {
+            credentials: 'include',
+         }
+      )
+         .then(async (response) => {
+            if (!response.ok) return;
+            const payload = (await response.json()) as {
+               data: Array<{ workspace: { name: string } }>;
+            };
+            if (payload.data[0]?.workspace.name) setWorkspaceName(payload.data[0].workspace.name);
+         })
+         .catch(() => undefined);
+   }, []);
+
    return (
       <SidebarMenu>
          <SidebarMenuItem>
@@ -37,7 +56,7 @@ export function OrgSwitcher() {
                            F
                         </div>
                         <div className="grid flex-1 text-left text-sm leading-tight">
-                           <span className="truncate font-semibold">Flowie</span>
+                           <span className="truncate font-semibold">{workspaceName}</span>
                         </div>
                         <ChevronsUpDown className="ml-auto" />
                      </SidebarMenuButton>
@@ -77,7 +96,7 @@ export function OrgSwitcher() {
                               <div className="flex aspect-square size-6 items-center justify-center rounded bg-orange-500 text-sidebar-primary-foreground">
                                  F
                               </div>
-                              Flowie
+                              {workspaceName}
                            </DropdownMenuItem>
                            <DropdownMenuSeparator />
                            <DropdownMenuItem>Create or join workspace</DropdownMenuItem>
