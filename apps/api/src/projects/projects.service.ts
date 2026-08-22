@@ -9,6 +9,21 @@ import { CreateMilestoneDto } from './dto/create-milestone.dto';
 import { UpdateMilestoneDto } from './dto/update-milestone.dto';
 import { CreateProjectTemplateDto } from './dto/create-project-template.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+
+const projectInclude = {
+   team: true,
+   lead: { select: { id: true, name: true, avatarUrl: true } },
+   issues: {
+      where: { archivedAt: null },
+      select: {
+         id: true,
+         status: { select: { category: true } },
+         assignee: { select: { id: true, name: true, avatarUrl: true } },
+      },
+   },
+   _count: { select: { issues: true } },
+} satisfies Prisma.ProjectInclude;
+
 @Injectable()
 export class ProjectsService {
    constructor(
@@ -19,7 +34,7 @@ export class ProjectsService {
       await this.authorize(workspaceId, userId);
       return this.prisma.project.findMany({
          where: { workspaceId, archivedAt: null, ...(teamId ? { teamId } : {}) },
-         include: { team: true, _count: { select: { issues: true } } },
+         include: projectInclude,
          orderBy: { createdAt: 'desc' },
       });
    }
@@ -29,7 +44,7 @@ export class ProjectsService {
       const project = await this.prisma.$transaction(async (tx) => {
          const project = await tx.project.create({
             data: { ...dto, identifier: dto.identifier.toUpperCase() },
-            include: { team: true, _count: { select: { issues: true } } },
+            include: projectInclude,
          });
          await tx.activity.create({
             data: {
@@ -57,7 +72,7 @@ export class ProjectsService {
       await this.authorize(workspaceId, userId);
       const project = await this.prisma.project.findFirst({
          where: { id: projectId, workspaceId, archivedAt: null },
-         include: { team: true, _count: { select: { issues: true } } },
+         include: projectInclude,
       });
       if (!project) throw new NotFoundException('Project not found.');
       if (project.teamId) await this.authorizeTeam(workspaceId, project.teamId, userId);
@@ -81,7 +96,7 @@ export class ProjectsService {
       return this.prisma.project.update({
          where: { id: projectId },
          data: dto,
-         include: { team: true, _count: { select: { issues: true } } },
+         include: projectInclude,
       });
    }
    async archive(projectId: string, workspaceId: string, userId: string) {
@@ -96,7 +111,7 @@ export class ProjectsService {
          return tx.project.update({
             where: { id: projectId },
             data: { archivedAt },
-            include: { team: true, _count: { select: { issues: true } } },
+            include: projectInclude,
          });
       });
    }
