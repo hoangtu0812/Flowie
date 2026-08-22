@@ -81,6 +81,8 @@ model User {
   assignedIssues Issue[] @relation("IssueAssignee")
   createdDocuments Document[] @relation("DocumentCreator")
   updatedDocuments Document[] @relation("DocumentUpdater")
+  comments Comment[]
+  activities Activity[] @relation("ActivityActor")
 
   @@map("users")
 }
@@ -184,6 +186,7 @@ model Workspace {
   issues       Issue[]
   cycles       Cycle[]
   documents    Document[]
+  activities   Activity[]
 
   @@index([organizationId])
   @@map("workspaces")
@@ -300,6 +303,8 @@ model Issue {
   creator   User        @relation("IssueCreator", fields: [creatorId], references: [id], onDelete: Restrict)
   assignee  User?       @relation("IssueAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   cycleLinks IssueCycle[]
+  comments Comment[]
+  activities Activity[]
 
   @@unique([workspaceId, identifier])
   @@unique([teamId, number])
@@ -361,6 +366,40 @@ model Document {
 
   @@index([workspaceId, teamId])
   @@map("documents")
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  issueId   String   @map("issue_id")
+  authorId  String   @map("author_id")
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  issue  Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  author User  @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([issueId, createdAt])
+  @@map("comments")
+}
+
+model Activity {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  issueId     String?  @map("issue_id")
+  actorId     String?  @map("actor_id")
+  type        String
+  data        Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  issue     Issue?    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  actor     User?     @relation("ActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, createdAt])
+  @@index([issueId, createdAt])
+  @@map("activities")
 }
 
 model WorkspaceMember {

@@ -1,6 +1,8 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
 
 type Issue = {
    id: string;
@@ -15,6 +17,7 @@ type Issue = {
 type WorkspaceResponse = { data: Array<{ workspace: { id: string } }> };
 
 export function RealIssues({ teamId, categories }: { teamId: string; categories?: string[] }) {
+   const { orgId } = useParams<{ orgId: string }>();
    const [issues, setIssues] = useState<Issue[]>([]);
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -118,8 +121,9 @@ export function RealIssues({ teamId, categories }: { teamId: string; categories?
          ) : (
             <div className="overflow-hidden rounded-md border">
                {issues.map((issue) => (
-                  <article
+                  <Link
                      className="flex items-center gap-3 border-b px-4 py-3 last:border-0"
+                     href={`/${orgId}/issue/${issue.id}`}
                      key={issue.id}
                   >
                      <span
@@ -140,7 +144,7 @@ export function RealIssues({ teamId, categories }: { teamId: string; categories?
                            {issue.priority.toLowerCase()}
                         </span>
                      )}
-                  </article>
+                  </Link>
                ))}
             </div>
          )}

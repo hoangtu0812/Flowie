@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { IssueStatusCategory } from '@circle/database';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { CreateIssueDto } from './dto/create-issue.dto';
@@ -29,5 +29,14 @@ export class IssuesController {
    @Post()
    async create(@Body() dto: CreateIssueDto, @Req() request: AuthenticatedRequest) {
       return { data: await this.issues.create(dto, request.auth!.userId) };
+   }
+
+   @Get(':issueId')
+   async get(
+      @Param('issueId') issueId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.issues.get(issueId, workspaceId, request.auth!.userId) };
    }
 }

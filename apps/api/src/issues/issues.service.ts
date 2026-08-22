@@ -63,7 +63,7 @@ export class IssuesService {
             });
             if (!assignee) throw new NotFoundException('Assignee is not a workspace member.');
          }
-         return tx.issue.create({
+         const issue = await tx.issue.create({
             data: {
                ...dto,
                statusId: status.id,
@@ -73,7 +73,30 @@ export class IssuesService {
             },
             include: issueInclude,
          });
+         await tx.activity.create({
+            data: {
+               workspaceId: dto.workspaceId,
+               issueId: issue.id,
+               actorId: userId,
+               type: 'issue.created',
+               data: { title: issue.title, identifier: issue.identifier },
+            },
+         });
+         return issue;
       });
+   }
+
+   async get(issueId: string, workspaceId: string, userId: string) {
+      const issue = await this.prisma.issue.findFirst({
+         where: { id: issueId, workspaceId, archivedAt: null },
+         include: {
+            ...issueInclude,
+            _count: { select: { comments: true } },
+         },
+      });
+      if (!issue) throw new NotFoundException('Issue not found.');
+      await this.authorize(workspaceId, userId, issue.teamId);
+      return issue;
    }
 
    private async authorize(workspaceId: string, userId: string, teamId?: string) {

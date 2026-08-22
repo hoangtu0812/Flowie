@@ -9,6 +9,8 @@ import { ProjectsModule } from './projects/projects.module';
 import { IssuesModule } from './issues/issues.module';
 import { CyclesModule } from './cycles/cycles.module';
 import { DocumentsModule } from './documents/documents.module';
+import { CommentsModule } from './comments/comments.module';
+import { ActivitiesModule } from './activities/activities.module';
 import { WorkspaceModule } from './workspace/workspace.module';
 
 @Module({
@@ -23,6 +25,8 @@ import { WorkspaceModule } from './workspace/workspace.module';
       IssuesModule,
       CyclesModule,
       DocumentsModule,
+      CommentsModule,
+      ActivitiesModule,
    ],
 })
 export class AppModule {}
