@@ -19,15 +19,18 @@ export class IssuesService {
       workspaceId: string,
       userId: string,
       teamId?: string,
-      categories?: IssueStatusCategory[]
+      categories?: IssueStatusCategory[],
+      scope?: 'assigned' | 'created'
    ) {
       await this.authorize(workspaceId, userId, teamId);
       return this.prisma.issue.findMany({
          where: {
             workspaceId,
             archivedAt: null,
-            ...(teamId ? { teamId } : {}),
+            ...(teamId ? { teamId } : { team: { members: { some: { userId } } } }),
             ...(categories?.length ? { status: { category: { in: categories } } } : {}),
+            ...(scope === 'assigned' ? { assigneeId: userId } : {}),
+            ...(scope === 'created' ? { creatorId: userId } : {}),
          },
          include: issueInclude,
          orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],

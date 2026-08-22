@@ -1,11 +1,13 @@
-import MyIssues from '@/components/common/my-issues/my-issues';
-import Header from '@/components/layout/headers/my-issues/header';
+import { RealMyIssues } from '@/components/issues/real-my-issues';
 import MainLayout from '@/components/layout/main-layout';
 
 export default function MyIssuesPage() {
    return (
-      <MainLayout header={<Header />} headersNumber={2}>
-         <MyIssues />
+      <MainLayout
+         header={<div className="w-full border-b px-6 py-3 font-medium">My issues</div>}
+         headersNumber={1}
+      >
+         <RealMyIssues />
       </MainLayout>
    );
 }

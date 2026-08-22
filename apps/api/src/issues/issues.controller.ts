@@ -14,6 +14,7 @@ export class IssuesController {
       @Query('workspaceId') workspaceId: string,
       @Query('teamId') teamId: string | undefined,
       @Query('categories') categoryInput: string | undefined,
+      @Query('scope') scope: 'assigned' | 'created' | undefined,
       @Req() request: AuthenticatedRequest
    ) {
       const categories = categoryInput
@@ -22,7 +23,7 @@ export class IssuesController {
             Object.values(IssueStatusCategory).includes(value as IssueStatusCategory)
          );
       return {
-         data: await this.issues.list(workspaceId, request.auth!.userId, teamId, categories),
+         data: await this.issues.list(workspaceId, request.auth!.userId, teamId, categories, scope),
       };
    }
 

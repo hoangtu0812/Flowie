@@ -1,8 +1,5 @@
-import MemberProfile from '@/components/common/members/member-profile';
-import Header from '@/components/layout/headers/profile/header';
+import { RealMemberProfile } from '@/components/members/real-member-profile';
 import MainLayout from '@/components/layout/main-layout';
-import { users } from '@/mock-data/users';
-import { notFound } from 'next/navigation';
 
 interface MemberProfilePageProps {
    params: Promise<{ memberId: string }>;
@@ -10,15 +7,9 @@ interface MemberProfilePageProps {
 
 export default async function MemberProfilePage({ params }: MemberProfilePageProps) {
    const { memberId } = await params;
-   const member = users.find((user) => user.id === memberId);
-
-   if (!member) {
-      notFound();
-   }
-
    return (
-      <MainLayout header={<Header member={member} />}>
-         <MemberProfile member={member} />
+      <MainLayout header={<div className="w-full border-b px-6 py-3 font-medium">Profile</div>}>
+         <RealMemberProfile memberId={memberId} />
       </MainLayout>
    );
 }
