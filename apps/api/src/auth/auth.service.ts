@@ -75,6 +75,26 @@ export class AuthService {
                            joinedAt: new Date(),
                         },
                      },
+                     issueStatuses: {
+                        create: [
+                           { name: 'Triage', category: 'TRIAGE', color: '#94a3b8', position: 0 },
+                           { name: 'Backlog', category: 'BACKLOG', color: '#64748b', position: 1 },
+                           { name: 'Todo', category: 'UNSTARTED', color: '#94a3b8', position: 2 },
+                           {
+                              name: 'In progress',
+                              category: 'STARTED',
+                              color: '#f59e0b',
+                              position: 3,
+                           },
+                           { name: 'Done', category: 'COMPLETED', color: '#22c55e', position: 4 },
+                           {
+                              name: 'Canceled',
+                              category: 'CANCELED',
+                              color: '#ef4444',
+                              position: 5,
+                           },
+                        ],
+                     },
                   },
                },
             },
