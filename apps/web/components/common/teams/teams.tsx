@@ -1,46 +1,29 @@
 'use client';
 
+import { teams as allTeams } from '@/mock-data/teams';
 import { useTeamsFilterStore } from '@/store/team-filter-store';
 import { useTeamsDisplayStore } from '@/store/teams-display-store';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Filter } from '@/components/layout/headers/teams/filter';
 import TeamLine from './team-line';
 import { TeamsDisplayOptions } from './teams-display-options';
-import type { ApiTeam } from './team-types';
 
 export default function Teams() {
    const { filters } = useTeamsFilterStore();
    const { ordering, displayProperties } = useTeamsDisplayStore();
-   const [allTeams, setAllTeams] = useState<ApiTeam[]>([]);
-   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
-
-   useEffect(() => {
-      const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
-      void fetch(`${api}/workspaces/me`, { credentials: 'include' })
-         .then((response) => (response.ok ? response.json() : Promise.reject()))
-         .then((payload: { data: Array<{ workspace: { id: string } }> }) =>
-            fetch(`${api}/teams?workspaceId=${payload.data[0]?.workspace.id}`, {
-               credentials: 'include',
-            })
-         )
-         .then((response) => (response.ok ? response.json() : Promise.reject()))
-         .then((payload: { data: ApiTeam[] }) => {
-            setAllTeams(payload.data);
-            setState('ready');
-         })
-         .catch(() => setState('error'));
-   }, []);
 
    const displayed = useMemo(() => {
       let list = allTeams.slice();
 
       if (filters.membership.length > 0) {
          const selectedMembership = new Set(filters.membership);
-         list = selectedMembership.has('Joined') ? list : [];
+         list = list.filter((team) =>
+            selectedMembership.has(team.joined ? 'Joined' : 'Not-Joined')
+         );
       }
       if (filters.identifier.length > 0) {
          const selectedIdentifiers = new Set(filters.identifier);
-         list = list.filter((team) => selectedIdentifiers.has(team.identifier));
+         list = list.filter((team) => selectedIdentifiers.has(team.id));
       }
 
       const compare = (a: (typeof list)[number], b: (typeof list)[number]) => {
@@ -48,14 +31,14 @@ export default function Teams() {
             case 'members':
                return b.members.length - a.members.length;
             case 'projects':
-               return b._count.projects - a._count.projects;
+               return b.projects.length - a.projects.length;
             case 'name':
             default:
                return a.name.localeCompare(b.name);
          }
       };
       return list.sort(compare);
-   }, [allTeams, filters, ordering]);
+   }, [filters, ordering]);
 
    return (
       <div className="w-full">
@@ -65,7 +48,7 @@ export default function Teams() {
                {displayed.length} {displayed.length === 1 ? 'team' : 'teams'}
             </span>
             <div className="flex items-center gap-1">
-               <Filter identifiers={allTeams.map((team) => team.identifier)} />
+               <Filter />
                <TeamsDisplayOptions />
             </div>
          </div>
@@ -95,15 +78,6 @@ export default function Teams() {
          </div>
 
          <div className="w-full">
-            {state === 'loading' && (
-               <p className="p-6 text-sm text-muted-foreground">Loading teams…</p>
-            )}
-            {state === 'error' && (
-               <p className="p-6 text-sm text-destructive">Could not load teams.</p>
-            )}
-            {state === 'ready' && displayed.length === 0 && (
-               <p className="p-6 text-sm text-muted-foreground">No teams match this filter.</p>
-            )}
             {displayed.map((team) => (
                <TeamLine key={team.id} team={team} />
             ))}

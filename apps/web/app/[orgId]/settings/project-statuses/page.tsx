@@ -1,10 +1,11 @@
 import MainLayout from '@/components/layout/main-layout';
-import { FeatureUnavailable } from '@/components/common/feature-unavailable';
+import ProjectStatusesSettings from '@/components/common/settings/project-statuses-settings';
+import Header from '@/components/layout/headers/settings/header';
 
 export default function Page() {
    return (
-      <MainLayout>
-         <FeatureUnavailable />
+      <MainLayout header={<Header />} headersNumber={1}>
+         <ProjectStatusesSettings />
       </MainLayout>
    );
 }

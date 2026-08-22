@@ -1,16 +1,24 @@
-import { RealProjectDetail } from '@/components/projects/real-project-detail';
+import ProjectIssues from '@/components/common/projects/details/project-issues';
+import Header from '@/components/layout/headers/project/header';
 import MainLayout from '@/components/layout/main-layout';
+import { getProjectById } from '@/mock-data/projects';
+import { notFound } from 'next/navigation';
 
 interface ProjectPageProps {
-   params: Promise<{ projectId: string; orgId: string }>;
+   params: Promise<{ projectId: string }>;
 }
 
 export default async function ProjectPage({ params }: ProjectPageProps) {
-   const { projectId, orgId } = await params;
+   const { projectId } = await params;
+   const project = getProjectById(projectId);
+
+   if (!project) {
+      notFound();
+   }
 
    return (
-      <MainLayout header={<div className="w-full border-b px-6 py-3 font-medium">Project</div>}>
-         <RealProjectDetail orgId={orgId} projectId={projectId} view="issues" />
+      <MainLayout header={<Header projectId={projectId} />}>
+         <ProjectIssues projectId={projectId} />
       </MainLayout>
    );
 }

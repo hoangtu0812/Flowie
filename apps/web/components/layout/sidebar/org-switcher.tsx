@@ -8,50 +8,21 @@ import {
    DropdownMenuContent,
    DropdownMenuGroup,
    DropdownMenuItem,
+   DropdownMenuLabel,
+   DropdownMenuPortal,
    DropdownMenuSeparator,
    DropdownMenuShortcut,
+   DropdownMenuSub,
+   DropdownMenuSubContent,
+   DropdownMenuSubTrigger,
    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
+import { CreateNewIssue } from './create-new-issue';
 import { ThemeToggle } from '../theme-toggle';
-import { FlowieLogo } from '@/components/brand/flowie-logo';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
 
 export function OrgSwitcher() {
-   const { orgId } = useParams<{ orgId: string }>();
-   const router = useRouter();
-   const [workspaceName, setWorkspaceName] = React.useState('Flowie');
-
-   async function logout() {
-      await fetch(
-         `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'}/auth/logout`,
-         {
-            method: 'POST',
-            credentials: 'include',
-         }
-      );
-      router.replace('/login');
-      router.refresh();
-   }
-
-   React.useEffect(() => {
-      void fetch(
-         `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'}/workspaces/me`,
-         {
-            credentials: 'include',
-         }
-      )
-         .then(async (response) => {
-            if (!response.ok) return;
-            const payload = (await response.json()) as {
-               data: Array<{ workspace: { name: string } }>;
-            };
-            if (payload.data[0]?.workspace.name) setWorkspaceName(payload.data[0].workspace.name);
-         })
-         .catch(() => undefined);
-   }, []);
-
    return (
       <SidebarMenu>
          <SidebarMenuItem>
@@ -62,15 +33,19 @@ export function OrgSwitcher() {
                         size="lg"
                         className="h-8 p-1 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                      >
-                        <FlowieLogo />
+                        <div className="flex aspect-square size-6 items-center justify-center rounded bg-orange-500 text-sidebar-primary-foreground">
+                           LN
+                        </div>
                         <div className="grid flex-1 text-left text-sm leading-tight">
-                           <span className="truncate font-semibold">{workspaceName}</span>
+                           <span className="truncate font-semibold">lndev-ui</span>
                         </div>
                         <ChevronsUpDown className="ml-auto" />
                      </SidebarMenuButton>
                   </DropdownMenuTrigger>
 
                   <ThemeToggle />
+
+                  <CreateNewIssue />
                </div>
                <DropdownMenuContent
                   className="w-[--radix-dropdown-menu-trigger-width] min-w-60 rounded-lg"
@@ -80,17 +55,37 @@ export function OrgSwitcher() {
                >
                   <DropdownMenuGroup>
                      <DropdownMenuItem asChild>
-                        <Link href={`/${orgId}/settings`}>
+                        <Link href="/lndev-ui/settings">
                            Settings
                            <DropdownMenuShortcut>G then S</DropdownMenuShortcut>
                         </Link>
                      </DropdownMenuItem>
-                     <DropdownMenuItem asChild>
-                        <Link href={`/${orgId}/teams`}>Teams and members</Link>
-                     </DropdownMenuItem>
+                     <DropdownMenuItem>Invite and manage members</DropdownMenuItem>
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onSelect={logout}>
+                  <DropdownMenuGroup>
+                     <DropdownMenuItem>Download desktop app</DropdownMenuItem>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuSub>
+                     <DropdownMenuSubTrigger>Switch Workspace</DropdownMenuSubTrigger>
+                     <DropdownMenuPortal>
+                        <DropdownMenuSubContent>
+                           <DropdownMenuLabel>leonelngoya@gmail.com</DropdownMenuLabel>
+                           <DropdownMenuSeparator />
+                           <DropdownMenuItem>
+                              <div className="flex aspect-square size-6 items-center justify-center rounded bg-orange-500 text-sidebar-primary-foreground">
+                                 LN
+                              </div>
+                              lndev-ui
+                           </DropdownMenuItem>
+                           <DropdownMenuSeparator />
+                           <DropdownMenuItem>Create or join workspace</DropdownMenuItem>
+                           <DropdownMenuItem>Add an account</DropdownMenuItem>
+                        </DropdownMenuSubContent>
+                     </DropdownMenuPortal>
+                  </DropdownMenuSub>
+                  <DropdownMenuItem>
                      Log out
                      <DropdownMenuShortcut>⌥⇧Q</DropdownMenuShortcut>
                   </DropdownMenuItem>

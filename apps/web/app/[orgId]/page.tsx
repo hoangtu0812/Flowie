@@ -1,10 +1,5 @@
-import MainLayout from '@/components/layout/main-layout';
-import { RealDashboard } from '@/components/portfolio/real-dashboard';
+import { redirect } from 'next/navigation';
 
 export default function OrgIdPage() {
-   return (
-      <MainLayout>
-         <RealDashboard />
-      </MainLayout>
-   );
+   redirect('lndev-ui/team/CORE/all');
 }

@@ -1,10 +1,10 @@
 import MainLayout from '@/components/layout/main-layout';
-import { RealInbox } from '@/components/notifications/real-inbox';
+import Inbox from '@/components/common/inbox/inbox';
 
 export default function InboxPage() {
    return (
       <MainLayout>
-         <RealInbox />
+         <Inbox />
       </MainLayout>
    );
 }

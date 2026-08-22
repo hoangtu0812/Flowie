@@ -1,15 +1,11 @@
-import { RealTeamDetail } from '@/components/teams/real-team-detail';
+import TeamOverview from '@/components/common/teams/team-overview';
+import Header from '@/components/layout/headers/team/header';
 import MainLayout from '@/components/layout/main-layout';
 
-export default async function TeamOverviewPage({
-   params,
-}: {
-   params: Promise<{ teamId: string }>;
-}) {
-   const { teamId } = await params;
+export default function TeamOverviewPage() {
    return (
-      <MainLayout header={<div className="w-full border-b px-6 py-3 font-medium">Team</div>}>
-         <RealTeamDetail teamId={teamId} view="overview" />
+      <MainLayout header={<Header />}>
+         <TeamOverview />
       </MainLayout>
    );
 }

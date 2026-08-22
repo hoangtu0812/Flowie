@@ -1,13 +1,11 @@
 import MainLayout from '@/components/layout/main-layout';
-import { RealNewTeam } from '@/components/settings/real-new-team';
+import Header from '@/components/layout/headers/settings/header';
+import NewTeam from '@/components/common/settings/new-team';
 
 export default function Page() {
    return (
-      <MainLayout
-         header={<div className="w-full border-b px-6 py-3 font-medium">Create team</div>}
-         headersNumber={1}
-      >
-         <RealNewTeam />
+      <MainLayout header={<Header />} headersNumber={1}>
+         <NewTeam />
       </MainLayout>
    );
 }

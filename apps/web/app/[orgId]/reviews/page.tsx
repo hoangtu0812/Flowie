@@ -1,10 +1,10 @@
-import { FeatureUnavailable } from '@/components/common/feature-unavailable';
+import Reviews from '@/components/common/reviews/reviews';
 import MainLayout from '@/components/layout/main-layout';
 
 export default function ReviewsPage() {
    return (
       <MainLayout>
-         <FeatureUnavailable />
+         <Reviews listTab="for-you" />
       </MainLayout>
    );
 }

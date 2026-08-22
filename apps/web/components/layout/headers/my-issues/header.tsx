@@ -1,103 +1,154 @@
 'use client';
 
+import {
+   MY_ISSUES_TAB_ITEMS,
+   scopeMyIssues,
+   useMyIssuesTab,
+} from '@/components/common/my-issues/use-my-issues';
+import { IssueFilterTrigger } from '@/components/common/issues/issue-filter-trigger';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
-import { BarChart3, ListFilter, SearchIcon } from 'lucide-react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useState } from 'react';
+import { useIssuesStore } from '@/store/issues-store';
+import { useRightPanelStore } from '@/store/right-panel-store';
+import { useSearchStore } from '@/store/search-store';
+import { BarChart3, PanelRight, SearchIcon } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { DisplayOptions } from '../display-options';
+import Notifications from '../issues/notifications';
 
-const TABS = [
-   { value: 'assigned', label: 'Assigned' },
-   { value: 'created', label: 'Created' },
-];
+function HeaderNav() {
+   const { isSearchOpen, toggleSearch, closeSearch, setSearchQuery, searchQuery } =
+      useSearchStore();
+   const searchInputRef = useRef<HTMLInputElement>(null);
+   const searchContainerRef = useRef<HTMLDivElement>(null);
 
-export default function Header() {
-   const pathname = usePathname();
-   const router = useRouter();
-   const searchParams = useSearchParams();
-   const [searchOpen, setSearchOpen] = useState(false);
-   const scope = searchParams.get('scope') === 'created' ? 'created' : 'assigned';
-   const query = searchParams.get('q') ?? '';
-   function update(values: { scope?: string; q?: string }) {
-      const params = new URLSearchParams(searchParams.toString());
-      if (values.scope !== undefined) {
-         if (values.scope === 'assigned') params.delete('scope');
-         else params.set('scope', values.scope);
+   useEffect(() => {
+      if (isSearchOpen && searchInputRef.current) {
+         searchInputRef.current.focus();
       }
-      if (values.q !== undefined) {
-         if (values.q.trim()) params.set('q', values.q);
-         else params.delete('q');
-      }
-      router.replace(`${pathname}${params.size ? `?${params.toString()}` : ''}`);
-   }
+   }, [isSearchOpen]);
+
+   useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+         if (
+            searchContainerRef.current &&
+            !searchContainerRef.current.contains(event.target as Node) &&
+            isSearchOpen &&
+            searchQuery.trim() === ''
+         ) {
+            closeSearch();
+         }
+      };
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+   }, [isSearchOpen, closeSearch, searchQuery]);
+
    return (
-      <div className="w-full flex flex-col items-center">
-         <div className="w-full flex justify-between items-center border-b py-1.5 px-6 h-10">
-            <div className="flex items-center gap-2">
-               <SidebarTrigger />
-               <span className="text-sm font-medium">My issues</span>
-            </div>
-            {searchOpen ? (
-               <div className="relative w-64">
-                  <SearchIcon className="absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <div className="w-full flex justify-between items-center border-b py-1.5 px-6 h-10">
+         <div className="flex items-center gap-2">
+            <SidebarTrigger />
+            <span className="text-sm font-medium">My issues</span>
+         </div>
+         <div className="flex items-center gap-2">
+            {isSearchOpen ? (
+               <div ref={searchContainerRef} className="relative flex items-center w-64">
+                  <SearchIcon className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
                   <Input
-                     autoFocus
-                     className="h-7 pl-8 text-sm"
                      type="search"
-                     value={query}
+                     ref={searchInputRef}
+                     value={searchQuery}
+                     onChange={(event) => setSearchQuery(event.target.value)}
                      placeholder="Search issues..."
-                     onChange={(event) => update({ q: event.target.value })}
+                     className="pl-8 h-7 text-sm"
                      onKeyDown={(event) => {
-                        if (event.key === 'Escape') setSearchOpen(false);
+                        if (event.key === 'Escape') {
+                           if (searchQuery.trim() === '') closeSearch();
+                           else setSearchQuery('');
+                        }
                      }}
                   />
                </div>
             ) : (
-               <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setSearchOpen(true)}
-                  aria-label="Search issues"
-               >
-                  <SearchIcon className="size-4" />
-               </Button>
+               <>
+                  <Button
+                     variant="ghost"
+                     size="icon"
+                     onClick={toggleSearch}
+                     className="h-8 w-8"
+                     aria-label="Search"
+                  >
+                     <SearchIcon className="h-4 w-4" />
+                  </Button>
+                  <Notifications />
+               </>
             )}
          </div>
-         <div className="w-full flex justify-between items-center border-b py-1.5 px-6 h-10">
+      </div>
+   );
+}
+
+function HeaderOptions() {
+   const [tab, setTab] = useMyIssuesTab();
+   const { issues } = useIssuesStore();
+   const { openPanel, togglePanel } = useRightPanelStore();
+
+   const count = scopeMyIssues(issues, tab).length;
+
+   return (
+      <div className="w-full flex justify-between items-center border-b py-1.5 px-6 h-10">
+         <div className="flex items-center gap-3">
             <div className="flex items-center gap-1">
-               {TABS.map((tab) => (
+               {MY_ISSUES_TAB_ITEMS.map((item) => (
                   <button
-                     key={tab.value}
+                     key={item.value}
                      type="button"
-                     onClick={() => update({ scope: tab.value })}
+                     onClick={() => void setTab(item.value === 'assigned' ? null : item.value)}
                      className={cn(
                         'px-2.5 h-7 inline-flex items-center rounded-full border text-xs font-medium transition-colors',
-                        scope === tab.value
+                        tab === item.value
                            ? 'bg-accent text-foreground border-border'
                            : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/50'
                      )}
                   >
-                     {tab.label}
+                     {item.label}
                   </button>
                ))}
             </div>
-            <div className="flex items-center gap-1">
-               <Button
-                  size="xs"
-                  variant="ghost"
-                  onClick={() => window.dispatchEvent(new Event('flowie:toggle-my-issues-filter'))}
-               >
-                  <ListFilter className="size-4" />
-                  <span className="hidden sm:inline ml-1">Filter</span>
-               </Button>
-               <Button size="xs" variant="ghost" aria-label="Issue insights">
-                  <BarChart3 className="size-4" />
-               </Button>
-            </div>
+            <span className="text-sm text-muted-foreground hidden sm:inline">
+               {count} {count === 1 ? 'issue' : 'issues'}
+            </span>
+         </div>
+         <div className="flex items-center gap-1">
+            <IssueFilterTrigger />
+            <Button
+               size="xs"
+               variant={openPanel === 'insights' ? 'secondary' : 'ghost'}
+               onClick={() => togglePanel('insights')}
+               aria-label="Toggle insights panel"
+            >
+               <BarChart3 className="size-4" />
+            </Button>
+            <Button
+               size="xs"
+               variant={openPanel === 'breakdown' ? 'secondary' : 'ghost'}
+               onClick={() => togglePanel('breakdown')}
+               aria-label="Toggle breakdown panel"
+            >
+               <PanelRight className="size-4" />
+            </Button>
+            <DisplayOptions />
          </div>
       </div>
+   );
+}
+
+export default function Header() {
+   return (
+      <>
+         <HeaderNav />
+         <HeaderOptions />
+      </>
    );
 }

@@ -7,7 +7,28 @@ import {
    SidebarMenuButton,
    SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { Bell, Blocks, ContactRound, LucideIcon, Tag, UserRound, Settings } from 'lucide-react';
+import {
+   Bell,
+   Blocks,
+   Bot,
+   Code,
+   Compass,
+   FileText,
+   Flame,
+   HeartHandshake,
+   KeyRound,
+   LucideIcon,
+   MessageCircleQuestion,
+   Rocket,
+   Settings,
+   Smile,
+   Sparkles,
+   Tag,
+   Target,
+   UserRound,
+   Users,
+   Zap,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 
@@ -23,6 +44,7 @@ interface SettingsNavGroup {
    items: SettingsNavItem[];
 }
 
+/** Linear-style settings navigation. */
 export const settingsNav: SettingsNavGroup[] = [
    {
       label: 'Personal',
@@ -30,13 +52,40 @@ export const settingsNav: SettingsNavGroup[] = [
          { name: 'Preferences', url: '/settings/preferences', icon: Settings },
          { name: 'Profile', url: '/settings/profile', icon: UserRound },
          { name: 'Notifications', url: '/settings/notifications', icon: Bell },
+         { name: 'Code & reviews', url: '/settings/code-and-reviews', icon: Code },
+         { name: 'Security & access', url: '/settings/security', icon: KeyRound },
+         { name: 'Connected accounts', url: '/settings/connected-accounts', icon: Users },
+         { name: 'Agent personalization', url: '/settings/agent-personalization', icon: Bot },
       ],
    },
    {
-      label: 'Workspace',
+      label: 'Issues',
       items: [
-         { name: 'Teams', url: '/teams', icon: ContactRound },
-         { name: 'Issue labels', url: '/settings/issue-labels', icon: Tag },
+         { name: 'Labels', url: '/settings/issue-labels', icon: Tag },
+         { name: 'Templates', url: '/settings/issue-templates', icon: FileText },
+         { name: 'SLAs', url: '/settings/slas', icon: Flame },
+      ],
+   },
+   {
+      label: 'Projects',
+      items: [
+         { name: 'Labels', url: '/settings/project-labels', icon: Tag },
+         { name: 'Templates', url: '/settings/project-templates', icon: FileText },
+         { name: 'Statuses', url: '/settings/project-statuses', icon: Target },
+         { name: 'Updates', url: '/settings/project-updates', icon: Zap },
+      ],
+   },
+   {
+      label: 'Features',
+      items: [
+         { name: 'AI & Agents', url: '/settings/ai', icon: Sparkles },
+         { name: 'Initiatives', url: '/settings/initiatives', icon: Compass },
+         { name: 'Documents', url: '/settings/documents', icon: FileText },
+         { name: 'Customer requests', url: '/settings/customer-requests', icon: HeartHandshake },
+         { name: 'Releases', url: '/settings/releases', icon: Rocket },
+         { name: 'Pulse', url: '/settings/pulse', icon: Zap },
+         { name: 'Asks', url: '/settings/asks', icon: MessageCircleQuestion },
+         { name: 'Emojis', url: '/settings/emojis', icon: Smile },
          { name: 'Integrations', url: '/settings/integrations', icon: Blocks },
       ],
    },

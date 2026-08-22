@@ -1,12 +1,11 @@
-import { RealCycles } from '@/components/cycles/real-cycles';
-import Header from '@/components/layout/headers/cycles/header';
+import CycleIssues from '@/components/common/issues/cycle-issues';
+import Header from '@/components/layout/headers/cycle/header';
 import MainLayout from '@/components/layout/main-layout';
 
-export default async function ActiveCyclePage({ params }: { params: Promise<{ teamId: string }> }) {
-   const { teamId } = await params;
+export default function ActiveCyclePage() {
    return (
-      <MainLayout header={<Header />}>
-         <RealCycles status="ACTIVE" teamId={teamId} />
+      <MainLayout header={<Header cycleView="active" />}>
+         <CycleIssues cycleView="active" />
       </MainLayout>
    );
 }
