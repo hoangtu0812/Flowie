@@ -33,11 +33,26 @@ import {
    SidebarMenuSubButton,
    SidebarMenuSubItem,
 } from '@/components/ui/sidebar';
-import { teams } from '@/mock-data/teams';
 import { RiDonutChartFill } from '@remixicon/react';
+import { useEffect, useState } from 'react';
+
+type Team = { id: string; identifier: string; name: string; icon: string | null };
 
 export function NavTeams() {
-   const joinedTeams = teams.filter((t) => t.joined);
+   const [joinedTeams, setJoinedTeams] = useState<Team[]>([]);
+   useEffect(() => {
+      const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+      void fetch(`${api}/workspaces/me`, { credentials: 'include' })
+         .then((response) => (response.ok ? response.json() : { data: [] }))
+         .then((workspaces: { data: Array<{ workspace: { id: string } }> }) => {
+            const workspaceId = workspaces.data[0]?.workspace.id;
+            if (!workspaceId) return;
+            return fetch(`${api}/teams?workspaceId=${workspaceId}`, { credentials: 'include' })
+               .then((response) => (response.ok ? response.json() : { data: [] }))
+               .then((payload: { data: Team[] }) => setJoinedTeams(payload.data));
+         })
+         .catch(() => undefined);
+   }, []);
    return (
       <SidebarGroup>
          <SidebarGroupLabel>Your teams</SidebarGroupLabel>
@@ -53,7 +68,7 @@ export function NavTeams() {
                      <CollapsibleTrigger asChild>
                         <SidebarMenuButton tooltip={item.name}>
                            <div className="inline-flex size-6 bg-muted/50 items-center justify-center rounded shrink-0">
-                              <div className="text-sm">{item.icon}</div>
+                              <div className="text-sm">{item.icon ?? '👥'}</div>
                            </div>
                            <span className="text-sm">{item.name}</span>
                            <span className="w-3 shrink-0">

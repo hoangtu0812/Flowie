@@ -8,7 +8,7 @@ export class TeamsService {
    async list(workspaceId: string, userId: string) {
       await this.authorize(workspaceId, userId);
       return this.prisma.team.findMany({
-         where: { workspaceId },
+         where: { workspaceId, members: { some: { userId } } },
          include: { members: { include: { user: true } } },
          orderBy: { name: 'asc' },
       });
