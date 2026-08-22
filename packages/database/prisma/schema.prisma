@@ -236,6 +236,7 @@ model Project {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   team Team? @relation(fields: [teamId], references: [id], onDelete: SetNull)
   issues Issue[]
+  activities Activity[]
 
   @@unique([workspaceId, identifier])
   @@index([workspaceId, teamId])
@@ -388,6 +389,7 @@ model Activity {
   id          String   @id @default(cuid())
   workspaceId String   @map("workspace_id")
   issueId     String?  @map("issue_id")
+  projectId   String?  @map("project_id")
   actorId     String?  @map("actor_id")
   type        String
   data        Json?
@@ -395,10 +397,12 @@ model Activity {
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   issue     Issue?    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  project   Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   actor     User?     @relation("ActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, createdAt])
   @@index([issueId, createdAt])
+  @@index([projectId, createdAt])
   @@map("activities")
 }
 

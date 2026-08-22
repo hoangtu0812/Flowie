@@ -12,23 +12,21 @@ export type ActivityResponse = {
 export class ActivitiesService {
    constructor(private readonly prisma: PrismaService) {}
 
-   async list(workspaceId: string, issueId: string, userId: string): Promise<ActivityResponse[]> {
-      const issue = await this.prisma.issue.findFirst({
-         where: { id: issueId, workspaceId, archivedAt: null },
-         select: { teamId: true },
-      });
-      if (!issue) throw new NotFoundException('Issue not found.');
+   async list(
+      workspaceId: string,
+      userId: string,
+      issueId?: string,
+      projectId?: string
+   ): Promise<ActivityResponse[]> {
+      if (!issueId && !projectId) throw new NotFoundException('An issue or project is required.');
       const membership = await this.prisma.workspaceMember.findFirst({
          where: { workspaceId, userId, status: 'ACTIVE' },
       });
-      const team =
-         membership &&
-         (await this.prisma.team.findFirst({
-            where: { id: issue.teamId, workspaceId, members: { some: { userId } } },
-         }));
-      if (!team) throw new ForbiddenException('You do not have access to this issue.');
+      if (!membership) throw new ForbiddenException('You do not have access to this workspace.');
+      if (issueId) await this.authorizeIssue(workspaceId, issueId, userId);
+      if (projectId) await this.authorizeProject(workspaceId, projectId, userId);
       const activities = await this.prisma.activity.findMany({
-         where: { workspaceId, issueId },
+         where: { workspaceId, ...(issueId ? { issueId } : { projectId }) },
          include: { actor: { select: { id: true, name: true, avatarUrl: true } } },
          orderBy: { createdAt: 'asc' },
       });
@@ -38,5 +36,28 @@ export class ActivitiesService {
          createdAt: activity.createdAt,
          actor: activity.actor,
       }));
+   }
+
+   private async authorizeIssue(workspaceId: string, issueId: string, userId: string) {
+      const issue = await this.prisma.issue.findFirst({
+         where: { id: issueId, workspaceId, archivedAt: null },
+      });
+      if (!issue) throw new NotFoundException('Issue not found.');
+      const team = await this.prisma.team.findFirst({
+         where: { id: issue.teamId, workspaceId, members: { some: { userId } } },
+      });
+      if (!team) throw new ForbiddenException('You do not have access to this issue.');
+   }
+
+   private async authorizeProject(workspaceId: string, projectId: string, userId: string) {
+      const project = await this.prisma.project.findFirst({
+         where: { id: projectId, workspaceId, archivedAt: null },
+      });
+      if (!project) throw new NotFoundException('Project not found.');
+      if (!project.teamId) return;
+      const team = await this.prisma.team.findFirst({
+         where: { id: project.teamId, workspaceId, members: { some: { userId } } },
+      });
+      if (!team) throw new ForbiddenException('You do not have access to this project.');
    }
 }

@@ -1,5 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
 type Project = {
    id: string;
    identifier: string;
@@ -10,6 +12,7 @@ type Project = {
    team: { name: string } | null;
 };
 export function RealProjects() {
+   const { orgId } = useParams<{ orgId: string }>();
    const [projects, setProjects] = useState<Project[]>([]);
    const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
    useEffect(() => {
@@ -41,7 +44,11 @@ export function RealProjects() {
    return (
       <div className="divide-y">
          {projects.map((project) => (
-            <div key={project.id} className="flex items-center gap-4 px-6 py-3">
+            <Link
+               href={`/${orgId}/project/${project.id}/overview`}
+               key={project.id}
+               className="flex items-center gap-4 px-6 py-3"
+            >
                <div className="min-w-0 flex-1">
                   <p className="font-medium">{project.name}</p>
                   <p className="text-xs text-muted-foreground">
@@ -51,7 +58,7 @@ export function RealProjects() {
                </div>
                <span className="rounded bg-muted px-2 py-1 text-xs">{project.status}</span>
                <span className="text-xs text-muted-foreground">{project.priority}</span>
-            </div>
+            </Link>
          ))}
       </div>
    );

@@ -10,9 +10,12 @@ export class ActivitiesController {
    @Get()
    async list(
       @Query('workspaceId') workspaceId: string,
-      @Query('issueId') issueId: string,
+      @Query('issueId') issueId: string | undefined,
+      @Query('projectId') projectId: string | undefined,
       @Req() request: AuthenticatedRequest
    ): Promise<{ data: ActivityResponse[] }> {
-      return { data: await this.activities.list(workspaceId, issueId, request.auth!.userId) };
+      return {
+         data: await this.activities.list(workspaceId, request.auth!.userId, issueId, projectId),
+      };
    }
 }
