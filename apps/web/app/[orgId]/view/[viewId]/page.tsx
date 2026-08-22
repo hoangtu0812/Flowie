@@ -1,12 +1,10 @@
-import ViewDetails from '@/components/common/views/view-details';
-import Header from '@/components/layout/headers/view/header';
+import { FeatureUnavailable } from '@/components/common/feature-unavailable';
 import MainLayout from '@/components/layout/main-layout';
 
-export default async function ViewDetailsPage({ params }: { params: Promise<{ viewId: string }> }) {
-   const { viewId } = await params;
+export default function ViewDetailsPage() {
    return (
-      <MainLayout header={<Header />} headersNumber={2}>
-         <ViewDetails viewId={viewId} />
+      <MainLayout>
+         <FeatureUnavailable />
       </MainLayout>
    );
 }

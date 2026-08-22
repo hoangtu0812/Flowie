@@ -1,12 +1,10 @@
 import MainLayout from '@/components/layout/main-layout';
-import TeamSettings from '@/components/common/settings/team-settings';
-import Header from '@/components/layout/headers/settings/header';
+import { FeatureUnavailable } from '@/components/common/feature-unavailable';
 
-export default async function Page({ params }: { params: Promise<{ teamId: string }> }) {
-   const { teamId } = await params;
+export default function Page() {
    return (
-      <MainLayout header={<Header />} headersNumber={1}>
-         <TeamSettings teamId={teamId} />
+      <MainLayout>
+         <FeatureUnavailable />
       </MainLayout>
    );
 }

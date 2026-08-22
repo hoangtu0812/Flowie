@@ -1,10 +1,10 @@
-import Reviews from '@/components/common/reviews/reviews';
+import { FeatureUnavailable } from '@/components/common/feature-unavailable';
 import MainLayout from '@/components/layout/main-layout';
 
 export default function CreatedReviewsPage() {
    return (
       <MainLayout>
-         <Reviews listTab="created" />
+         <FeatureUnavailable />
       </MainLayout>
    );
 }
