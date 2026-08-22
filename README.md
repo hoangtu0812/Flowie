@@ -1,13 +1,13 @@
-# Circle Platform
+# Flowie
 
-Circle Platform evolves the [Circle](https://github.com/ln-dev7/circle) UI into a
-full project-management application. The original UI stays in `apps/web`; the API,
-worker and shared packages are introduced as a pnpm workspace.
+Flowie evolves the Circle UI foundation into a full project-management application.
+The frontend stays in `apps/web`; the API, worker and shared packages are introduced
+as a pnpm workspace.
 
 ## Workspace layout
 
 ```text
-apps/web       Next.js Circle UI
+apps/web       Next.js frontend
 apps/api       NestJS REST API (`/api/v1`)
 apps/worker    BullMQ background worker
 packages/database   Prisma schema and generated client
@@ -22,6 +22,12 @@ Dùng lệnh này cho mọi lần chạy thông thường:
 
 ```bash
 pnpm docker:up
+```
+
+Trên Windows, có thể dùng script nhanh:
+
+```powershell
+.\scripts\start-local.ps1
 ```
 
 Lệnh luôn chạy với `--no-build --pull never`: không build image, không kéo image
@@ -58,7 +64,7 @@ Lần build Docker đầu tiên dùng `pnpm docker:build`; các lần chạy sau
 
 ## Current scope
 
-This commits the foundation only: workspace layout, local infrastructure, API
-versioning, Swagger, health endpoint, worker boundary and the initial Prisma domain
-for users and workspaces. Authentication and real frontend data integration are the
-next milestones; Circle mock data remains intact until each matching module migrates.
+The foundation is complete, including local infrastructure, API versioning, Swagger,
+Prisma and the first authentication slice: register, login, refresh-token rotation,
+logout and the matching web screens. Google/Microsoft login, email verification,
+password reset, authorization and real workspace data migration remain upcoming work.
