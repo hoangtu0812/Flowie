@@ -10,6 +10,15 @@ import { CreateTeamDto } from './dto/create-team.dto';
 import { UpdateTeamDto } from './dto/update-team.dto';
 import { AddTeamMemberDto } from './dto/add-team-member.dto';
 
+const teamMemberUser = {
+   select: { id: true, name: true, email: true, avatarUrl: true, title: true },
+} as const;
+
+const teamDetailInclude = {
+   members: { include: { user: teamMemberUser } },
+   _count: { select: { issues: true, projects: true, cycles: true, documents: true } },
+} as const;
+
 @Injectable()
 export class TeamsService {
    constructor(private readonly prisma: PrismaService) {}
@@ -33,17 +42,14 @@ export class TeamsService {
       await this.authorizeManager(dto.workspaceId, userId);
       return this.prisma.team.create({
          data: { ...dto, members: { create: { userId, role: 'LEAD' } } },
-         include: { members: { include: { user: true } } },
+          include: teamDetailInclude,
       });
    }
    async get(teamId: string, workspaceId: string, userId: string) {
       await this.authorize(workspaceId, userId);
       const team = await this.prisma.team.findFirst({
          where: { id: teamId, workspaceId, archivedAt: null, members: { some: { userId } } },
-         include: {
-            members: { include: { user: true } },
-            _count: { select: { issues: true, projects: true, cycles: true } },
-         },
+          include: teamDetailInclude,
       });
       if (!team) throw new NotFoundException('Team not found.');
       return team;
@@ -57,7 +63,7 @@ export class TeamsService {
       return this.prisma.team.update({
          where: { id: teamId },
          data: dto,
-         include: { members: { include: { user: true } } },
+          include: teamDetailInclude,
       });
    }
    async archive(teamId: string, workspaceId: string, userId: string) {
@@ -84,7 +90,7 @@ export class TeamsService {
       if (existing) throw new ConflictException('This person is already in the team.');
       return this.prisma.teamMember.create({
          data: { teamId, userId: dto.userId, role: dto.role },
-         include: { user: true },
+          include: { user: teamMemberUser },
       });
    }
    async updateMember(
@@ -102,7 +108,7 @@ export class TeamsService {
       return this.prisma.teamMember.update({
          where: { teamId_userId: { teamId, userId: targetUserId } },
          data: { role },
-         include: { user: true },
+          include: { user: teamMemberUser },
       });
    }
    async removeMember(teamId: string, targetUserId: string, workspaceId: string, userId: string) {

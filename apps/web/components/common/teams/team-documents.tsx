@@ -3,24 +3,73 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { documentFolders } from '@/mock-data/documents';
-import { formatDistanceToNowStrict, parseISO } from 'date-fns';
-import { ChevronRight, Pin, Plus, SlidersHorizontal } from 'lucide-react';
+import {
+   Dialog,
+   DialogContent,
+   DialogDescription,
+   DialogFooter,
+   DialogHeader,
+   DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { formatDistanceToNowStrict } from 'date-fns';
+import { ChevronRight, FileText, Plus, SlidersHorizontal } from 'lucide-react';
+import { useParams } from 'next/navigation';
+import { useState } from 'react';
+import { useLiveTeam } from './use-live-team';
 
-const timeAgo = (date: string) =>
-   formatDistanceToNowStrict(parseISO(date), { addSuffix: true })
-      .replace(' minutes', 'min')
-      .replace(' hours', 'h')
-      .replace(' days', 'd')
-      .replace(' weeks', 'w')
-      .replace(' months', 'mo')
-      .replace(' years', 'y');
+const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+const timeAgo = (date: string) => formatDistanceToNowStrict(new Date(date), { addSuffix: true });
 
-/**
- * Team Home — "Documents" tab: documents grouped in collapsible folders
- * with created / last edited metadata.
- */
+/** Team documents preserve the original table layout and create records through the API. */
 export default function TeamDocuments() {
+   const { teamId } = useParams<{ orgId: string; teamId: string }>();
+   const { workspaceId, team, documents, loading, error, reload } = useLiveTeam(teamId);
+   const [open, setOpen] = useState(false);
+   const [title, setTitle] = useState('');
+   const [content, setContent] = useState('');
+   const [submitting, setSubmitting] = useState(false);
+   const [formError, setFormError] = useState<string>();
+
+   if (loading)
+      return <div className="px-8 py-10 text-sm text-muted-foreground">Loading documents…</div>;
+   if (error || !team || !workspaceId)
+      return (
+         <div className="px-8 py-10 text-sm text-destructive">{error ?? 'Team not found.'}</div>
+      );
+
+   const createDocument = async () => {
+      if (title.trim().length < 2) {
+         setFormError('Document title must contain at least 2 characters.');
+         return;
+      }
+      setSubmitting(true);
+      setFormError(undefined);
+      try {
+         const response = await fetch(`${api}/documents`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ workspaceId, teamId: team.id, title: title.trim(), content }),
+         });
+         if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as {
+               message?: string;
+            } | null;
+            throw new Error(payload?.message ?? 'Could not create document.');
+         }
+         setOpen(false);
+         setTitle('');
+         setContent('');
+         reload();
+      } catch (caught) {
+         setFormError(caught instanceof Error ? caught.message : 'Could not create document.');
+      } finally {
+         setSubmitting(false);
+      }
+   };
+
    return (
       <div className="w-full">
          <div className="flex items-center justify-between px-6 py-3 gap-2">
@@ -31,7 +80,7 @@ export default function TeamDocuments() {
                <span />
             </div>
             <div className="flex items-center gap-2 shrink-0">
-               <Button size="xs" variant="secondary">
+               <Button size="xs" variant="secondary" onClick={() => setOpen(true)}>
                   <Plus className="size-4 md:mr-1" />
                   <span className="hidden md:inline">New document</span>
                </Button>
@@ -41,42 +90,77 @@ export default function TeamDocuments() {
             </div>
          </div>
 
-         {documentFolders.map((folder) => (
-            <Collapsible key={folder.id} defaultOpen={folder.documents.some((d) => d.pinned)}>
-               <CollapsibleTrigger asChild>
-                  <button className="group w-full flex items-center gap-2 px-6 h-10 bg-sidebar/30 hover:bg-sidebar/60 border-b border-border/50 text-sm">
-                     <ChevronRight className="size-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
-                     <span className="text-base leading-none">{folder.icon}</span>
-                     <span className="font-medium">{folder.name}</span>
-                     <span className="text-muted-foreground">{folder.documents.length}</span>
-                  </button>
-               </CollapsibleTrigger>
-               <CollapsibleContent>
-                  {folder.documents.map((doc) => (
+         <Collapsible defaultOpen>
+            <CollapsibleTrigger asChild>
+               <button className="group w-full flex items-center gap-2 px-6 h-10 bg-sidebar/30 hover:bg-sidebar/60 border-b border-border/50 text-sm">
+                  <ChevronRight className="size-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
+                  <FileText className="size-4 text-muted-foreground" />
+                  <span className="font-medium">Documents</span>
+                  <span className="text-muted-foreground">{documents.length}</span>
+               </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+               {documents.length === 0 ? (
+                  <p className="px-12 py-5 text-sm text-muted-foreground">No documents yet.</p>
+               ) : (
+                  documents.map((document) => (
                      <div
-                        key={doc.id}
+                        key={document.id}
                         className="grid grid-cols-[1fr_40px] md:grid-cols-[1fr_90px_90px_40px] items-center px-6 h-11 hover:bg-sidebar/50 border-b border-border/30 text-sm"
                      >
                         <div className="flex items-center gap-2 min-w-0 pl-6">
-                           <span className="text-base leading-none">{doc.icon}</span>
-                           <span className="font-medium truncate">{doc.name}</span>
-                           {doc.pinned && <Pin className="size-3 text-muted-foreground shrink-0" />}
+                           <FileText className="size-4 text-muted-foreground shrink-0" />
+                           <span className="font-medium truncate">{document.title}</span>
                         </div>
                         <span className="hidden md:block text-xs text-muted-foreground">
-                           {timeAgo(doc.createdAt)}
+                           {timeAgo(document.createdAt)}
                         </span>
                         <span className="hidden md:block text-xs text-muted-foreground">
-                           {timeAgo(doc.updatedAt)}
+                           {timeAgo(document.updatedAt)}
                         </span>
                         <Avatar className="size-5">
-                           <AvatarImage src={doc.creator.avatarUrl} alt={doc.creator.name} />
-                           <AvatarFallback>{doc.creator.name[0]}</AvatarFallback>
+                           <AvatarImage
+                              src={document.updatedBy.avatarUrl ?? undefined}
+                              alt={document.updatedBy.name}
+                           />
+                           <AvatarFallback>{document.updatedBy.name[0]}</AvatarFallback>
                         </Avatar>
                      </div>
-                  ))}
-               </CollapsibleContent>
-            </Collapsible>
-         ))}
+                  ))
+               )}
+            </CollapsibleContent>
+         </Collapsible>
+
+         <Dialog open={open} onOpenChange={setOpen}>
+            <DialogContent>
+               <DialogHeader>
+                  <DialogTitle>New document</DialogTitle>
+                  <DialogDescription>Create a document in {team.name}.</DialogDescription>
+               </DialogHeader>
+               <div className="space-y-3">
+                  <Input
+                     value={title}
+                     onChange={(event) => setTitle(event.target.value)}
+                     placeholder="Document title"
+                     autoFocus
+                  />
+                  <Textarea
+                     value={content}
+                     onChange={(event) => setContent(event.target.value)}
+                     placeholder="Start writing…"
+                  />
+                  {formError && <p className="text-sm text-destructive">{formError}</p>}
+               </div>
+               <DialogFooter>
+                  <Button variant="outline" onClick={() => setOpen(false)}>
+                     Cancel
+                  </Button>
+                  <Button onClick={() => void createDocument()} disabled={submitting}>
+                     {submitting ? 'Creating…' : 'Create document'}
+                  </Button>
+               </DialogFooter>
+            </DialogContent>
+         </Dialog>
       </div>
    );
 }
