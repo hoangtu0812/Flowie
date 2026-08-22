@@ -16,6 +16,14 @@ type Issue = {
 };
 type Comment = { id: string; content: string; createdAt: string; author: { name: string } };
 type Activity = { id: string; type: string; createdAt: string; actor: { name: string } | null };
+type Attachment = {
+   id: string;
+   filename: string;
+   mimeType: string;
+   size: number;
+   createdAt: string;
+   uploadedBy: { name: string };
+};
 
 function time(value: string) {
    return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(
@@ -28,9 +36,12 @@ export function RealIssueDetail({ issueId }: { issueId: string }) {
    const [issue, setIssue] = useState<Issue>();
    const [comments, setComments] = useState<Comment[]>([]);
    const [activities, setActivities] = useState<Activity[]>([]);
+   const [attachments, setAttachments] = useState<Attachment[]>([]);
    const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
    const [content, setContent] = useState('');
    const [commentError, setCommentError] = useState<string>();
+   const [file, setFile] = useState<File>();
+   const [attachmentError, setAttachmentError] = useState<string>();
    const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
    const load = async () => {
@@ -43,18 +54,53 @@ export function RealIssueDetail({ issueId }: { issueId: string }) {
       if (!currentWorkspaceId) throw new Error('No workspace is available.');
       setWorkspaceId(currentWorkspaceId);
       const query = new URLSearchParams({ workspaceId: currentWorkspaceId, issueId });
-      const [issueResponse, commentsResponse, activitiesResponse] = await Promise.all([
-         fetch(`${api}/issues/${issueId}?workspaceId=${currentWorkspaceId}`, {
-            credentials: 'include',
-         }),
-         fetch(`${api}/comments?${query}`, { credentials: 'include' }),
-         fetch(`${api}/activities?${query}`, { credentials: 'include' }),
-      ]);
-      if (!issueResponse.ok || !commentsResponse.ok || !activitiesResponse.ok)
+      const attachmentQuery = new URLSearchParams({
+         workspaceId: currentWorkspaceId,
+         entityType: 'issue',
+         entityId: issueId,
+      });
+      const [issueResponse, commentsResponse, activitiesResponse, attachmentsResponse] =
+         await Promise.all([
+            fetch(`${api}/issues/${issueId}?workspaceId=${currentWorkspaceId}`, {
+               credentials: 'include',
+            }),
+            fetch(`${api}/comments?${query}`, { credentials: 'include' }),
+            fetch(`${api}/activities?${query}`, { credentials: 'include' }),
+            fetch(`${api}/attachments?${attachmentQuery}`, { credentials: 'include' }),
+         ]);
+      if (
+         !issueResponse.ok ||
+         !commentsResponse.ok ||
+         !activitiesResponse.ok ||
+         !attachmentsResponse.ok
+      )
          throw new Error('Could not load issue.');
       setIssue(((await issueResponse.json()) as { data: Issue }).data);
       setComments(((await commentsResponse.json()) as { data: Comment[] }).data);
       setActivities(((await activitiesResponse.json()) as { data: Activity[] }).data);
+      setAttachments(((await attachmentsResponse.json()) as { data: Attachment[] }).data);
+   };
+
+   const uploadAttachment = async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!workspaceId || !file) return;
+      setAttachmentError(undefined);
+      const form = new FormData();
+      form.set('workspaceId', workspaceId);
+      form.set('entityType', 'issue');
+      form.set('entityId', issueId);
+      form.set('file', file);
+      const response = await fetch(`${api}/attachments`, {
+         method: 'POST',
+         credentials: 'include',
+         body: form,
+      });
+      if (!response.ok) {
+         setAttachmentError('Could not upload attachment.');
+         return;
+      }
+      setFile(undefined);
+      await load();
    };
 
    useEffect(() => {
@@ -100,6 +146,46 @@ export function RealIssueDetail({ issueId }: { issueId: string }) {
                   {issue.description}
                </p>
             )}
+            <div className="mt-8">
+               <h2 className="mb-3 font-medium">Attachments</h2>
+               {attachments.length ? (
+                  <ul className="mb-3 space-y-2">
+                     {attachments.map((attachment) => (
+                        <li
+                           className="flex items-center gap-3 rounded-md border px-3 py-2 text-sm"
+                           key={attachment.id}
+                        >
+                           <a
+                              className="min-w-0 flex-1 truncate underline-offset-2 hover:underline"
+                              href={`${api}/attachments/${attachment.id}/download`}
+                           >
+                              {attachment.filename}
+                           </a>
+                           <span className="text-xs text-muted-foreground">
+                              {Math.ceil(attachment.size / 1024)} KB
+                           </span>
+                        </li>
+                     ))}
+                  </ul>
+               ) : (
+                  <p className="mb-3 text-sm text-muted-foreground">No attachments yet.</p>
+               )}
+               <form className="flex flex-wrap items-center gap-2" onSubmit={uploadAttachment}>
+                  <input
+                     className="text-sm"
+                     onChange={(event) => setFile(event.target.files?.[0])}
+                     type="file"
+                  />
+                  <button
+                     className="rounded-md border px-3 py-2 text-sm disabled:opacity-50"
+                     disabled={!file}
+                     type="submit"
+                  >
+                     Upload
+                  </button>
+                  {attachmentError && <p className="text-xs text-destructive">{attachmentError}</p>}
+               </form>
+            </div>
             <div className="mt-8">
                <h2 className="mb-3 font-medium">Activity</h2>
                {activities.length ? (

@@ -84,6 +84,7 @@ model User {
   comments Comment[]
   activities Activity[] @relation("ActivityActor")
   notifications Notification[]
+  uploadedAttachments Attachment[]
 
   @@map("users")
 }
@@ -188,6 +189,7 @@ model Workspace {
   cycles       Cycle[]
   documents    Document[]
   labels       Label[]
+  attachments  Attachment[]
   activities   Activity[]
 
   @@index([organizationId])
@@ -453,6 +455,25 @@ model Notification {
 
   @@index([userId, readAt, createdAt])
   @@map("notifications")
+}
+
+model Attachment {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  uploadedById String  @map("uploaded_by")
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id")
+  objectKey   String   @unique @map("object_key")
+  filename    String
+  mimeType    String   @map("mime_type")
+  size        Int
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  uploadedBy User      @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId, entityType, entityId])
+  @@map("attachments")
 }
 
 model WorkspaceMember {
