@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { Toaster } from '@/components/ui/sonner';
 import './globals.css';
@@ -48,6 +48,14 @@ export const metadata: Metadata = {
       ],
    },
    keywords: ['project management', 'issues', 'teams', 'workspaces'],
+   manifest: '/manifest.webmanifest',
+   appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Flowie' },
+};
+
+export const viewport: Viewport = {
+   themeColor: '#09090b',
+   width: 'device-width',
+   initialScale: 1,
 };
 
 import { ThemeProvider } from '@/components/layout/theme-provider';
@@ -60,9 +68,6 @@ export default function RootLayout({
 }>) {
    return (
       <html lang="en" suppressHydrationWarning>
-         <head>
-            <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-         </head>
          <body
             className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background`}
             suppressHydrationWarning
