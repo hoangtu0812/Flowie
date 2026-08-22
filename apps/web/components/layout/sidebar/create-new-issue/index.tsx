@@ -7,75 +7,85 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { RiEditLine } from '@remixicon/react';
 import { useState, useEffect, useCallback } from 'react';
-import { Issue } from '@/mock-data/issues';
 import { priorities } from '@/mock-data/priorities';
-import { status } from '@/mock-data/status';
+import { Status } from '@/mock-data/status';
+import { User } from '@/mock-data/users';
+import { Project } from '@/mock-data/projects';
+import { LabelInterface } from '@/mock-data/labels';
 import { useIssuesStore } from '@/store/issues-store';
 import { useCreateIssueStore } from '@/store/create-issue-store';
 import { toast } from 'sonner';
-import { v4 as uuidv4 } from 'uuid';
 import { StatusSelector } from './status-selector';
 import { PrioritySelector } from './priority-selector';
 import { AssigneeSelector } from './assignee-selector';
 import { ProjectSelector } from './project-selector';
 import { LabelSelector } from './label-selector';
-import { ranks } from '@/mock-data/issues';
 import { DialogTitle } from '@radix-ui/react-dialog';
+
+interface IssueDraft {
+   title: string;
+   description: string;
+   status: Status | null;
+   priority: (typeof priorities)[number];
+   assignee: User | null;
+   project: Project | undefined;
+   labels: LabelInterface[];
+}
 
 export function CreateNewIssue() {
    const [createMore, setCreateMore] = useState<boolean>(false);
    const { isOpen, defaultStatus, openModal, closeModal } = useCreateIssueStore();
-   const { addIssue, getAllIssues } = useIssuesStore();
-
-   const generateUniqueIdentifier = useCallback(() => {
-      const identifiers = getAllIssues().map((issue) => issue.identifier);
-      let identifier = Math.floor(Math.random() * 999)
-         .toString()
-         .padStart(3, '0');
-      while (identifiers.includes(`LNUI-${identifier}`)) {
-         identifier = Math.floor(Math.random() * 999)
-            .toString()
-            .padStart(3, '0');
-      }
-      return identifier;
-   }, [getAllIssues]);
+   const { createIssue: createIssueRecord, statuses } = useIssuesStore();
 
    const createDefaultData = useCallback(() => {
-      const identifier = generateUniqueIdentifier();
       return {
-         id: uuidv4(),
-         identifier: `LNUI-${identifier}`,
          title: '',
          description: '',
-         status: defaultStatus || status.find((s) => s.id === 'to-do')!,
+         status:
+            defaultStatus ||
+            statuses.find((item) => item.category === 'unstarted') ||
+            statuses[0] ||
+            null,
          assignee: null,
          priority: priorities.find((p) => p.id === 'no-priority')!,
          labels: [],
-         createdAt: new Date().toISOString(),
-         cycleId: '',
          project: undefined,
-         subissues: [],
-         rank: ranks[ranks.length - 1],
       };
-   }, [defaultStatus, generateUniqueIdentifier]);
+   }, [defaultStatus, statuses]);
 
-   const [addIssueForm, setAddIssueForm] = useState<Issue>(createDefaultData());
+   const [addIssueForm, setAddIssueForm] = useState<IssueDraft>(createDefaultData());
 
    useEffect(() => {
       setAddIssueForm(createDefaultData());
    }, [createDefaultData]);
 
-   const createIssue = () => {
+   const createIssue = async () => {
       if (!addIssueForm.title) {
          toast.error('Title is required');
          return;
       }
-      toast.success('Issue created');
-      addIssue(addIssueForm);
-      if (!createMore) {
-         closeModal();
+      if (!addIssueForm.status) {
+         toast.error('A status is required');
+         return;
       }
-      setAddIssueForm(createDefaultData());
+      try {
+         await createIssueRecord({
+            title: addIssueForm.title,
+            description: addIssueForm.description || undefined,
+            statusId: addIssueForm.status.id,
+            priority: addIssueForm.priority.id,
+            assigneeId: addIssueForm.assignee?.id,
+            projectId: addIssueForm.project?.id,
+            labelIds: addIssueForm.labels.map((label) => label.id),
+         });
+         toast.success('Issue created');
+         if (!createMore) {
+            closeModal();
+         }
+         setAddIssueForm(createDefaultData());
+      } catch (error) {
+         toast.error(error instanceof Error ? error.message : 'Could not create issue');
+      }
    };
 
    return (
@@ -115,12 +125,14 @@ export function CreateNewIssue() {
                />
 
                <div className="w-full flex items-center justify-start gap-1.5 flex-wrap">
-                  <StatusSelector
-                     status={addIssueForm.status}
-                     onChange={(newStatus) =>
-                        setAddIssueForm({ ...addIssueForm, status: newStatus })
-                     }
-                  />
+                  {addIssueForm.status && (
+                     <StatusSelector
+                        status={addIssueForm.status}
+                        onChange={(newStatus) =>
+                           setAddIssueForm({ ...addIssueForm, status: newStatus })
+                        }
+                     />
+                  )}
                   <PrioritySelector
                      priority={addIssueForm.priority}
                      onChange={(newPriority) =>
@@ -158,12 +170,7 @@ export function CreateNewIssue() {
                      <Label htmlFor="create-more">Create more</Label>
                   </div>
                </div>
-               <Button
-                  size="sm"
-                  onClick={() => {
-                     createIssue();
-                  }}
-               >
+               <Button size="sm" onClick={() => void createIssue()}>
                   Create issue
                </Button>
             </div>

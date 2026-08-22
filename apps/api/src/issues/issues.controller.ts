@@ -44,6 +44,15 @@ export class IssuesController {
       return { data: await this.issues.create(dto, request.auth!.userId) };
    }
 
+   @Get('options')
+   async options(
+      @Query('workspaceId') workspaceId: string,
+      @Query('teamId') teamId: string | undefined,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.issues.options(workspaceId, request.auth!.userId, teamId) };
+   }
+
    @Get(':issueId')
    async get(
       @Param('issueId') issueId: string,

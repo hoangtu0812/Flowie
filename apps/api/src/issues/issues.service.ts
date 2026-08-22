@@ -8,9 +8,23 @@ import { NotificationsService } from '../notifications/notifications.service';
 const issueInclude = {
    team: { select: { id: true, name: true, identifier: true } },
    status: { select: { id: true, name: true, category: true, color: true } },
-   project: { select: { id: true, name: true, identifier: true } },
+   project: {
+      select: {
+         id: true,
+         name: true,
+         identifier: true,
+         status: true,
+         priority: true,
+         health: true,
+         startDate: true,
+         targetDate: true,
+         lead: { select: { id: true, name: true, avatarUrl: true } },
+         team: { select: { id: true, identifier: true } },
+      },
+   },
    creator: { select: { id: true, name: true, avatarUrl: true } },
    assignee: { select: { id: true, name: true, avatarUrl: true } },
+   labelLinks: { include: { label: { select: { id: true, name: true, color: true } } } },
 } as const;
 
 @Injectable()
@@ -42,9 +56,65 @@ export class IssuesService {
       });
    }
 
+   /**
+    * The issue views need the same workspace-owned choices that are available
+    * when an issue is created or edited.  Keeping these in one endpoint avoids
+    * the frontend inventing statuses, members, or projects from sample data.
+    */
+   async options(workspaceId: string, userId: string, teamId?: string) {
+      await this.authorize(workspaceId, userId, teamId);
+
+      const memberWhere = teamId
+         ? { teamMemberships: { some: { teamId } } }
+         : { memberships: { some: { workspaceId, status: 'ACTIVE' as const } } };
+
+      const [statuses, projects, members, labels] = await Promise.all([
+         this.prisma.issueStatus.findMany({
+            where: {
+               workspaceId,
+               ...(teamId ? { OR: [{ teamId: null }, { teamId }] } : {}),
+            },
+            orderBy: [{ position: 'asc' }, { name: 'asc' }],
+         }),
+         this.prisma.project.findMany({
+            where: {
+               workspaceId,
+               archivedAt: null,
+               ...(teamId ? { OR: [{ teamId: null }, { teamId }] } : {}),
+            },
+            select: {
+               id: true,
+               name: true,
+               identifier: true,
+               status: true,
+               priority: true,
+               health: true,
+               startDate: true,
+               targetDate: true,
+               lead: { select: { id: true, name: true, avatarUrl: true } },
+               team: { select: { id: true, identifier: true } },
+            },
+            orderBy: { name: 'asc' },
+         }),
+         this.prisma.user.findMany({
+            where: memberWhere,
+            select: { id: true, name: true, email: true, avatarUrl: true, createdAt: true },
+            orderBy: { name: 'asc' },
+         }),
+         this.prisma.label.findMany({
+            where: { workspaceId },
+            select: { id: true, name: true, color: true },
+            orderBy: { name: 'asc' },
+         }),
+      ]);
+
+      return { statuses, projects, members, labels };
+   }
+
    async create(dto: CreateIssueDto, userId: string) {
       await this.authorize(dto.workspaceId, userId, dto.teamId);
       const issue = await this.prisma.$transaction(async (tx) => {
+         const { labelIds, ...issueData } = dto;
          const team = await tx.team.update({
             where: { id: dto.teamId },
             data: { issueSequence: { increment: 1 } },
@@ -71,13 +141,24 @@ export class IssuesService {
             });
             if (!assignee) throw new NotFoundException('Assignee is not a workspace member.');
          }
+         if (labelIds?.length) {
+            const labelCount = await tx.label.count({
+               where: { workspaceId: dto.workspaceId, id: { in: labelIds } },
+            });
+            if (labelCount !== new Set(labelIds).size) {
+               throw new NotFoundException('One or more labels were not found.');
+            }
+         }
          const issue = await tx.issue.create({
             data: {
-               ...dto,
+               ...issueData,
                statusId: status.id,
                identifier: `${team.identifier}-${team.issueSequence}`,
                number: team.issueSequence,
                creatorId: userId,
+               ...(labelIds?.length
+                  ? { labelLinks: { create: labelIds.map((labelId) => ({ labelId })) } }
+                  : {}),
             },
             include: issueInclude,
          });
@@ -119,6 +200,7 @@ export class IssuesService {
 
    async update(issueId: string, workspaceId: string, dto: UpdateIssueDto, userId: string) {
       const issue = await this.get(issueId, workspaceId, userId);
+      const { labelIds, ...issueData } = dto;
       const status = dto.statusId
          ? await this.prisma.issueStatus.findFirst({ where: { id: dto.statusId, workspaceId } })
          : undefined;
@@ -137,11 +219,27 @@ export class IssuesService {
          });
          if (!assignee) throw new NotFoundException('Assignee is not a workspace member.');
       }
+      if (labelIds) {
+         const labelCount = await this.prisma.label.count({
+            where: { workspaceId, id: { in: labelIds } },
+         });
+         if (labelCount !== new Set(labelIds).size) {
+            throw new NotFoundException('One or more labels were not found.');
+         }
+      }
       return this.prisma.$transaction(async (tx) => {
          const updated = await tx.issue.update({
             where: { id: issueId },
             data: {
-               ...dto,
+               ...issueData,
+               ...(labelIds
+                  ? {
+                       labelLinks: {
+                          deleteMany: {},
+                          create: labelIds.map((labelId) => ({ labelId })),
+                       },
+                    }
+                  : {}),
                ...(status
                   ? {
                        completedAt: status.category === 'COMPLETED' ? new Date() : null,

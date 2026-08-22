@@ -35,11 +35,7 @@ import {
 } from 'lucide-react';
 import React, { useState } from 'react';
 import { useIssuesStore } from '@/store/issues-store';
-import { status } from '@/mock-data/status';
 import { priorities } from '@/mock-data/priorities';
-import { users } from '@/mock-data/users';
-import { labels } from '@/mock-data/labels';
-import { projects } from '@/mock-data/projects';
 import { toast } from 'sonner';
 
 interface IssueContextMenuProps {
@@ -59,11 +55,15 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       updateIssueProject,
       updateIssue,
       getIssueById,
+      statuses,
+      members,
+      projects,
+      labels: workspaceLabels,
    } = useIssuesStore();
 
    const handleStatusChange = (statusId: string) => {
       if (!issueId) return;
-      const newStatus = status.find((s) => s.id === statusId);
+      const newStatus = statuses.find((s) => s.id === statusId);
       if (newStatus) {
          updateIssueStatus(issueId, newStatus);
          toast.success(`Status updated to ${newStatus.name}`);
@@ -81,7 +81,7 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
 
    const handleAssigneeChange = (userId: string | null) => {
       if (!issueId) return;
-      const newAssignee = userId ? users.find((u) => u.id === userId) || null : null;
+      const newAssignee = userId ? members.find((u) => u.id === userId) || null : null;
       updateIssueAssignee(issueId, newAssignee);
       toast.success(newAssignee ? `Assigned to ${newAssignee.name}` : 'Unassigned');
    };
@@ -89,7 +89,7 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
    const handleLabelToggle = (labelId: string) => {
       if (!issueId) return;
       const issue = getIssueById(issueId);
-      const label = labels.find((l) => l.id === labelId);
+      const label = workspaceLabels.find((l) => l.id === labelId);
 
       if (!issue || !label) return;
 
@@ -170,7 +170,7 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                   <CircleCheck className="mr-2 size-4" /> Status
                </ContextMenuSubTrigger>
                <ContextMenuSubContent className="w-48">
-                  {status.map((s) => {
+                  {statuses.map((s) => {
                      const Icon = s.icon;
                      return (
                         <ContextMenuItem key={s.id} onClick={() => handleStatusChange(s.id)}>
@@ -189,20 +189,15 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                   <ContextMenuItem onClick={() => handleAssigneeChange(null)}>
                      <User className="size-4" /> Unassigned
                   </ContextMenuItem>
-                  {users
-                     .filter((user) => user.teamIds.includes('CORE'))
-                     .map((user) => (
-                        <ContextMenuItem
-                           key={user.id}
-                           onClick={() => handleAssigneeChange(user.id)}
-                        >
-                           <Avatar className="size-4">
-                              <AvatarImage src={user.avatarUrl} alt={user.name} />
-                              <AvatarFallback>{user.name[0]}</AvatarFallback>
-                           </Avatar>
-                           {user.name}
-                        </ContextMenuItem>
-                     ))}
+                  {members.map((user) => (
+                     <ContextMenuItem key={user.id} onClick={() => handleAssigneeChange(user.id)}>
+                        <Avatar className="size-4">
+                           <AvatarImage src={user.avatarUrl} alt={user.name} />
+                           <AvatarFallback>{user.name[0]}</AvatarFallback>
+                        </Avatar>
+                        {user.name}
+                     </ContextMenuItem>
+                  ))}
                </ContextMenuSubContent>
             </ContextMenuSub>
 
@@ -227,7 +222,7 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                   <Tag className="mr-2 size-4" /> Labels
                </ContextMenuSubTrigger>
                <ContextMenuSubContent className="w-48">
-                  {labels.map((label) => (
+                  {workspaceLabels.map((label) => (
                      <ContextMenuItem key={label.id} onClick={() => handleLabelToggle(label.id)}>
                         <span
                            className="inline-block size-3 rounded-full"

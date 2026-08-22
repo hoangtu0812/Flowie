@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useIssuesStore } from '@/store/issues-store';
-import { status as allStatus, Status } from '@/mock-data/status';
+import { Status } from '@/mock-data/status';
 import { CheckIcon } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
 import { renderStatusIcon } from '@/lib/status-utils';
@@ -26,7 +26,7 @@ export function StatusSelector({ status, issueId }: StatusSelectorProps) {
    const [open, setOpen] = useState<boolean>(false);
    const [value, setValue] = useState<string>(status.id);
 
-   const { updateIssueStatus, filterByStatus } = useIssuesStore();
+   const { updateIssueStatus, filterByStatus, statuses } = useIssuesStore();
 
    useEffect(() => {
       setValue(status.id);
@@ -37,7 +37,7 @@ export function StatusSelector({ status, issueId }: StatusSelectorProps) {
       setOpen(false);
 
       if (issueId) {
-         const newStatus = allStatus.find((s) => s.id === statusId);
+         const newStatus = statuses.find((s) => s.id === statusId);
          if (newStatus) {
             updateIssueStatus(issueId, newStatus);
          }
@@ -68,7 +68,7 @@ export function StatusSelector({ status, issueId }: StatusSelectorProps) {
                   <CommandList>
                      <CommandEmpty>No status found.</CommandEmpty>
                      <CommandGroup>
-                        {allStatus.map((item) => (
+                        {statuses.map((item) => (
                            <CommandItem
                               key={item.id}
                               value={item.id}
