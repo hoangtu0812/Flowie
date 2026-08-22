@@ -79,6 +79,8 @@ model User {
   organizations Organization[] @relation("OrganizationOwner")
   createdIssues Issue[] @relation("IssueCreator")
   assignedIssues Issue[] @relation("IssueAssignee")
+  createdDocuments Document[] @relation("DocumentCreator")
+  updatedDocuments Document[] @relation("DocumentUpdater")
 
   @@map("users")
 }
@@ -181,6 +183,7 @@ model Workspace {
   issueStatuses IssueStatus[]
   issues       Issue[]
   cycles       Cycle[]
+  documents    Document[]
 
   @@index([organizationId])
   @@map("workspaces")
@@ -203,6 +206,7 @@ model Team {
   issues    Issue[]
   issueSequence Int @default(0) @map("issue_sequence")
   cycles    Cycle[]
+  documents Document[]
 
   @@unique([workspaceId, identifier])
   @@index([workspaceId])
@@ -336,6 +340,27 @@ model IssueCycle {
   @@id([issueId, cycleId])
   @@index([cycleId])
   @@map("issue_cycles")
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  teamId      String?  @map("team_id")
+  title       String
+  content     String   @default("")
+  createdById String   @map("created_by")
+  updatedById String   @map("updated_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  archivedAt  DateTime? @map("archived_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  team      Team?     @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  createdBy User      @relation("DocumentCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy User      @relation("DocumentUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId, teamId])
+  @@map("documents")
 }
 
 model WorkspaceMember {

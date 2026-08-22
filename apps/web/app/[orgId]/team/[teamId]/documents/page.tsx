@@ -1,11 +1,15 @@
-import TeamDocuments from '@/components/common/teams/team-documents';
-import Header from '@/components/layout/headers/team/header';
+import { RealDocuments } from '@/components/documents/real-documents';
 import MainLayout from '@/components/layout/main-layout';
 
-export default function TeamDocumentsPage() {
+export default async function TeamDocumentsPage({
+   params,
+}: {
+   params: Promise<{ teamId: string }>;
+}) {
+   const { teamId } = await params;
    return (
-      <MainLayout header={<Header />}>
-         <TeamDocuments />
+      <MainLayout header={<div className="w-full border-b px-6 py-3 font-medium">Documents</div>}>
+         <RealDocuments teamId={teamId} />
       </MainLayout>
    );
 }
