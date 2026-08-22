@@ -1,11 +1,17 @@
-import CycleIssues from '@/components/common/issues/cycle-issues';
-import Header from '@/components/layout/headers/cycle/header';
+import { RealCycles } from '@/components/cycles/real-cycles';
 import MainLayout from '@/components/layout/main-layout';
 
-export default function UpcomingCyclePage() {
+export default async function UpcomingCyclePage({
+   params,
+}: {
+   params: Promise<{ teamId: string }>;
+}) {
+   const { teamId } = await params;
    return (
-      <MainLayout header={<Header cycleView="upcoming" />}>
-         <CycleIssues cycleView="upcoming" />
+      <MainLayout
+         header={<div className="w-full border-b px-6 py-3 font-medium">Upcoming cycle</div>}
+      >
+         <RealCycles status="UPCOMING" teamId={teamId} />
       </MainLayout>
    );
 }
