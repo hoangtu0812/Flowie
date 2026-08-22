@@ -20,6 +20,7 @@ export function RealMembers() {
    const [inviteRole, setInviteRole] = useState<Member['role']>('MEMBER');
    const [error, setError] = useState<string>();
    const [creatingWorkspace, setCreatingWorkspace] = useState(false);
+   const [inviteOpen, setInviteOpen] = useState(false);
    const [workspaceName, setWorkspaceName] = useState('');
    const { orgId } = useParams<{ orgId: string }>();
    const router = useRouter();
@@ -45,6 +46,11 @@ export function RealMembers() {
          .then(() => setState('ready'))
          .catch(() => setState('error'));
    }, [load]);
+   useEffect(() => {
+      const open = () => setInviteOpen(true);
+      window.addEventListener('flowie:invite-member', open);
+      return () => window.removeEventListener('flowie:invite-member', open);
+   }, []);
 
    const invite = async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
@@ -159,7 +165,7 @@ export function RealMembers() {
                </button>
             </form>
          )}
-         {(currentRole === 'OWNER' || currentRole === 'ADMIN') && (
+         {(currentRole === 'OWNER' || currentRole === 'ADMIN') && inviteOpen && (
             <form className="mb-5 flex flex-wrap gap-2 rounded-lg border p-3" onSubmit={invite}>
                <input
                   className="min-w-52 flex-1 rounded-md border bg-background px-3 py-2 text-sm"
@@ -181,6 +187,13 @@ export function RealMembers() {
                   type="submit"
                >
                   Invite
+               </button>
+               <button
+                  className="rounded-md border px-3 py-2 text-sm font-medium"
+                  onClick={() => setInviteOpen(false)}
+                  type="button"
+               >
+                  Cancel
                </button>
             </form>
          )}
