@@ -1,6 +1,13 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
+import { ChevronDown, CirclePlay } from 'lucide-react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { FormEvent, useCallback, useEffect, useState } from 'react';
 
 type Cycle = {
    id: string;
@@ -11,7 +18,6 @@ type Cycle = {
    endDate: string | null;
    _count: { issueLinks: number };
 };
-
 type CycleIssue = {
    id: string;
    identifier: string;
@@ -19,143 +25,164 @@ type CycleIssue = {
    status: { name: string; color: string };
    assignee: { name: string } | null;
 };
+type WorkspaceResponse = { data: Array<{ workspace: { id: string } }> };
 
-const statusLabel: Record<Cycle['status'], string> = {
+const STATUS_LABEL: Record<Cycle['status'], string> = {
    UPCOMING: 'Upcoming',
-   ACTIVE: 'Active',
+   ACTIVE: 'Current',
    COMPLETED: 'Completed',
    CANCELED: 'Canceled',
 };
-
-function formatDate(value: string | null) {
-   return value
-      ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(value))
-      : 'No date';
-}
+const formatDate = (value: string | null) =>
+   value
+      ? new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(
+           new Date(value)
+        )
+      : '—';
 
 export function RealCycles({ teamId, status }: { teamId: string; status?: Cycle['status'] }) {
+   const { orgId } = useParams<{ orgId: string }>();
    const [cycles, setCycles] = useState<Cycle[]>([]);
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
-   const [creating, setCreating] = useState(false);
+   const [createOpen, setCreateOpen] = useState(false);
    const [name, setName] = useState('');
    const [createError, setCreateError] = useState<string>();
+   const [saving, setSaving] = useState(false);
    const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
-   const loadCycles = async () => {
+   const loadCycles = useCallback(async () => {
       const workspaceResponse = await fetch(`${api}/workspaces/me`, { credentials: 'include' });
       if (!workspaceResponse.ok) throw new Error('Could not load workspace.');
-      const workspaceData = (await workspaceResponse.json()) as {
-         data: Array<{ workspace: { id: string } }>;
-      };
+      const workspaceData = (await workspaceResponse.json()) as WorkspaceResponse;
       const currentWorkspaceId = workspaceData.data[0]?.workspace.id;
       if (!currentWorkspaceId) throw new Error('No workspace is available.');
       setWorkspaceId(currentWorkspaceId);
       const query = new URLSearchParams({ workspaceId: currentWorkspaceId, teamId });
       if (status) query.set('status', status);
-      const cycleResponse = await fetch(`${api}/cycles?${query.toString()}`, {
-         credentials: 'include',
-      });
-      if (!cycleResponse.ok) throw new Error('Could not load cycles.');
-      const cycleData = (await cycleResponse.json()) as { data: Cycle[] };
-      setCycles(cycleData.data);
-   };
+      const response = await fetch(`${api}/cycles?${query.toString()}`, { credentials: 'include' });
+      if (!response.ok) throw new Error('Could not load cycles.');
+      setCycles(((await response.json()) as { data: Cycle[] }).data);
+   }, [api, status, teamId]);
 
    useEffect(() => {
       void loadCycles()
          .then(() => setState('ready'))
          .catch(() => setState('error'));
-      // The route parameters identify a distinct cycle view.
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-   }, [teamId, status]);
+   }, [loadCycles]);
 
-   const createCycle = async (event: FormEvent<HTMLFormElement>) => {
+   useEffect(() => {
+      const open = () => setCreateOpen(true);
+      window.addEventListener('flowie:create-cycle', open);
+      return () => window.removeEventListener('flowie:create-cycle', open);
+   }, []);
+
+   async function createCycle(event: FormEvent<HTMLFormElement>) {
       event.preventDefault();
       if (!workspaceId || name.trim().length < 2) return;
+      setSaving(true);
       setCreateError(undefined);
-      const response = await fetch(`${api}/cycles`, {
-         method: 'POST',
-         credentials: 'include',
-         headers: { 'content-type': 'application/json' },
-         body: JSON.stringify({ workspaceId, teamId, name: name.trim(), status: 'UPCOMING' }),
-      });
-      if (!response.ok) {
-         setCreateError('Could not create the cycle.');
-         return;
+      try {
+         const response = await fetch(`${api}/cycles`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ workspaceId, teamId, name: name.trim(), status: 'UPCOMING' }),
+         });
+         if (!response.ok) throw new Error('Could not create the cycle.');
+         setName('');
+         setCreateOpen(false);
+         await loadCycles();
+      } catch (caught) {
+         setCreateError(caught instanceof Error ? caught.message : 'Could not create the cycle.');
+      } finally {
+         setSaving(false);
       }
-      setName('');
-      setCreating(false);
-      await loadCycles();
-   };
-
-   if (state === 'loading')
-      return <p className="p-6 text-sm text-muted-foreground">Loading cycles…</p>;
-   if (state === 'error')
-      return <p className="p-6 text-sm text-destructive">Could not load cycles for this team.</p>;
+   }
 
    return (
-      <section className="mx-auto w-full max-w-5xl p-4 sm:p-6">
-         <div className="mb-4 flex items-center justify-between gap-4">
-            <p className="text-sm text-muted-foreground">{cycles.length} cycles</p>
-            {!status && (
-               <button
-                  className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
-                  onClick={() => setCreating((value) => !value)}
-                  type="button"
-               >
-                  New cycle
-               </button>
-            )}
-         </div>
-         {creating && (
-            <form className="mb-4 rounded-md border bg-card p-3" onSubmit={createCycle}>
-               <label className="sr-only" htmlFor="cycle-name">
-                  Cycle name
-               </label>
-               <div className="flex gap-2">
-                  <input
-                     autoFocus
-                     className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm"
-                     id="cycle-name"
-                     onChange={(event) => setName(event.target.value)}
-                     placeholder="Cycle name"
-                     value={name}
-                  />
-                  <button
-                     className="rounded-md border px-3 py-2 text-sm font-medium disabled:opacity-50"
-                     disabled={name.trim().length < 2}
-                     type="submit"
-                  >
-                     Create
-                  </button>
-               </div>
-               {createError && <p className="mt-2 text-xs text-destructive">{createError}</p>}
-            </form>
+      <div className="w-full py-4">
+         {state === 'loading' && (
+            <p className="px-6 py-4 text-sm text-muted-foreground">Loading cycles…</p>
          )}
-         {!cycles.length ? (
-            <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
+         {state === 'error' && (
+            <p className="px-6 py-4 text-sm text-destructive">
+               Could not load cycles for this team.
+            </p>
+         )}
+         {state === 'ready' && cycles.length === 0 && (
+            <div className="px-6 py-8 text-center text-sm text-muted-foreground">
                No cycles in this view yet.
             </div>
-         ) : (
-            <div className="overflow-hidden rounded-md border">
-               {cycles.map((cycle) => (
-                  <CycleRow cycle={cycle} key={cycle.id} workspaceId={workspaceId!} api={api} />
-               ))}
-            </div>
          )}
-      </section>
+         {cycles.map((cycle) => (
+            <CycleRow
+               key={cycle.id}
+               cycle={cycle}
+               teamId={teamId}
+               workspaceId={workspaceId}
+               api={api}
+               orgId={orgId}
+            />
+         ))}
+         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+            <DialogContent className="sm:max-w-[480px]">
+               <DialogHeader>
+                  <DialogTitle>Create cycle</DialogTitle>
+               </DialogHeader>
+               <form className="space-y-4" onSubmit={createCycle}>
+                  <Input
+                     autoFocus
+                     value={name}
+                     onChange={(event) => setName(event.target.value)}
+                     placeholder="Cycle name"
+                     minLength={2}
+                     maxLength={120}
+                     required
+                  />
+                  {createError && <p className="text-sm text-destructive">{createError}</p>}
+                  <div className="flex justify-end gap-2">
+                     <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>
+                        Cancel
+                     </Button>
+                     <Button type="submit" disabled={saving || name.trim().length < 2}>
+                        {saving ? 'Creating…' : 'Create cycle'}
+                     </Button>
+                  </div>
+               </form>
+            </DialogContent>
+         </Dialog>
+      </div>
    );
 }
 
-function CycleRow({ cycle, workspaceId, api }: { cycle: Cycle; workspaceId: string; api: string }) {
+function CycleRow({
+   cycle,
+   teamId,
+   workspaceId,
+   api,
+   orgId,
+}: {
+   cycle: Cycle;
+   teamId: string;
+   workspaceId?: string;
+   api: string;
+   orgId: string;
+}) {
    const [expanded, setExpanded] = useState(false);
    const [issues, setIssues] = useState<CycleIssue[]>([]);
    const [loading, setLoading] = useState(false);
+   const href =
+      cycle.status === 'ACTIVE'
+         ? `/${orgId}/team/${teamId}/cycle/active`
+         : cycle.status === 'UPCOMING'
+           ? `/${orgId}/team/${teamId}/cycle/upcoming`
+           : undefined;
 
-   const toggleIssues = async () => {
-      const nextExpanded = !expanded;
-      setExpanded(nextExpanded);
-      if (!nextExpanded || issues.length) return;
+   async function toggleIssues() {
+      const next = !expanded;
+      setExpanded(next);
+      if (!next || issues.length || !workspaceId) return;
       setLoading(true);
       try {
          const response = await fetch(
@@ -166,42 +193,89 @@ function CycleRow({ cycle, workspaceId, api }: { cycle: Cycle; workspaceId: stri
       } finally {
          setLoading(false);
       }
-   };
+   }
 
+   const title = (
+      <div className="flex items-center gap-3 min-w-0">
+         <CirclePlay className="size-4 shrink-0 text-muted-foreground" />
+         <span className="text-sm font-medium truncate">{cycle.name}</span>
+      </div>
+   );
    return (
-      <article className="border-b px-4 py-3 last:border-0">
-         <div className="flex items-center justify-between gap-3">
-            <button className="min-w-0 text-left" onClick={() => void toggleIssues()} type="button">
-               <p className="truncate text-sm font-medium">{cycle.name}</p>
-               <p className="mt-0.5 text-xs text-muted-foreground">
-                  {formatDate(cycle.startDate)} – {formatDate(cycle.endDate)} ·{' '}
-                  {cycle._count.issueLinks} issues
-               </p>
-            </button>
-            <span className="rounded bg-muted px-2 py-1 text-xs">{statusLabel[cycle.status]}</span>
-         </div>
-         {expanded && (
-            <div className="mt-3 border-t pt-3">
-               {loading ? (
-                  <p className="text-xs text-muted-foreground">Loading cycle issues…</p>
-               ) : issues.length ? (
-                  <ul className="space-y-2">
-                     {issues.map((issue) => (
-                        <li className="flex items-center gap-2 text-sm" key={issue.id}>
-                           <span
-                              className="h-2 w-2 rounded-full"
-                              style={{ backgroundColor: issue.status.color }}
-                           />
-                           <span className="min-w-0 flex-1 truncate">{issue.title}</span>
-                           <span className="text-xs text-muted-foreground">{issue.identifier}</span>
-                        </li>
-                     ))}
-                  </ul>
-               ) : (
-                  <p className="text-xs text-muted-foreground">No issues assigned to this cycle.</p>
-               )}
+      <div className="w-full flex items-stretch">
+         <div className="relative w-14 shrink-0 flex flex-col items-end pr-4 sm:w-20">
+            <div className="absolute right-[20.5px] top-0 bottom-0 w-px bg-border" />
+            <div className="flex h-12 items-center gap-2">
+               <span className="text-right text-[11px] leading-tight text-muted-foreground">
+                  {formatDate(cycle.startDate)}
+               </span>
+               <span
+                  className={cn(
+                     'relative z-10 size-2.5 rounded-full border-2 bg-background',
+                     cycle.status === 'ACTIVE'
+                        ? 'border-indigo-400 bg-indigo-400'
+                        : 'border-muted-foreground/40'
+                  )}
+               />
             </div>
-         )}
-      </article>
+         </div>
+         <div className="flex-1 min-w-0 border-b border-border/60">
+            <div className="flex h-12 items-center justify-between gap-4 rounded-md px-6 hover:bg-sidebar/50">
+               {href ? (
+                  <Link href={href} className="min-w-0">
+                     {title}
+                  </Link>
+               ) : (
+                  title
+               )}
+               <div className="flex shrink-0 items-center gap-3 sm:gap-6">
+                  <span className="rounded-md bg-accent px-2 py-1 text-xs text-muted-foreground">
+                     {STATUS_LABEL[cycle.status]}
+                  </span>
+                  <span className="hidden text-sm text-muted-foreground sm:inline">
+                     {cycle._count.issueLinks} issues
+                  </span>
+                  <Button
+                     type="button"
+                     className="size-7"
+                     size="icon"
+                     variant="ghost"
+                     onClick={() => void toggleIssues()}
+                     aria-label="Show cycle issues"
+                  >
+                     <ChevronDown
+                        className={cn('size-4 transition-transform', expanded && 'rotate-180')}
+                     />
+                  </Button>
+               </div>
+            </div>
+            {expanded && (
+               <div className="px-6 pb-4 pt-1">
+                  {loading ? (
+                     <p className="text-xs text-muted-foreground">Loading cycle issues…</p>
+                  ) : issues.length ? (
+                     <div className="space-y-1">
+                        {issues.map((issue) => (
+                           <div key={issue.id} className="flex items-center gap-2 py-1 text-sm">
+                              <span
+                                 className="size-2 rounded-full"
+                                 style={{ backgroundColor: issue.status.color }}
+                              />
+                              <span className="min-w-0 flex-1 truncate">{issue.title}</span>
+                              <span className="text-xs text-muted-foreground">
+                                 {issue.identifier}
+                              </span>
+                           </div>
+                        ))}
+                     </div>
+                  ) : (
+                     <p className="text-xs text-muted-foreground">
+                        No issues assigned to this cycle.
+                     </p>
+                  )}
+               </div>
+            )}
+         </div>
+      </div>
    );
 }
