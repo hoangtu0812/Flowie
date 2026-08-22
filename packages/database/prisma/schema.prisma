@@ -83,6 +83,7 @@ model User {
   updatedDocuments Document[] @relation("DocumentUpdater")
   comments Comment[]
   activities Activity[] @relation("ActivityActor")
+  notifications Notification[]
 
   @@map("users")
 }
@@ -436,6 +437,22 @@ model IssueLabel {
   @@id([issueId, labelId])
   @@index([labelId])
   @@map("issue_labels")
+}
+
+model Notification {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  type       String
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  data       Json?
+  readAt     DateTime? @map("read_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+  @@map("notifications")
 }
 
 model WorkspaceMember {

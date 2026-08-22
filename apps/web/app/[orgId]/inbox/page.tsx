@@ -1,10 +1,10 @@
 import MainLayout from '@/components/layout/main-layout';
-import Inbox from '@/components/common/inbox/inbox';
+import { RealInbox } from '@/components/notifications/real-inbox';
 
 export default function InboxPage() {
    return (
-      <MainLayout>
-         <Inbox />
+      <MainLayout header={<div className="w-full border-b px-6 py-3 font-medium">Inbox</div>}>
+         <RealInbox />
       </MainLayout>
    );
 }

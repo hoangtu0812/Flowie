@@ -12,6 +12,7 @@ import { DocumentsModule } from './documents/documents.module';
 import { CommentsModule } from './comments/comments.module';
 import { ActivitiesModule } from './activities/activities.module';
 import { LabelsModule } from './labels/labels.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { WorkspaceModule } from './workspace/workspace.module';
 
 @Module({
@@ -29,6 +30,7 @@ import { WorkspaceModule } from './workspace/workspace.module';
       CommentsModule,
       ActivitiesModule,
       LabelsModule,
+      NotificationsModule,
    ],
 })
 export class AppModule {}
