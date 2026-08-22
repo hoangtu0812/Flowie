@@ -18,11 +18,12 @@ import {
    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
-import { CreateNewIssue } from './create-new-issue';
 import { ThemeToggle } from '../theme-toggle';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 
 export function OrgSwitcher() {
+   const { orgId } = useParams<{ orgId: string }>();
    const [workspaceName, setWorkspaceName] = React.useState('Flowie');
 
    React.useEffect(() => {
@@ -63,8 +64,6 @@ export function OrgSwitcher() {
                   </DropdownMenuTrigger>
 
                   <ThemeToggle />
-
-                  <CreateNewIssue />
                </div>
                <DropdownMenuContent
                   className="w-[--radix-dropdown-menu-trigger-width] min-w-60 rounded-lg"
@@ -74,7 +73,7 @@ export function OrgSwitcher() {
                >
                   <DropdownMenuGroup>
                      <DropdownMenuItem asChild>
-                        <Link href="/lndev-ui/settings">
+                        <Link href={`/${orgId}/settings`}>
                            Settings
                            <DropdownMenuShortcut>G then S</DropdownMenuShortcut>
                         </Link>

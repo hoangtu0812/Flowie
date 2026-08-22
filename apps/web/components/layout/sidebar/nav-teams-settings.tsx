@@ -10,13 +10,30 @@ import {
    SidebarMenuButton,
    SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { teams } from '@/mock-data/teams';
 import { Button } from '@/components/ui/button';
 import { useParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 export function NavTeamsSettings() {
    const { orgId } = useParams<{ orgId: string }>();
-   const joinedTeams = teams.filter((t) => t.joined);
+   const [joinedTeams, setJoinedTeams] = useState<
+      Array<{ id: string; name: string; icon: string | null }>
+   >([]);
+   useEffect(() => {
+      const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+      void fetch(`${api}/workspaces/me`, { credentials: 'include' })
+         .then((response) => (response.ok ? response.json() : Promise.reject()))
+         .then((workspace: { data: Array<{ workspace: { id: string } }> }) =>
+            fetch(`${api}/teams?workspaceId=${workspace.data[0]?.workspace.id}`, {
+               credentials: 'include',
+            })
+         )
+         .then((response) => (response.ok ? response.json() : Promise.reject()))
+         .then((payload: { data: Array<{ id: string; name: string; icon: string | null }> }) =>
+            setJoinedTeams(payload.data)
+         )
+         .catch(() => undefined);
+   }, []);
    return (
       <SidebarGroup>
          <SidebarGroupLabel>Your teams</SidebarGroupLabel>
