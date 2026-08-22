@@ -4,6 +4,7 @@ import {
    Box,
    Compass,
    ContactRound,
+   Gauge,
    LayoutList,
    Layers,
    LucideIcon,
@@ -45,6 +46,7 @@ interface WorkspaceNavItem {
 }
 
 const WORKSPACE_NAV: WorkspaceNavItem[] = [
+   { key: 'dashboard', name: 'Dashboard', icon: Gauge, url: '' },
    { key: 'projects', name: 'Projects', icon: Box, url: '/projects' },
    { key: 'initiatives', name: 'Initiatives', icon: Compass, url: '/initiatives' },
    { key: 'views', name: 'Views', icon: Layers, url: '/views' },

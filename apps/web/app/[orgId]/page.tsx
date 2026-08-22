@@ -1,6 +1,10 @@
-import { redirect } from 'next/navigation';
+import MainLayout from '@/components/layout/main-layout';
+import { RealDashboard } from '@/components/portfolio/real-dashboard';
 
-export default async function OrgIdPage({ params }: { params: Promise<{ orgId: string }> }) {
-   const { orgId } = await params;
-   redirect(`/${orgId}/teams`);
+export default function OrgIdPage() {
+   return (
+      <MainLayout>
+         <RealDashboard />
+      </MainLayout>
+   );
 }
