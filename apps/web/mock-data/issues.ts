@@ -12,6 +12,8 @@ export interface Issue {
    description: string;
    status: Status;
    assignee: User | null;
+   /** Present for server-backed issues; older UI-only fixtures omit this field. */
+   creator?: User;
    priority: Priority;
    labels: LabelInterface[];
    createdAt: string;

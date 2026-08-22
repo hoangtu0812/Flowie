@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UsersService } from './users.service';
@@ -11,6 +11,20 @@ export class UsersController {
    @Get('me')
    async me(@Req() request: AuthenticatedRequest) {
       return { data: await this.users.me(request.auth!.userId) };
+   }
+
+   @Get()
+   async list(@Query('workspaceId') workspaceId: string, @Req() request: AuthenticatedRequest) {
+      return { data: await this.users.list(workspaceId, request.auth!.userId) };
+   }
+
+   @Get(':userId')
+   async get(
+      @Param('userId') userId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.users.get(userId, workspaceId, request.auth!.userId) };
    }
 
    @Patch('me')

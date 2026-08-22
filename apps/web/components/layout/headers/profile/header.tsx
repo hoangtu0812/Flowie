@@ -1,12 +1,11 @@
 'use client';
 
 import { IssueFilterTrigger } from '@/components/common/issues/issue-filter-trigger';
+import { useLiveMember } from '@/components/common/members/use-live-members';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { issueCreatorIndex } from '@/mock-data/issues';
-import { User, users } from '@/mock-data/users';
 import { cn } from '@/lib/utils';
 import { useIssuesStore } from '@/store/issues-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
@@ -116,20 +115,17 @@ function HeaderSearch() {
    );
 }
 
-export default function Header({ member }: { member: User }) {
+export default function Header({ memberId }: { memberId: string }) {
    const { orgId } = useParams<{ orgId: string }>();
+   const { member } = useLiveMember(memberId);
    const [activeTab] = useQueryState('tab', parseAsString.withDefault('assigned'));
    const { issues } = useIssuesStore();
    const { openPanel, togglePanel } = useRightPanelStore();
 
-   const memberIndex = Math.max(
-      0,
-      users.findIndex((candidate) => candidate.id === member.id)
-   );
    const count =
       activeTab === 'created'
-         ? issues.filter((issue) => issueCreatorIndex(issue, users.length) === memberIndex).length
-         : issues.filter((issue) => issue.assignee?.id === member.id).length;
+         ? issues.filter((issue) => issue.creator?.id === memberId).length
+         : issues.filter((issue) => issue.assignee?.id === memberId).length;
 
    return (
       <>
@@ -145,10 +141,13 @@ export default function Header({ member }: { member: User }) {
                   </Link>
                   <ChevronRight className="size-3.5 text-muted-foreground shrink-0" />
                   <Avatar className="size-5 shrink-0">
-                     <AvatarImage src={member.avatarUrl} alt={member.name} />
-                     <AvatarFallback>{member.name[0]}</AvatarFallback>
+                     <AvatarImage
+                        src={member?.avatarUrl ?? undefined}
+                        alt={member?.name ?? 'Member'}
+                     />
+                     <AvatarFallback>{member?.name?.[0] ?? 'M'}</AvatarFallback>
                   </Avatar>
-                  <span className="font-medium truncate">{member.name}</span>
+                  <span className="font-medium truncate">{member?.name ?? 'Member'}</span>
                   <Button variant="ghost" size="icon" className="size-6 text-muted-foreground">
                      <Star className="size-3.5" />
                   </Button>

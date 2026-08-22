@@ -188,6 +188,7 @@ const mapIssue = (issue: ApiIssue): Issue => ({
    description: issue.description ?? '',
    status: mapStatus(issue.status),
    assignee: issue.assignee ? mapUser(issue.assignee) : null,
+   creator: mapUser(issue.creator),
    priority: mapPriority(issue.priority),
    labels: issue.labelLinks.map(({ label }) => mapLabel(label)),
    createdAt: issue.createdAt,
