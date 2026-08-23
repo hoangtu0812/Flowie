@@ -63,47 +63,19 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 | `04ba864` | Team Overview/Members/Documents use API; create team member and document actions are real. Team API now selects safe user fields only. |
 | `7f3c694` | Members and Profile use workspace member API; profile Assigned/Created uses real issue assignee/creator. |
 | `f64147b` | Saved Views use API, create action persists, and issue/project filtering runs against live stores. |
-
-## In progress — do not discard
-
-The worktree currently contains the **Initiatives** implementation, not committed yet:
-
-- New migration: `packages/database/prisma/migrations/20260822130000_initiative_properties/migration.sql`
-- Schema adds Initiative `ownerId`, `priority`, `health`, and `icon` plus safe owner relation.
-- API DTO/service includes these fields, validates owner membership, and returns owner/project details.
-- Frontend changes in:
-  - `apps/web/components/common/initiatives/use-live-initiatives.ts`
-  - `apps/web/components/common/initiatives/initiatives.tsx`
-  - `apps/web/components/common/initiatives/initiative-details.tsx`
-  - `apps/web/components/layout/headers/initiative/header.tsx`
-- List, creation, detail tabs, and linking existing projects are wired to API.
-- Prisma generation and API build have passed. Frontend build had compiled and passed type validation; run a full Docker build/recreate before committing to verify migration and runtime.
-
-Recommended next commands after resuming (when 5G is permitted):
-
-```powershell
-pnpm --filter @circle/database generate
-pnpm --filter @circle/api build
-pnpm --filter @circle/web build
-git diff --check
-docker compose --profile app build api web
-docker compose --profile app up -d --no-build --pull never --force-recreate api web
-```
-
-Then check `/api/v1/health`, the API logs for successful migration, web HTTP 200, commit as e.g. `feat: connect initiatives to live data`, and push.
+| `cf16225` | Initiatives use live API for list, creation, detail, owner/properties, and linking existing projects. Prisma migration `20260822130000_initiative_properties` was applied successfully; API and web health checks return HTTP 200. |
 
 ## Remaining implementation backlog
 
 Prioritize by backend readiness and preserve original UI in every group.
 
-1. **Finish Initiatives** — complete verification/commit of in-progress work. Consider adding a real Initiative activity relation only if the original Activity tab needs field-level event history; never generate fake events.
-2. **Inbox and notifications** — API notification model exists. Replace inbox mock previews, mark-read/archive actions, and notification store with API data.
-3. **My issues** — use live issue store data for breakdowns, filters, and user-scoped list; remove remaining mock project/team/user derivations.
-4. **Settings** — labels/statuses/templates/security/preferences pages need an audit. Retain only actually supported settings; implement matching endpoints for pages still showing placeholder data.
-5. **Command palette/sidebar utilities** — remove remaining mock team/project/user imports, using live loaders already present (`team-types.ts`, issue store, workspace members).
-6. **Attachments/comments/issue activity** — API endpoints exist; finish original issue detail composer/activity/attachment interactions.
-7. **Initiative related enhancements** — resource links, labels, and granular activity only after their schema/API contract is designed and migrated.
-8. **Final audit** — `rg -l "@/mock-data|mock-data/" apps/web --glob '*.{ts,tsx}'` currently reports roughly 83 direct imports. Classify each result as presentation-only metadata, obsolete UI, or data still requiring API work. Do not claim mocks are eliminated until this is audited screen by screen.
+1. **Inbox and notifications** — API notification model exists. Replace inbox mock previews, mark-read/archive actions, and notification store with API data.
+2. **My issues** — use live issue store data for breakdowns, filters, and user-scoped list; remove remaining mock project/team/user derivations.
+3. **Settings** — labels/statuses/templates/security/preferences pages need an audit. Retain only actually supported settings; implement matching endpoints for pages still showing placeholder data.
+4. **Command palette/sidebar utilities** — remove remaining mock team/project/user imports, using live loaders already present (`team-types.ts`, issue store, workspace members).
+5. **Attachments/comments/issue activity** — API endpoints exist; finish original issue detail composer/activity/attachment interactions.
+6. **Initiative related enhancements** — resource links, labels, and granular activity only after their schema/API contract is designed and migrated.
+7. **Final audit** — `rg -l "@/mock-data|mock-data/" apps/web --glob '*.{ts,tsx}'` currently reports roughly 83 direct imports. Classify each result as presentation-only metadata, obsolete UI, or data still requiring API work. Do not claim mocks are eliminated until this is audited screen by screen.
 
 ## Technical conventions established
 
@@ -123,7 +95,7 @@ Prioritize by backend readiness and preserve original UI in every group.
 ## Handoff protocol
 
 1. Read this file and inspect `git status --short` first.
-2. Preserve uncommitted Initiatives work; finish/verify it before switching feature area.
+2. Continue from the first remaining backlog item; all work listed in the verified-progress table is committed and pushed.
 3. Send concise Vietnamese commentary before tool work and at least every 60 seconds during lengthy builds.
 4. Use `apply_patch` for edits; never write source files via shell redirection.
 5. Build and run Docker only at a coherent feature milestone. Commit/push only after verification.
