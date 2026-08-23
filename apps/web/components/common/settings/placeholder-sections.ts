@@ -1,4 +1,4 @@
-/** Config of the generic settings pages that don't have a dedicated UI yet. */
+/** Config of settings pages whose configuration service has not been implemented yet. */
 export interface PlaceholderConfig {
    title: string;
    description?: string;
@@ -17,11 +17,6 @@ export const PLACEHOLDER_SECTIONS: Record<string, PlaceholderConfig> = {
       title: 'Project labels',
       actionLabel: 'New label',
       emptyLabel: 'No project labels',
-   },
-   'project-templates': {
-      title: 'Project templates',
-      actionLabel: 'New template',
-      emptyLabel: 'No project templates',
    },
    'project-updates': {
       title: 'Project updates',

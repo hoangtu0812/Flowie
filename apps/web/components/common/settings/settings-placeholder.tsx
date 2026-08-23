@@ -49,9 +49,9 @@ export function DashedSmiley() {
 }
 
 /**
- * Generic settings page used by the sections that don't have a dedicated
- * UI yet (SLAs, project labels, emojis, …): title, filter input, primary
- * action and a friendly empty state.
+ * Generic settings page used by configuration sections that do not have a
+ * persistence service yet. The original layout remains visible, but no
+ * filter or mutation can be mistaken for a successful saved setting.
  */
 export default function SettingsPlaceholder({ config }: { config: PlaceholderConfig }) {
    return (
@@ -63,13 +63,24 @@ export default function SettingsPlaceholder({ config }: { config: PlaceholderCon
             )}
 
             <div className="flex items-center justify-between gap-3 mt-6">
-               <Input placeholder="Filter by name..." className="w-72 h-8" />
-               {config.actionLabel && <Button size="xs">{config.actionLabel}</Button>}
+               <Input placeholder="Filtering is not available yet" className="w-72 h-8" disabled />
+               {config.actionLabel && (
+                  <Button
+                     size="xs"
+                     disabled
+                     title={`${config.title} settings are not available yet`}
+                  >
+                     {config.actionLabel}
+                  </Button>
+               )}
             </div>
 
             <div className="flex flex-col items-center justify-center gap-5 py-32">
                <DashedSmiley />
                <p className="text-sm text-muted-foreground">{config.emptyLabel}</p>
+               <p className="text-xs text-muted-foreground text-center max-w-sm">
+                  Configuration for this feature is not available yet.
+               </p>
             </div>
          </div>
       </div>
