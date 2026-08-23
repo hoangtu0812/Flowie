@@ -4,14 +4,7 @@ import { Button } from '@/components/ui/button';
 import { FileText, Plus } from 'lucide-react';
 import { SettingsCard, SettingsRow, SettingsSection, SettingsShell } from './shared';
 
-/** Invented workspace issue templates. */
-const TEMPLATES = [
-   { name: 'Bug report intake', meta: 'Created by sophia.reed 1 year ago' },
-   { name: 'Component feature request', meta: 'Created by mason.carter 1 year ago' },
-   { name: 'Release checklist', meta: 'Updated by alex.zhang 2 years ago' },
-];
-
-/** Workspace "Issue templates" settings. */
+/** Workspace issue templates have no persistence model yet. */
 export default function IssueTemplatesSettings() {
    return (
       <SettingsShell
@@ -21,22 +14,27 @@ export default function IssueTemplatesSettings() {
          <SettingsSection>
             <SettingsCard>
                <SettingsRow
-                  title={`${TEMPLATES.length} issue templates`}
+                  title="No issue templates configured"
+                  description="Issue-template storage and creation are not enabled yet."
                   trailing={
-                     <Button size="icon" variant="ghost" className="size-7">
+                     <Button
+                        size="icon"
+                        variant="ghost"
+                        className="size-7"
+                        disabled
+                        title="Issue templates are not available"
+                     >
                         <Plus className="size-4" />
                      </Button>
                   }
+                  muted
                />
-               {TEMPLATES.map((template) => (
-                  <SettingsRow
-                     key={template.name}
-                     icon={<FileText className="size-4" />}
-                     title={template.name}
-                     description={template.meta}
-                     onClick={() => {}}
-                  />
-               ))}
+               <SettingsRow
+                  icon={<FileText className="size-4" />}
+                  title="Create from scratch"
+                  description="Use the issue composer to create an issue without a template."
+                  muted
+               />
             </SettingsCard>
          </SettingsSection>
       </SettingsShell>

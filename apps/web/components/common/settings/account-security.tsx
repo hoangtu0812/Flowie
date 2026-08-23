@@ -1,100 +1,62 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
-import { KeyRound, Laptop, Smartphone } from 'lucide-react';
+import { KeyRound, Laptop } from 'lucide-react';
 import { SettingsCard, SettingsRow, SettingsSection, SettingsShell } from './shared';
 
-/** Personal "Security & access" settings (sessions, passkeys, API keys). */
+/** Security settings only expose capabilities with a backing service. */
 export default function AccountSecurity() {
    return (
       <SettingsShell title="Security & access">
-         <SettingsSection title="Sessions" description="Devices logged into your account">
+         <SettingsSection
+            title="Sessions"
+            description="Session management is not exposed in the current deployment."
+         >
             <SettingsCard>
                <SettingsRow
                   icon={<Laptop className="size-4" />}
-                  title="Chrome on macOS"
-                  description={
-                     <span className="inline-flex items-center gap-1.5">
-                        <span className="size-1.5 rounded-full bg-[#00cc66]" />
-                        <span className="text-[#00a05a]">Current session</span> · Paris, FR · (EN,
-                        FR)
-                     </span>
-                  }
-               />
-            </SettingsCard>
-            <SettingsCard>
-               <SettingsRow
-                  title="1 other session"
-                  trailing={
-                     <Button size="xs" variant="ghost">
-                        Revoke all
-                     </Button>
-                  }
-               />
-               <SettingsRow
-                  icon={<Smartphone className="size-4" />}
-                  title="LNDev UI iOS"
-                  description="Paris, FR · Last seen about 3 hours ago"
+                  title="Session details unavailable"
+                  description="The application can sign in and out, but it does not yet provide a session list or remote revoke API."
+                  muted
                />
             </SettingsCard>
          </SettingsSection>
 
          <SettingsSection
             title="Passkeys"
-            description="Passkeys are a secure way to sign in to your account"
+            description="Passkey registration is not enabled in the current deployment."
          >
             <SettingsCard>
                <SettingsRow
-                  title="No passkeys registered"
-                  trailing={
-                     <Button size="xs" variant="ghost">
-                        New passkey
-                     </Button>
-                  }
+                  title="Passkeys unavailable"
+                  description="No passkey credential service is configured."
+                  muted
                />
             </SettingsCard>
          </SettingsSection>
 
          <SettingsSection
             title="Personal API keys"
-            description="Use the GraphQL API to build your own integrations"
+            description="Personal API keys are not available in this deployment."
          >
             <SettingsCard>
                <SettingsRow
-                  title="1 API key"
-                  trailing={
-                     <Button size="xs" variant="ghost">
-                        New API key
-                     </Button>
-                  }
-               />
-               <SettingsRow
                   icon={<KeyRound className="size-4" />}
-                  title={
-                     <>
-                        LNDEV_PERSONAL_API_KEY
-                        <span className="text-xs text-muted-foreground font-normal">
-                           · full access · public & private teams
-                        </span>
-                     </>
-                  }
-                  description="Created 2 months ago · last used on Jul 16, 2026"
+                  title="No personal API key service"
+                  description="Flowie exposes its internal REST API only to authenticated application sessions."
+                  muted
                />
             </SettingsCard>
          </SettingsSection>
 
          <SettingsSection
-            title="Commit signing key"
-            description="Coding sessions use this key to sign your commits"
+            title="Signing keys"
+            description="Code-signing integration is not part of this project-management deployment."
          >
             <SettingsCard>
                <SettingsRow
-                  title="No signing key added"
-                  trailing={
-                     <Button size="xs" variant="ghost">
-                        Add key
-                     </Button>
-                  }
+                  title="Signing keys unavailable"
+                  description="No signing-key storage or code-review feature is enabled."
+                  muted
                />
             </SettingsCard>
          </SettingsSection>
