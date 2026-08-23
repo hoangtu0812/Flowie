@@ -95,6 +95,7 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 | `40b8239` | Notifications, Security & access, and Issue templates no longer show invented enabled channels, sessions, API keys, devices, or templates. Only inbox/Discord capabilities are represented as active; unavailable services are explicitly disabled. Frontend Docker verification passed. |
 | `33fbdc2` | Original Project statuses settings now loads real projects through the workspace and Projects APIs, groups/counts actual persisted status values, and has loading/error states. The original add-status affordances stay visibly disabled because no project-status configuration API exists. Frontend build and Docker route verification passed. |
 | `6cce1ff` | Original Project templates settings page now lists, filters, and creates persisted templates through the Project Templates API while retaining the original Settings title/filter/empty-state structure. The redundant non-original template component was removed. Frontend build and Docker route verification passed. |
+| `a96a42b` | Preferences now persists and applies default home view, font size, pointer cursors, and link underlining in the browser. Existing theme/sidebar settings remain functional. Unsupported display/date/comment/desktop/automation controls are visibly unavailable instead of fake switches. Frontend build and Docker route verification passed. |
 
 ### Capability status at the handoff point
 
@@ -107,24 +108,24 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 | Issues, labels, cycles, saved views | Implemented baseline | Original issues list/filter options, My issues scopes, labels CRUD, cycles/timeline, subscriptions, and saved views use API data. Issue detail collaboration remains incomplete. |
 | Initiatives and documents | Implemented baseline | Initiative list/detail/create/linking and team documents are live. Advanced relationships/workflows remain deferred. |
 | Inbox and Discord | Implemented baseline | Inbox persists notifications/read/delete and workspace Discord integration exists. No fake delivery channels are enabled. |
-| Settings | In progress | Profile, issue labels, project statuses, and project templates are live. Unsupported Notification, Security, and Issue templates pages have been made truthful. Preferences and other placeholders need review. Template application/editing is deferred because the API currently provides list/create only. |
+| Settings | In progress | Profile, issue labels, project statuses, project templates, and actionable browser-local preferences are live. Unsupported Notification, Security, Issue templates, desktop and issue-automation preferences have been made truthful. Generic Settings placeholders still need review. Template application/editing is deferred because the API currently provides list/create only. |
 | Admin / RBAC / audit | Partial or deferred | Do not advertise as complete. Any current admin controls require a separate permissions, audit, and UX audit before production claims. |
 
 ## Exact restart point
 
-The next agent should start with **Settings audit → Preferences**. It contains a mixture of genuine local display preferences and UI switches/selects that may still represent non-persisted or unsupported services:
+The next agent should start with **Settings audit → generic placeholders**. The shared component still renders enabled-looking filter inputs and primary actions for settings modules that do not have a backend implementation:
 
-`apps/web/components/common/settings/preferences.tsx`
+`apps/web/components/common/settings/settings-placeholder.tsx`
 
 Preferred next vertical slice:
 
-1. Audit every control against its persistence mechanism and the explicit product scope (no desktop/mobile client, email, or Slack).
-2. Preserve settings that genuinely change the client experience (for example theme/sidebar behavior) and make their persistence clear.
-3. Disable and explain any preference that needs a desktop/mobile client or absent backend service. Do not keep a clickable local-only switch that looks like an account setting.
-4. For an account/workspace preference that needs cross-device persistence, design the API/schema first instead of storing authoritative data only in browser state.
-5. Build and, only with the user on 5G, rebuild/recreate the web image and verify the route. Commit/push and document the slice.
+1. Enumerate every route that uses the shared placeholder and identify whether a matching service/API exists today.
+2. For a route with a matching API, migrate it into the original Settings layout in a separate vertical slice.
+3. For a route with no API, retain its location and empty-state layout but disable fake filtering/creation and explain that the feature is unavailable.
+4. Do not disable a route merely because it is difficult: use existing live Documents/Initiatives data when it is genuinely relevant to that configuration screen.
+5. Build and, only with the user on 5G, rebuild/recreate the web image and verify the routes. Commit/push and document the classification.
 
-This audit may result in a narrow frontend truthfulness change or a discrete preference persistence vertical slice, depending on inspection.
+This is the first part of the required systematic mock/action audit; keep a table of classifications rather than treating all placeholders as equivalent.
 
 ## Execution plan from this handoff
 
