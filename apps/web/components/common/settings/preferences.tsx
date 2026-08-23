@@ -3,6 +3,7 @@
 import { CustomizeSidebarDialog } from '@/components/layout/sidebar/customize-sidebar-dialog';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { useUiPreferencesStore } from '@/store/ui-preferences-store';
 import { useState } from 'react';
 import { SelectMenu, SettingsCard, SettingsRow, SettingsSection, SettingsShell } from './shared';
 import { ThemePreferences } from './theme-preferences';
@@ -10,6 +11,16 @@ import { ThemePreferences } from './theme-preferences';
 /** Personal "Preferences" settings (general, theme, automations). */
 export default function Preferences() {
    const [customizeOpen, setCustomizeOpen] = useState(false);
+   const {
+      defaultHome,
+      fontSize,
+      pointerCursors,
+      underlineLinks,
+      setDefaultHome,
+      setFontSize,
+      setPointerCursors,
+      setUnderlineLinks,
+   } = useUiPreferencesStore();
    return (
       <SettingsShell title="Preferences">
          <SettingsSection title="General">
@@ -17,27 +28,49 @@ export default function Preferences() {
                <SettingsRow
                   title="Default home view"
                   description="Select which view to display when launching the app"
-                  trailing={<SelectMenu options={['Agent (default)', 'Inbox', 'My issues']} />}
+                  trailing={
+                     <SelectMenu
+                        options={['Agent', 'Inbox', 'My issues']}
+                        value={
+                           defaultHome === 'my-issues'
+                              ? 'My issues'
+                              : defaultHome[0].toUpperCase() + defaultHome.slice(1)
+                        }
+                        onChange={(value) =>
+                           setDefaultHome(
+                              value === 'Inbox'
+                                 ? 'inbox'
+                                 : value === 'My issues'
+                                   ? 'my-issues'
+                                   : 'agent'
+                           )
+                        }
+                     />
+                  }
                />
                <SettingsRow
                   title="Display names"
-                  description="Select how names are displayed in the interface"
-                  trailing={<SelectMenu options={['Username', 'Full name']} />}
+                  description="Display-name formatting is not configurable yet"
+                  trailing={<span className="text-xs text-muted-foreground">Unavailable</span>}
+                  muted
                />
                <SettingsRow
                   title="First day of the week"
-                  description="Used for date pickers"
-                  trailing={<SelectMenu options={['Monday', 'Sunday', 'Saturday']} />}
+                  description="Date-picker week settings are not configurable yet"
+                  trailing={<span className="text-xs text-muted-foreground">Unavailable</span>}
+                  muted
                />
                <SettingsRow
                   title="Convert text emoticons into emojis"
-                  description="Strings like :) will be converted to 🙂"
-                  trailing={<Switch defaultChecked />}
+                  description="Comment text transformations are not available yet"
+                  trailing={<Switch checked={false} disabled />}
+                  muted
                />
                <SettingsRow
                   title="Send comments on..."
-                  description="Choose which key press is used to submit comments"
-                  trailing={<SelectMenu options={['⌘+Enter', 'Enter']} />}
+                  description="Comment keyboard shortcuts are not configurable yet"
+                  trailing={<span className="text-xs text-muted-foreground">Unavailable</span>}
+                  muted
                />
             </SettingsCard>
          </SettingsSection>
@@ -56,17 +89,23 @@ export default function Preferences() {
                <SettingsRow
                   title="Font size"
                   description="Adjust the size of text across the app"
-                  trailing={<SelectMenu options={['Default', 'Small', 'Large']} />}
+                  trailing={
+                     <SelectMenu
+                        options={['Default', 'Small', 'Large']}
+                        value={fontSize[0].toUpperCase() + fontSize.slice(1)}
+                        onChange={(value) => setFontSize(value.toLowerCase() as typeof fontSize)}
+                     />
+                  }
                />
                <SettingsRow
                   title="Use pointer cursors"
                   description="Change the cursor to a pointer when hovering over any interactive elements"
-                  trailing={<Switch defaultChecked />}
+                  trailing={<Switch checked={pointerCursors} onCheckedChange={setPointerCursors} />}
                />
                <SettingsRow
                   title="Underline links"
                   description="Always underline links in text content"
-                  trailing={<Switch />}
+                  trailing={<Switch checked={underlineLinks} onCheckedChange={setUnderlineLinks} />}
                />
             </SettingsCard>
             <ThemePreferences />
@@ -76,8 +115,9 @@ export default function Preferences() {
             <SettingsCard>
                <SettingsRow
                   title="Open in desktop app"
-                  description="Automatically open links in desktop app when possible"
-                  trailing={<Switch />}
+                  description="The desktop application is not available"
+                  trailing={<Switch checked={false} disabled />}
+                  muted
                />
             </SettingsCard>
          </SettingsSection>
@@ -86,13 +126,15 @@ export default function Preferences() {
             <SettingsCard>
                <SettingsRow
                   title="Auto-assign to self"
-                  description="When creating new issues, always assign them to yourself by default"
-                  trailing={<Switch defaultChecked />}
+                  description="Issue automation is not available yet"
+                  trailing={<Switch checked={false} disabled />}
+                  muted
                />
                <SettingsRow
                   title="On move to started status, assign to yourself"
-                  description="When you move an unassigned issue to started, it will be automatically assigned to you"
-                  trailing={<Switch defaultChecked />}
+                  description="Issue automation is not available yet"
+                  trailing={<Switch checked={false} disabled />}
+                  muted
                />
             </SettingsCard>
          </SettingsSection>
