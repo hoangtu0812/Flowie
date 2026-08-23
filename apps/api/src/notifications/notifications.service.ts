@@ -29,10 +29,20 @@ export class NotificationsService {
       data: Record<string, unknown>,
       discordContent: string
    ) {
-      const recipients = await this.prisma.workspaceMember.findMany({
-         where: { workspaceId, status: 'ACTIVE', userId: { not: actorId } },
-         select: { userId: true },
-      });
+      const [recipients, actor] = await Promise.all([
+         this.prisma.workspaceMember.findMany({
+            where: { workspaceId, status: 'ACTIVE', userId: { not: actorId } },
+            select: { userId: true },
+         }),
+         this.prisma.user.findUnique({
+            where: { id: actorId },
+            select: { id: true, name: true, avatarUrl: true },
+         }),
+      ]);
+      const notificationData = {
+         ...data,
+         ...(actor ? { actor } : {}),
+      } as Prisma.InputJsonValue;
       if (recipients.length) {
          await this.prisma.notification.createMany({
             data: recipients.map((recipient) => ({
@@ -40,7 +50,7 @@ export class NotificationsService {
                type,
                entityType,
                entityId,
-               data: data as Prisma.InputJsonValue,
+               data: notificationData,
             })),
          });
       }
@@ -71,6 +81,39 @@ export class NotificationsService {
       await this.prisma.notification.updateMany({
          where: { userId, readAt: null },
          data: { readAt: new Date() },
+      });
+   }
+
+   async deleteAll(userId: string) {
+      return this.prisma.notification.deleteMany({ where: { userId } });
+   }
+
+   async deleteRead(userId: string) {
+      return this.prisma.notification.deleteMany({
+         where: { userId, readAt: { not: null } },
+      });
+   }
+
+   async deleteForCompletedIssues(userId: string) {
+      const issueNotifications = await this.prisma.notification.findMany({
+         where: { userId, entityType: 'issue' },
+         select: { entityId: true },
+      });
+      const issueIds = [...new Set(issueNotifications.map((notification) => notification.entityId))];
+      if (!issueIds.length) return { count: 0 };
+
+      const completedIssues = await this.prisma.issue.findMany({
+         where: {
+            id: { in: issueIds },
+            status: { category: { in: ['COMPLETED', 'CANCELED'] } },
+         },
+         select: { id: true },
+      });
+      const completedIssueIds = completedIssues.map((issue) => issue.id);
+      if (!completedIssueIds.length) return { count: 0 };
+
+      return this.prisma.notification.deleteMany({
+         where: { userId, entityType: 'issue', entityId: { in: completedIssueIds } },
       });
    }
 

@@ -28,9 +28,12 @@ const ITEM_KEYS: Record<string, SidebarItemKey> = {
 
 export function NavInbox() {
    const { visibility, badgeStyle, order } = useSidebarPrefsStore();
-   const { getUnreadCount } = useNotificationsStore();
+   const { getUnreadCount, loadNotifications } = useNotificationsStore();
    const [mounted, setMounted] = useState(false);
-   useEffect(() => setMounted(true), []);
+   useEffect(() => {
+      setMounted(true);
+      void loadNotifications();
+   }, [loadNotifications]);
 
    const unread = mounted ? getUnreadCount() : 0;
 
