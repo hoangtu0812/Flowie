@@ -1,6 +1,6 @@
 # Flowie — Agent Handoff
 
-Last updated: 2026-08-22
+Last updated: 2026-08-23
 
 ## Immutable objective
 
