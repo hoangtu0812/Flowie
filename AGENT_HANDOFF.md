@@ -8,6 +8,30 @@ Build Flowie from the original Circle frontend UI. Preserve its navigation, page
 
 The product is a general project-management system, not a code-review product. Code reviews, Slack, desktop/mobile notifications, and email delivery are intentionally not active. Discord is the supported outbound notification integration.
 
+## Scope and success criteria
+
+### Current product objective (authoritative)
+
+Turn the original `ln-dev7/circle` frontend into a self-hosted Flowie project-management application. The primary work is to connect the existing Circle screens to a real API and database, progressively replacing mock records without changing the original product's visual identity.
+
+The application must support real authenticated users, workspaces, teams, projects, issues, cycles, documents, initiatives, notifications, and Discord integration. It must work from the existing Docker images on an internal network without downloading anything at each startup.
+
+### Explicitly out of scope for the current implementation pass
+
+- Code review / pull-request workflow.
+- Slack, email, desktop, and mobile notification delivery.
+- Fake desktop or mobile clients, fake sessions, passkeys, API keys, connected accounts, or status records.
+- A UI redesign or replacing Circle navigation/layout with new pages.
+- External SSO, webhooks, automation, AI, advanced analytics, and enterprise security features until the core screens use real data.
+
+### Definition of success for the current pass
+
+1. A user can use the original UI to create and manage the core project-management data persisted in PostgreSQL.
+2. Every migrated screen has real loading, empty, and error states; mutations survive refresh and do not pretend to work locally.
+3. A screen whose backend has not been implemented stays in its original location but clearly says that the capability is unavailable; it must not show fabricated records.
+4. Production UI code has no imports of mock *records* for a migrated module. Presentation-only icon/color mappings may remain temporarily, documented in the mock audit.
+5. Each completed vertical slice is verified, committed, pushed, and recorded here.
+
 ## Non-negotiable user requirements
 
 - Preserve the original UI; only add UI where a missing real action needs a control.
@@ -70,15 +94,89 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 | `7aa709a` | Original Issue labels table uses Labels API for live records, counts, descriptions, dates, filter, and create/edit/delete dialogs. Label groups remain visibly disabled because there is no group schema/API. Frontend Docker runtime verification passed. |
 | `40b8239` | Notifications, Security & access, and Issue templates no longer show invented enabled channels, sessions, API keys, devices, or templates. Only inbox/Discord capabilities are represented as active; unavailable services are explicitly disabled. Frontend Docker verification passed. |
 
-## Remaining implementation backlog
+### Capability status at the handoff point
 
-Prioritize by backend readiness and preserve original UI in every group.
+| Area | Status | Practical state |
+| --- | --- | --- |
+| Runtime, Docker, DB | Implemented | Existing images run offline through `scripts/start-local.ps1`; PostgreSQL, Redis, MinIO, API, web, and worker are composed together. |
+| Authentication and workspace access | Implemented baseline | Login/session/workspace resolution are real. OAuth, email verification, password reset, and enterprise SSO are deferred. |
+| Teams and members | Implemented baseline | Original Teams, team overview, team members, and workspace members use API data; team/member creation actions covered by the migrated screens persist. |
+| Projects | Implemented baseline | Original project list, creation, lead, issue progress, overview, issues, activity, and project header use API data. Project settings still need their final audit. |
+| Issues, labels, cycles, saved views | Implemented baseline | Original issues list/filter options, My issues scopes, labels CRUD, cycles/timeline, subscriptions, and saved views use API data. Issue detail collaboration remains incomplete. |
+| Initiatives and documents | Implemented baseline | Initiative list/detail/create/linking and team documents are live. Advanced relationships/workflows remain deferred. |
+| Inbox and Discord | Implemented baseline | Inbox persists notifications/read/delete and workspace Discord integration exists. No fake delivery channels are enabled. |
+| Settings | In progress | Profile and issue labels are live. Unsupported Notification, Security, and Issue templates pages have been made truthful. Project statuses/templates, Preferences, and other placeholders need review. |
+| Admin / RBAC / audit | Partial or deferred | Do not advertise as complete. Any current admin controls require a separate permissions, audit, and UX audit before production claims. |
 
-1. **Settings** — complete the remaining audit. Issue labels are live; project templates/statuses, preferences, and generic placeholders must either use matching API data or be explicitly unavailable. Do not reintroduce invented rows/dates/devices/API keys.
-2. **Command palette/sidebar utilities** — remove remaining mock team/project/user imports, using live loaders already present (`team-types.ts`, issue store, workspace members).
-3. **Attachments/comments/issue activity** — API endpoints exist; finish original issue detail composer/activity/attachment interactions. Add a visible subscribe/unsubscribe control in the original issue detail UI when that screen is converted from its remaining mock detail payload.
-4. **Initiative related enhancements** — resource links, labels, and granular activity only after their schema/API contract is designed and migrated.
-5. **Final audit** — `rg -l "@/mock-data|mock-data/" apps/web --glob '*.{ts,tsx}'` currently reports roughly 83 direct imports. Classify each result as presentation-only metadata, obsolete UI, or data still requiring API work. Do not claim mocks are eliminated until this is audited screen by screen.
+## Exact restart point
+
+The next agent should start with **Settings audit → Project statuses**. The original component still relies on mock project-status rows and has group “plus” controls with no backend behavior:
+
+`apps/web/components/common/settings/project-statuses-settings.tsx`
+
+Preferred next vertical slice:
+
+1. Confirm the API `GET /projects?workspaceId=...` response and its `ProjectStatus` enum in Prisma.
+2. Keep the original grouped Settings layout, but load actual projects after resolving the workspace through `GET /workspaces/me`.
+3. Derive each status group/count from real project records. Use only a generic presentation icon if the database does not contain an icon.
+4. Keep status-management “add” actions visibly disabled with an honest explanation until a project-status schema/API exists. Do **not** invent editable statuses.
+5. Provide loading, empty, and error states; build the web app; then, only with the user on 5G, rebuild/recreate the web image and verify the route redirects correctly when unauthenticated.
+6. Commit/push the feature and a separate documentation update to this file.
+
+This is deliberately a frontend/API integration slice; it should not create a schema migration unless inspection shows current project status is unavailable from the API.
+
+## Execution plan from this handoff
+
+Work only one coherent vertical slice at a time. Preserve the original UI and close the corresponding mock imports before advancing.
+
+### Phase A — Make every existing settings page truthful (current priority)
+
+1. **Project statuses** — live project-derived groups; no imaginary configuration actions.
+2. **Project templates** — use existing template API only after adapting it into the original settings layout; otherwise mark unavailable.
+3. **Preferences** — retain real client preferences; disable desktop-only and server-side preferences that cannot persist. Do not display defaults as account settings if they are only mock state.
+4. **Remaining settings placeholders** — inspect one screen at a time. Wire a ready API or show an explicit unavailable state. Never add demo content.
+
+Exit criteria: every Settings menu item is either connected to a real persisted capability, an honest read-only capability, or explicitly unavailable.
+
+### Phase B — Core issue collaboration
+
+1. Finish the original issue-detail data source and convert the remaining mock payload to API data.
+2. Connect comment composer, edit/delete where API support exists, mentions if the contract supports them, and attachments.
+3. Render server-created activity, add visible subscribe/unsubscribe action, and ensure all mutation/error/empty states are real.
+4. Add/extend backend tests around authorization and tenant isolation before declaring the collaboration slice complete.
+
+Exit criteria: the core issue workflow can be performed without mock records or browser-only fake mutations.
+
+### Phase C — Navigation, command palette, and shared utilities
+
+1. Audit command palette/sidebar/search imports of team/project/user mock data.
+2. Reuse existing live loaders (`team-types.ts`, issue store, workspace members) rather than creating a parallel mocked store.
+3. Add server search only when the existing UI requires real cross-entity search; otherwise show an honest unavailable state.
+
+Exit criteria: navigation utilities no longer enumerate fictional entities.
+
+### Phase D — Systematic mock-data audit
+
+Run:
+
+```powershell
+rg -l "@/mock-data|mock-data/" apps/web --glob '*.{ts,tsx}'
+```
+
+For every match, add it to a short audit table in this document with one of:
+
+- `migrated`: replace record imports with API/store data;
+- `presentation-only`: retain temporary icon/color/type mapping, with no entities/dates/users;
+- `unavailable`: keep the original screen and explicitly disable it;
+- `deferred`: describe missing API/schema and the next vertical slice.
+
+Do not call the product “mock-free” based on the raw import count. It is mock-free only after every record source has been classified and migrated or removed.
+
+### Later phases (not current blocking work)
+
+1. Admin/RBAC/audit log: design permissions enforced in the API before exposing administrative promises.
+2. Auth hardening: session management, reset/verification flow, OAuth/OIDC only after product requirements and mail provider decisions exist.
+3. Export/import, webhook, automation, analytics, then AI: each needs a discrete approved design and backend contract.
 
 ## Technical conventions established
 
@@ -95,6 +193,38 @@ Prioritize by backend readiness and preserve original UI in every group.
 - The frontend Docker build occasionally prints `socket hang up` while Next.js retries its browser-list data request. It has completed successfully from cached dependencies; do not add a network-dependent install to normal startup.
 - Some original UI modules still import mock files for stable display metadata (icons/status color maps) mixed with mock records. The audit above must separate these before removing types or presentation mappings.
 - The original Inbox's snoozed filter is disabled because no snooze state or scheduling model exists yet. It deliberately does not simulate a local-only feature.
+
+## Agent operating checklist
+
+### Before writing code
+
+1. Read this file, `implement_plan.md`, and run `git status --short`.
+2. Treat uncommitted changes as user work until proven otherwise; do not discard them.
+3. Inspect both the original UI component and its existing API/schema before choosing the slice.
+4. Confirm whether the desired action is already supported by a real endpoint. If not, choose between an API/migration vertical slice or an explicitly unavailable state; never fabricate a client-only save.
+
+### While implementing
+
+1. Keep the original component/layout; make the smallest possible visual addition for a real missing action.
+2. Resolve workspace/user from the live API—never hardcode IDs or mock identities.
+3. Include loading, empty, error, and authorization handling in the same slice.
+4. Use `apply_patch` for source edits. Do not overwrite files through shell redirection.
+5. Tell the user in Vietnamese before any lengthy operation. Before an intentional package/image download or Docker build, ask them to switch to 5G.
+
+### Before handoff / ending a slice
+
+1. Run the relevant unit/build checks. Current minimum is the web build for UI work, plus API tests when API behavior changes.
+2. For a Docker rebuild, rebuild only the changed service(s), recreate with `--no-build --pull never`, and verify health/routes. Normal startup must remain offline.
+3. Run `git diff --check` and inspect `git status --short`.
+4. Commit and push the coherent feature group to `origin/codex/foundation`.
+5. Update this document: commit hash, user-visible behavior, verification, known limitation, and exact next step. Commit/push documentation separately when practical.
+
+### Claims that require evidence
+
+- “Live” means a real API/database read or write has been verified, not just an endpoint being present.
+- “Complete” means the module meets the current definition of success and has no known fake data/actions in its migrated UI.
+- “Docker verified” means the relevant image was rebuilt/recreated and a health or route check was performed.
+- Do not claim lint passes: the known unrelated lint failure remains until explicitly fixed.
 
 ## Handoff protocol
 
