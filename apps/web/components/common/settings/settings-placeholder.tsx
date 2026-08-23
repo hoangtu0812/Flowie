@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { PlaceholderConfig } from './placeholder-sections';
 
 /** Hand-drawn-style dashed smiley used by the empty states. */
-function DashedSmiley() {
+export function DashedSmiley() {
    return (
       <svg
          width="130"

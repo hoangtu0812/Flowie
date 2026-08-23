@@ -1,0 +1,214 @@
+'use client';
+
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { FileStack } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { DashedSmiley } from './settings-placeholder';
+
+type Template = {
+   id: string;
+   name: string;
+   description: string | null;
+   type: string;
+   updatedAt: string;
+};
+
+type TemplateDraft = { name: string; description: string };
+const EMPTY_DRAFT: TemplateDraft = { name: '', description: '' };
+const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+
+const formatDate = (value: string) =>
+   new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(value));
+
+/** Original settings page layout, backed by persisted workspace project templates. */
+export default function ProjectTemplatesSettings() {
+   const [workspaceId, setWorkspaceId] = useState<string>();
+   const [templates, setTemplates] = useState<Template[]>([]);
+   const [query, setQuery] = useState('');
+   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+   const [open, setOpen] = useState(false);
+   const [draft, setDraft] = useState<TemplateDraft>(EMPTY_DRAFT);
+   const [saving, setSaving] = useState(false);
+   const [message, setMessage] = useState<string>();
+
+   const load = useCallback(async () => {
+      const workspaceResponse = await fetch(`${api}/workspaces/me`, { credentials: 'include' });
+      if (!workspaceResponse.ok) throw new Error('Could not load workspace.');
+      const workspacePayload = (await workspaceResponse.json()) as {
+         data: Array<{ workspace: { id: string } }>;
+      };
+      const id = workspacePayload.data[0]?.workspace.id;
+      if (!id) throw new Error('No workspace is available.');
+      setWorkspaceId(id);
+
+      const response = await fetch(`${api}/projects/templates?workspaceId=${id}`, {
+         credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Could not load project templates.');
+      setTemplates(((await response.json()) as { data: Template[] }).data);
+   }, []);
+
+   useEffect(() => {
+      void load()
+         .then(() => setState('ready'))
+         .catch(() => setState('error'));
+   }, [load]);
+
+   const filtered = useMemo(() => {
+      const term = query.trim().toLowerCase();
+      return templates.filter(
+         (template) =>
+            !term ||
+            template.name.toLowerCase().includes(term) ||
+            template.description?.toLowerCase().includes(term)
+      );
+   }, [query, templates]);
+
+   const showCreate = () => {
+      setDraft(EMPTY_DRAFT);
+      setMessage(undefined);
+      setOpen(true);
+   };
+
+   const create = async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!workspaceId || draft.name.trim().length < 2) return;
+      setSaving(true);
+      setMessage(undefined);
+      try {
+         const response = await fetch(`${api}/projects/templates`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+               workspaceId,
+               name: draft.name.trim(),
+               description: draft.description.trim() || undefined,
+               config: {},
+            }),
+         });
+         if (!response.ok) {
+            throw new Error(
+               'Could not create project template. Workspace administrator access may be required.'
+            );
+         }
+         await load();
+         setOpen(false);
+      } catch (caught) {
+         setMessage(
+            caught instanceof Error ? caught.message : 'Could not create project template.'
+         );
+      } finally {
+         setSaving(false);
+      }
+   };
+
+   return (
+      <div className="w-full overflow-y-auto h-full">
+         <div className="max-w-4xl mx-auto px-6 py-10">
+            <h1 className="text-2xl font-medium">Project templates</h1>
+
+            <div className="flex items-center justify-between gap-3 mt-6">
+               <Input
+                  placeholder="Filter by name..."
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  className="w-72 h-8"
+               />
+               <Button size="xs" onClick={showCreate} disabled={state !== 'ready'}>
+                  New template
+               </Button>
+            </div>
+
+            {state === 'loading' && (
+               <p className="py-12 text-sm text-muted-foreground">Loading project templates…</p>
+            )}
+            {state === 'error' && (
+               <p className="py-12 text-sm text-destructive">Could not load project templates.</p>
+            )}
+            {state === 'ready' && filtered.length === 0 && (
+               <div className="flex flex-col items-center justify-center gap-5 py-32">
+                  <DashedSmiley />
+                  <p className="text-sm text-muted-foreground">
+                     {templates.length
+                        ? 'No project templates match your filter.'
+                        : 'No project templates'}
+                  </p>
+               </div>
+            )}
+            {state === 'ready' && filtered.length > 0 && (
+               <div className="mt-5 overflow-hidden rounded-lg border bg-container">
+                  {filtered.map((template) => (
+                     <div
+                        key={template.id}
+                        className="flex items-center gap-3 px-4 py-3 border-b last:border-b-0"
+                     >
+                        <span className="inline-flex size-8 items-center justify-center rounded-md bg-muted/50 shrink-0">
+                           <FileStack className="size-4 text-muted-foreground" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                           <div className="text-sm font-medium truncate">{template.name}</div>
+                           <div className="text-xs text-muted-foreground truncate">
+                              {template.description || 'No description'}
+                           </div>
+                        </div>
+                        <div className="hidden sm:block text-xs text-muted-foreground">
+                           Updated {formatDate(template.updatedAt)}
+                        </div>
+                     </div>
+                  ))}
+               </div>
+            )}
+         </div>
+
+         <Dialog open={open} onOpenChange={(visible) => !visible && setOpen(false)}>
+            <DialogContent>
+               <DialogHeader>
+                  <DialogTitle>New project template</DialogTitle>
+               </DialogHeader>
+               <form className="space-y-4" onSubmit={create}>
+                  <div className="space-y-2">
+                     <Label htmlFor="project-template-name">Name</Label>
+                     <Input
+                        id="project-template-name"
+                        value={draft.name}
+                        onChange={(event) =>
+                           setDraft((current) => ({ ...current, name: event.target.value }))
+                        }
+                        minLength={2}
+                        maxLength={120}
+                        autoFocus
+                        required
+                     />
+                  </div>
+                  <div className="space-y-2">
+                     <Label htmlFor="project-template-description">Description</Label>
+                     <Textarea
+                        id="project-template-description"
+                        value={draft.description}
+                        onChange={(event) =>
+                           setDraft((current) => ({ ...current, description: event.target.value }))
+                        }
+                        maxLength={2000}
+                        rows={3}
+                     />
+                  </div>
+                  {message && <p className="text-sm text-destructive">{message}</p>}
+                  <div className="flex justify-end gap-2">
+                     <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                        Cancel
+                     </Button>
+                     <Button type="submit" disabled={saving || draft.name.trim().length < 2}>
+                        {saving ? 'Creating…' : 'Create template'}
+                     </Button>
+                  </div>
+               </form>
+            </DialogContent>
+         </Dialog>
+      </div>
+   );
+}
