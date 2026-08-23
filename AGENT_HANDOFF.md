@@ -98,6 +98,7 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 | `a96a42b` | Preferences now persists and applies default home view, font size, pointer cursors, and link underlining in the browser. Existing theme/sidebar settings remain functional. Unsupported display/date/comment/desktop/automation controls are visibly unavailable instead of fake switches. Frontend build and Docker route verification passed. |
 | `d6524a4` | All remaining shared Settings placeholders retain their original layout but now disable filter/create actions and identify missing configuration services instead of presenting fake writes. The unused Project templates placeholder config was removed. Frontend build and Docker checks of SLA/Documents Settings routes passed. |
 | `54252b7` | Original Issue detail Activity now loads persisted comments/events, creates comments through the API, and subscribes/unsubscribes through real endpoints. Comment-created activity events are de-duplicated against the comment card. Composer attachments/reactions are not simulated. Frontend build, Docker route/API-auth checks, and the existing API test suite (2/2) passed. |
+| `dfd0496` | Original Issue detail, right properties panel, assignee picker, and issue header now derive their data from the live Issues store/API. Persisted status/priority/assignee selectors remain available; mock description, team, cycle, milestone, relation, PR, and sub-issue records were removed. Reactions, sub-issues, and the original-layout attachment action are explicitly unavailable until their contracts are implemented. Frontend build and Docker route verification passed. |
 
 ### Capability status at the handoff point
 
@@ -107,7 +108,7 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 | Authentication and workspace access | Implemented baseline | Login/session/workspace resolution are real. OAuth, email verification, password reset, and enterprise SSO are deferred. |
 | Teams and members | Implemented baseline | Original Teams, team overview, team members, and workspace members use API data; team/member creation actions covered by the migrated screens persist. |
 | Projects | Implemented baseline | Original project list, creation, lead, issue progress, overview, issues, activity, and project header use API data. Project settings still need their final audit. |
-| Issues, labels, cycles, saved views | Implemented baseline | Original issues list/filter options, My issues scopes, labels CRUD, cycles/timeline, subscriptions, and saved views use API data. Original Issue detail Activity/Comments/Subscribe are live; description, properties, sub-issues, and attachments still need migration. |
+| Issues, labels, cycles, saved views | Implemented baseline | Original issues list/filter options, My issues scopes, labels CRUD, cycles/timeline, subscriptions, and saved views use API data. Original Issue detail, Activity/Comments/Subscribe, properties and assignee changes are live. Attachments, label editing, sub-issues, reactions, and relations remain deferred. |
 | Initiatives and documents | Implemented baseline | Initiative list/detail/create/linking and team documents are live. Advanced relationships/workflows remain deferred. |
 | Inbox and Discord | Implemented baseline | Inbox persists notifications/read/delete and workspace Discord integration exists. No fake delivery channels are enabled. |
 | Settings | Audited baseline | Profile, issue labels, project statuses, project templates, and actionable browser-local preferences are live. Unsupported Notification, Security, Issue templates, desktop and issue-automation preferences are truthful. Generic configuration placeholders are visibly unavailable. Template application/editing is deferred because the API currently provides list/create only. |
@@ -115,16 +116,16 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 
 ## Exact restart point
 
-The next agent should start with **Core issue collaboration → original issue description/properties**. The Activity block is live, but the outer Issue detail still calls `getIssueDetail()` for fabricated description, sub-issues, relations, milestone, and PR records:
+The next agent should start with **Core issue collaboration → original issue attachments**. The backend Attachment API is implemented (upload/list/download), but the original Issue detail Paperclip action is deliberately disabled until it has a live original-layout implementation:
 
 `apps/web/components/common/issues/details/issue-details.tsx`
 
 Preferred next vertical slice:
 
-1. Add a live issue-detail loader that resolves the current workspace and fetches the issue by database id, while retaining the original layout.
-2. Render the persisted plain-text `description` truthfully; do not feed it into the mock rich `ContentBlock` format.
-3. Retain only real properties (status, priority, assignee, labels, cycle, project) and existing API-backed selectors. Clearly omit/disable mock-only milestones, relations, linked PRs, reactions, and sub-issue controls until contracts exist.
-4. Integrate existing Attachment API only after choosing an original-layout action that supports it; do not expose a fake Paperclip.
+1. Inspect `attachments.controller.ts` / `attachments.service.ts` and preserve their workspace/entity authorization contract.
+2. Turn the existing Paperclip affordance into a file picker/upload action in the original layout; render a concise list of persisted attachment records beneath the description or activity without redesigning the page.
+3. Support download through the existing protected endpoint. Include upload/loading/error/empty states and the 10 MB server limit in client feedback.
+4. Do not add comment attachment support or fake reactions; those require a distinct entity/contract decision.
 5. Add appropriate API tests for tenant isolation/mutations when backend behavior changes.
 6. Build and, only with the user on 5G, rebuild/recreate the API/web image(s), verify routes, commit/push, and record the remaining detail blocks.
 
