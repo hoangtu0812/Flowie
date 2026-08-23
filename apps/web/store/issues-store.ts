@@ -54,7 +54,10 @@ type ApiIssueOptions = {
    projects: ApiProject[];
    members: ApiPerson[];
    labels: ApiLabel[];
+   cycles: Array<{ id: string; name: string; status: string }>;
 };
+
+export type IssueCycleOption = { id: string; name: string; status: string };
 
 interface FilterOptions {
    status?: string[];
@@ -83,6 +86,7 @@ interface IssuesState {
    projects: Project[];
    members: User[];
    labels: LabelInterface[];
+   cycles: IssueCycleOption[];
    workspaceId?: string;
    teamId?: string;
    currentUserId?: string;
@@ -225,6 +229,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
    projects: [],
    members: [],
    labels: [],
+   cycles: [],
    isLoading: false,
    getAllIssues: () => get().issues,
 
@@ -274,6 +279,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
             projects: optionsData.data.projects.map(mapProject),
             members: optionsData.data.members.map(mapUser),
             labels: optionsData.data.labels.map(mapLabel),
+            cycles: optionsData.data.cycles,
             workspaceId,
             teamId: team?.id,
             currentUserId: currentUserData.data.id,
@@ -286,6 +292,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
             projects: [],
             members: [],
             labels: [],
+            cycles: [],
             currentUserId: undefined,
             isLoading: false,
             error: caught instanceof Error ? caught.message : 'Could not load issues.',

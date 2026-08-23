@@ -75,7 +75,7 @@ export class IssuesService {
          ? { teamMemberships: { some: { teamId } } }
          : { memberships: { some: { workspaceId, status: 'ACTIVE' as const } } };
 
-      const [statuses, projects, members, labels] = await Promise.all([
+      const [statuses, projects, members, labels, cycles] = await Promise.all([
          this.prisma.issueStatus.findMany({
             where: {
                workspaceId,
@@ -113,9 +113,17 @@ export class IssuesService {
             select: { id: true, name: true, color: true },
             orderBy: { name: 'asc' },
          }),
+         this.prisma.cycle.findMany({
+            where: {
+               workspaceId,
+               ...(teamId ? { teamId } : { team: { members: { some: { userId } } } }),
+            },
+            select: { id: true, name: true, status: true },
+            orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }],
+         }),
       ]);
 
-      return { statuses, projects, members, labels };
+      return { statuses, projects, members, labels, cycles };
    }
 
    async create(dto: CreateIssueDto, userId: string) {
