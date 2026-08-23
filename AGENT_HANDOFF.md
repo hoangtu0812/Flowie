@@ -94,6 +94,7 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 | `7aa709a` | Original Issue labels table uses Labels API for live records, counts, descriptions, dates, filter, and create/edit/delete dialogs. Label groups remain visibly disabled because there is no group schema/API. Frontend Docker runtime verification passed. |
 | `40b8239` | Notifications, Security & access, and Issue templates no longer show invented enabled channels, sessions, API keys, devices, or templates. Only inbox/Discord capabilities are represented as active; unavailable services are explicitly disabled. Frontend Docker verification passed. |
 | `33fbdc2` | Original Project statuses settings now loads real projects through the workspace and Projects APIs, groups/counts actual persisted status values, and has loading/error states. The original add-status affordances stay visibly disabled because no project-status configuration API exists. Frontend build and Docker route verification passed. |
+| `6cce1ff` | Original Project templates settings page now lists, filters, and creates persisted templates through the Project Templates API while retaining the original Settings title/filter/empty-state structure. The redundant non-original template component was removed. Frontend build and Docker route verification passed. |
 
 ### Capability status at the handoff point
 
@@ -106,29 +107,24 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 | Issues, labels, cycles, saved views | Implemented baseline | Original issues list/filter options, My issues scopes, labels CRUD, cycles/timeline, subscriptions, and saved views use API data. Issue detail collaboration remains incomplete. |
 | Initiatives and documents | Implemented baseline | Initiative list/detail/create/linking and team documents are live. Advanced relationships/workflows remain deferred. |
 | Inbox and Discord | Implemented baseline | Inbox persists notifications/read/delete and workspace Discord integration exists. No fake delivery channels are enabled. |
-| Settings | In progress | Profile, issue labels, and project-status read model are live. Unsupported Notification, Security, and Issue templates pages have been made truthful. Project templates, Preferences, and other placeholders need review. |
+| Settings | In progress | Profile, issue labels, project statuses, and project templates are live. Unsupported Notification, Security, and Issue templates pages have been made truthful. Preferences and other placeholders need review. Template application/editing is deferred because the API currently provides list/create only. |
 | Admin / RBAC / audit | Partial or deferred | Do not advertise as complete. Any current admin controls require a separate permissions, audit, and UX audit before production claims. |
 
 ## Exact restart point
 
-The next agent should start with **Settings audit → Project templates**. A working API component exists, but the original route currently still renders a generic placeholder instead of the original Settings-style UI:
+The next agent should start with **Settings audit → Preferences**. It contains a mixture of genuine local display preferences and UI switches/selects that may still represent non-persisted or unsupported services:
 
-`apps/web/app/[orgId]/settings/project-templates/page.tsx`
-
-Useful existing API-backed reference:
-
-`apps/web/components/settings/real-project-templates-settings.tsx`
+`apps/web/components/common/settings/preferences.tsx`
 
 Preferred next vertical slice:
 
-1. Inspect the original Project templates page/component from the upstream Circle UI before changing its route.
-2. Reuse `GET /projects/templates?workspaceId=...` and `POST /projects/templates`, resolving the workspace through `GET /workspaces/me`.
-3. Move/adapt the existing API behavior into the original Settings layout rather than replacing the screen with a new visual design.
-4. Keep only real template fields/actions. The current schema stores `name`, `description`, and JSON `config`; do not imply clone/edit/delete behavior until endpoints exist.
-5. Provide loading, empty, error, and authorization states. Build the web app; then, only with the user on 5G, rebuild/recreate the web image and verify the route redirects correctly when unauthenticated.
-6. Commit/push the feature and a separate documentation update to this file.
+1. Audit every control against its persistence mechanism and the explicit product scope (no desktop/mobile client, email, or Slack).
+2. Preserve settings that genuinely change the client experience (for example theme/sidebar behavior) and make their persistence clear.
+3. Disable and explain any preference that needs a desktop/mobile client or absent backend service. Do not keep a clickable local-only switch that looks like an account setting.
+4. For an account/workspace preference that needs cross-device persistence, design the API/schema first instead of storing authoritative data only in browser state.
+5. Build and, only with the user on 5G, rebuild/recreate the web image and verify the route. Commit/push and document the slice.
 
-This is expected to be a frontend/API integration slice; it should not need a migration.
+This audit may result in a narrow frontend truthfulness change or a discrete preference persistence vertical slice, depending on inspection.
 
 ## Execution plan from this handoff
 
