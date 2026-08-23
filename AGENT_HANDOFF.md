@@ -67,12 +67,13 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 | `a3461d4` | Original two-pane Inbox uses live notification API and unread badge; mark-read and all three existing delete actions persist through the backend. New notification payloads record the actor safely. Docker API/web build and runtime verification passed. |
 | `83ef453` | My issues tabs use the authenticated user and live issue data. Assigned/Created, Subscribed, and Activity now use real assignee/creator, subscription, and activity records. Migration `20260823010000_issue_subscriptions` was applied successfully; subscription endpoints are available and creators/assignees are subscribed automatically. |
 | `4e1c9a7` | Shared issue filter UI uses statuses, members, labels, projects, and cycles returned by `GET /issues/options`; no filter option records come from mock data. Docker API/web build and runtime route verification passed. |
+| `7aa709a` | Original Issue labels table uses Labels API for live records, counts, descriptions, dates, filter, and create/edit/delete dialogs. Label groups remain visibly disabled because there is no group schema/API. Frontend Docker runtime verification passed. |
 
 ## Remaining implementation backlog
 
 Prioritize by backend readiness and preserve original UI in every group.
 
-1. **Settings** — labels/statuses/templates/security/preferences pages need an audit. Retain only actually supported settings; implement matching endpoints for pages still showing placeholder data.
+1. **Settings** — complete the remaining audit. Issue labels are live; project/issue templates, statuses, security, preferences, and generic placeholders must either use matching API data or be explicitly unavailable. Do not reintroduce invented rows/dates/devices/API keys.
 2. **Command palette/sidebar utilities** — remove remaining mock team/project/user imports, using live loaders already present (`team-types.ts`, issue store, workspace members).
 3. **Attachments/comments/issue activity** — API endpoints exist; finish original issue detail composer/activity/attachment interactions. Add a visible subscribe/unsubscribe control in the original issue detail UI when that screen is converted from its remaining mock detail payload.
 4. **Initiative related enhancements** — resource links, labels, and granular activity only after their schema/API contract is designed and migrated.
