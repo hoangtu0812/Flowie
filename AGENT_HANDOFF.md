@@ -96,6 +96,7 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 | `33fbdc2` | Original Project statuses settings now loads real projects through the workspace and Projects APIs, groups/counts actual persisted status values, and has loading/error states. The original add-status affordances stay visibly disabled because no project-status configuration API exists. Frontend build and Docker route verification passed. |
 | `6cce1ff` | Original Project templates settings page now lists, filters, and creates persisted templates through the Project Templates API while retaining the original Settings title/filter/empty-state structure. The redundant non-original template component was removed. Frontend build and Docker route verification passed. |
 | `a96a42b` | Preferences now persists and applies default home view, font size, pointer cursors, and link underlining in the browser. Existing theme/sidebar settings remain functional. Unsupported display/date/comment/desktop/automation controls are visibly unavailable instead of fake switches. Frontend build and Docker route verification passed. |
+| `d6524a4` | All remaining shared Settings placeholders retain their original layout but now disable filter/create actions and identify missing configuration services instead of presenting fake writes. The unused Project templates placeholder config was removed. Frontend build and Docker checks of SLA/Documents Settings routes passed. |
 
 ### Capability status at the handoff point
 
@@ -108,24 +109,24 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 | Issues, labels, cycles, saved views | Implemented baseline | Original issues list/filter options, My issues scopes, labels CRUD, cycles/timeline, subscriptions, and saved views use API data. Issue detail collaboration remains incomplete. |
 | Initiatives and documents | Implemented baseline | Initiative list/detail/create/linking and team documents are live. Advanced relationships/workflows remain deferred. |
 | Inbox and Discord | Implemented baseline | Inbox persists notifications/read/delete and workspace Discord integration exists. No fake delivery channels are enabled. |
-| Settings | In progress | Profile, issue labels, project statuses, project templates, and actionable browser-local preferences are live. Unsupported Notification, Security, Issue templates, desktop and issue-automation preferences have been made truthful. Generic Settings placeholders still need review. Template application/editing is deferred because the API currently provides list/create only. |
+| Settings | Audited baseline | Profile, issue labels, project statuses, project templates, and actionable browser-local preferences are live. Unsupported Notification, Security, Issue templates, desktop and issue-automation preferences are truthful. Generic configuration placeholders are visibly unavailable. Template application/editing is deferred because the API currently provides list/create only. |
 | Admin / RBAC / audit | Partial or deferred | Do not advertise as complete. Any current admin controls require a separate permissions, audit, and UX audit before production claims. |
 
 ## Exact restart point
 
-The next agent should start with **Settings audit → generic placeholders**. The shared component still renders enabled-looking filter inputs and primary actions for settings modules that do not have a backend implementation:
+The next agent should start with **Core issue collaboration → original issue detail**. The API has comment, activity, attachment, and subscription capabilities, but the remaining original issue-detail blocks must be audited one interaction at a time before they can be declared live:
 
-`apps/web/components/common/settings/settings-placeholder.tsx`
+`apps/web/components/common/issues/details/`
 
 Preferred next vertical slice:
 
-1. Enumerate every route that uses the shared placeholder and identify whether a matching service/API exists today.
-2. For a route with a matching API, migrate it into the original Settings layout in a separate vertical slice.
-3. For a route with no API, retain its location and empty-state layout but disable fake filtering/creation and explain that the feature is unavailable.
-4. Do not disable a route merely because it is difficult: use existing live Documents/Initiatives data when it is genuinely relevant to that configuration screen.
-5. Build and, only with the user on 5G, rebuild/recreate the web image and verify the routes. Commit/push and document the classification.
+1. Trace each original Issue detail component to its current data source and mutation path.
+2. Replace a mock record/action only when the API returns/accepts the same behavior; do not rewrite the issue-detail UI.
+3. Prioritize a comment composer, activity feed, attachments, and a visible subscribe/unsubscribe control only after confirming the endpoint contracts and authorization.
+4. Add appropriate API tests for tenant isolation/mutations in the same vertical slice.
+5. Build and, only with the user on 5G, rebuild/recreate the API/web image(s), verify routes, commit/push, and record the remaining detail blocks.
 
-This is the first part of the required systematic mock/action audit; keep a table of classifications rather than treating all placeholders as equivalent.
+This is a backend/API integration priority, not a UI redesign task.
 
 ## Execution plan from this handoff
 
@@ -173,6 +174,23 @@ For every match, add it to a short audit table in this document with one of:
 - `deferred`: describe missing API/schema and the next vertical slice.
 
 Do not call the product “mock-free” based on the raw import count. It is mock-free only after every record source has been classified and migrated or removed.
+
+#### Settings-placeholder classification (2026-08-23)
+
+| Route group | Classification | Reason / follow-up |
+| --- | --- | --- |
+| SLAs | `unavailable` | No SLA schema or configuration API. |
+| Project labels | `unavailable` | No project-label schema/API (Issue labels are live separately). |
+| Project updates | `unavailable` | No project-update configuration service. |
+| Customer requests | `unavailable` | No customer-request schema/API. |
+| Releases | `unavailable` | No release schema/API. |
+| Pulse | `unavailable` | No pulse feed/settings model. |
+| Asks | `unavailable` | No Ask schema/API. |
+| Emojis | `unavailable` | No custom emoji storage/upload API. |
+| Documents settings | `unavailable` | Documents content API exists, but no workspace document-configuration contract. |
+| Initiatives settings | `unavailable` | Initiatives content API exists, but no workspace initiative-configuration contract. |
+
+The shared placeholder has disabled filter/action controls and an explicit unavailable message. These routes must be reclassified to `migrated` only after their configuration-specific backend contract is implemented.
 
 ### Later phases (not current blocking work)
 
