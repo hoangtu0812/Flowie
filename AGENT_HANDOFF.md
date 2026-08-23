@@ -1,5 +1,7 @@
 # Flowie — Agent Handoff
 
+> Bắt đầu từ [`CONTINUATION.md`](CONTINUATION.md) để có mục tiêu, tiến độ và backlog ngắn gọn. Tài liệu này giữ lịch sử kiểm chứng, quy ước kỹ thuật và hướng dẫn chi tiết cho việc tiếp quản.
+
 Last updated: 2026-08-23
 
 ## Immutable objective
