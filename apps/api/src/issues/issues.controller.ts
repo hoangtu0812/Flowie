@@ -26,7 +26,7 @@ export class IssuesController {
       @Query('workspaceId') workspaceId: string,
       @Query('teamId') teamId: string | undefined,
       @Query('categories') categoryInput: string | undefined,
-      @Query('scope') scope: 'assigned' | 'created' | undefined,
+      @Query('scope') scope: 'assigned' | 'created' | 'subscribed' | 'activity' | undefined,
       @Req() request: AuthenticatedRequest
    ) {
       const categories = categoryInput
@@ -60,6 +60,25 @@ export class IssuesController {
       @Req() request: AuthenticatedRequest
    ) {
       return { data: await this.issues.get(issueId, workspaceId, request.auth!.userId) };
+   }
+
+   @Post(':issueId/subscribers/me')
+   async subscribe(
+      @Param('issueId') issueId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.issues.subscribe(issueId, workspaceId, request.auth!.userId) };
+   }
+
+   @Delete(':issueId/subscribers/me')
+   async unsubscribe(
+      @Param('issueId') issueId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      await this.issues.unsubscribe(issueId, workspaceId, request.auth!.userId);
+      return { data: { ok: true } };
    }
 
    @Patch(':issueId')

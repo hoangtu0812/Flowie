@@ -40,7 +40,7 @@ export class IssuesService {
       userId: string,
       teamId?: string,
       categories?: IssueStatusCategory[],
-      scope?: 'assigned' | 'created'
+      scope?: 'assigned' | 'created' | 'subscribed' | 'activity'
    ) {
       await this.authorize(workspaceId, userId, teamId);
       return this.prisma.issue.findMany({
@@ -51,8 +51,14 @@ export class IssuesService {
             ...(categories?.length ? { status: { category: { in: categories } } } : {}),
             ...(scope === 'assigned' ? { assigneeId: userId } : {}),
             ...(scope === 'created' ? { creatorId: userId } : {}),
+            ...(scope === 'subscribed' ? { subscribers: { some: { userId } } } : {}),
+            ...(scope === 'activity' ? { activities: { some: { actorId: userId } } } : {}),
          },
-         include: issueInclude,
+         include: {
+            ...issueInclude,
+            subscribers: { where: { userId }, select: { userId: true } },
+            activities: { where: { actorId: userId }, select: { id: true } },
+         },
          orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
       });
    }
@@ -116,6 +122,7 @@ export class IssuesService {
       await this.authorize(dto.workspaceId, userId, dto.teamId);
       const issue = await this.prisma.$transaction(async (tx) => {
          const { labelIds, ...issueData } = dto;
+         const subscriberIds = [...new Set([userId, ...(dto.assigneeId ? [dto.assigneeId] : [])])];
          const team = await tx.team.update({
             where: { id: dto.teamId },
             data: { issueSequence: { increment: 1 } },
@@ -160,6 +167,7 @@ export class IssuesService {
                ...(labelIds?.length
                   ? { labelLinks: { create: labelIds.map((labelId) => ({ labelId })) } }
                   : {}),
+               subscribers: { create: subscriberIds.map((subscriberId) => ({ userId: subscriberId })) },
             },
             include: issueInclude,
          });
@@ -250,6 +258,13 @@ export class IssuesService {
             },
             include: issueInclude,
          });
+         if (dto.assigneeId) {
+            await tx.issueSubscription.upsert({
+               where: { issueId_userId: { issueId, userId: dto.assigneeId } },
+               update: {},
+               create: { issueId, userId: dto.assigneeId },
+            });
+         }
          await tx.activity.create({
             data: {
                workspaceId,
@@ -261,6 +276,20 @@ export class IssuesService {
          });
          return updated;
       });
+   }
+
+   async subscribe(issueId: string, workspaceId: string, userId: string) {
+      await this.get(issueId, workspaceId, userId);
+      return this.prisma.issueSubscription.upsert({
+         where: { issueId_userId: { issueId, userId } },
+         update: {},
+         create: { issueId, userId },
+      });
+   }
+
+   async unsubscribe(issueId: string, workspaceId: string, userId: string) {
+      await this.get(issueId, workspaceId, userId);
+      await this.prisma.issueSubscription.deleteMany({ where: { issueId, userId } });
    }
 
    async archive(issueId: string, workspaceId: string, userId: string) {

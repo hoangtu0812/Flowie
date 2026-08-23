@@ -1,7 +1,6 @@
 'use client';
 
-import { Issue, issueCreatorIndex } from '@/mock-data/issues';
-import { users } from '@/mock-data/users';
+import { Issue } from '@/mock-data/issues';
 import { parseAsStringLiteral, useQueryState } from 'nuqs';
 
 export const MY_ISSUES_TABS = ['assigned', 'created', 'subscribed', 'activity'] as const;
@@ -14,32 +13,25 @@ export const MY_ISSUES_TAB_ITEMS: { label: string; value: MyIssuesTab }[] = [
    { label: 'Activity', value: 'activity' },
 ];
 
-/** The "current" user of the mock workspace. */
-export const ME = users[0];
-
 /** Shared tab state (URL-backed) between the header and the page body. */
 export function useMyIssuesTab() {
    return useQueryState('tab', parseAsStringLiteral(MY_ISSUES_TABS).withDefault('assigned'));
 }
 
-const isCreatedByMe = (issue: Issue): boolean => issueCreatorIndex(issue, users.length) === 0;
-const isSubscribed = (issue: Issue): boolean =>
-   issue.assignee?.id === ME.id || isCreatedByMe(issue) || issueCreatorIndex(issue, 7) === 3;
-
 /** Issues shown by each My issues tab. */
-export function scopeMyIssues(issues: Issue[], tab: MyIssuesTab): Issue[] {
+export function scopeMyIssues(issues: Issue[], tab: MyIssuesTab, currentUserId?: string): Issue[] {
+   if (!currentUserId) return [];
    switch (tab) {
       case 'assigned':
-         return issues.filter((issue) => issue.assignee?.id === ME.id);
+         return issues.filter((issue) => issue.assignee?.id === currentUserId);
       case 'created':
-         return issues.filter(isCreatedByMe);
+         return issues.filter((issue) => issue.creator?.id === currentUserId);
       case 'subscribed':
-         return issues.filter(isSubscribed);
+         return issues.filter((issue) => issue.isSubscribed);
       case 'activity':
       default:
-         // "Activity" = everything I touch, most recent first.
          return issues
-            .filter(isSubscribed)
+            .filter((issue) => issue.hasActivity)
             .slice()
             .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
    }

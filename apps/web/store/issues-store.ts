@@ -40,11 +40,14 @@ type ApiIssue = {
    createdAt: string;
    dueDate?: string | null;
    status: ApiStatus;
+   team: { id: string; name: string; identifier: string };
    project: ApiProject | null;
    assignee: ApiPerson | null;
    creator: ApiPerson;
    labelLinks: Array<{ label: ApiLabel }>;
    cycleLinks: Array<{ cycleId: string }>;
+   subscribers?: Array<{ userId: string }>;
+   activities?: Array<{ id: string }>;
 };
 type ApiIssueOptions = {
    statuses: ApiStatus[];
@@ -82,6 +85,7 @@ interface IssuesState {
    labels: LabelInterface[];
    workspaceId?: string;
    teamId?: string;
+   currentUserId?: string;
    isLoading: boolean;
    error?: string;
    getAllIssues: () => Issue[];
@@ -192,6 +196,9 @@ const mapIssue = (issue: ApiIssue): Issue => ({
    priority: mapPriority(issue.priority),
    labels: issue.labelLinks.map(({ label }) => mapLabel(label)),
    createdAt: issue.createdAt,
+   team: issue.team,
+   isSubscribed: Boolean(issue.subscribers?.length),
+   hasActivity: Boolean(issue.activities?.length),
    cycleId: issue.cycleLinks[0]?.cycleId ?? '',
    project: issue.project ? mapProject(issue.project) : undefined,
    rank: issue.createdAt,
@@ -251,13 +258,16 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
 
          const query = new URLSearchParams({ workspaceId });
          if (team) query.set('teamId', team.id);
-         const [issuesResponse, optionsResponse] = await Promise.all([
+         const [issuesResponse, optionsResponse, currentUserResponse] = await Promise.all([
             fetch(`${api}/issues?${query.toString()}`, { credentials: 'include' }),
             fetch(`${api}/issues/options?${query.toString()}`, { credentials: 'include' }),
+            fetch(`${api}/users/me`, { credentials: 'include' }),
          ]);
-         if (!issuesResponse.ok || !optionsResponse.ok) throw new Error('Could not load issues.');
+         if (!issuesResponse.ok || !optionsResponse.ok || !currentUserResponse.ok)
+            throw new Error('Could not load issues.');
          const issuesData = (await issuesResponse.json()) as { data: ApiIssue[] };
          const optionsData = (await optionsResponse.json()) as { data: ApiIssueOptions };
+         const currentUserData = (await currentUserResponse.json()) as { data: { id: string } };
          set({
             ...issueState(issuesData.data.map(mapIssue)),
             statuses: optionsData.data.statuses.map(mapStatus),
@@ -266,6 +276,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
             labels: optionsData.data.labels.map(mapLabel),
             workspaceId,
             teamId: team?.id,
+            currentUserId: currentUserData.data.id,
             isLoading: false,
          });
       } catch (caught) {
@@ -275,6 +286,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
             projects: [],
             members: [],
             labels: [],
+            currentUserId: undefined,
             isLoading: false,
             error: caught instanceof Error ? caught.message : 'Could not load issues.',
          });

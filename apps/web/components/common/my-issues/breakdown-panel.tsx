@@ -2,7 +2,6 @@
 
 import { cn } from '@/lib/utils';
 import { Issue } from '@/mock-data/issues';
-import { teams } from '@/mock-data/teams';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { X } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -73,11 +72,8 @@ export function BreakdownPanel({ issues }: { issues: Issue[] }) {
                bump(issue.project.id, { key: issue.project.id, label: issue.project.name });
             }
          } else if (issue.project) {
-            const team = teams.find((candidate) => candidate.id === issue.project?.teamId);
-            bump(issue.project.teamId, {
-               key: issue.project.teamId,
-               label: team ? `${team.icon} ${team.name}` : issue.project.teamId,
-            });
+            const team = issue.team;
+            if (team) bump(team.id, { key: team.id, label: team.name });
          }
       }
       return [...counter.values()].sort((a, b) => b.count - a.count);

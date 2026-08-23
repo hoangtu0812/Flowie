@@ -91,10 +91,10 @@ function HeaderNav() {
 
 function HeaderOptions() {
    const [tab, setTab] = useMyIssuesTab();
-   const { issues } = useIssuesStore();
+   const { issues, currentUserId } = useIssuesStore();
    const { openPanel, togglePanel } = useRightPanelStore();
 
-   const count = scopeMyIssues(issues, tab).length;
+   const count = scopeMyIssues(issues, tab, currentUserId).length;
 
    return (
       <div className="w-full flex justify-between items-center border-b py-1.5 px-6 h-10">

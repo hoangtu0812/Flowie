@@ -17,6 +17,11 @@ export interface Issue {
    priority: Priority;
    labels: LabelInterface[];
    createdAt: string;
+   /** Populated by API-backed issue lists; fixture entries omit it. */
+   team?: { id: string; name: string; identifier: string };
+   /** Per-current-user state returned by the Issue API. */
+   isSubscribed?: boolean;
+   hasActivity?: boolean;
    /** Cycle the issue belongs to. Empty string = no cycle (backlog stock). */
    cycleId: string;
    project?: Project;
