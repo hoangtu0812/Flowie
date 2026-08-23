@@ -65,15 +65,16 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 | `f64147b` | Saved Views use API, create action persists, and issue/project filtering runs against live stores. |
 | `cf16225` | Initiatives use live API for list, creation, detail, owner/properties, and linking existing projects. Prisma migration `20260822130000_initiative_properties` was applied successfully; API and web health checks return HTTP 200. |
 | `a3461d4` | Original two-pane Inbox uses live notification API and unread badge; mark-read and all three existing delete actions persist through the backend. New notification payloads record the actor safely. Docker API/web build and runtime verification passed. |
+| `83ef453` | My issues tabs use the authenticated user and live issue data. Assigned/Created, Subscribed, and Activity now use real assignee/creator, subscription, and activity records. Migration `20260823010000_issue_subscriptions` was applied successfully; subscription endpoints are available and creators/assignees are subscribed automatically. |
 
 ## Remaining implementation backlog
 
 Prioritize by backend readiness and preserve original UI in every group.
 
-1. **My issues** — use live issue store data for breakdowns, filters, and user-scoped list; remove remaining mock project/team/user derivations.
+1. **Issue filter sources** — the My issues body and breakdown are live, but shared `issue-filter-columns.tsx` still needs dynamic options from the issue/cycle stores instead of mock option lists. This affects all issue list screens.
 2. **Settings** — labels/statuses/templates/security/preferences pages need an audit. Retain only actually supported settings; implement matching endpoints for pages still showing placeholder data.
 3. **Command palette/sidebar utilities** — remove remaining mock team/project/user imports, using live loaders already present (`team-types.ts`, issue store, workspace members).
-4. **Attachments/comments/issue activity** — API endpoints exist; finish original issue detail composer/activity/attachment interactions.
+4. **Attachments/comments/issue activity** — API endpoints exist; finish original issue detail composer/activity/attachment interactions. Add a visible subscribe/unsubscribe control in the original issue detail UI when that screen is converted from its remaining mock detail payload.
 5. **Initiative related enhancements** — resource links, labels, and granular activity only after their schema/API contract is designed and migrated.
 6. **Final audit** — `rg -l "@/mock-data|mock-data/" apps/web --glob '*.{ts,tsx}'` currently reports roughly 83 direct imports. Classify each result as presentation-only metadata, obsolete UI, or data still requiring API work. Do not claim mocks are eliminated until this is audited screen by screen.
 
