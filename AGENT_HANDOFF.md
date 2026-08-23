@@ -93,6 +93,7 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 | `4e1c9a7` | Shared issue filter UI uses statuses, members, labels, projects, and cycles returned by `GET /issues/options`; no filter option records come from mock data. Docker API/web build and runtime route verification passed. |
 | `7aa709a` | Original Issue labels table uses Labels API for live records, counts, descriptions, dates, filter, and create/edit/delete dialogs. Label groups remain visibly disabled because there is no group schema/API. Frontend Docker runtime verification passed. |
 | `40b8239` | Notifications, Security & access, and Issue templates no longer show invented enabled channels, sessions, API keys, devices, or templates. Only inbox/Discord capabilities are represented as active; unavailable services are explicitly disabled. Frontend Docker verification passed. |
+| `33fbdc2` | Original Project statuses settings now loads real projects through the workspace and Projects APIs, groups/counts actual persisted status values, and has loading/error states. The original add-status affordances stay visibly disabled because no project-status configuration API exists. Frontend build and Docker route verification passed. |
 
 ### Capability status at the handoff point
 
@@ -105,25 +106,29 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 | Issues, labels, cycles, saved views | Implemented baseline | Original issues list/filter options, My issues scopes, labels CRUD, cycles/timeline, subscriptions, and saved views use API data. Issue detail collaboration remains incomplete. |
 | Initiatives and documents | Implemented baseline | Initiative list/detail/create/linking and team documents are live. Advanced relationships/workflows remain deferred. |
 | Inbox and Discord | Implemented baseline | Inbox persists notifications/read/delete and workspace Discord integration exists. No fake delivery channels are enabled. |
-| Settings | In progress | Profile and issue labels are live. Unsupported Notification, Security, and Issue templates pages have been made truthful. Project statuses/templates, Preferences, and other placeholders need review. |
+| Settings | In progress | Profile, issue labels, and project-status read model are live. Unsupported Notification, Security, and Issue templates pages have been made truthful. Project templates, Preferences, and other placeholders need review. |
 | Admin / RBAC / audit | Partial or deferred | Do not advertise as complete. Any current admin controls require a separate permissions, audit, and UX audit before production claims. |
 
 ## Exact restart point
 
-The next agent should start with **Settings audit → Project statuses**. The original component still relies on mock project-status rows and has group “plus” controls with no backend behavior:
+The next agent should start with **Settings audit → Project templates**. A working API component exists, but the original route currently still renders a generic placeholder instead of the original Settings-style UI:
 
-`apps/web/components/common/settings/project-statuses-settings.tsx`
+`apps/web/app/[orgId]/settings/project-templates/page.tsx`
+
+Useful existing API-backed reference:
+
+`apps/web/components/settings/real-project-templates-settings.tsx`
 
 Preferred next vertical slice:
 
-1. Confirm the API `GET /projects?workspaceId=...` response and its `ProjectStatus` enum in Prisma.
-2. Keep the original grouped Settings layout, but load actual projects after resolving the workspace through `GET /workspaces/me`.
-3. Derive each status group/count from real project records. Use only a generic presentation icon if the database does not contain an icon.
-4. Keep status-management “add” actions visibly disabled with an honest explanation until a project-status schema/API exists. Do **not** invent editable statuses.
-5. Provide loading, empty, and error states; build the web app; then, only with the user on 5G, rebuild/recreate the web image and verify the route redirects correctly when unauthenticated.
+1. Inspect the original Project templates page/component from the upstream Circle UI before changing its route.
+2. Reuse `GET /projects/templates?workspaceId=...` and `POST /projects/templates`, resolving the workspace through `GET /workspaces/me`.
+3. Move/adapt the existing API behavior into the original Settings layout rather than replacing the screen with a new visual design.
+4. Keep only real template fields/actions. The current schema stores `name`, `description`, and JSON `config`; do not imply clone/edit/delete behavior until endpoints exist.
+5. Provide loading, empty, error, and authorization states. Build the web app; then, only with the user on 5G, rebuild/recreate the web image and verify the route redirects correctly when unauthenticated.
 6. Commit/push the feature and a separate documentation update to this file.
 
-This is deliberately a frontend/API integration slice; it should not create a schema migration unless inspection shows current project status is unavailable from the API.
+This is expected to be a frontend/API integration slice; it should not need a migration.
 
 ## Execution plan from this handoff
 
