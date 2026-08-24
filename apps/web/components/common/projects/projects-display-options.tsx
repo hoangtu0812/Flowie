@@ -15,9 +15,11 @@ import {
    PROJECT_DISPLAY_PROPERTIES,
    ProjectsGrouping,
    ProjectsOrdering,
+   ProjectsDisplaySettings,
    ProjectsViewType,
    useProjectsDisplayStore,
 } from '@/store/projects-display-store';
+import { loadCurrentWorkspaceMembership } from '@/lib/workspaces';
 import { parseAsStringLiteral, useQueryState } from 'nuqs';
 import {
    ArrowUpDown,
@@ -27,6 +29,7 @@ import {
    List,
    SlidersHorizontal,
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 const VIEW_TYPES: { value: ProjectsViewType; label: string; icon: React.ElementType }[] = [
    { value: 'list', label: 'List', icon: List },
@@ -78,8 +81,75 @@ export function ProjectsDisplayOptions() {
       setShowWeekNumbers,
       toggleDisplayProperty,
       resetDisplaySettings,
+      applyWorkspaceDefaults,
    } = useProjectsDisplayStore();
    const viewType = viewTypes[tab];
+   const [workspaceId, setWorkspaceId] = useState<string>();
+   const [canManageDefaults, setCanManageDefaults] = useState(false);
+   const [defaultState, setDefaultState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+   useEffect(() => {
+      let current = true;
+      void (async () => {
+         const membership = await loadCurrentWorkspaceMembership();
+         const response = await fetch(
+            `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'}/workspaces/${membership.workspace.id}/project-display-defaults`,
+            { credentials: 'include' }
+         );
+         if (!response.ok) throw new Error('Could not load workspace display defaults.');
+         const payload = (await response.json()) as {
+            data: { settings: ProjectsDisplaySettings; updatedAt: string };
+         };
+         if (!current) return;
+         setWorkspaceId(membership.workspace.id);
+         setCanManageDefaults(['OWNER', 'ADMIN'].includes(membership.role));
+         applyWorkspaceDefaults(
+            membership.workspace.id,
+            payload.data.updatedAt,
+            payload.data.settings
+         );
+      })().catch(() => {
+         if (current) setDefaultState('error');
+      });
+      return () => {
+         current = false;
+      };
+   }, [applyWorkspaceDefaults]);
+
+   const saveWorkspaceDefaults = async () => {
+      if (!workspaceId || !canManageDefaults) return;
+      setDefaultState('saving');
+      const settings: ProjectsDisplaySettings = {
+         viewTypes,
+         grouping,
+         ordering,
+         closedProjects,
+         showEmptyGroups,
+         showProjectList,
+         showWeekNumbers,
+         displayProperties,
+      };
+      try {
+         const response = await fetch(
+            `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'}/workspaces/${workspaceId}/project-display-defaults`,
+            {
+               method: 'PATCH',
+               credentials: 'include',
+               headers: { 'content-type': 'application/json' },
+               body: JSON.stringify(settings),
+            }
+         );
+         if (!response.ok) throw new Error('Could not save workspace display defaults.');
+         const payload = (await response.json()) as {
+            data: { settings: ProjectsDisplaySettings; updatedAt: string };
+         };
+         applyWorkspaceDefaults(workspaceId, payload.data.updatedAt, payload.data.settings);
+         setDefaultState('saved');
+         window.setTimeout(() => setDefaultState('idle'), 1800);
+      } catch {
+         setDefaultState('error');
+      }
+   };
 
    return (
       <Popover>
@@ -243,11 +313,22 @@ export function ProjectsDisplayOptions() {
                </button>
                <button
                   type="button"
-                  disabled
-                  title="Workspace display defaults are not available yet."
-                  className="text-sm text-muted-foreground cursor-not-allowed"
+                  disabled={!workspaceId || !canManageDefaults || defaultState === 'saving'}
+                  title={
+                     canManageDefaults
+                        ? defaultState === 'error'
+                           ? 'Could not save workspace display defaults.'
+                           : 'Use these display options as the workspace default.'
+                        : 'Workspace administrator access is required.'
+                  }
+                  className="text-sm text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60 transition-colors"
+                  onClick={() => void saveWorkspaceDefaults()}
                >
-                  Set default for everyone
+                  {defaultState === 'saving'
+                     ? 'Saving…'
+                     : defaultState === 'saved'
+                       ? 'Saved for everyone'
+                       : 'Set default for everyone'}
                </button>
             </div>
          </PopoverContent>

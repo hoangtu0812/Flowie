@@ -8,6 +8,29 @@ import { PrismaService } from '../database/prisma.service';
 import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { InviteMemberDto } from './dto/invite-member.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
+import { UpdateProjectDisplayDefaultsDto } from './dto/update-project-display-defaults.dto';
+import { Prisma } from '@circle/database';
+
+const DEFAULT_PROJECT_DISPLAY_SETTINGS = {
+   viewTypes: { all: 'list', active: 'timeline' },
+   grouping: 'team',
+   ordering: 'start-date',
+   closedProjects: 'all',
+   showEmptyGroups: false,
+   showProjectList: true,
+   showWeekNumbers: false,
+   displayProperties: {
+      milestones: false,
+      priority: true,
+      status: true,
+      health: true,
+      lead: true,
+      members: false,
+      targetDate: true,
+      issues: true,
+      labels: false,
+   },
+};
 
 @Injectable()
 export class WorkspaceService {
@@ -41,6 +64,45 @@ export class WorkspaceService {
             invitedBy: { select: { id: true, name: true, email: true } },
          },
          orderBy: { createdAt: 'desc' },
+      });
+   }
+
+   async projectDisplayDefaults(workspaceId: string, userId: string) {
+      await this.authorizeMember(workspaceId, userId);
+      const workspace = await this.prisma.workspace.findUnique({
+         where: { id: workspaceId },
+         select: { projectDisplayDefaults: true, updatedAt: true },
+      });
+      if (!workspace) throw new NotFoundException('Workspace not found.');
+      return {
+         settings: workspace.projectDisplayDefaults ?? DEFAULT_PROJECT_DISPLAY_SETTINGS,
+         updatedAt: workspace.updatedAt,
+      };
+   }
+
+   async updateProjectDisplayDefaults(
+      workspaceId: string,
+      dto: UpdateProjectDisplayDefaultsDto,
+      userId: string
+   ) {
+      await this.authorizeManager(workspaceId, userId);
+      return this.prisma.$transaction(async (tx) => {
+         const workspace = await tx.workspace.update({
+            where: { id: workspaceId },
+            data: { projectDisplayDefaults: dto as unknown as Prisma.InputJsonValue },
+            select: { projectDisplayDefaults: true, updatedAt: true },
+         });
+         await tx.auditLog.create({
+            data: {
+               workspaceId,
+               actorId: userId,
+               action: 'workspace.project-display-defaults.updated',
+               entityType: 'workspace',
+               entityId: workspaceId,
+               metadata: {},
+            },
+         });
+         return { settings: workspace.projectDisplayDefaults, updatedAt: workspace.updatedAt };
       });
    }
 
@@ -166,6 +228,13 @@ export class WorkspaceService {
          where: { workspaceId, userId, status: 'ACTIVE', role: { in: ['OWNER', 'ADMIN'] } },
       });
       if (!membership) throw new ForbiddenException('Workspace administrator access is required.');
+   }
+
+   private async authorizeMember(workspaceId: string, userId: string) {
+      const membership = await this.prisma.workspaceMember.findFirst({
+         where: { workspaceId, userId, status: 'ACTIVE' },
+      });
+      if (!membership) throw new NotFoundException('Workspace not found.');
    }
 
    private async authorizeOwner(workspaceId: string, userId: string) {

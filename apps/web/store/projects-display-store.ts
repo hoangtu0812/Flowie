@@ -44,7 +44,18 @@ const DEFAULT_PROPERTIES: Record<ProjectDisplayPropertyKey, boolean> = {
    labels: false,
 };
 
-interface ProjectsDisplayState {
+export interface ProjectsDisplaySettings {
+   viewTypes: Record<ProjectsTab, ProjectsViewType>;
+   grouping: ProjectsGrouping;
+   ordering: ProjectsOrdering;
+   closedProjects: ClosedProjectsFilter;
+   showEmptyGroups: boolean;
+   showProjectList: boolean;
+   showWeekNumbers: boolean;
+   displayProperties: Record<ProjectDisplayPropertyKey, boolean>;
+}
+
+interface ProjectsDisplayState extends ProjectsDisplaySettings {
    /** View type per tab — All projects defaults to list, Active to timeline. */
    viewTypes: Record<ProjectsTab, ProjectsViewType>;
    grouping: ProjectsGrouping;
@@ -57,6 +68,8 @@ interface ProjectsDisplayState {
    /** Timeline: show week-start day numbers under the month scale. */
    showWeekNumbers: boolean;
    displayProperties: Record<ProjectDisplayPropertyKey, boolean>;
+   workspaceDefaultsId?: string;
+   workspaceDefaultsUpdatedAt?: string;
 
    setViewType: (tab: ProjectsTab, viewType: ProjectsViewType) => void;
    setGrouping: (grouping: ProjectsGrouping) => void;
@@ -67,6 +80,11 @@ interface ProjectsDisplayState {
    setShowWeekNumbers: (value: boolean) => void;
    toggleDisplayProperty: (key: ProjectDisplayPropertyKey) => void;
    resetDisplaySettings: () => void;
+   applyWorkspaceDefaults: (
+      workspaceId: string,
+      updatedAt: string,
+      settings: ProjectsDisplaySettings
+   ) => void;
 }
 
 const DEFAULTS = {
@@ -101,6 +119,21 @@ export const useProjectsDisplayStore = create<ProjectsDisplayState>()(
                },
             })),
          resetDisplaySettings: () => set({ ...DEFAULTS }),
+         applyWorkspaceDefaults: (workspaceId, updatedAt, settings) =>
+            set((state) => {
+               const remoteTimestamp = Date.parse(updatedAt);
+               const localTimestamp = Date.parse(state.workspaceDefaultsUpdatedAt ?? '');
+               const shouldApply =
+                  state.workspaceDefaultsId !== workspaceId ||
+                  Number.isNaN(localTimestamp) ||
+                  remoteTimestamp > localTimestamp;
+               if (!shouldApply) return state;
+               return {
+                  ...settings,
+                  workspaceDefaultsId: workspaceId,
+                  workspaceDefaultsUpdatedAt: updatedAt,
+               };
+            }),
       }),
       {
          name: 'projects-display-settings-v2',
