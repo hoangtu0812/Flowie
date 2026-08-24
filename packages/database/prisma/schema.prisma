@@ -300,6 +300,12 @@ model Team {
   description String?
   icon        String?  @default("👥")
   color       String?  @default("#6366f1")
+  triageEnabled Boolean @default(true) @map("triage_enabled")
+  cycleCadenceWeeks Int? @map("cycle_cadence_weeks")
+  autoCloseDays Int? @map("auto_close_days")
+  autoArchiveDays Int? @map("auto_archive_days")
+  parentTeamId String? @map("parent_team_id")
+  defaultIssueTemplateId String? @map("default_issue_template_id")
   archivedAt  DateTime? @map("archived_at")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -313,9 +319,14 @@ model Team {
   documents Document[]
   slaPolicies SlaPolicy[]
   asks Ask[]
+  parentTeam Team? @relation("TeamHierarchy", fields: [parentTeamId], references: [id], onDelete: SetNull)
+  childTeams Team[] @relation("TeamHierarchy")
+  defaultIssueTemplate IssueTemplate? @relation(fields: [defaultIssueTemplateId], references: [id], onDelete: SetNull)
 
   @@unique([workspaceId, identifier])
   @@index([workspaceId])
+  @@index([parentTeamId])
+  @@index([defaultIssueTemplateId])
   @@map("teams")
 }
 
@@ -712,6 +723,7 @@ model IssueTemplate {
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdBy User      @relation("IssueTemplateCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  defaultForTeams Team[]
 
   @@unique([workspaceId, name])
   @@index([workspaceId])

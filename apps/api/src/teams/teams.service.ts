@@ -1,4 +1,5 @@
 import {
+   BadRequestException,
    ConflictException,
    ForbiddenException,
    Injectable,
@@ -60,6 +61,37 @@ export class TeamsService {
          where: { id: teamId, workspaceId, archivedAt: null },
       });
       if (!team) throw new NotFoundException('Team not found.');
+      if (dto.defaultIssueTemplateId) {
+         const template = await this.prisma.issueTemplate.findFirst({
+            where: { id: dto.defaultIssueTemplateId, workspaceId },
+         });
+         if (!template) throw new NotFoundException('Issue template not found.');
+      }
+      if (dto.parentTeamId) {
+         if (dto.parentTeamId === teamId) {
+            throw new BadRequestException('A team cannot be its own parent.');
+         }
+         let parent = await this.prisma.team.findFirst({
+            where: { id: dto.parentTeamId, workspaceId, archivedAt: null },
+            select: { id: true, parentTeamId: true },
+         });
+         if (!parent) throw new NotFoundException('Parent team not found.');
+         while (parent.parentTeamId) {
+            if (parent.parentTeamId === teamId) {
+               throw new BadRequestException('Team hierarchy cannot contain a cycle.');
+            }
+            parent = await this.prisma.team.findFirst({
+               where: { id: parent.parentTeamId, workspaceId, archivedAt: null },
+               select: { id: true, parentTeamId: true },
+            });
+            if (!parent) break;
+         }
+      }
+      const autoCloseDays = dto.autoCloseDays ?? team.autoCloseDays;
+      const autoArchiveDays = dto.autoArchiveDays ?? team.autoArchiveDays;
+      if (autoCloseDays && autoArchiveDays && autoArchiveDays < autoCloseDays) {
+         throw new BadRequestException('Auto-archive must not run before auto-close.');
+      }
       return this.prisma.team.update({
          where: { id: teamId },
          data: dto,

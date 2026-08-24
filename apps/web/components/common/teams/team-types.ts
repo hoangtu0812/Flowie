@@ -19,6 +19,13 @@ export type WorkspaceTeam = {
    cycleCount: number;
    createdAt: string;
    updatedAt: string;
+   description?: string | null;
+   triageEnabled: boolean;
+   cycleCadenceWeeks: number | null;
+   autoCloseDays: number | null;
+   autoArchiveDays: number | null;
+   parentTeamId: string | null;
+   defaultIssueTemplateId: string | null;
 };
 
 type ApiTeam = Omit<WorkspaceTeam, 'members' | 'projectCount' | 'cycleCount' | 'joined'> & {
