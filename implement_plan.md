@@ -90,6 +90,14 @@
 - Team danger zone: nút Leave và Retire trong layout upstream đã gọi backend thật. Self-leave kiểm
   tra active workspace/team membership; retire yêu cầu OWNER/ADMIN, giữ lịch sử bằng `archivedAt`;
   cả hai ghi audit và điều hướng khỏi team sau khi thành công.
+- Project Members: entity/quan hệ thành viên dự án đã được lưu riêng trong PostgreSQL; hàng Members
+  gốc ở Project Peek/Overview dùng avatar stack hoặc `Add members` như upstream và gọi API thật,
+  không còn suy luận sai thành viên dự án từ assignee của issue.
+- Issue Activity: API đã trả lại payload JSON được lưu cùng activity; feed chỉ format các event/key
+  được whitelist, giữ layout upstream, có fallback an toàn và không render HTML/text tùy ý từ server.
+- Team Documents: khôi phục folder `Collapsible`, icon, pin, creator, compact time và hàng header
+  đúng upstream; folder/document metadata được lưu PostgreSQL, sort gốc đã hoạt động và Team
+  Overview chỉ hiển thị document được pin. Dialog CRUD chỉ xuất hiện sau affordance gốc.
 - Docker Compose: Postgres, Redis, MinIO, API, worker, web; dependency layer đã cache nên
   `docker compose up` trong mạng nội bộ không tải lại khi lockfile/image base không đổi.
 
@@ -140,10 +148,16 @@
 - `685b082` — restore upstream Initiative/Project affordances and connect existing create buttons.
 - `8f20e5b` — persist inbox notification preferences and enforce them in API/Worker events.
 - `8c8fe34` — connect the original Team Leave/Retire buttons with authorization and audit.
+- `02839bd` — persist Project Members through the original member affordance.
+- `258ab82` — preserve and safely render persisted Issue Activity payloads.
+- `64d37be` — restore original Initiatives/Views/Inbox/Settings affordances.
+- `5091b2c` — persist Team Document folders, icons, pin and ordering.
+- `5922a8c` — block comment and attachment access to retired teams.
+- `9a61082` — connect the original Team Members sort affordance to live data.
 
 ### Kiểm tra gần nhất
 
-- API Jest: **40 suites, 109 tests passed**, gồm notification preferences, workspace isolation,
+- API Jest: **45 suites, 131 tests passed**, gồm notification preferences, workspace isolation,
   Issue actions, Project attachment, Team settings, Personal API Key và Bearer guard.
 - NestJS build: passed.
 - Next.js 15 production build: passed.
@@ -208,6 +222,16 @@
   `upstream/master`. Đã xóa 18 component `real-*` rút gọn không còn route nào dùng; runtime chỉ
   còn cây component gốc được nối API.
 - Docker dependency install dùng cache; không tải package mới trong các checkpoint trên.
+- Migration `20260824370000_project_members` đã apply; bảng `project_members` được xác minh trực tiếp
+  trong PostgreSQL Docker. API/web production build, Docker API/web và HTTP health/login đều pass.
+- Project Members và Issue Activity đã được push lên `origin/codex/foundation` tại `258ab82`.
+- Migration `20260824380000_team_document_folders` thêm folder/icon/pin/position và backfill ổn định;
+  Prisma generate/format, toàn bộ API test/build và web lint/production build đều pass. Feature đã
+  được push tại `5091b2c`; dependency graph không thay đổi.
+- Comment/attachment authorization đã đồng bộ với lifecycle Team: issue/project/document thuộc
+  team đã retire không còn đọc/ghi/upload được qua API trực tiếp; targeted Jest **4/4 passed**.
+- Docker API/Web đã rebuild với dependency install layer `CACHED`; migration Team Documents apply,
+  `document_folders` tồn tại và API health/Web login đều trả HTTP 200.
 - Script `scripts/start-local.ps1` dùng `--no-build --pull never`, nên khởi động từ image hiện có
   chạy được trong mạng nội bộ. Rebuild web vẫn có thể cần internet vì baseline dùng
   `next/font/google`; lần build gần nhất retry TLS rồi thành công trên 5G, không phải cài package.
@@ -232,8 +256,8 @@
 | P1 | Project extras | Hoàn thành: favorite, Update attachment, resource, typed custom-property values/definitions, workspace Display defaults và affordance Initiative/Label trong Overview đều dùng dữ liệu thật mà giữ layout gốc. |
 | P1 | Issue display/insights | Workspace Display defaults đã hoàn thành. Footer `Set default for everyone` trong Insights vẫn là visible no-op; cần persistence cho cấu hình analytics trước khi bật. |
 | P1 | Team danger zone | Leave và Retire đã hoàn thành bằng backend/audit thật. Delete vẫn khóa vì cần mô hình soft-delete + restore 30 ngày tách biệt; không được ánh xạ Delete sang archive vì sai semantics. |
-| P1 | Project/member/detail parity | Project Peek chưa có ProjectMember entity nên empty Members vẫn dựa trên issue assignee; Issue comment/relation chưa đủ rich content/relation type như baseline. |
-| P1 | Team documents | Document thật đã có, nhưng folder/pinned và các slider của màn Team Documents chưa có persistence tương ứng. |
+| P1 | Project/member/detail parity | ProjectMember đã hoàn thành và dùng đúng affordance gốc. Issue comment/reaction/relation vẫn chưa đủ rich content và directional relation type như baseline. |
+| P1 | Team documents | Hoàn thành: folder/icon/pin/position, CRUD, sort và Overview pinned dùng backend thật trong component tree upstream. |
 | P2 | Automation/webhook | Worker/Redis foundation có, nhưng rule builder, persisted automation và generic webhook chưa hoàn chỉnh. |
 | P2 | OAuth/enterprise identity | Google, Microsoft Entra, OIDC/SAML chưa triển khai; local email/password đang hoạt động. |
 | Excluded | AI Agent, Code Reviews | Cố ý unavailable theo phạm vi sản phẩm hiện tại; fixture/canned-response cũ đã được xóa khỏi source. |
