@@ -106,6 +106,7 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 | `ca19039` | Original Issue context menu now persists subscribe/unsubscribe and archive through existing API endpoints. Browser-only fake actions (favorite, link, conversion, copies, related issues, mark-as, team moves, reminders) remain in their original positions but are explicitly disabled. Frontend production build passed; Docker runtime verification is pending 5G. |
 | `74e21c7` | Original command palette now reads members, statuses, labels, projects, and cycles from the live Issue store/API rather than mock records. Move-to-cycle uses the Cycle API and updates local state only after successful requests; cycle option dates are returned by Issue options. Release/team move and code-review navigation are explicitly unavailable. API build, API tests (3 suites/5 tests), and frontend production build passed; Docker runtime verification is pending 5G. |
 | `f7994e1` | Sidebar Inbox badge now uses only notification API data, and Settings “Your teams” uses the live workspace-team loader. Reviews and Agent retain their original sidebar locations but are visibly unavailable instead of navigating to mock code-review/AI data. Frontend production build passed; Docker runtime verification is pending 5G. |
+| `398a432` | Original Team settings now resolves its team/member/cycle data through the live workspace-team loader and team-scoped Issue options. It has real loading/error states, links to real Team overview/members, and no longer renders mock counts or empty clickable rows. Unsupported configuration and destructive controls are explicitly unavailable. Frontend production build passed; Docker runtime verification is pending 5G. |
 
 ### Capability status at the handoff point
 
@@ -118,12 +119,12 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 | Issues, labels, cycles, saved views | Implemented baseline | Original issues list/filter options, My issues scopes, labels CRUD, cycles/timeline, subscriptions, saved views, due dates, archive action, and command palette use API data. Original Issue detail, Activity/Comments/Subscribe, properties, assignee changes, Issue attachments, and truthful context-menu actions are live in source. Docker runtime verification of the latest attachment/due-date/context-menu/command-palette UI is pending 5G. Label editing, sub-issues, reactions, and relations remain deferred. |
 | Initiatives and documents | Implemented baseline | Initiative list/detail/create/linking and team documents are live. Advanced relationships/workflows remain deferred. |
 | Inbox and Discord | Implemented baseline | Inbox persists notifications/read/delete and workspace Discord integration exists. No fake delivery channels are enabled. |
-| Settings | Audited baseline | Profile, issue labels, project statuses, project templates, and actionable browser-local preferences are live. Unsupported Notification, Security, Issue templates, desktop and issue-automation preferences are truthful. Generic configuration placeholders are visibly unavailable. Template application/editing is deferred because the API currently provides list/create only. |
+| Settings | Audited baseline | Profile, Team settings, issue labels, project statuses, project templates, and actionable browser-local preferences are live/read-only as their APIs allow. Unsupported Notification, Security, Issue templates, desktop and issue-automation preferences are truthful. Generic configuration placeholders are visibly unavailable. Template application/editing is deferred because the API currently provides list/create only. |
 | Admin / RBAC / audit | Partial or deferred | Do not advertise as complete. Any current admin controls require a separate permissions, audit, and UX audit before production claims. |
 
 ## Exact restart point
 
-The next agent should first complete **runtime verification for original Issue attachments, due dates, context-menu actions, command palette, and sidebar navigation**. These features are committed in `8c6bbd8` / `603c994` / `ca19039` / `74e21c7` / `f7994e1`; API and web builds passed, but they have not yet been included in the running Docker API/web images because Docker rebuilding awaits the user's 5G confirmation.
+The next agent should first complete **runtime verification for original Issue attachments, due dates, context-menu actions, command palette, sidebar navigation, and Team settings**. These features are committed in `8c6bbd8` / `603c994` / `ca19039` / `74e21c7` / `f7994e1` / `398a432`; API and web builds passed, but they have not yet been included in the running Docker API/web images because Docker rebuilding awaits the user's 5G confirmation.
 
 `apps/web/components/common/issues/details/issue-details.tsx`
 
@@ -135,8 +136,9 @@ Required verification sequence:
 4. From the original Issue context menu, subscribe/unsubscribe then refresh; archive a disposable Issue after confirmation and verify it disappears from the live list.
 5. In command palette, confirm assignee/status/labels/project options are real workspace records, then move an Issue to a cycle and clear it; refresh after each mutation.
 6. Confirm the Inbox badge matches persisted notifications and Settings “Your teams” lists only real workspace teams. Reviews and Agent must remain unavailable.
-7. Record the result in this document and `CONTINUATION.md`, then commit/push the documentation.
-8. Only after that, continue with **Issue label editing** if its API contract covers it; otherwise leave it explicitly unavailable. Sub-issues, reactions, comment attachments, and relations require separate contracts.
+7. Open a real Team settings page and verify team identity, member count, status count, cycle count and overview/members links. Unsupported settings must not be clickable.
+8. Record the result in this document and `CONTINUATION.md`, then commit/push the documentation.
+9. Only after that, continue with **Issue label editing** if its API contract covers it; otherwise leave it explicitly unavailable. Sub-issues, reactions, comment attachments, and relations require separate contracts.
 
 This is a backend/API integration priority, not a UI redesign task.
 
@@ -211,6 +213,7 @@ The shared placeholder has disabled filter/action controls and an explicit unava
 | Issue command palette | `migrated` | Members/statuses/labels/projects/cycles come from live Issue store; priority metadata is presentation-only. |
 | Sidebar Inbox | `migrated` | Badge comes from notification API; no review count. |
 | Settings sidebar teams | `migrated` | Workspace team loader replaces mock joined-team records. |
+| Team settings | `migrated` / `unavailable` | Team/member/status/cycle values are API-backed; configuration without APIs is disabled. |
 | Reviews and Agent sidebar entries | `unavailable` | Retained in original navigation but cannot open their mock workflows. |
 
 ### Later phases (not current blocking work)
