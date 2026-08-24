@@ -60,6 +60,8 @@ export type LiveProjectUpdate = {
    author: { id: string; name: string; avatarUrl: string | null };
 };
 
+export type LiveProjectLabel = { id: string; name: string; color: string };
+
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 /** Shared live data source for the three unchanged Project detail tabs. */
@@ -70,8 +72,10 @@ export function useLiveProject(projectId: string) {
    const [milestones, setMilestones] = useState<LiveMilestone[]>([]);
    const [activities, setActivities] = useState<LiveActivity[]>([]);
    const [updates, setUpdates] = useState<LiveProjectUpdate[]>([]);
+   const [availableLabels, setAvailableLabels] = useState<LiveProjectLabel[]>([]);
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState<string>();
+   const [refreshKey, setRefreshKey] = useState(0);
 
    useEffect(() => {
       let current = true;
@@ -95,6 +99,7 @@ export function useLiveProject(projectId: string) {
                milestonesResponse,
                activitiesResponse,
                updatesResponse,
+               labelsResponse,
             ] = await Promise.all([
                fetch(`${api}/projects/${projectId}?${query}`, { credentials: 'include' }),
                fetch(`${api}/projects/${projectId}/issues?${query}`, { credentials: 'include' }),
@@ -107,13 +112,15 @@ export function useLiveProject(projectId: string) {
                fetch(`${api}/projects/${projectId}/updates?${query}`, {
                   credentials: 'include',
                }),
+               fetch(`${api}/projects/labels?${query}`, { credentials: 'include' }),
             ]);
             if (
                !projectResponse.ok ||
                !issuesResponse.ok ||
                !milestonesResponse.ok ||
                !activitiesResponse.ok ||
-               !updatesResponse.ok
+               !updatesResponse.ok ||
+               !labelsResponse.ok
             ) {
                throw new Error('Could not load project details.');
             }
@@ -124,6 +131,9 @@ export function useLiveProject(projectId: string) {
             setMilestones(((await milestonesResponse.json()) as { data: LiveMilestone[] }).data);
             setActivities(((await activitiesResponse.json()) as { data: LiveActivity[] }).data);
             setUpdates(((await updatesResponse.json()) as { data: LiveProjectUpdate[] }).data);
+            setAvailableLabels(
+               ((await labelsResponse.json()) as { data: LiveProjectLabel[] }).data
+            );
          } catch (caught) {
             if (current)
                setError(caught instanceof Error ? caught.message : 'Could not load project.');
@@ -134,7 +144,9 @@ export function useLiveProject(projectId: string) {
       return () => {
          current = false;
       };
-   }, [projectId]);
+   }, [projectId, refreshKey]);
+
+   const reload = useCallback(() => setRefreshKey((value) => value + 1), []);
 
    const createUpdate = useCallback(
       async (body: string, health: string, kind: 'update' | 'comment') => {
@@ -158,6 +170,61 @@ export function useLiveProject(projectId: string) {
       [projectId, workspaceId]
    );
 
+   const updateLabels = useCallback(
+      async (labelIds: string[]) => {
+         if (!workspaceId) throw new Error('Workspace is not available yet.');
+         const query = new URLSearchParams({ workspaceId });
+         const response = await fetch(`${api}/projects/${projectId}?${query}`, {
+            method: 'PATCH',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ labelIds }),
+         });
+         if (!response.ok) throw new Error('Could not update project labels.');
+         setProject(((await response.json()) as { data: LiveProject }).data);
+      },
+      [projectId, workspaceId]
+   );
+
+   const createMilestone = useCallback(
+      async (title: string, targetDate?: string) => {
+         if (!workspaceId) throw new Error('Workspace is not available yet.');
+         const response = await fetch(`${api}/projects/${projectId}/milestones`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ workspaceId, title: title.trim(), targetDate }),
+         });
+         if (!response.ok) throw new Error('Could not create milestone.');
+         const created = ((await response.json()) as { data: LiveMilestone }).data;
+         setMilestones((current) => [...current, created]);
+         return created;
+      },
+      [projectId, workspaceId]
+   );
+
+   const toggleMilestone = useCallback(
+      async (milestoneId: string, completed: boolean) => {
+         if (!workspaceId) throw new Error('Workspace is not available yet.');
+         const query = new URLSearchParams({ workspaceId });
+         const response = await fetch(
+            `${api}/projects/${projectId}/milestones/${milestoneId}?${query}`,
+            {
+               method: 'PATCH',
+               credentials: 'include',
+               headers: { 'content-type': 'application/json' },
+               body: JSON.stringify({ completed }),
+            }
+         );
+         if (!response.ok) throw new Error('Could not update milestone.');
+         const updated = ((await response.json()) as { data: LiveMilestone }).data;
+         setMilestones((current) =>
+            current.map((milestone) => (milestone.id === updated.id ? updated : milestone))
+         );
+      },
+      [projectId, workspaceId]
+   );
+
    return {
       workspaceId,
       project,
@@ -165,8 +232,13 @@ export function useLiveProject(projectId: string) {
       milestones,
       activities,
       updates,
+      availableLabels,
       loading,
       error,
       createUpdate,
+      updateLabels,
+      createMilestone,
+      toggleMilestone,
+      reload,
    };
 }

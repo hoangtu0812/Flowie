@@ -5,6 +5,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+   Select,
+   SelectContent,
+   SelectItem,
+   SelectTrigger,
+   SelectValue,
+} from '@/components/ui/select';
 import { FileStack } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { DashedSmiley } from './settings-placeholder';
@@ -17,8 +24,9 @@ type Template = {
    updatedAt: string;
 };
 
-type TemplateDraft = { name: string; description: string };
-const EMPTY_DRAFT: TemplateDraft = { name: '', description: '' };
+type TemplateDraft = { name: string; description: string; type: string };
+const EMPTY_DRAFT: TemplateDraft = { name: '', description: '', type: 'GENERAL' };
+const PROJECT_TYPES = ['GENERAL', 'PRODUCT', 'MARKETING', 'OPERATIONS', 'EVENT', 'CLIENT'];
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 const formatDate = (value: string) =>
@@ -78,7 +86,11 @@ export default function ProjectTemplatesSettings() {
 
    const showEdit = (template: Template) => {
       setSelected(template);
-      setDraft({ name: template.name, description: template.description ?? '' });
+      setDraft({
+         name: template.name,
+         description: template.description ?? '',
+         type: template.type,
+      });
       setMessage(undefined);
       setOpen(true);
    };
@@ -101,6 +113,7 @@ export default function ProjectTemplatesSettings() {
                   ...(selected ? {} : { workspaceId }),
                   name: draft.name.trim(),
                   description: draft.description.trim() || undefined,
+                  type: draft.type,
                   config: {},
                }),
             }
@@ -188,7 +201,8 @@ export default function ProjectTemplatesSettings() {
                         <div className="min-w-0 flex-1">
                            <div className="text-sm font-medium truncate">{template.name}</div>
                            <div className="text-xs text-muted-foreground truncate">
-                              {template.description || 'No description'}
+                              {template.description || 'No description'} ·{' '}
+                              {template.type.toLowerCase()}
                            </div>
                         </div>
                         <div className="hidden sm:block text-xs text-muted-foreground">
@@ -221,6 +235,24 @@ export default function ProjectTemplatesSettings() {
                         autoFocus
                         required
                      />
+                  </div>
+                  <div className="space-y-2">
+                     <Label>Default project type</Label>
+                     <Select
+                        value={draft.type}
+                        onValueChange={(type) => setDraft((current) => ({ ...current, type }))}
+                     >
+                        <SelectTrigger>
+                           <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                           {PROJECT_TYPES.map((type) => (
+                              <SelectItem key={type} value={type}>
+                                 {type.toLowerCase()}
+                              </SelectItem>
+                           ))}
+                        </SelectContent>
+                     </Select>
                   </div>
                   <div className="space-y-2">
                      <Label htmlFor="project-template-description">Description</Label>

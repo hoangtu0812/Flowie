@@ -20,8 +20,19 @@ const formatDay = (iso?: string | null) => (iso ? format(parseISO(iso), 'MMM do'
 
 /** Project "Overview" tab: description column + properties side panel. */
 export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
-   const { project, issues, milestones, updates, activities, loading, error } =
-      useLiveProject(projectId);
+   const {
+      project,
+      issues,
+      milestones,
+      updates,
+      activities,
+      availableLabels,
+      updateLabels,
+      createMilestone,
+      toggleMilestone,
+      loading,
+      error,
+   } = useLiveProject(projectId);
    const { orgId } = useParams<{ orgId: string }>();
    const scrollRef = useRef<HTMLDivElement>(null);
    const uiProject = useMemo(
@@ -183,7 +194,15 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
          </div>
 
          {/* Side panel */}
-         <ProjectSidePanel project={uiProject} detail={detail} issues={uiIssues} />
+         <ProjectSidePanel
+            project={uiProject}
+            detail={detail}
+            issues={uiIssues}
+            availableLabels={availableLabels}
+            onLabelsChange={updateLabels}
+            onCreateMilestone={createMilestone}
+            onToggleMilestone={toggleMilestone}
+         />
       </div>
    );
 }

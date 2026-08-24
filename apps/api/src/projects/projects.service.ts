@@ -56,9 +56,31 @@ export class ProjectsService {
    async create(dto: CreateProjectDto, userId: string) {
       await this.authorize(dto.workspaceId, userId);
       if (dto.teamId) await this.authorizeTeam(dto.workspaceId, dto.teamId, userId);
+      const template = dto.templateId
+         ? await this.prisma.projectTemplate.findFirst({
+              where: { id: dto.templateId, workspaceId: dto.workspaceId },
+           })
+         : null;
+      if (dto.templateId && !template) throw new NotFoundException('Project template not found.');
+      const templateConfig =
+         template?.config && typeof template.config === 'object' && !Array.isArray(template.config)
+            ? (template.config as Record<string, unknown>)
+            : {};
+      const configString = (key: string) =>
+         typeof templateConfig[key] === 'string' ? (templateConfig[key] as string) : undefined;
       const project = await this.prisma.$transaction(async (tx) => {
          const project = await tx.project.create({
-            data: { ...dto, identifier: dto.identifier.toUpperCase() },
+            data: {
+               workspaceId: dto.workspaceId,
+               teamId: dto.teamId,
+               name: dto.name,
+               identifier: dto.identifier.toUpperCase(),
+               description: dto.description ?? configString('description') ?? template?.description,
+               type: dto.type ?? template?.type,
+               status: configString('status'),
+               priority: configString('priority'),
+               health: configString('health'),
+            },
             include: projectInclude,
          });
          await tx.activity.create({
@@ -67,7 +89,11 @@ export class ProjectsService {
                projectId: project.id,
                actorId: userId,
                type: 'project.created',
-               data: { name: project.name, identifier: project.identifier },
+               data: {
+                  name: project.name,
+                  identifier: project.identifier,
+                  templateId: template?.id,
+               },
             },
          });
          return project;

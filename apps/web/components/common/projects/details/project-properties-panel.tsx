@@ -3,6 +3,16 @@
 import { CapacityRing } from '@/components/common/cycles/capacity-ring';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
+import {
+   Dialog,
+   DialogContent,
+   DialogFooter,
+   DialogHeader,
+   DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { ProjectDetail } from '@/mock-data/project-details';
 import { PanelFilterTarget, usePanelFilter } from '@/components/common/issues/use-panel-filter';
 import { cn } from '@/lib/utils';
@@ -18,13 +28,22 @@ import {
    Tag,
    UserPlus,
 } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { toast } from 'sonner';
+import { ProjectLabelSelector } from '../project-label-selector';
+import type { LiveProjectLabel } from './use-live-project';
 import type { ProjectDetailUiIssue, ProjectDetailUiProject } from './project-detail-ui-adapter';
 
 interface ProjectPropertiesPanelProps {
    project: ProjectDetailUiProject;
    detail: ProjectDetail;
    issues: ProjectDetailUiIssue[];
+   availableLabels: LiveProjectLabel[];
+   onLabelsChange?: (labelIds: string[]) => Promise<void>;
+   onCreateMilestone?: (title: string, targetDate?: string) => Promise<unknown>;
+   onToggleMilestone?: (milestoneId: string, completed: boolean) => Promise<void>;
 }
 
 const isCompleted = (issue: ProjectDetailUiIssue) => issue.status.category === 'completed';
@@ -115,12 +134,94 @@ function PropertyRow({ label, children }: { label: string; children: React.React
    );
 }
 
+function MilestoneDialog({
+   onCreate,
+}: {
+   onCreate?: (title: string, targetDate?: string) => Promise<unknown>;
+}) {
+   const [open, setOpen] = useState(false);
+   const [title, setTitle] = useState('');
+   const [targetDate, setTargetDate] = useState('');
+   const [saving, setSaving] = useState(false);
+   const submit = async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!onCreate || !title.trim()) return;
+      setSaving(true);
+      try {
+         await onCreate(title.trim(), targetDate || undefined);
+         setTitle('');
+         setTargetDate('');
+         setOpen(false);
+      } catch (caught) {
+         toast.error(caught instanceof Error ? caught.message : 'Could not create milestone.');
+      } finally {
+         setSaving(false);
+      }
+   };
+   return (
+      <Dialog open={open} onOpenChange={setOpen}>
+         <button
+            type="button"
+            aria-label="Add milestone"
+            disabled={!onCreate}
+            onClick={() => setOpen(true)}
+            className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+         >
+            <Plus className="size-3.5" />
+         </button>
+         <DialogContent>
+            <DialogHeader>
+               <DialogTitle>New milestone</DialogTitle>
+            </DialogHeader>
+            <form className="space-y-4" onSubmit={submit}>
+               <div className="space-y-2">
+                  <Label htmlFor="milestone-title">Title</Label>
+                  <Input
+                     id="milestone-title"
+                     value={title}
+                     onChange={(event) => setTitle(event.target.value)}
+                     autoFocus
+                     required
+                  />
+               </div>
+               <div className="space-y-2">
+                  <Label htmlFor="milestone-date">Target date</Label>
+                  <Input
+                     id="milestone-date"
+                     type="date"
+                     value={targetDate}
+                     onChange={(event) => setTargetDate(event.target.value)}
+                  />
+               </div>
+               <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                     Cancel
+                  </Button>
+                  <Button type="submit" disabled={saving || !title.trim()}>
+                     {saving ? 'Creating…' : 'Create milestone'}
+                  </Button>
+               </DialogFooter>
+            </form>
+         </DialogContent>
+      </Dialog>
+   );
+}
+
 /**
  * Right-side panel of the project pages: properties, milestones,
  * progress breakdowns and a compact activity feed.
  */
-export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPropertiesPanelProps) {
+export function ProjectPropertiesPanel({
+   project,
+   detail,
+   issues,
+   availableLabels,
+   onLabelsChange,
+   onCreateMilestone,
+   onToggleMilestone,
+}: ProjectPropertiesPanelProps) {
    const panelFilter = usePanelFilter();
+   const { orgId } = useParams<{ orgId: string }>();
    const completed = issues.filter(isCompleted).length;
 
    const team = project.team;
@@ -245,10 +346,13 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
                         {members.length} {members.length === 1 ? 'member' : 'members'}
                      </span>
                   ) : (
-                     <button className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors">
+                     <span
+                        className="flex items-center gap-1.5 text-muted-foreground"
+                        title="Members appear here when project issues are assigned"
+                     >
                         <UserPlus className="size-3.5" />
-                        Add members
-                     </button>
+                        No assigned members
+                     </span>
                   )}
                </PropertyRow>
                <PropertyRow label="Dates">
@@ -303,9 +407,12 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
                            {label.name}
                         </span>
                      ))}
-                     <button className="text-muted-foreground hover:text-foreground transition-colors">
-                        <Plus className="size-3.5" />
-                     </button>
+                     <ProjectLabelSelector
+                        labels={project.labels}
+                        availableLabels={availableLabels}
+                        disabled={!onLabelsChange}
+                        onLabelsChange={onLabelsChange}
+                     />
                   </div>
                </PropertyRow>
             </div>
@@ -315,9 +422,7 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
          <div className="px-5 py-4 border-b">
             <div className="flex items-center justify-between mb-2">
                <h3 className="text-sm font-medium">Milestones</h3>
-               <button className="text-muted-foreground hover:text-foreground transition-colors">
-                  <Plus className="size-3.5" />
-               </button>
+               <MilestoneDialog onCreate={onCreateMilestone} />
             </div>
             {detail.milestones.length === 0 ? (
                <p className="text-xs text-muted-foreground">
@@ -327,9 +432,21 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
             ) : (
                <div className="flex flex-col gap-1.5">
                   {detail.milestones.map((milestone) => (
-                     <div
+                     <button
+                        type="button"
                         key={milestone.id}
-                        className="flex items-center justify-between gap-2 text-sm"
+                        disabled={!onToggleMilestone}
+                        onClick={() =>
+                           void onToggleMilestone?.(milestone.id, !milestone.completed).catch(
+                              (caught) =>
+                                 toast.error(
+                                    caught instanceof Error
+                                       ? caught.message
+                                       : 'Could not update milestone.'
+                                 )
+                           )
+                        }
+                        className="w-full flex items-center justify-between gap-2 text-sm text-left rounded hover:bg-accent/40 disabled:hover:bg-transparent"
                      >
                         <span className="flex items-center gap-2 min-w-0">
                            <span
@@ -354,7 +471,7 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
                         <span className="text-xs text-muted-foreground whitespace-nowrap">
                            {formatDay(milestone.targetDate)}
                         </span>
-                     </div>
+                     </button>
                   ))}
                </div>
             )}
@@ -423,9 +540,12 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
          <div className="px-5 py-4">
             <div className="flex items-center justify-between mb-2">
                <h3 className="text-sm font-medium">Activity</h3>
-               <button className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+               <Link
+                  href={`/${orgId}/project/${project.id}/activity`}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+               >
                   See all
-               </button>
+               </Link>
             </div>
             <div className="flex flex-col gap-3">
                {detail.activity.map((event) => (

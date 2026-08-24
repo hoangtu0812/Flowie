@@ -73,6 +73,10 @@ export default function ProjectActivity({ projectId }: ProjectActivityProps) {
       loading,
       error,
       createUpdate,
+      availableLabels,
+      updateLabels,
+      createMilestone,
+      toggleMilestone,
    } = useLiveProject(projectId);
    const [mode, setMode] = useState<'comment' | 'update'>('update');
    const [health, setHealth] = useState<ProjectUpdateHealth>('on-track');
@@ -275,7 +279,15 @@ export default function ProjectActivity({ projectId }: ProjectActivityProps) {
             </div>
          </div>
 
-         <ProjectSidePanel project={uiProject} detail={detail} issues={uiIssues} />
+         <ProjectSidePanel
+            project={uiProject}
+            detail={detail}
+            issues={uiIssues}
+            availableLabels={availableLabels}
+            onLabelsChange={updateLabels}
+            onCreateMilestone={createMilestone}
+            onToggleMilestone={toggleMilestone}
+         />
       </div>
    );
 }

@@ -18,8 +18,19 @@ interface ProjectIssuesProps {
 export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
    const { statuses, loadIssues } = useIssuesStore();
    const { filters } = useFilterStore();
-   const { project, issues, milestones, updates, activities, loading, error } =
-      useLiveProject(projectId);
+   const {
+      project,
+      issues,
+      milestones,
+      updates,
+      activities,
+      availableLabels,
+      updateLabels,
+      createMilestone,
+      toggleMilestone,
+      loading,
+      error,
+   } = useLiveProject(projectId);
 
    useEffect(() => {
       void loadIssues();
@@ -63,6 +74,10 @@ export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
                detail={detail}
                issues={uiIssues}
                insightsIssues={displayedIssues}
+               availableLabels={availableLabels}
+               onLabelsChange={updateLabels}
+               onCreateMilestone={createMilestone}
+               onToggleMilestone={toggleMilestone}
             />
          </div>
       </div>

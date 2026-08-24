@@ -18,6 +18,7 @@ import { FormEvent, useEffect, useState } from 'react';
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 type TeamOption = { id: string; name: string; identifier: string };
+type TemplateOption = { id: string; name: string; description: string | null; type: string };
 
 function CreateProjectDialog({
    open,
@@ -28,8 +29,10 @@ function CreateProjectDialog({
 }) {
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [teams, setTeams] = useState<TeamOption[]>([]);
+   const [templates, setTemplates] = useState<TemplateOption[]>([]);
    const [name, setName] = useState('');
    const [teamId, setTeamId] = useState('');
+   const [templateId, setTemplateId] = useState('');
    const [error, setError] = useState<string>();
    const [saving, setSaving] = useState(false);
 
@@ -44,13 +47,18 @@ function CreateProjectDialog({
          const currentWorkspaceId = workspaces.data[0]?.workspace.id;
          if (!currentWorkspaceId) throw new Error('No workspace is available for this account.');
          setWorkspaceId(currentWorkspaceId);
-         const teamsResponse = await fetch(`${api}/teams?workspaceId=${currentWorkspaceId}`, {
-            credentials: 'include',
-         });
-         if (teamsResponse.ok) {
-            const payload = (await teamsResponse.json()) as { data: TeamOption[] };
-            setTeams(payload.data);
-         }
+         const [teamsResponse, templatesResponse] = await Promise.all([
+            fetch(`${api}/teams?workspaceId=${currentWorkspaceId}`, {
+               credentials: 'include',
+            }),
+            fetch(`${api}/projects/templates?workspaceId=${currentWorkspaceId}`, {
+               credentials: 'include',
+            }),
+         ]);
+         if (teamsResponse.ok)
+            setTeams(((await teamsResponse.json()) as { data: TeamOption[] }).data);
+         if (templatesResponse.ok)
+            setTemplates(((await templatesResponse.json()) as { data: TemplateOption[] }).data);
       })().catch((caught: unknown) =>
          setError(caught instanceof Error ? caught.message : 'Could not load project options.')
       );
@@ -77,6 +85,7 @@ function CreateProjectDialog({
                name: name.trim(),
                identifier: identifier || 'PROJECT',
                ...(teamId ? { teamId } : {}),
+               ...(templateId ? { templateId } : {}),
             }),
          });
          const payload = (await response.json().catch(() => null)) as {
@@ -114,6 +123,22 @@ function CreateProjectDialog({
                      placeholder="e.g. Product launch"
                      autoFocus
                   />
+               </div>
+               <div className="space-y-2">
+                  <Label htmlFor="project-template">Template</Label>
+                  <select
+                     id="project-template"
+                     value={templateId}
+                     onChange={(event) => setTemplateId(event.target.value)}
+                     className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                     <option value="">No template</option>
+                     {templates.map((template) => (
+                        <option key={template.id} value={template.id}>
+                           {template.name}
+                        </option>
+                     ))}
+                  </select>
                </div>
                <div className="space-y-2">
                   <Label htmlFor="project-team">Team</Label>
