@@ -109,7 +109,12 @@ export class CommentsService {
       });
       if (!membership) throw new ForbiddenException('You do not have access to this workspace.');
       const team = await this.prisma.team.findFirst({
-         where: { id: issue.teamId, workspaceId, members: { some: { userId } } },
+         where: {
+            id: issue.teamId,
+            workspaceId,
+            archivedAt: null,
+            members: { some: { userId } },
+         },
       });
       if (!team) throw new ForbiddenException('You do not have access to this team.');
    }

@@ -74,7 +74,7 @@ export class AttachmentsService {
       const teamId = await this.entityTeamId(workspaceId, entityType, entityId);
       if (!teamId) return;
       const team = await this.prisma.team.findFirst({
-         where: { id: teamId, workspaceId, members: { some: { userId } } },
+         where: { id: teamId, workspaceId, archivedAt: null, members: { some: { userId } } },
       });
       if (!team) throw new ForbiddenException('You do not have access to this attachment target.');
    }
