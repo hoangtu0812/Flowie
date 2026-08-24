@@ -17,7 +17,7 @@ import {
    projectUpdateHealthLabel,
 } from '@/mock-data/project-details';
 import { format, parseISO } from 'date-fns';
-import { Paperclip, Sparkles, X } from 'lucide-react';
+import { Paperclip, X } from 'lucide-react';
 import { ChangeEvent, useMemo, useRef, useState } from 'react';
 import { toIssueUi, toProjectDetailUi, toProjectUi } from './project-detail-ui-adapter';
 import { ProjectSidePanel } from './project-side-panel';
@@ -287,17 +287,7 @@ export default function ProjectActivity({ projectId }: ProjectActivityProps) {
                      </div>
                   )}
 
-                  <div className="mt-3 flex items-center justify-between">
-                     <Button
-                        variant="outline"
-                        size="xs"
-                        className="gap-1.5"
-                        disabled
-                        title="AI writing is unavailable until an AI backend is configured"
-                     >
-                        <Sparkles className="size-3.5" />
-                        Write with Agent
-                     </Button>
+                  <div className="mt-3 flex items-center justify-end">
                      <div className="flex items-center gap-2">
                         <Button
                            variant="ghost"

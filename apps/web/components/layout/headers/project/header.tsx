@@ -5,7 +5,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
 import { useLiveProject } from '@/components/common/projects/details/use-live-project';
 import { useRightPanelStore } from '@/store/right-panel-store';
-import { BarChart3, ChevronRight, Link2, MoreHorizontal, PanelRight, Star } from 'lucide-react';
+import { BarChart3, ChevronRight, Link2, PanelRight, Star } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { toast } from 'sonner';
@@ -84,6 +84,15 @@ export default function Header({ projectId }: { projectId: string }) {
       }
    };
 
+   const copyProjectLink = async () => {
+      try {
+         await navigator.clipboard.writeText(window.location.href);
+         toast.success('Project link copied');
+      } catch {
+         toast.error('Could not copy the project link');
+      }
+   };
+
    return (
       <>
          <div className="w-full flex justify-between items-center border-b py-1.5 px-6 h-10">
@@ -114,11 +123,14 @@ export default function Header({ projectId }: { projectId: string }) {
                </div>
             </div>
             <div className="flex items-center gap-1">
-               <Button variant="ghost" size="icon" className="size-7 text-muted-foreground">
+               <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 text-muted-foreground"
+                  aria-label="Copy project link"
+                  onClick={() => void copyProjectLink()}
+               >
                   <Link2 className="size-4" />
-               </Button>
-               <Button variant="ghost" size="icon" className="size-7 text-muted-foreground">
-                  <MoreHorizontal className="size-4" />
                </Button>
             </div>
          </div>
