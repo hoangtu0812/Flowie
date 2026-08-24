@@ -113,6 +113,8 @@
 - `336a235` — persist team membership state and connect the original Join affordance.
 - `0963ec7` — connect issue Move Team command and remove Agent as the default home.
 - `03554c1` — persist Initiative updates/resources as first-class workspace entities.
+- `0f2b21c` — persist Project resources through the original Overview `+` affordance.
+- `fc30bf6` — persist typed Project custom-property values through the original Project Peek `+`.
 
 ### Kiểm tra gần nhất
 
@@ -151,6 +153,10 @@
   được backfill từ audit metadata sang hai bảng có workspace/initiative/user FK riêng.
 - Migration `20260824310000_project_resources` đã được apply; bảng resource có workspace/project/
   creator FK và route tạo resource đã được kiểm tra bằng unit test + Docker runtime.
+- Project custom properties dùng schema sẵn có; hai route đọc/lưu giá trị kiểm tra quyền project,
+  workspace ownership, kiểu TEXT/NUMBER/DATE/SELECT/MULTI_SELECT/BOOLEAN/URL và ghi Activity.
+  Nút `+` trong card Properties của Project Peek gốc đã được bật, không thay layout khi chưa có
+  custom field. Unit test mới **3/3 passed**; API/web/worker build và Docker API/web đều passed.
 - Audit frontend đã đối chiếu **308 file baseline** trong `app/components/hooks/lib/store` với
   `upstream/master`. Đã xóa 18 component `real-*` rút gọn không còn route nào dùng; runtime chỉ
   còn cây component gốc được nối API.
@@ -173,7 +179,7 @@
 | P1 | Issue actions còn thiếu | Convert-to-comment còn cần semantics/backend. Duplicate/Won't Fix, move team, favorite và reminder đã hoàn thành; taxonomy issue type không có control tương ứng trong UI gốc hiện tại. |
 | P1 | Team settings nâng cao | Cycle cadence, triage, auto-close/archive policy, hierarchy và template default đã persistence/UI; Worker auto-close/archive đã hoàn thành. Tự sinh cycle theo cadence vẫn chưa triển khai. |
 | P1 | Account security | Session management và Personal API Key đã hoàn thành. Passkeys cần WebAuthn dependency/RP configuration; signing key không có consumer và lệch phạm vi project-management nên vẫn unavailable. |
-| P1 | Project extras | Favorite project và attachment cho Project Update đã hoàn thành bằng dữ liệu thật. |
+| P1 | Project extras | Favorite, Project Update attachment, resource links và typed custom-property values đã hoàn thành bằng dữ liệu thật. Còn cần UI Settings để quản trị định nghĩa custom field và nối affordance initiative/label còn rỗng trong Overview nếu baseline có hiển thị. |
 | P2 | Automation/webhook | Worker/Redis foundation có, nhưng rule builder, persisted automation và generic webhook chưa hoàn chỉnh. |
 | P2 | OAuth/enterprise identity | Google, Microsoft Entra, OIDC/SAML chưa triển khai; local email/password đang hoạt động. |
 | Excluded | AI Agent, Code Reviews | Cố ý unavailable theo phạm vi sản phẩm hiện tại; fixture/canned-response cũ đã được xóa khỏi source. |
