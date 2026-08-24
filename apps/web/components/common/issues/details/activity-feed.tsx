@@ -34,9 +34,22 @@ type ApiComment = {
    author: NonNullable<ApiActor>;
    attachments: ApiAttachment[];
 };
-type ApiActivity = { id: string; type: string; createdAt: string; actor: ApiActor };
+type ApiActivity = {
+   id: string;
+   type: string;
+   data: unknown;
+   createdAt: string;
+   actor: ApiActor;
+};
 type FeedItem =
-   | { kind: 'event'; id: string; type: string; createdAt: string; actor: ApiActor }
+   | {
+        kind: 'event';
+        id: string;
+        type: string;
+        data: unknown;
+        createdAt: string;
+        actor: ApiActor;
+     }
    | {
         kind: 'comment';
         id: string;
@@ -79,14 +92,92 @@ const relativeTime = (value: string) => {
    return `${days}d ago`;
 };
 
-const eventText = (type: string) => {
+const eventData = (value: unknown): Record<string, unknown> =>
+   value !== null && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+
+const safePayloadText = (value: unknown, maxLength = 120) => {
+   if (typeof value !== 'string') return undefined;
+   const normalized = value.replace(/[\u0000-\u001f\u007f]/g, ' ').trim();
+   return normalized ? normalized.slice(0, maxLength) : undefined;
+};
+
+const updateFieldLabels: Record<string, string> = {
+   title: 'title',
+   description: 'description',
+   statusId: 'status',
+   priority: 'priority',
+   assigneeId: 'assignee',
+   projectId: 'project',
+   parentIssueId: 'parent issue',
+   estimate: 'estimate',
+   dueDate: 'due date',
+   labelIds: 'labels',
+   cycleId: 'cycle',
+   releaseIds: 'releases',
+};
+
+const eventText = (type: string, rawData: unknown) => {
+   const data = eventData(rawData);
+   const relatedIdentifier = safePayloadText(data.relatedIdentifier, 64);
+
    if (type === 'issue.created') return 'created this issue';
-   if (type === 'issue.updated') return 'updated this issue';
+   if (type === 'issue.updated') {
+      const fields = Array.isArray(data.fields)
+         ? [
+              ...new Set(
+                 data.fields
+                    .map((field) =>
+                       typeof field === 'string' ? updateFieldLabels[field] : undefined
+                    )
+                    .filter((field): field is string => Boolean(field))
+              ),
+           ]
+         : [];
+      return fields.length ? `updated ${fields.join(', ')}` : 'updated this issue';
+   }
    if (type === 'issue.archived') return 'archived this issue';
-   if (type === 'issue.related') return 'linked this issue';
-   if (type === 'issue.unrelated') return 'removed an issue link';
-   if (type === 'issue.subissue_created') return 'created a sub-issue';
-   return type.replace(/[._]/g, ' ');
+   if (type === 'issue.related')
+      return relatedIdentifier ? `linked this issue to ${relatedIdentifier}` : 'linked this issue';
+   if (type === 'issue.unrelated')
+      return relatedIdentifier
+         ? `removed the link to ${relatedIdentifier}`
+         : 'removed an issue link';
+   if (type === 'issue.subissue_created') {
+      const identifier = safePayloadText(data.identifier, 64);
+      return identifier ? `created sub-issue ${identifier}` : 'created a sub-issue';
+   }
+   if (type === 'issue.converted_to_comment') {
+      const identifier = safePayloadText(data.targetIdentifier, 64);
+      return identifier
+         ? `converted this issue into a comment on ${identifier}`
+         : 'converted this issue into a comment';
+   }
+   if (type === 'issue.moved') {
+      const identifier = safePayloadText(data.identifier, 64);
+      return identifier ? `moved this issue to ${identifier}` : 'moved this issue';
+   }
+   if (type === 'issue.classified') {
+      const resolution = safePayloadText(data.resolution, 32);
+      const duplicateIdentifier = safePayloadText(data.duplicateIdentifier, 64);
+      if (resolution === 'DUPLICATE') {
+         return duplicateIdentifier
+            ? `marked this issue as duplicate of ${duplicateIdentifier}`
+            : 'marked this issue as duplicate';
+      }
+      if (resolution === 'WONT_FIX') return "marked this issue as won't fix";
+      return 'classified this issue';
+   }
+   if (type === 'issue.blocked')
+      return relatedIdentifier
+         ? `marked this issue as blocked by ${relatedIdentifier}`
+         : 'marked this issue as blocked';
+   if (type === 'issue.unblocked')
+      return relatedIdentifier
+         ? `removed blocker ${relatedIdentifier}`
+         : 'removed an issue blocker';
+   return 'updated this issue';
 };
 
 function EventRow({ item }: { item: Extract<FeedItem, { kind: 'event' }> }) {
@@ -97,7 +188,7 @@ function EventRow({ item }: { item: Extract<FeedItem, { kind: 'event' }> }) {
          </span>
          <span className="min-w-0 truncate">
             <span className="text-foreground/90 font-medium">{item.actor?.name ?? 'System'}</span>{' '}
-            {eventText(item.type)}
+            {eventText(item.type, item.data)}
          </span>
          <span className="shrink-0 text-xs">· {relativeTime(item.createdAt)}</span>
       </div>
@@ -193,6 +284,7 @@ export function ActivityFeed({
                   kind: 'event' as const,
                   id: activity.id,
                   type: activity.type,
+                  data: activity.data,
                   createdAt: activity.createdAt,
                   actor: activity.actor,
                })),

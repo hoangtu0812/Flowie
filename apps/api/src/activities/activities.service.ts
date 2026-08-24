@@ -1,9 +1,11 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '@circle/database';
 import { PrismaService } from '../database/prisma.service';
 
 export type ActivityResponse = {
    id: string;
    type: string;
+   data: Prisma.JsonValue;
    createdAt: Date;
    actor: { id: string; name: string; avatarUrl: string | null } | null;
 };
@@ -33,6 +35,7 @@ export class ActivitiesService {
       return activities.map((activity) => ({
          id: activity.id,
          type: activity.type,
+         data: activity.data,
          createdAt: activity.createdAt,
          actor: activity.actor,
       }));
