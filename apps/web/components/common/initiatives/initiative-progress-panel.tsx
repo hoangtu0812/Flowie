@@ -4,13 +4,43 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { getInitiativeProjects, Initiative, initiativeHealth } from './initiative-ui-adapter';
 import { useMemo, useState } from 'react';
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
 
 type BreakdownTab = 'health' | 'status' | 'teams' | 'leads';
+
+interface ProgressPoint {
+   label: string;
+   completed: number;
+   started: number;
+   scope: number;
+}
 
 /** Progress area chart + Health/Status/Teams/Leads breakdown of an initiative. */
 export function InitiativeProgressPanel({ initiative }: { initiative: Initiative }) {
    const [tab, setTab] = useState<BreakdownTab>('teams');
    const projects = useMemo(() => getInitiativeProjects(initiative), [initiative]);
+
+   const series = useMemo<ProgressPoint[]>(() => {
+      const ordered = [...projects].sort((left, right) =>
+         left.createdAt.localeCompare(right.createdAt)
+      );
+      let completed = 0;
+      let started = 0;
+      let scope = 0;
+      return ordered.map((project) => {
+         if (project.status.category === 'completed') completed += 1;
+         else if (project.status.category === 'started') started += 1;
+         else scope += 1;
+         return {
+            label: new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(
+               new Date(project.createdAt)
+            ),
+            completed,
+            started,
+            scope,
+         };
+      });
+   }, [projects]);
 
    const rows = useMemo(() => {
       if (tab === 'teams') {
@@ -73,8 +103,59 @@ export function InitiativeProgressPanel({ initiative }: { initiative: Initiative
    return (
       <div className="flex flex-col gap-3">
          <span className="text-sm font-medium">Progress</span>
-         <div className="h-44 -mx-2 flex items-center justify-center rounded-md border border-dashed text-center text-xs text-muted-foreground px-6">
-            Progress history will appear after the workspace has recorded project snapshots.
+         <div className="h-44 -mx-2">
+            {series.length > 0 ? (
+               <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={series} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
+                     <XAxis
+                        dataKey="label"
+                        tick={{ fontSize: 10 }}
+                        tickLine={false}
+                        axisLine={false}
+                        interval="preserveStartEnd"
+                     />
+                     <Tooltip
+                        contentStyle={{
+                           background: 'var(--container)',
+                           border: '1px solid var(--border)',
+                           borderRadius: 8,
+                           fontSize: 12,
+                        }}
+                     />
+                     <Area
+                        type="monotone"
+                        dataKey="completed"
+                        stackId="progress"
+                        stroke="#5e6ad2"
+                        fill="#5e6ad2"
+                        fillOpacity={0.55}
+                        name="Completed"
+                     />
+                     <Area
+                        type="monotone"
+                        dataKey="started"
+                        stackId="progress"
+                        stroke="#f2c94c"
+                        fill="#f2c94c"
+                        fillOpacity={0.4}
+                        name="Started"
+                     />
+                     <Area
+                        type="monotone"
+                        dataKey="scope"
+                        stackId="progress"
+                        stroke="#95a2b3"
+                        fill="#95a2b3"
+                        fillOpacity={0.18}
+                        name="Scope"
+                     />
+                  </AreaChart>
+               </ResponsiveContainer>
+            ) : (
+               <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+                  Link a project to start tracking progress.
+               </div>
+            )}
          </div>
          <div className="flex items-center gap-1.5 flex-wrap">
             {(

@@ -34,6 +34,13 @@ export type LiveInitiative = {
 };
 
 export type LiveWorkspaceProject = LiveInitiativeProject;
+export type LiveInitiativeActivity = {
+   id: string;
+   action: string;
+   metadata: Record<string, unknown>;
+   createdAt: string;
+   actor: { id: string; name: string; avatarUrl: string | null } | null;
+};
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 export function useLiveInitiatives() {
@@ -90,4 +97,40 @@ export function useLiveInitiatives() {
    }, [refreshKey]);
    const reload = useCallback(() => setRefreshKey((value) => value + 1), []);
    return { workspaceId, initiatives, projects, loading, error, reload };
+}
+
+export function useInitiativeActivity(initiativeId?: string, workspaceId?: string) {
+   const [activities, setActivities] = useState<LiveInitiativeActivity[]>([]);
+   const [loading, setLoading] = useState(false);
+   const [error, setError] = useState<string>();
+   const [refreshKey, setRefreshKey] = useState(0);
+   useEffect(() => {
+      if (!initiativeId || !workspaceId) return;
+      let current = true;
+      setLoading(true);
+      setError(undefined);
+      const query = new URLSearchParams({ workspaceId });
+      void fetch(`${api}/initiatives/${initiativeId}/activity?${query}`, {
+         credentials: 'include',
+      })
+         .then(async (response) => {
+            if (!response.ok) throw new Error('Could not load initiative activity.');
+            const payload = (await response.json()) as { data: LiveInitiativeActivity[] };
+            if (current) setActivities(payload.data);
+         })
+         .catch((caught) => {
+            if (current)
+               setError(
+                  caught instanceof Error ? caught.message : 'Could not load initiative activity.'
+               );
+         })
+         .finally(() => {
+            if (current) setLoading(false);
+         });
+      return () => {
+         current = false;
+      };
+   }, [initiativeId, workspaceId, refreshKey]);
+   const reload = useCallback(() => setRefreshKey((value) => value + 1), []);
+   return { activities, loading, error, reload };
 }

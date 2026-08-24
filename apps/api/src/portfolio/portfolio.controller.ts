@@ -16,6 +16,8 @@ import { CreateSavedViewDto } from './dto/create-saved-view.dto';
 import { CreateInitiativeDto } from './dto/create-initiative.dto';
 import { UpdateInitiativeDto } from './dto/update-initiative.dto';
 import { LinkProjectDto } from './dto/link-project.dto';
+import { CreateInitiativeUpdateDto } from './dto/create-initiative-update.dto';
+import { CreateInitiativeResourceDto } from './dto/create-initiative-resource.dto';
 
 @UseGuards(AuthGuard)
 @Controller()
@@ -94,6 +96,37 @@ export class PortfolioController {
             dto.projectId,
             request.auth!.userId
          ),
+      };
+   }
+   @Get('initiatives/:initiativeId/activity') async initiativeActivity(
+      @Param('initiativeId') initiativeId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ): Promise<{ data: unknown }> {
+      return {
+         data: await this.portfolio.initiativeActivity(
+            initiativeId,
+            workspaceId,
+            request.auth!.userId
+         ),
+      };
+   }
+   @Post('initiatives/:initiativeId/updates') async createInitiativeUpdate(
+      @Param('initiativeId') initiativeId: string,
+      @Body() dto: CreateInitiativeUpdateDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.portfolio.createInitiativeUpdate(initiativeId, dto, request.auth!.userId),
+      };
+   }
+   @Post('initiatives/:initiativeId/resources') async addInitiativeResource(
+      @Param('initiativeId') initiativeId: string,
+      @Body() dto: CreateInitiativeResourceDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.portfolio.addInitiativeResource(initiativeId, dto, request.auth!.userId),
       };
    }
    @Delete('initiatives/:initiativeId/projects/:projectId') async unlinkProject(

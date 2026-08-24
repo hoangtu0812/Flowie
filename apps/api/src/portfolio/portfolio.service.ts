@@ -4,6 +4,9 @@ import { PrismaService } from '../database/prisma.service';
 import { CreateSavedViewDto } from './dto/create-saved-view.dto';
 import { CreateInitiativeDto } from './dto/create-initiative.dto';
 import { UpdateInitiativeDto } from './dto/update-initiative.dto';
+import { AuditService } from '../audit/audit.service';
+import { CreateInitiativeUpdateDto } from './dto/create-initiative-update.dto';
+import { CreateInitiativeResourceDto } from './dto/create-initiative-resource.dto';
 
 const initiativeInclude = {
    owner: { select: { id: true, name: true, avatarUrl: true } },
@@ -35,7 +38,10 @@ const initiativeInclude = {
 
 @Injectable()
 export class PortfolioService {
-   constructor(private readonly prisma: PrismaService) {}
+   constructor(
+      private readonly prisma: PrismaService,
+      private readonly audit: AuditService
+   ) {}
 
    async savedViews(workspaceId: string, userId: string): Promise<unknown> {
       await this.authorize(workspaceId, userId);
@@ -83,7 +89,7 @@ export class PortfolioService {
       await this.authorizeManager(dto.workspaceId, userId);
       const ownerId = dto.ownerId ?? userId;
       await this.assertWorkspaceOwner(dto.workspaceId, ownerId);
-      return this.prisma.initiative.create({
+      const initiative = await this.prisma.initiative.create({
          data: {
             workspaceId: dto.workspaceId,
             name: dto.name.trim(),
@@ -97,6 +103,15 @@ export class PortfolioService {
          },
          include: initiativeInclude,
       });
+      await this.audit.record({
+         workspaceId: dto.workspaceId,
+         actorId: userId,
+         action: 'initiative.created',
+         entityType: 'initiative',
+         entityId: initiative.id,
+         metadata: { name: initiative.name },
+      });
+      return initiative;
    }
 
    async updateInitiative(
@@ -111,7 +126,7 @@ export class PortfolioService {
       });
       if (!initiative) throw new NotFoundException('Initiative not found.');
       if (dto.ownerId !== undefined) await this.assertWorkspaceOwner(workspaceId, dto.ownerId);
-      return this.prisma.initiative.update({
+      const updated = await this.prisma.initiative.update({
          where: { id: initiativeId },
          data: {
             ...dto,
@@ -121,6 +136,17 @@ export class PortfolioService {
          },
          include: initiativeInclude,
       });
+      await this.audit.record({
+         workspaceId,
+         actorId: userId,
+         action: 'initiative.updated',
+         entityType: 'initiative',
+         entityId: initiativeId,
+         metadata: Object.fromEntries(
+            Object.entries(dto).filter(([, value]) => value !== undefined)
+         ),
+      });
+      return updated;
    }
 
    async archiveInitiative(initiativeId: string, workspaceId: string, userId: string) {
@@ -129,10 +155,18 @@ export class PortfolioService {
          where: { id: initiativeId, workspaceId, archivedAt: null },
       });
       if (!initiative) throw new NotFoundException('Initiative not found.');
-      return this.prisma.initiative.update({
+      const archived = await this.prisma.initiative.update({
          where: { id: initiativeId },
          data: { archivedAt: new Date() },
       });
+      await this.audit.record({
+         workspaceId,
+         actorId: userId,
+         action: 'initiative.archived',
+         entityType: 'initiative',
+         entityId: initiativeId,
+      });
+      return archived;
    }
 
    async linkProject(initiativeId: string, workspaceId: string, projectId: string, userId: string) {
@@ -144,11 +178,20 @@ export class PortfolioService {
          this.prisma.project.findFirst({ where: { id: projectId, workspaceId, archivedAt: null } }),
       ]);
       if (!initiative || !project) throw new NotFoundException('Initiative or project not found.');
-      return this.prisma.initiativeProject.upsert({
+      const link = await this.prisma.initiativeProject.upsert({
          where: { initiativeId_projectId: { initiativeId, projectId } },
          create: { initiativeId, projectId },
          update: {},
       });
+      await this.audit.record({
+         workspaceId,
+         actorId: userId,
+         action: 'initiative.project.linked',
+         entityType: 'initiative',
+         entityId: initiativeId,
+         metadata: { projectId, projectName: project.name },
+      });
+      return link;
    }
 
    async unlinkProject(
@@ -165,7 +208,89 @@ export class PortfolioService {
       await this.prisma.initiativeProject.delete({
          where: { initiativeId_projectId: { initiativeId, projectId } },
       });
+      await this.audit.record({
+         workspaceId,
+         actorId: userId,
+         action: 'initiative.project.unlinked',
+         entityType: 'initiative',
+         entityId: initiativeId,
+         metadata: { projectId },
+      });
       return { initiativeId, projectId, removed: true };
+   }
+
+   async initiativeActivity(initiativeId: string, workspaceId: string, userId: string) {
+      await this.authorize(workspaceId, userId);
+      const initiative = await this.prisma.initiative.findFirst({
+         where: { id: initiativeId, workspaceId },
+         select: { id: true },
+      });
+      if (!initiative) throw new NotFoundException('Initiative not found.');
+      const logs = await this.prisma.auditLog.findMany({
+         where: { workspaceId, entityType: 'initiative', entityId: initiativeId },
+         orderBy: { createdAt: 'desc' },
+         take: 100,
+      });
+      const actorIds = [...new Set(logs.flatMap((log) => (log.actorId ? [log.actorId] : [])))];
+      const actors = await this.prisma.user.findMany({
+         where: { id: { in: actorIds } },
+         select: { id: true, name: true, avatarUrl: true },
+      });
+      const actorById = new Map(actors.map((actor) => [actor.id, actor]));
+      return logs.map((log) => ({
+         id: log.id,
+         action: log.action,
+         metadata: log.metadata,
+         createdAt: log.createdAt,
+         actor: log.actorId ? (actorById.get(log.actorId) ?? null) : null,
+      }));
+   }
+
+   async createInitiativeUpdate(
+      initiativeId: string,
+      dto: CreateInitiativeUpdateDto,
+      userId: string
+   ) {
+      await this.authorizeManager(dto.workspaceId, userId);
+      const initiative = await this.prisma.initiative.findFirst({
+         where: { id: initiativeId, workspaceId: dto.workspaceId, archivedAt: null },
+      });
+      if (!initiative) throw new NotFoundException('Initiative not found.');
+      if (dto.health) {
+         await this.prisma.initiative.update({
+            where: { id: initiativeId },
+            data: { health: dto.health },
+         });
+      }
+      return this.audit.record({
+         workspaceId: dto.workspaceId,
+         actorId: userId,
+         action: 'initiative.update.posted',
+         entityType: 'initiative',
+         entityId: initiativeId,
+         metadata: { body: dto.body.trim(), health: dto.health ?? initiative.health },
+      });
+   }
+
+   async addInitiativeResource(
+      initiativeId: string,
+      dto: CreateInitiativeResourceDto,
+      userId: string
+   ) {
+      await this.authorizeManager(dto.workspaceId, userId);
+      const initiative = await this.prisma.initiative.findFirst({
+         where: { id: initiativeId, workspaceId: dto.workspaceId, archivedAt: null },
+         select: { id: true },
+      });
+      if (!initiative) throw new NotFoundException('Initiative not found.');
+      return this.audit.record({
+         workspaceId: dto.workspaceId,
+         actorId: userId,
+         action: 'initiative.resource.added',
+         entityType: 'initiative',
+         entityId: initiativeId,
+         metadata: { label: dto.label.trim(), url: dto.url.trim() },
+      });
    }
 
    private async authorize(workspaceId: string, userId: string) {
