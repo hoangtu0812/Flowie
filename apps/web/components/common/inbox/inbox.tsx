@@ -69,10 +69,10 @@ export default function Inbox() {
             if (!a.read && b.read) return -1;
             if (a.read && !b.read) return 1;
          }
-         // Sort by timestamp (newest first by default)
+         // Sort by the server timestamp. `timestamp` is the localized relative label.
          return ordering === 'newest'
-            ? new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-            : new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+            ? new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            : new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       });
 
    const handleDeleteAllNotifications = () => {
