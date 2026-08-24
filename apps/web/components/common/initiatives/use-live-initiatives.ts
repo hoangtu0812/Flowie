@@ -10,7 +10,11 @@ export type LiveInitiativeProject = {
    priority: string;
    health: string;
    targetDate: string | null;
+   startDate: string | null;
+   createdAt: string;
+   team: { id: string; name: string; identifier: string; icon: string | null } | null;
    lead: { id: string; name: string; avatarUrl: string | null } | null;
+   issues: Array<{ id: string; status: { category: string } }>;
 };
 
 export type LiveInitiative = {

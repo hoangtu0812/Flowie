@@ -24,7 +24,7 @@ Implementation: `apps/web`
 | Teams (`mock-data/teams`) | Canned records remain only in unreferenced tooltip source | `inactive mock source` | Do not render; Initiative/Team UI must use API team relations |
 | Cycles (`mock-data/cycles`) | Type and date/status formatting helpers; records come from Cycle/Issue APIs | `migrated` + `type/presentation-only` | Move type/helpers later without changing Cycle UI |
 | Projects (`mock-data/projects`) | `Project` type plus health presentation list; records come from Projects API | `migrated` + `type/presentation-only` | Project settings must use persisted values; preserve upstream components |
-| Initiatives (`mock-data/initiatives`) | Active code imports only `InitiativeStatus` type; list/detail use Portfolio API | `migrated baseline` | Restore/audit upstream Initiative panels and connect them to `projectLinks`, owner and Project API data |
+| Initiatives (`mock-data/initiatives`) | List/detail, owner/team/health breakdowns, project progress and mutations use Portfolio/Project APIs; priority/health/status metadata is presentation-only | `migrated` | Preserve the restored upstream layout; progress history stays explicitly empty until persisted snapshots exist |
 | Views | Saved Views and filters use API/store records | `migrated` | Preserve upstream View layout; no mock status list |
 | Inbox | Active Inbox uses Notifications API | `migrated` | Keep snooze unavailable until scheduler/state exists |
 | Agent (`mock-data/agent`, canned users, `agent-chat-store`) | Direct Agent page is unavailable; old chat source is not rendered | `unavailable` + `inactive mock source` | Never re-enable until an AI backend exists; remove/isolated source must not affect current UI |
@@ -39,6 +39,7 @@ Implementation: `apps/web`
 - The sidebar advertising/footer block was intentionally removed by user request and must stay removed.
 - The light screenshot is consistent with the persisted `system/light` theme; theme logic and CSS variables match upstream except for additive Flowie preference/loading rules.
 - The Issue status visuals did drift: API statuses used generic Lucide icons and the original ID lookup could not match database CUIDs. The adapter must preserve API records while selecting Circle's presentation icon by API name/category.
+- Initiative list/detail and both right-side panels have been restored from the upstream component structure. Create/edit/archive/link/unlink use API data; the former deterministic fake progress series has been removed.
 - Every future migration must include a direct `upstream/master:<path>` versus `apps/web/<path>` comparison before editing.
 
 ## Execution order
