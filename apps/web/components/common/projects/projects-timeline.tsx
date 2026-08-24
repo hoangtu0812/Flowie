@@ -448,7 +448,21 @@ export default function ProjectsTimeline({ groups }: ProjectsTimelineProps) {
                            <span className="text-xs text-muted-foreground">
                               {group.projects.length}
                            </span>
-                           <button className="ml-auto text-muted-foreground hover:text-foreground transition-colors">
+                           <button
+                              className="ml-auto text-muted-foreground hover:text-foreground transition-colors"
+                              onClick={() =>
+                                 window.dispatchEvent(
+                                    new CustomEvent('flowie:create-project', {
+                                       detail: {
+                                          teamId:
+                                             group.id === 'all' || group.id === 'unassigned'
+                                                ? undefined
+                                                : group.id,
+                                       },
+                                    })
+                                 )
+                              }
+                           >
                               <Plus className="size-3.5" />
                            </button>
                         </div>

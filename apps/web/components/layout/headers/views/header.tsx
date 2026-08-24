@@ -11,7 +11,11 @@ export default function Header() {
             <SidebarTrigger />
             <span className="text-sm font-medium">Views</span>
          </div>
-         <Button size="xs" variant="ghost">
+         <Button
+            size="xs"
+            variant="ghost"
+            onClick={() => window.dispatchEvent(new Event('flowie:create-view'))}
+         >
             <Plus className="size-4" />
          </Button>
       </div>

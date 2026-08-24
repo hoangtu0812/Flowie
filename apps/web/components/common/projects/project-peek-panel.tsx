@@ -21,16 +21,7 @@ import {
    SelectValue,
 } from '@/components/ui/select';
 import { format, parseISO } from 'date-fns';
-import {
-   ArrowRight,
-   Calendar,
-   CalendarPlus,
-   ChevronRight,
-   FolderKanban,
-   Plus,
-   Star,
-   X,
-} from 'lucide-react';
+import { ArrowRight, Calendar, CalendarPlus, ChevronRight, Plus, Star, X } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -190,7 +181,7 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
       <aside className="absolute top-10 right-2 bottom-2 w-[400px] max-w-[calc(100%-1rem)] z-40 flex flex-col gap-2 overflow-y-auto">
          <Card className="flex items-center gap-2 py-3">
             <span className="inline-flex size-6 bg-muted/50 items-center justify-center rounded shrink-0">
-               <FolderKanban className="size-3.5" />
+               <uiProject.icon className="size-3.5" />
             </span>
             <Link
                href={`/${orgId}/project/${project.id}/overview`}
@@ -346,7 +337,8 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
             </div>
             {milestones.length === 0 ? (
                <p className="text-xs text-muted-foreground">
-                  No milestones have been created for this project.
+                  Add milestones to organize work within your project and break it into more
+                  granular stages. <span className="text-foreground/70 underline">Learn more</span>
                </p>
             ) : (
                <div className="flex flex-col gap-1.5">

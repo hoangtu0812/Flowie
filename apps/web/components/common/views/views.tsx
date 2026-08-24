@@ -26,7 +26,7 @@ import { ArrowDown, FolderKanban, ListTodo, Plus, SlidersHorizontal } from 'luci
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { parseAsStringLiteral, useQueryState } from 'nuqs';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { LiveView, useLiveViews } from './use-live-views';
 
 const TABS = ['issues', 'projects'] as const;
@@ -140,6 +140,11 @@ export default function Views({ teamId }: { teamId?: string }) {
    const [name, setName] = useState('');
    const [submitting, setSubmitting] = useState(false);
    const [formError, setFormError] = useState<string>();
+   useEffect(() => {
+      const openCreateDialog = () => setOpen(true);
+      window.addEventListener('flowie:create-view', openCreateDialog);
+      return () => window.removeEventListener('flowie:create-view', openCreateDialog);
+   }, []);
    const list = useMemo(
       () =>
          views

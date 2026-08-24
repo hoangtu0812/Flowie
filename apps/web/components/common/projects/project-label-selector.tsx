@@ -17,6 +17,7 @@ interface ProjectLabelSelectorProps {
    availableLabels: ProjectListLabel[];
    disabled?: boolean;
    onLabelsChange?: (labelIds: string[]) => Promise<void>;
+   plainTrigger?: boolean;
 }
 
 /** Minimal original-list control for assigning the workspace's persisted Project labels. */
@@ -25,6 +26,7 @@ export function ProjectLabelSelector({
    availableLabels,
    disabled,
    onLabelsChange,
+   plainTrigger = false,
 }: ProjectLabelSelectorProps) {
    const [saving, setSaving] = useState(false);
    const [message, setMessage] = useState<string>();
@@ -57,9 +59,13 @@ export function ProjectLabelSelector({
                      ? 'Project labels are not available for this view'
                      : 'Add or remove project labels'
                }
-               className="inline-flex size-5 items-center justify-center rounded border border-dashed text-muted-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+               className={
+                  plainTrigger
+                     ? 'text-muted-foreground hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-50'
+                     : 'inline-flex size-5 items-center justify-center rounded border border-dashed text-muted-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50'
+               }
             >
-               <Plus className="size-3" />
+               <Plus className={plainTrigger ? 'size-3.5' : 'size-3'} />
             </button>
          </DropdownMenuTrigger>
          <DropdownMenuContent align="start" className="w-52">

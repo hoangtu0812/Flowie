@@ -169,9 +169,13 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
 
    const handleClassification = async (resolution: 'DUPLICATE' | 'WONT_FIX') => {
       if (!issueId) return;
+      const issue = getIssueById(issueId);
+      const exampleIdentifier = `${issue?.team?.identifier ?? 'TEAM'}-123`;
       const duplicateOfIdentifier =
          resolution === 'DUPLICATE'
-            ? window.prompt('Identifier of the original issue (for example, CORE-123):')?.trim()
+            ? window
+                 .prompt(`Identifier of the original issue (for example, ${exampleIdentifier}):`)
+                 ?.trim()
             : undefined;
       if (resolution === 'DUPLICATE' && !duplicateOfIdentifier) return;
       try {
@@ -358,8 +362,9 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       if (!issueId) return;
       const issue = getIssueById(issueId);
       if (!issue) return;
+      const exampleIdentifier = `${issue.team?.identifier ?? 'TEAM'}-123`;
       const targetIdentifier = window
-         .prompt('Target issue identifier (for example, CORE-123):')
+         .prompt(`Target issue identifier (for example, ${exampleIdentifier}):`)
          ?.trim();
       if (!targetIdentifier) return;
       if (targetIdentifier.toLowerCase() === issue.identifier.toLowerCase()) {

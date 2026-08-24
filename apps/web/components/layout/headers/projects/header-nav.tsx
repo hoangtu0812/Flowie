@@ -24,9 +24,11 @@ type TemplateOption = { id: string; name: string; description: string | null; ty
 function CreateProjectDialog({
    open,
    onOpenChange,
+   initialTeamId,
 }: {
    open: boolean;
    onOpenChange: (open: boolean) => void;
+   initialTeamId?: string;
 }) {
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [teams, setTeams] = useState<TeamOption[]>([]);
@@ -54,10 +56,11 @@ function CreateProjectDialog({
             setTeams(((await teamsResponse.json()) as { data: TeamOption[] }).data);
          if (templatesResponse.ok)
             setTemplates(((await templatesResponse.json()) as { data: TemplateOption[] }).data);
+         setTeamId(initialTeamId ?? '');
       })().catch((caught: unknown) =>
          setError(caught instanceof Error ? caught.message : 'Could not load project options.')
       );
-   }, [open]);
+   }, [initialTeamId, open]);
 
    const create = async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
@@ -169,6 +172,7 @@ function CreateProjectDialog({
 export default function HeaderNav() {
    const [count, setCount] = useState<number>();
    const [createOpen, setCreateOpen] = useState(false);
+   const [createTeamId, setCreateTeamId] = useState<string>();
 
    useEffect(() => {
       void (async () => {
@@ -180,6 +184,15 @@ export default function HeaderNav() {
          const payload = (await projectsResponse.json()) as { data: unknown[] };
          setCount(payload.data.length);
       })().catch(() => setCount(undefined));
+   }, []);
+
+   useEffect(() => {
+      const openCreateDialog = (event: Event) => {
+         setCreateTeamId((event as CustomEvent<{ teamId?: string }>).detail?.teamId);
+         setCreateOpen(true);
+      };
+      window.addEventListener('flowie:create-project', openCreateDialog);
+      return () => window.removeEventListener('flowie:create-project', openCreateDialog);
    }, []);
 
    return (
@@ -196,12 +209,19 @@ export default function HeaderNav() {
                className="relative"
                size="xs"
                variant="secondary"
-               onClick={() => setCreateOpen(true)}
+               onClick={() => {
+                  setCreateTeamId(undefined);
+                  setCreateOpen(true);
+               }}
             >
                <Plus className="size-4" />
                <span className="hidden sm:inline ml-1">Create project</span>
             </Button>
-            <CreateProjectDialog open={createOpen} onOpenChange={setCreateOpen} />
+            <CreateProjectDialog
+               open={createOpen}
+               onOpenChange={setCreateOpen}
+               initialTeamId={createTeamId}
+            />
          </div>
       </div>
    );

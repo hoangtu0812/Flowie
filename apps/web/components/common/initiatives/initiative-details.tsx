@@ -23,19 +23,16 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import {
    CalendarRange,
-   Archive,
    ChevronDown,
    FilePenLine,
    FileText,
    ExternalLink,
    Plus,
-   Pencil,
    Tag,
    UserRound,
-   X,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { parseAsStringLiteral, useQueryState } from 'nuqs';
 import { useMemo, useState } from 'react';
 import { InitiativeProgressPanel } from './initiative-progress-panel';
@@ -84,170 +81,6 @@ const activityLabel = (activity: LiveInitiativeActivity) => {
       return `${actor} posted an initiative update`;
    return `${actor} ${activity.action.replaceAll('.', ' ')}`;
 };
-
-function EditInitiativeDialog({
-   initiative,
-   workspaceId,
-   reload,
-}: {
-   initiative: LiveInitiative;
-   workspaceId?: string;
-   reload: () => void;
-}) {
-   const { orgId } = useParams<{ orgId: string }>();
-   const router = useRouter();
-   const [open, setOpen] = useState(false);
-   const [name, setName] = useState(initiative.name);
-   const [description, setDescription] = useState(initiative.description ?? '');
-   const [status, setStatus] = useState(initiative.status);
-   const [priority, setPriority] = useState(initiative.priority);
-   const [health, setHealth] = useState(initiative.health);
-   const [targetDate, setTargetDate] = useState(initiative.targetDate?.slice(0, 10) ?? '');
-   const [submitting, setSubmitting] = useState(false);
-   const [error, setError] = useState<string>();
-   const reset = () => {
-      setName(initiative.name);
-      setDescription(initiative.description ?? '');
-      setStatus(initiative.status);
-      setPriority(initiative.priority);
-      setHealth(initiative.health);
-      setTargetDate(initiative.targetDate?.slice(0, 10) ?? '');
-      setError(undefined);
-   };
-   const save = async () => {
-      if (!workspaceId || name.trim().length < 2) {
-         setError('Initiative name must contain at least 2 characters.');
-         return;
-      }
-      setSubmitting(true);
-      setError(undefined);
-      try {
-         const query = new URLSearchParams({ workspaceId });
-         const response = await fetch(`${api}/initiatives/${initiative.id}?${query}`, {
-            method: 'PATCH',
-            credentials: 'include',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-               name: name.trim(),
-               description: description.trim() || null,
-               status,
-               priority,
-               health,
-               targetDate: targetDate || null,
-            }),
-         });
-         if (!response.ok) throw new Error('Could not update initiative.');
-         setOpen(false);
-         reload();
-      } catch (caught) {
-         setError(caught instanceof Error ? caught.message : 'Could not update initiative.');
-      } finally {
-         setSubmitting(false);
-      }
-   };
-   const archive = async () => {
-      if (!workspaceId || !window.confirm(`Archive ${initiative.name}?`)) return;
-      setSubmitting(true);
-      setError(undefined);
-      try {
-         const query = new URLSearchParams({ workspaceId });
-         const response = await fetch(`${api}/initiatives/${initiative.id}?${query}`, {
-            method: 'DELETE',
-            credentials: 'include',
-         });
-         if (!response.ok) throw new Error('Could not archive initiative.');
-         router.push(`/${orgId}/initiatives`);
-      } catch (caught) {
-         setError(caught instanceof Error ? caught.message : 'Could not archive initiative.');
-      } finally {
-         setSubmitting(false);
-      }
-   };
-   return (
-      <Dialog
-         open={open}
-         onOpenChange={(next) => {
-            setOpen(next);
-            if (next) reset();
-         }}
-      >
-         <Button size="xs" variant="ghost" onClick={() => setOpen(true)}>
-            <Pencil className="size-3.5" />
-            Edit
-         </Button>
-         <DialogContent>
-            <DialogHeader>
-               <DialogTitle>Edit initiative</DialogTitle>
-               <DialogDescription>Update the initiative properties.</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-3">
-               <Input value={name} onChange={(event) => setName(event.target.value)} />
-               <Textarea
-                  value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-               />
-               <div className="grid grid-cols-3 gap-2">
-                  <Select value={status} onValueChange={setStatus}>
-                     <SelectTrigger>
-                        <SelectValue />
-                     </SelectTrigger>
-                     <SelectContent>
-                        {['planned', 'active', 'completed', 'canceled'].map((value) => (
-                           <SelectItem key={value} value={value}>
-                              {value}
-                           </SelectItem>
-                        ))}
-                     </SelectContent>
-                  </Select>
-                  <Select value={priority} onValueChange={setPriority}>
-                     <SelectTrigger>
-                        <SelectValue />
-                     </SelectTrigger>
-                     <SelectContent>
-                        {['none', 'low', 'medium', 'high', 'urgent'].map((value) => (
-                           <SelectItem key={value} value={value}>
-                              {value}
-                           </SelectItem>
-                        ))}
-                     </SelectContent>
-                  </Select>
-                  <Select value={health} onValueChange={setHealth}>
-                     <SelectTrigger>
-                        <SelectValue />
-                     </SelectTrigger>
-                     <SelectContent>
-                        {['no-update', 'on-track', 'at-risk', 'off-track'].map((value) => (
-                           <SelectItem key={value} value={value}>
-                              {value}
-                           </SelectItem>
-                        ))}
-                     </SelectContent>
-                  </Select>
-               </div>
-               <Input
-                  type="date"
-                  value={targetDate}
-                  onChange={(event) => setTargetDate(event.target.value)}
-               />
-               {error && <p className="text-sm text-destructive">{error}</p>}
-            </div>
-            <DialogFooter className="sm:justify-between">
-               <Button variant="destructive" onClick={() => void archive()} disabled={submitting}>
-                  <Archive className="size-4" /> Archive
-               </Button>
-               <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => setOpen(false)}>
-                     Cancel
-                  </Button>
-                  <Button onClick={() => void save()} disabled={submitting}>
-                     {submitting ? 'Saving…' : 'Save'}
-                  </Button>
-               </div>
-            </DialogFooter>
-         </DialogContent>
-      </Dialog>
-   );
-}
 
 function InitiativeUpdateDialog({
    initiative,
@@ -464,24 +297,6 @@ function ProjectsSection({
          setSubmitting(false);
       }
    };
-   const unlinkProject = async (linkedProjectId: string) => {
-      if (!workspaceId) return;
-      setSubmitting(true);
-      setError(undefined);
-      try {
-         const query = new URLSearchParams({ workspaceId });
-         const response = await fetch(
-            `${api}/initiatives/${initiative.id}/projects/${linkedProjectId}?${query}`,
-            { method: 'DELETE', credentials: 'include' }
-         );
-         if (!response.ok) throw new Error('Could not remove project.');
-         reload();
-      } catch (caught) {
-         setError(caught instanceof Error ? caught.message : 'Could not remove project.');
-      } finally {
-         setSubmitting(false);
-      }
-   };
    const groups = GROUP_ORDER.map((group) => ({
       ...group,
       projects: projects.filter(group.match),
@@ -517,60 +332,47 @@ function ProjectsSection({
                   <span className="flex-1 border-b border-border/60" />
                </div>
                {group.projects.map((project) => (
-                  <div
+                  <Link
                      key={project.id}
-                     className="flex items-center hover:bg-sidebar/50 rounded-md px-1 -mx-1 transition-colors"
+                     href={`/${orgId}/project/${project.id}/overview`}
+                     className="flex items-center gap-2 py-2 text-sm hover:bg-sidebar/50 rounded-md px-1 -mx-1 transition-colors"
                   >
-                     <Link
-                        href={`/${orgId}/project/${project.id}/overview`}
-                        className="flex flex-1 min-w-0 items-center gap-2 py-2 text-sm"
-                     >
-                        <project.icon className="size-4 text-muted-foreground shrink-0" />
-                        <span className="flex-1 truncate font-medium">{project.name}</span>
-                        <span className="hidden sm:block w-16 shrink-0">
-                           <span
-                              className="size-2.5 rounded-full inline-block"
-                              style={{ backgroundColor: project.health.color }}
+                     <project.icon className="size-4 text-muted-foreground shrink-0" />
+                     <span className="flex-1 truncate font-medium">{project.name}</span>
+                     <span className="hidden sm:block w-16 shrink-0">
+                        <span
+                           className="size-2.5 rounded-full inline-block"
+                           style={{ backgroundColor: project.health.color }}
+                        />
+                     </span>
+                     <span className="hidden sm:block w-16 shrink-0">
+                        <project.priority.icon className="size-4 text-muted-foreground" />
+                     </span>
+                     <span className="hidden md:block w-12 shrink-0">
+                        <Avatar className="size-5">
+                           <AvatarImage
+                              src={project.lead.avatarUrl || undefined}
+                              alt={project.lead.name}
                            />
-                        </span>
-                        <span className="hidden sm:block w-16 shrink-0">
-                           <project.priority.icon className="size-4 text-muted-foreground" />
-                        </span>
-                        <span className="hidden md:block w-12 shrink-0">
-                           <Avatar className="size-5">
-                              <AvatarImage
-                                 src={project.lead.avatarUrl || undefined}
-                                 alt={project.lead.name}
-                              />
-                              <AvatarFallback className="text-[9px]">
-                                 {project.lead.name[0]}
-                              </AvatarFallback>
-                           </Avatar>
-                        </span>
-                        <span className="hidden md:flex items-center gap-1 w-24 shrink-0 text-xs text-muted-foreground">
-                           {project.targetDate ? (
-                              <>
-                                 <CalendarRange className="size-3.5" />
-                                 {formatTarget(project.targetDate)}
-                              </>
-                           ) : (
-                              '—'
-                           )}
-                        </span>
-                        <span className="w-16 shrink-0 text-xs text-muted-foreground">
-                           {project.percentComplete}%
-                        </span>
-                     </Link>
-                     <button
-                        type="button"
-                        aria-label={`Remove ${project.name} from initiative`}
-                        className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
-                        disabled={submitting}
-                        onClick={() => void unlinkProject(project.id)}
-                     >
-                        <X className="size-3.5" />
-                     </button>
-                  </div>
+                           <AvatarFallback className="text-[9px]">
+                              {project.lead.name[0]}
+                           </AvatarFallback>
+                        </Avatar>
+                     </span>
+                     <span className="hidden md:flex items-center gap-1 w-24 shrink-0 text-xs text-muted-foreground">
+                        {project.targetDate ? (
+                           <>
+                              <CalendarRange className="size-3.5" />
+                              {formatTarget(project.targetDate)}
+                           </>
+                        ) : (
+                           '—'
+                        )}
+                     </span>
+                     <span className="w-16 shrink-0 text-xs text-muted-foreground">
+                        {project.percentComplete}%
+                     </span>
+                  </Link>
                ))}
             </div>
          ))}
@@ -655,18 +457,11 @@ function Overview({
                <span className="inline-flex size-10 items-center justify-center rounded-md bg-muted/50 text-2xl">
                   {initiative.icon}
                </span>
-               <div className="flex items-start justify-between gap-4">
-                  <div className="flex flex-col gap-2">
-                     <h1 className="text-2xl font-semibold">{initiative.name}</h1>
-                     <p className="text-sm text-muted-foreground">
-                        {initiative.description ?? 'Add a short summary…'}
-                     </p>
-                  </div>
-                  <EditInitiativeDialog
-                     initiative={liveInitiative}
-                     workspaceId={workspaceId}
-                     reload={reload}
-                  />
+               <div className="flex flex-col gap-2">
+                  <h1 className="text-2xl font-semibold">{initiative.name}</h1>
+                  <p className="text-sm text-muted-foreground">
+                     {initiative.description ?? 'Add a short summary…'}
+                  </p>
                </div>
 
                <div className="flex items-center gap-3 flex-wrap text-sm">
