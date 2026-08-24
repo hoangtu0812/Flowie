@@ -2,7 +2,7 @@
 
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { loadCurrentWorkspaceTeams, WorkspaceTeam } from '@/components/common/teams/team-types';
+import { loadJoinedWorkspaceTeams, WorkspaceTeam } from '@/components/common/teams/team-types';
 import { ChevronRight, Plus, Star } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -13,7 +13,7 @@ export default function HeaderNav() {
    const [team, setTeam] = useState<WorkspaceTeam>();
 
    useEffect(() => {
-      void loadCurrentWorkspaceTeams()
+      void loadJoinedWorkspaceTeams()
          .then(({ teams }) =>
             setTeam(
                teams.find(

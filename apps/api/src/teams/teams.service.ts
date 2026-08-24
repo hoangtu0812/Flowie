@@ -25,8 +25,8 @@ export class TeamsService {
    constructor(private readonly prisma: PrismaService) {}
    async list(workspaceId: string, userId: string) {
       await this.authorize(workspaceId, userId);
-      return this.prisma.team.findMany({
-         where: { workspaceId, archivedAt: null, members: { some: { userId } } },
+      const teams = await this.prisma.team.findMany({
+         where: { workspaceId, archivedAt: null },
          include: {
             members: {
                select: {
@@ -38,6 +38,10 @@ export class TeamsService {
          },
          orderBy: { name: 'asc' },
       });
+      return teams.map((team) => ({
+         ...team,
+         joined: team.members.some((member) => member.user.id === userId),
+      }));
    }
    async create(dto: CreateTeamDto, userId: string) {
       await this.authorizeManager(dto.workspaceId, userId);
@@ -123,6 +127,20 @@ export class TeamsService {
       return this.prisma.teamMember.create({
          data: { teamId, userId: dto.userId, role: dto.role },
           include: { user: teamMemberUser },
+      });
+   }
+   async join(teamId: string, workspaceId: string, userId: string) {
+      await this.authorize(workspaceId, userId);
+      const team = await this.prisma.team.findFirst({
+         where: { id: teamId, workspaceId, archivedAt: null },
+         select: { id: true },
+      });
+      if (!team) throw new NotFoundException('Team not found.');
+      return this.prisma.teamMember.upsert({
+         where: { teamId_userId: { teamId, userId } },
+         create: { teamId, userId, role: 'MEMBER' },
+         update: {},
+         include: { user: teamMemberUser },
       });
    }
    async updateMember(

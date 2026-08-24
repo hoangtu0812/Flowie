@@ -25,6 +25,8 @@
 - Authentication: register/login/refresh/logout, route protection, profile thật.
 - Platform admin: tài khoản bootstrap và giao diện quản trị người dùng/workspace.
 - Workspace, Teams, Members: danh sách, tạo/sửa team, thành viên và phân quyền cơ bản.
+- Team membership: bảng Teams gốc hiển thị mọi team trong workspace và trạng thái joined thật;
+  nút Join gọi API idempotent, còn sidebar/issue/cycle chỉ hiển thị team người dùng đã tham gia.
 - Issues: danh sách/group/filter, create/update/archive, status/priority/assignee/label/project/
   cycle/due date, comment/activity, reaction, subscriber, relation/sub-issue, attachment.
 - Issue templates: Prisma/API CRUD thật trong đúng màn hình Settings gốc; template được chọn và
@@ -105,6 +107,7 @@
 - `6244e3b` — manage real sessions and personal API keys in the original Security shell.
 - `554ff59` — enforce Team auto-close/archive retention policies in the Worker.
 - `38ad4af` — resolve every runtime loader against the workspace slug in the current route.
+- `05e8595` — isolate notifications by workspace and restore the original settings shells.
 
 ### Kiểm tra gần nhất
 
@@ -156,7 +159,7 @@
 | P0 | Visual parity toàn route | Source audit 305 TS/TSX xác nhận bảng Projects/Teams/Issues vẫn giữ composition gốc; sai lệch rõ còn lại là Notifications/Integrations custom và một số visible no-op. Visual acceptance nội bộ vẫn cần phiên workspace-member; browser sạch hiện mới xác nhận route guard/login và không có console error. |
 | P0 | Notifications đa workspace | Hoàn thành: notification có workspace FK, API/store scope đúng workspace và preview xử lý cả issue/project thật. |
 | P0 | Settings Notifications/Integrations | Hoàn thành: shell/card/search gốc được giữ lại; Discord dùng row/dialog thật, không quảng cáo Slack/email/desktop. |
-| P0 | Team membership | API list hiện chỉ trả team đã join và frontend ép `joined=true`; cần list all + computed membership + self-join policy, đấu nối đúng bảng/nút Join gốc. |
+| P0 | Team membership | Hoàn thành: API trả all team + membership thật, self-join idempotent và mọi consumer được phân loại đúng giữa all/joined mà không đổi bảng/nút gốc. |
 | P1 | Issue actions còn thiếu | Convert-to-comment còn cần semantics/backend. Duplicate/Won't Fix, move team, favorite và reminder đã hoàn thành; taxonomy issue type không có control tương ứng trong UI gốc hiện tại. |
 | P1 | Team settings nâng cao | Cycle cadence, triage, auto-close/archive policy, hierarchy và template default đã persistence/UI; Worker auto-close/archive đã hoàn thành. Tự sinh cycle theo cadence vẫn chưa triển khai. |
 | P1 | Account security | Session management và Personal API Key đã hoàn thành. Passkeys cần WebAuthn dependency/RP configuration; signing key không có consumer và lệch phạm vi project-management nên vẫn unavailable. |
@@ -168,9 +171,8 @@
 ## Thứ tự tiếp tục đề xuất
 
 1. Tách notification theo workspace và khôi phục Notifications/Integrations shell gốc với Discord.
-2. Hoàn thiện Team membership list/join trong đúng bảng gốc.
-3. Loại các visible no-op P0 (command palette/Agent default) rồi xử lý P1 theo audit.
-4. Tạo phiên test workspace-member và chụp đối chiếu từng route chính với `upstream/master`.
+2. Loại các visible no-op P0 (command palette/Agent default) rồi xử lý P1 theo audit.
+3. Tạo phiên test workspace-member và chụp đối chiếu từng route chính với `upstream/master`.
 
 ## 1. Mục tiêu
 

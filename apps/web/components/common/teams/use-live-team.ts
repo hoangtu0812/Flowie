@@ -66,11 +66,12 @@ export function useLiveTeam(teamReference: string) {
             });
             if (!teamsResponse.ok) throw new Error('Could not load teams.');
             const teamsPayload = (await teamsResponse.json()) as {
-               data: Array<{ id: string; identifier: string }>;
+               data: Array<{ id: string; identifier: string; joined: boolean }>;
             };
             const matchedTeam = teamsPayload.data.find(
                (candidate) =>
-                  candidate.id === teamReference || candidate.identifier === teamReference
+                  candidate.joined &&
+                  (candidate.id === teamReference || candidate.identifier === teamReference)
             );
             if (!matchedTeam) throw new Error('Team not found.');
 

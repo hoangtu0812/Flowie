@@ -1,10 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import {
-   loadCurrentWorkspaceTeams,
-   type WorkspaceTeam,
-} from '@/components/common/teams/team-types';
+import { loadJoinedWorkspaceTeams, type WorkspaceTeam } from '@/components/common/teams/team-types';
 import {
    Bot,
    ChevronRight,
@@ -50,7 +47,7 @@ export default function TeamSettings({ teamId }: TeamSettingsProps) {
 
    useEffect(() => {
       setState('loading');
-      void loadCurrentWorkspaceTeams()
+      void loadJoinedWorkspaceTeams()
          .then(async ({ workspaceId, teams }) => {
             const currentTeam = teams.find((candidate) => candidate.id === teamId);
             if (!currentTeam) throw new Error('Team not found.');

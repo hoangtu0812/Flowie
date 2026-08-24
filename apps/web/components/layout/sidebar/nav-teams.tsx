@@ -34,7 +34,7 @@ import {
    SidebarMenuSubItem,
 } from '@/components/ui/sidebar';
 import { RiDonutChartFill } from '@remixicon/react';
-import { loadCurrentWorkspaceTeams, WorkspaceTeam } from '@/components/common/teams/team-types';
+import { loadJoinedWorkspaceTeams, WorkspaceTeam } from '@/components/common/teams/team-types';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 
@@ -43,7 +43,7 @@ export function NavTeams() {
    const [joinedTeams, setJoinedTeams] = useState<WorkspaceTeam[]>([]);
 
    useEffect(() => {
-      void loadCurrentWorkspaceTeams()
+      void loadJoinedWorkspaceTeams()
          .then(({ teams }) => setJoinedTeams(teams))
          .catch(() => setJoinedTeams([]));
    }, []);

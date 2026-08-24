@@ -13,7 +13,7 @@ import { User } from '@/mock-data/users';
 import { Project } from '@/mock-data/projects';
 import { LabelInterface } from '@/mock-data/labels';
 import { useIssuesStore } from '@/store/issues-store';
-import { loadCurrentWorkspaceTeams } from '@/components/common/teams/team-types';
+import { loadJoinedWorkspaceTeams } from '@/components/common/teams/team-types';
 import { useCreateIssueStore } from '@/store/create-issue-store';
 import { toast } from 'sonner';
 import { StatusSelector } from './status-selector';
@@ -59,7 +59,7 @@ export function CreateNewIssue() {
 
    useEffect(() => {
       if (!isOpen) return;
-      void loadCurrentWorkspaceTeams()
+      void loadJoinedWorkspaceTeams()
          .then(async ({ teams: availableTeams }) => {
             const selected =
                availableTeams.find(

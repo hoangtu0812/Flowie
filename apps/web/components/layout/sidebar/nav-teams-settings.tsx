@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { useParams } from 'next/navigation';
-import { loadCurrentWorkspaceTeams, WorkspaceTeam } from '@/components/common/teams/team-types';
+import { loadJoinedWorkspaceTeams, WorkspaceTeam } from '@/components/common/teams/team-types';
 import { useEffect, useState } from 'react';
 
 export function NavTeamsSettings() {
@@ -20,7 +20,7 @@ export function NavTeamsSettings() {
    const [joinedTeams, setJoinedTeams] = useState<WorkspaceTeam[]>([]);
 
    useEffect(() => {
-      void loadCurrentWorkspaceTeams()
+      void loadJoinedWorkspaceTeams()
          .then(({ teams }) => setJoinedTeams(teams))
          .catch(() => setJoinedTeams([]));
    }, []);

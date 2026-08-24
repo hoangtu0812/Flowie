@@ -1,6 +1,6 @@
 'use client';
 
-import { loadCurrentWorkspaceTeams } from '@/components/common/teams/team-types';
+import { loadJoinedWorkspaceTeams } from '@/components/common/teams/team-types';
 import { Button } from '@/components/ui/button';
 import {
    Dialog,
@@ -65,7 +65,7 @@ export default function Cycles() {
       setLoading(true);
       setError(undefined);
       try {
-         const { workspaceId, teams } = await loadCurrentWorkspaceTeams();
+         const { workspaceId, teams } = await loadJoinedWorkspaceTeams();
          const team = teams.find(
             (item) => item.id === teamId || item.identifier.toLowerCase() === teamId.toLowerCase()
          );

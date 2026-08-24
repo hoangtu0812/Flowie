@@ -1,6 +1,6 @@
 'use client';
 
-import { loadCurrentWorkspaceTeams, WorkspaceTeam } from '@/components/common/teams/team-types';
+import { loadJoinedWorkspaceTeams, WorkspaceTeam } from '@/components/common/teams/team-types';
 import { Cycle } from '@/mock-data/cycles';
 import { useIssuesStore } from '@/store/issues-store';
 import { useParams } from 'next/navigation';
@@ -55,7 +55,7 @@ export function useLiveCycle(cycleView: LiveCycleView) {
       void (async () => {
          setLoading(true);
          try {
-            const { workspaceId, teams } = await loadCurrentWorkspaceTeams();
+            const { workspaceId, teams } = await loadJoinedWorkspaceTeams();
             const currentTeam = teams.find(
                (item) =>
                   item.id === teamId || item.identifier.toLowerCase() === teamId.toLowerCase()

@@ -30,7 +30,7 @@ export type WorkspaceTeam = {
    defaultIssueTemplateId: string | null;
 };
 
-type ApiTeam = Omit<WorkspaceTeam, 'members' | 'projectCount' | 'cycleCount' | 'joined'> & {
+type ApiTeam = Omit<WorkspaceTeam, 'members' | 'projectCount' | 'cycleCount'> & {
    members: Array<{ role: string; user: Omit<TeamMember, 'role'> }>;
    _count: { projects: number; cycles: number };
 };
@@ -53,12 +53,19 @@ export async function loadCurrentWorkspaceTeams(): Promise<{
       workspaceId,
       teams: payload.data.map((team) => ({
          ...team,
-         joined: true,
          members: team.members.map((member) => ({ ...member.user, role: member.role })),
          projectCount: team._count.projects,
          cycleCount: team._count.cycles,
       })),
    };
+}
+
+export async function loadJoinedWorkspaceTeams(): Promise<{
+   workspaceId: string;
+   teams: WorkspaceTeam[];
+}> {
+   const workspace = await loadCurrentWorkspaceTeams();
+   return { ...workspace, teams: workspace.teams.filter((team) => team.joined) };
 }
 
 export async function createWorkspaceTeam(input: {
@@ -75,6 +82,19 @@ export async function createWorkspaceTeam(input: {
    if (!response.ok) {
       const payload = (await response.json().catch(() => null)) as { message?: string } | null;
       throw new Error(payload?.message ?? 'Could not create team.');
+   }
+   return response.json();
+}
+
+export async function joinWorkspaceTeam(workspaceId: string, teamId: string) {
+   const query = new URLSearchParams({ workspaceId });
+   const response = await fetch(`${api}/teams/${teamId}/join?${query}`, {
+      method: 'POST',
+      credentials: 'include',
+   });
+   if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+      throw new Error(payload?.message ?? 'Could not join team.');
    }
    return response.json();
 }

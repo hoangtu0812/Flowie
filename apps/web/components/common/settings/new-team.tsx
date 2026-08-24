@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
    createWorkspaceTeam,
+   joinWorkspaceTeam,
    loadCurrentWorkspaceTeams,
    WorkspaceTeam,
 } from '@/components/common/teams/team-types';
@@ -20,6 +21,7 @@ export default function NewTeam() {
    const [teams, setTeams] = useState<WorkspaceTeam[]>([]);
    const [error, setError] = useState<string>();
    const [saving, setSaving] = useState(false);
+   const [joiningTeamId, setJoiningTeamId] = useState<string>();
    const notJoined = teams.filter((team) => !team.joined);
 
    useEffect(() => {
@@ -58,6 +60,21 @@ export default function NewTeam() {
       }
    };
 
+   const joinTeam = async (teamId: string) => {
+      if (!workspaceId || joiningTeamId) return;
+      setJoiningTeamId(teamId);
+      setError(undefined);
+      try {
+         await joinWorkspaceTeam(workspaceId, teamId);
+         const current = await loadCurrentWorkspaceTeams();
+         setTeams(current.teams);
+      } catch (error) {
+         setError(error instanceof Error ? error.message : 'Could not join team.');
+      } finally {
+         setJoiningTeamId(undefined);
+      }
+   };
+
    return (
       <SettingsShell
          title="Join or create a team"
@@ -93,9 +110,14 @@ export default function NewTeam() {
                      title={team.name}
                      description={`${team.members.length} members · ${team.projectCount} projects`}
                      trailing={
-                        <Button size="xs" variant="secondary">
+                        <Button
+                           size="xs"
+                           variant="secondary"
+                           disabled={!workspaceId || Boolean(joiningTeamId)}
+                           onClick={() => void joinTeam(team.id)}
+                        >
                            <Check className="size-3.5" />
-                           Join
+                           {joiningTeamId === team.id ? 'Joining…' : 'Join'}
                         </Button>
                      }
                   />
