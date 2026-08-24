@@ -11,6 +11,8 @@ import { CreateProjectTemplateDto } from './dto/create-project-template.dto';
 import { CreateProjectUpdateDto } from './dto/create-project-update.dto';
 import { CreateProjectLabelDto } from './dto/create-project-label.dto';
 import { UpdateProjectLabelDto } from './dto/update-project-label.dto';
+import { CreateProjectStatusDto } from './dto/create-project-status.dto';
+import { UpdateProjectStatusDto } from './dto/update-project-status.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 
 const projectInclude = {
@@ -111,6 +113,7 @@ export class ProjectsService {
       }
       const { labelIds, ...projectData } = dto;
       if (labelIds) await this.assertProjectLabels(workspaceId, labelIds);
+      if (dto.status) await this.assertProjectStatus(workspaceId, dto.status);
       return this.prisma.$transaction(async (tx) => {
          const updated = await tx.project.update({
             where: { id: projectId },
@@ -248,6 +251,73 @@ export class ProjectsService {
          include: { _count: { select: { projectLinks: true } } },
          orderBy: { name: 'asc' },
       });
+   }
+   async listStatuses(workspaceId: string, userId: string) {
+      await this.authorize(workspaceId, userId);
+      const count = await this.prisma.projectStatus.count({ where: { workspaceId } });
+      if (count === 0) {
+         await this.prisma.projectStatus.createMany({
+            data: [
+               { workspaceId, name: 'backlog', category: 'backlog', color: '#95a2b3', position: 0 },
+               { workspaceId, name: 'planned', category: 'planned', color: '#95a2b3', position: 0 },
+               { workspaceId, name: 'in-progress', category: 'in-progress', color: '#f2c94c', position: 0 },
+               { workspaceId, name: 'completed', category: 'completed', color: '#5e6ad2', position: 0 },
+               { workspaceId, name: 'canceled', category: 'canceled', color: '#8f9299', position: 0 },
+            ],
+            skipDuplicates: true,
+         });
+      }
+      const statuses = await this.prisma.projectStatus.findMany({
+         where: { workspaceId },
+         orderBy: [{ category: 'asc' }, { position: 'asc' }, { name: 'asc' }],
+      });
+      const projectCounts = await this.prisma.project.groupBy({
+         by: ['status'],
+         where: { workspaceId, archivedAt: null },
+         _count: { _all: true },
+      });
+      const counts = new Map(projectCounts.map((entry) => [entry.status, entry._count._all]));
+      return statuses.map((status) => ({ ...status, projectCount: counts.get(status.name) ?? 0 }));
+   }
+   async createStatus(dto: CreateProjectStatusDto, userId: string) {
+      await this.authorizeManager(dto.workspaceId, userId);
+      return this.prisma.projectStatus.create({
+         data: { ...dto, name: dto.name.trim().toLowerCase().replace(/\s+/g, '-') },
+      });
+   }
+   async updateStatus(
+      statusId: string,
+      workspaceId: string,
+      dto: UpdateProjectStatusDto,
+      userId: string
+   ) {
+      await this.authorizeManager(workspaceId, userId);
+      const status = await this.prisma.projectStatus.findFirst({ where: { id: statusId, workspaceId } });
+      if (!status) throw new NotFoundException('Project status not found.');
+      const name = dto.name?.trim().toLowerCase().replace(/\s+/g, '-');
+      return this.prisma.$transaction(async (tx) => {
+         if (name && name !== status.name) {
+            await tx.project.updateMany({
+               where: { workspaceId, status: status.name },
+               data: { status: name },
+            });
+         }
+         return tx.projectStatus.update({
+            where: { id: statusId },
+            data: { ...dto, ...(name ? { name } : {}) },
+         });
+      });
+   }
+   async removeStatus(statusId: string, workspaceId: string, userId: string) {
+      await this.authorizeManager(workspaceId, userId);
+      const status = await this.prisma.projectStatus.findFirst({ where: { id: statusId, workspaceId } });
+      if (!status) throw new NotFoundException('Project status not found.');
+      const inUse = await this.prisma.project.count({
+         where: { workspaceId, status: status.name, archivedAt: null },
+      });
+      if (inUse > 0) throw new BadRequestException('Move projects to another status before deleting it.');
+      await this.prisma.projectStatus.delete({ where: { id: statusId } });
+      return { id: statusId, deleted: true };
    }
    async createLabel(dto: CreateProjectLabelDto, userId: string) {
       await this.authorize(dto.workspaceId, userId);
@@ -415,6 +485,13 @@ export class ProjectsService {
       if (count !== uniqueLabelIds.length) {
          throw new NotFoundException('One or more project labels are not available in this workspace.');
       }
+   }
+   private async assertProjectStatus(workspaceId: string, status: string) {
+      const configured = await this.prisma.projectStatus.findFirst({
+         where: { workspaceId, name: status },
+         select: { id: true },
+      });
+      if (!configured) throw new NotFoundException('Project status is not configured in this workspace.');
    }
    private async authorizeTeam(workspaceId: string, teamId: string, userId: string) {
       const team = await this.prisma.team.findFirst({

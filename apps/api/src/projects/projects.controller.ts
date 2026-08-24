@@ -21,6 +21,8 @@ import { CreateProjectTemplateDto } from './dto/create-project-template.dto';
 import { CreateProjectUpdateDto } from './dto/create-project-update.dto';
 import { CreateProjectLabelDto } from './dto/create-project-label.dto';
 import { UpdateProjectLabelDto } from './dto/update-project-label.dto';
+import { CreateProjectStatusDto } from './dto/create-project-status.dto';
+import { UpdateProjectStatusDto } from './dto/update-project-status.dto';
 import { ProjectsService } from './projects.service';
 @UseGuards(AuthGuard)
 @Controller('projects')
@@ -89,6 +91,35 @@ export class ProjectsController {
       @Req() request: AuthenticatedRequest
    ) {
       return { data: await this.projects.listLabels(workspaceId, request.auth!.userId) };
+   }
+   @Get('statuses') async listStatuses(
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.projects.listStatuses(workspaceId, request.auth!.userId) };
+   }
+   @Post('statuses') async createStatus(
+      @Body() dto: CreateProjectStatusDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.projects.createStatus(dto, request.auth!.userId) };
+   }
+   @Patch('statuses/:statusId') async updateStatus(
+      @Param('statusId') statusId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Body() dto: UpdateProjectStatusDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.projects.updateStatus(statusId, workspaceId, dto, request.auth!.userId),
+      };
+   }
+   @Delete('statuses/:statusId') async removeStatus(
+      @Param('statusId') statusId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.projects.removeStatus(statusId, workspaceId, request.auth!.userId) };
    }
    @Post('labels') async createLabel(
       @Body() dto: CreateProjectLabelDto,

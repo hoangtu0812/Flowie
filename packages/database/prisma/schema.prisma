@@ -235,6 +235,7 @@ model Workspace {
   projectTemplates ProjectTemplate[]
   projectMilestones ProjectMilestone[]
   projectLabels ProjectLabel[]
+  projectStatuses ProjectStatus[]
   projectUpdates ProjectUpdate[]
   savedViews SavedView[]
   initiatives Initiative[]
@@ -431,6 +432,23 @@ model ProjectTemplate {
   @@unique([workspaceId, name])
   @@index([workspaceId])
   @@map("project_templates")
+}
+
+model ProjectStatus {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  name        String
+  category    String
+  color       String
+  position    Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId, category, position])
+  @@map("project_statuses")
 }
 
 model SavedView {

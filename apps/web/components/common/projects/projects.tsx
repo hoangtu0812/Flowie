@@ -47,6 +47,12 @@ type ApiProject = {
    }>;
    _count: { issues: number };
 };
+type ApiProjectStatus = {
+   id: string;
+   name: string;
+   category: 'backlog' | 'planned' | 'in-progress' | 'completed' | 'canceled';
+   color: string;
+};
 
 export type ProjectListMember = {
    id: string;
@@ -120,6 +126,34 @@ const uniqueProjectStatuses = (projects: ApiProject[]): ProjectListStatus[] =>
    [
       ...new Map(projects.map((project) => [project.status, mapStatus(project.status)])).values(),
    ].sort((left, right) => left.name.localeCompare(right.name));
+
+const mapConfiguredStatus = (status: ApiProjectStatus): ProjectListStatus => {
+   const category: StatusCategory =
+      status.category === 'planned'
+         ? 'unstarted'
+         : status.category === 'in-progress'
+           ? 'started'
+           : status.category;
+   const Icon =
+      category === 'completed'
+         ? CircleCheck
+         : category === 'canceled'
+           ? CircleX
+           : category === 'started'
+             ? CirclePlay
+             : category === 'backlog'
+               ? CircleDashed
+               : Circle;
+   return {
+      id: status.name,
+      name: status.name
+         .replace(/[_-]+/g, ' ')
+         .replace(/\b\w/g, (character) => character.toUpperCase()),
+      color: status.color,
+      category,
+      icon: () => createElement(Icon, { className: 'size-4' }),
+   };
+};
 
 const mapProject = (project: ApiProject): Project & { issueCount: number } => {
    const completed = project.issues.filter((issue) => issue.status.category === 'COMPLETED').length;
@@ -213,12 +247,15 @@ export default function Projects({ teamId }: { teamId?: string }) {
          };
          const workspaceId = workspaces.data[0]?.workspace.id;
          if (!workspaceId) throw new Error('No workspace is available for this account.');
-         const [response, membersResponse, labelsResponse] = await Promise.all([
+         const [response, membersResponse, labelsResponse, statusesResponse] = await Promise.all([
             fetch(`${api}/projects?workspaceId=${workspaceId}`, { credentials: 'include' }),
             fetch(`${api}/workspaces/${workspaceId}/members`, { credentials: 'include' }),
             fetch(`${api}/projects/labels?workspaceId=${workspaceId}`, { credentials: 'include' }),
+            fetch(`${api}/projects/statuses?workspaceId=${workspaceId}`, {
+               credentials: 'include',
+            }),
          ]);
-         if (!response.ok || !membersResponse.ok || !labelsResponse.ok)
+         if (!response.ok || !membersResponse.ok || !labelsResponse.ok || !statusesResponse.ok)
             throw new Error('Could not load projects.');
          const payload = (await response.json()) as { data: ApiProject[] };
          const membersPayload = (await membersResponse.json()) as {
@@ -228,6 +265,7 @@ export default function Projects({ teamId }: { teamId?: string }) {
             }>;
          };
          const labelsPayload = (await labelsResponse.json()) as { data: ProjectListLabel[] };
+         const statusesPayload = (await statusesResponse.json()) as { data: ApiProjectStatus[] };
          setWorkspaceId(workspaceId);
          setWorkspaceMembers(
             membersPayload.data
@@ -236,7 +274,11 @@ export default function Projects({ teamId }: { teamId?: string }) {
          );
          setProjectLabels(labelsPayload.data);
          setAllProjects(payload.data.map(mapProject));
-         setProjectStatuses(uniqueProjectStatuses(payload.data));
+         setProjectStatuses(
+            statusesPayload.data.length
+               ? statusesPayload.data.map(mapConfiguredStatus)
+               : uniqueProjectStatuses(payload.data)
+         );
          setTeamGroups(
             Array.from(
                new Map(

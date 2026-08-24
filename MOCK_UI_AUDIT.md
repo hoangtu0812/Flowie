@@ -23,7 +23,7 @@ Implementation: `apps/web`
 | Users (`mock-data/users`) | Mostly type shape; canned users remain only in inactive Agent source | `migrated` / `inactive mock source` | Active selectors must use workspace members; remove canned Agent dependency when that source is retired or implemented |
 | Teams (`mock-data/teams`) | Canned records remain only in unreferenced tooltip source | `inactive mock source` | Do not render; Initiative/Team UI must use API team relations |
 | Cycles (`mock-data/cycles`) | Type and date/status formatting helpers; records come from Cycle/Issue APIs | `migrated` + `type/presentation-only` | Move type/helpers later without changing Cycle UI |
-| Projects (`mock-data/projects`) | `Project` type plus health presentation list; records come from Projects API | `migrated` + `type/presentation-only` | Project settings must use persisted values; preserve upstream components |
+| Projects (`mock-data/projects`) | `Project` type plus health presentation list; records come from Projects API | `migrated` + `type/presentation-only` | Labels and statuses are persisted; finish template CRUD and replace Project updates placeholder while preserving upstream components |
 | Initiatives (`mock-data/initiatives`) | List/detail, owner/team/health breakdowns, project progress and mutations use Portfolio/Project APIs; priority/health/status metadata is presentation-only | `migrated` | Preserve the restored upstream layout; progress history stays explicitly empty until persisted snapshots exist |
 | Views | Saved Views and filters use API/store records | `migrated` | Preserve upstream View layout; no mock status list |
 | Inbox | Active Inbox uses Notifications API | `migrated` | Keep snooze unavailable until scheduler/state exists |
