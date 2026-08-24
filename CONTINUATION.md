@@ -46,7 +46,7 @@ docker compose --profile app up -d --no-build --pull never --force-recreate api 
 
 ## 4. Tiến độ đã xác minh
 
-Tất cả commit bên dưới đã được push. Commit tài liệu gần nhất là `0097207`; commit tính năng gần nhất là `8c6bbd8`.
+Tất cả commit bên dưới đã được push. Commit tài liệu gần nhất là `723d7a3`; commit tính năng gần nhất là `603c994`.
 
 | Nhóm chức năng | Trạng thái thực tế |
 | --- | --- |
@@ -54,7 +54,7 @@ Tất cả commit bên dưới đã được push. Commit tài liệu gần nh�
 | Auth và workspace | Login/session/workspace resolution thật; OAuth, reset password, email verification, SSO chưa làm. |
 | Teams và members | Màn Teams, team overview/members/documents và workspace members dùng API; các tạo mới đã có trên màn đã migrate. |
 | Projects | Danh sách, tạo project, lead, issue progress, header, Overview/Issues/Activity dùng API. |
-| Issues | Danh sách, tạo/sửa trường cơ bản, filter options, My issues, labels CRUD, cycles, saved views và subscriptions dùng dữ liệu thật. Issue detail, properties, assignee, status/priority, comments/activity/subscribe và Issue attachment đã live trong source. Docker runtime verification cho attachment đang chờ 5G. |
+| Issues | Danh sách, tạo/sửa trường cơ bản, filter options, My issues, labels CRUD, cycles, saved views, subscriptions và due dates dùng dữ liệu thật. Issue detail, properties, assignee, status/priority, comments/activity/subscribe và Issue attachment đã live trong source. Docker runtime verification cho attachment/due date đang chờ 5G. |
 | Initiatives & documents | Initiative list/detail/create/link project; team documents đã live. |
 | Inbox & Discord | Inbox read/delete/unread badge lưu thật; cấu hình Discord workspace đã có. |
 | Settings | Profile, issue labels, project statuses, project templates và preference browser-local đã được audit/nối phù hợp. Các option không có backend đã được disable minh bạch. |
@@ -71,21 +71,23 @@ Các commit mốc quan trọng:
 - `54252b7`: Issue comments/activity/subscribe thật.
 - `dfd0496`: Issue detail và properties/assignee/header lấy dữ liệu API.
 - `8c6bbd8`: Paperclip UI gốc upload/list/download Issue attachment qua API thật; production web build đã pass, Docker verification đang chờ 5G.
+- `603c994`: Due date persist thật qua API, thay preset ngày mock cố định; API tests và production web build đã pass, Docker verification đang chờ 5G.
 
 Lịch sử đầy đủ và kiểm chứng từng commit nằm trong `AGENT_HANDOFF.md`.
 
 ## 5. Điểm bắt đầu chính xác
 
-### Việc cần làm trước khi tiếp tục: runtime verification Attachment của Issue detail
+### Việc cần làm trước khi tiếp tục: runtime verification Attachment và Due date của Issue
 
 UI đích: `apps/web/components/common/issues/details/issue-details.tsx`.
 
-Paperclip ở Issue detail đã được nối vào Attachment API tại `8c6bbd8`. Mã nguồn và production web build đã được xác minh, nhưng container `web` đang chạy chưa chứa thay đổi vì chưa được phép rebuild Docker. Agent tiếp theo cần:
+Paperclip ở Issue detail đã được nối vào Attachment API tại `8c6bbd8`, và due date đã được nối vào `PATCH /issues` tại `603c994`. Mã nguồn, API tests và production web build đã được xác minh, nhưng container `api`/`web` đang chạy chưa chứa thay đổi vì chưa được phép rebuild Docker. Agent tiếp theo cần:
 
-1. Chỉ khi người dùng xác nhận 5G: rebuild `web`, recreate với `--no-build --pull never`, và vào Issue detail đã đăng nhập.
+1. Chỉ khi người dùng xác nhận 5G: rebuild `api` và `web`, recreate với `--no-build --pull never`, rồi vào Issue detail/command palette đã đăng nhập.
 2. Upload file nhỏ từ Paperclip, refresh trang để xác nhận persistence, tải file xuống, và thử file lớn hơn 10 MB để xác nhận feedback client.
-3. Ghi rõ kết quả runtime vào hai tài liệu này rồi commit/push documentation.
-4. Không mở rộng sang comment attachment, reaction, sub-issue hay relation trong lần xác minh này.
+3. Đặt và xoá due date trong command palette, refresh để xác nhận hai mutation đều persisted.
+4. Ghi rõ kết quả runtime vào hai tài liệu này rồi commit/push documentation.
+5. Không mở rộng sang comment attachment, reaction, sub-issue hay relation trong lần xác minh này.
 
 ## 6. Backlog theo thứ tự ưu tiên
 
