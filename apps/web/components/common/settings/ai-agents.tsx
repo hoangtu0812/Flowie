@@ -1,7 +1,6 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import { RiSlackFill } from '@remixicon/react';
 import { Bot, MessageCircleQuestion, Radar, RefreshCcw, Sparkles, Terminal } from 'lucide-react';
 import { SettingsCard, SettingsRow, SettingsSection, SettingsShell } from './shared';
@@ -36,19 +35,20 @@ const AGENT_FEATURES = [
    },
 ];
 
-/** Workspace "AI & Agents" settings. */
+/** Workspace "AI & Agents" settings retained as an explicit unavailable capability. */
 export default function AiAgents() {
    return (
       <SettingsShell
          title="AI & Agents"
-         description="Automate your product development processes and operations with AI"
+         description="AI agent services are not enabled in this Flowie deployment"
       >
          <SettingsSection>
             <SettingsCard>
                <SettingsRow
-                  title="Enable usage feedback"
-                  description="Improve AI functionality by sharing usage feedback. Never used to train models"
-                  trailing={<Switch defaultChecked />}
+                  title="Usage feedback"
+                  description="AI usage feedback is unavailable because AI services are not enabled"
+                  trailing={<span>Unavailable</span>}
+                  muted
                />
             </SettingsCard>
          </SettingsSection>
@@ -73,9 +73,8 @@ export default function AiAgents() {
                         </>
                      }
                      description={feature.description}
-                     trailing={<span>Enabled</span>}
-                     chevron
-                     onClick={() => {}}
+                     trailing={<span>Unavailable</span>}
+                     muted
                   />
                ))}
             </SettingsCard>
@@ -85,7 +84,12 @@ export default function AiAgents() {
             title="Agent integrations"
             description="Integrations available to the agent"
             action={
-               <Button size="xs" variant="secondary">
+               <Button
+                  size="xs"
+                  variant="secondary"
+                  disabled
+                  title="Agent integrations are not available"
+               >
                   Browse integrations
                </Button>
             }
@@ -94,18 +98,16 @@ export default function AiAgents() {
                <SettingsRow
                   icon={<RiSlackFill className="size-4" />}
                   title="Slack"
-                  description="Settings and additional guidance for creating issues from Slack messages"
-                  trailing={<span>Enabled</span>}
-                  chevron
-                  onClick={() => {}}
+                  description="Slack integration is not enabled for this Flowie deployment"
+                  trailing={<span>Unavailable</span>}
+                  muted
                />
                <SettingsRow
                   icon={<MessageCircleQuestion className="size-4" />}
                   title="Asks for Slack"
-                  description="Settings and issue templates for creating issues from Asks for Slack"
-                  trailing={<span>Enabled</span>}
-                  chevron
-                  onClick={() => {}}
+                  description="Slack Ask workflows are not enabled for this Flowie deployment"
+                  trailing={<span>Unavailable</span>}
+                  muted
                />
             </SettingsCard>
          </SettingsSection>
