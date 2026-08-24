@@ -1,6 +1,16 @@
 'use client';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import {
+   Dialog,
+   DialogContent,
+   DialogDescription,
+   DialogFooter,
+   DialogHeader,
+   DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { format, parseISO } from 'date-fns';
 import {
    ArrowRight,
@@ -10,14 +20,15 @@ import {
    FolderKanban,
    Plus,
    Star,
-   Tag,
    X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ProjectProgressChart } from './details/project-progress-chart';
+import { toProjectUi } from './details/project-detail-ui-adapter';
 import { useLiveProject } from './details/use-live-project';
+import { ProjectLabelSelector } from './project-label-selector';
 
 interface ProjectPeekPanelProps {
    projectId: string;
@@ -25,12 +36,6 @@ interface ProjectPeekPanelProps {
 }
 
 const formatDay = (iso?: string | null) => (iso ? format(parseISO(iso), 'MMM do') : '—');
-
-const displayValue = (value: string) =>
-   value
-      .replaceAll('-', ' ')
-      .replaceAll('_', ' ')
-      .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 function PropertyRow({ label, children }: { label: string; children: React.ReactNode }) {
    return (
@@ -52,7 +57,25 @@ function Card({ children, className }: { children: React.ReactNode; className?: 
 /** Floating timeline peek backed solely by persisted Project, Issue, and Milestone data. */
 export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) {
    const { orgId } = useParams<{ orgId: string }>();
-   const { project, issues, milestones, loading, error } = useLiveProject(projectId);
+   const {
+      project,
+      issues,
+      milestones,
+      availableLabels,
+      loading,
+      error,
+      updateLabels,
+      createMilestone,
+   } = useLiveProject(projectId);
+   const [milestoneDialogOpen, setMilestoneDialogOpen] = useState(false);
+   const [milestoneTitle, setMilestoneTitle] = useState('');
+   const [milestoneTargetDate, setMilestoneTargetDate] = useState('');
+   const [milestoneSaving, setMilestoneSaving] = useState(false);
+   const [milestoneError, setMilestoneError] = useState<string>();
+   const uiProject = useMemo(
+      () => (project ? toProjectUi(project, issues) : undefined),
+      [issues, project]
+   );
 
    useEffect(() => {
       const onKeyDown = (event: KeyboardEvent) => {
@@ -80,7 +103,7 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
          </aside>
       );
    }
-   if (error || !project) {
+   if (error || !project || !uiProject) {
       return (
          <aside className="absolute top-10 right-2 bottom-2 w-[400px] max-w-[calc(100%-1rem)] z-40">
             <Card className="text-destructive">{error ?? 'Project not found.'}</Card>
@@ -96,6 +119,25 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
    ).length;
    const chartStartDate = project.startDate ?? project.createdAt;
    const initiativeNames = project.initiativeLinks.map((link) => link.initiative.name);
+   const labels = project.labelLinks.map((link) => link.label);
+
+   const submitMilestone = async () => {
+      if (milestoneTitle.trim().length < 2) return;
+      setMilestoneSaving(true);
+      setMilestoneError(undefined);
+      try {
+         await createMilestone(milestoneTitle, milestoneTargetDate || undefined);
+         setMilestoneDialogOpen(false);
+         setMilestoneTitle('');
+         setMilestoneTargetDate('');
+      } catch (caught) {
+         setMilestoneError(
+            caught instanceof Error ? caught.message : 'Could not create milestone.'
+         );
+      } finally {
+         setMilestoneSaving(false);
+      }
+   };
 
    return (
       <aside className="absolute top-10 right-2 bottom-2 w-[400px] max-w-[calc(100%-1rem)] z-40 flex flex-col gap-2 overflow-y-auto">
@@ -144,10 +186,12 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
             </div>
             <div className="flex flex-col">
                <PropertyRow label="Status">
-                  <span>{displayValue(project.status)}</span>
+                  <uiProject.status.icon />
+                  <span>{uiProject.status.name}</span>
                </PropertyRow>
                <PropertyRow label="Priority">
-                  <span>{displayValue(project.priority)}</span>
+                  <uiProject.priority.icon className="size-3.5 text-muted-foreground" />
+                  <span>{uiProject.priority.name}</span>
                </PropertyRow>
                <PropertyRow label="Lead">
                   {project.lead ? (
@@ -200,11 +244,8 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
                      )}
                   </span>
                </PropertyRow>
-               <PropertyRow label="Team">
+               <PropertyRow label="Teams">
                   <span>{project.team?.name ?? 'No team'}</span>
-               </PropertyRow>
-               <PropertyRow label="Slack">
-                  <span className="text-muted-foreground">Unavailable</span>
                </PropertyRow>
                <PropertyRow label="Initiatives">
                   {initiativeNames.length ? (
@@ -214,9 +255,25 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
                   )}
                </PropertyRow>
                <PropertyRow label="Labels">
-                  <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                     <Tag className="size-3.5" /> Unavailable
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                     {labels.map((label) => (
+                        <span
+                           key={label.id}
+                           className="inline-flex items-center gap-1 text-xs border rounded-full px-2 py-0.5"
+                        >
+                           <span
+                              className="size-2 rounded-full"
+                              style={{ backgroundColor: label.color }}
+                           />
+                           {label.name}
+                        </span>
+                     ))}
+                     <ProjectLabelSelector
+                        labels={labels}
+                        availableLabels={availableLabels}
+                        onLabelsChange={updateLabels}
+                     />
+                  </div>
                </PropertyRow>
             </div>
          </Card>
@@ -225,10 +282,11 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
             <div className="flex items-center justify-between mb-2">
                <h3 className="text-sm font-medium">Milestones</h3>
                <button
-                  disabled
-                  title="Create milestones from the Project page"
-                  className="text-muted-foreground/50"
-                  aria-label="Create milestones from the Project page"
+                  type="button"
+                  title="Create milestone"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label="Create milestone"
+                  onClick={() => setMilestoneDialogOpen(true)}
                >
                   <Plus className="size-3.5" />
                </button>
@@ -292,6 +350,40 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
                completed={completed}
             />
          </Card>
+
+         <Dialog open={milestoneDialogOpen} onOpenChange={setMilestoneDialogOpen}>
+            <DialogContent className="sm:max-w-[440px]">
+               <DialogHeader>
+                  <DialogTitle>New milestone</DialogTitle>
+                  <DialogDescription>Add a milestone to {project.name}.</DialogDescription>
+               </DialogHeader>
+               <div className="space-y-3">
+                  <Input
+                     value={milestoneTitle}
+                     onChange={(event) => setMilestoneTitle(event.target.value)}
+                     placeholder="Milestone name"
+                     autoFocus
+                  />
+                  <Input
+                     type="date"
+                     value={milestoneTargetDate}
+                     onChange={(event) => setMilestoneTargetDate(event.target.value)}
+                  />
+                  {milestoneError && <p className="text-sm text-destructive">{milestoneError}</p>}
+               </div>
+               <DialogFooter>
+                  <Button variant="outline" onClick={() => setMilestoneDialogOpen(false)}>
+                     Cancel
+                  </Button>
+                  <Button
+                     disabled={milestoneSaving || milestoneTitle.trim().length < 2}
+                     onClick={() => void submitMilestone()}
+                  >
+                     {milestoneSaving ? 'Creating…' : 'Create milestone'}
+                  </Button>
+               </DialogFooter>
+            </DialogContent>
+         </Dialog>
       </aside>
    );
 }
