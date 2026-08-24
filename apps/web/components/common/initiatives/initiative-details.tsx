@@ -645,12 +645,7 @@ function Overview({
 }) {
    const completed = countCompletedProjects(initiative);
    const total = initiative.projects.length;
-   const resources = activities.filter(
-      (activity) =>
-         activity.action === 'initiative.resource.added' &&
-         metadataString(activity, 'label') &&
-         metadataString(activity, 'url')
-   );
+   const resources = liveInitiative.resources;
    const recentActivity = activities.slice(0, 3);
 
    return (
@@ -716,19 +711,22 @@ function Overview({
                      {resources.map((resource) => (
                         <a
                            key={resource.id}
-                           href={metadataString(resource, 'url')}
+                           href={resource.url}
                            target="_blank"
                            rel="noreferrer"
                            className="inline-flex items-center gap-1.5 rounded border px-2 py-1 text-xs hover:bg-accent"
                         >
                            <ExternalLink className="size-3" />
-                           {metadataString(resource, 'label')}
+                           {resource.label}
                         </a>
                      ))}
                      <InitiativeResourceDialog
                         initiativeId={initiative.id}
                         workspaceId={workspaceId}
-                        onSaved={reloadActivity}
+                        onSaved={() => {
+                           reload();
+                           reloadActivity();
+                        }}
                      />
                   </div>
                </div>

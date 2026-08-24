@@ -33,6 +33,15 @@ const initiativeInclude = {
          },
       },
    },
+   updates: {
+      include: { author: { select: { id: true, name: true, avatarUrl: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+   },
+   resources: {
+      include: { createdBy: { select: { id: true, name: true, avatarUrl: true } } },
+      orderBy: { createdAt: 'asc' },
+   },
    _count: { select: { projectLinks: true } },
 } as const;
 
@@ -256,20 +265,34 @@ export class PortfolioService {
          where: { id: initiativeId, workspaceId: dto.workspaceId, archivedAt: null },
       });
       if (!initiative) throw new NotFoundException('Initiative not found.');
-      if (dto.health) {
-         await this.prisma.initiative.update({
-            where: { id: initiativeId },
-            data: { health: dto.health },
+      const health = dto.health ?? initiative.health;
+      const update = await this.prisma.$transaction(async (tx) => {
+         if (dto.health) {
+            await tx.initiative.update({
+               where: { id: initiativeId },
+               data: { health },
+            });
+         }
+         return tx.initiativeUpdate.create({
+            data: {
+               workspaceId: dto.workspaceId,
+               initiativeId,
+               authorId: userId,
+               body: dto.body.trim(),
+               health,
+            },
+            include: { author: { select: { id: true, name: true, avatarUrl: true } } },
          });
-      }
-      return this.audit.record({
+      });
+      await this.audit.record({
          workspaceId: dto.workspaceId,
          actorId: userId,
          action: 'initiative.update.posted',
          entityType: 'initiative',
          entityId: initiativeId,
-         metadata: { body: dto.body.trim(), health: dto.health ?? initiative.health },
+         metadata: { body: update.body, health: update.health, updateId: update.id },
       });
+      return update;
    }
 
    async addInitiativeResource(
@@ -283,14 +306,25 @@ export class PortfolioService {
          select: { id: true },
       });
       if (!initiative) throw new NotFoundException('Initiative not found.');
-      return this.audit.record({
+      const resource = await this.prisma.initiativeResource.create({
+         data: {
+            workspaceId: dto.workspaceId,
+            initiativeId,
+            createdById: userId,
+            label: dto.label.trim(),
+            url: dto.url.trim(),
+         },
+         include: { createdBy: { select: { id: true, name: true, avatarUrl: true } } },
+      });
+      await this.audit.record({
          workspaceId: dto.workspaceId,
          actorId: userId,
          action: 'initiative.resource.added',
          entityType: 'initiative',
          entityId: initiativeId,
-         metadata: { label: dto.label.trim(), url: dto.url.trim() },
+         metadata: { label: resource.label, url: resource.url, resourceId: resource.id },
       });
+      return resource;
    }
 
    private async authorize(workspaceId: string, userId: string) {

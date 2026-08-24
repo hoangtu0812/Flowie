@@ -30,6 +30,20 @@ export type LiveInitiative = {
    createdAt: string;
    updatedAt: string;
    owner: { id: string; name: string; avatarUrl: string | null } | null;
+   updates: Array<{
+      id: string;
+      body: string;
+      health: string;
+      createdAt: string;
+      author: { id: string; name: string; avatarUrl: string | null };
+   }>;
+   resources: Array<{
+      id: string;
+      label: string;
+      url: string;
+      createdAt: string;
+      createdBy: { id: string; name: string; avatarUrl: string | null };
+   }>;
    projectLinks: Array<{ project: LiveInitiativeProject }>;
    _count: { projectLinks: number };
 };

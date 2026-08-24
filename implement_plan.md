@@ -57,7 +57,8 @@
   current session và revoke session khác. Personal API Key lưu hash/prefix/expiry, secret chỉ trả
   một lần, hỗ trợ revoke và Bearer authentication; không còn record mẫu Paris/iOS/LNDEV key.
 - Initiatives: list/detail/create/update/archive, project links, real progress chart, resources,
-  updates và activity; Settings Initiatives đã thay placeholder bằng CRUD thật.
+  updates và activity; update/resource là entity PostgreSQL riêng (không còn mượn AuditLog làm
+  storage), dữ liệu cũ được backfill; Settings Initiatives đã thay placeholder bằng CRUD thật.
 - Releases: Settings giữ nguyên shell/toolbar/empty-state gốc; list/filter/create/update/archive,
   trạng thái, target date và liên kết nhiều project đều dùng API/PostgreSQL thật với RBAC + audit.
 - Customer requests: giữ shell/mô tả/toolbar/empty-state gốc; CRUD thật cho khách hàng, nguồn,
@@ -109,6 +110,7 @@
 - `38ad4af` — resolve every runtime loader against the workspace slug in the current route.
 - `05e8595` — isolate notifications by workspace and restore the original settings shells.
 - `336a235` — persist team membership state and connect the original Join affordance.
+- `0963ec7` — connect issue Move Team command and remove Agent as the default home.
 
 ### Kiểm tra gần nhất
 
@@ -143,6 +145,8 @@
   session/API-key đã được xác minh trong Docker.
 - Migration `20260824290000_notification_workspaces` đã được apply; notification được backfill,
   bắt buộc có workspace FK và toàn bộ list/read/delete được authorize + filter theo workspace.
+- Migration `20260824300000_initiative_updates_resources` đã được apply; update/resource Initiative
+  được backfill từ audit metadata sang hai bảng có workspace/initiative/user FK riêng.
 - Audit frontend đã đối chiếu **308 file baseline** trong `app/components/hooks/lib/store` với
   `upstream/master`. Đã xóa 18 component `real-*` rút gọn không còn route nào dùng; runtime chỉ
   còn cây component gốc được nối API.

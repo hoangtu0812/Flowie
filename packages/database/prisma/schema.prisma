@@ -123,6 +123,8 @@ model User {
   projectSubscriptions ProjectSubscription[]
   projectFavorites ProjectFavorite[]
   projectUpdates ProjectUpdate[] @relation("ProjectUpdateAuthor")
+  initiativeUpdates InitiativeUpdate[] @relation("InitiativeUpdateAuthor")
+  initiativeResources InitiativeResource[] @relation("InitiativeResourceCreator")
   createdDocuments Document[] @relation("DocumentCreator")
   updatedDocuments Document[] @relation("DocumentUpdater")
   comments Comment[]
@@ -273,6 +275,8 @@ model Workspace {
   projectUpdates ProjectUpdate[]
   savedViews SavedView[]
   initiatives Initiative[]
+  initiativeUpdates InitiativeUpdate[]
+  initiativeResources InitiativeResource[]
   issueTemplates IssueTemplate[]
   releases Release[]
   customerRequests CustomerRequest[]
@@ -559,6 +563,8 @@ model Initiative {
   workspace Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   owner     User?                @relation("InitiativeOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   projectLinks InitiativeProject[]
+  updates InitiativeUpdate[]
+  resources InitiativeResource[]
 
   @@index([workspaceId, archivedAt])
   @@index([ownerId])
@@ -576,6 +582,44 @@ model InitiativeProject {
   @@id([initiativeId, projectId])
   @@index([projectId])
   @@map("initiative_projects")
+}
+
+model InitiativeUpdate {
+  id           String   @id @default(cuid())
+  workspaceId  String   @map("workspace_id")
+  initiativeId String   @map("initiative_id")
+  authorId     String   @map("author_id")
+  body         String
+  health       String
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  workspace  Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  initiative Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  author     User       @relation("InitiativeUpdateAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([initiativeId, createdAt])
+  @@index([workspaceId, createdAt])
+  @@map("initiative_updates")
+}
+
+model InitiativeResource {
+  id           String   @id @default(cuid())
+  workspaceId  String   @map("workspace_id")
+  initiativeId String   @map("initiative_id")
+  createdById  String   @map("created_by")
+  label        String
+  url          String
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  workspace  Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  initiative Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  createdBy  User       @relation("InitiativeResourceCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([initiativeId, createdAt])
+  @@index([workspaceId, createdAt])
+  @@map("initiative_resources")
 }
 
 model Release {
