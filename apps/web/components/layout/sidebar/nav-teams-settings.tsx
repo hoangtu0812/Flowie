@@ -10,13 +10,21 @@ import {
    SidebarMenuButton,
    SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { teams } from '@/mock-data/teams';
 import { Button } from '@/components/ui/button';
 import { useParams } from 'next/navigation';
+import { loadCurrentWorkspaceTeams, WorkspaceTeam } from '@/components/common/teams/team-types';
+import { useEffect, useState } from 'react';
 
 export function NavTeamsSettings() {
    const { orgId } = useParams<{ orgId: string }>();
-   const joinedTeams = teams.filter((t) => t.joined);
+   const [joinedTeams, setJoinedTeams] = useState<WorkspaceTeam[]>([]);
+
+   useEffect(() => {
+      void loadCurrentWorkspaceTeams()
+         .then(({ teams }) => setJoinedTeams(teams))
+         .catch(() => setJoinedTeams([]));
+   }, []);
+
    return (
       <SidebarGroup>
          <SidebarGroupLabel>Your teams</SidebarGroupLabel>
@@ -26,7 +34,7 @@ export function NavTeamsSettings() {
                   <SidebarMenuButton asChild>
                      <Link href={`/${orgId}/settings/teams/${team.id}`}>
                         <div className="inline-flex size-6 bg-muted/50 items-center justify-center rounded shrink-0">
-                           <div className="text-sm">{team.icon}</div>
+                           <div className="text-sm">{team.icon ?? '👥'}</div>
                         </div>
                         <span>{team.name}</span>
                      </Link>
