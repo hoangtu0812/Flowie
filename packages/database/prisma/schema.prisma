@@ -111,6 +111,7 @@ model User {
   assignedIssues Issue[] @relation("IssueAssignee")
   createdIssueRelations IssueRelation[]
   issueSubscriptions IssueSubscription[]
+  issueReactions IssueReaction[]
   projectSubscriptions ProjectSubscription[]
   projectUpdates ProjectUpdate[] @relation("ProjectUpdateAuthor")
   createdDocuments Document[] @relation("DocumentCreator")
@@ -557,6 +558,7 @@ model Issue {
   activities Activity[]
   labelLinks IssueLabel[]
   subscribers IssueSubscription[]
+  reactions IssueReaction[]
 
   @@unique([workspaceId, identifier])
   @@unique([teamId, number])
@@ -596,6 +598,20 @@ model IssueSubscription {
   @@id([issueId, userId])
   @@index([userId, createdAt])
   @@map("issue_subscriptions")
+}
+
+model IssueReaction {
+  issueId    String   @map("issue_id")
+  userId     String   @map("user_id")
+  emoji      String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([issueId, userId, emoji])
+  @@index([issueId, createdAt])
+  @@map("issue_reactions")
 }
 
 model Cycle {

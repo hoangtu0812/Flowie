@@ -1,13 +1,14 @@
 'use client';
 
 import { useIssuesStore } from '@/store/issues-store';
-import { Paperclip, SmilePlus } from 'lucide-react';
+import { Paperclip } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityFeed } from './activity-feed';
 import { IssuePropertiesPanel } from './issue-properties-panel';
 import { IssueRelations } from './issue-relations';
+import { IssueReactions } from './issue-reactions';
 import { IssueSubIssues } from './issue-sub-issues';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
@@ -153,15 +154,7 @@ export default function IssueDetails() {
                </div>
 
                <div className="flex items-center gap-3 mt-6 text-muted-foreground">
-                  <button
-                     type="button"
-                     disabled
-                     title="Reactions are not available yet"
-                     className="opacity-50 cursor-not-allowed"
-                     aria-label="Reactions are not available yet"
-                  >
-                     <SmilePlus className="size-4" />
-                  </button>
+                  <IssueReactions issueId={issue.id} />
                   <button
                      type="button"
                      disabled={isUploadingAttachment}
@@ -210,11 +203,13 @@ export default function IssueDetails() {
 
                <IssueRelations issueId={issue.id} orgId={orgId ?? 'lndev-ui'} />
 
-               <IssueSubIssues
-                  issueId={issue.id}
-                  teamId={issue.team.id}
-                  orgId={orgId ?? 'lndev-ui'}
-               />
+               {issue.team && (
+                  <IssueSubIssues
+                     issueId={issue.id}
+                     teamId={issue.team.id}
+                     orgId={orgId ?? 'lndev-ui'}
+                  />
+               )}
 
                <div className="border-t border-border/60 mt-8" />
 

@@ -8,6 +8,7 @@ import { IssueStatusCategory } from '@circle/database';
 import { PrismaService } from '../database/prisma.service';
 import { CreateIssueDto } from './dto/create-issue.dto';
 import { LinkIssueDto } from './dto/link-issue.dto';
+import { issueReactionEmojis, IssueReactionDto } from './dto/issue-reaction.dto';
 import { UpdateIssueDto } from './dto/update-issue.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -268,6 +269,46 @@ export class IssuesService {
          select: subIssueSelect,
          orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
       });
+   }
+
+   async reactions(issueId: string, workspaceId: string, userId: string) {
+      await this.get(issueId, workspaceId, userId);
+      const [groups, current] = await Promise.all([
+         this.prisma.issueReaction.groupBy({
+            by: ['emoji'],
+            where: { issueId },
+            _count: { emoji: true },
+            orderBy: { _count: { emoji: 'desc' } },
+         }),
+         this.prisma.issueReaction.findMany({
+            where: { issueId, userId },
+            select: { emoji: true },
+         }),
+      ]);
+      const currentEmojis = new Set(current.map((reaction) => reaction.emoji));
+      return groups.map((group) => ({
+         emoji: group.emoji,
+         count: group._count.emoji,
+         reacted: currentEmojis.has(group.emoji),
+      }));
+   }
+
+   async addReaction(issueId: string, dto: IssueReactionDto, userId: string) {
+      await this.get(issueId, dto.workspaceId, userId);
+      return this.prisma.issueReaction.upsert({
+         where: { issueId_userId_emoji: { issueId, userId, emoji: dto.emoji } },
+         create: { issueId, userId, emoji: dto.emoji },
+         update: {},
+      });
+   }
+
+   async removeReaction(issueId: string, emoji: string, workspaceId: string, userId: string) {
+      await this.get(issueId, workspaceId, userId);
+      if (!issueReactionEmojis.includes(emoji as (typeof issueReactionEmojis)[number])) {
+         throw new BadRequestException('Unsupported reaction.');
+      }
+      await this.prisma.issueReaction.deleteMany({ where: { issueId, userId, emoji } });
+      return { issueId, emoji, removed: true };
    }
 
    async relations(issueId: string, workspaceId: string, userId: string) {

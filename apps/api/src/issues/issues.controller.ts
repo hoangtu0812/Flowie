@@ -14,6 +14,7 @@ import { IssueStatusCategory } from '@circle/database';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { CreateIssueDto } from './dto/create-issue.dto';
 import { LinkIssueDto } from './dto/link-issue.dto';
+import { IssueReactionDto } from './dto/issue-reaction.dto';
 import { UpdateIssueDto } from './dto/update-issue.dto';
 import { IssuesService } from './issues.service';
 
@@ -61,6 +62,36 @@ export class IssuesController {
       @Req() request: AuthenticatedRequest
    ) {
       return { data: await this.issues.subIssues(issueId, workspaceId, request.auth!.userId) };
+   }
+
+   @Get(':issueId/reactions')
+   async reactions(
+      @Param('issueId') issueId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.issues.reactions(issueId, workspaceId, request.auth!.userId) };
+   }
+
+   @Post(':issueId/reactions')
+   async addReaction(
+      @Param('issueId') issueId: string,
+      @Body() dto: IssueReactionDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.issues.addReaction(issueId, dto, request.auth!.userId) };
+   }
+
+   @Delete(':issueId/reactions/:emoji')
+   async removeReaction(
+      @Param('issueId') issueId: string,
+      @Param('emoji') emoji: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.issues.removeReaction(issueId, emoji, workspaceId, request.auth!.userId),
+      };
    }
 
    @Get(':issueId/relations')
