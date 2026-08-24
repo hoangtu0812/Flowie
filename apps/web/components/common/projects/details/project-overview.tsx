@@ -14,11 +14,12 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { format, parseISO } from 'date-fns';
 import { ArrowRight, ChevronDown, FileText, PenLine, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useMemo, useRef, useState } from 'react';
+import { type ReactNode, useMemo, useRef, useState } from 'react';
 import { DocumentOutline, getOutlineItems } from './document-outline';
 import { toIssueUi, toProjectDetailUi, toProjectUi } from './project-detail-ui-adapter';
 import { ProjectSidePanel } from './project-side-panel';
@@ -202,6 +203,80 @@ function ProjectInitiativesDialog({
    );
 }
 
+function ProjectDescriptionDialog({
+   value,
+   trigger,
+   onSave,
+}: {
+   value: string;
+   trigger: ReactNode;
+   onSave: (description: string) => Promise<unknown>;
+}) {
+   const [open, setOpen] = useState(false);
+   const [draft, setDraft] = useState(value);
+   const [saving, setSaving] = useState(false);
+   const [error, setError] = useState<string>();
+   const save = async () => {
+      setSaving(true);
+      setError(undefined);
+      try {
+         await onSave(draft);
+         setOpen(false);
+      } catch (caught) {
+         setError(caught instanceof Error ? caught.message : 'Could not update description.');
+      } finally {
+         setSaving(false);
+      }
+   };
+   return (
+      <Dialog open={open} onOpenChange={setOpen}>
+         <div
+            role="button"
+            tabIndex={0}
+            className="w-full text-left"
+            onClick={() => {
+               setDraft(value);
+               setError(undefined);
+               setOpen(true);
+            }}
+            onKeyDown={(event) => {
+               if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  setDraft(value);
+                  setError(undefined);
+                  setOpen(true);
+               }
+            }}
+         >
+            {trigger}
+         </div>
+         <DialogContent>
+            <DialogHeader>
+               <DialogTitle>Project description</DialogTitle>
+               <DialogDescription>
+                  Update the summary and detailed project context.
+               </DialogDescription>
+            </DialogHeader>
+            <Textarea
+               value={draft}
+               onChange={(event) => setDraft(event.target.value)}
+               rows={12}
+               autoFocus
+            />
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <DialogFooter>
+               <Button variant="outline" onClick={() => setOpen(false)}>
+                  Cancel
+               </Button>
+               <Button disabled={saving} onClick={() => void save()}>
+                  {saving ? 'Saving…' : 'Save'}
+               </Button>
+            </DialogFooter>
+         </DialogContent>
+      </Dialog>
+   );
+}
+
 /** Project "Overview" tab: description column + properties side panel. */
 export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
    const {
@@ -213,9 +288,11 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
       availableLabels,
       availableInitiatives,
       availableMembers,
+      availableStatuses,
       updateLabels,
       updateInitiatives,
       updateMembers,
+      updateProject,
       createMilestone,
       toggleMilestone,
       createResource,
@@ -259,9 +336,15 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
                      <uiProject.icon className="size-6" />
                   </div>
                   <h1 className="text-3xl font-semibold tracking-tight">{uiProject.name}</h1>
-                  <p className="mt-3 text-muted-foreground leading-relaxed">
-                     {detail.summary || 'No summary yet.'}
-                  </p>
+                  <ProjectDescriptionDialog
+                     value={project.description ?? ''}
+                     onSave={(description) => updateProject({ description })}
+                     trigger={
+                        <p className="mt-3 text-muted-foreground leading-relaxed">
+                           {detail.summary || 'No summary yet.'}
+                        </p>
+                     }
+                  />
 
                   {/* Inline properties */}
                   <div className="mt-6 flex flex-col gap-2.5 text-sm">
@@ -380,13 +463,19 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
                         Description
                         <ChevronDown className="size-3.5" />
                      </div>
-                     <div className="text-[15px] leading-relaxed">
-                        {detail.description.length ? (
-                           <ContentBlocks blocks={detail.description} />
-                        ) : (
-                           <p className="text-muted-foreground">No description yet.</p>
-                        )}
-                     </div>
+                     <ProjectDescriptionDialog
+                        value={project.description ?? ''}
+                        onSave={(description) => updateProject({ description })}
+                        trigger={
+                           <div className="text-[15px] leading-relaxed">
+                              {detail.description.length ? (
+                                 <ContentBlocks blocks={detail.description} />
+                              ) : (
+                                 <p className="text-muted-foreground">No description yet.</p>
+                              )}
+                           </div>
+                        }
+                     />
                   </div>
                </div>
             </div>
@@ -399,6 +488,8 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
             issues={uiIssues}
             availableLabels={availableLabels}
             availableMembers={availableMembers}
+            availableStatuses={availableStatuses}
+            onProjectChange={updateProject}
             onLabelsChange={updateLabels}
             onMembersChange={updateMembers}
             onCreateMilestone={createMilestone}

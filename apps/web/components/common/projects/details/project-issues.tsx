@@ -26,8 +26,10 @@ export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
       activities,
       availableLabels,
       availableMembers,
+      availableStatuses,
       updateLabels,
       updateMembers,
+      updateProject,
       createMilestone,
       toggleMilestone,
       loading,
@@ -78,6 +80,8 @@ export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
                insightsIssues={displayedIssues}
                availableLabels={availableLabels}
                availableMembers={availableMembers}
+               availableStatuses={availableStatuses}
+               onProjectChange={updateProject}
                onLabelsChange={updateLabels}
                onMembersChange={updateMembers}
                onCreateMilestone={createMilestone}

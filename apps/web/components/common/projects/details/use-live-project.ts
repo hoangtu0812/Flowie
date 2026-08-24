@@ -89,6 +89,7 @@ export type LiveProjectUpdate = {
 
 export type LiveProjectLabel = { id: string; name: string; color: string };
 export type LiveProjectInitiative = { id: string; name: string };
+export type LiveProjectStatus = { id: string; name: string; color: string; category: string };
 
 export type LiveProjectCustomField = {
    id: string;
@@ -113,6 +114,7 @@ export function useLiveProject(projectId: string) {
    const [updates, setUpdates] = useState<LiveProjectUpdate[]>([]);
    const [availableLabels, setAvailableLabels] = useState<LiveProjectLabel[]>([]);
    const [availableInitiatives, setAvailableInitiatives] = useState<LiveProjectInitiative[]>([]);
+   const [availableStatuses, setAvailableStatuses] = useState<LiveProjectStatus[]>([]);
    const [customFields, setCustomFields] = useState<LiveProjectCustomField[]>([]);
    const [availableMembers, setAvailableMembers] = useState<LiveWorkspaceMember[]>([]);
    const [loading, setLoading] = useState(true);
@@ -137,6 +139,7 @@ export function useLiveProject(projectId: string) {
                customFieldsResponse,
                initiativesResponse,
                membersResponse,
+               statusesResponse,
             ] = await Promise.all([
                fetch(`${api}/projects/${projectId}?${query}`, { credentials: 'include' }),
                fetch(`${api}/projects/${projectId}/issues?${query}`, { credentials: 'include' }),
@@ -155,6 +158,7 @@ export function useLiveProject(projectId: string) {
                }),
                fetch(`${api}/initiatives?${query}`, { credentials: 'include' }),
                fetch(`${api}/workspaces/${workspaceId}/members`, { credentials: 'include' }),
+               fetch(`${api}/projects/statuses?${query}`, { credentials: 'include' }),
             ]);
             if (
                !projectResponse.ok ||
@@ -165,7 +169,8 @@ export function useLiveProject(projectId: string) {
                !labelsResponse.ok ||
                !customFieldsResponse.ok ||
                !initiativesResponse.ok ||
-               !membersResponse.ok
+               !membersResponse.ok ||
+               !statusesResponse.ok
             ) {
                throw new Error('Could not load project details.');
             }
@@ -189,6 +194,9 @@ export function useLiveProject(projectId: string) {
                ((await membersResponse.json()) as { data: LiveWorkspaceMember[] }).data.filter(
                   (member) => member.status === 'ACTIVE'
                )
+            );
+            setAvailableStatuses(
+               ((await statusesResponse.json()) as { data: LiveProjectStatus[] }).data
             );
          } catch (caught) {
             if (current)
@@ -244,6 +252,36 @@ export function useLiveProject(projectId: string) {
             current.map((update) => (update.id === created.id ? withAttachment : update))
          );
          return withAttachment;
+      },
+      [projectId, workspaceId]
+   );
+
+   const updateProject = useCallback(
+      async (data: Record<string, unknown>) => {
+         if (!workspaceId) throw new Error('Workspace is not available yet.');
+         const query = new URLSearchParams({ workspaceId });
+         const response = await fetch(`${api}/projects/${projectId}?${query}`, {
+            method: 'PATCH',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(data),
+         });
+         if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as {
+               message?: string | string[];
+            } | null;
+            throw new Error(
+               Array.isArray(payload?.message)
+                  ? payload.message.join(' ')
+                  : (payload?.message ?? 'Could not update the project.')
+            );
+         }
+         const updated = ((await response.json()) as { data: LiveProject }).data;
+         setProject((current) => ({
+            ...updated,
+            favorites: updated.favorites ?? current?.favorites ?? [],
+         }));
+         return updated;
       },
       [projectId, workspaceId]
    );
@@ -450,12 +488,14 @@ export function useLiveProject(projectId: string) {
       updates,
       availableLabels,
       availableInitiatives,
+      availableStatuses,
       availableMembers,
       customFields,
       loading,
       error,
       createUpdate,
       createResource,
+      updateProject,
       updateLabels,
       updateCustomFields,
       updateInitiatives,

@@ -13,6 +13,13 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+   Select,
+   SelectContent,
+   SelectItem,
+   SelectTrigger,
+   SelectValue,
+} from '@/components/ui/select';
 import { ProjectDetail } from '@/mock-data/project-details';
 import { PanelFilterTarget, usePanelFilter } from '@/components/common/issues/use-panel-filter';
 import { cn } from '@/lib/utils';
@@ -24,7 +31,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { ProjectLabelSelector } from '../project-label-selector';
-import type { LiveProjectLabel, LiveWorkspaceMember } from './use-live-project';
+import type { LiveProjectLabel, LiveProjectStatus, LiveWorkspaceMember } from './use-live-project';
 import type { ProjectDetailUiIssue, ProjectDetailUiProject } from './project-detail-ui-adapter';
 import { ProjectMemberSelector } from '../project-member-selector';
 
@@ -34,6 +41,8 @@ interface ProjectPropertiesPanelProps {
    issues: ProjectDetailUiIssue[];
    availableLabels: LiveProjectLabel[];
    availableMembers: LiveWorkspaceMember[];
+   availableStatuses: LiveProjectStatus[];
+   onProjectChange: (data: Record<string, unknown>) => Promise<unknown>;
    onLabelsChange?: (labelIds: string[]) => Promise<void>;
    onMembersChange: (userIds: string[]) => Promise<void>;
    onCreateMilestone?: (title: string, targetDate?: string) => Promise<unknown>;
@@ -201,6 +210,58 @@ function MilestoneDialog({
    );
 }
 
+function ProjectTargetDateDialog({
+   value,
+   onSave,
+}: {
+   value?: string;
+   onSave: (targetDate: string | null) => Promise<unknown>;
+}) {
+   const [open, setOpen] = useState(false);
+   const [draft, setDraft] = useState(value?.slice(0, 10) ?? '');
+   const [saving, setSaving] = useState(false);
+   const save = async () => {
+      setSaving(true);
+      try {
+         await onSave(draft || null);
+         setOpen(false);
+      } catch (caught) {
+         toast.error(caught instanceof Error ? caught.message : 'Could not update target date.');
+      } finally {
+         setSaving(false);
+      }
+   };
+   return (
+      <Dialog open={open} onOpenChange={setOpen}>
+         <button
+            type="button"
+            className="inline-flex items-center gap-1"
+            onClick={() => {
+               setDraft(value?.slice(0, 10) ?? '');
+               setOpen(true);
+            }}
+         >
+            <Calendar className="size-3.5 text-muted-foreground" />
+            {value ? formatDay(value) : 'Target'}
+         </button>
+         <DialogContent>
+            <DialogHeader>
+               <DialogTitle>Project target date</DialogTitle>
+            </DialogHeader>
+            <Input type="date" value={draft} onChange={(event) => setDraft(event.target.value)} />
+            <DialogFooter>
+               <Button variant="outline" onClick={() => setOpen(false)}>
+                  Cancel
+               </Button>
+               <Button disabled={saving} onClick={() => void save()}>
+                  {saving ? 'Saving…' : 'Save'}
+               </Button>
+            </DialogFooter>
+         </DialogContent>
+      </Dialog>
+   );
+}
+
 /**
  * Right-side panel of the project pages: properties, milestones,
  * progress breakdowns and a compact activity feed.
@@ -211,6 +272,8 @@ export function ProjectPropertiesPanel({
    issues,
    availableLabels,
    availableMembers,
+   availableStatuses,
+   onProjectChange,
    onLabelsChange,
    onMembersChange,
    onCreateMilestone,
@@ -223,6 +286,10 @@ export function ProjectPropertiesPanel({
    const team = project.team;
 
    const started = issues.filter((issue) => issue.status.category === 'started').length;
+   const mutate = (data: Record<string, unknown>) =>
+      onProjectChange(data).catch((caught) => {
+         toast.error(caught instanceof Error ? caught.message : 'Could not update project.');
+      });
 
    const assigneeRows = useMemo(
       () =>
@@ -297,22 +364,64 @@ export function ProjectPropertiesPanel({
             <h3 className="text-sm font-medium mb-2.5">Properties</h3>
             <div className="flex flex-col gap-1">
                <PropertyRow label="Status">
-                  <project.status.icon />
-                  <span>{project.status.name}</span>
+                  <Select
+                     value={project.status.id}
+                     onValueChange={(status) => void mutate({ status })}
+                  >
+                     <SelectTrigger className="h-auto w-40 border-0 bg-transparent p-0 shadow-none">
+                        <SelectValue />
+                     </SelectTrigger>
+                     <SelectContent>
+                        {availableStatuses.map((status) => (
+                           <SelectItem key={status.id} value={status.name}>
+                              {status.name
+                                 .replaceAll('-', ' ')
+                                 .replace(/\b\w/g, (character) => character.toUpperCase())}
+                           </SelectItem>
+                        ))}
+                     </SelectContent>
+                  </Select>
                </PropertyRow>
                <PropertyRow label="Priority">
-                  <project.priority.icon className="size-3.5 text-muted-foreground" />
-                  <span>{project.priority.name}</span>
+                  <Select
+                     value={project.priority.id}
+                     onValueChange={(priority) =>
+                        void mutate({ priority: priority === 'no-priority' ? 'none' : priority })
+                     }
+                  >
+                     <SelectTrigger className="h-auto w-40 border-0 bg-transparent p-0 shadow-none">
+                        <SelectValue />
+                     </SelectTrigger>
+                     <SelectContent>
+                        {['no-priority', 'urgent', 'high', 'medium', 'low'].map((priority) => (
+                           <SelectItem key={priority} value={priority}>
+                              {priority === 'no-priority'
+                                 ? 'No priority'
+                                 : priority[0].toUpperCase() + priority.slice(1)}
+                           </SelectItem>
+                        ))}
+                     </SelectContent>
+                  </Select>
                </PropertyRow>
                <PropertyRow label="Lead">
-                  <Avatar className="size-5">
-                     <AvatarImage
-                        src={project.lead.avatarUrl || undefined}
-                        alt={project.lead.name}
-                     />
-                     <AvatarFallback>{project.lead.name[0]}</AvatarFallback>
-                  </Avatar>
-                  <span className="truncate max-w-36">{project.lead.name}</span>
+                  <Select
+                     value={project.lead.id}
+                     onValueChange={(leadId) =>
+                        void mutate({ leadId: leadId === 'unassigned' ? null : leadId })
+                     }
+                  >
+                     <SelectTrigger className="h-auto w-40 border-0 bg-transparent p-0 shadow-none">
+                        <SelectValue />
+                     </SelectTrigger>
+                     <SelectContent>
+                        <SelectItem value="unassigned">Unassigned</SelectItem>
+                        {availableMembers.map((member) => (
+                           <SelectItem key={member.user.id} value={member.user.id}>
+                              {member.user.name}
+                           </SelectItem>
+                        ))}
+                     </SelectContent>
+                  </Select>
                </PropertyRow>
                <PropertyRow label="Members">
                   <ProjectMemberSelector
@@ -327,10 +436,10 @@ export function ProjectPropertiesPanel({
                      {formatDay(project.startDate)}
                   </span>
                   <ArrowRight className="size-3 text-muted-foreground" />
-                  <span className="inline-flex items-center gap-1">
-                     <Calendar className="size-3.5 text-muted-foreground" />
-                     {project.targetDate ? formatDay(project.targetDate) : 'Target'}
-                  </span>
+                  <ProjectTargetDateDialog
+                     value={project.targetDate}
+                     onSave={(targetDate) => onProjectChange({ targetDate })}
+                  />
                </PropertyRow>
                <PropertyRow label="Teams">
                   <span className="inline-flex items-center gap-1.5">
