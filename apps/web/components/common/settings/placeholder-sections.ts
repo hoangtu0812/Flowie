@@ -13,11 +13,6 @@ export const PLACEHOLDER_SECTIONS: Record<string, PlaceholderConfig> = {
       actionLabel: 'New SLA',
       emptyLabel: 'No SLAs',
    },
-   'project-labels': {
-      title: 'Project labels',
-      actionLabel: 'New label',
-      emptyLabel: 'No project labels',
-   },
    'project-updates': {
       title: 'Project updates',
       description: 'Configure how project updates are collected across the workspace',

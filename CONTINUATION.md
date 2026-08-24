@@ -47,14 +47,14 @@ docker compose --profile app up -d --no-build --pull never --force-recreate api 
 
 ## 4. Tiến độ đã xác minh
 
-Tất cả commit bên dưới đã được push. Commit tài liệu gần nhất là `f6cde67`; commit tính năng gần nhất là `a4ce762`.
+Tất cả commit bên dưới đã được push. Commit tài liệu gần nhất là `62cf6b3`; commit tính năng gần nhất là `8eae2d4`.
 
 | Nhóm chức năng | Trạng thái thực tế |
 | --- | --- |
 | Runtime/Docker/database | Hoạt động; API và web mới nhất đã rebuild/recreate, health API và login route đều HTTP 200. PostgreSQL host port mặc định là 5433 để không đụng project khác. |
 | Auth và workspace | Login/session/workspace resolution thật; OAuth, reset password, email verification, SSO chưa làm. |
 | Teams và members | Màn Teams, team overview/members/documents và workspace members dùng API; các tạo mới đã có trên màn đã migrate. |
-| Projects | Danh sách, tạo project, issue progress, header, Overview/Issues/Activity dùng API. Tại Project list gốc, lead/priority/status/target date nay lưu qua `PATCH /projects/:id`, lead lấy thành viên workspace thật và activity được ghi. Timeline peek hiển thị Project/Issue/Milestone/Initiative từ API; Saved View không có mutation Project được disable thay vì giả lưu. Health popover nay lưu Subscribe/Unsubscribe và New update vào PostgreSQL, hiển thị update gần nhất, ghi Activity, gửi Inbox cho subscriber và enqueue Discord khi webhook có cấu hình. |
+| Projects | Danh sách, tạo project, issue progress, header, Overview/Issues/Activity dùng API. Tại Project list gốc, lead/priority/status/target date và Project label nay lưu qua `PATCH /projects/:id`, lead lấy thành viên workspace thật và activity được ghi. Settings Project labels có CRUD riêng, không lẫn Issue labels; list/board hiển thị label đã lưu và list có selector gán/bỏ gán. Timeline peek hiển thị Project/Issue/Milestone/Initiative từ API; Saved View không có mutation Project được disable thay vì giả lưu. Health popover nay lưu Subscribe/Unsubscribe và New update vào PostgreSQL, hiển thị update gần nhất, ghi Activity, gửi Inbox cho subscriber và enqueue Discord khi webhook có cấu hình. |
 | Issues | Danh sách, tạo/sửa trường cơ bản, filter options, My issues, labels CRUD, cycles, saved views, subscriptions, due dates, archive và command palette dùng dữ liệu thật. Issue detail, properties, assignee, status/priority, comments/activity/subscribe, Issue attachment và context-menu actions đã live trong Docker. Status/priority/assignee/label/project chỉ đổi UI sau API success; khi thiếu workspace hoặc API lỗi không tạo local-only state. Thao tác authenticated end-to-end còn cần xác minh thủ công. |
 | Initiatives & documents | Initiative list/detail/create/link project; team documents đã live. |
 | Inbox & Discord | Inbox read/delete/unread badge lưu thật; cấu hình Discord workspace đã có. |
@@ -79,6 +79,7 @@ Các commit mốc quan trọng:
 - `37d7b67`: Timeline Project peek bỏ `mock-data` cho Project/detail/team; dùng Project, Issue, Milestone, Initiative API thật, có loading/error/empty state. Các control không có contract (favorite, Slack, project labels, custom properties) unavailable rõ ràng. TypeScript web, API build/tests 4 suites/8 tests, Docker API/web production rebuild/recreate cùng health/login route HTTP 200 đều pass. Browser automation xác nhận chưa có session login, nên acceptance mutation vẫn chờ user đăng nhập.
 - `3a0a8f8`: Xoá Project update store và ba Project side-panel/outline component không được import bởi route/UI nào, nên không còn giữ luồng mock có thể được gọi nhầm. Health popover giữ layout gốc nhưng Subscribe/New update disabled rõ ràng vì chưa có contract backend. TypeScript web và Docker frontend production rebuild/recreate pass; API health và login route HTTP 200.
 - `a4ce762`: Bổ sung migration `project_updates`/`project_subscriptions`, API list/create update và subscribe/unsubscribe có workspace/team authorization. Health popover gốc được nối API, không optimistic-write; tạo update tự subscribe người tạo, ghi Activity và chỉ Inbox subscriber khác, đồng thời enqueue Discord. API test 5 suites/11 tests, API build, TypeScript web, Docker API/web production rebuild/recreate, migration PostgreSQL, health/login route đều pass. Acceptance trong browser đã đăng nhập còn chờ xác minh.
+- `8eae2d4`: Bổ sung migration `project_labels`/`project_label_links`, Project label CRUD tại Settings và gán/bỏ gán qua `PATCH /projects/:id`. Project labels tách biệt hoàn toàn Issue labels; list/board nhận labels từ API, selector giữ state cũ và báo lỗi nếu PATCH fail. API test 6 suites/15 tests, API build, TypeScript web, Docker API/web production rebuild/recreate, migration PostgreSQL, health/login route đều pass. Acceptance trong browser đã đăng nhập còn chờ xác minh.
 
 Lịch sử đầy đủ và kiểm chứng từng commit nằm trong `AGENT_HANDOFF.md`.
 
@@ -88,19 +89,20 @@ Lịch sử đầy đủ và kiểm chứng từng commit nằm trong `AGENT_HAN
 
 UI đích: `apps/web/components/common/issues/details/issue-details.tsx`.
 
-Project list tại `098d5f8` đã nối lead/priority/status/target date vào `PATCH /projects/:id`; `cf59ca6` đảm bảo status/priority/assignee/label/project ở Issue chỉ đổi state sau API success; `37d7b67` nối timeline Project peek vào Project/Issue/Milestone/Initiative API; `a4ce762` nối Subscribe/Unsubscribe/New update trong Health popover vào Project API/Migration thật; Paperclip ở Issue detail đã được nối vào Attachment API tại `8c6bbd8`, due date đã được nối vào `PATCH /issues` tại `603c994`, context menu đã nối subscription/archive tại `ca19039`, command palette đã nối API workspace/cycle tại `74e21c7`, sidebar đã bỏ mock records tại `f7994e1`, và Team settings đã bỏ mock data/click rỗng tại `398a432`. Image `api`/`web` đã rebuild/recreate ngày 2026-08-24; `GET /health` và `/auth/login` đều HTTP 200. Browser automation xác nhận local app đang ở Login và không có session sẵn; agent không tự tạo/đăng nhập account. Agent tiếp theo cần xác minh các mutation trong một browser đã đăng nhập:
+Project list tại `098d5f8` đã nối lead/priority/status/target date vào `PATCH /projects/:id`; `8eae2d4` nối Project label settings/list selector vào Project API/Migration thật; `cf59ca6` đảm bảo status/priority/assignee/label/project ở Issue chỉ đổi state sau API success; `37d7b67` nối timeline Project peek vào Project/Issue/Milestone/Initiative API; `a4ce762` nối Subscribe/Unsubscribe/New update trong Health popover vào Project API/Migration thật; Paperclip ở Issue detail đã được nối vào Attachment API tại `8c6bbd8`, due date đã được nối vào `PATCH /issues` tại `603c994`, context menu đã nối subscription/archive tại `ca19039`, command palette đã nối API workspace/cycle tại `74e21c7`, sidebar đã bỏ mock records tại `f7994e1`, và Team settings đã bỏ mock data/click rỗng tại `398a432`. Image `api`/`web` đã rebuild/recreate ngày 2026-08-24; `GET /health` và `/auth/login` đều HTTP 200. Browser automation xác nhận local app đang ở Login và không có session sẵn; agent không tự tạo/đăng nhập account. Agent tiếp theo cần xác minh các mutation trong một browser đã đăng nhập:
 
 1. Vào Project list/Health popover/Issue detail/command palette đã đăng nhập (chỉ rebuild lại khi source/image đã thay đổi và người dùng xác nhận 5G).
 2. Đổi lead/priority/status/target date của một Project thử nghiệm, refresh từng lần và xác nhận Activity ghi lại thay đổi; thử lead ngoài workspace nếu có để xác nhận API từ chối.
-3. Trong Health popover của Project thử nghiệm, subscribe/unsubscribe và refresh để xác nhận persistence; tạo một New update, refresh để thấy record/author/timestamp, kiểm tra Activity và Inbox của một subscriber khác nếu có. Không claim delivery Discord nếu workspace chưa cấu hình webhook thật.
-4. Upload file nhỏ từ Paperclip, refresh trang để xác nhận persistence, tải file xuống, và thử file lớn hơn 10 MB để xác nhận feedback client.
-5. Đặt và xoá due date trong command palette, refresh để xác nhận hai mutation đều persisted.
-6. Trong context menu, subscribe/unsubscribe rồi refresh; archive một Issue thử nghiệm sau confirm và xác nhận item biến mất khỏi danh sách thật.
-7. Trong command palette, kiểm tra assignee/status/label/project đều là record của workspace thật; chuyển Issue sang cycle rồi xoá cycle, refresh sau từng thao tác.
-8. Kiểm tra badge Inbox và Settings “Your teams” phản ánh API; Reviews/Agent vẫn unavailable.
-9. Mở một Team settings thật và xác minh team/member/status/cycle cùng các link real; settings chưa có API phải unavailable.
-10. Ghi rõ kết quả runtime vào hai tài liệu này rồi commit/push documentation.
-11. Không mở rộng sang comment attachment, reaction, sub-issue hay relation trong lần xác minh này.
+3. Tạo/sửa/xoá Project label trong Settings, refresh mỗi lần; trong Project list gán/bỏ gán label bằng selector và refresh để xác nhận chip/list/board persist. Thử một label ngoài workspace qua API nếu có để xác nhận API từ chối.
+4. Trong Health popover của Project thử nghiệm, subscribe/unsubscribe và refresh để xác nhận persistence; tạo một New update, refresh để thấy record/author/timestamp, kiểm tra Activity và Inbox của một subscriber khác nếu có. Không claim delivery Discord nếu workspace chưa cấu hình webhook thật.
+5. Upload file nhỏ từ Paperclip, refresh trang để xác nhận persistence, tải file xuống, và thử file lớn hơn 10 MB để xác nhận feedback client.
+6. Đặt và xoá due date trong command palette, refresh để xác nhận hai mutation đều persisted.
+7. Trong context menu, subscribe/unsubscribe rồi refresh; archive một Issue thử nghiệm sau confirm và xác nhận item biến mất khỏi danh sách thật.
+8. Trong command palette, kiểm tra assignee/status/label/project đều là record của workspace thật; chuyển Issue sang cycle rồi xoá cycle, refresh sau từng thao tác.
+9. Kiểm tra badge Inbox và Settings “Your teams” phản ánh API; Reviews/Agent vẫn unavailable.
+10. Mở một Team settings thật và xác minh team/member/status/cycle cùng các link real; settings chưa có API phải unavailable.
+11. Ghi rõ kết quả runtime vào hai tài liệu này rồi commit/push documentation.
+12. Không mở rộng sang comment attachment, reaction, sub-issue hay relation trong lần xác minh này.
 
 ## 6. Backlog theo thứ tự ưu tiên
 

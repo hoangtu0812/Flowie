@@ -109,6 +109,7 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 | `37d7b67` | Original Project timeline peek no longer reads mock Project/detail/team data. It loads persisted project, issue, milestone, and initiative-link data through the existing Project APIs, and has loading/error/empty states. Unsupported favorites, Slack, project labels, and custom-property controls are explicitly unavailable. Frontend TypeScript check, API build/tests (4 suites/8 tests), Docker API/web production rebuild/recreate, API health, and web login route passed. Browser automation found the local app at Login with no reusable session, so authenticated acceptance remains pending. |
 | `3a0a8f8` | Removed the unreachable Project update store and deprecated Project side-panel/properties/outline components; no active route imports them. The original Health popover still renders persisted health, while Subscribe and New update are disabled because there is no project-subscription/project-update API contract. Frontend TypeScript check, Docker web production build/recreate, API health, and web login route passed. |
 | `a4ce762` | Added persisted Project subscriptions and updates through Prisma migration `20260824100000_project_updates`, protected Project APIs, and original Health popover integration. Subscribe/unsubscribe and posting updates only change browser state after API success; an update auto-subscribes its author, creates Project Activity, sends Inbox notifications only to other subscribers, and enqueues Discord delivery. API tests (5 suites/11 tests), API build, frontend TypeScript check, Docker API/web production rebuild/recreate, migration inspection, API health, and web login route passed. Authenticated acceptance remains pending. |
+| `8eae2d4` | Added separate persisted Project labels through Prisma migration `20260824110000_project_labels`; no Issue label data or route is reused. Original Project labels Settings now has CRUD, and the original Project-list label area loads labels from API with a minimal selector that persists assignments through `PATCH /projects/:id`. Failed assignment requests retain the prior browser state and render an error. API tests (6 suites/15 tests), API build, frontend TypeScript check, Docker API/web production rebuild/recreate, migration inspection, API health, and web login route passed. Authenticated acceptance remains pending. |
 
 ### Capability status at the handoff point
 
@@ -117,7 +118,7 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 | Runtime, Docker, DB | Implemented | Existing images run offline through `scripts/start-local.ps1`; PostgreSQL, Redis, MinIO, API, web, and worker are composed together. API/web were rebuilt and recreated on 2026-08-24; API health and web login routes returned HTTP 200. PostgreSQL uses host port 5433 by default. |
 | Authentication and workspace access | Implemented baseline | Login/session/workspace resolution are real. OAuth, email verification, password reset, and enterprise SSO are deferred. |
 | Teams and members | Implemented baseline | Original Teams, team overview, team members, and workspace members use API data; team/member creation actions covered by the migrated screens persist. |
-| Projects | Implemented baseline | Original project list, creation, issue progress, overview, issues, activity, timeline peek, and project header use API data. Project-list lead/priority/status/target-date controls now persist through the Projects API and record activity; workspace members are the only selectable leads. Timeline peek's unsupported controls are disabled instead of mock. Health popover now persists subscriptions and updates, renders recent updates, records Activity, and uses subscriber-only Inbox/Discord notification delivery. Project settings still need their final audit. |
+| Projects | Implemented baseline | Original project list, creation, issue progress, overview, issues, activity, timeline peek, and project header use API data. Project-list lead/priority/status/target-date and label assignments persist through the Projects API and record activity; workspace members are the only selectable leads. Project labels have separate settings CRUD and storage from Issue labels. Timeline peek's unsupported controls are disabled instead of mock. Health popover now persists subscriptions and updates, renders recent updates, records Activity, and uses subscriber-only Inbox/Discord notification delivery. Project settings still need their final audit. |
 | Issues, labels, cycles, saved views | Implemented baseline | Original issues list/filter options, My issues scopes, labels CRUD, cycles/timeline, subscriptions, saved views, due dates, archive action, and command palette use API data. Original Issue detail, Activity/Comments/Subscribe, properties, assignee changes, Issue attachments, and truthful context-menu actions are in the rebuilt Docker images. Status/priority/assignee/label/project changes do not optimistically invent browser state. Authenticated end-to-end mutations still require manual acceptance verification. Label editing, sub-issues, reactions, and relations remain deferred. |
 | Initiatives and documents | Implemented baseline | Initiative list/detail/create/linking and team documents are live. Advanced relationships/workflows remain deferred. |
 | Inbox and Discord | Implemented baseline | Inbox persists notifications/read/delete and workspace Discord integration exists. No fake delivery channels are enabled. |
@@ -126,7 +127,7 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 
 ## Exact restart point
 
-The next agent should first complete **authenticated acceptance verification for original Project list/timeline/Health popover controls, Issue mutations/attachments, due dates, context-menu actions, command palette, sidebar navigation, and Team settings**. Features in `098d5f8` / `cf59ca6` / `37d7b67` / `3a0a8f8` / `a4ce762` / `8c6bbd8` / `603c994` / `ca19039` / `74e21c7` / `f7994e1` / `398a432` / `c5d2d73` are already included in rebuilt/running Docker API/web images. On 2026-08-24, API health and the web login route returned HTTP 200; browser automation reached Login with no session, so this does not prove authenticated mutations.
+The next agent should first complete **authenticated acceptance verification for original Project list/timeline/Health popover controls, Issue mutations/attachments, due dates, context-menu actions, command palette, sidebar navigation, and Team settings**. Features in `098d5f8` / `8eae2d4` / `cf59ca6` / `37d7b67` / `3a0a8f8` / `a4ce762` / `8c6bbd8` / `603c994` / `ca19039` / `74e21c7` / `f7994e1` / `398a432` / `c5d2d73` are already included in rebuilt/running Docker API/web images. On 2026-08-24, API health and the web login route returned HTTP 200; browser automation reached Login with no session, so this does not prove authenticated mutations.
 
 `apps/web/components/common/issues/details/issue-details.tsx`
 
@@ -135,16 +136,17 @@ Required verification sequence:
 1. Verify an authenticated Project list, timeline peek, Issue detail route, and command palette. Rebuild only if source/image changes and the user confirms 5G.
 2. Click a project timeline bar and verify its peek values against the Project overview: project/team/lead, issue scope, milestones, and initiative links must be persisted values; unsupported favorite/Slack/labels controls must remain disabled or unavailable.
 3. Change a disposable project's lead, priority, status, and target date from the original list; refresh after each mutation and verify the Project Activity audit entry. Attempt a non-workspace lead only through the protected API if a suitable account exists; it must be rejected.
-4. Open the original Project Health popover, subscribe/unsubscribe and refresh, post an update, refresh and verify its author/body/timestamp plus Project Activity. With a second subscriber, confirm the Inbox record; Discord requires an actual configured webhook and must not be claimed from queueing alone.
-5. In the original Issue detail/context menu/command palette, mutate status, priority, assignee, label, and project; refresh after each mutation and trigger one failed request if safely possible to confirm the UI keeps its former data and displays an error.
-6. Manually upload a small file, refresh, download it, then verify the 10 MB client error. Do not claim full attachment runtime verification from a route `307` alone.
-7. Set and clear a due date from the original command palette; refresh to prove both operations persisted through the API.
-8. From the original Issue context menu, subscribe/unsubscribe then refresh; archive a disposable Issue after confirmation and verify it disappears from the live list.
-9. In command palette, confirm assignee/status/labels/project options are real workspace records, then move an Issue to a cycle and clear it; refresh after each mutation.
-10. Confirm the Inbox badge matches persisted notifications and Settings “Your teams” lists only real workspace teams. Reviews and Agent must remain unavailable.
-11. Open a real Team settings page and verify team identity, member count, status count, cycle count and overview/members links. Unsupported settings must not be clickable.
-12. Record the result in this document and `CONTINUATION.md`, then commit/push the documentation.
-13. Only after that, continue with **Issue label editing** if its API contract covers it; otherwise leave it explicitly unavailable. Sub-issues, reactions, comment attachments, and relations require separate contracts.
+4. Create/edit/delete a Project label in original Settings and refresh after each action. Assign/unassign it from an original Project-list selector, then refresh the list/board; it must not leak into Issue labels. Attempt an outside-workspace label via protected API if a suitable account exists; it must be rejected.
+5. Open the original Project Health popover, subscribe/unsubscribe and refresh, post an update, refresh and verify its author/body/timestamp plus Project Activity. With a second subscriber, confirm the Inbox record; Discord requires an actual configured webhook and must not be claimed from queueing alone.
+6. In the original Issue detail/context menu/command palette, mutate status, priority, assignee, label, and project; refresh after each mutation and trigger one failed request if safely possible to confirm the UI keeps its former data and displays an error.
+7. Manually upload a small file, refresh, download it, then verify the 10 MB client error. Do not claim full attachment runtime verification from a route `307` alone.
+8. Set and clear a due date from the original command palette; refresh to prove both operations persisted through the API.
+9. From the original Issue context menu, subscribe/unsubscribe then refresh; archive a disposable Issue after confirmation and verify it disappears from the live list.
+10. In command palette, confirm assignee/status/labels/project options are real workspace records, then move an Issue to a cycle and clear it; refresh after each mutation.
+11. Confirm the Inbox badge matches persisted notifications and Settings “Your teams” lists only real workspace teams. Reviews and Agent must remain unavailable.
+12. Open a real Team settings page and verify team identity, member count, status count, cycle count and overview/members links. Unsupported settings must not be clickable.
+13. Record the result in this document and `CONTINUATION.md`, then commit/push the documentation.
+14. Only after that, continue with **Issue label editing** if its API contract covers it; otherwise leave it explicitly unavailable. Sub-issues, reactions, comment attachments, and relations require separate contracts.
 
 This is a backend/API integration priority, not a UI redesign task.
 
@@ -200,7 +202,7 @@ Do not call the product “mock-free” based on the raw import count. It is moc
 | Route group | Classification | Reason / follow-up |
 | --- | --- | --- |
 | SLAs | `unavailable` | No SLA schema or configuration API. |
-| Project labels | `unavailable` | No project-label schema/API (Issue labels are live separately). |
+| Project labels | `migrated` | Separate Project-label schema/API, Settings CRUD, and Project-list assignment are implemented; Issue labels remain separate. |
 | Project updates | `unavailable` | No project-update configuration service. |
 | Customer requests | `unavailable` | No customer-request schema/API. |
 | Releases | `unavailable` | No release schema/API. |
@@ -223,6 +225,7 @@ The shared placeholder has disabled filter/action controls and an explicit unava
 | Team settings | `migrated` / `unavailable` | Team/member/status/cycle values are API-backed; configuration without APIs is disabled. |
 | Reviews and Agent sidebar entries | `unavailable` | Retained in original navigation but cannot open their mock workflows. |
 | Project Health popover | `migrated` | Displays persisted health and calls Project subscription/update APIs. Recent updates are loaded from PostgreSQL; failed requests leave visible state unchanged. |
+| Project labels Settings/list selector | `migrated` | CRUD and assignment use `project_labels`/`project_label_links`; list/board render persisted labels and failed assignment leaves prior state unchanged. |
 | Legacy Project update/side-panel modules | `removed` | Four files had no imports from any active route or component and were removed in `3a0a8f8`; they cannot reintroduce mock records. |
 
 ### Later phases (not current blocking work)
