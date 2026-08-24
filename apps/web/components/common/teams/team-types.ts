@@ -30,6 +30,10 @@ export type WorkspaceTeam = {
    defaultIssueTemplateId: string | null;
 };
 
+export type DeletedWorkspaceTeam = Pick<WorkspaceTeam, 'id' | 'name' | 'identifier' | 'icon'> & {
+   deletedAt: string;
+};
+
 type ApiTeam = Omit<WorkspaceTeam, 'members' | 'projectCount' | 'cycleCount'> & {
    members: Array<{ role: string; user: Omit<TeamMember, 'role'> }>;
    _count: { projects: number; cycles: number };
@@ -95,6 +99,28 @@ export async function joinWorkspaceTeam(workspaceId: string, teamId: string) {
    if (!response.ok) {
       const payload = (await response.json().catch(() => null)) as { message?: string } | null;
       throw new Error(payload?.message ?? 'Could not join team.');
+   }
+   return response.json();
+}
+
+export async function loadDeletedWorkspaceTeams(
+   workspaceId: string
+): Promise<DeletedWorkspaceTeam[]> {
+   const query = new URLSearchParams({ workspaceId });
+   const response = await fetch(`${api}/teams/deleted?${query}`, { credentials: 'include' });
+   if (!response.ok) throw new Error('Could not load recently deleted teams.');
+   return ((await response.json()) as { data: DeletedWorkspaceTeam[] }).data;
+}
+
+export async function restoreWorkspaceTeam(workspaceId: string, teamId: string) {
+   const query = new URLSearchParams({ workspaceId });
+   const response = await fetch(`${api}/teams/${teamId}/restore?${query}`, {
+      method: 'POST',
+      credentials: 'include',
+   });
+   if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+      throw new Error(payload?.message ?? 'Could not restore this team.');
    }
    return response.json();
 }

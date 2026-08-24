@@ -20,6 +20,8 @@ const teamDetailInclude = {
    _count: { select: { issues: true, projects: true, cycles: true, documents: true } },
 } as const;
 
+const TEAM_RESTORE_WINDOW_DAYS = 30;
+
 @Injectable()
 export class TeamsService {
    constructor(private readonly prisma: PrismaService) {}
@@ -54,6 +56,23 @@ export class TeamsService {
             },
          },
          include: teamDetailInclude,
+      });
+   }
+   async listDeleted(workspaceId: string, userId: string) {
+      await this.authorizeManager(workspaceId, userId);
+      const restorableSince = new Date(
+         Date.now() - TEAM_RESTORE_WINDOW_DAYS * 24 * 60 * 60 * 1000
+      );
+      return this.prisma.team.findMany({
+         where: { workspaceId, deletedAt: { gte: restorableSince } },
+         select: {
+            id: true,
+            name: true,
+            identifier: true,
+            icon: true,
+            deletedAt: true,
+         },
+         orderBy: { deletedAt: 'desc' },
       });
    }
    async get(teamId: string, workspaceId: string, userId: string) {
@@ -129,6 +148,62 @@ export class TeamsService {
             },
          });
          return retired;
+      });
+   }
+   async scheduleDeletion(teamId: string, workspaceId: string, userId: string) {
+      await this.authorizeManager(workspaceId, userId);
+      const team = await this.prisma.team.findFirst({
+         where: { id: teamId, workspaceId, deletedAt: null },
+         select: { id: true },
+      });
+      if (!team) throw new NotFoundException('Team not found.');
+      const deletedAt = new Date();
+      return this.prisma.$transaction(async (tx) => {
+         const scheduled = await tx.team.update({
+            where: { id: teamId },
+            data: { archivedAt: deletedAt, deletedAt },
+         });
+         await tx.auditLog.create({
+            data: {
+               workspaceId,
+               actorId: userId,
+               action: 'team.deletion_scheduled',
+               entityType: 'team',
+               entityId: teamId,
+               metadata: { restoreWindowDays: TEAM_RESTORE_WINDOW_DAYS },
+            },
+         });
+         return scheduled;
+      });
+   }
+   async restore(teamId: string, workspaceId: string, userId: string) {
+      await this.authorizeManager(workspaceId, userId);
+      const team = await this.prisma.team.findFirst({
+         where: { id: teamId, workspaceId, deletedAt: { not: null } },
+         select: { id: true, deletedAt: true },
+      });
+      if (!team?.deletedAt) throw new NotFoundException('Deleted team not found.');
+      const restoreDeadline = new Date(
+         team.deletedAt.getTime() + TEAM_RESTORE_WINDOW_DAYS * 24 * 60 * 60 * 1000
+      );
+      if (restoreDeadline <= new Date()) {
+         throw new BadRequestException('The 30-day restoration window has expired.');
+      }
+      return this.prisma.$transaction(async (tx) => {
+         const restored = await tx.team.update({
+            where: { id: teamId },
+            data: { archivedAt: null, deletedAt: null },
+         });
+         await tx.auditLog.create({
+            data: {
+               workspaceId,
+               actorId: userId,
+               action: 'team.restored',
+               entityType: 'team',
+               entityId: teamId,
+            },
+         });
+         return restored;
       });
    }
    async addMember(teamId: string, dto: AddTeamMemberDto, userId: string) {

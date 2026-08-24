@@ -150,4 +150,79 @@ describe('TeamsService membership', () => {
       );
       expect(prisma.$transaction).not.toHaveBeenCalled();
    });
+
+   it('schedules deletion separately from retirement and records the restore window', async () => {
+      const tx = {
+         team: { update: jest.fn().mockResolvedValue({ id: 'team-1' }) },
+         auditLog: { create: jest.fn().mockResolvedValue({ id: 'audit-1' }) },
+      };
+      const prisma = {
+         workspaceMember: { findFirst: jest.fn().mockResolvedValue({ role: 'ADMIN' }) },
+         team: { findFirst: jest.fn().mockResolvedValue({ id: 'team-1' }) },
+         $transaction: jest.fn((operation: (client: typeof tx) => unknown) => operation(tx)),
+      };
+      const service = new TeamsService(prisma as never);
+
+      await expect(
+         service.scheduleDeletion('team-1', 'workspace-1', 'user-1')
+      ).resolves.toEqual({ id: 'team-1' });
+      expect(tx.team.update).toHaveBeenCalledWith({
+         where: { id: 'team-1' },
+         data: { archivedAt: expect.any(Date), deletedAt: expect.any(Date) },
+      });
+      expect(tx.auditLog.create).toHaveBeenCalledWith({
+         data: expect.objectContaining({
+            action: 'team.deletion_scheduled',
+            metadata: { restoreWindowDays: 30 },
+         }),
+      });
+   });
+
+   it('restores a team during the 30-day window and records the audit event', async () => {
+      const tx = {
+         team: { update: jest.fn().mockResolvedValue({ id: 'team-1' }) },
+         auditLog: { create: jest.fn().mockResolvedValue({ id: 'audit-1' }) },
+      };
+      const prisma = {
+         workspaceMember: { findFirst: jest.fn().mockResolvedValue({ role: 'OWNER' }) },
+         team: {
+            findFirst: jest.fn().mockResolvedValue({
+               id: 'team-1',
+               deletedAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+            }),
+         },
+         $transaction: jest.fn((operation: (client: typeof tx) => unknown) => operation(tx)),
+      };
+      const service = new TeamsService(prisma as never);
+
+      await expect(service.restore('team-1', 'workspace-1', 'user-1')).resolves.toEqual({
+         id: 'team-1',
+      });
+      expect(tx.team.update).toHaveBeenCalledWith({
+         where: { id: 'team-1' },
+         data: { archivedAt: null, deletedAt: null },
+      });
+      expect(tx.auditLog.create).toHaveBeenCalledWith({
+         data: expect.objectContaining({ action: 'team.restored' }),
+      });
+   });
+
+   it('does not restore a team after the 30-day window', async () => {
+      const prisma = {
+         workspaceMember: { findFirst: jest.fn().mockResolvedValue({ role: 'OWNER' }) },
+         team: {
+            findFirst: jest.fn().mockResolvedValue({
+               id: 'team-1',
+               deletedAt: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000),
+            }),
+         },
+         $transaction: jest.fn(),
+      };
+      const service = new TeamsService(prisma as never);
+
+      await expect(service.restore('team-1', 'workspace-1', 'user-1')).rejects.toThrow(
+         'The 30-day restoration window has expired.'
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+   });
 });

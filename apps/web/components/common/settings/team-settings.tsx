@@ -41,6 +41,7 @@ export default function TeamSettings({ teamId }: TeamSettingsProps) {
    const [statusCount, setStatusCount] = useState(0);
    const [templates, setTemplates] = useState<IssueOptions['templates']>([]);
    const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+   const [deleting, setDeleting] = useState(false);
 
    useEffect(() => {
       setState('loading');
@@ -209,6 +210,30 @@ export default function TeamSettings({ teamId }: TeamSettingsProps) {
       if (!response.ok) {
          const payload = (await response.json().catch(() => null)) as { message?: string } | null;
          window.alert(payload?.message ?? 'Could not retire this team.');
+         return;
+      }
+      router.push(`/${orgId}/teams`);
+      router.refresh();
+   };
+
+   const deleteTeam = async () => {
+      if (
+         !workspaceId ||
+         deleting ||
+         !window.confirm(
+            `Delete ${team.name}? You can restore it from team settings for the next 30 days.`
+         )
+      )
+         return;
+      setDeleting(true);
+      const response = await fetch(
+         `${api}/teams/${team.id}/schedule-deletion?${new URLSearchParams({ workspaceId })}`,
+         { method: 'POST', credentials: 'include' }
+      );
+      if (!response.ok) {
+         const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+         window.alert(payload?.message ?? 'Could not delete this team.');
+         setDeleting(false);
          return;
       }
       router.push(`/${orgId}/teams`);
@@ -403,8 +428,13 @@ export default function TeamSettings({ teamId }: TeamSettingsProps) {
                         description="Permanently delete this team and all its data, with a 30-day restoration window"
                         muted
                         trailing={
-                           <Button size="xs" variant="ghost" disabled>
-                              Delete...
+                           <Button
+                              size="xs"
+                              variant="ghost"
+                              disabled={deleting}
+                              onClick={() => void deleteTeam()}
+                           >
+                              {deleting ? 'Deleting…' : 'Delete...'}
                            </Button>
                         }
                      />

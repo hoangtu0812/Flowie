@@ -30,6 +30,12 @@ export class TeamsController {
    @Post() async create(@Body() dto: CreateTeamDto, @Req() request: AuthenticatedRequest) {
       return { data: await this.teams.create(dto, request.auth!.userId) };
    }
+   @Get('deleted') async listDeleted(
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.teams.listDeleted(workspaceId, request.auth!.userId) };
+   }
    @Get(':teamId') async get(
       @Param('teamId') teamId: string,
       @Query('workspaceId') workspaceId: string,
@@ -51,6 +57,22 @@ export class TeamsController {
       @Req() request: AuthenticatedRequest
    ) {
       return { data: await this.teams.archive(teamId, workspaceId, request.auth!.userId) };
+   }
+   @Post(':teamId/schedule-deletion') async scheduleDeletion(
+      @Param('teamId') teamId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.teams.scheduleDeletion(teamId, workspaceId, request.auth!.userId),
+      };
+   }
+   @Post(':teamId/restore') async restore(
+      @Param('teamId') teamId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.teams.restore(teamId, workspaceId, request.auth!.userId) };
    }
    @Post(':teamId/members') async addMember(
       @Param('teamId') teamId: string,

@@ -346,6 +346,7 @@ model Team {
   parentTeamId           String?   @map("parent_team_id")
   defaultIssueTemplateId String?   @map("default_issue_template_id")
   archivedAt             DateTime? @map("archived_at")
+  deletedAt              DateTime? @map("deleted_at")
   createdAt              DateTime  @default(now()) @map("created_at")
   updatedAt              DateTime  @updatedAt @map("updated_at")
 
@@ -365,6 +366,7 @@ model Team {
 
   @@unique([workspaceId, identifier])
   @@index([workspaceId])
+  @@index([workspaceId, deletedAt])
   @@index([parentTeamId])
   @@index([defaultIssueTemplateId])
   @@map("teams")

@@ -5,9 +5,13 @@ import { Input } from '@/components/ui/input';
 import {
    createWorkspaceTeam,
    joinWorkspaceTeam,
+   loadDeletedWorkspaceTeams,
    loadCurrentWorkspaceTeams,
+   restoreWorkspaceTeam,
+   type DeletedWorkspaceTeam,
    WorkspaceTeam,
 } from '@/components/common/teams/team-types';
+import { loadCurrentWorkspaceMembership } from '@/lib/workspaces';
 import { Check } from 'lucide-react';
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -22,13 +26,18 @@ export default function NewTeam() {
    const [error, setError] = useState<string>();
    const [saving, setSaving] = useState(false);
    const [joiningTeamId, setJoiningTeamId] = useState<string>();
+   const [deletedTeams, setDeletedTeams] = useState<DeletedWorkspaceTeam[]>([]);
+   const [restoringTeamId, setRestoringTeamId] = useState<string>();
    const notJoined = teams.filter((team) => !team.joined);
 
    useEffect(() => {
-      void loadCurrentWorkspaceTeams()
-         .then(({ workspaceId, teams }) => {
+      void Promise.all([loadCurrentWorkspaceTeams(), loadCurrentWorkspaceMembership()])
+         .then(async ([{ workspaceId, teams }, membership]) => {
             setWorkspaceId(workspaceId);
             setTeams(teams);
+            if (membership.role === 'OWNER' || membership.role === 'ADMIN') {
+               setDeletedTeams(await loadDeletedWorkspaceTeams(workspaceId));
+            }
          })
          .catch((error: unknown) =>
             setError(error instanceof Error ? error.message : 'Could not load teams.')
@@ -57,6 +66,25 @@ export default function NewTeam() {
          setError(error instanceof Error ? error.message : 'Could not create team.');
       } finally {
          setSaving(false);
+      }
+   };
+
+   const restoreTeam = async (teamId: string) => {
+      if (!workspaceId || restoringTeamId) return;
+      setRestoringTeamId(teamId);
+      setError(undefined);
+      try {
+         await restoreWorkspaceTeam(workspaceId, teamId);
+         const [current, deleted] = await Promise.all([
+            loadCurrentWorkspaceTeams(),
+            loadDeletedWorkspaceTeams(workspaceId),
+         ]);
+         setTeams(current.teams);
+         setDeletedTeams(deleted);
+      } catch (error) {
+         setError(error instanceof Error ? error.message : 'Could not restore this team.');
+      } finally {
+         setRestoringTeamId(undefined);
       }
    };
 
@@ -124,6 +152,34 @@ export default function NewTeam() {
                ))}
             </SettingsCard>
          </SettingsSection>
+
+         {deletedTeams.length > 0 && (
+            <SettingsSection
+               title="Recently deleted teams"
+               description="Deleted teams can be restored for 30 days"
+            >
+               <SettingsCard>
+                  {deletedTeams.map((team) => (
+                     <SettingsRow
+                        key={team.id}
+                        icon={<span className="text-sm">{team.icon ?? '👥'}</span>}
+                        title={team.name}
+                        description={`Deleted ${new Date(team.deletedAt).toLocaleDateString()}`}
+                        trailing={
+                           <Button
+                              size="xs"
+                              variant="secondary"
+                              disabled={Boolean(restoringTeamId)}
+                              onClick={() => void restoreTeam(team.id)}
+                           >
+                              {restoringTeamId === team.id ? 'Restoring…' : 'Restore'}
+                           </Button>
+                        }
+                     />
+                  ))}
+               </SettingsCard>
+            </SettingsSection>
+         )}
       </SettingsShell>
    );
 }
