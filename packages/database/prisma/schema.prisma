@@ -112,6 +112,8 @@ model User {
   createdIssueRelations IssueRelation[]
   issueSubscriptions IssueSubscription[]
   issueReactions IssueReaction[]
+  issueFavorites IssueFavorite[]
+  issueReminders IssueReminder[]
   projectSubscriptions ProjectSubscription[]
   projectUpdates ProjectUpdate[] @relation("ProjectUpdateAuthor")
   createdDocuments Document[] @relation("DocumentCreator")
@@ -734,6 +736,8 @@ model Issue {
   labelLinks IssueLabel[]
   subscribers IssueSubscription[]
   reactions IssueReaction[]
+  favorites IssueFavorite[]
+  reminders IssueReminder[]
   customerRequests CustomerRequest[]
   convertedAsks Ask[] @relation("AskConvertedIssue")
 
@@ -775,6 +779,36 @@ model IssueSubscription {
   @@id([issueId, userId])
   @@index([userId, createdAt])
   @@map("issue_subscriptions")
+}
+
+model IssueFavorite {
+  issueId   String   @map("issue_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([issueId, userId])
+  @@index([userId, createdAt])
+  @@map("issue_favorites")
+}
+
+model IssueReminder {
+  id          String    @id @default(cuid())
+  issueId     String    @map("issue_id")
+  userId      String    @map("user_id")
+  remindAt    DateTime  @map("remind_at")
+  deliveredAt DateTime? @map("delivered_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([issueId, userId])
+  @@index([userId, deliveredAt, remindAt])
+  @@map("issue_reminders")
 }
 
 model IssueReaction {

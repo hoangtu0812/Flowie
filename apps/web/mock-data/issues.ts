@@ -21,6 +21,8 @@ export interface Issue {
    team?: { id: string; name: string; identifier: string };
    /** Per-current-user state returned by the Issue API. */
    isSubscribed?: boolean;
+   isFavorite?: boolean;
+   reminderAt?: string;
    hasActivity?: boolean;
    /** Cycle the issue belongs to. Empty string = no cycle (backlog stock). */
    cycleId: string;

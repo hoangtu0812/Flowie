@@ -57,6 +57,8 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       createIssue,
       getIssueById,
       setIssueSubscription,
+      setIssueFavorite,
+      setIssueReminder,
       archiveIssue,
       statuses,
       members,
@@ -146,6 +148,55 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
          toast.success(issue.isSubscribed ? 'Unsubscribed from issue' : 'Subscribed to issue');
       } catch {
          toast.error('Could not update subscription');
+      }
+   };
+
+   const handleFavorite = async () => {
+      if (!issueId) return;
+      const issue = getIssueById(issueId);
+      if (!issue) return;
+      try {
+         await setIssueFavorite(issueId, !issue.isFavorite);
+         toast.success(issue.isFavorite ? 'Removed from favorites' : 'Added to favorites');
+      } catch {
+         toast.error('Could not update favorite');
+      }
+   };
+
+   const handleReminder = async () => {
+      if (!issueId) return;
+      const issue = getIssueById(issueId);
+      if (!issue) return;
+      const reminderDate = issue.reminderAt ? new Date(issue.reminderAt) : undefined;
+      const pad = (value: number) => value.toString().padStart(2, '0');
+      const current = reminderDate
+         ? `${reminderDate.getFullYear()}-${pad(reminderDate.getMonth() + 1)}-${pad(reminderDate.getDate())} ${pad(reminderDate.getHours())}:${pad(reminderDate.getMinutes())}`
+         : '';
+      const value = window.prompt(
+         'Reminder time (YYYY-MM-DD HH:mm). Leave empty to cancel the current reminder.',
+         current
+      );
+      if (value === null) return;
+      try {
+         if (!value.trim()) {
+            if (!issue.reminderAt) return;
+            await setIssueReminder(issueId, undefined);
+            toast.success('Reminder canceled');
+            return;
+         }
+         if (!/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}$/.test(value.trim())) {
+            toast.error('Use the YYYY-MM-DD HH:mm date format');
+            return;
+         }
+         const remindAt = new Date(value.trim().replace(' ', 'T'));
+         if (Number.isNaN(remindAt.getTime()) || remindAt.getTime() <= Date.now()) {
+            toast.error('Choose a valid future time');
+            return;
+         }
+         await setIssueReminder(issueId, remindAt.toISOString());
+         toast.success('Reminder set');
+      } catch {
+         toast.error('Could not update reminder');
       }
    };
 
@@ -454,8 +505,9 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
             <ContextMenuShortcut>S</ContextMenuShortcut>
          </ContextMenuItem>
 
-         <ContextMenuItem disabled title="Favorites are not available yet">
-            <Star className="size-4" /> Favorite
+         <ContextMenuItem onClick={() => void handleFavorite()}>
+            <Star className="size-4" />
+            {getIssueById(issueId ?? '')?.isFavorite ? 'Unfavorite' : 'Favorite'}
             <ContextMenuShortcut>F</ContextMenuShortcut>
          </ContextMenuItem>
 
@@ -463,8 +515,9 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
             <Clipboard className="size-4" /> Copy
          </ContextMenuItem>
 
-         <ContextMenuItem disabled title="Reminders are not available yet">
-            <AlarmClock className="size-4" /> Remind me
+         <ContextMenuItem onClick={() => void handleReminder()}>
+            <AlarmClock className="size-4" />
+            {getIssueById(issueId ?? '')?.reminderAt ? 'Change reminder' : 'Remind me'}
             <ContextMenuShortcut>H</ContextMenuShortcut>
          </ContextMenuItem>
 

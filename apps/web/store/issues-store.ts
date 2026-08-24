@@ -48,6 +48,8 @@ type ApiIssue = {
    cycleLinks: Array<{ cycleId: string }>;
    subscribers?: Array<{ userId: string }>;
    activities?: Array<{ id: string }>;
+   favorites?: Array<{ userId: string }>;
+   reminders?: Array<{ id: string; remindAt: string; deliveredAt: string | null }>;
 };
 type ApiIssueOptions = {
    statuses: ApiStatus[];
@@ -144,6 +146,8 @@ interface IssuesState {
    updateIssueTitle: (issueId: string, title: string) => Promise<void>;
    updateIssueCycle: (issueId: string, cycleId?: string) => Promise<void>;
    setIssueSubscription: (issueId: string, subscribed: boolean) => Promise<void>;
+   setIssueFavorite: (issueId: string, favorite: boolean) => Promise<void>;
+   setIssueReminder: (issueId: string, remindAt?: string) => Promise<void>;
    archiveIssue: (issueId: string) => Promise<void>;
    getIssueById: (id: string) => Issue | undefined;
 }
@@ -258,6 +262,8 @@ const mapIssue = (issue: ApiIssue): Issue => ({
    createdAt: issue.createdAt,
    team: issue.team,
    isSubscribed: Boolean(issue.subscribers?.length),
+   isFavorite: Boolean(issue.favorites?.length),
+   reminderAt: issue.reminders?.[0]?.remindAt,
    hasActivity: Boolean(issue.activities?.length),
    cycleId: issue.cycleLinks[0]?.cycleId ?? '',
    project: issue.project ? mapProject(issue.project) : undefined,
@@ -507,6 +513,33 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
       );
       if (!response.ok) throw new Error('Could not update subscription.');
       get().updateIssue(issueId, { isSubscribed: subscribed });
+   },
+   setIssueFavorite: async (issueId, favorite) => {
+      const workspaceId = get().workspaceId;
+      if (!workspaceId) throw new Error('No workspace is available.');
+      const response = await fetch(`${api}/issues/${issueId}/favorite?workspaceId=${workspaceId}`, {
+         method: favorite ? 'POST' : 'DELETE',
+         credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Could not update favorite.');
+      get().updateIssue(issueId, { isFavorite: favorite });
+   },
+   setIssueReminder: async (issueId, remindAt) => {
+      const workspaceId = get().workspaceId;
+      if (!workspaceId) throw new Error('No workspace is available.');
+      const response = await fetch(
+         `${api}/issues/${issueId}/reminder${remindAt ? '' : `?workspaceId=${workspaceId}`}`,
+         remindAt
+            ? {
+                 method: 'POST',
+                 credentials: 'include',
+                 headers: { 'content-type': 'application/json' },
+                 body: JSON.stringify({ workspaceId, remindAt }),
+              }
+            : { method: 'DELETE', credentials: 'include' }
+      );
+      if (!response.ok) throw new Error('Could not update reminder.');
+      get().updateIssue(issueId, { reminderAt: remindAt });
    },
    archiveIssue: async (issueId) => {
       const workspaceId = get().workspaceId;

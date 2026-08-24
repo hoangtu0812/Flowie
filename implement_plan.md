@@ -31,7 +31,8 @@
   áp dụng vào dialog Create Issue gốc (title, description, status, priority, project, assignee,
   labels).
 - Issue context menu: rename, due date, copy, create-related-and-link, convert to document,
-  mark completed, subscribe và archive đều gọi backend.
+  mark completed, subscribe, favorite, reminder và archive đều gọi backend. Reminder được xếp
+  lịch qua Redis/BullMQ và Worker tạo notification thật đúng thời điểm.
 - Issue detail: giữ cột nội dung/sidebar, typography mô tả và hàng sub-issue của UI gốc; relations
   nằm lại trong properties sidebar, nhưng dữ liệu/action đều từ API thật.
 - Projects: list/board/timeline, create/update/archive, overview/activity/issues, update, health,
@@ -80,8 +81,8 @@
 
 ### Kiểm tra gần nhất
 
-- API Jest: **18 suites, 38 tests passed** trong Docker image, gồm validation Ask, workflow
-  chuyển Ask thành Issue thật, Pulse thật và kiểm tra image signature/storage metadata của Emoji.
+- API Jest: **19 suites, 40 tests passed** trong Docker image, gồm validation Ask, workflow
+  chuyển Ask thành Issue thật, Pulse, Emoji và personal state favorite/reminder của Issue.
 - NestJS build: passed.
 - Next.js 15 production build: passed.
 - Docker `api` và `web`: rebuilt; `http://localhost:4000/api/v1/health` và
@@ -97,10 +98,14 @@
   Postgres Docker.
 - Migration `20260824230000_workspace_emojis` đã được apply và bảng `workspace_emojis` đã được
   xác minh trực tiếp trong Postgres Docker.
+- Migration `20260824240000_issue_favorites_reminders` đã được apply; hai bảng
+  `issue_favorites`/`issue_reminders`, bốn route và Worker kết nối Redis đã được xác minh.
 - Audit frontend đã đối chiếu **308 file baseline** trong `app/components/hooks/lib/store` với
   `upstream/master`. Đã xóa 18 component `real-*` rút gọn không còn route nào dùng; runtime chỉ
   còn cây component gốc được nối API.
 - Docker dependency install dùng cache; không tải package mới trong các checkpoint trên.
+- Audit runtime mới nhất không còn route dùng `SettingsPlaceholder` và không còn import mảng
+  record nghiệp vụ mock; các import từ `mock-data` chỉ còn type hoặc catalog icon/màu/status.
 - Lưu ý môi trường host hiện thiếu binary `jest`/`prettier` trong `node_modules`, dù lockfile có
   khai báo; không cài lại package chỉ để chạy test vì Docker build đã kiểm tra compile bằng đúng
   dependency graph. DTO spec cho Issue Templates đã được thêm để chạy ở lần cài dependency đầy đủ.
@@ -110,7 +115,7 @@
 | Ưu tiên | Phần còn lại | Trạng thái/chỉ dẫn |
 | --- | --- | --- |
 | P0 | Visual parity toàn route | So sánh từng route với `upstream/master`; visual acceptance cần một phiên đăng nhập workspace-member. Phiên browser kiểm thử hiện chưa đăng nhập nên mới xác nhận được route guard/login, chưa chụp được các màn hình nội bộ. |
-| P1 | Issue actions còn thiếu | Favorite, reminder, move team, issue type/duplicate/won't-fix classification và convert-to-comment cần schema/backend; hiện được disabled trung thực. |
+| P1 | Issue actions còn thiếu | Move team, issue type/duplicate/won't-fix classification và convert-to-comment cần schema/backend; hiện được disabled trung thực. Favorite và reminder đã hoàn thành. |
 | P1 | Team settings nâng cao | Cycle cadence, triage, auto-close/archive, hierarchy và template defaults chưa có schema; UI hiện ghi Unavailable. |
 | P1 | Account security | Session management, passkeys, personal API keys và signing keys chưa có backend. |
 | P1 | Project extras | Favorite project và attachment cho project update chưa có persistence. |
@@ -121,7 +126,7 @@
 ## Thứ tự tiếp tục đề xuất
 
 1. Tạo user workspace-member/phiên test và chụp đối chiếu các route chính với UI gốc.
-2. Bổ sung issue favorite/reminder và project favorite bằng schema thật.
+2. Bổ sung project favorite bằng schema thật, sau đó move team/classification cho Issue.
 3. Hoàn thiện team automation/cycle policy và Account Security.
 4. Tiếp tục audit visual bằng phiên workspace-member và ghi lại screenshot acceptance cho từng route.
 

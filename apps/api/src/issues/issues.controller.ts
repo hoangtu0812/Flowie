@@ -18,6 +18,7 @@ import { LinkIssueDto } from './dto/link-issue.dto';
 import { IssueReactionDto } from './dto/issue-reaction.dto';
 import { UpdateIssueDto } from './dto/update-issue.dto';
 import { UpdateIssueTemplateDto } from './dto/update-issue-template.dto';
+import { SetIssueReminderDto } from './dto/set-issue-reminder.dto';
 import { IssuesService } from './issues.service';
 
 @UseGuards(AuthGuard)
@@ -193,6 +194,42 @@ export class IssuesController {
    ) {
       await this.issues.unsubscribe(issueId, workspaceId, request.auth!.userId);
       return { data: { ok: true } };
+   }
+
+   @Post(':issueId/favorite')
+   async favorite(
+      @Param('issueId') issueId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.issues.favorite(issueId, workspaceId, request.auth!.userId) };
+   }
+
+   @Delete(':issueId/favorite')
+   async unfavorite(
+      @Param('issueId') issueId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.issues.unfavorite(issueId, workspaceId, request.auth!.userId) };
+   }
+
+   @Post(':issueId/reminder')
+   async setReminder(
+      @Param('issueId') issueId: string,
+      @Body() dto: SetIssueReminderDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.issues.setReminder(issueId, dto, request.auth!.userId) };
+   }
+
+   @Delete(':issueId/reminder')
+   async cancelReminder(
+      @Param('issueId') issueId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.issues.cancelReminder(issueId, workspaceId, request.auth!.userId) };
    }
 
    @Patch(':issueId')

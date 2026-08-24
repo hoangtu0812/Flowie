@@ -14,6 +14,8 @@ import { UpdateIssueDto } from './dto/update-issue.dto';
 import { UpdateIssueTemplateDto } from './dto/update-issue-template.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SlasService } from '../slas/slas.service';
+import { JobsService } from '../jobs/jobs.service';
+import { SetIssueReminderDto } from './dto/set-issue-reminder.dto';
 
 const issueInclude = {
    team: { select: { id: true, name: true, identifier: true } },
@@ -54,12 +56,21 @@ const subIssueSelect = {
    assignee: { select: { id: true, name: true, avatarUrl: true } },
 } as const;
 
+const issueUserStateInclude = (userId: string) => ({
+   favorites: { where: { userId }, select: { userId: true } },
+   reminders: {
+      where: { userId, deliveredAt: null },
+      select: { id: true, remindAt: true, deliveredAt: true },
+   },
+});
+
 @Injectable()
 export class IssuesService {
    constructor(
       private readonly prisma: PrismaService,
       private readonly notifications: NotificationsService,
-      private readonly slas: SlasService
+      private readonly slas: SlasService,
+      private readonly jobs: JobsService
    ) {}
 
    async list(
@@ -85,6 +96,7 @@ export class IssuesService {
             ...issueInclude,
             subscribers: { where: { userId }, select: { userId: true } },
             activities: { where: { actorId: userId }, select: { id: true } },
+            ...issueUserStateInclude(userId),
          },
          orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
       });
@@ -335,6 +347,7 @@ export class IssuesService {
          include: {
             ...issueInclude,
             _count: { select: { comments: true } },
+            ...issueUserStateInclude(userId),
          },
       });
       if (!issue) throw new NotFoundException('Issue not found.');
@@ -602,6 +615,51 @@ export class IssuesService {
    async unsubscribe(issueId: string, workspaceId: string, userId: string) {
       await this.get(issueId, workspaceId, userId);
       await this.prisma.issueSubscription.deleteMany({ where: { issueId, userId } });
+   }
+
+   async favorite(issueId: string, workspaceId: string, userId: string) {
+      await this.get(issueId, workspaceId, userId);
+      return this.prisma.issueFavorite.upsert({
+         where: { issueId_userId: { issueId, userId } },
+         update: {},
+         create: { issueId, userId },
+      });
+   }
+
+   async unfavorite(issueId: string, workspaceId: string, userId: string) {
+      await this.get(issueId, workspaceId, userId);
+      await this.prisma.issueFavorite.deleteMany({ where: { issueId, userId } });
+      return { issueId, favorite: false };
+   }
+
+   async setReminder(issueId: string, dto: SetIssueReminderDto, userId: string) {
+      await this.get(issueId, dto.workspaceId, userId);
+      const remindAt = new Date(dto.remindAt);
+      const now = Date.now();
+      if (remindAt.getTime() <= now) {
+         throw new BadRequestException('Reminder time must be in the future.');
+      }
+      if (remindAt.getTime() > now + 366 * 24 * 60 * 60 * 1_000) {
+         throw new BadRequestException('Reminder time may not be more than one year away.');
+      }
+      const reminder = await this.prisma.issueReminder.upsert({
+         where: { issueId_userId: { issueId, userId } },
+         update: { remindAt, deliveredAt: null },
+         create: { issueId, userId, remindAt },
+      });
+      await this.jobs.enqueueIssueReminder(reminder.id, remindAt);
+      return reminder;
+   }
+
+   async cancelReminder(issueId: string, workspaceId: string, userId: string) {
+      await this.get(issueId, workspaceId, userId);
+      const reminder = await this.prisma.issueReminder.findUnique({
+         where: { issueId_userId: { issueId, userId } },
+      });
+      if (!reminder) return { issueId, reminder: null };
+      await this.jobs.cancelIssueReminder(reminder.id);
+      await this.prisma.issueReminder.delete({ where: { id: reminder.id } });
+      return { issueId, reminder: null };
    }
 
    async archive(issueId: string, workspaceId: string, userId: string) {
