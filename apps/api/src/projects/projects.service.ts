@@ -632,11 +632,12 @@ export class ProjectsService {
    }
    async createCustomField(dto: CreateProjectCustomFieldDto, userId: string): Promise<unknown> {
       await this.authorizeManager(dto.workspaceId, userId);
+      const options = this.normalizeCustomFieldOptions(dto.type, dto.options);
       return this.prisma.projectCustomField.create({
          data: {
             ...dto,
             name: dto.name.trim(),
-            options: dto.options as Prisma.InputJsonValue | undefined,
+            options,
          },
       });
    }
@@ -651,13 +652,23 @@ export class ProjectsService {
          where: { id: fieldId, workspaceId },
       });
       if (!field) throw new NotFoundException('Project custom field not found.');
-      return this.prisma.projectCustomField.update({
-         where: { id: fieldId },
-         data: {
-            ...dto,
-            ...(dto.name ? { name: dto.name.trim() } : {}),
-            options: dto.options as Prisma.InputJsonValue | undefined,
-         },
+      const type = dto.type ?? field.type;
+      const existingOptions = Array.isArray(field.options)
+         ? field.options.filter((option): option is string => typeof option === 'string')
+         : undefined;
+      const options = this.normalizeCustomFieldOptions(type, dto.options ?? existingOptions);
+      return this.prisma.$transaction(async (tx) => {
+         if (dto.type && dto.type !== field.type) {
+            await tx.projectCustomFieldValue.deleteMany({ where: { fieldId } });
+         }
+         return tx.projectCustomField.update({
+            where: { id: fieldId },
+            data: {
+               ...dto,
+               ...(dto.name ? { name: dto.name.trim() } : {}),
+               options,
+            },
+         });
       });
    }
    async removeCustomField(fieldId: string, workspaceId: string, userId: string) {
@@ -668,6 +679,22 @@ export class ProjectsService {
       if (!field) throw new NotFoundException('Project custom field not found.');
       await this.prisma.projectCustomField.delete({ where: { id: fieldId } });
       return { id: fieldId, deleted: true };
+   }
+
+   private normalizeCustomFieldOptions(
+      type: ProjectCustomFieldType,
+      options: string[] | undefined
+   ): Prisma.InputJsonValue | typeof Prisma.JsonNull {
+      if (type !== ProjectCustomFieldType.SELECT && type !== ProjectCustomFieldType.MULTI_SELECT) {
+         return Prisma.JsonNull;
+      }
+      const normalized = [
+         ...new Set((options ?? []).map((option) => option.trim()).filter(Boolean)),
+      ];
+      if (normalized.length === 0) {
+         throw new BadRequestException('Select fields require at least one option.');
+      }
+      return normalized;
    }
    async listMilestones(projectId: string, workspaceId: string, userId: string) {
       await this.get(projectId, workspaceId, userId);

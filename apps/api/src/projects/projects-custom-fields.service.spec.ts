@@ -5,6 +5,9 @@ import { ProjectsService } from './projects.service';
 describe('ProjectsService project custom field values', () => {
    function createService(field: Record<string, unknown> | null) {
       const tx = {
+         projectCustomField: {
+            update: jest.fn().mockImplementation(({ data }) => ({ ...field, ...data })),
+         },
          projectCustomFieldValue: {
             upsert: jest.fn().mockResolvedValue({}),
             deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -12,7 +15,11 @@ describe('ProjectsService project custom field values', () => {
          activity: { create: jest.fn().mockResolvedValue({ id: 'activity-1' }) },
       };
       const prisma = {
-         projectCustomField: { findFirst: jest.fn().mockResolvedValue(field) },
+         workspaceMember: { findFirst: jest.fn().mockResolvedValue({ id: 'member-1' }) },
+         projectCustomField: {
+            findFirst: jest.fn().mockResolvedValue(field),
+            create: jest.fn().mockImplementation(({ data }) => ({ id: 'field-new', ...data })),
+         },
          $transaction: jest.fn((operation: (client: typeof tx) => unknown) => operation(tx)),
       };
       const service = new ProjectsService(prisma as never, {} as never);
@@ -76,5 +83,44 @@ describe('ProjectsService project custom field values', () => {
             'user-1'
          )
       ).rejects.toBeInstanceOf(NotFoundException);
+   });
+
+   it('requires options when creating a select field', async () => {
+      const { service } = createService(null);
+
+      await expect(
+         service.createCustomField(
+            { workspaceId: 'workspace-1', name: 'Region', type: ProjectCustomFieldType.SELECT },
+            'user-1'
+         )
+      ).rejects.toBeInstanceOf(BadRequestException);
+   });
+
+   it('clears incompatible values when a field type changes', async () => {
+      const field = {
+         id: 'field-1',
+         workspaceId: 'workspace-1',
+         name: 'Region',
+         type: ProjectCustomFieldType.SELECT,
+         options: ['APAC'],
+         required: false,
+      };
+      const { service, tx } = createService(field);
+
+      await service.updateCustomField(
+         'field-1',
+         'workspace-1',
+         { type: ProjectCustomFieldType.TEXT },
+         'user-1'
+      );
+
+      expect(tx.projectCustomFieldValue.deleteMany).toHaveBeenCalledWith({
+         where: { fieldId: 'field-1' },
+      });
+      expect(tx.projectCustomField.update).toHaveBeenCalledWith(
+         expect.objectContaining({
+            data: expect.objectContaining({ type: ProjectCustomFieldType.TEXT }),
+         })
+      );
    });
 });
