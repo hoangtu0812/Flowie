@@ -4,7 +4,7 @@ import { groupIssuesByStatus, Issue } from '@/mock-data/issues';
 import { LabelInterface } from '@/mock-data/labels';
 import { priorities, Priority } from '@/mock-data/priorities';
 import { Project } from '@/mock-data/projects';
-import { Status, StatusCategory } from '@/mock-data/status';
+import { status as statusPresentations, Status, StatusCategory } from '@/mock-data/status';
 import { User } from '@/mock-data/users';
 import { create } from 'zustand';
 
@@ -140,7 +140,22 @@ const categoryFromApi = (category: string): StatusCategory => {
       : 'unstarted';
 };
 
-const statusIcon = (category: StatusCategory) => {
+const normalizedStatusName = (value: string) =>
+   value
+      .trim()
+      .toLowerCase()
+      .replace(/[\s_]+/g, '-');
+
+const statusIcon = (status: ApiStatus, category: StatusCategory) => {
+   const normalizedId = normalizedStatusName(status.id);
+   const normalizedName = normalizedStatusName(status.name);
+   const presentation = statusPresentations.find(
+      (candidate) =>
+         normalizedStatusName(candidate.id) === normalizedId ||
+         normalizedStatusName(candidate.name) === normalizedName
+   );
+   if (presentation) return presentation.icon;
+
    const Icon =
       category === 'completed'
          ? CircleCheck
@@ -157,7 +172,7 @@ const mapStatus = (status: ApiStatus): Status => ({
    name: status.name,
    color: status.color,
    category: categoryFromApi(status.category),
-   icon: statusIcon(categoryFromApi(status.category)),
+   icon: statusIcon(status, categoryFromApi(status.category)),
 });
 
 const mapPriority = (priority: string): Priority =>
@@ -193,7 +208,15 @@ const mapProject = (project: ApiProject): Project =>
          name: project.status,
          color: '#8f9299',
          category: 'unstarted',
-         icon: statusIcon('unstarted'),
+         icon: statusIcon(
+            {
+               id: project.status,
+               name: project.status,
+               color: '#8f9299',
+               category: 'unstarted',
+            },
+            'unstarted'
+         ),
       },
       percentComplete: 0,
       startDate: project.startDate ?? '',
