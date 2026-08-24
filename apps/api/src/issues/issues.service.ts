@@ -42,6 +42,13 @@ const relatedIssueSelect = {
    team: { select: { id: true, name: true, identifier: true } },
 } as const;
 
+const subIssueSelect = {
+   id: true,
+   identifier: true,
+   title: true,
+   status: { select: { id: true, name: true, color: true, category: true } },
+} as const;
+
 @Injectable()
 export class IssuesService {
    constructor(
@@ -143,7 +150,7 @@ export class IssuesService {
    async create(dto: CreateIssueDto, userId: string) {
       await this.authorize(dto.workspaceId, userId, dto.teamId);
       const issue = await this.prisma.$transaction(async (tx) => {
-         const { labelIds, ...issueData } = dto;
+         const { labelIds, parentIssueId, ...issueData } = dto;
          const subscriberIds = [...new Set([userId, ...(dto.assigneeId ? [dto.assigneeId] : [])])];
          const team = await tx.team.update({
             where: { id: dto.teamId },
@@ -164,6 +171,17 @@ export class IssuesService {
                where: { id: dto.projectId, workspaceId: dto.workspaceId, archivedAt: null },
             });
             if (!project) throw new NotFoundException('Project not found.');
+         }
+         if (parentIssueId) {
+            const parent = await tx.issue.findFirst({
+               where: {
+                  id: parentIssueId,
+                  workspaceId: dto.workspaceId,
+                  teamId: dto.teamId,
+                  archivedAt: null,
+               },
+            });
+            if (!parent) throw new NotFoundException('Parent issue was not found for this team.');
          }
          if (dto.assigneeId) {
             const assignee = await tx.workspaceMember.findFirst({
@@ -186,6 +204,7 @@ export class IssuesService {
                identifier: `${team.identifier}-${team.issueSequence}`,
                number: team.issueSequence,
                creatorId: userId,
+               ...(parentIssueId ? { parentIssueId } : {}),
                ...(labelIds?.length
                   ? { labelLinks: { create: labelIds.map((labelId) => ({ labelId })) } }
                   : {}),
@@ -204,6 +223,17 @@ export class IssuesService {
                data: { title: issue.title, identifier: issue.identifier },
             },
          });
+         if (parentIssueId) {
+            await tx.activity.create({
+               data: {
+                  workspaceId: dto.workspaceId,
+                  issueId: parentIssueId,
+                  actorId: userId,
+                  type: 'issue.subissue_created',
+                  data: { issueId: issue.id, identifier: issue.identifier, title: issue.title },
+               },
+            });
+         }
          return issue;
       });
       void this.notifications.notifyWorkspace(
@@ -229,6 +259,15 @@ export class IssuesService {
       if (!issue) throw new NotFoundException('Issue not found.');
       await this.authorize(workspaceId, userId, issue.teamId);
       return issue;
+   }
+
+   async subIssues(issueId: string, workspaceId: string, userId: string) {
+      const parent = await this.get(issueId, workspaceId, userId);
+      return this.prisma.issue.findMany({
+         where: { parentIssueId: parent.id, workspaceId, teamId: parent.teamId, archivedAt: null },
+         select: subIssueSelect,
+         orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+      });
    }
 
    async relations(issueId: string, workspaceId: string, userId: string) {

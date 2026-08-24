@@ -8,6 +8,7 @@ import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from '
 import { ActivityFeed } from './activity-feed';
 import { IssuePropertiesPanel } from './issue-properties-panel';
 import { IssueRelations } from './issue-relations';
+import { IssueSubIssues } from './issue-sub-issues';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
@@ -209,9 +210,11 @@ export default function IssueDetails() {
 
                <IssueRelations issueId={issue.id} orgId={orgId ?? 'lndev-ui'} />
 
-               <div className="mt-6 text-sm text-muted-foreground">
-                  Sub-issues are not available yet.
-               </div>
+               <IssueSubIssues
+                  issueId={issue.id}
+                  teamId={issue.team.id}
+                  orgId={orgId ?? 'lndev-ui'}
+               />
 
                <div className="border-t border-border/60 mt-8" />
 

@@ -31,6 +31,7 @@ const EVENT_ICONS: Record<string, ReactNode> = {
    'issue.unblocked': <Unlock className="size-3.5" />,
    'issue.related': <Link2 className="size-3.5" />,
    'issue.unrelated': <Link2 className="size-3.5" />,
+   'issue.subissue_created': <Plus className="size-3.5" />,
 };
 
 const relativeTime = (value: string) => {
@@ -50,6 +51,7 @@ const eventText = (type: string) => {
    if (type === 'issue.archived') return 'archived this issue';
    if (type === 'issue.related') return 'linked this issue';
    if (type === 'issue.unrelated') return 'removed an issue link';
+   if (type === 'issue.subissue_created') return 'created a sub-issue';
    return type.replace(/[._]/g, ' ');
 };
 
