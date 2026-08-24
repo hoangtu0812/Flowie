@@ -4,7 +4,7 @@ import {
    Injectable,
    NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@circle/database';
+import { Prisma, ProjectCustomFieldType } from '@circle/database';
 import { PrismaService } from '../database/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
@@ -313,7 +313,132 @@ export class ProjectsService {
       });
    }
 
-   private async withUpdateAttachments<T extends { id: string }>(workspaceId: string, updates: T[]) {
+   async listProjectCustomFields(projectId: string, workspaceId: string, userId: string) {
+      await this.get(projectId, workspaceId, userId);
+      const fields = await this.prisma.projectCustomField.findMany({
+         where: { workspaceId },
+         include: { values: { where: { projectId }, select: { value: true } } },
+         orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+      });
+      return fields.map(({ values, ...field }) => ({
+         ...field,
+         value: values[0]?.value ?? null,
+      }));
+   }
+
+   async updateProjectCustomField(
+      projectId: string,
+      fieldId: string,
+      workspaceId: string,
+      value: unknown,
+      userId: string
+   ) {
+      await this.get(projectId, workspaceId, userId);
+      const field = await this.prisma.projectCustomField.findFirst({
+         where: { id: fieldId, workspaceId },
+      });
+      if (!field) throw new NotFoundException('Project custom field not found.');
+
+      const normalized = this.normalizeCustomFieldValue(field.type, field.options, value);
+      if (normalized === null && field.required) {
+         throw new BadRequestException(`${field.name} is required.`);
+      }
+
+      return this.prisma.$transaction(async (tx) => {
+         if (normalized === null) {
+            await tx.projectCustomFieldValue.deleteMany({ where: { projectId, fieldId } });
+         } else {
+            await tx.projectCustomFieldValue.upsert({
+               where: { projectId_fieldId: { projectId, fieldId } },
+               create: {
+                  projectId,
+                  fieldId,
+                  value: normalized as Prisma.InputJsonValue,
+               },
+               update: { value: normalized as Prisma.InputJsonValue },
+            });
+         }
+         await tx.activity.create({
+            data: {
+               workspaceId,
+               projectId,
+               actorId: userId,
+               type: 'project.custom-field.updated',
+               data: { fieldId, fieldName: field.name, cleared: normalized === null },
+            },
+         });
+         return { ...field, value: normalized };
+      });
+   }
+
+   private normalizeCustomFieldValue(
+      type: ProjectCustomFieldType,
+      options: Prisma.JsonValue,
+      value: unknown
+   ): Prisma.InputJsonValue | null {
+      if (value === null || value === undefined) return null;
+      const configuredOptions = Array.isArray(options)
+         ? options.filter((option): option is string => typeof option === 'string')
+         : [];
+
+      switch (type) {
+         case ProjectCustomFieldType.TEXT: {
+            if (typeof value !== 'string') throw new BadRequestException('Expected text value.');
+            const normalized = value.trim();
+            return normalized ? normalized : null;
+         }
+         case ProjectCustomFieldType.URL: {
+            if (typeof value !== 'string') throw new BadRequestException('Expected URL value.');
+            const normalized = value.trim();
+            if (!normalized) return null;
+            try {
+               const parsed = new URL(normalized);
+               if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('protocol');
+            } catch {
+               throw new BadRequestException('Expected a valid HTTP or HTTPS URL.');
+            }
+            return normalized;
+         }
+         case ProjectCustomFieldType.NUMBER:
+            if (typeof value !== 'number' || !Number.isFinite(value)) {
+               throw new BadRequestException('Expected a finite number.');
+            }
+            return value;
+         case ProjectCustomFieldType.DATE: {
+            if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+               throw new BadRequestException('Expected a date in YYYY-MM-DD format.');
+            }
+            const parsed = new Date(`${value}T00:00:00.000Z`);
+            if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+               throw new BadRequestException('Expected a valid date.');
+            }
+            return value;
+         }
+         case ProjectCustomFieldType.BOOLEAN:
+            if (typeof value !== 'boolean')
+               throw new BadRequestException('Expected true or false.');
+            return value;
+         case ProjectCustomFieldType.SELECT:
+            if (typeof value !== 'string' || !configuredOptions.includes(value)) {
+               throw new BadRequestException('Expected one configured option.');
+            }
+            return value;
+         case ProjectCustomFieldType.MULTI_SELECT: {
+            if (
+               !Array.isArray(value) ||
+               value.some((item) => typeof item !== 'string' || !configuredOptions.includes(item))
+            ) {
+               throw new BadRequestException('Expected configured options.');
+            }
+            return [...new Set(value)] as Prisma.InputJsonValue;
+         }
+      }
+   }
+
+   private async withUpdateAttachments<T extends { id: string }>(
+      workspaceId: string,
+      updates: T[]
+   ) {
       if (updates.length === 0) return [];
       const attachments = await this.prisma.attachment.findMany({
          where: {

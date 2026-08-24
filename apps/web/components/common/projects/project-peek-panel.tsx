@@ -11,6 +11,15 @@ import {
    DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import {
+   Select,
+   SelectContent,
+   SelectItem,
+   SelectTrigger,
+   SelectValue,
+} from '@/components/ui/select';
 import { format, parseISO } from 'date-fns';
 import {
    ArrowRight,
@@ -28,6 +37,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ProjectProgressChart } from './details/project-progress-chart';
 import { toProjectUi } from './details/project-detail-ui-adapter';
 import { useLiveProject } from './details/use-live-project';
+import type { LiveProjectCustomField } from './details/use-live-project';
 import { ProjectLabelSelector } from './project-label-selector';
 
 interface ProjectPeekPanelProps {
@@ -54,6 +64,13 @@ function Card({ children, className }: { children: React.ReactNode; className?: 
    );
 }
 
+function customFieldDisplayValue(field: LiveProjectCustomField) {
+   if (field.value === null || field.value === undefined || field.value === '') return '—';
+   if (field.type === 'BOOLEAN') return field.value ? 'Yes' : 'No';
+   if (Array.isArray(field.value)) return field.value.join(', ') || '—';
+   return String(field.value);
+}
+
 /** Floating timeline peek backed solely by persisted Project, Issue, and Milestone data. */
 export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) {
    const { orgId } = useParams<{ orgId: string }>();
@@ -62,9 +79,11 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
       issues,
       milestones,
       availableLabels,
+      customFields,
       loading,
       error,
       updateLabels,
+      updateCustomFields,
       createMilestone,
       toggleFavorite,
    } = useLiveProject(projectId);
@@ -73,6 +92,10 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
    const [milestoneTargetDate, setMilestoneTargetDate] = useState('');
    const [milestoneSaving, setMilestoneSaving] = useState(false);
    const [milestoneError, setMilestoneError] = useState<string>();
+   const [customFieldsDialogOpen, setCustomFieldsDialogOpen] = useState(false);
+   const [customFieldDrafts, setCustomFieldDrafts] = useState<Record<string, unknown>>({});
+   const [customFieldsSaving, setCustomFieldsSaving] = useState(false);
+   const [customFieldsError, setCustomFieldsError] = useState<string>();
    const uiProject = useMemo(
       () => (project ? toProjectUi(project, issues) : undefined),
       [issues, project]
@@ -140,6 +163,29 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
       }
    };
 
+   const openCustomFields = () => {
+      setCustomFieldDrafts(
+         Object.fromEntries(customFields.map((field) => [field.id, field.value]))
+      );
+      setCustomFieldsError(undefined);
+      setCustomFieldsDialogOpen(true);
+   };
+
+   const submitCustomFields = async () => {
+      setCustomFieldsSaving(true);
+      setCustomFieldsError(undefined);
+      try {
+         await updateCustomFields(customFieldDrafts);
+         setCustomFieldsDialogOpen(false);
+      } catch (caught) {
+         setCustomFieldsError(
+            caught instanceof Error ? caught.message : 'Could not update custom properties.'
+         );
+      } finally {
+         setCustomFieldsSaving(false);
+      }
+   };
+
    return (
       <aside className="absolute top-10 right-2 bottom-2 w-[400px] max-w-[calc(100%-1rem)] z-40 flex flex-col gap-2 overflow-y-auto">
          <Card className="flex items-center gap-2 py-3">
@@ -177,10 +223,11 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
             <div className="flex items-center justify-between mb-1.5">
                <h3 className="text-sm font-medium">Properties</h3>
                <button
-                  disabled
-                  title="Project custom properties are not available in this panel"
-                  className="text-muted-foreground/50"
-                  aria-label="Project custom properties are not available"
+                  type="button"
+                  title="Edit custom properties"
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label="Edit custom properties"
+                  onClick={openCustomFields}
                >
                   <Plus className="size-3.5" />
                </button>
@@ -276,6 +323,11 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
                      />
                   </div>
                </PropertyRow>
+               {customFields.map((field) => (
+                  <PropertyRow key={field.id} label={field.name}>
+                     <span className="truncate max-w-52">{customFieldDisplayValue(field)}</span>
+                  </PropertyRow>
+               ))}
             </div>
          </Card>
 
@@ -381,6 +433,150 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
                      onClick={() => void submitMilestone()}
                   >
                      {milestoneSaving ? 'Creating…' : 'Create milestone'}
+                  </Button>
+               </DialogFooter>
+            </DialogContent>
+         </Dialog>
+
+         <Dialog open={customFieldsDialogOpen} onOpenChange={setCustomFieldsDialogOpen}>
+            <DialogContent className="sm:max-w-[480px] max-h-[80vh] overflow-y-auto">
+               <DialogHeader>
+                  <DialogTitle>Custom properties</DialogTitle>
+                  <DialogDescription>
+                     Update workspace properties for {project.name}.
+                  </DialogDescription>
+               </DialogHeader>
+               {customFields.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                     No project custom properties have been configured for this workspace.
+                  </p>
+               ) : (
+                  <div className="space-y-4">
+                     {customFields.map((field) => {
+                        const value = customFieldDrafts[field.id];
+                        const setValue = (next: unknown) =>
+                           setCustomFieldDrafts((current) => ({
+                              ...current,
+                              [field.id]: next,
+                           }));
+                        return (
+                           <div key={field.id} className="space-y-1.5">
+                              <Label htmlFor={`custom-field-${field.id}`}>
+                                 {field.name}
+                                 {field.required ? ' *' : ''}
+                              </Label>
+                              {field.type === 'BOOLEAN' ? (
+                                 <div className="flex items-center gap-2 min-h-9">
+                                    <Checkbox
+                                       id={`custom-field-${field.id}`}
+                                       checked={value === true}
+                                       onCheckedChange={(checked) => setValue(checked === true)}
+                                    />
+                                    <span className="text-sm text-muted-foreground">Enabled</span>
+                                 </div>
+                              ) : field.type === 'SELECT' ? (
+                                 <Select
+                                    value={typeof value === 'string' ? value : '__unset__'}
+                                    onValueChange={(next) =>
+                                       setValue(next === '__unset__' ? null : next)
+                                    }
+                                 >
+                                    <SelectTrigger id={`custom-field-${field.id}`}>
+                                       <SelectValue placeholder="Select an option" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                       {!field.required && (
+                                          <SelectItem value="__unset__">No value</SelectItem>
+                                       )}
+                                       {(field.options ?? []).map((option) => (
+                                          <SelectItem key={option} value={option}>
+                                             {option}
+                                          </SelectItem>
+                                       ))}
+                                    </SelectContent>
+                                 </Select>
+                              ) : field.type === 'MULTI_SELECT' ? (
+                                 <div className="rounded-md border p-3 space-y-2">
+                                    {(field.options ?? []).map((option) => {
+                                       const selected = Array.isArray(value)
+                                          ? value.includes(option)
+                                          : false;
+                                       return (
+                                          <label
+                                             key={option}
+                                             className="flex items-center gap-2 text-sm"
+                                          >
+                                             <Checkbox
+                                                checked={selected}
+                                                onCheckedChange={(checked) => {
+                                                   const current = Array.isArray(value)
+                                                      ? value.filter(
+                                                           (item): item is string =>
+                                                              typeof item === 'string'
+                                                        )
+                                                      : [];
+                                                   setValue(
+                                                      checked
+                                                         ? [...new Set([...current, option])]
+                                                         : current.filter((item) => item !== option)
+                                                   );
+                                                }}
+                                             />
+                                             {option}
+                                          </label>
+                                       );
+                                    })}
+                                 </div>
+                              ) : (
+                                 <Input
+                                    id={`custom-field-${field.id}`}
+                                    type={
+                                       field.type === 'NUMBER'
+                                          ? 'number'
+                                          : field.type === 'DATE'
+                                            ? 'date'
+                                            : field.type === 'URL'
+                                              ? 'url'
+                                              : 'text'
+                                    }
+                                    value={
+                                       typeof value === 'string' || typeof value === 'number'
+                                          ? value
+                                          : ''
+                                    }
+                                    onChange={(event) =>
+                                       setValue(
+                                          field.type === 'NUMBER'
+                                             ? event.target.value === ''
+                                                ? null
+                                                : Number(event.target.value)
+                                             : event.target.value
+                                       )
+                                    }
+                                 />
+                              )}
+                              {field.description && (
+                                 <p className="text-xs text-muted-foreground">
+                                    {field.description}
+                                 </p>
+                              )}
+                           </div>
+                        );
+                     })}
+                     {customFieldsError && (
+                        <p className="text-sm text-destructive">{customFieldsError}</p>
+                     )}
+                  </div>
+               )}
+               <DialogFooter>
+                  <Button variant="outline" onClick={() => setCustomFieldsDialogOpen(false)}>
+                     Cancel
+                  </Button>
+                  <Button
+                     disabled={customFieldsSaving || customFields.length === 0}
+                     onClick={() => void submitCustomFields()}
+                  >
+                     {customFieldsSaving ? 'Saving…' : 'Save properties'}
                   </Button>
                </DialogFooter>
             </DialogContent>

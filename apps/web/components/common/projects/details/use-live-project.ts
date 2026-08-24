@@ -77,6 +77,17 @@ export type LiveProjectUpdate = {
 
 export type LiveProjectLabel = { id: string; name: string; color: string };
 
+export type LiveProjectCustomField = {
+   id: string;
+   name: string;
+   type: 'TEXT' | 'NUMBER' | 'DATE' | 'SELECT' | 'MULTI_SELECT' | 'BOOLEAN' | 'URL';
+   description: string | null;
+   options: string[] | null;
+   required: boolean;
+   position: number;
+   value: unknown;
+};
+
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 /** Shared live data source for the three unchanged Project detail tabs. */
@@ -88,6 +99,7 @@ export function useLiveProject(projectId: string) {
    const [activities, setActivities] = useState<LiveActivity[]>([]);
    const [updates, setUpdates] = useState<LiveProjectUpdate[]>([]);
    const [availableLabels, setAvailableLabels] = useState<LiveProjectLabel[]>([]);
+   const [customFields, setCustomFields] = useState<LiveProjectCustomField[]>([]);
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState<string>();
    const [refreshKey, setRefreshKey] = useState(0);
@@ -107,6 +119,7 @@ export function useLiveProject(projectId: string) {
                activitiesResponse,
                updatesResponse,
                labelsResponse,
+               customFieldsResponse,
             ] = await Promise.all([
                fetch(`${api}/projects/${projectId}?${query}`, { credentials: 'include' }),
                fetch(`${api}/projects/${projectId}/issues?${query}`, { credentials: 'include' }),
@@ -120,6 +133,9 @@ export function useLiveProject(projectId: string) {
                   credentials: 'include',
                }),
                fetch(`${api}/projects/labels?${query}`, { credentials: 'include' }),
+               fetch(`${api}/projects/${projectId}/custom-fields?${query}`, {
+                  credentials: 'include',
+               }),
             ]);
             if (
                !projectResponse.ok ||
@@ -127,7 +143,8 @@ export function useLiveProject(projectId: string) {
                !milestonesResponse.ok ||
                !activitiesResponse.ok ||
                !updatesResponse.ok ||
-               !labelsResponse.ok
+               !labelsResponse.ok ||
+               !customFieldsResponse.ok
             ) {
                throw new Error('Could not load project details.');
             }
@@ -140,6 +157,9 @@ export function useLiveProject(projectId: string) {
             setUpdates(((await updatesResponse.json()) as { data: LiveProjectUpdate[] }).data);
             setAvailableLabels(
                ((await labelsResponse.json()) as { data: LiveProjectLabel[] }).data
+            );
+            setCustomFields(
+               ((await customFieldsResponse.json()) as { data: LiveProjectCustomField[] }).data
             );
          } catch (caught) {
             if (current)
@@ -247,6 +267,40 @@ export function useLiveProject(projectId: string) {
       [projectId, workspaceId]
    );
 
+   const updateCustomFields = useCallback(
+      async (values: Record<string, unknown>) => {
+         if (!workspaceId) throw new Error('Workspace is not available yet.');
+         const changedFields = customFields.filter(
+            (field) =>
+               JSON.stringify(field.value ?? null) !== JSON.stringify(values[field.id] ?? null)
+         );
+         const updated = await Promise.all(
+            changedFields.map(async (field) => {
+               const response = await fetch(
+                  `${api}/projects/${projectId}/custom-fields/${field.id}`,
+                  {
+                     method: 'PATCH',
+                     credentials: 'include',
+                     headers: { 'content-type': 'application/json' },
+                     body: JSON.stringify({ workspaceId, value: values[field.id] ?? null }),
+                  }
+               );
+               if (!response.ok) {
+                  const payload = (await response.json().catch(() => null)) as {
+                     message?: string;
+                  } | null;
+                  throw new Error(payload?.message ?? `Could not update ${field.name}.`);
+               }
+               return ((await response.json()) as { data: LiveProjectCustomField }).data;
+            })
+         );
+         const updatedById = new Map(updated.map((field) => [field.id, field]));
+         setCustomFields((current) => current.map((field) => updatedById.get(field.id) ?? field));
+         return updated;
+      },
+      [customFields, projectId, workspaceId]
+   );
+
    const createMilestone = useCallback(
       async (title: string, targetDate?: string) => {
          if (!workspaceId) throw new Error('Workspace is not available yet.');
@@ -309,11 +363,13 @@ export function useLiveProject(projectId: string) {
       activities,
       updates,
       availableLabels,
+      customFields,
       loading,
       error,
       createUpdate,
       createResource,
       updateLabels,
+      updateCustomFields,
       createMilestone,
       toggleMilestone,
       toggleFavorite,

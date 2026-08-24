@@ -15,6 +15,7 @@ import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { CreateProjectCustomFieldDto } from './dto/create-project-custom-field.dto';
 import { UpdateProjectCustomFieldDto } from './dto/update-project-custom-field.dto';
+import { UpdateProjectCustomFieldValueDto } from './dto/update-project-custom-field-value.dto';
 import { CreateMilestoneDto } from './dto/create-milestone.dto';
 import { UpdateMilestoneDto } from './dto/update-milestone.dto';
 import { CreateProjectTemplateDto } from './dto/create-project-template.dto';
@@ -145,7 +146,9 @@ export class ProjectsController {
       @Query('workspaceId') workspaceId: string,
       @Req() request: AuthenticatedRequest
    ) {
-      return { data: await this.projects.removeStatus(statusId, workspaceId, request.auth!.userId) };
+      return {
+         data: await this.projects.removeStatus(statusId, workspaceId, request.auth!.userId),
+      };
    }
    @Post('labels') async createLabel(
       @Body() dto: CreateProjectLabelDto,
@@ -181,7 +184,9 @@ export class ProjectsController {
       @Query('workspaceId') workspaceId: string,
       @Req() request: AuthenticatedRequest
    ) {
-      return { data: await this.projects.listUpdates(projectId, workspaceId, request.auth!.userId) };
+      return {
+         data: await this.projects.listUpdates(projectId, workspaceId, request.auth!.userId),
+      };
    }
    @Post(':projectId/updates') async createUpdate(
       @Param('projectId') projectId: string,
@@ -196,6 +201,35 @@ export class ProjectsController {
       @Req() request: AuthenticatedRequest
    ) {
       return { data: await this.projects.createResource(projectId, dto, request.auth!.userId) };
+   }
+   @Get(':projectId/custom-fields') async projectCustomFields(
+      @Param('projectId') projectId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ): Promise<{ data: unknown }> {
+      return {
+         data: await this.projects.listProjectCustomFields(
+            projectId,
+            workspaceId,
+            request.auth!.userId
+         ),
+      };
+   }
+   @Patch(':projectId/custom-fields/:fieldId') async updateProjectCustomField(
+      @Param('projectId') projectId: string,
+      @Param('fieldId') fieldId: string,
+      @Body() dto: UpdateProjectCustomFieldValueDto,
+      @Req() request: AuthenticatedRequest
+   ): Promise<{ data: unknown }> {
+      return {
+         data: await this.projects.updateProjectCustomField(
+            projectId,
+            fieldId,
+            dto.workspaceId,
+            dto.value,
+            request.auth!.userId
+         ),
+      };
    }
    @Get(':projectId/subscription') async subscription(
       @Param('projectId') projectId: string,
@@ -218,7 +252,9 @@ export class ProjectsController {
       @Query('workspaceId') workspaceId: string,
       @Req() request: AuthenticatedRequest
    ) {
-      return { data: await this.projects.unsubscribe(projectId, workspaceId, request.auth!.userId) };
+      return {
+         data: await this.projects.unsubscribe(projectId, workspaceId, request.auth!.userId),
+      };
    }
    @Post(':projectId/favorite') async favorite(
       @Param('projectId') projectId: string,
