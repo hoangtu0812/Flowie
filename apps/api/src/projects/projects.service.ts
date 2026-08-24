@@ -9,6 +9,8 @@ import { CreateMilestoneDto } from './dto/create-milestone.dto';
 import { UpdateMilestoneDto } from './dto/update-milestone.dto';
 import { CreateProjectTemplateDto } from './dto/create-project-template.dto';
 import { CreateProjectUpdateDto } from './dto/create-project-update.dto';
+import { CreateProjectLabelDto } from './dto/create-project-label.dto';
+import { UpdateProjectLabelDto } from './dto/update-project-label.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 
 const projectInclude = {
@@ -26,6 +28,7 @@ const projectInclude = {
    initiativeLinks: {
       include: { initiative: { select: { id: true, name: true } } },
    },
+   labelLinks: { include: { label: true } },
 } satisfies Prisma.ProjectInclude;
 
 @Injectable()
@@ -106,10 +109,22 @@ export class ProjectsService {
             throw new NotFoundException('Project lead must be an active workspace member.');
          }
       }
+      const { labelIds, ...projectData } = dto;
+      if (labelIds) await this.assertProjectLabels(workspaceId, labelIds);
       return this.prisma.$transaction(async (tx) => {
          const updated = await tx.project.update({
             where: { id: projectId },
-            data: dto,
+            data: {
+               ...projectData,
+               ...(labelIds
+                  ? {
+                       labelLinks: {
+                          deleteMany: {},
+                          create: [...new Set(labelIds)].map((labelId) => ({ labelId })),
+                       },
+                    }
+                  : {}),
+            },
             include: projectInclude,
          });
          await tx.activity.create({
@@ -225,6 +240,43 @@ export class ProjectsService {
          where: { workspaceId },
          orderBy: [{ position: 'asc' }, { name: 'asc' }],
       });
+   }
+   async listLabels(workspaceId: string, userId: string) {
+      await this.authorize(workspaceId, userId);
+      return this.prisma.projectLabel.findMany({
+         where: { workspaceId },
+         include: { _count: { select: { projectLinks: true } } },
+         orderBy: { name: 'asc' },
+      });
+   }
+   async createLabel(dto: CreateProjectLabelDto, userId: string) {
+      await this.authorize(dto.workspaceId, userId);
+      return this.prisma.projectLabel.create({
+         data: { ...dto, name: dto.name.trim() },
+         include: { _count: { select: { projectLinks: true } } },
+      });
+   }
+   async updateLabel(
+      labelId: string,
+      workspaceId: string,
+      dto: UpdateProjectLabelDto,
+      userId: string
+   ) {
+      await this.authorizeManager(workspaceId, userId);
+      const label = await this.prisma.projectLabel.findFirst({ where: { id: labelId, workspaceId } });
+      if (!label) throw new NotFoundException('Project label not found.');
+      return this.prisma.projectLabel.update({
+         where: { id: labelId },
+         data: { ...dto, ...(dto.name ? { name: dto.name.trim() } : {}) },
+         include: { _count: { select: { projectLinks: true } } },
+      });
+   }
+   async removeLabel(labelId: string, workspaceId: string, userId: string) {
+      await this.authorizeManager(workspaceId, userId);
+      const label = await this.prisma.projectLabel.findFirst({ where: { id: labelId, workspaceId } });
+      if (!label) throw new NotFoundException('Project label not found.');
+      await this.prisma.projectLabel.delete({ where: { id: labelId } });
+      return { id: labelId, deleted: true };
    }
    async createCustomField(dto: CreateProjectCustomFieldDto, userId: string): Promise<unknown> {
       await this.authorizeManager(dto.workspaceId, userId);
@@ -353,6 +405,15 @@ export class ProjectsService {
          }))
       ) {
          throw new ForbiddenException('Workspace administrator access is required.');
+      }
+   }
+   private async assertProjectLabels(workspaceId: string, labelIds: string[]) {
+      const uniqueLabelIds = [...new Set(labelIds)];
+      const count = await this.prisma.projectLabel.count({
+         where: { workspaceId, id: { in: uniqueLabelIds } },
+      });
+      if (count !== uniqueLabelIds.length) {
+         throw new NotFoundException('One or more project labels are not available in this workspace.');
       }
    }
    private async authorizeTeam(workspaceId: string, teamId: string, userId: string) {

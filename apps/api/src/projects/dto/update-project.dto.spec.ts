@@ -18,3 +18,17 @@ describe('UpdateProjectDto targetDate', () => {
       expect(errors[0].property).toBe('targetDate');
    });
 });
+
+describe('UpdateProjectDto labelIds', () => {
+   it('accepts an empty label collection to clear persisted Project labels', async () => {
+      const errors = await validate(plainToInstance(UpdateProjectDto, { labelIds: [] }));
+
+      expect(errors).toHaveLength(0);
+   });
+
+   it('rejects non-string label identifiers', async () => {
+      const errors = await validate(plainToInstance(UpdateProjectDto, { labelIds: ['label', 3] }));
+
+      expect(errors.some((error) => error.property === 'labelIds')).toBe(true);
+   });
+});

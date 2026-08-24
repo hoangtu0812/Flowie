@@ -1,4 +1,4 @@
-import { IsDateString, IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsArray, IsDateString, IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { ProjectType } from '@circle/database';
 
 export class UpdateProjectDto {
@@ -9,5 +9,6 @@ export class UpdateProjectDto {
    @IsOptional() @IsString() @MaxLength(32) health?: string;
    @IsOptional() @IsString() leadId?: string | null;
    @IsOptional() @IsDateString() targetDate?: string | null;
+   @IsOptional() @IsArray() @IsString({ each: true }) labelIds?: string[];
    @IsOptional() @IsEnum(ProjectType) type?: ProjectType;
 }

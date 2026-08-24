@@ -231,6 +231,7 @@ model Workspace {
   projectCustomFields ProjectCustomField[]
   projectTemplates ProjectTemplate[]
   projectMilestones ProjectMilestone[]
+  projectLabels ProjectLabel[]
   projectUpdates ProjectUpdate[]
   savedViews SavedView[]
   initiatives Initiative[]
@@ -318,6 +319,7 @@ model Project {
   milestones ProjectMilestone[]
   customFieldValues ProjectCustomFieldValue[]
   initiativeLinks InitiativeProject[]
+  labelLinks ProjectLabelLink[]
   subscriptions ProjectSubscription[]
   updates ProjectUpdate[]
 
@@ -659,6 +661,36 @@ model Activity {
   @@index([issueId, createdAt])
   @@index([projectId, createdAt])
   @@map("activities")
+}
+
+model ProjectLabel {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  name        String
+  color       String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projectLinks ProjectLabelLink[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@map("project_labels")
+}
+
+model ProjectLabelLink {
+  projectId String @map("project_id")
+  labelId   String @map("label_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  label   ProjectLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, labelId])
+  @@index([labelId])
+  @@map("project_label_links")
 }
 
 model Label {

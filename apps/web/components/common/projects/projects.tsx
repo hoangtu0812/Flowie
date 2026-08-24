@@ -38,6 +38,7 @@ type ApiProject = {
    teamId: string | null;
    team: { id: string; name: string; icon: string | null } | null;
    lead: { id: string; name: string; avatarUrl: string | null } | null;
+   labelLinks: Array<{ label: { id: string; name: string; color: string } }>;
    issues: Array<{
       id: string;
       status: { category: string };
@@ -52,11 +53,18 @@ export type ProjectListMember = {
    avatarUrl: string | null;
 };
 
+export type ProjectListLabel = {
+   id: string;
+   name: string;
+   color: string;
+};
+
 export type ProjectListUpdate = {
    leadId?: string | null;
    priority?: string;
    status?: string;
    targetDate?: string | null;
+   labelIds?: string[];
 };
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
@@ -121,7 +129,7 @@ const mapProject = (project: ApiProject): Project & { issueCount: number } => {
       priority,
       health,
       teamId: project.teamId ?? '',
-      labels: [],
+      labels: project.labelLinks.map((link) => link.label),
       issueCount: project._count.issues,
    };
 };
@@ -154,6 +162,7 @@ export default function Projects({ teamId }: { teamId?: string }) {
    );
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [workspaceMembers, setWorkspaceMembers] = useState<ProjectListMember[]>([]);
+   const [projectLabels, setProjectLabels] = useState<ProjectListLabel[]>([]);
    const [loadError, setLoadError] = useState<string>();
    const viewType = viewTypes[tab];
 
@@ -166,11 +175,13 @@ export default function Projects({ teamId }: { teamId?: string }) {
          };
          const workspaceId = workspaces.data[0]?.workspace.id;
          if (!workspaceId) throw new Error('No workspace is available for this account.');
-         const [response, membersResponse] = await Promise.all([
+         const [response, membersResponse, labelsResponse] = await Promise.all([
             fetch(`${api}/projects?workspaceId=${workspaceId}`, { credentials: 'include' }),
             fetch(`${api}/workspaces/${workspaceId}/members`, { credentials: 'include' }),
+            fetch(`${api}/projects/labels?workspaceId=${workspaceId}`, { credentials: 'include' }),
          ]);
-         if (!response.ok || !membersResponse.ok) throw new Error('Could not load projects.');
+         if (!response.ok || !membersResponse.ok || !labelsResponse.ok)
+            throw new Error('Could not load projects.');
          const payload = (await response.json()) as { data: ApiProject[] };
          const membersPayload = (await membersResponse.json()) as {
             data: Array<{
@@ -178,12 +189,14 @@ export default function Projects({ teamId }: { teamId?: string }) {
                user: { id: string; name: string; avatarUrl: string | null };
             }>;
          };
+         const labelsPayload = (await labelsResponse.json()) as { data: ProjectListLabel[] };
          setWorkspaceId(workspaceId);
          setWorkspaceMembers(
             membersPayload.data
                .filter((member) => member.status === 'ACTIVE')
                .map((member) => member.user)
          );
+         setProjectLabels(labelsPayload.data);
          setAllProjects(payload.data.map(mapProject));
          setTeamGroups(
             Array.from(
@@ -334,6 +347,7 @@ export default function Projects({ teamId }: { teamId?: string }) {
                      groups={groups}
                      workspaceId={workspaceId}
                      workspaceMembers={workspaceMembers}
+                     projectLabels={projectLabels}
                      onUpdateProject={updateProject}
                   />
                )}

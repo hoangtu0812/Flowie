@@ -2,18 +2,25 @@
 
 import { useProjectsDisplayStore } from '@/store/projects-display-store';
 import ProjectLine from './project-line';
-import type { ProjectGroup, ProjectListMember, ProjectListUpdate } from './projects';
+import type {
+   ProjectGroup,
+   ProjectListLabel,
+   ProjectListMember,
+   ProjectListUpdate,
+} from './projects';
 
 /** Projects "List" view: grouped table (team sections by default). */
 export default function ProjectsList({
    groups,
    workspaceId,
    workspaceMembers = [],
+   projectLabels = [],
    onUpdateProject,
 }: {
    groups: ProjectGroup[];
    workspaceId?: string;
    workspaceMembers?: ProjectListMember[];
+   projectLabels?: ProjectListLabel[];
    onUpdateProject?: (projectId: string, update: ProjectListUpdate) => Promise<void>;
 }) {
    const { grouping, displayProperties } = useProjectsDisplayStore();
@@ -55,6 +62,7 @@ export default function ProjectsList({
                      project={project}
                      workspaceId={workspaceId}
                      workspaceMembers={workspaceMembers}
+                     projectLabels={projectLabels}
                      onUpdateProject={onUpdateProject}
                   />
                ))}

@@ -19,6 +19,8 @@ import { CreateMilestoneDto } from './dto/create-milestone.dto';
 import { UpdateMilestoneDto } from './dto/update-milestone.dto';
 import { CreateProjectTemplateDto } from './dto/create-project-template.dto';
 import { CreateProjectUpdateDto } from './dto/create-project-update.dto';
+import { CreateProjectLabelDto } from './dto/create-project-label.dto';
+import { UpdateProjectLabelDto } from './dto/update-project-label.dto';
 import { ProjectsService } from './projects.service';
 @UseGuards(AuthGuard)
 @Controller('projects')
@@ -81,6 +83,35 @@ export class ProjectsController {
       @Req() request: AuthenticatedRequest
    ): Promise<{ data: unknown }> {
       return { data: await this.projects.createTemplate(dto, request.auth!.userId) };
+   }
+   @Get('labels') async listLabels(
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.projects.listLabels(workspaceId, request.auth!.userId) };
+   }
+   @Post('labels') async createLabel(
+      @Body() dto: CreateProjectLabelDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.projects.createLabel(dto, request.auth!.userId) };
+   }
+   @Patch('labels/:labelId') async updateLabel(
+      @Param('labelId') labelId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Body() dto: UpdateProjectLabelDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.projects.updateLabel(labelId, workspaceId, dto, request.auth!.userId),
+      };
+   }
+   @Delete('labels/:labelId') async removeLabel(
+      @Param('labelId') labelId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.projects.removeLabel(labelId, workspaceId, request.auth!.userId) };
    }
    @Get(':projectId/updates') async listUpdates(
       @Param('projectId') projectId: string,

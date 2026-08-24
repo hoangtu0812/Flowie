@@ -14,7 +14,7 @@ type ApiLabel = {
    description: string | null;
    createdAt: string;
    updatedAt: string;
-   _count: { issueLinks: number };
+   _count: { issueLinks?: number; projectLinks?: number };
 };
 
 type LabelDraft = { name: string; color: string; description: string };
@@ -27,8 +27,14 @@ const formatDate = (value: string) =>
 const formatCount = (count: number) =>
    count >= 1000 ? `${(count / 1000).toFixed(1)}K` : String(count);
 
-/** Workspace Issue labels, retaining the original table UI with live CRUD data. */
-export default function IssueLabelsSettings() {
+type LabelScope = 'issue' | 'project';
+
+/** Shared original settings layout backed by the matching persisted label resource. */
+export function LabelsSettings({ scope }: { scope: LabelScope }) {
+   const isProject = scope === 'project';
+   const title = isProject ? 'Project labels' : 'Issue labels';
+   const resource = isProject ? 'project labels' : 'labels';
+   const endpoint = isProject ? '/projects/labels' : '/labels';
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [labels, setLabels] = useState<ApiLabel[]>([]);
    const [query, setQuery] = useState('');
@@ -48,10 +54,12 @@ export default function IssueLabelsSettings() {
       const id = workspacePayload.data[0]?.workspace.id;
       if (!id) throw new Error('No workspace is available.');
       setWorkspaceId(id);
-      const response = await fetch(`${api}/labels?workspaceId=${id}`, { credentials: 'include' });
-      if (!response.ok) throw new Error('Could not load labels.');
+      const response = await fetch(`${api}${endpoint}?workspaceId=${id}`, {
+         credentials: 'include',
+      });
+      if (!response.ok) throw new Error(`Could not load ${resource}.`);
       setLabels(((await response.json()) as { data: ApiLabel[] }).data);
-   }, []);
+   }, [endpoint, resource]);
 
    useEffect(() => {
       void load()
@@ -88,7 +96,9 @@ export default function IssueLabelsSettings() {
       try {
          const editing = dialog === 'edit' && selected;
          const response = await fetch(
-            editing ? `${api}/labels/${selected.id}?workspaceId=${workspaceId}` : `${api}/labels`,
+            editing
+               ? `${api}${endpoint}/${selected.id}?workspaceId=${workspaceId}`
+               : `${api}${endpoint}`,
             {
                method: editing ? 'PATCH' : 'POST',
                credentials: 'include',
@@ -121,10 +131,13 @@ export default function IssueLabelsSettings() {
       setSaving(true);
       setMessage(undefined);
       try {
-         const response = await fetch(`${api}/labels/${selected.id}?workspaceId=${workspaceId}`, {
-            method: 'DELETE',
-            credentials: 'include',
-         });
+         const response = await fetch(
+            `${api}${endpoint}/${selected.id}?workspaceId=${workspaceId}`,
+            {
+               method: 'DELETE',
+               credentials: 'include',
+            }
+         );
          if (!response.ok)
             throw new Error(
                'Could not delete label. Workspace administrator access may be required.'
@@ -141,7 +154,7 @@ export default function IssueLabelsSettings() {
    return (
       <div className="w-full overflow-y-auto h-full">
          <div className="max-w-5xl mx-auto px-6 py-10 pb-20">
-            <h1 className="text-2xl font-medium mb-6">Issue labels</h1>
+            <h1 className="text-2xl font-medium mb-6">{title}</h1>
             <div className="flex items-center justify-between gap-3 mb-6">
                <Input
                   placeholder="Filter by name..."
@@ -167,7 +180,7 @@ export default function IssueLabelsSettings() {
             <div className="flex items-center px-2 py-1.5 text-xs text-muted-foreground border-b">
                <div className="flex-1 min-w-0">Name ↓</div>
                <div className="hidden md:block w-[260px]">Description</div>
-               <div className="w-[70px]">Issues</div>
+               <div className="w-[70px]">{isProject ? 'Projects' : 'Issues'}</div>
                <div className="hidden sm:block w-[110px]">Last updated</div>
                <div className="w-[100px]">Created</div>
             </div>
@@ -197,7 +210,12 @@ export default function IssueLabelsSettings() {
                         {label.description || '—'}
                      </div>
                      <div className="w-[70px] text-xs text-muted-foreground">
-                        {label._count.issueLinks ? formatCount(label._count.issueLinks) : ''}
+                        {(() => {
+                           const count = isProject
+                              ? (label._count.projectLinks ?? 0)
+                              : (label._count.issueLinks ?? 0);
+                           return count ? formatCount(count) : '';
+                        })()}
                      </div>
                      <div className="hidden sm:block w-[110px] text-xs text-muted-foreground">
                         {formatDate(label.updatedAt)}
@@ -208,7 +226,9 @@ export default function IssueLabelsSettings() {
                   </button>
                ))}
             {state === 'ready' && rows.length === 0 && (
-               <p className="text-sm text-muted-foreground py-6">No labels match your filter.</p>
+               <p className="text-sm text-muted-foreground py-6">
+                  No {resource} match your filter.
+               </p>
             )}
          </div>
 
@@ -292,4 +312,9 @@ export default function IssueLabelsSettings() {
          </Dialog>
       </div>
    );
+}
+
+/** Workspace Issue labels, retaining the original table UI with live CRUD data. */
+export default function IssueLabelsSettings() {
+   return <LabelsSettings scope="issue" />;
 }
