@@ -55,10 +55,18 @@ export function HealthPopover({ project }: HealthPopoverProps) {
                   <h4 className="font-medium text-sm">{project.name}</h4>
                </div>
                <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                  <Button
+                     disabled
+                     title="Project subscriptions are not available yet"
+                     variant="ghost"
+                     size="sm"
+                     className="h-7 px-2 text-xs"
+                  >
                      Subscribe
                   </Button>
                   <Button
+                     disabled
+                     title="Project updates are not available yet"
                      variant="outline"
                      size="sm"
                      className="h-7 px-2 text-xs flex items-center gap-1"
@@ -76,7 +84,10 @@ export function HealthPopover({ project }: HealthPopoverProps) {
                   </div>
                   <div className="flex items-center gap-2">
                      <Avatar className="size-5">
-                        <AvatarImage src={project.lead.avatarUrl} alt={project.lead.name} />
+                        <AvatarImage
+                           src={project.lead.avatarUrl || undefined}
+                           alt={project.lead.name}
+                        />
                         <AvatarFallback>{project.lead.name.charAt(0)}</AvatarFallback>
                      </Avatar>
                      <span className="text-xs text-muted-foreground">{project.lead.name}</span>
