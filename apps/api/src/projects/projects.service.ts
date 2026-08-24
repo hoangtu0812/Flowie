@@ -22,6 +22,9 @@ const projectInclude = {
       },
    },
    _count: { select: { issues: true } },
+   initiativeLinks: {
+      include: { initiative: { select: { id: true, name: true } } },
+   },
 } satisfies Prisma.ProjectInclude;
 
 @Injectable()

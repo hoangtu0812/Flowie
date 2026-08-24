@@ -12,9 +12,11 @@ export type LiveProject = {
    health: string;
    startDate: string | null;
    targetDate: string | null;
+   createdAt: string;
    team: { id: string; name: string; identifier: string; icon: string | null } | null;
    lead: { id: string; name: string; avatarUrl: string | null } | null;
    _count: { issues: number };
+   initiativeLinks: Array<{ initiative: { id: string; name: string } }>;
 };
 
 export type LiveProjectIssue = {
