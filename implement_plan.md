@@ -104,10 +104,11 @@
 - `9fdca7f` — persist Team workflow settings in the original page.
 - `6244e3b` — manage real sessions and personal API keys in the original Security shell.
 - `554ff59` — enforce Team auto-close/archive retention policies in the Worker.
+- `38ad4af` — resolve every runtime loader against the workspace slug in the current route.
 
 ### Kiểm tra gần nhất
 
-- API Jest: **24 suites, 53 tests passed** trong Docker image, gồm validation Ask, Issue actions,
+- API Jest: **26 suites, 64 tests passed**, gồm validation Ask, Issue actions,
   Project attachment, Team settings, Personal API Key one-time token và Bearer guard.
 - NestJS build: passed.
 - Next.js 15 production build: passed.
@@ -136,6 +137,8 @@
   key và các index đã được xác minh trực tiếp trong PostgreSQL Docker.
 - Migration `20260824280000_personal_api_keys` đã được apply; bảng/key index và sáu route
   session/API-key đã được xác minh trong Docker.
+- Migration `20260824290000_notification_workspaces` đã được apply; notification được backfill,
+  bắt buộc có workspace FK và toàn bộ list/read/delete được authorize + filter theo workspace.
 - Audit frontend đã đối chiếu **308 file baseline** trong `app/components/hooks/lib/store` với
   `upstream/master`. Đã xóa 18 component `real-*` rút gọn không còn route nào dùng; runtime chỉ
   còn cây component gốc được nối API.
@@ -151,8 +154,8 @@
 | Ưu tiên | Phần còn lại | Trạng thái/chỉ dẫn |
 | --- | --- | --- |
 | P0 | Visual parity toàn route | Source audit 305 TS/TSX xác nhận bảng Projects/Teams/Issues vẫn giữ composition gốc; sai lệch rõ còn lại là Notifications/Integrations custom và một số visible no-op. Visual acceptance nội bộ vẫn cần phiên workspace-member; browser sạch hiện mới xác nhận route guard/login và không có console error. |
-| P0 | Notifications đa workspace | `Notification` chưa có `workspaceId`, nên Inbox có thể trộn record giữa workspace. Cần migration/FK, filter API/store theo workspace và preview entity-aware cho issue/project. |
-| P0 | Settings Notifications/Integrations | Khôi phục shell/card/search gốc; đưa Discord vào row/dialog thật, không quảng cáo Slack/email/desktop đã hoạt động. |
+| P0 | Notifications đa workspace | Hoàn thành: notification có workspace FK, API/store scope đúng workspace và preview xử lý cả issue/project thật. |
+| P0 | Settings Notifications/Integrations | Hoàn thành: shell/card/search gốc được giữ lại; Discord dùng row/dialog thật, không quảng cáo Slack/email/desktop. |
 | P0 | Team membership | API list hiện chỉ trả team đã join và frontend ép `joined=true`; cần list all + computed membership + self-join policy, đấu nối đúng bảng/nút Join gốc. |
 | P1 | Issue actions còn thiếu | Convert-to-comment còn cần semantics/backend. Duplicate/Won't Fix, move team, favorite và reminder đã hoàn thành; taxonomy issue type không có control tương ứng trong UI gốc hiện tại. |
 | P1 | Team settings nâng cao | Cycle cadence, triage, auto-close/archive policy, hierarchy và template default đã persistence/UI; Worker auto-close/archive đã hoàn thành. Tự sinh cycle theo cadence vẫn chưa triển khai. |

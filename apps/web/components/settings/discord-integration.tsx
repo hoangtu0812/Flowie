@@ -1,111 +1,165 @@
 'use client';
-import { FormEvent, useEffect, useState } from 'react';
+
+import { type FormEvent, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import {
+   Dialog,
+   DialogContent,
+   DialogDescription,
+   DialogHeader,
+   DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { loadCurrentWorkspace } from '@/lib/workspaces';
+
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
-export function DiscordIntegration() {
+
+export type DiscordStatus = {
+   enabled: boolean;
+   webhookUrlMasked: string;
+   updatedAt: string;
+} | null;
+
+export async function loadDiscordStatus(): Promise<DiscordStatus> {
+   const workspaceId = (await loadCurrentWorkspace()).id;
+   const response = await fetch(`${api}/integrations/discord?workspaceId=${workspaceId}`, {
+      credentials: 'include',
+   });
+   if (!response.ok) throw new Error('Could not load the Discord integration.');
+   return ((await response.json()) as { data: DiscordStatus }).data;
+}
+
+export function DiscordIntegration({
+   onSaved,
+}: {
+   onSaved?: (status: NonNullable<DiscordStatus>) => void;
+}) {
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [url, setUrl] = useState('');
    const [enabled, setEnabled] = useState(true);
    const [message, setMessage] = useState<string>();
    const [saving, setSaving] = useState(false);
    const [configured, setConfigured] = useState(false);
+
    useEffect(() => {
       void loadCurrentWorkspace()
-         .then((workspace) => {
-            const id = workspace.id;
-            setWorkspaceId(id);
-            return fetch(`${api}/integrations/discord?workspaceId=${id}`, {
-               credentials: 'include',
-            });
-         })
-         .then(async (r) => {
-            if (!r?.ok) return;
-            const p = (await r.json()) as {
-               data: { webhookUrlMasked: string; enabled: boolean } | null;
-            };
-            if (p.data) {
+         .then(async (workspace) => {
+            setWorkspaceId(workspace.id);
+            const status = await loadDiscordStatus();
+            if (status) {
                setConfigured(true);
-               setEnabled(p.data.enabled);
+               setEnabled(status.enabled);
             }
          })
-         .catch(() => setMessage('Không thể tải cấu hình Discord.'));
+         .catch(() => setMessage('Could not load the Discord integration.'));
    }, []);
+
    async function save(event: FormEvent) {
       event.preventDefault();
       if (!workspaceId) return;
       setSaving(true);
       setMessage(undefined);
-      const r = await fetch(`${api}/integrations/discord?workspaceId=${workspaceId}`, {
+      const response = await fetch(`${api}/integrations/discord?workspaceId=${workspaceId}`, {
          method: 'POST',
          credentials: 'include',
          headers: { 'content-type': 'application/json' },
-         body: JSON.stringify({ webhookUrl: url, enabled }),
+         body: JSON.stringify({ ...(url ? { webhookUrl: url } : {}), enabled }),
       });
       setSaving(false);
-      setMessage(r.ok ? 'Đã lưu cấu hình Discord.' : 'Không thể lưu. Hãy kiểm tra webhook URL.');
+      if (!response.ok) {
+         setMessage('Could not save. Check the webhook URL and your workspace role.');
+         return;
+      }
+      const status = ((await response.json()) as { data: NonNullable<DiscordStatus> }).data;
+      setConfigured(true);
+      setUrl('');
+      setEnabled(status.enabled);
+      setMessage('Discord integration saved.');
+      onSaved?.(status);
    }
+
    async function test() {
       if (!workspaceId) return;
-      const r = await fetch(`${api}/integrations/discord/test?workspaceId=${workspaceId}`, {
+      const response = await fetch(`${api}/integrations/discord/test?workspaceId=${workspaceId}`, {
          method: 'POST',
          credentials: 'include',
       });
-      const p = (await r.json()) as { data?: { delivered: boolean } };
+      const payload = (await response.json().catch(() => null)) as {
+         data?: { delivered: boolean };
+      } | null;
       setMessage(
-         r.ok && p.data?.delivered
-            ? 'Đã gửi thông báo thử đến Discord.'
-            : 'Gửi thử không thành công. Hãy kiểm tra webhook URL.'
+         response.ok && payload?.data?.delivered
+            ? 'Test notification queued for Discord.'
+            : 'The test could not be delivered. Check the webhook and enabled state.'
       );
    }
+
    return (
-      <section className="mx-auto w-full max-w-2xl p-6">
-         <h1 className="text-xl font-semibold">Discord</h1>
-         <p className="mt-1 text-sm text-muted-foreground">
-            Nhận thông báo khi tạo issue hoặc project. Email, Slack và desktop app hiện không được
-            kích hoạt.
-         </p>
-         <form className="mt-6 space-y-4 rounded-lg border bg-card p-5" onSubmit={save}>
+      <form className="space-y-5" onSubmit={save}>
+         <div>
+            <Label htmlFor="discord-url">Discord webhook URL</Label>
+            <Input
+               id="discord-url"
+               className="mt-1"
+               value={url}
+               onChange={(event) => setUrl(event.target.value)}
+               placeholder={
+                  configured
+                     ? 'Configured — enter a new URL to replace it'
+                     : 'https://discord.com/api/webhooks/…'
+               }
+               type="url"
+            />
+         </div>
+         <div className="flex items-center justify-between gap-4 rounded-md border px-3 py-2.5">
             <div>
-               <Label htmlFor="discord-url">Discord webhook URL</Label>
-               <Input
-                  id="discord-url"
-                  className="mt-1"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder={
-                     configured
-                        ? 'Đã cấu hình — nhập URL mới để thay thế'
-                        : 'https://discord.com/api/webhooks/…'
-                  }
-                  type="url"
-               />
+               <p className="text-sm font-medium">Enable Discord notifications</p>
+               <p className="text-xs text-muted-foreground">
+                  Deliver supported workspace events through the configured webhook.
+               </p>
             </div>
-            <label className="flex items-center gap-2 text-sm">
-               <input
-                  type="checkbox"
-                  checked={enabled}
-                  onChange={(e) => setEnabled(e.target.checked)}
-               />{' '}
-               Bật gửi thông báo Discord
-            </label>
-            {message && <p className="text-sm text-muted-foreground">{message}</p>}
-            <div className="flex gap-2">
-               <Button type="submit" disabled={saving}>
-                  {saving ? 'Đang lưu…' : 'Lưu cấu hình'}
-               </Button>
-               <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void test()}
-                  disabled={!url && !configured}
-               >
-                  Gửi thử
-               </Button>
-            </div>
-         </form>
-      </section>
+            <Switch checked={enabled} onCheckedChange={setEnabled} />
+         </div>
+         {message && <p className="text-sm text-muted-foreground">{message}</p>}
+         <div className="flex gap-2">
+            <Button type="submit" disabled={saving || (!configured && !url)}>
+               {saving ? 'Saving…' : 'Save configuration'}
+            </Button>
+            <Button
+               type="button"
+               variant="outline"
+               onClick={() => void test()}
+               disabled={!configured}
+            >
+               Send test
+            </Button>
+         </div>
+      </form>
+   );
+}
+
+export function DiscordIntegrationDialog({
+   open,
+   onOpenChange,
+   onSaved,
+}: {
+   open: boolean;
+   onOpenChange: (open: boolean) => void;
+   onSaved?: (status: NonNullable<DiscordStatus>) => void;
+}) {
+   return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+         <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+               <DialogTitle>Discord</DialogTitle>
+               <DialogDescription>
+                  Configure the webhook used for Flowie workspace notifications.
+               </DialogDescription>
+            </DialogHeader>
+            <DiscordIntegration onSaved={onSaved} />
+         </DialogContent>
+      </Dialog>
    );
 }

@@ -16,6 +16,7 @@ function createFakePrisma(options: FakeOptions = {}) {
       updates: 0,
       activities: 0,
       notifications: 0,
+      notificationWorkspaceIds: [] as string[],
    };
    const autoCloseDays = options.autoCloseDays ?? null;
    const autoArchiveDays = options.autoArchiveDays ?? null;
@@ -47,12 +48,14 @@ function createFakePrisma(options: FakeOptions = {}) {
          },
       },
       notification: {
-         create: async () => {
+         create: async ({ data }: { data: { workspaceId: string } }) => {
             calls.notifications += 1;
+            calls.notificationWorkspaceIds.push(data.workspaceId);
             return {};
          },
-         createMany: async ({ data }: { data: unknown[] }) => {
+         createMany: async ({ data }: { data: Array<{ workspaceId: string }> }) => {
             calls.notifications += data.length;
+            calls.notificationWorkspaceIds.push(...data.map(({ workspaceId }) => workspaceId));
             return { count: data.length };
          },
       },
@@ -102,6 +105,7 @@ test('auto-close claims a stale issue once and deduplicates subscriber notificat
    assert.deepEqual(await runTeamPolicies(prisma, now), { teams: 1, closed: 0, archived: 0 });
    assert.equal(calls.activities, 1);
    assert.equal(calls.notifications, 1);
+   assert.deepEqual(calls.notificationWorkspaceIds, ['workspace-1']);
    assert.equal(calls.updates, 2);
    assert.match(JSON.stringify(calls.issueWhere[0]), /ACTIVE/);
    assert.match(JSON.stringify(calls.issueWhere[0]), /comments/);
@@ -126,6 +130,7 @@ test('auto-archive claims a closed issue and notifies its creator', async () => 
    assert.equal(calls.updates, 1);
    assert.equal(calls.activities, 1);
    assert.equal(calls.notifications, 1);
+   assert.deepEqual(calls.notificationWorkspaceIds, ['workspace-1']);
    assert.match(JSON.stringify(calls.issueWhere[0]), /COMPLETED/);
    assert.match(JSON.stringify(calls.issueWhere[0]), /CANCELED/);
 });

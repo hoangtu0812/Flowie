@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@circle/database';
 import { PrismaService } from '../database/prisma.service';
 import { JobsService } from '../jobs/jobs.service';
 
 export type NotificationResponse = {
    id: string;
+   workspaceId: string;
    type: string;
    entityType: string;
    entityId: string;
@@ -56,6 +57,16 @@ export class NotificationsService {
       discordContent: string
    ) {
       const recipientIdsWithoutActor = [...new Set(recipientIds)].filter((id) => id !== actorId);
+      const activeRecipients = recipientIdsWithoutActor.length
+         ? await this.prisma.workspaceMember.findMany({
+              where: {
+                 workspaceId,
+                 status: 'ACTIVE',
+                 userId: { in: recipientIdsWithoutActor },
+              },
+              select: { userId: true },
+           })
+         : [];
       const actor = await this.prisma.user.findUnique({
          where: { id: actorId },
          select: { id: true, name: true, avatarUrl: true },
@@ -64,9 +75,10 @@ export class NotificationsService {
          ...data,
          ...(actor ? { actor } : {}),
       } as Prisma.InputJsonValue;
-      if (recipientIdsWithoutActor.length) {
+      if (activeRecipients.length) {
          await this.prisma.notification.createMany({
-            data: recipientIdsWithoutActor.map((userId) => ({
+            data: activeRecipients.map(({ userId }) => ({
+               workspaceId,
                userId,
                type,
                entityType,
@@ -78,17 +90,23 @@ export class NotificationsService {
       await this.jobs.enqueueDiscord({ workspaceId, content: discordContent });
    }
 
-   async list(userId: string): Promise<NotificationResponse[]> {
+   async list(workspaceId: string, userId: string): Promise<NotificationResponse[]> {
+      await this.authorize(workspaceId, userId);
       const notifications = await this.prisma.notification.findMany({
-         where: { userId },
+         where: { workspaceId, userId },
          orderBy: { createdAt: 'desc' },
       });
       return notifications.map((notification) => this.toResponse(notification));
    }
 
-   async markRead(notificationId: string, userId: string): Promise<NotificationResponse> {
+   async markRead(
+      notificationId: string,
+      workspaceId: string,
+      userId: string
+   ): Promise<NotificationResponse> {
+      await this.authorize(workspaceId, userId);
       const notification = await this.prisma.notification.findFirst({
-         where: { id: notificationId, userId },
+         where: { id: notificationId, workspaceId, userId },
       });
       if (!notification) throw new NotFoundException('Notification not found.');
       const updated = await this.prisma.notification.update({
@@ -98,26 +116,30 @@ export class NotificationsService {
       return this.toResponse(updated);
    }
 
-   async markAllRead(userId: string) {
+   async markAllRead(workspaceId: string, userId: string) {
+      await this.authorize(workspaceId, userId);
       await this.prisma.notification.updateMany({
-         where: { userId, readAt: null },
+         where: { workspaceId, userId, readAt: null },
          data: { readAt: new Date() },
       });
    }
 
-   async deleteAll(userId: string) {
-      return this.prisma.notification.deleteMany({ where: { userId } });
+   async deleteAll(workspaceId: string, userId: string) {
+      await this.authorize(workspaceId, userId);
+      return this.prisma.notification.deleteMany({ where: { workspaceId, userId } });
    }
 
-   async deleteRead(userId: string) {
+   async deleteRead(workspaceId: string, userId: string) {
+      await this.authorize(workspaceId, userId);
       return this.prisma.notification.deleteMany({
-         where: { userId, readAt: { not: null } },
+         where: { workspaceId, userId, readAt: { not: null } },
       });
    }
 
-   async deleteForCompletedIssues(userId: string) {
+   async deleteForCompletedIssues(workspaceId: string, userId: string) {
+      await this.authorize(workspaceId, userId);
       const issueNotifications = await this.prisma.notification.findMany({
-         where: { userId, entityType: 'issue' },
+         where: { workspaceId, userId, entityType: 'issue' },
          select: { entityId: true },
       });
       const issueIds = [...new Set(issueNotifications.map((notification) => notification.entityId))];
@@ -125,6 +147,7 @@ export class NotificationsService {
 
       const completedIssues = await this.prisma.issue.findMany({
          where: {
+            workspaceId,
             id: { in: issueIds },
             status: { category: { in: ['COMPLETED', 'CANCELED'] } },
          },
@@ -134,12 +157,27 @@ export class NotificationsService {
       if (!completedIssueIds.length) return { count: 0 };
 
       return this.prisma.notification.deleteMany({
-         where: { userId, entityType: 'issue', entityId: { in: completedIssueIds } },
+         where: {
+            workspaceId,
+            userId,
+            entityType: 'issue',
+            entityId: { in: completedIssueIds },
+         },
       });
+   }
+
+   private async authorize(workspaceId: string, userId: string) {
+      if (!workspaceId?.trim()) throw new BadRequestException('workspaceId is required.');
+      const membership = await this.prisma.workspaceMember.findFirst({
+         where: { workspaceId, userId, status: 'ACTIVE' },
+         select: { id: true },
+      });
+      if (!membership) throw new NotFoundException('Workspace not found.');
    }
 
    private toResponse(notification: {
       id: string;
+      workspaceId: string;
       type: string;
       entityType: string;
       entityId: string;

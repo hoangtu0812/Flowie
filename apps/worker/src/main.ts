@@ -40,6 +40,7 @@ const worker = new Worker<FlowieJob>(
                issue: {
                   select: {
                      id: true,
+                     workspaceId: true,
                      identifier: true,
                      title: true,
                      archivedAt: true,
@@ -54,6 +55,7 @@ const worker = new Worker<FlowieJob>(
          await prisma.$transaction([
             prisma.notification.create({
                data: {
+                  workspaceId: reminder.issue.workspaceId,
                   userId: reminder.userId,
                   type: 'issue.reminder',
                   entityType: 'issue',

@@ -26,6 +26,13 @@ interface IssuePreviewProps {
    onMarkAsRead?: (id: string) => Promise<void> | void;
 }
 
+type ProjectPreview = {
+   id: string;
+   identifier: string;
+   name: string;
+   description: string | null;
+};
+
 const descriptionBlocks = (description: string): ContentBlock[] =>
    description
       .split(/\n{2,}/)
@@ -38,20 +45,37 @@ export default function IssuePreview({ notification, onMarkAsRead }: IssuePrevie
    const { getUnreadCount } = useNotificationsStore();
    const { issues, loadIssues } = useIssuesStore();
    const [workspaceId, setWorkspaceId] = useState<string>();
+   const [project, setProject] = useState<ProjectPreview>();
    const [draft, setDraft] = useState('');
    const [attachment, setAttachment] = useState<File>();
    const [saving, setSaving] = useState(false);
    const fileInputRef = useRef<HTMLInputElement>(null);
 
    useEffect(() => {
-      void loadIssues();
-   }, [loadIssues]);
+      if (notification?.entityType === 'issue') void loadIssues();
+   }, [loadIssues, notification?.entityType]);
 
    useEffect(() => {
       void loadCurrentWorkspace()
          .then((workspace) => setWorkspaceId(workspace.id))
          .catch(() => setWorkspaceId(undefined));
    }, []);
+
+   useEffect(() => {
+      if (!workspaceId || notification?.entityType !== 'project') {
+         setProject(undefined);
+         return;
+      }
+      void fetch(
+         `${api}/projects/${notification.entityId}?${new URLSearchParams({ workspaceId })}`,
+         { credentials: 'include' }
+      )
+         .then(async (response) => {
+            if (!response.ok) throw new Error();
+            setProject(((await response.json()) as { data: ProjectPreview }).data);
+         })
+         .catch(() => setProject(undefined));
+   }, [notification?.entityId, notification?.entityType, workspaceId]);
 
    const issue = useMemo(() => {
       if (!notification || notification.entityType !== 'issue') return undefined;
@@ -123,7 +147,7 @@ export default function IssuePreview({ notification, onMarkAsRead }: IssuePrevie
       }
    };
 
-   const header = issue ? issue.identifier : notification.identifier;
+   const header = issue?.identifier ?? project?.identifier ?? notification.identifier;
 
    return (
       <div className="flex flex-col h-full overflow-hidden">
@@ -147,6 +171,13 @@ export default function IssuePreview({ notification, onMarkAsRead }: IssuePrevie
                {issue && (
                   <Button variant="ghost" size="xs" asChild>
                      <Link href={`/${orgId}/issue/${issue.identifier}`}>
+                        Open <ArrowUpRight className="size-3.5 ml-0.5" />
+                     </Link>
+                  </Button>
+               )}
+               {project && (
+                  <Button variant="ghost" size="xs" asChild>
+                     <Link href={`/${orgId}/project/${project.id}/overview`}>
                         Open <ArrowUpRight className="size-3.5 ml-0.5" />
                      </Link>
                   </Button>
@@ -180,8 +211,16 @@ export default function IssuePreview({ notification, onMarkAsRead }: IssuePrevie
                   </div>
 
                   <h3 className="text-2xl font-semibold text-foreground text-balance">
-                     {issue?.title ?? notification.title}
+                     {issue?.title ?? project?.name ?? notification.title}
                   </h3>
+
+                  {project && (
+                     <div className="mt-6">
+                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                           {project.description || 'No description provided.'}
+                        </p>
+                     </div>
+                  )}
 
                   {issue && (
                      <>

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { loadCurrentWorkspace } from '@/lib/workspaces';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -126,7 +127,12 @@ const toInboxNotification = (notification: ApiNotification): InboxNotification =
 };
 
 const request = async (path: string, init?: RequestInit) => {
-   const response = await fetch(`${api}${path}`, { credentials: 'include', ...init });
+   const workspace = await loadCurrentWorkspace();
+   const separator = path.includes('?') ? '&' : '?';
+   const response = await fetch(
+      `${api}${path}${separator}workspaceId=${encodeURIComponent(workspace.id)}`,
+      { credentials: 'include', ...init }
+   );
    if (!response.ok) throw new Error('Could not update notifications.');
    return response;
 };

@@ -263,6 +263,7 @@ model Workspace {
   labels       Label[]
   attachments  Attachment[]
   activities   Activity[]
+  notifications Notification[]
   discordWebhook DiscordWebhook?
   projectCustomFields ProjectCustomField[]
   projectTemplates ProjectTemplate[]
@@ -1049,6 +1050,7 @@ model IssueLabel {
 
 model Notification {
   id         String   @id @default(cuid())
+  workspaceId String  @map("workspace_id")
   userId     String   @map("user_id")
   type       String
   entityType String   @map("entity_type")
@@ -1057,9 +1059,11 @@ model Notification {
   readAt     DateTime? @map("read_at")
   createdAt  DateTime @default(now()) @map("created_at")
 
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt, createdAt])
+  @@index([workspaceId, userId, readAt, createdAt])
   @@map("notifications")
 }
 

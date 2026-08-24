@@ -261,6 +261,7 @@ async function applyAutoClose(
          if (recipientIds.length) {
             await tx.notification.createMany({
                data: recipientIds.map((userId) => ({
+                  workspaceId: issue.workspaceId,
                   userId,
                   type: 'issue.auto_closed',
                   entityType: 'issue',
@@ -322,6 +323,7 @@ async function applyAutoArchive(
          });
          await tx.notification.create({
             data: {
+               workspaceId: issue.workspaceId,
                userId: issue.creatorId,
                type: 'issue.auto_archived',
                entityType: 'issue',
