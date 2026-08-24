@@ -22,6 +22,7 @@ import { IntegrationsModule } from './integrations/integrations.module';
 import { PortfolioModule } from './portfolio/portfolio.module';
 import { JobsModule } from './jobs/jobs.module';
 import { AuditModule } from './audit/audit.module';
+import { ReleasesModule } from './releases/releases.module';
 
 @Module({
    imports: [
@@ -35,6 +36,7 @@ import { AuditModule } from './audit/audit.module';
       UsersModule,
       IntegrationsModule,
       PortfolioModule,
+      ReleasesModule,
       WorkspaceModule,
       TeamsModule,
       ProjectsModule,

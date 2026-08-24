@@ -38,6 +38,8 @@
   labels, milestones, templates, statuses và project settings.
 - Initiatives: list/detail/create/update/archive, project links, real progress chart, resources,
   updates và activity; Settings Initiatives đã thay placeholder bằng CRUD thật.
+- Releases: Settings giữ nguyên shell/toolbar/empty-state gốc; list/filter/create/update/archive,
+  trạng thái, target date và liên kết nhiều project đều dùng API/PostgreSQL thật với RBAC + audit.
 - Cycles: list/create/issue assignment/document links; burn-up lấy từ `IssueCycle.createdAt`,
   `Issue.completedAt` và trạng thái thật, không còn curve mock.
 - Documents: workspace/team list, create/edit/archive; cycle-document link.
@@ -62,12 +64,14 @@
 
 ### Kiểm tra gần nhất
 
-- API Jest: **9 suites, 22 tests passed**.
+- API Jest: **11 suites, 26 tests passed** trong Docker build image, gồm validation Release mới.
 - NestJS build: passed.
 - Next.js 15 production build: passed.
 - Docker `api` và `web`: rebuilt; `http://localhost:4000/api/v1/health` và
   `http://localhost:3000/auth/login` trả HTTP 200.
 - Migration `20260824180000_issue_templates` đã được apply trong Postgres Docker.
+- Migration `20260824190000_releases` đã được apply; bảng `releases` và `release_projects` đã được
+  xác minh trực tiếp trong Postgres Docker.
 - Audit frontend đã đối chiếu **308 file baseline** trong `app/components/hooks/lib/store` với
   `upstream/master`. Đã xóa 18 component `real-*` rút gọn không còn route nào dùng; runtime chỉ
   còn cây component gốc được nối API.
@@ -80,8 +84,8 @@
 
 | Ưu tiên | Phần còn lại | Trạng thái/chỉ dẫn |
 | --- | --- | --- |
-| P0 | Visual parity toàn route | So sánh từng route với `upstream/master`; visual acceptance cần một phiên đăng nhập workspace-member. Phiên browser hiện có là platform admin không thuộc workspace nên chưa chụp được các màn hình nội bộ. |
-| P0 | Settings placeholders | `SLAs`, `Customer requests`, `Releases`, `Pulse`, `Asks`, `Emojis` vẫn là placeholder gốc và chưa có model/API. Phải thiết kế model + API + CRUD trong đúng khung UI gốc. |
+| P0 | Visual parity toàn route | So sánh từng route với `upstream/master`; visual acceptance cần một phiên đăng nhập workspace-member. Phiên browser kiểm thử hiện chưa đăng nhập nên mới xác nhận được route guard/login, chưa chụp được các màn hình nội bộ. |
+| P0 | Settings placeholders | `SLAs`, `Customer requests`, `Pulse`, `Asks`, `Emojis` vẫn là placeholder gốc và chưa có model/API. Phải thiết kế model + API + CRUD trong đúng khung UI gốc. `Releases` đã hoàn thành. |
 | P1 | Issue actions còn thiếu | Favorite, reminder, move team, issue type/duplicate/won't-fix classification và convert-to-comment cần schema/backend; hiện được disabled trung thực. |
 | P1 | Team settings nâng cao | Cycle cadence, triage, auto-close/archive, hierarchy và template defaults chưa có schema; UI hiện ghi Unavailable. |
 | P1 | Account security | Session management, passkeys, personal API keys và signing keys chưa có backend. |
@@ -93,8 +97,8 @@
 ## Thứ tự tiếp tục đề xuất
 
 1. Tạo user workspace-member/phiên test và chụp đối chiếu các route chính với UI gốc.
-2. Hoàn thiện một module placeholder theo lát dọc: ưu tiên `Releases`, sau đó `Customer requests`,
-   `SLAs`, `Asks`, `Pulse`, `Emojis`; mỗi module gồm Prisma migration, Nest module/API, UI CRUD,
+2. Hoàn thiện một module placeholder theo lát dọc: ưu tiên `Customer requests`, sau đó `SLAs`,
+   `Asks`, `Pulse`, `Emojis`; mỗi module gồm Prisma migration, Nest module/API, UI CRUD,
    test, Docker, commit/push riêng.
 3. Bổ sung issue favorite/reminder và project favorite bằng schema thật.
 4. Hoàn thiện team automation/cycle policy và Account Security.

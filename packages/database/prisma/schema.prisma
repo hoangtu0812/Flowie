@@ -124,6 +124,7 @@ model User {
   ledProjects Project[] @relation("ProjectLead")
   ownedInitiatives Initiative[] @relation("InitiativeOwner")
   createdIssueTemplates IssueTemplate[] @relation("IssueTemplateCreator")
+  createdReleases Release[] @relation("ReleaseCreator")
 
   @@map("users")
 }
@@ -241,6 +242,7 @@ model Workspace {
   savedViews SavedView[]
   initiatives Initiative[]
   issueTemplates IssueTemplate[]
+  releases Release[]
 
   @@index([organizationId])
   @@map("workspaces")
@@ -325,6 +327,7 @@ model Project {
   milestones ProjectMilestone[]
   customFieldValues ProjectCustomFieldValue[]
   initiativeLinks InitiativeProject[]
+  releaseLinks ReleaseProject[]
   labelLinks ProjectLabelLink[]
   subscriptions ProjectSubscription[]
   updates ProjectUpdate[]
@@ -508,6 +511,42 @@ model InitiativeProject {
   @@id([initiativeId, projectId])
   @@index([projectId])
   @@map("initiative_projects")
+}
+
+model Release {
+  id          String    @id @default(cuid())
+  workspaceId String    @map("workspace_id")
+  name        String
+  version     String
+  description String?
+  status      String    @default("planned")
+  targetDate  DateTime? @map("target_date")
+  releasedAt  DateTime? @map("released_at")
+  createdById String    @map("created_by")
+  archivedAt  DateTime? @map("archived_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy   User             @relation("ReleaseCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  projectLinks ReleaseProject[]
+
+  @@unique([workspaceId, version])
+  @@index([workspaceId, archivedAt])
+  @@map("releases")
+}
+
+model ReleaseProject {
+  releaseId String   @map("release_id")
+  projectId String   @map("project_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  release Release @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([releaseId, projectId])
+  @@index([projectId])
+  @@map("release_projects")
 }
 
 model TeamMember {
