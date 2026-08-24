@@ -27,12 +27,24 @@ export type LiveTeam = {
 
 export type LiveDocument = {
    id: string;
+   folderId: string | null;
    title: string;
    content: string;
+   icon: string;
+   pinned: boolean;
+   position: number;
    createdAt: string;
    updatedAt: string;
    createdBy: { id: string; name: string; avatarUrl: string | null };
    updatedBy: { id: string; name: string; avatarUrl: string | null };
+};
+
+export type LiveDocumentFolder = {
+   id: string;
+   name: string;
+   icon: string;
+   position: number;
+   documents: LiveDocument[];
 };
 
 export type WorkspacePerson = {
@@ -48,6 +60,7 @@ export function useLiveTeam(teamReference: string) {
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [team, setTeam] = useState<LiveTeam>();
    const [documents, setDocuments] = useState<LiveDocument[]>([]);
+   const [documentFolders, setDocumentFolders] = useState<LiveDocumentFolder[]>([]);
    const [workspaceMembers, setWorkspaceMembers] = useState<WorkspacePerson[]>([]);
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState<string>();
@@ -76,20 +89,24 @@ export function useLiveTeam(teamReference: string) {
             if (!matchedTeam) throw new Error('Team not found.');
 
             const query = new URLSearchParams({ workspaceId: currentWorkspaceId });
-            const [teamResponse, documentsResponse, membersResponse] = await Promise.all([
+            const [teamResponse, documentFoldersResponse, membersResponse] = await Promise.all([
                fetch(`${api}/teams/${matchedTeam.id}?${query}`, { credentials: 'include' }),
                fetch(
-                  `${api}/documents?${new URLSearchParams({ workspaceId: currentWorkspaceId, teamId: matchedTeam.id })}`,
+                  `${api}/documents/folders?${new URLSearchParams({ workspaceId: currentWorkspaceId, teamId: matchedTeam.id })}`,
                   { credentials: 'include' }
                ),
                fetch(`${api}/workspaces/${currentWorkspaceId}/members`, { credentials: 'include' }),
             ]);
-            if (!teamResponse.ok || !documentsResponse.ok || !membersResponse.ok)
+            if (!teamResponse.ok || !documentFoldersResponse.ok || !membersResponse.ok)
                throw new Error('Could not load team details.');
             if (!current) return;
+            const folders = (
+               (await documentFoldersResponse.json()) as { data: LiveDocumentFolder[] }
+            ).data;
             setWorkspaceId(currentWorkspaceId);
             setTeam(((await teamResponse.json()) as { data: LiveTeam }).data);
-            setDocuments(((await documentsResponse.json()) as { data: LiveDocument[] }).data);
+            setDocumentFolders(folders);
+            setDocuments(folders.flatMap((folder) => folder.documents));
             setWorkspaceMembers(
                ((await membersResponse.json()) as { data: WorkspacePerson[] }).data
             );
@@ -107,5 +124,14 @@ export function useLiveTeam(teamReference: string) {
 
    const reload = useCallback(() => setRefreshKey((value) => value + 1), []);
 
-   return { workspaceId, team, documents, workspaceMembers, loading, error, reload };
+   return {
+      workspaceId,
+      team,
+      documents,
+      documentFolders,
+      workspaceMembers,
+      loading,
+      error,
+      reload,
+   };
 }

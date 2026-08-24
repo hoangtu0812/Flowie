@@ -90,59 +90,59 @@ enum CycleStatus {
 }
 
 model User {
-  id            String       @id @default(cuid())
-  email         String       @unique
-  name          String
-  username      String?      @unique
-  title         String?
-  avatarUrl     String?      @map("avatar_url")
-  passwordHash  String?      @map("password_hash")
+  id              String     @id @default(cuid())
+  email           String     @unique
+  name            String
+  username        String?    @unique
+  title           String?
+  avatarUrl       String?    @map("avatar_url")
+  passwordHash    String?    @map("password_hash")
   isPlatformAdmin Boolean    @default(false) @map("is_platform_admin")
   emailVerifiedAt DateTime?  @map("email_verified_at")
-  status        UserStatus   @default(ACTIVE)
-  createdAt     DateTime     @default(now()) @map("created_at")
-  updatedAt     DateTime     @updatedAt @map("updated_at")
-  lastLoginAt   DateTime?    @map("last_login_at")
+  status          UserStatus @default(ACTIVE)
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+  lastLoginAt     DateTime?  @map("last_login_at")
 
-  identities    UserIdentity[]
-  sessions      Session[]
-  personalApiKeys PersonalApiKey[]
-  passwordResetTokens PasswordResetToken[]
-  emailVerificationTokens EmailVerificationToken[]
-  memberships   WorkspaceMember[]
-  sentWorkspaceInvitations WorkspaceMember[] @relation("WorkspaceInvitationSender")
-  teamMemberships TeamMember[]
-  organizations Organization[] @relation("OrganizationOwner")
-  createdIssues Issue[] @relation("IssueCreator")
-  assignedIssues Issue[] @relation("IssueAssignee")
-  createdIssueRelations IssueRelation[]
-  issueSubscriptions IssueSubscription[]
-  issueReactions IssueReaction[]
-  issueFavorites IssueFavorite[]
-  issueReminders IssueReminder[]
-  projectSubscriptions ProjectSubscription[]
-  projectFavorites ProjectFavorite[]
-  projectMemberships ProjectMember[]
-  projectUpdates ProjectUpdate[] @relation("ProjectUpdateAuthor")
-  initiativeUpdates InitiativeUpdate[] @relation("InitiativeUpdateAuthor")
-  initiativeResources InitiativeResource[] @relation("InitiativeResourceCreator")
-  projectResources ProjectResource[] @relation("ProjectResourceCreator")
-  createdDocuments Document[] @relation("DocumentCreator")
-  updatedDocuments Document[] @relation("DocumentUpdater")
-  comments Comment[]
-  activities Activity[] @relation("ActivityActor")
-  notifications Notification[]
-  notificationPreferences NotificationPreference[]
-  uploadedAttachments Attachment[]
-  savedViews SavedView[] @relation("SavedViewCreator")
-  ledProjects Project[] @relation("ProjectLead")
-  ownedInitiatives Initiative[] @relation("InitiativeOwner")
-  createdIssueTemplates IssueTemplate[] @relation("IssueTemplateCreator")
-  createdReleases Release[] @relation("ReleaseCreator")
-  createdCustomerRequests CustomerRequest[] @relation("CustomerRequestCreator")
-  createdSlaPolicies SlaPolicy[] @relation("SlaPolicyCreator")
-  createdAsks Ask[] @relation("AskCreator")
-  createdWorkspaceEmojis WorkspaceEmoji[] @relation("WorkspaceEmojiCreator")
+  identities               UserIdentity[]
+  sessions                 Session[]
+  personalApiKeys          PersonalApiKey[]
+  passwordResetTokens      PasswordResetToken[]
+  emailVerificationTokens  EmailVerificationToken[]
+  memberships              WorkspaceMember[]
+  sentWorkspaceInvitations WorkspaceMember[]        @relation("WorkspaceInvitationSender")
+  teamMemberships          TeamMember[]
+  organizations            Organization[]           @relation("OrganizationOwner")
+  createdIssues            Issue[]                  @relation("IssueCreator")
+  assignedIssues           Issue[]                  @relation("IssueAssignee")
+  createdIssueRelations    IssueRelation[]
+  issueSubscriptions       IssueSubscription[]
+  issueReactions           IssueReaction[]
+  issueFavorites           IssueFavorite[]
+  issueReminders           IssueReminder[]
+  projectSubscriptions     ProjectSubscription[]
+  projectFavorites         ProjectFavorite[]
+  projectMemberships       ProjectMember[]
+  projectUpdates           ProjectUpdate[]          @relation("ProjectUpdateAuthor")
+  initiativeUpdates        InitiativeUpdate[]       @relation("InitiativeUpdateAuthor")
+  initiativeResources      InitiativeResource[]     @relation("InitiativeResourceCreator")
+  projectResources         ProjectResource[]        @relation("ProjectResourceCreator")
+  createdDocuments         Document[]               @relation("DocumentCreator")
+  updatedDocuments         Document[]               @relation("DocumentUpdater")
+  comments                 Comment[]
+  activities               Activity[]               @relation("ActivityActor")
+  notifications            Notification[]
+  notificationPreferences  NotificationPreference[]
+  uploadedAttachments      Attachment[]
+  savedViews               SavedView[]              @relation("SavedViewCreator")
+  ledProjects              Project[]                @relation("ProjectLead")
+  ownedInitiatives         Initiative[]             @relation("InitiativeOwner")
+  createdIssueTemplates    IssueTemplate[]          @relation("IssueTemplateCreator")
+  createdReleases          Release[]                @relation("ReleaseCreator")
+  createdCustomerRequests  CustomerRequest[]        @relation("CustomerRequestCreator")
+  createdSlaPolicies       SlaPolicy[]              @relation("SlaPolicyCreator")
+  createdAsks              Ask[]                    @relation("AskCreator")
+  createdWorkspaceEmojis   WorkspaceEmoji[]         @relation("WorkspaceEmojiCreator")
 
   @@map("users")
 }
@@ -166,15 +166,15 @@ model Session {
 }
 
 model PersonalApiKey {
-  id          String    @id @default(cuid())
-  userId      String    @map("user_id")
-  name        String
-  prefix      String
-  tokenHash   String    @unique @map("token_hash")
-  expiresAt   DateTime? @map("expires_at")
-  lastUsedAt  DateTime? @map("last_used_at")
-  revokedAt   DateTime? @map("revoked_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  name       String
+  prefix     String
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime? @map("expires_at")
+  lastUsedAt DateTime? @map("last_used_at")
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -247,50 +247,51 @@ model Organization {
 }
 
 model Workspace {
-  id             String            @id @default(cuid())
-  organizationId String            @map("organization_id")
-  name           String
-  slug           String            @unique
-  description    String?
-  timezone       String            @default("UTC")
-  projectDisplayDefaults Json?     @map("project_display_defaults")
-  issueDisplayDefaults   Json?     @map("issue_display_defaults")
-  issueInsightDefaults   Json?     @map("issue_insight_defaults")
-  createdAt      DateTime          @default(now()) @map("created_at")
-  updatedAt      DateTime          @updatedAt @map("updated_at")
+  id                     String   @id @default(cuid())
+  organizationId         String   @map("organization_id")
+  name                   String
+  slug                   String   @unique
+  description            String?
+  timezone               String   @default("UTC")
+  projectDisplayDefaults Json?    @map("project_display_defaults")
+  issueDisplayDefaults   Json?    @map("issue_display_defaults")
+  issueInsightDefaults   Json?    @map("issue_insight_defaults")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
 
-  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  members      WorkspaceMember[]
-  teams        Team[]
-  projects     Project[]
-  issueStatuses IssueStatus[]
-  issues       Issue[]
-  issueRelations IssueRelation[]
-  cycles       Cycle[]
-  documents    Document[]
-  labels       Label[]
-  attachments  Attachment[]
-  activities   Activity[]
-  notifications Notification[]
+  organization            Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members                 WorkspaceMember[]
+  teams                   Team[]
+  projects                Project[]
+  issueStatuses           IssueStatus[]
+  issues                  Issue[]
+  issueRelations          IssueRelation[]
+  cycles                  Cycle[]
+  documents               Document[]
+  documentFolders         DocumentFolder[]
+  labels                  Label[]
+  attachments             Attachment[]
+  activities              Activity[]
+  notifications           Notification[]
   notificationPreferences NotificationPreference[]
-  discordWebhook DiscordWebhook?
-  projectCustomFields ProjectCustomField[]
-  projectTemplates ProjectTemplate[]
-  projectMilestones ProjectMilestone[]
-  projectLabels ProjectLabel[]
-  projectStatuses ProjectStatus[]
-  projectUpdates ProjectUpdate[]
-  savedViews SavedView[]
-  initiatives Initiative[]
-  initiativeUpdates InitiativeUpdate[]
-  initiativeResources InitiativeResource[]
-  projectResources ProjectResource[]
-  issueTemplates IssueTemplate[]
-  releases Release[]
-  customerRequests CustomerRequest[]
-  slaPolicies SlaPolicy[]
-  asks Ask[]
-  emojis WorkspaceEmoji[]
+  discordWebhook          DiscordWebhook?
+  projectCustomFields     ProjectCustomField[]
+  projectTemplates        ProjectTemplate[]
+  projectMilestones       ProjectMilestone[]
+  projectLabels           ProjectLabel[]
+  projectStatuses         ProjectStatus[]
+  projectUpdates          ProjectUpdate[]
+  savedViews              SavedView[]
+  initiatives             Initiative[]
+  initiativeUpdates       InitiativeUpdate[]
+  initiativeResources     InitiativeResource[]
+  projectResources        ProjectResource[]
+  issueTemplates          IssueTemplate[]
+  releases                Release[]
+  customerRequests        CustomerRequest[]
+  slaPolicies             SlaPolicy[]
+  asks                    Ask[]
+  emojis                  WorkspaceEmoji[]
 
   @@index([organizationId])
   @@map("workspaces")
@@ -310,14 +311,14 @@ model DiscordWebhook {
 }
 
 model AuditLog {
-  id         String   @id @default(cuid())
-  workspaceId String? @map("workspace_id")
-  actorId    String?  @map("actor_id")
-  action     String
-  entityType String   @map("entity_type")
-  entityId   String?  @map("entity_id")
-  metadata   Json     @default("{}")
-  createdAt  DateTime @default(now()) @map("created_at")
+  id          String   @id @default(cuid())
+  workspaceId String?  @map("workspace_id")
+  actorId     String?  @map("actor_id")
+  action      String
+  entityType  String   @map("entity_type")
+  entityId    String?  @map("entity_id")
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at")
 
   @@index([workspaceId, createdAt])
   @@index([actorId, createdAt])
@@ -325,35 +326,36 @@ model AuditLog {
 }
 
 model Team {
-  id          String   @id @default(cuid())
-  workspaceId String   @map("workspace_id")
-  name        String
-  identifier  String
-  description String?
-  icon        String?  @default("👥")
-  color       String?  @default("#6366f1")
-  triageEnabled Boolean @default(true) @map("triage_enabled")
-  cycleCadenceWeeks Int? @map("cycle_cadence_weeks")
-  autoCloseDays Int? @map("auto_close_days")
-  autoArchiveDays Int? @map("auto_archive_days")
-  parentTeamId String? @map("parent_team_id")
-  defaultIssueTemplateId String? @map("default_issue_template_id")
-  archivedAt  DateTime? @map("archived_at")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id                     String    @id @default(cuid())
+  workspaceId            String    @map("workspace_id")
+  name                   String
+  identifier             String
+  description            String?
+  icon                   String?   @default("👥")
+  color                  String?   @default("#6366f1")
+  triageEnabled          Boolean   @default(true) @map("triage_enabled")
+  cycleCadenceWeeks      Int?      @map("cycle_cadence_weeks")
+  autoCloseDays          Int?      @map("auto_close_days")
+  autoArchiveDays        Int?      @map("auto_archive_days")
+  parentTeamId           String?   @map("parent_team_id")
+  defaultIssueTemplateId String?   @map("default_issue_template_id")
+  archivedAt             DateTime? @map("archived_at")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
 
-  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  members   TeamMember[]
-  projects  Project[]
-  issues    Issue[]
-  issueSequence Int @default(0) @map("issue_sequence")
-  cycles    Cycle[]
-  documents Document[]
-  slaPolicies SlaPolicy[]
-  asks Ask[]
-  parentTeam Team? @relation("TeamHierarchy", fields: [parentTeamId], references: [id], onDelete: SetNull)
-  childTeams Team[] @relation("TeamHierarchy")
-  defaultIssueTemplate IssueTemplate? @relation(fields: [defaultIssueTemplateId], references: [id], onDelete: SetNull)
+  workspace            Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  members              TeamMember[]
+  projects             Project[]
+  issues               Issue[]
+  issueSequence        Int              @default(0) @map("issue_sequence")
+  cycles               Cycle[]
+  documents            Document[]
+  documentFolders      DocumentFolder[]
+  slaPolicies          SlaPolicy[]
+  asks                 Ask[]
+  parentTeam           Team?            @relation("TeamHierarchy", fields: [parentTeamId], references: [id], onDelete: SetNull)
+  childTeams           Team[]           @relation("TeamHierarchy")
+  defaultIssueTemplate IssueTemplate?   @relation(fields: [defaultIssueTemplateId], references: [id], onDelete: SetNull)
 
   @@unique([workspaceId, identifier])
   @@index([workspaceId])
@@ -363,40 +365,40 @@ model Team {
 }
 
 model Project {
-  id          String   @id @default(cuid())
-  workspaceId String   @map("workspace_id")
-  teamId      String?  @map("team_id")
+  id          String      @id @default(cuid())
+  workspaceId String      @map("workspace_id")
+  teamId      String?     @map("team_id")
   name        String
   identifier  String
   description String?
   type        ProjectType @default(GENERAL)
-  status      String   @default("planned")
-  priority    String   @default("none")
-  health      String   @default("no-update")
-  leadId      String?  @map("lead_id")
-  startDate   DateTime? @map("start_date")
-  targetDate  DateTime? @map("target_date")
-  archivedAt  DateTime? @map("archived_at")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  status      String      @default("planned")
+  priority    String      @default("none")
+  health      String      @default("no-update")
+  leadId      String?     @map("lead_id")
+  startDate   DateTime?   @map("start_date")
+  targetDate  DateTime?   @map("target_date")
+  archivedAt  DateTime?   @map("archived_at")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  team Team? @relation(fields: [teamId], references: [id], onDelete: SetNull)
-  lead User? @relation("ProjectLead", fields: [leadId], references: [id], onDelete: SetNull)
-  issues Issue[]
-  activities Activity[]
-  milestones ProjectMilestone[]
+  workspace         Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  team              Team?                     @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  lead              User?                     @relation("ProjectLead", fields: [leadId], references: [id], onDelete: SetNull)
+  issues            Issue[]
+  activities        Activity[]
+  milestones        ProjectMilestone[]
   customFieldValues ProjectCustomFieldValue[]
-  initiativeLinks InitiativeProject[]
-  releaseLinks ReleaseProject[]
-  customerRequests CustomerRequest[]
-  asks Ask[]
-  labelLinks ProjectLabelLink[]
-  subscriptions ProjectSubscription[]
-  favorites ProjectFavorite[]
-  updates ProjectUpdate[]
-  resources ProjectResource[]
-  members ProjectMember[]
+  initiativeLinks   InitiativeProject[]
+  releaseLinks      ReleaseProject[]
+  customerRequests  CustomerRequest[]
+  asks              Ask[]
+  labelLinks        ProjectLabelLink[]
+  subscriptions     ProjectSubscription[]
+  favorites         ProjectFavorite[]
+  updates           ProjectUpdate[]
+  resources         ProjectResource[]
+  members           ProjectMember[]
 
   @@unique([workspaceId, identifier])
   @@index([workspaceId, teamId])
@@ -428,7 +430,7 @@ model ProjectCustomField {
   createdAt   DateTime               @default(now()) @map("created_at")
   updatedAt   DateTime               @updatedAt @map("updated_at")
 
-  workspace Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   values    ProjectCustomFieldValue[]
 
   @@unique([workspaceId, name])
@@ -437,8 +439,8 @@ model ProjectCustomField {
 }
 
 model ProjectCustomFieldValue {
-  projectId String @map("project_id")
-  fieldId   String @map("field_id")
+  projectId String   @map("project_id")
+  fieldId   String   @map("field_id")
   value     Json?
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -471,8 +473,8 @@ model ProjectMilestone {
 }
 
 model ProjectSubscription {
-  projectId String @map("project_id")
-  userId    String @map("user_id")
+  projectId String   @map("project_id")
+  userId    String   @map("user_id")
   createdAt DateTime @default(now()) @map("created_at")
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -588,25 +590,25 @@ model SavedView {
 }
 
 model Initiative {
-  id          String   @id @default(cuid())
-  workspaceId String   @map("workspace_id")
+  id          String    @id @default(cuid())
+  workspaceId String    @map("workspace_id")
   name        String
   description String?
-  status      String   @default("planned")
-  priority    String   @default("none")
-  health      String   @default("no-update")
-  icon        String?  @default("🎯")
-  ownerId     String?  @map("owner_id")
+  status      String    @default("planned")
+  priority    String    @default("none")
+  health      String    @default("no-update")
+  icon        String?   @default("🎯")
+  ownerId     String?   @map("owner_id")
   targetDate  DateTime? @map("target_date")
   archivedAt  DateTime? @map("archived_at")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  workspace Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  owner     User?                @relation("InitiativeOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  workspace    Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  owner        User?                @relation("InitiativeOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   projectLinks InitiativeProject[]
-  updates InitiativeUpdate[]
-  resources InitiativeResource[]
+  updates      InitiativeUpdate[]
+  resources    InitiativeResource[]
 
   @@index([workspaceId, archivedAt])
   @@index([ownerId])
@@ -614,8 +616,8 @@ model Initiative {
 }
 
 model InitiativeProject {
-  initiativeId String @map("initiative_id")
-  projectId    String @map("project_id")
+  initiativeId String   @map("initiative_id")
+  projectId    String   @map("project_id")
   createdAt    DateTime @default(now()) @map("created_at")
 
   initiative Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
@@ -678,8 +680,8 @@ model Release {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  createdBy   User             @relation("ReleaseCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  workspace    Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy    User             @relation("ReleaseCreator", fields: [createdById], references: [id], onDelete: Restrict)
   projectLinks ReleaseProject[]
   issueLinks   IssueRelease[]
 
@@ -742,18 +744,18 @@ model CustomerRequest {
 }
 
 model SlaPolicy {
-  id              String        @id @default(cuid())
-  workspaceId     String        @map("workspace_id")
+  id              String         @id @default(cuid())
+  workspaceId     String         @map("workspace_id")
   name            String
   description     String?
-  teamId          String?       @map("team_id")
+  teamId          String?        @map("team_id")
   priority        IssuePriority?
-  deadlineMinutes Int           @map("deadline_minutes")
-  enabled         Boolean       @default(true)
-  createdById     String        @map("created_by")
-  archivedAt      DateTime?     @map("archived_at")
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
+  deadlineMinutes Int            @map("deadline_minutes")
+  enabled         Boolean        @default(true)
+  createdById     String         @map("created_by")
+  archivedAt      DateTime?      @map("archived_at")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   team      Team?     @relation(fields: [teamId], references: [id], onDelete: SetNull)
@@ -793,10 +795,10 @@ model Ask {
 }
 
 model TeamMember {
-  teamId String         @map("team_id")
-  userId String         @map("user_id")
-  role   TeamMemberRole @default(MEMBER)
-  createdAt DateTime    @default(now()) @map("created_at")
+  teamId    String         @map("team_id")
+  userId    String         @map("user_id")
+  role      TeamMemberRole @default(MEMBER)
+  createdAt DateTime       @default(now()) @map("created_at")
 
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -819,7 +821,7 @@ model IssueStatus {
   updatedAt   DateTime            @updatedAt @map("updated_at")
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  issues Issue[]
+  issues    Issue[]
 
   @@index([workspaceId, teamId])
   @@map("issue_statuses")
@@ -841,8 +843,8 @@ model IssueTemplate {
   createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime      @updatedAt @map("updated_at")
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  createdBy User      @relation("IssueTemplateCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy       User      @relation("IssueTemplateCreator", fields: [createdById], references: [id], onDelete: Restrict)
   defaultForTeams Team[]
 
   @@unique([workspaceId, name])
@@ -851,52 +853,52 @@ model IssueTemplate {
 }
 
 model Issue {
-  id          String        @id @default(cuid())
-  workspaceId String        @map("workspace_id")
-  teamId      String        @map("team_id")
-  statusId    String        @map("status_id")
-  projectId   String?       @map("project_id")
-  parentIssueId String?     @map("parent_issue_id")
-  duplicateOfId String?     @map("duplicate_of_id")
-  identifier  String
-  number      Int
-  title       String
-  description String?
-  priority    IssuePriority @default(NONE)
-  resolution  IssueResolution?
-  estimate    Int?
-  dueDate     DateTime?     @map("due_date")
-  creatorId   String        @map("creator_id")
-  assigneeId  String?       @map("assignee_id")
-  completedAt DateTime?     @map("completed_at")
-  canceledAt  DateTime?     @map("canceled_at")
-  archivedAt  DateTime?     @map("archived_at")
-  createdAt   DateTime      @default(now()) @map("created_at")
-  updatedAt   DateTime      @updatedAt @map("updated_at")
+  id            String           @id @default(cuid())
+  workspaceId   String           @map("workspace_id")
+  teamId        String           @map("team_id")
+  statusId      String           @map("status_id")
+  projectId     String?          @map("project_id")
+  parentIssueId String?          @map("parent_issue_id")
+  duplicateOfId String?          @map("duplicate_of_id")
+  identifier    String
+  number        Int
+  title         String
+  description   String?
+  priority      IssuePriority    @default(NONE)
+  resolution    IssueResolution?
+  estimate      Int?
+  dueDate       DateTime?        @map("due_date")
+  creatorId     String           @map("creator_id")
+  assigneeId    String?          @map("assignee_id")
+  completedAt   DateTime?        @map("completed_at")
+  canceledAt    DateTime?        @map("canceled_at")
+  archivedAt    DateTime?        @map("archived_at")
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
 
-  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  team      Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  status    IssueStatus @relation(fields: [statusId], references: [id], onDelete: Restrict)
-  project   Project?    @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  parentIssue Issue?   @relation("IssueSubIssues", fields: [parentIssueId], references: [id], onDelete: SetNull)
-  subIssues Issue[]    @relation("IssueSubIssues")
-  duplicateOf Issue?   @relation("IssueDuplicates", fields: [duplicateOfId], references: [id], onDelete: SetNull)
-  duplicates Issue[]   @relation("IssueDuplicates")
-  creator   User        @relation("IssueCreator", fields: [creatorId], references: [id], onDelete: Restrict)
-  assignee  User?       @relation("IssueAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  cycleLinks IssueCycle[]
-  releaseLinks IssueRelease[]
-  outgoingRelations IssueRelation[] @relation("IssueRelationSource")
-  incomingRelations IssueRelation[] @relation("IssueRelationTarget")
-  comments Comment[]
-  activities Activity[]
-  labelLinks IssueLabel[]
-  subscribers IssueSubscription[]
-  reactions IssueReaction[]
-  favorites IssueFavorite[]
-  reminders IssueReminder[]
-  customerRequests CustomerRequest[]
-  convertedAsks Ask[] @relation("AskConvertedIssue")
+  workspace         Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  team              Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  status            IssueStatus         @relation(fields: [statusId], references: [id], onDelete: Restrict)
+  project           Project?            @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  parentIssue       Issue?              @relation("IssueSubIssues", fields: [parentIssueId], references: [id], onDelete: SetNull)
+  subIssues         Issue[]             @relation("IssueSubIssues")
+  duplicateOf       Issue?              @relation("IssueDuplicates", fields: [duplicateOfId], references: [id], onDelete: SetNull)
+  duplicates        Issue[]             @relation("IssueDuplicates")
+  creator           User                @relation("IssueCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+  assignee          User?               @relation("IssueAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  cycleLinks        IssueCycle[]
+  releaseLinks      IssueRelease[]
+  outgoingRelations IssueRelation[]     @relation("IssueRelationSource")
+  incomingRelations IssueRelation[]     @relation("IssueRelationTarget")
+  comments          Comment[]
+  activities        Activity[]
+  labelLinks        IssueLabel[]
+  subscribers       IssueSubscription[]
+  reactions         IssueReaction[]
+  favorites         IssueFavorite[]
+  reminders         IssueReminder[]
+  customerRequests  CustomerRequest[]
+  convertedAsks     Ask[]               @relation("AskConvertedIssue")
 
   @@unique([workspaceId, identifier])
   @@unique([teamId, number])
@@ -970,10 +972,10 @@ model IssueReminder {
 }
 
 model IssueReaction {
-  issueId    String   @map("issue_id")
-  userId     String   @map("user_id")
-  emoji      String
-  createdAt  DateTime @default(now()) @map("created_at")
+  issueId   String   @map("issue_id")
+  userId    String   @map("user_id")
+  emoji     String
+  createdAt DateTime @default(now()) @map("created_at")
 
   issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -995,9 +997,9 @@ model Cycle {
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
 
-  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  team      Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  issueLinks IssueCycle[]
+  workspace     Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  team          Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  issueLinks    IssueCycle[]
   documentLinks CycleDocument[]
 
   @@index([workspaceId, teamId, status])
@@ -1018,8 +1020,8 @@ model CycleDocument {
 }
 
 model IssueCycle {
-  issueId String @map("issue_id")
-  cycleId String @map("cycle_id")
+  issueId   String   @map("issue_id")
+  cycleId   String   @map("cycle_id")
   createdAt DateTime @default(now()) @map("created_at")
 
   issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
@@ -1030,35 +1032,60 @@ model IssueCycle {
   @@map("issue_cycles")
 }
 
-model Document {
+model DocumentFolder {
   id          String   @id @default(cuid())
   workspaceId String   @map("workspace_id")
-  teamId      String?  @map("team_id")
-  title       String
-  content     String   @default("")
-  createdById String   @map("created_by")
-  updatedById String   @map("updated_by")
+  teamId      String   @map("team_id")
+  name        String
+  icon        String   @default("📁")
+  position    Int      @default(0)
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  team      Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  documents Document[]
+
+  @@unique([teamId, name])
+  @@index([workspaceId, teamId, position])
+  @@map("document_folders")
+}
+
+model Document {
+  id          String    @id @default(cuid())
+  workspaceId String    @map("workspace_id")
+  teamId      String?   @map("team_id")
+  folderId    String?   @map("folder_id")
+  title       String
+  content     String    @default("")
+  icon        String    @default("📄")
+  pinned      Boolean   @default(false)
+  position    Int       @default(0)
+  createdById String    @map("created_by")
+  updatedById String    @map("updated_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
   archivedAt  DateTime? @map("archived_at")
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  team      Team?     @relation(fields: [teamId], references: [id], onDelete: SetNull)
-  createdBy User      @relation("DocumentCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy User      @relation("DocumentUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+  workspace  Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  team       Team?           @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  folder     DocumentFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  createdBy  User            @relation("DocumentCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy  User            @relation("DocumentUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
   cycleLinks CycleDocument[]
 
   @@index([workspaceId, teamId])
+  @@index([folderId, pinned, position])
   @@map("documents")
 }
 
 model Comment {
-  id        String   @id @default(cuid())
-  issueId   String   @map("issue_id")
-  authorId  String   @map("author_id")
+  id        String    @id @default(cuid())
+  issueId   String    @map("issue_id")
+  authorId  String    @map("author_id")
   content   String
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
   issue  Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
@@ -1098,7 +1125,7 @@ model ProjectLabel {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace    Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   projectLinks ProjectLabelLink[]
 
   @@unique([workspaceId, name])
@@ -1107,8 +1134,8 @@ model ProjectLabel {
 }
 
 model ProjectLabelLink {
-  projectId String @map("project_id")
-  labelId   String @map("label_id")
+  projectId String   @map("project_id")
+  labelId   String   @map("label_id")
   createdAt DateTime @default(now()) @map("created_at")
 
   project Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -1128,7 +1155,7 @@ model Label {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace  Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   issueLinks IssueLabel[]
 
   @@unique([workspaceId, name])
@@ -1137,8 +1164,8 @@ model Label {
 }
 
 model IssueLabel {
-  issueId String @map("issue_id")
-  labelId String @map("label_id")
+  issueId   String   @map("issue_id")
+  labelId   String   @map("label_id")
   createdAt DateTime @default(now()) @map("created_at")
 
   issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
@@ -1150,18 +1177,18 @@ model IssueLabel {
 }
 
 model Notification {
-  id         String   @id @default(cuid())
-  workspaceId String  @map("workspace_id")
-  userId     String   @map("user_id")
-  type       String
-  entityType String   @map("entity_type")
-  entityId   String   @map("entity_id")
-  data       Json?
-  readAt     DateTime? @map("read_at")
-  createdAt  DateTime @default(now()) @map("created_at")
+  id          String    @id @default(cuid())
+  workspaceId String    @map("workspace_id")
+  userId      String    @map("user_id")
+  type        String
+  entityType  String    @map("entity_type")
+  entityId    String    @map("entity_id")
+  data        Json?
+  readAt      DateTime? @map("read_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt, createdAt])
   @@index([workspaceId, userId, readAt, createdAt])
@@ -1169,13 +1196,13 @@ model Notification {
 }
 
 model NotificationPreference {
-  workspaceId          String   @map("workspace_id")
-  userId               String   @map("user_id")
-  teamIssueAdded       Boolean  @default(false) @map("team_issue_added")
-  issueCompleted       Boolean  @default(false) @map("issue_completed")
-  issueAddedToTriage   Boolean  @default(false) @map("issue_added_to_triage")
-  createdAt            DateTime @default(now()) @map("created_at")
-  updatedAt            DateTime @updatedAt @map("updated_at")
+  workspaceId        String   @map("workspace_id")
+  userId             String   @map("user_id")
+  teamIssueAdded     Boolean  @default(false) @map("team_issue_added")
+  issueCompleted     Boolean  @default(false) @map("issue_completed")
+  issueAddedToTriage Boolean  @default(false) @map("issue_added_to_triage")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1186,18 +1213,18 @@ model NotificationPreference {
 }
 
 model Attachment {
-  id          String   @id @default(cuid())
-  workspaceId String   @map("workspace_id")
-  uploadedById String  @map("uploaded_by")
-  entityType  String   @map("entity_type")
-  entityId    String   @map("entity_id")
-  objectKey   String   @unique @map("object_key")
-  filename    String
-  mimeType    String   @map("mime_type")
-  size        Int
-  createdAt   DateTime @default(now()) @map("created_at")
+  id           String   @id @default(cuid())
+  workspaceId  String   @map("workspace_id")
+  uploadedById String   @map("uploaded_by")
+  entityType   String   @map("entity_type")
+  entityId     String   @map("entity_id")
+  objectKey    String   @unique @map("object_key")
+  filename     String
+  mimeType     String   @map("mime_type")
+  size         Int
+  createdAt    DateTime @default(now()) @map("created_at")
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace  Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   uploadedBy User      @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
 
   @@index([workspaceId, entityType, entityId])

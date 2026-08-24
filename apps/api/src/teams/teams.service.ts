@@ -46,7 +46,13 @@ export class TeamsService {
    async create(dto: CreateTeamDto, userId: string) {
       await this.authorizeManager(dto.workspaceId, userId);
       return this.prisma.team.create({
-         data: { ...dto, members: { create: { userId, role: 'LEAD' } } },
+         data: {
+            ...dto,
+            members: { create: { userId, role: 'LEAD' } },
+            documentFolders: {
+               create: { workspaceId: dto.workspaceId, name: 'Team documents', icon: '📁' },
+            },
+         },
          include: teamDetailInclude,
       });
    }

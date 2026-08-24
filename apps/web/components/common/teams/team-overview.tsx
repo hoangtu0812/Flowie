@@ -20,6 +20,8 @@ export default function TeamOverview() {
          <div className="px-8 py-10 text-sm text-destructive">{error ?? 'Team not found.'}</div>
       );
 
+   const pinnedDocuments = documents.filter((document) => document.pinned);
+
    const goToLinks = [
       { label: 'Team settings', icon: Settings, href: `/${orgId}/settings/teams/${team.id}` },
       { label: 'Issues', icon: CopyMinus, href: `/${orgId}/team/${teamId}/all` },
@@ -46,7 +48,7 @@ export default function TeamOverview() {
                <div className="flex items-center justify-between">
                   <h2 className="text-xl font-semibold">Team resources</h2>
                   <div className="flex items-center gap-1">
-                     <Link href={`/${orgId}/team/${teamId}/documents`}>
+                     <Link href={`/${orgId}/team/${teamId}/documents?new=1`}>
                         <Button variant="ghost" size="icon" className="size-7 rounded-full border">
                            <Plus className="size-4" />
                            <span className="sr-only">Create document</span>
@@ -62,16 +64,16 @@ export default function TeamOverview() {
                </div>
 
                <div className="mt-4 flex flex-col gap-1">
-                  {documents.length === 0 && (
+                  {pinnedDocuments.length === 0 && (
                      <p className="text-sm text-muted-foreground">No resources yet.</p>
                   )}
-                  {documents.slice(0, 8).map((document) => (
+                  {pinnedDocuments.map((document) => (
                      <Link
                         key={document.id}
                         href={`/${orgId}/team/${teamId}/documents`}
                         className="flex items-center gap-2 py-1.5 px-2 -mx-2 rounded-md hover:bg-sidebar/50 text-sm"
                      >
-                        <span className="text-base leading-none">📄</span>
+                        <span className="text-base leading-none">{document.icon}</span>
                         <span className="font-medium">{document.title}</span>
                      </Link>
                   ))}

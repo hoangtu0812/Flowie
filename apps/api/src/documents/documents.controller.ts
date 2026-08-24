@@ -12,7 +12,9 @@ import {
 } from '@nestjs/common';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { CreateDocumentDto } from './dto/create-document.dto';
+import { CreateDocumentFolderDto } from './dto/create-document-folder.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
+import { UpdateDocumentFolderDto } from './dto/update-document-folder.dto';
 import { DocumentsService } from './documents.service';
 
 @UseGuards(AuthGuard)
@@ -27,6 +29,34 @@ export class DocumentsController {
       @Req() request: AuthenticatedRequest
    ) {
       return { data: await this.documents.list(workspaceId, request.auth!.userId, teamId) };
+   }
+
+   @Get('folders')
+   async listFolders(
+      @Query('workspaceId') workspaceId: string,
+      @Query('teamId') teamId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.documents.listFolders(workspaceId, teamId, request.auth!.userId),
+      };
+   }
+
+   @Post('folders')
+   async createFolder(@Body() dto: CreateDocumentFolderDto, @Req() request: AuthenticatedRequest) {
+      return { data: await this.documents.createFolder(dto, request.auth!.userId) };
+   }
+
+   @Patch('folders/:folderId')
+   async updateFolder(
+      @Param('folderId') folderId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Body() dto: UpdateDocumentFolderDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.documents.updateFolder(folderId, workspaceId, dto, request.auth!.userId),
+      };
    }
 
    @Post()

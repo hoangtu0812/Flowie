@@ -2,6 +2,28 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { TeamsService } from './teams.service';
 
 describe('TeamsService membership', () => {
+   it('creates the default document folder with a new team', async () => {
+      const createdTeam = { id: 'team-1', name: 'Core' };
+      const prisma = {
+         workspaceMember: { findFirst: jest.fn().mockResolvedValue({ id: 'manager-1' }) },
+         team: { create: jest.fn().mockResolvedValue(createdTeam) },
+      };
+      const service = new TeamsService(prisma as never);
+
+      await expect(
+         service.create({ workspaceId: 'workspace-1', name: 'Core', identifier: 'CORE' }, 'user-1')
+      ).resolves.toEqual(createdTeam);
+      expect(prisma.team.create).toHaveBeenCalledWith(
+         expect.objectContaining({
+            data: expect.objectContaining({
+               documentFolders: {
+                  create: { workspaceId: 'workspace-1', name: 'Team documents', icon: '📁' },
+               },
+            }),
+         })
+      );
+   });
+
    it('lists every active team in an accessible workspace with the current membership truth', async () => {
       const prisma = {
          workspaceMember: { findFirst: jest.fn().mockResolvedValue({ id: 'workspace-member-1' }) },
