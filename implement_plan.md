@@ -108,6 +108,8 @@
   qua đúng property row; danh sách owner lấy workspace member active.
 - Team navigation: Team Projects resolve identifier URL sang database ID; Show empty groups dùng
   toàn bộ team thật. Menu ba chấm chỉ còn Settings/Copy link/Leave và cả ba đã có action thật.
+- Project Detail properties: status, priority, lead, target date và description/summary dùng PATCH
+  thật qua đúng property row/description region; các tab dùng chung live hook nên cập nhật nhất quán.
 - Docker Compose: Postgres, Redis, MinIO, API, worker, web; dependency layer đã cache nên
   `docker compose up` trong mạng nội bộ không tải lại khi lockfile/image base không đổi.
 
@@ -172,6 +174,7 @@
 - `54c257a` — fix Team Projects identifier resolution and connect Team menu actions.
 - `65b1f11` — remove Project Agent/More no-ops and connect Copy link.
 - `2dd3f58` — package the contracts workspace in the API runtime image.
+- `db61402` — connect Project Detail status, priority, lead, target date and description.
 
 ### Kiểm tra gần nhất
 
@@ -281,7 +284,7 @@
 | P1 | Project extras | Hoàn thành: favorite, Update attachment, resource, typed custom-property values/definitions, workspace Display defaults và affordance Initiative/Label trong Overview đều dùng dữ liệu thật mà giữ layout gốc. |
 | P1 | Issue display/insights | Workspace Display defaults đã hoàn thành. Footer `Set default for everyone` trong Insights vẫn là visible no-op; cần persistence cho cấu hình analytics trước khi bật. |
 | P1 | Team danger zone | Hoàn thành: Leave, Retire và Delete là ba action riêng; Delete có soft-delete + restore 30 ngày và chỉ OWNER/ADMIN được thao tác. Permanent purge job sau ngày 30 vẫn là hardening P2 vì cần xóa object MinIO an toàn. |
-| P1 | Project/member/detail parity | ProjectMember, rich comment/reaction và directional relation đã hoàn thành. Project Detail status/priority/lead/dates/team/initiative và summary/description vẫn read-only dù API PATCH có sẵn; phải nối vào property row gốc. |
+| P1 | Project/member/detail parity | ProjectMember, rich comment/reaction, directional relation và Project Detail status/priority/lead/target/description đã hoàn thành. Start date/team vẫn read-only vì UpdateProject DTO chưa hỗ trợ; initiative đã chỉnh được từ hàng Initiative gốc ở Overview. |
 | P1 | Team documents | Hoàn thành: folder/icon/pin/position, CRUD, sort và Overview pinned dùng backend thật trong component tree upstream. |
 | P1 | Saved Views parity | Cần thêm `description` vào SavedView và avatar creator vào API mapping; hiện row dùng mô tả generic vì backend thiếu dữ liệu. |
 | P1 | Member Profile parity | Cần timezone/presence thật và lấy project membership từ `ProjectMember`; hiện local time/presence là placeholder và project suy ra từ assigned issue. |
