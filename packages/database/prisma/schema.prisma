@@ -405,6 +405,8 @@ model ProjectUpdate {
   projectId   String   @map("project_id")
   authorId    String   @map("author_id")
   body        String
+  kind        String   @default("update")
+  health      String?
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 

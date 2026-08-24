@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+   BadRequestException,
+   ForbiddenException,
+   Injectable,
+   NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@circle/database';
 import { PrismaService } from '../database/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
@@ -95,7 +100,14 @@ export class ProjectsService {
          include: {
             status: { select: { id: true, name: true, category: true, color: true } },
             team: { select: { id: true, name: true, identifier: true } },
+            creator: { select: { id: true, name: true, avatarUrl: true } },
             assignee: { select: { id: true, name: true, avatarUrl: true } },
+            labelLinks: {
+               include: { label: { select: { id: true, name: true, color: true } } },
+            },
+            cycleLinks: {
+               include: { cycle: { select: { id: true, name: true } } },
+            },
          },
          orderBy: { updatedAt: 'desc' },
       });
@@ -193,9 +205,17 @@ export class ProjectsService {
                projectId: project.id,
                authorId: userId,
                body,
+               kind: dto.kind ?? 'update',
+               health: dto.kind === 'comment' ? null : (dto.health ?? 'on-track'),
             },
             include: { author: { select: { id: true, name: true, avatarUrl: true } } },
          });
+         if (dto.kind !== 'comment' && dto.health) {
+            await tx.project.update({
+               where: { id: project.id },
+               data: { health: dto.health },
+            });
+         }
          await tx.projectSubscription.upsert({
             where: { projectId_userId: { projectId: project.id, userId } },
             create: { projectId: project.id, userId },
@@ -273,9 +293,27 @@ export class ProjectsService {
             data: [
                { workspaceId, name: 'backlog', category: 'backlog', color: '#95a2b3', position: 0 },
                { workspaceId, name: 'planned', category: 'planned', color: '#95a2b3', position: 0 },
-               { workspaceId, name: 'in-progress', category: 'in-progress', color: '#f2c94c', position: 0 },
-               { workspaceId, name: 'completed', category: 'completed', color: '#5e6ad2', position: 0 },
-               { workspaceId, name: 'canceled', category: 'canceled', color: '#8f9299', position: 0 },
+               {
+                  workspaceId,
+                  name: 'in-progress',
+                  category: 'in-progress',
+                  color: '#f2c94c',
+                  position: 0,
+               },
+               {
+                  workspaceId,
+                  name: 'completed',
+                  category: 'completed',
+                  color: '#5e6ad2',
+                  position: 0,
+               },
+               {
+                  workspaceId,
+                  name: 'canceled',
+                  category: 'canceled',
+                  color: '#8f9299',
+                  position: 0,
+               },
             ],
             skipDuplicates: true,
          });
@@ -305,7 +343,9 @@ export class ProjectsService {
       userId: string
    ) {
       await this.authorizeManager(workspaceId, userId);
-      const status = await this.prisma.projectStatus.findFirst({ where: { id: statusId, workspaceId } });
+      const status = await this.prisma.projectStatus.findFirst({
+         where: { id: statusId, workspaceId },
+      });
       if (!status) throw new NotFoundException('Project status not found.');
       const name = dto.name?.trim().toLowerCase().replace(/\s+/g, '-');
       return this.prisma.$transaction(async (tx) => {
@@ -323,12 +363,15 @@ export class ProjectsService {
    }
    async removeStatus(statusId: string, workspaceId: string, userId: string) {
       await this.authorizeManager(workspaceId, userId);
-      const status = await this.prisma.projectStatus.findFirst({ where: { id: statusId, workspaceId } });
+      const status = await this.prisma.projectStatus.findFirst({
+         where: { id: statusId, workspaceId },
+      });
       if (!status) throw new NotFoundException('Project status not found.');
       const inUse = await this.prisma.project.count({
          where: { workspaceId, status: status.name, archivedAt: null },
       });
-      if (inUse > 0) throw new BadRequestException('Move projects to another status before deleting it.');
+      if (inUse > 0)
+         throw new BadRequestException('Move projects to another status before deleting it.');
       await this.prisma.projectStatus.delete({ where: { id: statusId } });
       return { id: statusId, deleted: true };
    }
@@ -346,7 +389,9 @@ export class ProjectsService {
       userId: string
    ) {
       await this.authorizeManager(workspaceId, userId);
-      const label = await this.prisma.projectLabel.findFirst({ where: { id: labelId, workspaceId } });
+      const label = await this.prisma.projectLabel.findFirst({
+         where: { id: labelId, workspaceId },
+      });
       if (!label) throw new NotFoundException('Project label not found.');
       return this.prisma.projectLabel.update({
          where: { id: labelId },
@@ -356,7 +401,9 @@ export class ProjectsService {
    }
    async removeLabel(labelId: string, workspaceId: string, userId: string) {
       await this.authorizeManager(workspaceId, userId);
-      const label = await this.prisma.projectLabel.findFirst({ where: { id: labelId, workspaceId } });
+      const label = await this.prisma.projectLabel.findFirst({
+         where: { id: labelId, workspaceId },
+      });
       if (!label) throw new NotFoundException('Project label not found.');
       await this.prisma.projectLabel.delete({ where: { id: labelId } });
       return { id: labelId, deleted: true };
@@ -526,7 +573,9 @@ export class ProjectsService {
          where: { workspaceId, id: { in: uniqueLabelIds } },
       });
       if (count !== uniqueLabelIds.length) {
-         throw new NotFoundException('One or more project labels are not available in this workspace.');
+         throw new NotFoundException(
+            'One or more project labels are not available in this workspace.'
+         );
       }
    }
    private async assertProjectStatus(workspaceId: string, status: string) {
@@ -534,7 +583,8 @@ export class ProjectsService {
          where: { workspaceId, name: status },
          select: { id: true },
       });
-      if (!configured) throw new NotFoundException('Project status is not configured in this workspace.');
+      if (!configured)
+         throw new NotFoundException('Project status is not configured in this workspace.');
    }
    private async authorizeTeam(workspaceId: string, teamId: string, userId: string) {
       const team = await this.prisma.team.findFirst({

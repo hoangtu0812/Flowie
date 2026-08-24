@@ -1,13 +1,14 @@
 'use client';
 
 import { GroupedIssuesView } from '@/components/common/issues/grouped-issues-view';
-import { InsightsPanel } from '@/components/common/issues/insights-panel';
 import { applyIssueFilters } from '@/components/common/issues/issue-filter-columns';
 import { IssueFilterBar } from '@/components/common/issues/issue-filter-bar';
 import { useFilterStore } from '@/store/filter-store';
 import { useIssuesStore } from '@/store/issues-store';
-import { useRightPanelStore } from '@/store/right-panel-store';
 import { useEffect, useMemo } from 'react';
+import { toIssueUi, toProjectDetailUi, toProjectUi } from './project-detail-ui-adapter';
+import { ProjectSidePanel } from './project-side-panel';
+import { useLiveProject } from './use-live-project';
 
 interface ProjectIssuesProps {
    projectId: string;
@@ -15,22 +16,35 @@ interface ProjectIssuesProps {
 
 /** Project Issues retains the original grouped Circle list, scoped to API issues. */
 export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
-   const { issues: allIssues, statuses, loadIssues, isLoading } = useIssuesStore();
+   const { statuses, loadIssues } = useIssuesStore();
    const { filters } = useFilterStore();
-   const { openPanel } = useRightPanelStore();
+   const { project, issues, milestones, updates, activities, loading, error } =
+      useLiveProject(projectId);
 
    useEffect(() => {
       void loadIssues();
    }, [loadIssues]);
 
-   const issues = useMemo(
-      () => allIssues.filter((issue) => issue.project?.id === projectId),
-      [allIssues, projectId]
+   const uiProject = useMemo(
+      () => (project ? toProjectUi(project, issues) : undefined),
+      [issues, project]
    );
-   const displayedIssues = useMemo(() => applyIssueFilters(issues, filters), [issues, filters]);
+   const detail = useMemo(
+      () => (project ? toProjectDetailUi(project, milestones, updates, activities) : undefined),
+      [activities, milestones, project, updates]
+   );
+   const uiIssues = useMemo(
+      () => (uiProject ? issues.map((issue) => toIssueUi(issue, uiProject)) : []),
+      [issues, uiProject]
+   );
+   const displayedIssues = useMemo(() => applyIssueFilters(uiIssues, filters), [filters, uiIssues]);
 
-   if (isLoading)
+   if (loading)
       return <div className="px-6 py-4 text-sm text-muted-foreground">Loading project issues…</div>;
+   if (error || !project || !uiProject || !detail)
+      return (
+         <div className="px-6 py-4 text-sm text-destructive">{error ?? 'Project not found.'}</div>
+      );
 
    return (
       <div className="w-full h-full flex flex-col overflow-hidden">
@@ -39,16 +53,17 @@ export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
             <div className="flex-1 min-w-0 h-full overflow-hidden">
                <GroupedIssuesView
                   issues={displayedIssues}
-                  totalIssues={issues}
+                  totalIssues={uiIssues}
                   statuses={statuses}
                   isViewTypeGrid={false}
                />
             </div>
-            {openPanel === 'insights' && (
-               <aside className="hidden xl:flex w-[380px] shrink-0 border-l h-full overflow-hidden bg-container">
-                  <InsightsPanel issues={displayedIssues} />
-               </aside>
-            )}
+            <ProjectSidePanel
+               project={uiProject}
+               detail={detail}
+               issues={uiIssues}
+               insightsIssues={displayedIssues}
+            />
          </div>
       </div>
    );

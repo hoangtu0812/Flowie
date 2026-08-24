@@ -1,132 +1,189 @@
 'use client';
 
+import { ContentBlocks } from '@/components/common/issues/details/content-blocks';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { format } from 'date-fns';
-import { ArrowRight, Calendar, FolderKanban, ListChecks } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
+import { ArrowRight, ChevronDown, FileText, PenLine, Plus } from 'lucide-react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { useMemo, useRef } from 'react';
+import { DocumentOutline, getOutlineItems } from './document-outline';
+import { toIssueUi, toProjectDetailUi, toProjectUi } from './project-detail-ui-adapter';
+import { ProjectSidePanel } from './project-side-panel';
 import { useLiveProject } from './use-live-project';
 
 interface ProjectOverviewProps {
    projectId: string;
 }
 
-const dateLabel = (value: string | null) => (value ? format(new Date(value), 'MMM do') : '—');
+const formatDay = (iso?: string | null) => (iso ? format(parseISO(iso), 'MMM do') : '—');
 
-/** Project Overview retains the original two-column Circle detail layout. */
+/** Project "Overview" tab: description column + properties side panel. */
 export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
-   const { project, issues, milestones, loading, error } = useLiveProject(projectId);
+   const { project, issues, milestones, updates, activities, loading, error } =
+      useLiveProject(projectId);
+   const { orgId } = useParams<{ orgId: string }>();
+   const scrollRef = useRef<HTMLDivElement>(null);
+   const uiProject = useMemo(
+      () => (project ? toProjectUi(project, issues) : undefined),
+      [issues, project]
+   );
+   const detail = useMemo(
+      () => (project ? toProjectDetailUi(project, milestones, updates, activities) : undefined),
+      [activities, milestones, project, updates]
+   );
+   const uiIssues = useMemo(
+      () => (uiProject ? issues.map((issue) => toIssueUi(issue, uiProject)) : []),
+      [issues, uiProject]
+   );
+   const outlineItems = useMemo(
+      () => getOutlineItems(detail?.description ?? []),
+      [detail?.description]
+   );
 
    if (loading)
       return <div className="px-8 py-10 text-sm text-muted-foreground">Loading project…</div>;
-   if (error || !project)
+   if (error || !project || !uiProject || !detail)
       return (
          <div className="px-8 py-10 text-sm text-destructive">{error ?? 'Project not found.'}</div>
       );
 
-   const completed = issues.filter((issue) => issue.status.category === 'COMPLETED').length;
-   const progress = issues.length ? Math.round((completed / issues.length) * 100) : 0;
-
    return (
       <div className="w-full h-full flex overflow-hidden">
-         <div className="flex-1 min-w-0 h-full overflow-y-auto">
-            <div className="max-w-3xl mx-auto px-6 lg:px-10 py-10">
-               <div className="inline-flex size-10 bg-muted/50 items-center justify-center rounded-md mb-4">
-                  <FolderKanban className="size-6" />
-               </div>
-               <h1 className="text-3xl font-semibold tracking-tight">{project.name}</h1>
-               {project.description && (
-                  <p className="mt-3 text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                     {project.description}
+         {/* Main column */}
+         <div className="flex-1 min-w-0 h-full relative">
+            <DocumentOutline items={outlineItems} scrollRef={scrollRef} />
+            <div ref={scrollRef} className="h-full overflow-y-auto">
+               <div className="max-w-3xl mx-auto px-6 lg:px-10 py-10">
+                  <div className="inline-flex size-10 bg-muted/50 items-center justify-center rounded-md mb-4">
+                     <uiProject.icon className="size-6" />
+                  </div>
+                  <h1 className="text-3xl font-semibold tracking-tight">{uiProject.name}</h1>
+                  <p className="mt-3 text-muted-foreground leading-relaxed">
+                     {detail.summary || 'No summary yet.'}
                   </p>
-               )}
 
-               <div className="mt-6 flex flex-col gap-2.5 text-sm">
-                  <div className="flex items-start gap-3">
-                     <span className="w-24 text-muted-foreground shrink-0">Properties</span>
-                     <div className="flex items-center gap-3 flex-wrap">
-                        <span className="capitalize">{project.status.replace('-', ' ')}</span>
-                        <span className="capitalize text-muted-foreground">{project.priority}</span>
-                        {project.lead ? (
+                  {/* Inline properties */}
+                  <div className="mt-6 flex flex-col gap-2.5 text-sm">
+                     <div className="flex items-center gap-3">
+                        <span className="w-24 text-muted-foreground shrink-0">Properties</span>
+                        <div className="flex items-center gap-3 flex-wrap">
+                           <span className="inline-flex items-center gap-1.5">
+                              <uiProject.status.icon />
+                              {uiProject.status.name}
+                           </span>
+                           <span className="inline-flex items-center gap-1.5">
+                              <uiProject.priority.icon className="size-3.5 text-muted-foreground" />
+                              {uiProject.priority.name}
+                           </span>
                            <span className="inline-flex items-center gap-1.5">
                               <Avatar className="size-4">
                                  <AvatarImage
-                                    src={project.lead.avatarUrl ?? undefined}
-                                    alt={project.lead.name}
+                                    src={uiProject.lead.avatarUrl || undefined}
+                                    alt={uiProject.lead.name}
                                  />
-                                 <AvatarFallback>{project.lead.name[0]}</AvatarFallback>
+                                 <AvatarFallback>{uiProject.lead.name[0]}</AvatarFallback>
                               </Avatar>
-                              {project.lead.name}
+                              {uiProject.lead.name}
                            </span>
+                           <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                              {formatDay(uiProject.startDate)}
+                              <ArrowRight className="size-3" />
+                              {formatDay(uiProject.targetDate)}
+                           </span>
+                           {uiProject.team && (
+                              <span className="inline-flex items-center gap-1.5">
+                                 {uiProject.team.icon ?? '👥'} {uiProject.team.name}
+                              </span>
+                           )}
+                        </div>
+                     </div>
+
+                     {uiProject.initiative && (
+                        <div className="flex items-center gap-3">
+                           <span className="w-24 text-muted-foreground shrink-0">Initiatives</span>
+                           <span className="inline-flex items-center gap-1.5">
+                              📄 {uiProject.initiative}
+                              <button className="text-muted-foreground hover:text-foreground transition-colors">
+                                 <Plus className="size-3.5" />
+                              </button>
+                           </span>
+                        </div>
+                     )}
+
+                     <div className="flex items-center gap-3">
+                        <span className="w-24 text-muted-foreground shrink-0">Labels</span>
+                        <div className="flex items-center gap-1.5">
+                           {uiProject.labels.map((label) => (
+                              <span
+                                 key={label.id}
+                                 className="inline-flex items-center gap-1 text-xs border rounded-full px-2 py-0.5"
+                              >
+                                 <span
+                                    className="size-2 rounded-full"
+                                    style={{ backgroundColor: label.color }}
+                                 />
+                                 {label.name}
+                                 <ChevronDown className="size-3 text-muted-foreground" />
+                              </span>
+                           ))}
+                           <button className="text-muted-foreground hover:text-foreground transition-colors">
+                              <Plus className="size-3.5" />
+                           </button>
+                        </div>
+                     </div>
+
+                     {detail.resources.length > 0 && (
+                        <div className="flex items-center gap-3">
+                           <span className="w-24 text-muted-foreground shrink-0">Resources</span>
+                           <div className="flex items-center gap-2 flex-wrap">
+                              {detail.resources.map((resource) => (
+                                 <a
+                                    key={resource.label}
+                                    href={resource.url}
+                                    className="inline-flex items-center gap-1.5 text-xs border rounded-md px-2 py-1 hover:bg-accent/50 transition-colors"
+                                 >
+                                    <FileText className="size-3.5 text-muted-foreground" />
+                                    {resource.label}
+                                 </a>
+                              ))}
+                              <button className="text-muted-foreground hover:text-foreground transition-colors">
+                                 <Plus className="size-3.5" />
+                              </button>
+                           </div>
+                        </div>
+                     )}
+                  </div>
+
+                  {/* Update CTA */}
+                  <Link
+                     href={`/${orgId}/project/${uiProject.id}/activity`}
+                     className="mt-8 flex items-center justify-center gap-2 border rounded-lg py-4 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/30 transition-colors"
+                  >
+                     <PenLine className="size-4" />
+                     Write {detail.updates.length === 0 ? 'first ' : ''}project update
+                  </Link>
+
+                  {/* Description */}
+                  <div className="mt-10">
+                     <div className="flex items-center gap-1 text-sm font-medium text-muted-foreground mb-2">
+                        Description
+                        <ChevronDown className="size-3.5" />
+                     </div>
+                     <div className="text-[15px] leading-relaxed">
+                        {detail.description.length ? (
+                           <ContentBlocks blocks={detail.description} />
                         ) : (
-                           <span className="text-muted-foreground">Unassigned</span>
-                        )}
-                        <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                           {dateLabel(project.startDate)} <ArrowRight className="size-3" />{' '}
-                           {dateLabel(project.targetDate)}
-                        </span>
-                        {project.team && (
-                           <span>
-                              {project.team.icon ?? '👥'} {project.team.name}
-                           </span>
+                           <p className="text-muted-foreground">No description yet.</p>
                         )}
                      </div>
                   </div>
                </div>
-
-               <div className="mt-10">
-                  <div className="flex items-center gap-1 text-sm font-medium text-muted-foreground mb-2">
-                     Description
-                  </div>
-                  <p className="text-[15px] leading-relaxed whitespace-pre-wrap">
-                     {project.description || 'No description yet.'}
-                  </p>
-               </div>
             </div>
          </div>
 
-         <aside className="hidden xl:flex w-[380px] shrink-0 border-l h-full overflow-y-auto bg-container">
-            <div className="w-full px-5 py-5">
-               <h3 className="text-sm font-medium mb-3">Progress</h3>
-               <div className="flex items-center justify-between text-sm mb-5">
-                  <span>
-                     {completed} of {issues.length} completed
-                  </span>
-                  <span className="font-medium">{progress}%</span>
-               </div>
-               <div className="h-1.5 rounded-full bg-accent overflow-hidden mb-7">
-                  <div className="h-full bg-indigo-500" style={{ width: `${progress}%` }} />
-               </div>
-               <div className="flex items-center gap-2 mb-3">
-                  <ListChecks className="size-4 text-muted-foreground" />
-                  <h3 className="text-sm font-medium">Milestones</h3>
-               </div>
-               {milestones.length ? (
-                  <div className="space-y-2">
-                     {milestones.map((milestone) => (
-                        <div
-                           key={milestone.id}
-                           className="flex items-center justify-between gap-3 text-sm"
-                        >
-                           <span
-                              className={
-                                 milestone.completedAt ? 'line-through text-muted-foreground' : ''
-                              }
-                           >
-                              {milestone.title}
-                           </span>
-                           <span className="text-xs text-muted-foreground whitespace-nowrap">
-                              {milestone.targetDate ? dateLabel(milestone.targetDate) : 'No date'}
-                           </span>
-                        </div>
-                     ))}
-                  </div>
-               ) : (
-                  <p className="text-sm text-muted-foreground">No milestones yet.</p>
-               )}
-               <div className="mt-7 border-t pt-4 text-sm text-muted-foreground flex items-center gap-2">
-                  <Calendar className="size-4" /> {project._count.issues} total issues
-               </div>
-            </div>
-         </aside>
+         {/* Side panel */}
+         <ProjectSidePanel project={uiProject} detail={detail} issues={uiIssues} />
       </div>
    );
 }
