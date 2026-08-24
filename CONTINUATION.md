@@ -47,14 +47,14 @@ docker compose --profile app up -d --no-build --pull never --force-recreate api 
 
 ## 4. Tiến độ đã xác minh
 
-Tất cả commit bên dưới đã được push. Commit cấu hình runtime gần nhất là `0c8ca1c`; commit tính năng gần nhất là `c5d2d73`.
+Tất cả commit bên dưới đã được push. Commit tài liệu gần nhất là `16ef00f`; commit tính năng gần nhất là `098d5f8`.
 
 | Nhóm chức năng | Trạng thái thực tế |
 | --- | --- |
 | Runtime/Docker/database | Hoạt động; API và web mới nhất đã rebuild/recreate, health API và login route đều HTTP 200. PostgreSQL host port mặc định là 5433 để không đụng project khác. |
 | Auth và workspace | Login/session/workspace resolution thật; OAuth, reset password, email verification, SSO chưa làm. |
 | Teams và members | Màn Teams, team overview/members/documents và workspace members dùng API; các tạo mới đã có trên màn đã migrate. |
-| Projects | Danh sách, tạo project, lead, issue progress, header, Overview/Issues/Activity dùng API. |
+| Projects | Danh sách, tạo project, issue progress, header, Overview/Issues/Activity dùng API. Tại Project list gốc, lead/priority/status/target date nay lưu qua `PATCH /projects/:id`, lead lấy thành viên workspace thật và activity được ghi. Saved View không có mutation Project được disable thay vì giả lưu. |
 | Issues | Danh sách, tạo/sửa trường cơ bản, filter options, My issues, labels CRUD, cycles, saved views, subscriptions, due dates, archive và command palette dùng dữ liệu thật. Issue detail, properties, assignee, status/priority, comments/activity/subscribe, Issue attachment và context-menu actions đã live trong Docker. Thao tác authenticated end-to-end còn cần xác minh thủ công. |
 | Initiatives & documents | Initiative list/detail/create/link project; team documents đã live. |
 | Inbox & Discord | Inbox read/delete/unread badge lưu thật; cấu hình Discord workspace đã có. |
@@ -74,26 +74,28 @@ Các commit mốc quan trọng:
 - `dfd0496`: Issue detail và properties/assignee/header lấy dữ liệu API.
 - `8c6bbd8` đến `c5d2d73`: Attachment, due date, context menu, command palette, sidebar, Team settings và cycle badge đã nằm trong image API/web đã rebuild; Docker API health và web login route đều HTTP 200. Xác minh mutation khi đã đăng nhập vẫn chưa thực hiện.
 - `0c8ca1c`: Docker PostgreSQL host port mặc định chuyển sang `5433`, tránh xung đột cổng `5432` với project khác.
+- `098d5f8`: Project list gốc persist lead/priority/status/target date qua API thật; DTO validate target date, lead phải là active workspace member, mỗi update ghi project activity. API tests 4 suites/8 tests, API build, TypeScript web và Docker rebuild/recreate với API/login route HTTP 200 đều pass. Acceptance mutation qua browser đăng nhập còn chờ xác minh.
 
 Lịch sử đầy đủ và kiểm chứng từng commit nằm trong `AGENT_HANDOFF.md`.
 
 ## 5. Điểm bắt đầu chính xác
 
-### Việc cần làm trước khi tiếp tục: authenticated acceptance verification Attachment, Due date, Context menu, Command palette, Sidebar và Team settings
+### Việc cần làm trước khi tiếp tục: authenticated acceptance verification Project list, Attachment, Due date, Context menu, Command palette, Sidebar và Team settings
 
 UI đích: `apps/web/components/common/issues/details/issue-details.tsx`.
 
-Paperclip ở Issue detail đã được nối vào Attachment API tại `8c6bbd8`, due date đã được nối vào `PATCH /issues` tại `603c994`, context menu đã nối subscription/archive tại `ca19039`, command palette đã nối API workspace/cycle tại `74e21c7`, sidebar đã bỏ mock records tại `f7994e1`, và Team settings đã bỏ mock data/click rỗng tại `398a432`. Image `api`/`web` đã rebuild/recreate ngày 2026-08-24; `GET /health` và `/auth/login` đều HTTP 200. Agent tiếp theo cần xác minh các mutation trong một browser đã đăng nhập:
+Project list tại `098d5f8` đã nối lead/priority/status/target date vào `PATCH /projects/:id`; Paperclip ở Issue detail đã được nối vào Attachment API tại `8c6bbd8`, due date đã được nối vào `PATCH /issues` tại `603c994`, context menu đã nối subscription/archive tại `ca19039`, command palette đã nối API workspace/cycle tại `74e21c7`, sidebar đã bỏ mock records tại `f7994e1`, và Team settings đã bỏ mock data/click rỗng tại `398a432`. Image `api`/`web` đã rebuild/recreate ngày 2026-08-24; `GET /health` và `/auth/login` đều HTTP 200. Agent tiếp theo cần xác minh các mutation trong một browser đã đăng nhập:
 
-1. Vào Issue detail/command palette đã đăng nhập (chỉ rebuild lại khi source/image đã thay đổi và người dùng xác nhận 5G).
-2. Upload file nhỏ từ Paperclip, refresh trang để xác nhận persistence, tải file xuống, và thử file lớn hơn 10 MB để xác nhận feedback client.
-3. Đặt và xoá due date trong command palette, refresh để xác nhận hai mutation đều persisted.
-4. Trong context menu, subscribe/unsubscribe rồi refresh; archive một Issue thử nghiệm sau confirm và xác nhận item biến mất khỏi danh sách thật.
-5. Trong command palette, kiểm tra assignee/status/label/project đều là record của workspace thật; chuyển Issue sang cycle rồi xoá cycle, refresh sau từng thao tác.
-6. Kiểm tra badge Inbox và Settings “Your teams” phản ánh API; Reviews/Agent vẫn unavailable.
-7. Mở một Team settings thật và xác minh team/member/status/cycle cùng các link real; settings chưa có API phải unavailable.
-8. Ghi rõ kết quả runtime vào hai tài liệu này rồi commit/push documentation.
-9. Không mở rộng sang comment attachment, reaction, sub-issue hay relation trong lần xác minh này.
+1. Vào Project list/Issue detail/command palette đã đăng nhập (chỉ rebuild lại khi source/image đã thay đổi và người dùng xác nhận 5G).
+2. Đổi lead/priority/status/target date của một Project thử nghiệm, refresh từng lần và xác nhận Activity ghi lại thay đổi; thử lead ngoài workspace nếu có để xác nhận API từ chối.
+3. Upload file nhỏ từ Paperclip, refresh trang để xác nhận persistence, tải file xuống, và thử file lớn hơn 10 MB để xác nhận feedback client.
+4. Đặt và xoá due date trong command palette, refresh để xác nhận hai mutation đều persisted.
+5. Trong context menu, subscribe/unsubscribe rồi refresh; archive một Issue thử nghiệm sau confirm và xác nhận item biến mất khỏi danh sách thật.
+6. Trong command palette, kiểm tra assignee/status/label/project đều là record của workspace thật; chuyển Issue sang cycle rồi xoá cycle, refresh sau từng thao tác.
+7. Kiểm tra badge Inbox và Settings “Your teams” phản ánh API; Reviews/Agent vẫn unavailable.
+8. Mở một Team settings thật và xác minh team/member/status/cycle cùng các link real; settings chưa có API phải unavailable.
+9. Ghi rõ kết quả runtime vào hai tài liệu này rồi commit/push documentation.
+10. Không mở rộng sang comment attachment, reaction, sub-issue hay relation trong lần xác minh này.
 
 ## 6. Backlog theo thứ tự ưu tiên
 
