@@ -46,6 +46,8 @@
   được lưu thật. Khi tạo issue không có due date, backend áp dụng policy khớp cụ thể nhất.
 - Asks: giữ shell/mô tả/toolbar/empty-state gốc; request theo team/project/priority được lưu thật
   và action Convert gọi Issue service để tạo issue thật, tiếp tục thừa hưởng SLA/notification.
+- Pulse: giữ shell/mô tả/ô lọc/empty-state gốc; feed chỉ đọc được tổng hợp từ Activity và
+  Project Update thật theo quyền truy cập team/project, không tạo thêm dữ liệu trùng lặp.
 - Cycles: list/create/issue assignment/document links; burn-up lấy từ `IssueCycle.createdAt`,
   `Issue.completedAt` và trạng thái thật, không còn curve mock.
 - Documents: workspace/team list, create/edit/archive; cycle-document link.
@@ -70,11 +72,13 @@
 - `9187041` — remove disabled Agent/Reviews fixture trees and other unused mock-only UI.
 - `88a7127` — persist workspace Releases in the original Settings shell.
 - `0b3f4cd` — persist Customer Requests with real project/issue links.
+- `b98022f` — persist and apply workspace SLA policies.
+- `33c8763` — persist workspace Asks and convert them to real Issues.
 
 ### Kiểm tra gần nhất
 
-- API Jest: **16 suites, 35 tests passed** trong Docker image, gồm validation Ask và kiểm thử
-  workflow chuyển Ask thành Issue thật.
+- API Jest: **17 suites, 36 tests passed** trong Docker image, gồm validation Ask, workflow
+  chuyển Ask thành Issue thật và kiểm thử Pulse trộn/sắp xếp Activity với Project Update thật.
 - NestJS build: passed.
 - Next.js 15 production build: passed.
 - Docker `api` và `web`: rebuilt; `http://localhost:4000/api/v1/health` và
@@ -101,7 +105,7 @@
 | Ưu tiên | Phần còn lại | Trạng thái/chỉ dẫn |
 | --- | --- | --- |
 | P0 | Visual parity toàn route | So sánh từng route với `upstream/master`; visual acceptance cần một phiên đăng nhập workspace-member. Phiên browser kiểm thử hiện chưa đăng nhập nên mới xác nhận được route guard/login, chưa chụp được các màn hình nội bộ. |
-| P0 | Settings placeholders | `Pulse`, `Emojis` vẫn là placeholder gốc và chưa có model/API. Phải thiết kế model + API trong đúng khung UI gốc. `Releases`, `Customer requests`, `SLAs` và `Asks` đã hoàn thành. |
+| P0 | Settings placeholders | Chỉ còn `Emojis` là placeholder gốc chưa có model/API. `Pulse` đã dùng feed dẫn xuất từ dữ liệu thật; `Releases`, `Customer requests`, `SLAs` và `Asks` đã hoàn thành. |
 | P1 | Issue actions còn thiếu | Favorite, reminder, move team, issue type/duplicate/won't-fix classification và convert-to-comment cần schema/backend; hiện được disabled trung thực. |
 | P1 | Team settings nâng cao | Cycle cadence, triage, auto-close/archive, hierarchy và template defaults chưa có schema; UI hiện ghi Unavailable. |
 | P1 | Account security | Session management, passkeys, personal API keys và signing keys chưa có backend. |
@@ -113,9 +117,8 @@
 ## Thứ tự tiếp tục đề xuất
 
 1. Tạo user workspace-member/phiên test và chụp đối chiếu các route chính với UI gốc.
-2. Hoàn thiện một module placeholder theo lát dọc: ưu tiên `Pulse`, sau đó `Emojis`; mỗi module
-   gồm Prisma migration, Nest module/API, UI CRUD,
-   test, Docker, commit/push riêng.
+2. Hoàn thiện `Emojis` theo lát dọc bằng storage hiện có: Prisma migration, Nest module/API,
+   UI upload trong đúng shell gốc, test, Docker, commit/push riêng.
 3. Bổ sung issue favorite/reminder và project favorite bằng schema thật.
 4. Hoàn thiện team automation/cycle policy và Account Security.
 5. Tiếp tục audit visual bằng phiên workspace-member và ghi lại screenshot acceptance cho từng route.

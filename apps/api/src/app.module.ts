@@ -26,6 +26,7 @@ import { ReleasesModule } from './releases/releases.module';
 import { CustomerRequestsModule } from './customer-requests/customer-requests.module';
 import { SlasModule } from './slas/slas.module';
 import { AsksModule } from './asks/asks.module';
+import { PulseModule } from './pulse/pulse.module';
 
 @Module({
    imports: [
@@ -43,6 +44,7 @@ import { AsksModule } from './asks/asks.module';
       CustomerRequestsModule,
       SlasModule,
       AsksModule,
+      PulseModule,
       WorkspaceModule,
       TeamsModule,
       ProjectsModule,
