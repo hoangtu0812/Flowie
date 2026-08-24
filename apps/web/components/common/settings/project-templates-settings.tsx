@@ -31,6 +31,7 @@ export default function ProjectTemplatesSettings() {
    const [query, setQuery] = useState('');
    const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
    const [open, setOpen] = useState(false);
+   const [selected, setSelected] = useState<Template>();
    const [draft, setDraft] = useState<TemplateDraft>(EMPTY_DRAFT);
    const [saving, setSaving] = useState(false);
    const [message, setMessage] = useState<string>();
@@ -69,38 +70,70 @@ export default function ProjectTemplatesSettings() {
    }, [query, templates]);
 
    const showCreate = () => {
+      setSelected(undefined);
       setDraft(EMPTY_DRAFT);
       setMessage(undefined);
       setOpen(true);
    };
 
-   const create = async (event: FormEvent<HTMLFormElement>) => {
+   const showEdit = (template: Template) => {
+      setSelected(template);
+      setDraft({ name: template.name, description: template.description ?? '' });
+      setMessage(undefined);
+      setOpen(true);
+   };
+
+   const save = async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       if (!workspaceId || draft.name.trim().length < 2) return;
       setSaving(true);
       setMessage(undefined);
       try {
-         const response = await fetch(`${api}/projects/templates`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-               workspaceId,
-               name: draft.name.trim(),
-               description: draft.description.trim() || undefined,
-               config: {},
-            }),
-         });
+         const response = await fetch(
+            selected
+               ? `${api}/projects/templates/${selected.id}?workspaceId=${workspaceId}`
+               : `${api}/projects/templates`,
+            {
+               method: selected ? 'PATCH' : 'POST',
+               credentials: 'include',
+               headers: { 'content-type': 'application/json' },
+               body: JSON.stringify({
+                  ...(selected ? {} : { workspaceId }),
+                  name: draft.name.trim(),
+                  description: draft.description.trim() || undefined,
+                  config: {},
+               }),
+            }
+         );
          if (!response.ok) {
             throw new Error(
-               'Could not create project template. Workspace administrator access may be required.'
+               'Could not save project template. Workspace administrator access may be required.'
             );
          }
          await load();
          setOpen(false);
       } catch (caught) {
+         setMessage(caught instanceof Error ? caught.message : 'Could not save project template.');
+      } finally {
+         setSaving(false);
+      }
+   };
+   const remove = async () => {
+      if (!workspaceId || !selected) return;
+      if (!window.confirm(`Delete “${selected.name}”?`)) return;
+      setSaving(true);
+      setMessage(undefined);
+      try {
+         const response = await fetch(
+            `${api}/projects/templates/${selected.id}?workspaceId=${workspaceId}`,
+            { method: 'DELETE', credentials: 'include' }
+         );
+         if (!response.ok) throw new Error('Could not delete project template.');
+         await load();
+         setOpen(false);
+      } catch (caught) {
          setMessage(
-            caught instanceof Error ? caught.message : 'Could not create project template.'
+            caught instanceof Error ? caught.message : 'Could not delete project template.'
          );
       } finally {
          setSaving(false);
@@ -143,9 +176,11 @@ export default function ProjectTemplatesSettings() {
             {state === 'ready' && filtered.length > 0 && (
                <div className="mt-5 overflow-hidden rounded-lg border bg-container">
                   {filtered.map((template) => (
-                     <div
+                     <button
                         key={template.id}
-                        className="flex items-center gap-3 px-4 py-3 border-b last:border-b-0"
+                        type="button"
+                        onClick={() => showEdit(template)}
+                        className="w-full flex items-center gap-3 px-4 py-3 border-b last:border-b-0 text-left hover:bg-sidebar/50"
                      >
                         <span className="inline-flex size-8 items-center justify-center rounded-md bg-muted/50 shrink-0">
                            <FileStack className="size-4 text-muted-foreground" />
@@ -159,7 +194,7 @@ export default function ProjectTemplatesSettings() {
                         <div className="hidden sm:block text-xs text-muted-foreground">
                            Updated {formatDate(template.updatedAt)}
                         </div>
-                     </div>
+                     </button>
                   ))}
                </div>
             )}
@@ -168,9 +203,11 @@ export default function ProjectTemplatesSettings() {
          <Dialog open={open} onOpenChange={(visible) => !visible && setOpen(false)}>
             <DialogContent>
                <DialogHeader>
-                  <DialogTitle>New project template</DialogTitle>
+                  <DialogTitle>
+                     {selected ? 'Edit project template' : 'New project template'}
+                  </DialogTitle>
                </DialogHeader>
-               <form className="space-y-4" onSubmit={create}>
+               <form className="space-y-4" onSubmit={save}>
                   <div className="space-y-2">
                      <Label htmlFor="project-template-name">Name</Label>
                      <Input
@@ -198,13 +235,28 @@ export default function ProjectTemplatesSettings() {
                      />
                   </div>
                   {message && <p className="text-sm text-destructive">{message}</p>}
-                  <div className="flex justify-end gap-2">
-                     <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                        Cancel
-                     </Button>
-                     <Button type="submit" disabled={saving || draft.name.trim().length < 2}>
-                        {saving ? 'Creating…' : 'Create template'}
-                     </Button>
+                  <div className="flex items-center justify-between gap-2">
+                     {selected ? (
+                        <Button
+                           type="button"
+                           variant="ghost"
+                           className="text-destructive"
+                           disabled={saving}
+                           onClick={() => void remove()}
+                        >
+                           Delete
+                        </Button>
+                     ) : (
+                        <span />
+                     )}
+                     <div className="flex gap-2">
+                        <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                           Cancel
+                        </Button>
+                        <Button type="submit" disabled={saving || draft.name.trim().length < 2}>
+                           {saving ? 'Saving…' : selected ? 'Save changes' : 'Create template'}
+                        </Button>
+                     </div>
                   </div>
                </form>
             </DialogContent>

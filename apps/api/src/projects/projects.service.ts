@@ -8,6 +8,7 @@ import { UpdateProjectCustomFieldDto } from './dto/update-project-custom-field.d
 import { CreateMilestoneDto } from './dto/create-milestone.dto';
 import { UpdateMilestoneDto } from './dto/update-milestone.dto';
 import { CreateProjectTemplateDto } from './dto/create-project-template.dto';
+import { UpdateProjectTemplateDto } from './dto/update-project-template.dto';
 import { CreateProjectUpdateDto } from './dto/create-project-update.dto';
 import { CreateProjectLabelDto } from './dto/create-project-label.dto';
 import { UpdateProjectLabelDto } from './dto/update-project-label.dto';
@@ -459,6 +460,35 @@ export class ProjectsService {
             config: (dto.config ?? {}) as Prisma.InputJsonValue,
          },
       });
+   }
+   async updateTemplate(
+      templateId: string,
+      workspaceId: string,
+      dto: UpdateProjectTemplateDto,
+      userId: string
+   ): Promise<unknown> {
+      await this.authorizeManager(workspaceId, userId);
+      const template = await this.prisma.projectTemplate.findFirst({
+         where: { id: templateId, workspaceId },
+      });
+      if (!template) throw new NotFoundException('Project template not found.');
+      return this.prisma.projectTemplate.update({
+         where: { id: templateId },
+         data: {
+            ...dto,
+            ...(dto.name ? { name: dto.name.trim() } : {}),
+            ...(dto.config ? { config: dto.config as Prisma.InputJsonValue } : {}),
+         },
+      });
+   }
+   async removeTemplate(templateId: string, workspaceId: string, userId: string) {
+      await this.authorizeManager(workspaceId, userId);
+      const template = await this.prisma.projectTemplate.findFirst({
+         where: { id: templateId, workspaceId },
+      });
+      if (!template) throw new NotFoundException('Project template not found.');
+      await this.prisma.projectTemplate.delete({ where: { id: templateId } });
+      return { id: templateId, deleted: true };
    }
    private async authorize(workspaceId: string, userId: string) {
       if (

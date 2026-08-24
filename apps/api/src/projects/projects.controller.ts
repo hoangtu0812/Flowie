@@ -18,6 +18,7 @@ import { UpdateProjectCustomFieldDto } from './dto/update-project-custom-field.d
 import { CreateMilestoneDto } from './dto/create-milestone.dto';
 import { UpdateMilestoneDto } from './dto/update-milestone.dto';
 import { CreateProjectTemplateDto } from './dto/create-project-template.dto';
+import { UpdateProjectTemplateDto } from './dto/update-project-template.dto';
 import { CreateProjectUpdateDto } from './dto/create-project-update.dto';
 import { CreateProjectLabelDto } from './dto/create-project-label.dto';
 import { UpdateProjectLabelDto } from './dto/update-project-label.dto';
@@ -85,6 +86,30 @@ export class ProjectsController {
       @Req() request: AuthenticatedRequest
    ): Promise<{ data: unknown }> {
       return { data: await this.projects.createTemplate(dto, request.auth!.userId) };
+   }
+   @Patch('templates/:templateId') async updateTemplate(
+      @Param('templateId') templateId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Body() dto: UpdateProjectTemplateDto,
+      @Req() request: AuthenticatedRequest
+   ): Promise<{ data: unknown }> {
+      return {
+         data: await this.projects.updateTemplate(
+            templateId,
+            workspaceId,
+            dto,
+            request.auth!.userId
+         ),
+      };
+   }
+   @Delete('templates/:templateId') async removeTemplate(
+      @Param('templateId') templateId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.projects.removeTemplate(templateId, workspaceId, request.auth!.userId),
+      };
    }
    @Get('labels') async listLabels(
       @Query('workspaceId') workspaceId: string,
