@@ -87,6 +87,9 @@
 - UI parity checkpoint: Initiative Detail đã bỏ Edit/X tự thêm và trở lại title/project-row của
   upstream; Project Overview/Peek chỉ render các row có dữ liệu giống baseline. Nút `+` gốc của
   Views và Project Timeline nay mở dialog tạo thật, không thêm toolbar/control mới.
+- Team danger zone: nút Leave và Retire trong layout upstream đã gọi backend thật. Self-leave kiểm
+  tra active workspace/team membership; retire yêu cầu OWNER/ADMIN, giữ lịch sử bằng `archivedAt`;
+  cả hai ghi audit và điều hướng khỏi team sau khi thành công.
 - Docker Compose: Postgres, Redis, MinIO, API, worker, web; dependency layer đã cache nên
   `docker compose up` trong mạng nội bộ không tải lại khi lockfile/image base không đổi.
 
@@ -136,6 +139,7 @@
 - `5d67e22` — onboard authenticated accounts that do not have a workspace yet.
 - `685b082` — restore upstream Initiative/Project affordances and connect existing create buttons.
 - `8f20e5b` — persist inbox notification preferences and enforce them in API/Worker events.
+- `8c8fe34` — connect the original Team Leave/Retire buttons with authorization and audit.
 
 ### Kiểm tra gần nhất
 
@@ -204,6 +208,9 @@
   `upstream/master`. Đã xóa 18 component `real-*` rút gọn không còn route nào dùng; runtime chỉ
   còn cây component gốc được nối API.
 - Docker dependency install dùng cache; không tải package mới trong các checkpoint trên.
+- Script `scripts/start-local.ps1` dùng `--no-build --pull never`, nên khởi động từ image hiện có
+  chạy được trong mạng nội bộ. Rebuild web vẫn có thể cần internet vì baseline dùng
+  `next/font/google`; lần build gần nhất retry TLS rồi thành công trên 5G, không phải cài package.
 - Audit runtime mới nhất không còn route dùng `SettingsPlaceholder` và không còn import mảng
   record nghiệp vụ mock; các import từ `mock-data` chỉ còn type hoặc catalog icon/màu/status.
 - Host hiện đã chạy được Jest/Prettier từ dependency cache. Prisma generate trên mạng nội bộ cần
@@ -224,7 +231,7 @@
 | P1 | Account security | Session management và Personal API Key đã hoàn thành. Passkeys cần WebAuthn dependency/RP configuration; signing key không có consumer và lệch phạm vi project-management nên vẫn unavailable. |
 | P1 | Project extras | Hoàn thành: favorite, Update attachment, resource, typed custom-property values/definitions, workspace Display defaults và affordance Initiative/Label trong Overview đều dùng dữ liệu thật mà giữ layout gốc. |
 | P1 | Issue display/insights | Workspace Display defaults đã hoàn thành. Footer `Set default for everyone` trong Insights vẫn là visible no-op; cần persistence cho cấu hình analytics trước khi bật. |
-| P1 | Team danger zone | Leave/Retire/Delete vẫn là control disabled. Backend có archive và member removal nhưng chưa có self-leave an toàn, semantics retire và soft-delete 30 ngày tách biệt; phải hoàn thiện trước khi bật đúng ba nút upstream. |
+| P1 | Team danger zone | Leave và Retire đã hoàn thành bằng backend/audit thật. Delete vẫn khóa vì cần mô hình soft-delete + restore 30 ngày tách biệt; không được ánh xạ Delete sang archive vì sai semantics. |
 | P1 | Project/member/detail parity | Project Peek chưa có ProjectMember entity nên empty Members vẫn dựa trên issue assignee; Issue comment/relation chưa đủ rich content/relation type như baseline. |
 | P1 | Team documents | Document thật đã có, nhưng folder/pinned và các slider của màn Team Documents chưa có persistence tương ứng. |
 | P2 | Automation/webhook | Worker/Redis foundation có, nhưng rule builder, persisted automation và generic webhook chưa hoàn chỉnh. |
