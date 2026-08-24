@@ -57,6 +57,8 @@
 - `fb93014` — replace Documents/Initiatives settings placeholders.
 - `3782230` — connect issue context actions.
 - `2f525b2` — persist workspace Issue Templates and apply them in Create Issue.
+- `aeb03dc` — restore original Issue Detail structure and remove 18 unused simplified UIs.
+- `62f1b32` — restore live labels, status/priority presentation and milestone action in Project Peek.
 
 ### Kiểm tra gần nhất
 
@@ -86,7 +88,7 @@
 | P1 | Project extras | Favorite project và attachment cho project update chưa có persistence. |
 | P2 | Automation/webhook | Worker/Redis foundation có, nhưng rule builder, persisted automation và generic webhook chưa hoàn chỉnh. |
 | P2 | OAuth/enterprise identity | Google, Microsoft Entra, OIDC/SAML chưa triển khai; local email/password đang hoạt động. |
-| Excluded | AI Agent, Code Reviews | Cố ý unavailable theo phạm vi sản phẩm hiện tại; các fixture cũ còn trong source nhưng không được route runtime sử dụng. |
+| Excluded | AI Agent, Code Reviews | Cố ý unavailable theo phạm vi sản phẩm hiện tại; fixture/canned-response cũ đã được xóa khỏi source. |
 
 ## Thứ tự tiếp tục đề xuất
 
@@ -96,7 +98,7 @@
    test, Docker, commit/push riêng.
 3. Bổ sung issue favorite/reminder và project favorite bằng schema thật.
 4. Hoàn thiện team automation/cycle policy và Account Security.
-5. Chạy lại audit import runtime, xóa code fixture chết của Agent/Reviews nếu xác nhận không dùng lâu dài.
+5. Tiếp tục audit visual bằng phiên workspace-member và ghi lại screenshot acceptance cho từng route.
 
 ## 1. Mục tiêu
 

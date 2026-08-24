@@ -205,11 +205,8 @@ Each feature is self-contained under `components/common/<feature>` + its header 
   timeline** (`projects-timeline.tsx` — month scale, team groups, date-positioned bars,
   client-only Today marker). `projects-insights-panel.tsx` adds Health/Teams/Leads
   counters; clicking a Health row toggles the corresponding URL filter.
-- **Agent page** (`components/common/agent/agent-chat.tsx` +
-  `components/layout/headers/agent/` + `app/[orgId]/agent/`) — functional mock of a
-  workspace agent: hero screen with example cards, multi-conversation chat
-  (`agent-chat-store`), deterministic canned replies (`mock-data/agent.ts`) streamed
-  word-by-word, light markdown rendering (bold / inline code / lists). No network.
+- **Agent page** (`app/[orgId]/agent/`) — intentionally unavailable until a real AI
+  service is configured. The canned chat store and fixture-backed UI were removed.
 - **Settings** (`components/common/settings/` + `app/[orgId]/settings/`) — Linear-style
   settings area. The app sidebar swaps to a settings nav (`sidebar/nav-settings.tsx`,
   groups Personal / Issues / Projects / Features, plus `nav-teams-settings.tsx`) whenever
@@ -249,21 +246,10 @@ Each feature is self-contained under `components/common/<feature>` + its header 
   Views can carry a `teamId`; the team sidebar "Views"/"Projects" entries open the
   team-scoped pages `/{orgId}/team/{teamId}/views` (same `Views` component with a
   `teamId` prop) and `/{orgId}/team/{teamId}/projects` (`teams/team-projects.tsx`).
-- **Reviews** (`components/common/reviews/` + `app/[orgId]/reviews/` +
-  `app/[orgId]/review/[reviewId]/{,review,changes}`) — Linear-style PR reviews.
-  Split view: left list panel with "For you" / "Created" tabs (grouped
-  Completed / Merged / Closed, relative times), right pane = empty state or the
-  selected review. Detail tabs are real routes: Overview (`review-overview.tsx`:
-  summary bullets with inline code, linked ticket, test plan, deployment row,
-  commit event, agent "Review results" verdict table + properties panel with
-  status/resolves/checks/files-by-category), Guide (`review-guide.tsx`:
-  narrated sections next to the relevant file diff, progress "01/02" +
-  Reviewed checkboxes), Diff (`review-diff.tsx`: Files/Commits toolbar,
-  filterable file list, stacked unified diffs). `diff-view.tsx` renders a
-  `FileDiff` (add/del/context/skip lines). Data in `mock-data/reviews.ts`:
-  13 seeded reviews whose `resolves` reference real issue identifiers;
-  `getReviewFileDiff`/`getReviewGuide` expand deterministic diffs and guide
-  sections from the seeds.
+- **Reviews** (`app/[orgId]/reviews/` +
+  `app/[orgId]/review/[reviewId]/{,review,changes}`) — intentionally unavailable because
+  Flowie manages general projects and has no code-review backend. Fixture-backed review
+  components and seeded diffs were removed.
 - **My issues** (`components/common/my-issues/my-issues.tsx` + `app/[orgId]/my-issues/`)
   — personal issue hub with Assigned / Created / Subscribed / Activity tabs (nuqs).
   Assigned groups by cycle (name + date range from `mock-data/cycles`) then
