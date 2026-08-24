@@ -17,6 +17,7 @@ const activityLabels: Record<string, string> = {
    'issue.created': 'created an issue',
    'issue.updated': 'updated an issue',
    'issue.archived': 'archived an issue',
+   'issue.moved': 'moved an issue',
    'issue.subissue_created': 'created a sub-issue',
    'issue.related': 'linked two issues',
    'issue.unrelated': 'removed an issue relation',

@@ -31,8 +31,9 @@
   áp dụng vào dialog Create Issue gốc (title, description, status, priority, project, assignee,
   labels).
 - Issue context menu: rename, due date, copy, create-related-and-link, convert to document,
-  mark completed, subscribe, favorite, reminder và archive đều gọi backend. Reminder được xếp
-  lịch qua Redis/BullMQ và Worker tạo notification thật đúng thời điểm.
+  move team, mark completed, subscribe, favorite, reminder và archive đều gọi backend. Khi move,
+  backend cấp lại identifier/number, ánh xạ status tương đương và loại liên kết cycle không còn
+  hợp lệ. Reminder được xếp lịch qua Redis/BullMQ và Worker tạo notification thật đúng thời điểm.
 - Issue detail: giữ cột nội dung/sidebar, typography mô tả và hàng sub-issue của UI gốc; relations
   nằm lại trong properties sidebar, nhưng dữ liệu/action đều từ API thật.
 - Projects: list/board/timeline, create/update/archive, overview/activity/issues, update, health,
@@ -80,11 +81,12 @@
 - `fdfe043` — connect the workspace Pulse feed to Activity and Project Update data.
 - `761379f` — persist private workspace custom emojis with MinIO.
 - `796abde` — persist issue favorites and delayed reminders.
+- `620550b` — persist project favorites per user.
 
 ### Kiểm tra gần nhất
 
-- API Jest: **20 suites, 41 tests passed** trong Docker image, gồm validation Ask, workflow
-  chuyển Ask thành Issue thật, Pulse, Emoji và personal state của Issue/Project.
+- API Jest: **20 suites, 42 tests passed** trong Docker image, gồm validation Ask, workflow
+  chuyển Ask thành Issue thật, Pulse, Emoji, personal state của Issue/Project và move Issue.
 - NestJS build: passed.
 - Next.js 15 production build: passed.
 - Docker `api` và `web`: rebuilt; `http://localhost:4000/api/v1/health` và
@@ -119,7 +121,7 @@
 | Ưu tiên | Phần còn lại | Trạng thái/chỉ dẫn |
 | --- | --- | --- |
 | P0 | Visual parity toàn route | So sánh từng route với `upstream/master`; visual acceptance cần một phiên đăng nhập workspace-member. Phiên browser kiểm thử hiện chưa đăng nhập nên mới xác nhận được route guard/login, chưa chụp được các màn hình nội bộ. |
-| P1 | Issue actions còn thiếu | Move team, issue type/duplicate/won't-fix classification và convert-to-comment cần schema/backend; hiện được disabled trung thực. Favorite và reminder đã hoàn thành. |
+| P1 | Issue actions còn thiếu | Issue type/duplicate/won't-fix classification và convert-to-comment cần schema/backend; hiện được disabled trung thực. Move team, favorite và reminder đã hoàn thành. |
 | P1 | Team settings nâng cao | Cycle cadence, triage, auto-close/archive, hierarchy và template defaults chưa có schema; UI hiện ghi Unavailable. |
 | P1 | Account security | Session management, passkeys, personal API keys và signing keys chưa có backend. |
 | P1 | Project extras | Favorite project đã hoàn thành. Attachment cho project update chưa có persistence. |
@@ -130,7 +132,7 @@
 ## Thứ tự tiếp tục đề xuất
 
 1. Tạo user workspace-member/phiên test và chụp đối chiếu các route chính với UI gốc.
-2. Bổ sung move team/classification cho Issue, sau đó attachment cho Project Update.
+2. Bổ sung classification cho Issue, sau đó attachment cho Project Update.
 3. Hoàn thiện team automation/cycle policy và Account Security.
 4. Tiếp tục audit visual bằng phiên workspace-member và ghi lại screenshot acceptance cho từng route.
 

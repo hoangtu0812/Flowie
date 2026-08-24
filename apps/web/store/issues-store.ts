@@ -74,6 +74,8 @@ export type IssueCycleOption = {
    endDate: string | null;
 };
 
+export type IssueTeamOption = { id: string; name: string; identifier: string };
+
 export type IssueTemplateOption = {
    id: string;
    name: string;
@@ -117,6 +119,7 @@ interface IssuesState {
    labels: LabelInterface[];
    cycles: IssueCycleOption[];
    templates: IssueTemplateOption[];
+   teams: IssueTeamOption[];
    workspaceId?: string;
    teamId?: string;
    currentUserId?: string;
@@ -148,6 +151,7 @@ interface IssuesState {
    setIssueSubscription: (issueId: string, subscribed: boolean) => Promise<void>;
    setIssueFavorite: (issueId: string, favorite: boolean) => Promise<void>;
    setIssueReminder: (issueId: string, remindAt?: string) => Promise<void>;
+   moveIssue: (issueId: string, teamId: string) => Promise<Issue>;
    archiveIssue: (issueId: string) => Promise<void>;
    getIssueById: (id: string) => Issue | undefined;
 }
@@ -293,6 +297,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
    labels: [],
    cycles: [],
    templates: [],
+   teams: [],
    isLoading: false,
    getAllIssues: () => get().issues,
 
@@ -312,7 +317,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
          });
          if (!teamsResponse.ok) throw new Error('Could not load teams.');
          const teamsData = (await teamsResponse.json()) as {
-            data: Array<{ id: string; identifier: string }>;
+            data: IssueTeamOption[];
          };
          const team = teamIdentifier
             ? teamsData.data.find(
@@ -344,6 +349,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
             labels: optionsData.data.labels.map(mapLabel),
             cycles: optionsData.data.cycles,
             templates: optionsData.data.templates,
+            teams: teamsData.data,
             workspaceId,
             teamId: team?.id,
             currentUserId: currentUserData.data.id,
@@ -358,6 +364,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
             labels: [],
             cycles: [],
             templates: [],
+            teams: [],
             currentUserId: undefined,
             isLoading: false,
             error: caught instanceof Error ? caught.message : 'Could not load issues.',
@@ -540,6 +547,29 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
       );
       if (!response.ok) throw new Error('Could not update reminder.');
       get().updateIssue(issueId, { reminderAt: remindAt });
+   },
+   moveIssue: async (issueId, destinationTeamId) => {
+      const { workspaceId, teamId } = get();
+      if (!workspaceId) throw new Error('No workspace is available.');
+      const current = get().getIssueById(issueId);
+      if (!current) throw new Error('Issue not found.');
+      const response = await fetch(`${api}/issues/${issueId}/move`, {
+         method: 'POST',
+         credentials: 'include',
+         headers: { 'content-type': 'application/json' },
+         body: JSON.stringify({ workspaceId, teamId: destinationTeamId }),
+      });
+      if (!response.ok) throw new Error('Could not move issue.');
+      const payload = (await response.json()) as { data: ApiIssue };
+      const moved = {
+         ...mapIssue(payload.data),
+         isSubscribed: current.isSubscribed,
+         isFavorite: current.isFavorite,
+         reminderAt: current.reminderAt,
+      };
+      if (teamId && teamId !== destinationTeamId) get().deleteIssue(issueId);
+      else get().updateIssue(issueId, moved);
+      return moved;
    },
    archiveIssue: async (issueId) => {
       const workspaceId = get().workspaceId;

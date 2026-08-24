@@ -16,6 +16,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { SlasService } from '../slas/slas.service';
 import { JobsService } from '../jobs/jobs.service';
 import { SetIssueReminderDto } from './dto/set-issue-reminder.dto';
+import { MoveIssueDto } from './dto/move-issue.dto';
 
 const issueInclude = {
    team: { select: { id: true, name: true, identifier: true } },
@@ -660,6 +661,74 @@ export class IssuesService {
       await this.jobs.cancelIssueReminder(reminder.id);
       await this.prisma.issueReminder.delete({ where: { id: reminder.id } });
       return { issueId, reminder: null };
+   }
+
+   async move(issueId: string, dto: MoveIssueDto, userId: string) {
+      const issue = await this.get(issueId, dto.workspaceId, userId);
+      if (issue.teamId === dto.teamId) return issue;
+      await this.authorize(dto.workspaceId, userId, dto.teamId);
+      return this.prisma.$transaction(async (tx) => {
+         const destination = await tx.team.update({
+            where: { id: dto.teamId },
+            data: { issueSequence: { increment: 1 } },
+            select: { id: true, name: true, identifier: true, issueSequence: true },
+         });
+         const destinationStatus =
+            (await tx.issueStatus.findFirst({
+               where: {
+                  workspaceId: dto.workspaceId,
+                  teamId: dto.teamId,
+                  category: issue.status.category,
+               },
+               orderBy: { position: 'asc' },
+            })) ??
+            (await tx.issueStatus.findFirst({
+               where: {
+                  workspaceId: dto.workspaceId,
+                  teamId: null,
+                  category: issue.status.category,
+               },
+               orderBy: { position: 'asc' },
+            }));
+         if (!destinationStatus) {
+            throw new NotFoundException('The destination team has no compatible issue status.');
+         }
+         await Promise.all([
+            tx.issueCycle.deleteMany({ where: { issueId } }),
+            tx.issue.updateMany({
+               where: { parentIssueId: issueId },
+               data: { parentIssueId: null },
+            }),
+         ]);
+         const moved = await tx.issue.update({
+            where: { id: issueId },
+            data: {
+               teamId: destination.id,
+               statusId: destinationStatus.id,
+               identifier: `${destination.identifier}-${destination.issueSequence}`,
+               number: destination.issueSequence,
+               parentIssueId: null,
+               ...(issue.project?.team?.id && issue.project.team.id !== destination.id
+                  ? { projectId: null }
+                  : {}),
+            },
+            include: issueInclude,
+         });
+         await tx.activity.create({
+            data: {
+               workspaceId: dto.workspaceId,
+               issueId,
+               actorId: userId,
+               type: 'issue.moved',
+               data: {
+                  fromTeamId: issue.teamId,
+                  toTeamId: destination.id,
+                  identifier: moved.identifier,
+               },
+            },
+         });
+         return moved;
+      });
    }
 
    async archive(issueId: string, workspaceId: string, userId: string) {

@@ -59,12 +59,14 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       setIssueSubscription,
       setIssueFavorite,
       setIssueReminder,
+      moveIssue,
       archiveIssue,
       statuses,
       members,
       projects,
       labels: workspaceLabels,
       workspaceId,
+      teams,
    } = useIssuesStore();
 
    const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
@@ -197,6 +199,36 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
          toast.success('Reminder set');
       } catch {
          toast.error('Could not update reminder');
+      }
+   };
+
+   const handleMove = async () => {
+      if (!issueId) return;
+      const issue = getIssueById(issueId);
+      if (!issue?.team) return;
+      const destinations = teams.filter((team) => team.id !== issue.team?.id);
+      if (!destinations.length) {
+         toast.error('No other accessible team is available');
+         return;
+      }
+      const value = window.prompt(
+         `Move to team (${destinations.map((team) => team.identifier).join(', ')})`
+      );
+      if (!value?.trim()) return;
+      const normalized = value.trim().toLowerCase();
+      const destination = destinations.find(
+         (team) =>
+            team.identifier.toLowerCase() === normalized || team.name.toLowerCase() === normalized
+      );
+      if (!destination) {
+         toast.error('Enter one of the available team identifiers');
+         return;
+      }
+      try {
+         const moved = await moveIssue(issueId, destination.id);
+         toast.success(`Moved to ${destination.name} as ${moved.identifier}`);
+      } catch {
+         toast.error('Could not move issue');
       }
    };
 
@@ -493,7 +525,7 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
             </ContextMenuSubContent>
          </ContextMenuSub>
 
-         <ContextMenuItem disabled title="Moving issues between teams is not available yet">
+         <ContextMenuItem onClick={() => void handleMove()}>
             <ArrowRightLeft className="size-4" /> Move
          </ContextMenuItem>
 

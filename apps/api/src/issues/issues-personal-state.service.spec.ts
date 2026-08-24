@@ -6,6 +6,8 @@ describe('IssuesService personal state', () => {
       workspaceId: 'workspace-1',
       teamId: 'team-1',
       archivedAt: null,
+      status: { id: 'status-1', category: 'UNSTARTED' },
+      project: null,
    };
 
    const serviceWith = (overrides: Record<string, unknown> = {}) => {
@@ -65,5 +67,50 @@ describe('IssuesService personal state', () => {
          })
       );
       expect(jobs.enqueueIssueReminder).toHaveBeenCalledWith('reminder-1', new Date(remindAt));
+   });
+
+   it('moves an issue atomically and assigns a destination identifier', async () => {
+      const moved = {
+         ...accessibleIssue,
+         teamId: 'team-2',
+         identifier: 'OPS-7',
+      };
+      const tx = {
+         team: {
+            update: jest.fn().mockResolvedValue({
+               id: 'team-2',
+               name: 'Operations',
+               identifier: 'OPS',
+               issueSequence: 7,
+            }),
+         },
+         issueStatus: { findFirst: jest.fn().mockResolvedValue({ id: 'status-2' }) },
+         issueCycle: { deleteMany: jest.fn().mockResolvedValue({ count: 1 }) },
+         issue: {
+            updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+            update: jest.fn().mockResolvedValue(moved),
+         },
+         activity: { create: jest.fn().mockResolvedValue({ id: 'activity-1' }) },
+      };
+      const { service } = serviceWith({
+         $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
+      });
+
+      await expect(
+         service.move(
+            'issue-1',
+            { workspaceId: 'workspace-1', teamId: 'team-2' },
+            'user-1'
+         )
+      ).resolves.toMatchObject({ identifier: 'OPS-7', teamId: 'team-2' });
+      expect(tx.issue.update).toHaveBeenCalledWith(
+         expect.objectContaining({
+            data: expect.objectContaining({
+               teamId: 'team-2',
+               identifier: 'OPS-7',
+               number: 7,
+            }),
+         })
+      );
    });
 });

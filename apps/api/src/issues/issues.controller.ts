@@ -19,6 +19,7 @@ import { IssueReactionDto } from './dto/issue-reaction.dto';
 import { UpdateIssueDto } from './dto/update-issue.dto';
 import { UpdateIssueTemplateDto } from './dto/update-issue-template.dto';
 import { SetIssueReminderDto } from './dto/set-issue-reminder.dto';
+import { MoveIssueDto } from './dto/move-issue.dto';
 import { IssuesService } from './issues.service';
 
 @UseGuards(AuthGuard)
@@ -230,6 +231,15 @@ export class IssuesController {
       @Req() request: AuthenticatedRequest
    ) {
       return { data: await this.issues.cancelReminder(issueId, workspaceId, request.auth!.userId) };
+   }
+
+   @Post(':issueId/move')
+   async move(
+      @Param('issueId') issueId: string,
+      @Body() dto: MoveIssueDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.issues.move(issueId, dto, request.auth!.userId) };
    }
 
    @Patch(':issueId')
