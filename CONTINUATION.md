@@ -47,7 +47,7 @@ docker compose --profile app up -d --no-build --pull never --force-recreate api 
 
 ## 4. Tiến độ đã xác minh
 
-Tất cả commit bên dưới đã được push. Commit tài liệu gần nhất là `16ef00f`; commit tính năng gần nhất là `098d5f8`.
+Tất cả commit bên dưới đã được push. Commit tài liệu gần nhất là `5109fd2`; commit tính năng gần nhất là `cf59ca6`.
 
 | Nhóm chức năng | Trạng thái thực tế |
 | --- | --- |
@@ -55,7 +55,7 @@ Tất cả commit bên dưới đã được push. Commit tài liệu gần nh�
 | Auth và workspace | Login/session/workspace resolution thật; OAuth, reset password, email verification, SSO chưa làm. |
 | Teams và members | Màn Teams, team overview/members/documents và workspace members dùng API; các tạo mới đã có trên màn đã migrate. |
 | Projects | Danh sách, tạo project, issue progress, header, Overview/Issues/Activity dùng API. Tại Project list gốc, lead/priority/status/target date nay lưu qua `PATCH /projects/:id`, lead lấy thành viên workspace thật và activity được ghi. Saved View không có mutation Project được disable thay vì giả lưu. |
-| Issues | Danh sách, tạo/sửa trường cơ bản, filter options, My issues, labels CRUD, cycles, saved views, subscriptions, due dates, archive và command palette dùng dữ liệu thật. Issue detail, properties, assignee, status/priority, comments/activity/subscribe, Issue attachment và context-menu actions đã live trong Docker. Thao tác authenticated end-to-end còn cần xác minh thủ công. |
+| Issues | Danh sách, tạo/sửa trường cơ bản, filter options, My issues, labels CRUD, cycles, saved views, subscriptions, due dates, archive và command palette dùng dữ liệu thật. Issue detail, properties, assignee, status/priority, comments/activity/subscribe, Issue attachment và context-menu actions đã live trong Docker. Status/priority/assignee/label/project chỉ đổi UI sau API success; khi thiếu workspace hoặc API lỗi không tạo local-only state. Thao tác authenticated end-to-end còn cần xác minh thủ công. |
 | Initiatives & documents | Initiative list/detail/create/link project; team documents đã live. |
 | Inbox & Discord | Inbox read/delete/unread badge lưu thật; cấu hình Discord workspace đã có. |
 | Sidebar navigation | Inbox badge và Settings “Your teams” dùng API thật. Reviews/Agent giữ UI gốc nhưng unavailable, không đi vào mock workflow. |
@@ -75,6 +75,7 @@ Các commit mốc quan trọng:
 - `8c6bbd8` đến `c5d2d73`: Attachment, due date, context menu, command palette, sidebar, Team settings và cycle badge đã nằm trong image API/web đã rebuild; Docker API health và web login route đều HTTP 200. Xác minh mutation khi đã đăng nhập vẫn chưa thực hiện.
 - `0c8ca1c`: Docker PostgreSQL host port mặc định chuyển sang `5433`, tránh xung đột cổng `5432` với project khác.
 - `098d5f8`: Project list gốc persist lead/priority/status/target date qua API thật; DTO validate target date, lead phải là active workspace member, mỗi update ghi project activity. API tests 4 suites/8 tests, API build, TypeScript web và Docker rebuild/recreate với API/login route HTTP 200 đều pass. Acceptance mutation qua browser đăng nhập còn chờ xác minh.
+- `cf59ca6`: Issue store/context menu/command palette/selectors/board drag-drop chờ Issue API success trước khi cập nhật state status/priority/assignee/label/project; error không còn để lại thay đổi local giả. TypeScript web, API tests 4 suites/8 tests, Docker web production build/recreate cùng API/login route HTTP 200 đều pass. Acceptance mutation qua browser đăng nhập còn chờ xác minh.
 
 Lịch sử đầy đủ và kiểm chứng từng commit nằm trong `AGENT_HANDOFF.md`.
 
@@ -84,7 +85,7 @@ Lịch sử đầy đủ và kiểm chứng từng commit nằm trong `AGENT_HAN
 
 UI đích: `apps/web/components/common/issues/details/issue-details.tsx`.
 
-Project list tại `098d5f8` đã nối lead/priority/status/target date vào `PATCH /projects/:id`; Paperclip ở Issue detail đã được nối vào Attachment API tại `8c6bbd8`, due date đã được nối vào `PATCH /issues` tại `603c994`, context menu đã nối subscription/archive tại `ca19039`, command palette đã nối API workspace/cycle tại `74e21c7`, sidebar đã bỏ mock records tại `f7994e1`, và Team settings đã bỏ mock data/click rỗng tại `398a432`. Image `api`/`web` đã rebuild/recreate ngày 2026-08-24; `GET /health` và `/auth/login` đều HTTP 200. Agent tiếp theo cần xác minh các mutation trong một browser đã đăng nhập:
+Project list tại `098d5f8` đã nối lead/priority/status/target date vào `PATCH /projects/:id`; `cf59ca6` đảm bảo status/priority/assignee/label/project ở Issue chỉ đổi state sau API success; Paperclip ở Issue detail đã được nối vào Attachment API tại `8c6bbd8`, due date đã được nối vào `PATCH /issues` tại `603c994`, context menu đã nối subscription/archive tại `ca19039`, command palette đã nối API workspace/cycle tại `74e21c7`, sidebar đã bỏ mock records tại `f7994e1`, và Team settings đã bỏ mock data/click rỗng tại `398a432`. Image `api`/`web` đã rebuild/recreate ngày 2026-08-24; `GET /health` và `/auth/login` đều HTTP 200. Agent tiếp theo cần xác minh các mutation trong một browser đã đăng nhập:
 
 1. Vào Project list/Issue detail/command palette đã đăng nhập (chỉ rebuild lại khi source/image đã thay đổi và người dùng xác nhận 5G).
 2. Đổi lead/priority/status/target date của một Project thử nghiệm, refresh từng lần và xác nhận Activity ghi lại thay đổi; thử lead ngoài workspace nếu có để xác nhận API từ chối.
