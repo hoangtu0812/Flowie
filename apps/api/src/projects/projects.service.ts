@@ -484,12 +484,13 @@ export class ProjectsService {
          where: { id: templateId, workspaceId },
       });
       if (!template) throw new NotFoundException('Project template not found.');
+      const { config, ...data } = dto;
       return this.prisma.projectTemplate.update({
          where: { id: templateId },
          data: {
-            ...dto,
+            ...data,
             ...(dto.name ? { name: dto.name.trim() } : {}),
-            ...(dto.config ? { config: dto.config as Prisma.InputJsonValue } : {}),
+            ...(config ? { config: config as Prisma.InputJsonValue } : {}),
          },
       });
    }
