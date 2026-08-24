@@ -47,14 +47,14 @@ docker compose --profile app up -d --no-build --pull never --force-recreate api 
 
 ## 4. Tiến độ đã xác minh
 
-Tất cả commit bên dưới đã được push. Commit tài liệu gần nhất là `c195998`; commit tính năng gần nhất là `37d7b67`.
+Tất cả commit bên dưới đã được push. Commit tài liệu gần nhất là `d8034a4`; commit tính năng gần nhất là `3a0a8f8`.
 
 | Nhóm chức năng | Trạng thái thực tế |
 | --- | --- |
 | Runtime/Docker/database | Hoạt động; API và web mới nhất đã rebuild/recreate, health API và login route đều HTTP 200. PostgreSQL host port mặc định là 5433 để không đụng project khác. |
 | Auth và workspace | Login/session/workspace resolution thật; OAuth, reset password, email verification, SSO chưa làm. |
 | Teams và members | Màn Teams, team overview/members/documents và workspace members dùng API; các tạo mới đã có trên màn đã migrate. |
-| Projects | Danh sách, tạo project, issue progress, header, Overview/Issues/Activity dùng API. Tại Project list gốc, lead/priority/status/target date nay lưu qua `PATCH /projects/:id`, lead lấy thành viên workspace thật và activity được ghi. Timeline peek hiển thị Project/Issue/Milestone/Initiative từ API; Saved View không có mutation Project được disable thay vì giả lưu. |
+| Projects | Danh sách, tạo project, issue progress, header, Overview/Issues/Activity dùng API. Tại Project list gốc, lead/priority/status/target date nay lưu qua `PATCH /projects/:id`, lead lấy thành viên workspace thật và activity được ghi. Timeline peek hiển thị Project/Issue/Milestone/Initiative từ API; Saved View không có mutation Project được disable thay vì giả lưu. Health popover chỉ giữ health đã lưu; Subscribe và New update chưa có backend nên bị disable. |
 | Issues | Danh sách, tạo/sửa trường cơ bản, filter options, My issues, labels CRUD, cycles, saved views, subscriptions, due dates, archive và command palette dùng dữ liệu thật. Issue detail, properties, assignee, status/priority, comments/activity/subscribe, Issue attachment và context-menu actions đã live trong Docker. Status/priority/assignee/label/project chỉ đổi UI sau API success; khi thiếu workspace hoặc API lỗi không tạo local-only state. Thao tác authenticated end-to-end còn cần xác minh thủ công. |
 | Initiatives & documents | Initiative list/detail/create/link project; team documents đã live. |
 | Inbox & Discord | Inbox read/delete/unread badge lưu thật; cấu hình Discord workspace đã có. |
@@ -77,6 +77,7 @@ Các commit mốc quan trọng:
 - `098d5f8`: Project list gốc persist lead/priority/status/target date qua API thật; DTO validate target date, lead phải là active workspace member, mỗi update ghi project activity. API tests 4 suites/8 tests, API build, TypeScript web và Docker rebuild/recreate với API/login route HTTP 200 đều pass. Acceptance mutation qua browser đăng nhập còn chờ xác minh.
 - `cf59ca6`: Issue store/context menu/command palette/selectors/board drag-drop chờ Issue API success trước khi cập nhật state status/priority/assignee/label/project; error không còn để lại thay đổi local giả. TypeScript web, API tests 4 suites/8 tests, Docker web production build/recreate cùng API/login route HTTP 200 đều pass. Acceptance mutation qua browser đăng nhập còn chờ xác minh.
 - `37d7b67`: Timeline Project peek bỏ `mock-data` cho Project/detail/team; dùng Project, Issue, Milestone, Initiative API thật, có loading/error/empty state. Các control không có contract (favorite, Slack, project labels, custom properties) unavailable rõ ràng. TypeScript web, API build/tests 4 suites/8 tests, Docker API/web production rebuild/recreate cùng health/login route HTTP 200 đều pass. Browser automation xác nhận chưa có session login, nên acceptance mutation vẫn chờ user đăng nhập.
+- `3a0a8f8`: Xoá Project update store và ba Project side-panel/outline component không được import bởi route/UI nào, nên không còn giữ luồng mock có thể được gọi nhầm. Health popover giữ layout gốc nhưng Subscribe/New update disabled rõ ràng vì chưa có contract backend. TypeScript web và Docker frontend production rebuild/recreate pass; API health và login route HTTP 200.
 
 Lịch sử đầy đủ và kiểm chứng từng commit nằm trong `AGENT_HANDOFF.md`.
 
