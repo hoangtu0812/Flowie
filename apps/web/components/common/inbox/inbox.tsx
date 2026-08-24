@@ -47,7 +47,6 @@ export default function Inbox() {
 
    const isMobile = useIsMobile();
    const [showRead, setShowRead] = useState(true);
-   const [showSnoozed, setShowSnoozed] = useState(false);
    const [showUnreadFirst, setShowUnreadFirst] = useState(false);
    const [ordering, setOrdering] = useState('newest');
    const [showId, setShowId] = useState(true);
@@ -61,7 +60,6 @@ export default function Inbox() {
    const filteredNotifications = notifications
       .filter((notification) => {
          if (!showRead && notification.read) return false;
-         // Add snoozed filter logic here when implemented
          return true;
       })
       .sort((a, b) => {
@@ -152,17 +150,6 @@ export default function Inbox() {
                      <DropdownMenuSeparator />
 
                      <div className="p-2 space-y-3">
-                        <div className="flex items-center justify-between">
-                           <Label htmlFor="show-snoozed" className="text-sm">
-                              Show snoozed
-                           </Label>
-                           <Switch
-                              id="show-snoozed"
-                              checked={showSnoozed}
-                              onCheckedChange={setShowSnoozed}
-                              disabled
-                           />
-                        </div>
                         <div className="flex items-center justify-between">
                            <Label htmlFor="show-read" className="text-sm">
                               Show read

@@ -1,6 +1,7 @@
 'use client';
 
 import { CyclePlayIcon } from '@/components/common/cycles/cycle-line';
+import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useIssuesStore } from '@/store/issues-store';
 import { Check, Plus } from 'lucide-react';
@@ -85,21 +86,18 @@ export function IssuePropertiesPanel({ issue, orgId }: { issue: IssueProperties;
          </Section>
 
          <Section title="Labels">
-            <div className="flex items-center flex-wrap gap-1.5">
-               {issue.labels.length ? (
-                  <LabelBadge label={issue.labels} />
-               ) : (
-                  <p className="text-sm text-muted-foreground">No labels</p>
-               )}
+            <div className="flex items-center gap-2">
+               <LabelBadge label={issue.labels} />
                <Popover>
                   <PopoverTrigger asChild>
-                     <button
-                        type="button"
+                     <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-6 rounded-full border"
                         aria-label="Edit issue labels"
-                        className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
                      >
                         <Plus className="size-3.5" />
-                     </button>
+                     </Button>
                   </PopoverTrigger>
                   <PopoverContent align="start" className="w-56 p-1.5">
                      <p className="px-2 py-1 text-xs font-medium text-muted-foreground">Labels</p>
