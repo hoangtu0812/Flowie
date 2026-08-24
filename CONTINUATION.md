@@ -59,7 +59,7 @@ Tất cả commit bên dưới đã được push. Commit tài liệu gần nh�
 | Initiatives & documents | Initiative list/detail/create/link project; team documents đã live. |
 | Inbox & Discord | Inbox read/delete/unread badge lưu thật; cấu hình Discord workspace đã có. |
 | Sidebar navigation | Inbox badge và Settings “Your teams” dùng API thật. Reviews/Agent giữ UI gốc nhưng unavailable, không đi vào mock workflow. |
-| Settings | Profile, Team settings, issue labels, project statuses, project templates và preference browser-local đã được audit/nối phù hợp. Các option không có backend đã được disable minh bạch. |
+| Settings | Profile, Team settings, issue labels, project labels, project statuses, project templates và preference browser-local đã được audit/nối phù hợp. AI & Agents/Slack không có backend trong phạm vi Flowie nên hiển thị unavailable, không còn trạng thái Enabled hay click rỗng. Các option không có backend khác cũng disable minh bạch. |
 | Admin/RBAC/audit | Chưa hoàn thiện; không được quảng bá là chức năng production-ready. |
 
 Các commit mốc quan trọng:
@@ -80,6 +80,7 @@ Các commit mốc quan trọng:
 - `3a0a8f8`: Xoá Project update store và ba Project side-panel/outline component không được import bởi route/UI nào, nên không còn giữ luồng mock có thể được gọi nhầm. Health popover giữ layout gốc nhưng Subscribe/New update disabled rõ ràng vì chưa có contract backend. TypeScript web và Docker frontend production rebuild/recreate pass; API health và login route HTTP 200.
 - `a4ce762`: Bổ sung migration `project_updates`/`project_subscriptions`, API list/create update và subscribe/unsubscribe có workspace/team authorization. Health popover gốc được nối API, không optimistic-write; tạo update tự subscribe người tạo, ghi Activity và chỉ Inbox subscriber khác, đồng thời enqueue Discord. API test 5 suites/11 tests, API build, TypeScript web, Docker API/web production rebuild/recreate, migration PostgreSQL, health/login route đều pass. Acceptance trong browser đã đăng nhập còn chờ xác minh.
 - `8eae2d4`: Bổ sung migration `project_labels`/`project_label_links`, Project label CRUD tại Settings và gán/bỏ gán qua `PATCH /projects/:id`. Project labels tách biệt hoàn toàn Issue labels; list/board nhận labels từ API, selector giữ state cũ và báo lỗi nếu PATCH fail. API test 6 suites/15 tests, API build, TypeScript web, Docker API/web production rebuild/recreate, migration PostgreSQL, health/login route đều pass. Acceptance trong browser đã đăng nhập còn chờ xác minh.
+- `b82e8fb`: AI & Agents/Slack Settings không còn hiển thị Enabled hoặc handler rỗng; tất cả service không có backend bị unavailable rõ ràng. Cycle “Add document or link” cũng bị disable vì chưa có Cycle–Document/Link contract. TypeScript web, Docker frontend production build/recreate, API health và login route HTTP 200 pass.
 
 Lịch sử đầy đủ và kiểm chứng từng commit nằm trong `AGENT_HANDOFF.md`.
 
