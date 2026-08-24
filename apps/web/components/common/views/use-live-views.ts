@@ -26,6 +26,7 @@ async function workspaceIdForCurrentUser() {
 
 export function useLiveViews() {
    const [workspaceId, setWorkspaceId] = useState<string>();
+   const [currentUserId, setCurrentUserId] = useState<string>();
    const [views, setViews] = useState<LiveView[]>([]);
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState<string>();
@@ -38,13 +39,17 @@ export function useLiveViews() {
          setError(undefined);
          try {
             const currentWorkspaceId = await workspaceIdForCurrentUser();
-            const response = await fetch(`${api}/views?workspaceId=${currentWorkspaceId}`, {
-               credentials: 'include',
-            });
-            if (!response.ok) throw new Error('Could not load views.');
+            const [response, userResponse] = await Promise.all([
+               fetch(`${api}/views?workspaceId=${currentWorkspaceId}`, {
+                  credentials: 'include',
+               }),
+               fetch(`${api}/users/me`, { credentials: 'include' }),
+            ]);
+            if (!response.ok || !userResponse.ok) throw new Error('Could not load views.');
             if (current) {
                setWorkspaceId(currentWorkspaceId);
                setViews(((await response.json()) as { data: LiveView[] }).data);
+               setCurrentUserId(((await userResponse.json()) as { data: { id: string } }).data.id);
             }
          } catch (caught) {
             if (current)
@@ -59,5 +64,5 @@ export function useLiveViews() {
    }, [refreshKey]);
 
    const reload = useCallback(() => setRefreshKey((value) => value + 1), []);
-   return { workspaceId, views, loading, error, reload };
+   return { workspaceId, currentUserId, views, loading, error, reload };
 }
