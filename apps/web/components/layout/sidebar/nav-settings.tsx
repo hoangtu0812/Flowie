@@ -24,6 +24,7 @@ import {
    Tag,
    Target,
    UserRound,
+   Users,
    Zap,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -50,6 +51,7 @@ export const settingsNav: SettingsNavGroup[] = [
          { name: 'Profile', url: '/settings/profile', icon: UserRound },
          { name: 'Notifications', url: '/settings/notifications', icon: Bell },
          { name: 'Security & access', url: '/settings/security', icon: KeyRound },
+         { name: 'Connected accounts', url: '/settings/connected-accounts', icon: Users },
       ],
    },
    {

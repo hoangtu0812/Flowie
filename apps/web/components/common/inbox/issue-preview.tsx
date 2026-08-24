@@ -262,7 +262,7 @@ export default function IssuePreview({ notification, onMarkAsRead }: IssuePrevie
                            <Textarea
                               value={draft}
                               onChange={(event) => setDraft(event.target.value)}
-                              className="w-full rounded-lg border px-4 py-3 pb-14 resize-none"
+                              className="w-full rounded-lg border px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent pb-14 resize-none"
                               placeholder="Leave a comment..."
                               rows={3}
                            />

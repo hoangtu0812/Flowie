@@ -62,27 +62,30 @@ function DisplayOptions() {
                   </SelectContent>
                </Select>
             </div>
-            <div className="flex flex-wrap gap-1.5">
-               {(
-                  [
-                     ['created', 'Created'],
-                     ['updated', 'Updated'],
-                     ['owner', 'Owner'],
-                  ] as const
-               ).map(([key, label]) => (
-                  <button
-                     key={key}
-                     onClick={() => toggleProperty(key)}
-                     className={cn(
-                        'px-2 py-0.5 rounded-md border text-xs transition-colors',
-                        displayProperties[key]
-                           ? 'bg-accent border-transparent'
-                           : 'text-muted-foreground hover:bg-accent/50'
-                     )}
-                  >
-                     {label}
-                  </button>
-               ))}
+            <div className="flex flex-col gap-2">
+               <span className="text-xs text-muted-foreground">Display properties</span>
+               <div className="flex flex-wrap gap-1.5">
+                  {(
+                     [
+                        ['created', 'Created'],
+                        ['updated', 'Updated'],
+                        ['owner', 'Owner'],
+                     ] as const
+                  ).map(([key, label]) => (
+                     <button
+                        key={key}
+                        onClick={() => toggleProperty(key)}
+                        className={cn(
+                           'px-2 py-0.5 rounded-md border text-xs transition-colors',
+                           displayProperties[key]
+                              ? 'bg-accent border-transparent'
+                              : 'text-muted-foreground hover:bg-accent/50'
+                        )}
+                     >
+                        {label}
+                     </button>
+                  ))}
+               </div>
             </div>
          </PopoverContent>
       </Popover>

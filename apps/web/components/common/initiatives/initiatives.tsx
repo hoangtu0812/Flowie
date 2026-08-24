@@ -9,7 +9,6 @@ import {
    DialogFooter,
    DialogHeader,
    DialogTitle,
-   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -43,14 +42,13 @@ import {
    HeartPulse,
    ListFilter,
    PanelRight,
-   Plus,
    SlidersHorizontal,
    UserRound,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { parseAsStringLiteral, useQueryState } from 'nuqs';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { InitiativeStatusIcon } from './initiative-status-icon';
 import { InitiativesSidePanel } from './initiatives-side-panel';
 import {
@@ -86,6 +84,11 @@ function CreateInitiativeDialog({
    const [targetDate, setTargetDate] = useState('');
    const [submitting, setSubmitting] = useState(false);
    const [error, setError] = useState<string>();
+   useEffect(() => {
+      const openCreateDialog = () => setOpen(true);
+      window.addEventListener('flowie:create-initiative', openCreateDialog);
+      return () => window.removeEventListener('flowie:create-initiative', openCreateDialog);
+   }, []);
    const create = async () => {
       if (!workspaceId || name.trim().length < 2) {
          setError('Initiative name must contain at least 2 characters.');
@@ -128,12 +131,6 @@ function CreateInitiativeDialog({
    };
    return (
       <Dialog open={open} onOpenChange={setOpen}>
-         <DialogTrigger asChild>
-            <Button size="xs" variant="secondary" disabled={!workspaceId}>
-               <Plus className="size-4" />
-               New initiative
-            </Button>
-         </DialogTrigger>
          <DialogContent>
             <DialogHeader>
                <DialogTitle>New initiative</DialogTitle>

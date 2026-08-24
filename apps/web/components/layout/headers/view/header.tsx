@@ -1,6 +1,7 @@
 'use client';
 
 import { useLiveViews } from '@/components/common/views/use-live-views';
+import { viewIssues, viewProjects } from '@/components/common/views/view-filter';
 import { Button } from '@/components/ui/button';
 import {
    DropdownMenu,
@@ -10,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useRightPanelStore } from '@/store/right-panel-store';
+import { useIssuesStore } from '@/store/issues-store';
 import { BarChart3, FolderKanban, ListTodo, MoreHorizontal, Star, Trash2 } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -20,11 +22,17 @@ export default function Header() {
    const { viewId, orgId } = useParams<{ viewId: string; orgId: string }>();
    const router = useRouter();
    const { workspaceId, currentUserId, views } = useLiveViews();
+   const { issues, projects } = useIssuesStore();
    const { openPanel, togglePanel } = useRightPanelStore();
    const [deleting, setDeleting] = useState(false);
    const [error, setError] = useState<string>();
    const view = views.find((entry) => entry.id === viewId);
    const isIssue = view?.entityType === 'issue';
+   const count = view
+      ? view.entityType === 'issue'
+         ? viewIssues(view, issues).length
+         : viewProjects(view, projects).length
+      : 0;
    const canDelete = Boolean(view && currentUserId === view.createdBy.id);
    const removeView = async () => {
       if (!view || !workspaceId || !canDelete || !window.confirm(`Delete ${view.name}?`)) return;
@@ -88,7 +96,7 @@ export default function Header() {
          </div>
          <div className="w-full flex justify-between items-center border-b py-1.5 px-6 h-10">
             <span className="text-xs text-muted-foreground">
-               {view?.entityType === 'project' ? 'Project view' : 'Issue view'}
+               {count} {view?.entityType === 'project' ? 'projects' : 'issues'}
             </span>
             {isIssue && (
                <Button
