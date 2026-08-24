@@ -9,12 +9,19 @@ import { PrioritySelector } from './priority-selector';
 import { LeadSelector } from './lead-selector';
 import { StatusWithPercent } from './status-with-percent';
 import { DatePicker } from './date-picker';
+import type { ProjectListMember, ProjectListUpdate } from './projects';
 
 interface ProjectLineProps {
    project: Project & { issueCount?: number };
+   workspaceMembers: ProjectListMember[];
+   onUpdateProject?: (projectId: string, update: ProjectListUpdate) => Promise<void>;
 }
 
-export default function ProjectLine({ project }: ProjectLineProps) {
+export default function ProjectLine({
+   project,
+   workspaceMembers,
+   onUpdateProject,
+}: ProjectLineProps) {
    const { orgId } = useParams<{ orgId: string }>();
    const { displayProperties } = useProjectsDisplayStore();
    const issueCount = project.issueCount ?? 0;
@@ -57,17 +64,45 @@ export default function ProjectLine({ project }: ProjectLineProps) {
          )}
          {displayProperties.priority && (
             <div className="hidden md:block w-[70px] shrink-0">
-               <PrioritySelector priority={project.priority} />
+               <PrioritySelector
+                  priority={project.priority}
+                  disabled={!onUpdateProject}
+                  onPriorityChange={
+                     onUpdateProject
+                        ? (priority) => onUpdateProject(project.id, { priority })
+                        : undefined
+                  }
+               />
             </div>
          )}
          {displayProperties.lead && (
             <div className="hidden xl:block w-[130px] shrink-0">
-               <LeadSelector lead={project.lead} />
+               <LeadSelector
+                  lead={project.lead}
+                  members={workspaceMembers}
+                  disabled={!onUpdateProject}
+                  onLeadChange={
+                     onUpdateProject
+                        ? (leadId) => onUpdateProject(project.id, { leadId })
+                        : undefined
+                  }
+               />
             </div>
          )}
          {displayProperties.targetDate && (
             <div className="hidden xl:block w-[110px] shrink-0">
-               <DatePicker date={project.targetDate ? new Date(project.targetDate) : undefined} />
+               <DatePicker
+                  date={project.targetDate ? new Date(project.targetDate) : undefined}
+                  disabled={!onUpdateProject}
+                  onDateChange={
+                     onUpdateProject
+                        ? (targetDate) =>
+                             onUpdateProject(project.id, {
+                                targetDate: targetDate ? targetDate.toISOString() : null,
+                             })
+                        : undefined
+                  }
+               />
             </div>
          )}
          {displayProperties.issues && (
@@ -80,6 +115,12 @@ export default function ProjectLine({ project }: ProjectLineProps) {
                <StatusWithPercent
                   status={project.status}
                   percentComplete={project.percentComplete}
+                  disabled={!onUpdateProject}
+                  onStatusChange={
+                     onUpdateProject
+                        ? (status) => onUpdateProject(project.id, { status })
+                        : undefined
+                  }
                />
             </div>
          )}

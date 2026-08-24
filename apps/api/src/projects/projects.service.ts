@@ -93,10 +93,33 @@ export class ProjectsService {
    async update(projectId: string, workspaceId: string, dto: UpdateProjectDto, userId: string) {
       const project = await this.get(projectId, workspaceId, userId);
       if (project.teamId) await this.authorizeTeam(workspaceId, project.teamId, userId);
-      return this.prisma.project.update({
-         where: { id: projectId },
-         data: dto,
-         include: projectInclude,
+      if (dto.leadId) {
+         const leadMembership = await this.prisma.workspaceMember.findFirst({
+            where: { workspaceId, userId: dto.leadId, status: 'ACTIVE' },
+            select: { userId: true },
+         });
+         if (!leadMembership) {
+            throw new NotFoundException('Project lead must be an active workspace member.');
+         }
+      }
+      return this.prisma.$transaction(async (tx) => {
+         const updated = await tx.project.update({
+            where: { id: projectId },
+            data: dto,
+            include: projectInclude,
+         });
+         await tx.activity.create({
+            data: {
+               workspaceId,
+               projectId,
+               actorId: userId,
+               type: 'project.updated',
+               data: Object.fromEntries(
+                  Object.entries(dto).filter(([, value]) => value !== undefined)
+               ),
+            },
+         });
+         return updated;
       });
    }
    async archive(projectId: string, workspaceId: string, userId: string) {

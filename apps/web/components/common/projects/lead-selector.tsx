@@ -10,27 +10,32 @@ import {
    CommandList,
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { users, User } from '@/mock-data/users';
+import type { User } from '@/mock-data/users';
 import { CheckIcon } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useId, useState } from 'react';
+import type { ProjectListMember } from './projects';
 
 interface LeadSelectorProps {
    lead: User;
-   onLeadChange?: (userId: string) => void;
+   members: ProjectListMember[];
+   onLeadChange?: (userId: string) => void | Promise<void>;
+   disabled?: boolean;
 }
 
-export function LeadSelector({ lead, onLeadChange }: LeadSelectorProps) {
+export function LeadSelector({ lead, members, onLeadChange, disabled = false }: LeadSelectorProps) {
    const id = useId();
    const [open, setOpen] = useState<boolean>(false);
    const [value, setValue] = useState<string>(lead.id);
 
-   const handleLeadChange = (userId: string) => {
-      setValue(userId);
-      setOpen(false);
-
-      if (onLeadChange) {
-         onLeadChange(userId);
+   const handleLeadChange = async (userId: string) => {
+      if (!onLeadChange) return;
+      try {
+         await onLeadChange(userId);
+         setValue(userId);
+         setOpen(false);
+      } catch {
+         // The parent keeps the persisted value and renders the API error.
       }
    };
 
@@ -45,15 +50,18 @@ export function LeadSelector({ lead, onLeadChange }: LeadSelectorProps) {
                   variant="ghost"
                   role="combobox"
                   aria-expanded={open}
+                  disabled={disabled}
                >
                   {(() => {
-                     const selectedUser = users.find((user) => user.id === value);
+                     const selectedUser =
+                        members.find((user) => user.id === value) ??
+                        (lead.id === value ? lead : undefined);
                      if (selectedUser) {
                         return (
                            <>
                               <Avatar className="size-5 mr-1">
                                  <AvatarImage
-                                    src={selectedUser.avatarUrl}
+                                    src={selectedUser.avatarUrl ?? undefined}
                                     alt={selectedUser.name}
                                  />
                                  <AvatarFallback>{selectedUser.name.charAt(0)}</AvatarFallback>
@@ -72,7 +80,7 @@ export function LeadSelector({ lead, onLeadChange }: LeadSelectorProps) {
                   <CommandList>
                      <CommandEmpty>No user found.</CommandEmpty>
                      <CommandGroup>
-                        {users.map((user) => (
+                        {members.map((user) => (
                            <CommandItem
                               key={user.id}
                               value={user.id}
@@ -81,7 +89,10 @@ export function LeadSelector({ lead, onLeadChange }: LeadSelectorProps) {
                            >
                               <div className="flex items-center gap-2">
                                  <Avatar className="size-5">
-                                    <AvatarImage src={user.avatarUrl} alt={user.name} />
+                                    <AvatarImage
+                                       src={user.avatarUrl ?? undefined}
+                                       alt={user.name}
+                                    />
                                     <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
                                  </Avatar>
                                  <span className="text-xs">{user.name}</span>

@@ -46,6 +46,19 @@ type ApiProject = {
    _count: { issues: number };
 };
 
+export type ProjectListMember = {
+   id: string;
+   name: string;
+   avatarUrl: string | null;
+};
+
+export type ProjectListUpdate = {
+   leadId?: string | null;
+   priority?: string;
+   status?: string;
+   targetDate?: string | null;
+};
+
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 const mapStatus = (value: string) => {
@@ -139,6 +152,8 @@ export default function Projects({ teamId }: { teamId?: string }) {
    const [teamGroups, setTeamGroups] = useState<Array<{ id: string; name: string; icon?: string }>>(
       []
    );
+   const [workspaceId, setWorkspaceId] = useState<string>();
+   const [workspaceMembers, setWorkspaceMembers] = useState<ProjectListMember[]>([]);
    const [loadError, setLoadError] = useState<string>();
    const viewType = viewTypes[tab];
 
@@ -151,11 +166,24 @@ export default function Projects({ teamId }: { teamId?: string }) {
          };
          const workspaceId = workspaces.data[0]?.workspace.id;
          if (!workspaceId) throw new Error('No workspace is available for this account.');
-         const response = await fetch(`${api}/projects?workspaceId=${workspaceId}`, {
-            credentials: 'include',
-         });
-         if (!response.ok) throw new Error('Could not load projects.');
+         const [response, membersResponse] = await Promise.all([
+            fetch(`${api}/projects?workspaceId=${workspaceId}`, { credentials: 'include' }),
+            fetch(`${api}/workspaces/${workspaceId}/members`, { credentials: 'include' }),
+         ]);
+         if (!response.ok || !membersResponse.ok) throw new Error('Could not load projects.');
          const payload = (await response.json()) as { data: ApiProject[] };
+         const membersPayload = (await membersResponse.json()) as {
+            data: Array<{
+               status: string;
+               user: { id: string; name: string; avatarUrl: string | null };
+            }>;
+         };
+         setWorkspaceId(workspaceId);
+         setWorkspaceMembers(
+            membersPayload.data
+               .filter((member) => member.status === 'ACTIVE')
+               .map((member) => member.user)
+         );
          setAllProjects(payload.data.map(mapProject));
          setTeamGroups(
             Array.from(
@@ -174,6 +202,31 @@ export default function Projects({ teamId }: { teamId?: string }) {
          setLoadError(error instanceof Error ? error.message : 'Could not load projects.')
       );
    }, []);
+
+   const updateProject = async (projectId: string, update: ProjectListUpdate) => {
+      if (!workspaceId) throw new Error('Workspace is not ready yet.');
+      setLoadError(undefined);
+      const response = await fetch(`${api}/projects/${projectId}?workspaceId=${workspaceId}`, {
+         method: 'PATCH',
+         headers: { 'Content-Type': 'application/json' },
+         credentials: 'include',
+         body: JSON.stringify(update),
+      });
+      if (!response.ok) {
+         const payload = (await response.json().catch(() => null)) as {
+            message?: string | string[];
+         } | null;
+         const message = Array.isArray(payload?.message)
+            ? payload.message.join(' ')
+            : (payload?.message ?? 'Could not update project.');
+         setLoadError(message);
+         throw new Error(message);
+      }
+      const payload = (await response.json()) as { data: ApiProject };
+      setAllProjects((projects) =>
+         projects.map((project) => (project.id === projectId ? mapProject(payload.data) : project))
+      );
+   };
 
    const displayed = useMemo(() => {
       let list = allProjects.slice();
@@ -276,7 +329,13 @@ export default function Projects({ teamId }: { teamId?: string }) {
             <div className="flex-1 min-w-0 h-full overflow-hidden">
                {viewType === 'timeline' && <ProjectsTimeline groups={groups} />}
                {viewType === 'board' && <ProjectsBoard groups={groups} />}
-               {viewType === 'list' && <ProjectsList groups={groups} />}
+               {viewType === 'list' && (
+                  <ProjectsList
+                     groups={groups}
+                     workspaceMembers={workspaceMembers}
+                     onUpdateProject={updateProject}
+                  />
+               )}
             </div>
 
             {openPanel === 'insights' && (

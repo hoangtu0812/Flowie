@@ -17,24 +17,28 @@ import { useId, useState } from 'react';
 interface StatusWithPercentProps {
    status: Status;
    percentComplete: number;
-   onStatusChange?: (statusId: string) => void;
+   onStatusChange?: (statusId: string) => void | Promise<void>;
+   disabled?: boolean;
 }
 
 export function StatusWithPercent({
    status,
    percentComplete,
    onStatusChange,
+   disabled = false,
 }: StatusWithPercentProps) {
    const id = useId();
    const [open, setOpen] = useState<boolean>(false);
    const [value, setValue] = useState<string>(status.id);
 
-   const handleStatusChange = (statusId: string) => {
-      setValue(statusId);
-      setOpen(false);
-
-      if (onStatusChange) {
-         onStatusChange(statusId);
+   const handleStatusChange = async (statusId: string) => {
+      if (!onStatusChange) return;
+      try {
+         await onStatusChange(statusId);
+         setValue(statusId);
+         setOpen(false);
+      } catch {
+         // The parent keeps the persisted value and renders the API error.
       }
    };
 
@@ -48,6 +52,7 @@ export function StatusWithPercent({
                variant="ghost"
                role="combobox"
                aria-expanded={open}
+               disabled={disabled}
             >
                {(() => {
                   const selectedItem = allStatus.find((item) => item.id === value);

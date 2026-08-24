@@ -2,10 +2,18 @@
 
 import { useProjectsDisplayStore } from '@/store/projects-display-store';
 import ProjectLine from './project-line';
-import { ProjectGroup } from './projects';
+import type { ProjectGroup, ProjectListMember, ProjectListUpdate } from './projects';
 
 /** Projects "List" view: grouped table (team sections by default). */
-export default function ProjectsList({ groups }: { groups: ProjectGroup[] }) {
+export default function ProjectsList({
+   groups,
+   workspaceMembers = [],
+   onUpdateProject,
+}: {
+   groups: ProjectGroup[];
+   workspaceMembers?: ProjectListMember[];
+   onUpdateProject?: (projectId: string, update: ProjectListUpdate) => Promise<void>;
+}) {
    const { grouping, displayProperties } = useProjectsDisplayStore();
 
    return (
@@ -40,7 +48,12 @@ export default function ProjectsList({ groups }: { groups: ProjectGroup[] }) {
                   </div>
                )}
                {group.projects.map((project) => (
-                  <ProjectLine key={project.id} project={project} />
+                  <ProjectLine
+                     key={project.id}
+                     project={project}
+                     workspaceMembers={workspaceMembers}
+                     onUpdateProject={onUpdateProject}
+                  />
                ))}
                {group.projects.length === 0 && (
                   <div className="px-6 py-3 text-xs text-muted-foreground border-b border-border/40">

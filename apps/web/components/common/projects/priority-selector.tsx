@@ -16,20 +16,27 @@ import { useId, useState } from 'react';
 
 interface PrioritySelectorProps {
    priority: Priority;
-   onPriorityChange?: (priorityId: string) => void;
+   onPriorityChange?: (priorityId: string) => void | Promise<void>;
+   disabled?: boolean;
 }
 
-export function PrioritySelector({ priority, onPriorityChange }: PrioritySelectorProps) {
+export function PrioritySelector({
+   priority,
+   onPriorityChange,
+   disabled = false,
+}: PrioritySelectorProps) {
    const id = useId();
    const [open, setOpen] = useState<boolean>(false);
    const [value, setValue] = useState<string>(priority.id);
 
-   const handlePriorityChange = (priorityId: string) => {
-      setValue(priorityId);
-      setOpen(false);
-
-      if (onPriorityChange) {
-         onPriorityChange(priorityId);
+   const handlePriorityChange = async (priorityId: string) => {
+      if (!onPriorityChange) return;
+      try {
+         await onPriorityChange(priorityId);
+         setValue(priorityId);
+         setOpen(false);
+      } catch {
+         // The parent keeps the persisted value and renders the API error.
       }
    };
 
@@ -44,6 +51,7 @@ export function PrioritySelector({ priority, onPriorityChange }: PrioritySelecto
                   variant="ghost"
                   role="combobox"
                   aria-expanded={open}
+                  disabled={disabled}
                >
                   {(() => {
                      const selectedItem = priorities.find((item) => item.id === value);

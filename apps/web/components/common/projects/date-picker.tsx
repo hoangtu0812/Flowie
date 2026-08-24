@@ -9,19 +9,25 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 
 interface DatePickerProps {
    date: Date | undefined;
-   onDateChange?: (date: Date | undefined) => void;
+   onDateChange?: (date: Date | undefined) => void | Promise<void>;
+   disabled?: boolean;
 }
 
-export function DatePicker({ date, onDateChange }: DatePickerProps) {
+export function DatePicker({ date, onDateChange, disabled = false }: DatePickerProps) {
    const [selectedDate, setSelectedDate] = React.useState<Date | undefined>(date);
    const [open, setOpen] = React.useState<boolean>(false);
 
-   const handleDateSelect = (date: Date | undefined) => {
-      setSelectedDate(date);
-      if (onDateChange) {
-         onDateChange(date);
+   React.useEffect(() => setSelectedDate(date), [date]);
+
+   const handleDateSelect = async (date: Date | undefined) => {
+      if (!onDateChange) return;
+      try {
+         await onDateChange(date);
+         setSelectedDate(date);
+         setOpen(false);
+      } catch {
+         // The parent keeps the persisted value and renders the API error.
       }
-      setOpen(false);
    };
 
    return (
@@ -31,6 +37,7 @@ export function DatePicker({ date, onDateChange }: DatePickerProps) {
                variant="ghost"
                className="h-7 px-2 justify-start text-left font-normal"
                size="sm"
+               disabled={disabled}
             >
                <CalendarIcon className="h-4 w-4 md:mr-0.5" />
                {selectedDate ? (
