@@ -20,6 +20,7 @@ import { UpdateIssueDto } from './dto/update-issue.dto';
 import { UpdateIssueTemplateDto } from './dto/update-issue-template.dto';
 import { SetIssueReminderDto } from './dto/set-issue-reminder.dto';
 import { MoveIssueDto } from './dto/move-issue.dto';
+import { ClassifyIssueDto } from './dto/classify-issue.dto';
 import { IssuesService } from './issues.service';
 
 @UseGuards(AuthGuard)
@@ -240,6 +241,15 @@ export class IssuesController {
       @Req() request: AuthenticatedRequest
    ) {
       return { data: await this.issues.move(issueId, dto, request.auth!.userId) };
+   }
+
+   @Post(':issueId/classification')
+   async classify(
+      @Param('issueId') issueId: string,
+      @Body() dto: ClassifyIssueDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.issues.classify(issueId, dto, request.auth!.userId) };
    }
 
    @Patch(':issueId')

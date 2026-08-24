@@ -3,6 +3,7 @@ import { IssuesService } from './issues.service';
 describe('IssuesService personal state', () => {
    const accessibleIssue = {
       id: 'issue-1',
+      identifier: 'CORE-1',
       workspaceId: 'workspace-1',
       teamId: 'team-1',
       archivedAt: null,
@@ -110,6 +111,81 @@ describe('IssuesService personal state', () => {
                identifier: 'OPS-7',
                number: 7,
             }),
+         })
+      );
+   });
+
+   it("marks an issue as won't fix and moves it to a canceled status", async () => {
+      const classified = {
+         ...accessibleIssue,
+         resolution: 'WONT_FIX',
+         statusId: 'status-canceled',
+      };
+      const tx = {
+         issue: { update: jest.fn().mockResolvedValue(classified) },
+         activity: { create: jest.fn().mockResolvedValue({ id: 'activity-1' }) },
+      };
+      const { service } = serviceWith({
+         issueStatus: {
+            findFirst: jest.fn().mockResolvedValue({ id: 'status-canceled', category: 'CANCELED' }),
+         },
+         $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
+      });
+
+      await expect(
+         service.classify(
+            'issue-1',
+            { workspaceId: 'workspace-1', resolution: 'WONT_FIX' as never },
+            'user-1'
+         )
+      ).resolves.toMatchObject({ resolution: 'WONT_FIX', statusId: 'status-canceled' });
+      expect(tx.issue.update).toHaveBeenCalledWith(
+         expect.objectContaining({
+            data: expect.objectContaining({
+               resolution: 'WONT_FIX',
+               duplicateOfId: null,
+               statusId: 'status-canceled',
+            }),
+         })
+      );
+   });
+
+   it('links a duplicate only after confirming the target is accessible', async () => {
+      const target = { ...accessibleIssue, id: 'issue-2', identifier: 'CORE-2' };
+      const findFirst = jest
+         .fn()
+         .mockResolvedValueOnce(accessibleIssue)
+         .mockResolvedValueOnce({ id: target.id, identifier: target.identifier })
+         .mockResolvedValueOnce(target);
+      const tx = {
+         issue: {
+            update: jest.fn().mockResolvedValue({
+               ...accessibleIssue,
+               resolution: 'DUPLICATE',
+               duplicateOfId: target.id,
+            }),
+         },
+         activity: { create: jest.fn().mockResolvedValue({ id: 'activity-1' }) },
+      };
+      const { service } = serviceWith({
+         issue: { findFirst },
+         issueStatus: { findFirst: jest.fn().mockResolvedValue({ id: 'status-canceled' }) },
+         $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
+      });
+
+      await service.classify(
+         'issue-1',
+         {
+            workspaceId: 'workspace-1',
+            resolution: 'DUPLICATE' as never,
+            duplicateOfIdentifier: 'core-2',
+         },
+         'user-1'
+      );
+
+      expect(tx.issue.update).toHaveBeenCalledWith(
+         expect.objectContaining({
+            data: expect.objectContaining({ duplicateOfId: 'issue-2' }),
          })
       );
    });

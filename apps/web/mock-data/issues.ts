@@ -23,6 +23,8 @@ export interface Issue {
    isSubscribed?: boolean;
    isFavorite?: boolean;
    reminderAt?: string;
+   resolution?: 'DUPLICATE' | 'WONT_FIX';
+   duplicateOfId?: string;
    hasActivity?: boolean;
    /** Cycle the issue belongs to. Empty string = no cycle (backlog stock). */
    cycleId: string;

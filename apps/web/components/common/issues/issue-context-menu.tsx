@@ -60,6 +60,7 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       setIssueFavorite,
       setIssueReminder,
       moveIssue,
+      classifyIssue,
       archiveIssue,
       statuses,
       members,
@@ -162,6 +163,21 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
          toast.success(issue.isFavorite ? 'Removed from favorites' : 'Added to favorites');
       } catch {
          toast.error('Could not update favorite');
+      }
+   };
+
+   const handleClassification = async (resolution: 'DUPLICATE' | 'WONT_FIX') => {
+      if (!issueId) return;
+      const duplicateOfIdentifier =
+         resolution === 'DUPLICATE'
+            ? window.prompt('Identifier of the original issue (for example, CORE-123):')?.trim()
+            : undefined;
+      if (resolution === 'DUPLICATE' && !duplicateOfIdentifier) return;
+      try {
+         await classifyIssue(issueId, resolution, duplicateOfIdentifier);
+         toast.success(resolution === 'DUPLICATE' ? 'Marked as duplicate' : "Marked as won't fix");
+      } catch {
+         toast.error('Could not classify issue');
       }
    };
 
@@ -516,10 +532,10 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                <ContextMenuItem onClick={() => void handleMarkCompleted()}>
                   <CheckCircle2 className="size-4" /> Completed
                </ContextMenuItem>
-               <ContextMenuItem disabled title="Marking issue types is not available yet">
+               <ContextMenuItem onClick={() => void handleClassification('DUPLICATE')}>
                   <CopyIcon className="size-4" /> Duplicate
                </ContextMenuItem>
-               <ContextMenuItem disabled title="Marking issue types is not available yet">
+               <ContextMenuItem onClick={() => void handleClassification('WONT_FIX')}>
                   <Clock className="size-4" /> Won&apos;t Fix
                </ContextMenuItem>
             </ContextMenuSubContent>

@@ -4,7 +4,7 @@ import {
    Injectable,
    NotFoundException,
 } from '@nestjs/common';
-import { IssuePriority, IssueStatusCategory } from '@circle/database';
+import { IssuePriority, IssueResolution, IssueStatusCategory } from '@circle/database';
 import { PrismaService } from '../database/prisma.service';
 import { CreateIssueDto } from './dto/create-issue.dto';
 import { CreateIssueTemplateDto } from './dto/create-issue-template.dto';
@@ -17,6 +17,7 @@ import { SlasService } from '../slas/slas.service';
 import { JobsService } from '../jobs/jobs.service';
 import { SetIssueReminderDto } from './dto/set-issue-reminder.dto';
 import { MoveIssueDto } from './dto/move-issue.dto';
+import { ClassifyIssueDto } from './dto/classify-issue.dto';
 
 const issueInclude = {
    team: { select: { id: true, name: true, identifier: true } },
@@ -579,6 +580,9 @@ export class IssuesService {
                   ? {
                        completedAt: status.category === 'COMPLETED' ? new Date() : null,
                        canceledAt: status.category === 'CANCELED' ? new Date() : null,
+                       ...(status.category !== 'CANCELED'
+                          ? { resolution: null, duplicateOfId: null }
+                          : {}),
                     }
                   : {}),
             },
@@ -728,6 +732,75 @@ export class IssuesService {
             },
          });
          return moved;
+      });
+   }
+
+   async classify(issueId: string, dto: ClassifyIssueDto, userId: string) {
+      const issue = await this.get(issueId, dto.workspaceId, userId);
+      let duplicateOfId: string | null = null;
+      let duplicateIdentifier: string | null = null;
+
+      if (dto.resolution === IssueResolution.DUPLICATE) {
+         const identifier = dto.duplicateOfIdentifier?.trim().toUpperCase();
+         if (!identifier) {
+            throw new BadRequestException('A duplicate issue identifier is required.');
+         }
+         const target = await this.prisma.issue.findFirst({
+            where: { workspaceId: dto.workspaceId, identifier, archivedAt: null },
+            select: { id: true, identifier: true },
+         });
+         if (!target) throw new NotFoundException('Duplicate target issue not found.');
+         if (target.id === issue.id) {
+            throw new BadRequestException('An issue cannot be a duplicate of itself.');
+         }
+         await this.get(target.id, dto.workspaceId, userId);
+         duplicateOfId = target.id;
+         duplicateIdentifier = target.identifier;
+      }
+
+      const canceledStatus =
+         (await this.prisma.issueStatus.findFirst({
+            where: {
+               workspaceId: dto.workspaceId,
+               teamId: issue.teamId,
+               category: IssueStatusCategory.CANCELED,
+            },
+            orderBy: { position: 'asc' },
+         })) ??
+         (await this.prisma.issueStatus.findFirst({
+            where: {
+               workspaceId: dto.workspaceId,
+               teamId: null,
+               category: IssueStatusCategory.CANCELED,
+            },
+            orderBy: { position: 'asc' },
+         }));
+      if (!canceledStatus) {
+         throw new NotFoundException('No canceled status is configured for this team.');
+      }
+
+      return this.prisma.$transaction(async (tx) => {
+         const classified = await tx.issue.update({
+            where: { id: issueId },
+            data: {
+               resolution: dto.resolution,
+               duplicateOfId,
+               statusId: canceledStatus.id,
+               completedAt: null,
+               canceledAt: new Date(),
+            },
+            include: issueInclude,
+         });
+         await tx.activity.create({
+            data: {
+               workspaceId: dto.workspaceId,
+               issueId,
+               actorId: userId,
+               type: 'issue.classified',
+               data: { resolution: dto.resolution, duplicateOfId, duplicateIdentifier },
+            },
+         });
+         return classified;
       });
    }
 

@@ -50,6 +50,8 @@ type ApiIssue = {
    activities?: Array<{ id: string }>;
    favorites?: Array<{ userId: string }>;
    reminders?: Array<{ id: string; remindAt: string; deliveredAt: string | null }>;
+   resolution?: 'DUPLICATE' | 'WONT_FIX' | null;
+   duplicateOfId?: string | null;
 };
 type ApiIssueOptions = {
    statuses: ApiStatus[];
@@ -152,6 +154,11 @@ interface IssuesState {
    setIssueFavorite: (issueId: string, favorite: boolean) => Promise<void>;
    setIssueReminder: (issueId: string, remindAt?: string) => Promise<void>;
    moveIssue: (issueId: string, teamId: string) => Promise<Issue>;
+   classifyIssue: (
+      issueId: string,
+      resolution: 'DUPLICATE' | 'WONT_FIX',
+      duplicateOfIdentifier?: string
+   ) => Promise<Issue>;
    archiveIssue: (issueId: string) => Promise<void>;
    getIssueById: (id: string) => Issue | undefined;
 }
@@ -268,6 +275,8 @@ const mapIssue = (issue: ApiIssue): Issue => ({
    isSubscribed: Boolean(issue.subscribers?.length),
    isFavorite: Boolean(issue.favorites?.length),
    reminderAt: issue.reminders?.[0]?.remindAt,
+   resolution: issue.resolution ?? undefined,
+   duplicateOfId: issue.duplicateOfId ?? undefined,
    hasActivity: Boolean(issue.activities?.length),
    cycleId: issue.cycleLinks[0]?.cycleId ?? '',
    project: issue.project ? mapProject(issue.project) : undefined,
@@ -570,6 +579,27 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
       if (teamId && teamId !== destinationTeamId) get().deleteIssue(issueId);
       else get().updateIssue(issueId, moved);
       return moved;
+   },
+   classifyIssue: async (issueId, resolution, duplicateOfIdentifier) => {
+      const workspaceId = get().workspaceId;
+      if (!workspaceId) throw new Error('No workspace is available.');
+      const response = await fetch(`${api}/issues/${issueId}/classification`, {
+         method: 'POST',
+         credentials: 'include',
+         headers: { 'content-type': 'application/json' },
+         body: JSON.stringify({ workspaceId, resolution, duplicateOfIdentifier }),
+      });
+      if (!response.ok) throw new Error('Could not classify issue.');
+      const payload = (await response.json()) as { data: ApiIssue };
+      const current = get().getIssueById(issueId);
+      const classified = {
+         ...mapIssue(payload.data),
+         isSubscribed: current?.isSubscribed,
+         isFavorite: current?.isFavorite,
+         reminderAt: current?.reminderAt,
+      };
+      get().updateIssue(issueId, classified);
+      return classified;
    },
    archiveIssue: async (issueId) => {
       const workspaceId = get().workspaceId;

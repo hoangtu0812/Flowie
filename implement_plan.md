@@ -34,6 +34,8 @@
   move team, mark completed, subscribe, favorite, reminder và archive đều gọi backend. Khi move,
   backend cấp lại identifier/number, ánh xạ status tương đương và loại liên kết cycle không còn
   hợp lệ. Reminder được xếp lịch qua Redis/BullMQ và Worker tạo notification thật đúng thời điểm.
+- Duplicate/Won't Fix trong submenu `Mark as` gốc đã lưu resolution thật; Duplicate bắt buộc trỏ
+  tới một issue mà người dùng có quyền xem và cả hai classification chuyển issue sang canceled.
 - Issue detail: giữ cột nội dung/sidebar, typography mô tả và hàng sub-issue của UI gốc; relations
   nằm lại trong properties sidebar, nhưng dữ liệu/action đều từ API thật.
 - Projects: list/board/timeline, create/update/archive, overview/activity/issues, update, health,
@@ -82,11 +84,12 @@
 - `761379f` — persist private workspace custom emojis with MinIO.
 - `796abde` — persist issue favorites and delayed reminders.
 - `620550b` — persist project favorites per user.
+- `126f5db` — move issues between teams without changing the original menu.
 
 ### Kiểm tra gần nhất
 
-- API Jest: **20 suites, 42 tests passed** trong Docker image, gồm validation Ask, workflow
-  chuyển Ask thành Issue thật, Pulse, Emoji, personal state của Issue/Project và move Issue.
+- API Jest: **20 suites, 44 tests passed** trong Docker image, gồm validation Ask, workflow
+  chuyển Ask thành Issue thật, Pulse, Emoji, personal state, move và classification của Issue.
 - NestJS build: passed.
 - Next.js 15 production build: passed.
 - Docker `api` và `web`: rebuilt; `http://localhost:4000/api/v1/health` và
@@ -106,6 +109,8 @@
   `issue_favorites`/`issue_reminders`, bốn route và Worker kết nối Redis đã được xác minh.
 - Migration `20260824250000_project_favorites` đã được apply; bảng `project_favorites` và hai
   route favorite/unfavorite đã được xác minh trực tiếp.
+- Migration `20260824260000_issue_resolutions` đã được apply; enum resolution, self-reference
+  duplicate target và route classification đã được xác minh trực tiếp.
 - Audit frontend đã đối chiếu **308 file baseline** trong `app/components/hooks/lib/store` với
   `upstream/master`. Đã xóa 18 component `real-*` rút gọn không còn route nào dùng; runtime chỉ
   còn cây component gốc được nối API.
@@ -121,7 +126,7 @@
 | Ưu tiên | Phần còn lại | Trạng thái/chỉ dẫn |
 | --- | --- | --- |
 | P0 | Visual parity toàn route | So sánh từng route với `upstream/master`; visual acceptance cần một phiên đăng nhập workspace-member. Phiên browser kiểm thử hiện chưa đăng nhập nên mới xác nhận được route guard/login, chưa chụp được các màn hình nội bộ. |
-| P1 | Issue actions còn thiếu | Issue type/duplicate/won't-fix classification và convert-to-comment cần schema/backend; hiện được disabled trung thực. Move team, favorite và reminder đã hoàn thành. |
+| P1 | Issue actions còn thiếu | Convert-to-comment còn cần semantics/backend. Duplicate/Won't Fix, move team, favorite và reminder đã hoàn thành; taxonomy issue type không có control tương ứng trong UI gốc hiện tại. |
 | P1 | Team settings nâng cao | Cycle cadence, triage, auto-close/archive, hierarchy và template defaults chưa có schema; UI hiện ghi Unavailable. |
 | P1 | Account security | Session management, passkeys, personal API keys và signing keys chưa có backend. |
 | P1 | Project extras | Favorite project đã hoàn thành. Attachment cho project update chưa có persistence. |
@@ -132,7 +137,7 @@
 ## Thứ tự tiếp tục đề xuất
 
 1. Tạo user workspace-member/phiên test và chụp đối chiếu các route chính với UI gốc.
-2. Bổ sung classification cho Issue, sau đó attachment cho Project Update.
+2. Bổ sung attachment cho Project Update, sau đó xác định semantics cho Convert-to-comment.
 3. Hoàn thiện team automation/cycle policy và Account Security.
 4. Tiếp tục audit visual bằng phiên workspace-member và ghi lại screenshot acceptance cho từng route.
 
