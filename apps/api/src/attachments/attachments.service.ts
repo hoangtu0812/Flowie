@@ -108,6 +108,14 @@ export class AttachmentsService {
          if (!project) throw new NotFoundException('Project not found.');
          return project.teamId;
       }
+      if (entityType === 'project-update') {
+         const update = await this.prisma.projectUpdate.findFirst({
+            where: { id: entityId, workspaceId, project: { archivedAt: null } },
+            include: { project: { select: { teamId: true } } },
+         });
+         if (!update) throw new NotFoundException('Project update not found.');
+         return update.project.teamId;
+      }
       if (entityType === 'document') {
          const document = await this.prisma.document.findFirst({
             where: { id: entityId, workspaceId, archivedAt: null },

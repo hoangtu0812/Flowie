@@ -17,8 +17,8 @@ import {
    projectUpdateHealthLabel,
 } from '@/mock-data/project-details';
 import { format, parseISO } from 'date-fns';
-import { Paperclip, Sparkles } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Paperclip, Sparkles, X } from 'lucide-react';
+import { ChangeEvent, useMemo, useRef, useState } from 'react';
 import { toIssueUi, toProjectDetailUi, toProjectUi } from './project-detail-ui-adapter';
 import { ProjectSidePanel } from './project-side-panel';
 import { useLiveProject } from './use-live-project';
@@ -26,6 +26,13 @@ import { useLiveProject } from './use-live-project';
 interface ProjectActivityProps {
    projectId: string;
 }
+
+const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+
+const formatFileSize = (size: number) =>
+   size >= 1024 * 1024
+      ? `${(size / (1024 * 1024)).toFixed(1)} MB`
+      : `${Math.max(1, Math.round(size / 1024))} KB`;
 
 function HealthBadge({ health }: { health: ProjectUpdateHealth }) {
    return (
@@ -58,6 +65,24 @@ function UpdateCard({ update }: { update: ProjectUpdate }) {
          <div className="mt-2 text-sm leading-relaxed">
             <ContentBlocks blocks={update.blocks} />
          </div>
+         {update.attachments?.length ? (
+            <ul className="mt-3 space-y-1.5">
+               {update.attachments.map((attachment) => (
+                  <li className="flex items-center gap-2 text-xs" key={attachment.id}>
+                     <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
+                     <a
+                        className="min-w-0 truncate hover:underline"
+                        href={`${api}/attachments/${attachment.id}/download`}
+                     >
+                        {attachment.filename}
+                     </a>
+                     <span className="shrink-0 text-muted-foreground">
+                        {formatFileSize(attachment.size)}
+                     </span>
+                  </li>
+               ))}
+            </ul>
+         ) : null}
       </div>
    );
 }
@@ -83,6 +108,8 @@ export default function ProjectActivity({ projectId }: ProjectActivityProps) {
    const [text, setText] = useState('');
    const [posting, setPosting] = useState(false);
    const [postError, setPostError] = useState<string>();
+   const [pendingAttachment, setPendingAttachment] = useState<File>();
+   const attachmentInputRef = useRef<HTMLInputElement>(null);
 
    const uiProject = useMemo(
       () => (project ? toProjectUi(project, issues) : undefined),
@@ -115,13 +142,31 @@ export default function ProjectActivity({ projectId }: ProjectActivityProps) {
       setPosting(true);
       setPostError(undefined);
       try {
-         await createUpdate(text.trim(), health, mode);
+         await createUpdate(text.trim(), health, mode, pendingAttachment);
          setText('');
+         setPendingAttachment(undefined);
       } catch (caught) {
-         setPostError(caught instanceof Error ? caught.message : 'Could not post update.');
+         const message = caught instanceof Error ? caught.message : 'Could not post update.';
+         if (message.startsWith('Project update was posted')) {
+            setText('');
+            setPendingAttachment(undefined);
+         }
+         setPostError(message);
       } finally {
          setPosting(false);
       }
+   };
+
+   const selectAttachment = (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      if (!file) return;
+      if (file.size > 10 * 1024 * 1024) {
+         setPostError('Files must be 10 MB or smaller.');
+         return;
+      }
+      setPendingAttachment(file);
+      setPostError(undefined);
    };
 
    if (loading)
@@ -224,6 +269,22 @@ export default function ProjectActivity({ projectId }: ProjectActivityProps) {
                      </div>
                   )}
 
+                  {pendingAttachment && (
+                     <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+                        <Paperclip className="size-3.5 shrink-0" />
+                        <span className="min-w-0 truncate">{pendingAttachment.name}</span>
+                        <span className="shrink-0">{formatFileSize(pendingAttachment.size)}</span>
+                        <button
+                           type="button"
+                           className="ml-auto rounded-sm p-0.5 hover:bg-accent"
+                           aria-label="Remove project update attachment"
+                           onClick={() => setPendingAttachment(undefined)}
+                        >
+                           <X className="size-3.5" />
+                        </button>
+                     </div>
+                  )}
+
                   <div className="mt-3 flex items-center justify-between">
                      <Button
                         variant="outline"
@@ -240,11 +301,20 @@ export default function ProjectActivity({ projectId }: ProjectActivityProps) {
                            variant="ghost"
                            size="icon"
                            className="size-7 text-muted-foreground"
-                           disabled
-                           title="Project update attachments are not available yet"
+                           disabled={posting}
+                           title="Add attachment"
+                           aria-label="Add project update attachment"
+                           onClick={() => attachmentInputRef.current?.click()}
                         >
                            <Paperclip className="size-4" />
                         </Button>
+                        <input
+                           ref={attachmentInputRef}
+                           type="file"
+                           className="hidden"
+                           onChange={selectAttachment}
+                           aria-label="Upload project update attachment"
+                        />
                         <Button
                            size="xs"
                            onClick={() => void handlePost()}

@@ -40,6 +40,9 @@
   nằm lại trong properties sidebar, nhưng dữ liệu/action đều từ API thật.
 - Projects: list/board/timeline, create/update/archive, overview/activity/issues, update, health,
   labels, milestones, templates, statuses, favorite theo user và project settings.
+- Project Update attachments: nút kẹp giấy trong composer Activity gốc đã upload tối đa 10 MB
+  vào MinIO, metadata lưu qua bảng attachment hiện hữu, kiểm tra quyền theo project/team và hiển
+  thị link tải trong update card sau khi reload.
 - Initiatives: list/detail/create/update/archive, project links, real progress chart, resources,
   updates và activity; Settings Initiatives đã thay placeholder bằng CRUD thật.
 - Releases: Settings giữ nguyên shell/toolbar/empty-state gốc; list/filter/create/update/archive,
@@ -85,11 +88,12 @@
 - `796abde` — persist issue favorites and delayed reminders.
 - `620550b` — persist project favorites per user.
 - `126f5db` — move issues between teams without changing the original menu.
+- `94f5f3e` — persist Duplicate/Won't Fix issue classifications.
 
 ### Kiểm tra gần nhất
 
-- API Jest: **20 suites, 44 tests passed** trong Docker image, gồm validation Ask, workflow
-  chuyển Ask thành Issue thật, Pulse, Emoji, personal state, move và classification của Issue.
+- API Jest: **21 suites, 46 tests passed** trong Docker image, gồm validation Ask, workflow
+  chuyển Ask thành Issue thật, Pulse, Emoji, Issue personal actions và Project Update attachment.
 - NestJS build: passed.
 - Next.js 15 production build: passed.
 - Docker `api` và `web`: rebuilt; `http://localhost:4000/api/v1/health` và
@@ -129,7 +133,7 @@
 | P1 | Issue actions còn thiếu | Convert-to-comment còn cần semantics/backend. Duplicate/Won't Fix, move team, favorite và reminder đã hoàn thành; taxonomy issue type không có control tương ứng trong UI gốc hiện tại. |
 | P1 | Team settings nâng cao | Cycle cadence, triage, auto-close/archive, hierarchy và template defaults chưa có schema; UI hiện ghi Unavailable. |
 | P1 | Account security | Session management, passkeys, personal API keys và signing keys chưa có backend. |
-| P1 | Project extras | Favorite project đã hoàn thành. Attachment cho project update chưa có persistence. |
+| P1 | Project extras | Favorite project và attachment cho Project Update đã hoàn thành bằng dữ liệu thật. |
 | P2 | Automation/webhook | Worker/Redis foundation có, nhưng rule builder, persisted automation và generic webhook chưa hoàn chỉnh. |
 | P2 | OAuth/enterprise identity | Google, Microsoft Entra, OIDC/SAML chưa triển khai; local email/password đang hoạt động. |
 | Excluded | AI Agent, Code Reviews | Cố ý unavailable theo phạm vi sản phẩm hiện tại; fixture/canned-response cũ đã được xóa khỏi source. |
@@ -137,7 +141,7 @@
 ## Thứ tự tiếp tục đề xuất
 
 1. Tạo user workspace-member/phiên test và chụp đối chiếu các route chính với UI gốc.
-2. Bổ sung attachment cho Project Update, sau đó xác định semantics cho Convert-to-comment.
+2. Xác định semantics cho Convert-to-comment mà không làm lệch UI gốc.
 3. Hoàn thiện team automation/cycle policy và Account Security.
 4. Tiếp tục audit visual bằng phiên workspace-member và ghi lại screenshot acceptance cho từng route.
 

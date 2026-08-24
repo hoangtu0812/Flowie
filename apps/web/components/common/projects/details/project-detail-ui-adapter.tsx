@@ -222,6 +222,7 @@ export function toProjectDetailUi(
          date: update.createdAt,
          health: updateHealth(update.health ?? project.health),
          blocks: descriptionBlocks(update.body),
+         attachments: update.attachments ?? [],
       })),
       activity: activities.map((activity) => ({
          id: activity.id,

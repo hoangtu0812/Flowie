@@ -33,6 +33,12 @@ export interface ProjectUpdate {
    date: string; // ISO date
    health: ProjectUpdateHealth;
    blocks: ContentBlock[];
+   attachments?: Array<{
+      id: string;
+      filename: string;
+      mimeType: string;
+      size: number;
+   }>;
 }
 
 /** Lightweight activity event ("x added themselves as a member…"). */

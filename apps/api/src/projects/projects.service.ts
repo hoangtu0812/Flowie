@@ -207,16 +207,17 @@ export class ProjectsService {
    }
    async listUpdates(projectId: string, workspaceId: string, userId: string) {
       await this.get(projectId, workspaceId, userId);
-      return this.prisma.projectUpdate.findMany({
+      const updates = await this.prisma.projectUpdate.findMany({
          where: { projectId, workspaceId },
          include: { author: { select: { id: true, name: true, avatarUrl: true } } },
          orderBy: { createdAt: 'desc' },
          take: 25,
       });
+      return this.withUpdateAttachments(workspaceId, updates);
    }
    async workspaceUpdates(workspaceId: string, userId: string) {
       await this.authorize(workspaceId, userId);
-      return this.prisma.projectUpdate.findMany({
+      const updates = await this.prisma.projectUpdate.findMany({
          where: { workspaceId, project: { archivedAt: null } },
          include: {
             project: { select: { id: true, name: true, identifier: true } },
@@ -225,6 +226,7 @@ export class ProjectsService {
          orderBy: { createdAt: 'desc' },
          take: 100,
       });
+      return this.withUpdateAttachments(workspaceId, updates);
    }
    async createUpdate(projectId: string, dto: CreateProjectUpdateDto, userId: string) {
       const project = await this.get(projectId, dto.workspaceId, userId);
@@ -278,7 +280,26 @@ export class ProjectsService {
          { name: project.name, updateId: update.id, preview: body.slice(0, 200) },
          `📣 Project update: ${project.name}\n${body.slice(0, 1500)}`
       );
-      return update;
+      return { ...update, attachments: [] };
+   }
+
+   private async withUpdateAttachments<T extends { id: string }>(workspaceId: string, updates: T[]) {
+      if (updates.length === 0) return [];
+      const attachments = await this.prisma.attachment.findMany({
+         where: {
+            workspaceId,
+            entityType: 'project-update',
+            entityId: { in: updates.map((update) => update.id) },
+         },
+         select: { id: true, entityId: true, filename: true, mimeType: true, size: true },
+         orderBy: { createdAt: 'asc' },
+      });
+      return updates.map((update) => ({
+         ...update,
+         attachments: attachments
+            .filter((attachment) => attachment.entityId === update.id)
+            .map(({ entityId: _entityId, ...attachment }) => attachment),
+      }));
    }
    async subscription(projectId: string, workspaceId: string, userId: string) {
       await this.get(projectId, workspaceId, userId);

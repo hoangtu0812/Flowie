@@ -59,6 +59,12 @@ export type LiveProjectUpdate = {
    health: string | null;
    createdAt: string;
    author: { id: string; name: string; avatarUrl: string | null };
+   attachments: Array<{
+      id: string;
+      filename: string;
+      mimeType: string;
+      size: number;
+   }>;
 };
 
 export type LiveProjectLabel = { id: string; name: string; color: string };
@@ -150,7 +156,7 @@ export function useLiveProject(projectId: string) {
    const reload = useCallback(() => setRefreshKey((value) => value + 1), []);
 
    const createUpdate = useCallback(
-      async (body: string, health: string, kind: 'update' | 'comment') => {
+      async (body: string, health: string, kind: 'update' | 'comment', attachment?: File) => {
          if (!workspaceId) throw new Error('Workspace is not available yet.');
          const response = await fetch(`${api}/projects/${projectId}/updates`, {
             method: 'POST',
@@ -166,7 +172,29 @@ export function useLiveProject(projectId: string) {
          }
          const created = ((await response.json()) as { data: LiveProjectUpdate }).data;
          setUpdates((current) => [created, ...current]);
-         return created;
+         if (!attachment) return created;
+
+         const form = new FormData();
+         form.set('workspaceId', workspaceId);
+         form.set('entityType', 'project-update');
+         form.set('entityId', created.id);
+         form.set('file', attachment);
+         const uploadResponse = await fetch(`${api}/attachments`, {
+            method: 'POST',
+            credentials: 'include',
+            body: form,
+         });
+         if (!uploadResponse.ok) {
+            throw new Error('Project update was posted, but its attachment could not be uploaded.');
+         }
+         const uploaded = (await uploadResponse.json()) as {
+            data: { id: string; filename: string; mimeType: string; size: number };
+         };
+         const withAttachment = { ...created, attachments: [uploaded.data] };
+         setUpdates((current) =>
+            current.map((update) => (update.id === created.id ? withAttachment : update))
+         );
+         return withAttachment;
       },
       [projectId, workspaceId]
    );
