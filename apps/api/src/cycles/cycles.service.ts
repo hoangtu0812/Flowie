@@ -8,6 +8,7 @@ import { CycleStatus } from '@circle/database';
 import { PrismaService } from '../database/prisma.service';
 import { AddIssueToCycleDto } from './dto/add-issue-to-cycle.dto';
 import { CreateCycleDto } from './dto/create-cycle.dto';
+import { LinkCycleDocumentDto } from './dto/link-cycle-document.dto';
 import { UpdateCycleDto } from './dto/update-cycle.dto';
 
 @Injectable()
@@ -86,6 +87,66 @@ export class CyclesService {
          orderBy: { createdAt: 'desc' },
       });
       return links.map((link) => link.issue);
+   }
+
+   async documents(cycleId: string, workspaceId: string, userId: string) {
+      const cycle = await this.findAuthorizedCycle(cycleId, workspaceId, userId);
+      const links = await this.prisma.cycleDocument.findMany({
+         where: { cycleId: cycle.id, document: { archivedAt: null } },
+         include: {
+            document: {
+               select: { id: true, title: true, updatedAt: true, teamId: true },
+            },
+         },
+         orderBy: { createdAt: 'desc' },
+      });
+      return links.map((link) => link.document);
+   }
+
+   async availableDocuments(cycleId: string, workspaceId: string, userId: string) {
+      const cycle = await this.findAuthorizedCycle(cycleId, workspaceId, userId);
+      return this.prisma.document.findMany({
+         where: {
+            workspaceId,
+            archivedAt: null,
+            OR: [{ teamId: null }, { teamId: cycle.teamId }],
+         },
+         select: { id: true, title: true, updatedAt: true, teamId: true },
+         orderBy: { updatedAt: 'desc' },
+      });
+   }
+
+   async addDocument(cycleId: string, dto: LinkCycleDocumentDto, userId: string) {
+      const cycle = await this.findAuthorizedCycle(cycleId, dto.workspaceId, userId);
+      const document = await this.prisma.document.findFirst({
+         where: {
+            id: dto.documentId,
+            workspaceId: dto.workspaceId,
+            archivedAt: null,
+            OR: [{ teamId: null }, { teamId: cycle.teamId }],
+         },
+      });
+      if (!document) throw new NotFoundException('Document is not available for this cycle.');
+      return this.prisma.cycleDocument.upsert({
+         where: { cycleId_documentId: { cycleId: cycle.id, documentId: document.id } },
+         create: { cycleId: cycle.id, documentId: document.id },
+         update: {},
+         include: {
+            document: { select: { id: true, title: true, updatedAt: true, teamId: true } },
+         },
+      });
+   }
+
+   async removeDocument(cycleId: string, documentId: string, workspaceId: string, userId: string) {
+      const cycle = await this.findAuthorizedCycle(cycleId, workspaceId, userId);
+      const link = await this.prisma.cycleDocument.findFirst({
+         where: { cycleId: cycle.id, documentId },
+      });
+      if (!link) throw new NotFoundException('Document is not linked to this cycle.');
+      await this.prisma.cycleDocument.delete({
+         where: { cycleId_documentId: { cycleId: cycle.id, documentId } },
+      });
+      return { cycleId, documentId, removed: true };
    }
 
    async removeIssue(cycleId: string, issueId: string, workspaceId: string, userId: string) {

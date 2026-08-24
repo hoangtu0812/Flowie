@@ -3,13 +3,22 @@
 import { PanelFilterTarget, usePanelFilter } from '@/components/common/issues/use-panel-filter';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import {
+   Dialog,
+   DialogContent,
+   DialogDescription,
+   DialogFooter,
+   DialogHeader,
+   DialogTitle,
+} from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { Cycle, cycleStatusLabel, formatCycleDateRange } from '@/mock-data/cycles';
 import { Issue } from '@/mock-data/issues';
 import { useRightPanelStore } from '@/store/right-panel-store';
-import { Plus, User, X } from 'lucide-react';
-import { useMemo } from 'react';
+import { FileText, Plus, User, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { loadCurrentWorkspaceTeams } from '../teams/team-types';
 import { CapacityRing } from './capacity-ring';
 import { CycleBurnupChart } from './cycle-burnup-chart';
 import { CyclePlayIcon } from './cycle-line';
@@ -28,6 +37,14 @@ interface CycleDetailsPanelProps {
    cycle: Cycle;
    issues: Issue[];
 }
+
+interface CycleDocument {
+   id: string;
+   title: string;
+   updatedAt: string;
+}
+
+const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 const isCompleted = (issue: Issue) => issue.status.category === 'completed';
 
@@ -109,6 +126,14 @@ function BreakdownList({ rows, isActive, toggle }: BreakdownListProps) {
 export function CycleDetailsPanel({ cycle, issues }: CycleDetailsPanelProps) {
    const { closePanel } = useRightPanelStore();
    const { isActive, toggle } = usePanelFilter();
+   const [workspaceId, setWorkspaceId] = useState<string>();
+   const [documents, setDocuments] = useState<CycleDocument[]>([]);
+   const [availableDocuments, setAvailableDocuments] = useState<CycleDocument[]>([]);
+   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+   const [selectedDocumentId, setSelectedDocumentId] = useState<string>();
+   const [loadingDocuments, setLoadingDocuments] = useState(true);
+   const [submitting, setSubmitting] = useState(false);
+   const [documentError, setDocumentError] = useState<string>();
 
    const completedPercent = cycle.scope > 0 ? Math.round((cycle.completed / cycle.scope) * 100) : 0;
    const startedPercent = cycle.scope > 0 ? Math.round((cycle.started / cycle.scope) * 100) : 0;
@@ -215,6 +240,104 @@ export function CycleDetailsPanel({ cycle, issues }: CycleDetailsPanelProps) {
       [issues]
    );
 
+   const loadDocuments = async (id: string) => {
+      const response = await fetch(
+         `${api}/cycles/${cycle.id}/documents?${new URLSearchParams({ workspaceId: id }).toString()}`,
+         { credentials: 'include' }
+      );
+      if (!response.ok) throw new Error('Could not load cycle documents.');
+      const payload = (await response.json()) as { data: CycleDocument[] };
+      setDocuments(payload.data);
+   };
+
+   useEffect(() => {
+      let active = true;
+      void (async () => {
+         setLoadingDocuments(true);
+         setDocumentError(undefined);
+         try {
+            const { workspaceId: id } = await loadCurrentWorkspaceTeams();
+            if (!active) return;
+            setWorkspaceId(id);
+            await loadDocuments(id);
+         } catch (caught) {
+            if (active) {
+               setDocuments([]);
+               setDocumentError(
+                  caught instanceof Error ? caught.message : 'Could not load cycle documents.'
+               );
+            }
+         } finally {
+            if (active) setLoadingDocuments(false);
+         }
+      })();
+      return () => {
+         active = false;
+      };
+   }, [cycle.id]);
+
+   const openLinkDialog = async () => {
+      if (!workspaceId) return;
+      setDocumentError(undefined);
+      setLinkDialogOpen(true);
+      try {
+         const response = await fetch(
+            `${api}/cycles/${cycle.id}/available-documents?${new URLSearchParams({ workspaceId }).toString()}`,
+            { credentials: 'include' }
+         );
+         if (!response.ok) throw new Error('Could not load available documents.');
+         const payload = (await response.json()) as { data: CycleDocument[] };
+         setAvailableDocuments(payload.data);
+         setSelectedDocumentId((current) =>
+            payload.data.some((document) => document.id === current) ? current : undefined
+         );
+      } catch (caught) {
+         setDocumentError(
+            caught instanceof Error ? caught.message : 'Could not load available documents.'
+         );
+      }
+   };
+
+   const linkDocument = async () => {
+      if (!workspaceId || !selectedDocumentId) return;
+      setSubmitting(true);
+      setDocumentError(undefined);
+      try {
+         const response = await fetch(`${api}/cycles/${cycle.id}/documents`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ workspaceId, documentId: selectedDocumentId }),
+         });
+         if (!response.ok) throw new Error('Could not link document.');
+         await loadDocuments(workspaceId);
+         setLinkDialogOpen(false);
+         setSelectedDocumentId(undefined);
+      } catch (caught) {
+         setDocumentError(caught instanceof Error ? caught.message : 'Could not link document.');
+      } finally {
+         setSubmitting(false);
+      }
+   };
+
+   const unlinkDocument = async (documentId: string) => {
+      if (!workspaceId) return;
+      setSubmitting(true);
+      setDocumentError(undefined);
+      try {
+         const response = await fetch(
+            `${api}/cycles/${cycle.id}/documents/${documentId}?${new URLSearchParams({ workspaceId }).toString()}`,
+            { method: 'DELETE', credentials: 'include' }
+         );
+         if (!response.ok) throw new Error('Could not unlink document.');
+         await loadDocuments(workspaceId);
+      } catch (caught) {
+         setDocumentError(caught instanceof Error ? caught.message : 'Could not unlink document.');
+      } finally {
+         setSubmitting(false);
+      }
+   };
+
    return (
       <div className="flex flex-col h-full w-full">
          {/* Header */}
@@ -240,13 +363,33 @@ export function CycleDetailsPanel({ cycle, issues }: CycleDetailsPanelProps) {
 
             <button
                type="button"
-               disabled
-               title="Cycle document and link connections are not available yet"
-               className="flex items-center gap-1.5 mt-3 text-sm text-muted-foreground/50 cursor-not-allowed"
+               onClick={() => void openLinkDialog()}
+               disabled={!workspaceId || loadingDocuments}
+               className="flex items-center gap-1.5 mt-3 text-sm text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
             >
                <Plus className="size-4" />
                Add document or link...
             </button>
+            {documents.length > 0 && (
+               <div className="mt-3 space-y-1">
+                  {documents.map((document) => (
+                     <div key={document.id} className="group flex items-center gap-2 text-sm">
+                        <FileText className="size-3.5 text-muted-foreground shrink-0" />
+                        <span className="min-w-0 truncate">{document.title}</span>
+                        <button
+                           type="button"
+                           onClick={() => void unlinkDocument(document.id)}
+                           disabled={submitting}
+                           aria-label={`Unlink ${document.title}`}
+                           className="ml-auto opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground disabled:opacity-50"
+                        >
+                           <X className="size-3.5" />
+                        </button>
+                     </div>
+                  ))}
+               </div>
+            )}
+            {documentError && <p className="mt-2 text-xs text-destructive">{documentError}</p>}
          </div>
 
          {/* Progress */}
@@ -320,6 +463,51 @@ export function CycleDetailsPanel({ cycle, issues }: CycleDetailsPanelProps) {
                </TabsContent>
             </Tabs>
          </div>
+
+         <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
+            <DialogContent className="sm:max-w-[480px]">
+               <DialogHeader>
+                  <DialogTitle>Link document</DialogTitle>
+                  <DialogDescription>
+                     Choose a workspace or team document for this cycle.
+                  </DialogDescription>
+               </DialogHeader>
+               <div className="max-h-64 space-y-1 overflow-y-auto">
+                  {availableDocuments.length === 0 ? (
+                     <p className="py-4 text-sm text-muted-foreground">
+                        No documents are available.
+                     </p>
+                  ) : (
+                     availableDocuments.map((document) => (
+                        <label
+                           key={document.id}
+                           className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 hover:bg-accent"
+                        >
+                           <input
+                              type="radio"
+                              name="cycle-document"
+                              checked={selectedDocumentId === document.id}
+                              onChange={() => setSelectedDocumentId(document.id)}
+                           />
+                           <FileText className="size-4 text-muted-foreground shrink-0" />
+                           <span className="min-w-0 truncate text-sm">{document.title}</span>
+                        </label>
+                     ))
+                  )}
+               </div>
+               <DialogFooter>
+                  <Button variant="outline" onClick={() => setLinkDialogOpen(false)}>
+                     Cancel
+                  </Button>
+                  <Button
+                     onClick={() => void linkDocument()}
+                     disabled={!selectedDocumentId || submitting}
+                  >
+                     {submitting ? 'Linking…' : 'Link document'}
+                  </Button>
+               </DialogFooter>
+            </DialogContent>
+         </Dialog>
       </div>
    );
 }

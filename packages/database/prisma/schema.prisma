@@ -587,9 +587,23 @@ model Cycle {
   workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   team      Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
   issueLinks IssueCycle[]
+  documentLinks CycleDocument[]
 
   @@index([workspaceId, teamId, status])
   @@map("cycles")
+}
+
+model CycleDocument {
+  cycleId    String   @map("cycle_id")
+  documentId String   @map("document_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  cycle    Cycle    @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@id([cycleId, documentId])
+  @@index([documentId])
+  @@map("cycle_documents")
 }
 
 model IssueCycle {
@@ -621,6 +635,7 @@ model Document {
   team      Team?     @relation(fields: [teamId], references: [id], onDelete: SetNull)
   createdBy User      @relation("DocumentCreator", fields: [createdById], references: [id], onDelete: Restrict)
   updatedBy User      @relation("DocumentUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+  cycleLinks CycleDocument[]
 
   @@index([workspaceId, teamId])
   @@map("documents")

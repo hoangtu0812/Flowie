@@ -14,6 +14,7 @@ import { CycleStatus } from '@circle/database';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { AddIssueToCycleDto } from './dto/add-issue-to-cycle.dto';
 import { CreateCycleDto } from './dto/create-cycle.dto';
+import { LinkCycleDocumentDto } from './dto/link-cycle-document.dto';
 import { UpdateCycleDto } from './dto/update-cycle.dto';
 import { CyclesService } from './cycles.service';
 
@@ -54,6 +55,52 @@ export class CyclesController {
       @Req() request: AuthenticatedRequest
    ) {
       return { data: await this.cycles.addIssue(cycleId, dto, request.auth!.userId) };
+   }
+
+   @Get(':cycleId/documents')
+   async documents(
+      @Param('cycleId') cycleId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.cycles.documents(cycleId, workspaceId, request.auth!.userId) };
+   }
+
+   @Get(':cycleId/available-documents')
+   async availableDocuments(
+      @Param('cycleId') cycleId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.cycles.availableDocuments(cycleId, workspaceId, request.auth!.userId),
+      };
+   }
+
+   @Post(':cycleId/documents')
+   async addDocument(
+      @Param('cycleId') cycleId: string,
+      @Body() dto: LinkCycleDocumentDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.cycles.addDocument(cycleId, dto, request.auth!.userId) };
+   }
+
+   @Delete(':cycleId/documents/:documentId')
+   async removeDocument(
+      @Param('cycleId') cycleId: string,
+      @Param('documentId') documentId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.cycles.removeDocument(
+            cycleId,
+            documentId,
+            workspaceId,
+            request.auth!.userId
+         ),
+      };
    }
 
    @Delete(':cycleId/issues/:issueId')
