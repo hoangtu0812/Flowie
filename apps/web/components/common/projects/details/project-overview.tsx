@@ -3,6 +3,7 @@
 import { ContentBlocks } from '@/components/common/issues/details/content-blocks';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
    Dialog,
    DialogContent,
@@ -22,6 +23,8 @@ import { DocumentOutline, getOutlineItems } from './document-outline';
 import { toIssueUi, toProjectDetailUi, toProjectUi } from './project-detail-ui-adapter';
 import { ProjectSidePanel } from './project-side-panel';
 import { useLiveProject } from './use-live-project';
+import type { LiveProjectInitiative } from './use-live-project';
+import { ProjectLabelSelector } from '../project-label-selector';
 
 interface ProjectOverviewProps {
    projectId: string;
@@ -110,6 +113,95 @@ function ProjectResourceDialog({
    );
 }
 
+function ProjectInitiativesDialog({
+   initiatives,
+   selectedIds,
+   onSave,
+}: {
+   initiatives: LiveProjectInitiative[];
+   selectedIds: string[];
+   onSave: (initiativeIds: string[]) => Promise<void>;
+}) {
+   const [open, setOpen] = useState(false);
+   const [draft, setDraft] = useState<string[]>(selectedIds);
+   const [saving, setSaving] = useState(false);
+   const [error, setError] = useState<string>();
+
+   const show = () => {
+      setDraft(selectedIds);
+      setError(undefined);
+      setOpen(true);
+   };
+   const save = async () => {
+      setSaving(true);
+      setError(undefined);
+      try {
+         await onSave(draft);
+         setOpen(false);
+      } catch (caught) {
+         setError(caught instanceof Error ? caught.message : 'Could not update initiatives.');
+      } finally {
+         setSaving(false);
+      }
+   };
+
+   return (
+      <Dialog open={open} onOpenChange={setOpen}>
+         <button
+            type="button"
+            aria-label="Edit project initiatives"
+            className="text-muted-foreground hover:text-foreground transition-colors"
+            onClick={show}
+         >
+            <Plus className="size-3.5" />
+         </button>
+         <DialogContent>
+            <DialogHeader>
+               <DialogTitle>Project initiatives</DialogTitle>
+               <DialogDescription>Select the initiatives linked to this project.</DialogDescription>
+            </DialogHeader>
+            <div className="max-h-72 overflow-y-auto rounded-md border divide-y">
+               {initiatives.map((initiative) => {
+                  const checked = draft.includes(initiative.id);
+                  return (
+                     <label
+                        key={initiative.id}
+                        className="flex items-center gap-3 px-3 py-2.5 text-sm"
+                     >
+                        <Checkbox
+                           checked={checked}
+                           onCheckedChange={(next) =>
+                              setDraft((current) =>
+                                 next
+                                    ? [...new Set([...current, initiative.id])]
+                                    : current.filter((id) => id !== initiative.id)
+                              )
+                           }
+                        />
+                        {initiative.name}
+                     </label>
+                  );
+               })}
+               {initiatives.length === 0 && (
+                  <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+                     No initiatives have been created in this workspace.
+                  </p>
+               )}
+            </div>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <DialogFooter>
+               <Button variant="outline" onClick={() => setOpen(false)}>
+                  Cancel
+               </Button>
+               <Button disabled={saving} onClick={() => void save()}>
+                  {saving ? 'Saving…' : 'Save'}
+               </Button>
+            </DialogFooter>
+         </DialogContent>
+      </Dialog>
+   );
+}
+
 /** Project "Overview" tab: description column + properties side panel. */
 export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
    const {
@@ -119,7 +211,9 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
       updates,
       activities,
       availableLabels,
+      availableInitiatives,
       updateLabels,
+      updateInitiatives,
       createMilestone,
       toggleMilestone,
       createResource,
@@ -203,14 +297,23 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
                         </div>
                      </div>
 
-                     {uiProject.initiative && (
+                     {(availableInitiatives.length > 0 || project.initiativeLinks.length > 0) && (
                         <div className="flex items-center gap-3">
                            <span className="w-24 text-muted-foreground shrink-0">Initiatives</span>
                            <span className="inline-flex items-center gap-1.5">
-                              📄 {uiProject.initiative}
-                              <button className="text-muted-foreground hover:text-foreground transition-colors">
-                                 <Plus className="size-3.5" />
-                              </button>
+                              📄{' '}
+                              {project.initiativeLinks.length
+                                 ? project.initiativeLinks
+                                      .map((link) => link.initiative.name)
+                                      .join(', ')
+                                 : 'No initiative'}
+                              <ProjectInitiativesDialog
+                                 initiatives={availableInitiatives}
+                                 selectedIds={project.initiativeLinks.map(
+                                    (link) => link.initiative.id
+                                 )}
+                                 onSave={updateInitiatives}
+                              />
                            </span>
                         </div>
                      )}
@@ -231,9 +334,11 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
                                  <ChevronDown className="size-3 text-muted-foreground" />
                               </span>
                            ))}
-                           <button className="text-muted-foreground hover:text-foreground transition-colors">
-                              <Plus className="size-3.5" />
-                           </button>
+                           <ProjectLabelSelector
+                              labels={project.labelLinks.map((link) => link.label)}
+                              availableLabels={availableLabels}
+                              onLabelsChange={updateLabels}
+                           />
                         </div>
                      </div>
 

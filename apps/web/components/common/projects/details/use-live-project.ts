@@ -76,6 +76,7 @@ export type LiveProjectUpdate = {
 };
 
 export type LiveProjectLabel = { id: string; name: string; color: string };
+export type LiveProjectInitiative = { id: string; name: string };
 
 export type LiveProjectCustomField = {
    id: string;
@@ -99,6 +100,7 @@ export function useLiveProject(projectId: string) {
    const [activities, setActivities] = useState<LiveActivity[]>([]);
    const [updates, setUpdates] = useState<LiveProjectUpdate[]>([]);
    const [availableLabels, setAvailableLabels] = useState<LiveProjectLabel[]>([]);
+   const [availableInitiatives, setAvailableInitiatives] = useState<LiveProjectInitiative[]>([]);
    const [customFields, setCustomFields] = useState<LiveProjectCustomField[]>([]);
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState<string>();
@@ -120,6 +122,7 @@ export function useLiveProject(projectId: string) {
                updatesResponse,
                labelsResponse,
                customFieldsResponse,
+               initiativesResponse,
             ] = await Promise.all([
                fetch(`${api}/projects/${projectId}?${query}`, { credentials: 'include' }),
                fetch(`${api}/projects/${projectId}/issues?${query}`, { credentials: 'include' }),
@@ -136,6 +139,7 @@ export function useLiveProject(projectId: string) {
                fetch(`${api}/projects/${projectId}/custom-fields?${query}`, {
                   credentials: 'include',
                }),
+               fetch(`${api}/initiatives?${query}`, { credentials: 'include' }),
             ]);
             if (
                !projectResponse.ok ||
@@ -144,7 +148,8 @@ export function useLiveProject(projectId: string) {
                !activitiesResponse.ok ||
                !updatesResponse.ok ||
                !labelsResponse.ok ||
-               !customFieldsResponse.ok
+               !customFieldsResponse.ok ||
+               !initiativesResponse.ok
             ) {
                throw new Error('Could not load project details.');
             }
@@ -160,6 +165,9 @@ export function useLiveProject(projectId: string) {
             );
             setCustomFields(
                ((await customFieldsResponse.json()) as { data: LiveProjectCustomField[] }).data
+            );
+            setAvailableInitiatives(
+               ((await initiativesResponse.json()) as { data: LiveProjectInitiative[] }).data
             );
          } catch (caught) {
             if (current)
@@ -301,6 +309,42 @@ export function useLiveProject(projectId: string) {
       [customFields, projectId, workspaceId]
    );
 
+   const updateInitiatives = useCallback(
+      async (initiativeIds: string[]) => {
+         if (!workspaceId || !project) throw new Error('Project is not available yet.');
+         const currentIds = new Set(project.initiativeLinks.map((link) => link.initiative.id));
+         const requestedIds = new Set(initiativeIds);
+         const removals = [...currentIds].filter((id) => !requestedIds.has(id));
+         const additions = [...requestedIds].filter((id) => !currentIds.has(id));
+         const responses = await Promise.all([
+            ...removals.map((initiativeId) =>
+               fetch(
+                  `${api}/initiatives/${initiativeId}/projects/${projectId}?${new URLSearchParams({ workspaceId })}`,
+                  { method: 'DELETE', credentials: 'include' }
+               )
+            ),
+            ...additions.map((initiativeId) =>
+               fetch(`${api}/initiatives/${initiativeId}/projects`, {
+                  method: 'POST',
+                  credentials: 'include',
+                  headers: { 'content-type': 'application/json' },
+                  body: JSON.stringify({ workspaceId, projectId }),
+               })
+            ),
+         ]);
+         const failed = responses.find((response) => !response.ok);
+         if (failed) {
+            const payload = (await failed.json().catch(() => null)) as {
+               message?: string;
+            } | null;
+            reload();
+            throw new Error(payload?.message ?? 'Could not update project initiatives.');
+         }
+         reload();
+      },
+      [project, projectId, reload, workspaceId]
+   );
+
    const createMilestone = useCallback(
       async (title: string, targetDate?: string) => {
          if (!workspaceId) throw new Error('Workspace is not available yet.');
@@ -363,6 +407,7 @@ export function useLiveProject(projectId: string) {
       activities,
       updates,
       availableLabels,
+      availableInitiatives,
       customFields,
       loading,
       error,
@@ -370,6 +415,7 @@ export function useLiveProject(projectId: string) {
       createResource,
       updateLabels,
       updateCustomFields,
+      updateInitiatives,
       createMilestone,
       toggleMilestone,
       toggleFavorite,
