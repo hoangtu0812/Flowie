@@ -172,6 +172,7 @@ interface IssuesState {
       resolution: 'DUPLICATE' | 'WONT_FIX',
       duplicateOfIdentifier?: string
    ) => Promise<Issue>;
+   convertIssueToComment: (issueId: string, targetIdentifier: string) => Promise<string>;
    archiveIssue: (issueId: string) => Promise<void>;
    getIssueById: (id: string) => Issue | undefined;
 }
@@ -617,6 +618,20 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
       };
       get().updateIssue(issueId, classified);
       return classified;
+   },
+   convertIssueToComment: async (issueId, targetIdentifier) => {
+      const workspaceId = get().workspaceId;
+      if (!workspaceId) throw new Error('No workspace is available.');
+      const response = await fetch(`${api}/issues/${issueId}/convert-to-comment`, {
+         method: 'POST',
+         credentials: 'include',
+         headers: { 'content-type': 'application/json' },
+         body: JSON.stringify({ workspaceId, targetIdentifier }),
+      });
+      if (!response.ok) throw new Error('Could not convert the issue to a comment.');
+      const payload = (await response.json()) as { data: { targetIdentifier: string } };
+      get().deleteIssue(issueId);
+      return payload.data.targetIdentifier;
    },
    archiveIssue: async (issueId) => {
       const workspaceId = get().workspaceId;

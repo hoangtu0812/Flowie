@@ -18,6 +18,7 @@ import { JobsService } from '../jobs/jobs.service';
 import { SetIssueReminderDto } from './dto/set-issue-reminder.dto';
 import { MoveIssueDto } from './dto/move-issue.dto';
 import { ClassifyIssueDto } from './dto/classify-issue.dto';
+import { ConvertIssueToCommentDto } from './dto/convert-issue-to-comment.dto';
 
 const issueInclude = {
    team: { select: { id: true, name: true, identifier: true } },
@@ -634,6 +635,71 @@ export class IssuesService {
             },
          });
          return updated;
+      });
+   }
+
+   async convertToComment(issueId: string, dto: ConvertIssueToCommentDto, userId: string) {
+      const source = await this.get(issueId, dto.workspaceId, userId);
+      const targetReference = await this.prisma.issue.findFirst({
+         where: {
+            workspaceId: dto.workspaceId,
+            identifier: dto.targetIdentifier.trim().toUpperCase(),
+            archivedAt: null,
+         },
+         select: { id: true },
+      });
+      if (!targetReference) throw new NotFoundException('Target issue not found.');
+      if (targetReference.id === source.id) {
+         throw new BadRequestException('An issue cannot be converted into its own comment.');
+      }
+      const target = await this.get(targetReference.id, dto.workspaceId, userId);
+      const content = [`**${source.identifier}: ${source.title}**`, source.description?.trim()]
+         .filter(Boolean)
+         .join('\n\n');
+
+      return this.prisma.$transaction(async (tx) => {
+         const comment = await tx.comment.create({
+            data: { issueId: target.id, authorId: userId, content },
+            include: {
+               author: { select: { id: true, name: true, avatarUrl: true } },
+            },
+         });
+         await tx.activity.createMany({
+            data: [
+               {
+                  workspaceId: dto.workspaceId,
+                  issueId: target.id,
+                  actorId: userId,
+                  type: 'comment.created',
+                  data: {
+                     commentId: comment.id,
+                     convertedFromIssueId: source.id,
+                     convertedFromIdentifier: source.identifier,
+                  },
+               },
+               {
+                  workspaceId: dto.workspaceId,
+                  issueId: source.id,
+                  actorId: userId,
+                  type: 'issue.converted_to_comment',
+                  data: {
+                     commentId: comment.id,
+                     targetIssueId: target.id,
+                     targetIdentifier: target.identifier,
+                  },
+               },
+            ],
+         });
+         await tx.issue.update({
+            where: { id: source.id },
+            data: { archivedAt: new Date() },
+         });
+         return {
+            comment,
+            sourceIssueId: source.id,
+            targetIssueId: target.id,
+            targetIdentifier: target.identifier,
+         };
       });
    }
 

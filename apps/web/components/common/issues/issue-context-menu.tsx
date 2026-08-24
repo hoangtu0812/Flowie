@@ -61,6 +61,7 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       setIssueReminder,
       moveIssue,
       classifyIssue,
+      convertIssueToComment,
       archiveIssue,
       statuses,
       members,
@@ -353,6 +354,26 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       }
    };
 
+   const handleConvertToComment = async () => {
+      if (!issueId) return;
+      const issue = getIssueById(issueId);
+      if (!issue) return;
+      const targetIdentifier = window
+         .prompt('Target issue identifier (for example, CORE-123):')
+         ?.trim();
+      if (!targetIdentifier) return;
+      if (targetIdentifier.toLowerCase() === issue.identifier.toLowerCase()) {
+         toast.error('Choose a different target issue');
+         return;
+      }
+      try {
+         const target = await convertIssueToComment(issueId, targetIdentifier);
+         toast.success(`Converted into a comment on ${target}`);
+      } catch {
+         toast.error('Could not convert issue to comment');
+      }
+   };
+
    const handleMarkCompleted = async () => {
       if (!issueId) return;
       const completed = statuses.find((status) => status.category === 'completed');
@@ -507,7 +528,7 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                   <ContextMenuItem onClick={() => void handleConvertToDocument()}>
                      <FileText className="size-4" /> Document
                   </ContextMenuItem>
-                  <ContextMenuItem disabled title="Conversion is not available yet">
+                  <ContextMenuItem onClick={() => void handleConvertToComment()}>
                      <MessageSquare className="size-4" /> Comment
                   </ContextMenuItem>
                </ContextMenuSubContent>

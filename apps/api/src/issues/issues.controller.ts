@@ -21,6 +21,7 @@ import { UpdateIssueTemplateDto } from './dto/update-issue-template.dto';
 import { SetIssueReminderDto } from './dto/set-issue-reminder.dto';
 import { MoveIssueDto } from './dto/move-issue.dto';
 import { ClassifyIssueDto } from './dto/classify-issue.dto';
+import { ConvertIssueToCommentDto } from './dto/convert-issue-to-comment.dto';
 import { IssuesService } from './issues.service';
 
 @UseGuards(AuthGuard)
@@ -49,6 +50,17 @@ export class IssuesController {
    @Post()
    async create(@Body() dto: CreateIssueDto, @Req() request: AuthenticatedRequest) {
       return { data: await this.issues.create(dto, request.auth!.userId) };
+   }
+
+   @Post(':issueId/convert-to-comment')
+   async convertToComment(
+      @Param('issueId') issueId: string,
+      @Body() dto: ConvertIssueToCommentDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.issues.convertToComment(issueId, dto, request.auth!.userId),
+      };
    }
 
    @Get('options')
