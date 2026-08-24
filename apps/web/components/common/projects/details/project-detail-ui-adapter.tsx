@@ -132,6 +132,8 @@ const activityText = (activity: LiveActivity) => {
          return 'updated project properties';
       case 'project.update.created':
          return 'posted a project update';
+      case 'project.resource.created':
+         return 'added a project resource';
       case 'project.archived':
          return 'archived the project';
       case 'project.restored':
@@ -209,7 +211,10 @@ export function toProjectDetailUi(
       projectId: project.id,
       summary: project.description?.split(/\r?\n/).find((line) => line.trim()) ?? '',
       description: descriptionBlocks(project.description),
-      resources: [],
+      resources: project.resources.map((resource) => ({
+         label: resource.label,
+         url: resource.url,
+      })),
       milestones: milestones.map((milestone) => ({
          id: milestone.id,
          name: milestone.title,

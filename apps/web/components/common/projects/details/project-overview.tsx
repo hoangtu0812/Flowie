@@ -2,11 +2,22 @@
 
 import { ContentBlocks } from '@/components/common/issues/details/content-blocks';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import {
+   Dialog,
+   DialogContent,
+   DialogDescription,
+   DialogFooter,
+   DialogHeader,
+   DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { format, parseISO } from 'date-fns';
 import { ArrowRight, ChevronDown, FileText, PenLine, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { DocumentOutline, getOutlineItems } from './document-outline';
 import { toIssueUi, toProjectDetailUi, toProjectUi } from './project-detail-ui-adapter';
 import { ProjectSidePanel } from './project-side-panel';
@@ -17,6 +28,87 @@ interface ProjectOverviewProps {
 }
 
 const formatDay = (iso?: string | null) => (iso ? format(parseISO(iso), 'MMM do') : '—');
+
+function ProjectResourceDialog({
+   onCreate,
+}: {
+   onCreate: (label: string, url: string) => Promise<unknown>;
+}) {
+   const [open, setOpen] = useState(false);
+   const [label, setLabel] = useState('');
+   const [url, setUrl] = useState('');
+   const [saving, setSaving] = useState(false);
+   const [error, setError] = useState<string>();
+
+   const save = async () => {
+      setSaving(true);
+      setError(undefined);
+      try {
+         await onCreate(label, url);
+         setOpen(false);
+         setLabel('');
+         setUrl('');
+      } catch (caught) {
+         setError(caught instanceof Error ? caught.message : 'Could not add project resource.');
+      } finally {
+         setSaving(false);
+      }
+   };
+
+   return (
+      <Dialog open={open} onOpenChange={setOpen}>
+         <button
+            type="button"
+            aria-label="Add project resource"
+            className="text-muted-foreground hover:text-foreground transition-colors"
+            onClick={() => setOpen(true)}
+         >
+            <Plus className="size-3.5" />
+         </button>
+         <DialogContent>
+            <DialogHeader>
+               <DialogTitle>Add resource</DialogTitle>
+               <DialogDescription>
+                  Link a document or external resource to this project.
+               </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+               <div className="space-y-1.5">
+                  <Label htmlFor="project-resource-label">Label</Label>
+                  <Input
+                     id="project-resource-label"
+                     value={label}
+                     onChange={(event) => setLabel(event.target.value)}
+                     placeholder="Project brief"
+                  />
+               </div>
+               <div className="space-y-1.5">
+                  <Label htmlFor="project-resource-url">URL</Label>
+                  <Input
+                     id="project-resource-url"
+                     value={url}
+                     onChange={(event) => setUrl(event.target.value)}
+                     placeholder="https://…"
+                     type="url"
+                  />
+               </div>
+               {error && <p className="text-sm text-destructive">{error}</p>}
+            </div>
+            <DialogFooter>
+               <Button variant="outline" onClick={() => setOpen(false)}>
+                  Cancel
+               </Button>
+               <Button
+                  onClick={() => void save()}
+                  disabled={saving || !label.trim() || !url.trim()}
+               >
+                  {saving ? 'Adding…' : 'Add resource'}
+               </Button>
+            </DialogFooter>
+         </DialogContent>
+      </Dialog>
+   );
+}
 
 /** Project "Overview" tab: description column + properties side panel. */
 export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
@@ -30,6 +122,7 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
       updateLabels,
       createMilestone,
       toggleMilestone,
+      createResource,
       loading,
       error,
    } = useLiveProject(projectId);
@@ -144,26 +237,24 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
                         </div>
                      </div>
 
-                     {detail.resources.length > 0 && (
-                        <div className="flex items-center gap-3">
-                           <span className="w-24 text-muted-foreground shrink-0">Resources</span>
-                           <div className="flex items-center gap-2 flex-wrap">
-                              {detail.resources.map((resource) => (
-                                 <a
-                                    key={resource.label}
-                                    href={resource.url}
-                                    className="inline-flex items-center gap-1.5 text-xs border rounded-md px-2 py-1 hover:bg-accent/50 transition-colors"
-                                 >
-                                    <FileText className="size-3.5 text-muted-foreground" />
-                                    {resource.label}
-                                 </a>
-                              ))}
-                              <button className="text-muted-foreground hover:text-foreground transition-colors">
-                                 <Plus className="size-3.5" />
-                              </button>
-                           </div>
+                     <div className="flex items-center gap-3">
+                        <span className="w-24 text-muted-foreground shrink-0">Resources</span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                           {detail.resources.map((resource) => (
+                              <a
+                                 key={`${resource.label}-${resource.url}`}
+                                 href={resource.url}
+                                 target="_blank"
+                                 rel="noreferrer"
+                                 className="inline-flex items-center gap-1.5 text-xs border rounded-md px-2 py-1 hover:bg-accent/50 transition-colors"
+                              >
+                                 <FileText className="size-3.5 text-muted-foreground" />
+                                 {resource.label}
+                              </a>
+                           ))}
+                           <ProjectResourceDialog onCreate={createResource} />
                         </div>
-                     )}
+                     </div>
                   </div>
 
                   {/* Update CTA */}

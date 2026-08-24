@@ -20,6 +20,13 @@ export type LiveProject = {
    initiativeLinks: Array<{ initiative: { id: string; name: string } }>;
    labelLinks: Array<{ label: { id: string; name: string; color: string } }>;
    favorites: Array<{ userId: string }>;
+   resources: Array<{
+      id: string;
+      label: string;
+      url: string;
+      createdAt: string;
+      createdBy: { id: string; name: string; avatarUrl: string | null };
+   }>;
 };
 
 export type LiveProjectIssue = {
@@ -192,6 +199,34 @@ export function useLiveProject(projectId: string) {
       [projectId, workspaceId]
    );
 
+   const createResource = useCallback(
+      async (label: string, url: string) => {
+         if (!workspaceId) throw new Error('Workspace is not available yet.');
+         const response = await fetch(`${api}/projects/${projectId}/resources`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ workspaceId, label: label.trim(), url: url.trim() }),
+         });
+         if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as {
+               message?: string;
+            } | null;
+            throw new Error(payload?.message ?? 'Could not add project resource.');
+         }
+         const created = (
+            (await response.json()) as {
+               data: LiveProject['resources'][number];
+            }
+         ).data;
+         setProject((current) =>
+            current ? { ...current, resources: [...current.resources, created] } : current
+         );
+         return created;
+      },
+      [projectId, workspaceId]
+   );
+
    const updateLabels = useCallback(
       async (labelIds: string[]) => {
          if (!workspaceId) throw new Error('Workspace is not available yet.');
@@ -277,6 +312,7 @@ export function useLiveProject(projectId: string) {
       loading,
       error,
       createUpdate,
+      createResource,
       updateLabels,
       createMilestone,
       toggleMilestone,

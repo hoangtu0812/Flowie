@@ -19,6 +19,7 @@ import { CreateProjectLabelDto } from './dto/create-project-label.dto';
 import { UpdateProjectLabelDto } from './dto/update-project-label.dto';
 import { CreateProjectStatusDto } from './dto/create-project-status.dto';
 import { UpdateProjectStatusDto } from './dto/update-project-status.dto';
+import { CreateProjectResourceDto } from './dto/create-project-resource.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 
 const projectInclude = {
@@ -37,6 +38,10 @@ const projectInclude = {
       include: { initiative: { select: { id: true, name: true } } },
    },
    labelLinks: { include: { label: true } },
+   resources: {
+      include: { createdBy: { select: { id: true, name: true, avatarUrl: true } } },
+      orderBy: { createdAt: 'asc' },
+   },
 } satisfies Prisma.ProjectInclude;
 
 @Injectable()
@@ -281,6 +286,31 @@ export class ProjectsService {
          `📣 Project update: ${project.name}\n${body.slice(0, 1500)}`
       );
       return { ...update, attachments: [] };
+   }
+   async createResource(projectId: string, dto: CreateProjectResourceDto, userId: string) {
+      const project = await this.get(projectId, dto.workspaceId, userId);
+      return this.prisma.$transaction(async (tx) => {
+         const resource = await tx.projectResource.create({
+            data: {
+               workspaceId: dto.workspaceId,
+               projectId: project.id,
+               createdById: userId,
+               label: dto.label.trim(),
+               url: dto.url.trim(),
+            },
+            include: { createdBy: { select: { id: true, name: true, avatarUrl: true } } },
+         });
+         await tx.activity.create({
+            data: {
+               workspaceId: dto.workspaceId,
+               projectId: project.id,
+               actorId: userId,
+               type: 'project.resource.created',
+               data: { resourceId: resource.id, label: resource.label, url: resource.url },
+            },
+         });
+         return resource;
+      });
    }
 
    private async withUpdateAttachments<T extends { id: string }>(workspaceId: string, updates: T[]) {

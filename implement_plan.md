@@ -41,7 +41,8 @@
 - Issue detail: giữ cột nội dung/sidebar, typography mô tả và hàng sub-issue của UI gốc; relations
   nằm lại trong properties sidebar, nhưng dữ liệu/action đều từ API thật.
 - Projects: list/board/timeline, create/update/archive, overview/activity/issues, update, health,
-  labels, milestones, templates, statuses, favorite theo user và project settings.
+  labels, milestones, templates, statuses, favorite theo user, project settings và resource link
+  entity thật được thêm từ chính hàng Resources/nút `+` trong Overview gốc.
 - Project Update attachments: nút kẹp giấy trong composer Activity gốc đã upload tối đa 10 MB
   vào MinIO, metadata lưu qua bảng attachment hiện hữu, kiểm tra quyền theo project/team và hiển
   thị link tải trong update card sau khi reload.
@@ -111,6 +112,7 @@
 - `05e8595` — isolate notifications by workspace and restore the original settings shells.
 - `336a235` — persist team membership state and connect the original Join affordance.
 - `0963ec7` — connect issue Move Team command and remove Agent as the default home.
+- `03554c1` — persist Initiative updates/resources as first-class workspace entities.
 
 ### Kiểm tra gần nhất
 
@@ -147,6 +149,8 @@
   bắt buộc có workspace FK và toàn bộ list/read/delete được authorize + filter theo workspace.
 - Migration `20260824300000_initiative_updates_resources` đã được apply; update/resource Initiative
   được backfill từ audit metadata sang hai bảng có workspace/initiative/user FK riêng.
+- Migration `20260824310000_project_resources` đã được apply; bảng resource có workspace/project/
+  creator FK và route tạo resource đã được kiểm tra bằng unit test + Docker runtime.
 - Audit frontend đã đối chiếu **308 file baseline** trong `app/components/hooks/lib/store` với
   `upstream/master`. Đã xóa 18 component `real-*` rút gọn không còn route nào dùng; runtime chỉ
   còn cây component gốc được nối API.
