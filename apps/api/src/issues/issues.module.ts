@@ -9,5 +9,6 @@ import { SlasModule } from '../slas/slas.module';
    imports: [AuthModule, NotificationsModule, SlasModule],
    controllers: [IssuesController],
    providers: [IssuesService],
+   exports: [IssuesService],
 })
 export class IssuesModule {}

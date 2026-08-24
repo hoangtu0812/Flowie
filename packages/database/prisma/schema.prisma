@@ -127,6 +127,7 @@ model User {
   createdReleases Release[] @relation("ReleaseCreator")
   createdCustomerRequests CustomerRequest[] @relation("CustomerRequestCreator")
   createdSlaPolicies SlaPolicy[] @relation("SlaPolicyCreator")
+  createdAsks Ask[] @relation("AskCreator")
 
   @@map("users")
 }
@@ -247,6 +248,7 @@ model Workspace {
   releases Release[]
   customerRequests CustomerRequest[]
   slaPolicies SlaPolicy[]
+  asks Ask[]
 
   @@index([organizationId])
   @@map("workspaces")
@@ -300,6 +302,7 @@ model Team {
   cycles    Cycle[]
   documents Document[]
   slaPolicies SlaPolicy[]
+  asks Ask[]
 
   @@unique([workspaceId, identifier])
   @@index([workspaceId])
@@ -334,6 +337,7 @@ model Project {
   initiativeLinks InitiativeProject[]
   releaseLinks ReleaseProject[]
   customerRequests CustomerRequest[]
+  asks Ask[]
   labelLinks ProjectLabelLink[]
   subscriptions ProjectSubscription[]
   updates ProjectUpdate[]
@@ -605,6 +609,34 @@ model SlaPolicy {
   @@map("sla_policies")
 }
 
+model Ask {
+  id               String        @id @default(cuid())
+  workspaceId      String        @map("workspace_id")
+  teamId           String        @map("team_id")
+  projectId        String?       @map("project_id")
+  title            String
+  description      String?
+  priority         IssuePriority @default(NONE)
+  status           String        @default("open")
+  createdById      String        @map("created_by")
+  convertedIssueId String?       @map("converted_issue_id")
+  archivedAt       DateTime?     @map("archived_at")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  team           Team      @relation(fields: [teamId], references: [id], onDelete: Restrict)
+  project        Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdBy      User      @relation("AskCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  convertedIssue Issue?    @relation("AskConvertedIssue", fields: [convertedIssueId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, archivedAt, status])
+  @@index([teamId])
+  @@index([projectId])
+  @@index([convertedIssueId])
+  @@map("asks")
+}
+
 model TeamMember {
   teamId String         @map("team_id")
   userId String         @map("user_id")
@@ -701,6 +733,7 @@ model Issue {
   subscribers IssueSubscription[]
   reactions IssueReaction[]
   customerRequests CustomerRequest[]
+  convertedAsks Ask[] @relation("AskConvertedIssue")
 
   @@unique([workspaceId, identifier])
   @@unique([teamId, number])
