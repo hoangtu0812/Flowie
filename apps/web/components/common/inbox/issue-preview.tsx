@@ -268,7 +268,7 @@ export default function IssuePreview({ notification, onMarkAsRead }: IssuePrevie
 
             {issue && (
                <aside className="hidden xl:block w-64 shrink-0 border-l overflow-y-auto bg-container px-4 py-5">
-                  <IssuePropertiesPanel issue={issue} />
+                  <IssuePropertiesPanel issue={issue} orgId={orgId ?? 'lndev-ui'} />
                </aside>
             )}
          </div>

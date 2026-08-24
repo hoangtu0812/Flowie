@@ -12,9 +12,10 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useIssuesStore } from '@/store/issues-store';
-import { CheckSquare, Plus } from 'lucide-react';
+import { Circle, CircleCheck, CircleDashed, CircleX, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
+import { AssigneeUser } from '../assignee-user';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -23,6 +24,20 @@ type SubIssue = {
    identifier: string;
    title: string;
    status: { id: string; name: string; color: string; category: string };
+   assignee: { id: string; name: string; avatarUrl: string | null } | null;
+};
+
+const StatusIcon = ({ status }: { status: SubIssue['status'] }) => {
+   const category = status.category.toLowerCase();
+   const Icon =
+      category === 'completed'
+         ? CircleCheck
+         : category === 'canceled'
+           ? CircleX
+           : category === 'backlog' || category === 'triage'
+             ? CircleDashed
+             : Circle;
+   return <Icon className="size-4 shrink-0" style={{ color: status.color }} />;
 };
 
 /** Original Issue-detail sub-issue area backed by a parent-child Issue relationship. */
@@ -99,12 +114,6 @@ export function IssueSubIssues({
 
    return (
       <section className="mt-6">
-         <div className="flex items-center justify-between gap-3">
-            <h2 className="text-base font-semibold">Sub-issues</h2>
-            <Button size="xs" variant="ghost" onClick={() => setDialogOpen(true)}>
-               <Plus /> New sub-issue
-            </Button>
-         </div>
          {state === 'loading' && (
             <p className="mt-3 text-sm text-muted-foreground">Loading sub-issues…</p>
          )}
@@ -112,26 +121,51 @@ export function IssueSubIssues({
             <p className="mt-3 text-sm text-destructive">Could not load sub-issues.</p>
          )}
          {state === 'ready' && subIssues.length === 0 && (
-            <p className="mt-3 text-sm text-muted-foreground">No sub-issues.</p>
+            <button
+               type="button"
+               onClick={() => setDialogOpen(true)}
+               className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+            >
+               <Plus className="size-4" />
+               Add sub-issues
+            </button>
          )}
          {state === 'ready' && subIssues.length > 0 && (
-            <div className="mt-3 space-y-1">
-               {subIssues.map((subIssue) => (
-                  <Link
-                     key={subIssue.id}
-                     href={`/${orgId}/issue/${subIssue.identifier}`}
-                     className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
-                  >
-                     <CheckSquare className="size-3.5 text-muted-foreground" />
-                     <span
-                        className="size-2 rounded-full"
-                        style={{ backgroundColor: subIssue.status.color }}
-                     />
-                     <span className="shrink-0 text-muted-foreground">{subIssue.identifier}</span>
-                     <span className="min-w-0 truncate">{subIssue.title}</span>
-                  </Link>
-               ))}
-            </div>
+            <>
+               <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-sm font-medium mb-1">
+                     Sub-issues{' '}
+                     <span className="text-muted-foreground">
+                        {
+                           subIssues.filter((subIssue) => subIssue.status.category === 'completed')
+                              .length
+                        }
+                        /{subIssues.length}
+                     </span>
+                  </h2>
+                  <Button size="xs" variant="ghost" onClick={() => setDialogOpen(true)}>
+                     <Plus className="size-3.5" /> New
+                  </Button>
+               </div>
+               <div className="flex flex-col border-t border-border/50">
+                  {subIssues.map((subIssue) => (
+                     <Link
+                        key={subIssue.id}
+                        href={`/${orgId}/issue/${subIssue.identifier}`}
+                        className="flex items-center gap-2.5 h-10 px-1 border-b border-border/50 hover:bg-sidebar/50 text-sm min-w-0"
+                     >
+                        <StatusIcon status={subIssue.status} />
+                        <span className="text-muted-foreground shrink-0 text-xs font-medium">
+                           {subIssue.identifier}
+                        </span>
+                        <span className="truncate font-medium">{subIssue.title}</span>
+                        <span className="ml-auto shrink-0">
+                           <AssigneeUser user={subIssue.assignee} />
+                        </span>
+                     </Link>
+                  ))}
+               </div>
+            </>
          )}
 
          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

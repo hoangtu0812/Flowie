@@ -50,6 +50,7 @@ const subIssueSelect = {
    identifier: true,
    title: true,
    status: { select: { id: true, name: true, color: true, category: true } },
+   assignee: { select: { id: true, name: true, avatarUrl: true } },
 } as const;
 
 @Injectable()

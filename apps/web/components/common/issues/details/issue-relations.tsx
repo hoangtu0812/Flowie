@@ -18,7 +18,15 @@ type RelatedIssue = {
 };
 
 /** Original detail-area relation list, backed by the persisted IssueRelation API. */
-export function IssueRelations({ issueId, orgId }: { issueId: string; orgId: string }) {
+export function IssueRelations({
+   issueId,
+   orgId,
+   compact = false,
+}: {
+   issueId: string;
+   orgId: string;
+   compact?: boolean;
+}) {
    const workspaceId = useIssuesStore((state) => state.workspaceId);
    const { openForIssue } = useIssueRelationDialogStore();
    const [relations, setRelations] = useState<RelatedIssue[]>([]);
@@ -77,28 +85,61 @@ export function IssueRelations({ issueId, orgId }: { issueId: string; orgId: str
    };
 
    return (
-      <section className="mt-8">
+      <section className={compact ? '' : 'mt-8'}>
          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-base font-semibold">Related issues</h2>
-            <Button size="xs" variant="ghost" onClick={() => openForIssue(issueId)}>
-               <Link2 /> Add link
+            <h2
+               className={
+                  compact
+                     ? 'text-xs font-medium text-muted-foreground mb-2'
+                     : 'text-base font-semibold'
+               }
+            >
+               {compact ? 'Related' : 'Related issues'}
+            </h2>
+            <Button
+               size={compact ? 'icon' : 'xs'}
+               variant="ghost"
+               className={compact ? 'size-6 rounded-full border' : undefined}
+               aria-label="Add related issue"
+               onClick={() => openForIssue(issueId)}
+            >
+               <Link2 className="size-3.5" />
+               {!compact && 'Add link'}
             </Button>
          </div>
          {state === 'loading' && (
-            <p className="mt-3 text-sm text-muted-foreground">Loading links…</p>
+            <p
+               className={
+                  compact ? 'text-sm text-muted-foreground' : 'mt-3 text-sm text-muted-foreground'
+               }
+            >
+               Loading links…
+            </p>
          )}
          {state === 'error' && (
-            <p className="mt-3 text-sm text-destructive">Could not load issue links.</p>
+            <p className={compact ? 'text-sm text-destructive' : 'mt-3 text-sm text-destructive'}>
+               Could not load issue links.
+            </p>
          )}
          {state === 'ready' && relations.length === 0 && (
-            <p className="mt-3 text-sm text-muted-foreground">No related issues.</p>
+            <p
+               className={
+                  compact ? 'text-sm text-muted-foreground' : 'mt-3 text-sm text-muted-foreground'
+               }
+            >
+               No related issues.
+            </p>
          )}
          {state === 'ready' && relations.length > 0 && (
-            <div className="mt-3 space-y-1">
+            <div className={compact ? 'flex flex-col' : 'mt-3 space-y-1'}>
                {relations.map((related) => (
                   <div
                      key={related.id}
-                     className="group flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent"
+                     className={
+                        compact
+                           ? 'group flex items-center gap-1.5 min-w-0 py-0.5'
+                           : 'group flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent'
+                     }
                   >
                      <span
                         className="size-2 rounded-full"

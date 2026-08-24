@@ -32,6 +32,8 @@
   labels).
 - Issue context menu: rename, due date, copy, create-related-and-link, convert to document,
   mark completed, subscribe và archive đều gọi backend.
+- Issue detail: giữ cột nội dung/sidebar, typography mô tả và hàng sub-issue của UI gốc; relations
+  nằm lại trong properties sidebar, nhưng dữ liệu/action đều từ API thật.
 - Projects: list/board/timeline, create/update/archive, overview/activity/issues, update, health,
   labels, milestones, templates, statuses và project settings.
 - Initiatives: list/detail/create/update/archive, project links, real progress chart, resources,
@@ -54,6 +56,7 @@
 - `4d0bb37` — complete cycle progress and documents.
 - `fb93014` — replace Documents/Initiatives settings placeholders.
 - `3782230` — connect issue context actions.
+- `2f525b2` — persist workspace Issue Templates and apply them in Create Issue.
 
 ### Kiểm tra gần nhất
 
@@ -63,6 +66,9 @@
 - Docker `api` và `web`: rebuilt; `http://localhost:4000/api/v1/health` và
   `http://localhost:3000/auth/login` trả HTTP 200.
 - Migration `20260824180000_issue_templates` đã được apply trong Postgres Docker.
+- Audit frontend đã đối chiếu **308 file baseline** trong `app/components/hooks/lib/store` với
+  `upstream/master`. Đã xóa 18 component `real-*` rút gọn không còn route nào dùng; runtime chỉ
+  còn cây component gốc được nối API.
 - Docker dependency install dùng cache; không tải package mới trong các checkpoint trên.
 - Lưu ý môi trường host hiện thiếu binary `jest`/`prettier` trong `node_modules`, dù lockfile có
   khai báo; không cài lại package chỉ để chạy test vì Docker build đã kiểm tra compile bằng đúng

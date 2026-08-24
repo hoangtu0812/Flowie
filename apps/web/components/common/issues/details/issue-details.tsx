@@ -6,8 +6,8 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityFeed } from './activity-feed';
+import { ContentBlocks } from './content-blocks';
 import { IssuePropertiesPanel } from './issue-properties-panel';
-import { IssueRelations } from './issue-relations';
 import { IssueReactions } from './issue-reactions';
 import { IssueSubIssues } from './issue-sub-issues';
 
@@ -48,6 +48,15 @@ export default function IssueDetails() {
       [issues, issueId]
    );
    const issueEntityId = issue?.id;
+   const descriptionBlocks = useMemo(
+      () =>
+         issue?.description
+            ? issue.description
+                 .split(/\n{2,}/)
+                 .map((text) => ({ type: 'paragraph' as const, text }))
+            : [],
+      [issue?.description]
+   );
 
    const loadAttachments = useCallback(async () => {
       if (!workspaceId || !issueEntityId) return;
@@ -146,8 +155,8 @@ export default function IssueDetails() {
                <h1 className="text-3xl font-semibold leading-tight text-balance">{issue.title}</h1>
 
                <div className="mt-6">
-                  {issue.description ? (
-                     <p className="whitespace-pre-wrap text-sm leading-6">{issue.description}</p>
+                  {descriptionBlocks.length ? (
+                     <ContentBlocks blocks={descriptionBlocks} />
                   ) : (
                      <p className="text-sm text-muted-foreground">No description provided.</p>
                   )}
@@ -174,34 +183,32 @@ export default function IssueDetails() {
                   />
                </div>
 
-               <div className="mt-4 text-sm">
-                  {isLoadingAttachments ? (
-                     <p className="text-muted-foreground">Loading attachments…</p>
-                  ) : attachmentError ? (
-                     <p className="text-destructive">{attachmentError}</p>
-                  ) : attachments.length ? (
-                     <ul className="space-y-2">
-                        {attachments.map((attachment) => (
-                           <li className="flex items-center gap-3" key={attachment.id}>
-                              <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
-                              <a
-                                 className="min-w-0 truncate hover:underline"
-                                 href={`${api}/attachments/${attachment.id}/download`}
-                              >
-                                 {attachment.filename}
-                              </a>
-                              <span className="shrink-0 text-xs text-muted-foreground">
-                                 {formatFileSize(attachment.size)}
-                              </span>
-                           </li>
-                        ))}
-                     </ul>
-                  ) : (
-                     <p className="text-muted-foreground">No attachments yet.</p>
-                  )}
-               </div>
-
-               <IssueRelations issueId={issue.id} orgId={orgId ?? 'lndev-ui'} />
+               {(isLoadingAttachments || attachmentError || attachments.length > 0) && (
+                  <div className="mt-4 text-sm">
+                     {isLoadingAttachments ? (
+                        <p className="text-muted-foreground">Loading attachments…</p>
+                     ) : attachmentError ? (
+                        <p className="text-destructive">{attachmentError}</p>
+                     ) : attachments.length ? (
+                        <ul className="space-y-2">
+                           {attachments.map((attachment) => (
+                              <li className="flex items-center gap-3" key={attachment.id}>
+                                 <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
+                                 <a
+                                    className="min-w-0 truncate hover:underline"
+                                    href={`${api}/attachments/${attachment.id}/download`}
+                                 >
+                                    {attachment.filename}
+                                 </a>
+                                 <span className="shrink-0 text-xs text-muted-foreground">
+                                    {formatFileSize(attachment.size)}
+                                 </span>
+                              </li>
+                           ))}
+                        </ul>
+                     ) : null}
+                  </div>
+               )}
 
                {issue.team && (
                   <IssueSubIssues
@@ -218,7 +225,7 @@ export default function IssueDetails() {
          </div>
 
          <aside className="hidden lg:block w-80 shrink-0 border-l h-full overflow-y-auto bg-container px-5 py-6">
-            <IssuePropertiesPanel issue={issue} />
+            <IssuePropertiesPanel issue={issue} orgId={orgId ?? 'lndev-ui'} />
          </aside>
       </div>
    );

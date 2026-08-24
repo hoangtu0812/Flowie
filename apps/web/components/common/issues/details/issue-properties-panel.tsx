@@ -11,6 +11,7 @@ import { AssigneeUser } from '../assignee-user';
 import { LabelBadge } from '../label-badge';
 import { PrioritySelector } from '../priority-selector';
 import { StatusSelector } from '../status-selector';
+import { IssueRelations } from './issue-relations';
 
 type IssueProperties = {
    id: string;
@@ -32,7 +33,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 /** Original right-side issue properties panel using only fields returned by the Issue API. */
-export function IssuePropertiesPanel({ issue }: { issue: IssueProperties }) {
+export function IssuePropertiesPanel({ issue, orgId }: { issue: IssueProperties; orgId: string }) {
    const cycles = useIssuesStore((state) => state.cycles);
    const workspaceLabels = useIssuesStore((state) => state.labels);
    const { addIssueLabel, removeIssueLabel } = useIssuesStore();
@@ -144,6 +145,8 @@ export function IssuePropertiesPanel({ issue }: { issue: IssueProperties }) {
                </div>
             </Section>
          )}
+
+         <IssueRelations issueId={issue.id} orgId={orgId} compact />
       </div>
    );
 }
