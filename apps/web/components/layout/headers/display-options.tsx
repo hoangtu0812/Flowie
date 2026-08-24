@@ -257,7 +257,12 @@ export function DisplayOptions() {
                >
                   Reset
                </button>
-               <button className="text-xs text-indigo-500 dark:text-indigo-400 hover:underline">
+               <button
+                  type="button"
+                  disabled
+                  title="Workspace display defaults are not available yet."
+                  className="text-xs text-muted-foreground cursor-not-allowed"
+               >
                   Set default for everyone
                </button>
             </div>
