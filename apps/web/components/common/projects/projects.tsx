@@ -4,8 +4,9 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { health as healthOptions, Project } from '@/mock-data/projects';
 import { priorities } from '@/mock-data/priorities';
-import { status as statuses } from '@/mock-data/status';
-import { FolderKanban } from 'lucide-react';
+import type { Status, StatusCategory } from '@/mock-data/status';
+import { Circle, CircleCheck, CircleDashed, CirclePlay, CircleX, FolderKanban } from 'lucide-react';
+import { createElement } from 'react';
 import { useProjectsFilterStore } from '@/store/projects-filter-store';
 import { useProjectsDisplayStore } from '@/store/projects-display-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
@@ -59,6 +60,8 @@ export type ProjectListLabel = {
    color: string;
 };
 
+export type ProjectListStatus = Status;
+
 export type ProjectListUpdate = {
    leadId?: string | null;
    priority?: string;
@@ -69,8 +72,8 @@ export type ProjectListUpdate = {
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
-const mapStatus = (value: string) => {
-   const normalized = value.toLowerCase();
+const mapStatus = (value: string): ProjectListStatus => {
+   const normalized = value.trim().toLowerCase().replace(/_/g, '-');
    const category =
       normalized === 'completed' || normalized === 'done'
          ? 'completed'
@@ -81,8 +84,42 @@ const mapStatus = (value: string) => {
              : normalized === 'backlog'
                ? 'backlog'
                : 'unstarted';
-   return statuses.find((status) => status.category === category) ?? statuses[0];
+   const icon =
+      category === 'completed'
+         ? CircleCheck
+         : category === 'canceled'
+           ? CircleX
+           : category === 'started'
+             ? CirclePlay
+             : category === 'backlog'
+               ? CircleDashed
+               : Circle;
+   const color =
+      category === 'completed'
+         ? '#5e6ad2'
+         : category === 'canceled'
+           ? '#95a2b3'
+           : category === 'started'
+             ? '#facc15'
+             : category === 'backlog'
+               ? '#95a2b3'
+               : '#99a2b2';
+   return {
+      id: value,
+      name: value
+         .trim()
+         .replace(/[_-]+/g, ' ')
+         .replace(/\b\w/g, (character) => character.toUpperCase()),
+      color,
+      category: category as StatusCategory,
+      icon: () => createElement(icon, { className: 'size-4' }),
+   };
 };
+
+const uniqueProjectStatuses = (projects: ApiProject[]): ProjectListStatus[] =>
+   [
+      ...new Map(projects.map((project) => [project.status, mapStatus(project.status)])).values(),
+   ].sort((left, right) => left.name.localeCompare(right.name));
 
 const mapProject = (project: ApiProject): Project & { issueCount: number } => {
    const completed = project.issues.filter((issue) => issue.status.category === 'COMPLETED').length;
@@ -163,6 +200,7 @@ export default function Projects({ teamId }: { teamId?: string }) {
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [workspaceMembers, setWorkspaceMembers] = useState<ProjectListMember[]>([]);
    const [projectLabels, setProjectLabels] = useState<ProjectListLabel[]>([]);
+   const [projectStatuses, setProjectStatuses] = useState<ProjectListStatus[]>([]);
    const [loadError, setLoadError] = useState<string>();
    const viewType = viewTypes[tab];
 
@@ -198,6 +236,7 @@ export default function Projects({ teamId }: { teamId?: string }) {
          );
          setProjectLabels(labelsPayload.data);
          setAllProjects(payload.data.map(mapProject));
+         setProjectStatuses(uniqueProjectStatuses(payload.data));
          setTeamGroups(
             Array.from(
                new Map(
@@ -236,6 +275,12 @@ export default function Projects({ teamId }: { teamId?: string }) {
          throw new Error(message);
       }
       const payload = (await response.json()) as { data: ApiProject };
+      setProjectStatuses((statuses) => {
+         const updated = mapStatus(payload.data.status);
+         return statuses.some((status) => status.id === updated.id)
+            ? statuses
+            : [...statuses, updated].sort((left, right) => left.name.localeCompare(right.name));
+      });
       setAllProjects((projects) =>
          projects.map((project) => (project.id === projectId ? mapProject(payload.data) : project))
       );
@@ -348,6 +393,7 @@ export default function Projects({ teamId }: { teamId?: string }) {
                      workspaceId={workspaceId}
                      workspaceMembers={workspaceMembers}
                      projectLabels={projectLabels}
+                     projectStatuses={projectStatuses}
                      onUpdateProject={updateProject}
                   />
                )}

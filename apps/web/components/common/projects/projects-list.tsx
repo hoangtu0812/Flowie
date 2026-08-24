@@ -6,6 +6,7 @@ import type {
    ProjectGroup,
    ProjectListLabel,
    ProjectListMember,
+   ProjectListStatus,
    ProjectListUpdate,
 } from './projects';
 
@@ -15,12 +16,14 @@ export default function ProjectsList({
    workspaceId,
    workspaceMembers = [],
    projectLabels = [],
+   projectStatuses = [],
    onUpdateProject,
 }: {
    groups: ProjectGroup[];
    workspaceId?: string;
    workspaceMembers?: ProjectListMember[];
    projectLabels?: ProjectListLabel[];
+   projectStatuses?: ProjectListStatus[];
    onUpdateProject?: (projectId: string, update: ProjectListUpdate) => Promise<void>;
 }) {
    const { grouping, displayProperties } = useProjectsDisplayStore();
@@ -63,6 +66,7 @@ export default function ProjectsList({
                      workspaceId={workspaceId}
                      workspaceMembers={workspaceMembers}
                      projectLabels={projectLabels}
+                     projectStatuses={projectStatuses}
                      onUpdateProject={onUpdateProject}
                   />
                ))}

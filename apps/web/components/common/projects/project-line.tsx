@@ -10,13 +10,19 @@ import { LeadSelector } from './lead-selector';
 import { StatusWithPercent } from './status-with-percent';
 import { DatePicker } from './date-picker';
 import { ProjectLabelSelector } from './project-label-selector';
-import type { ProjectListLabel, ProjectListMember, ProjectListUpdate } from './projects';
+import type {
+   ProjectListLabel,
+   ProjectListMember,
+   ProjectListStatus,
+   ProjectListUpdate,
+} from './projects';
 
 interface ProjectLineProps {
    project: Project & { issueCount?: number };
    workspaceId?: string;
    workspaceMembers: ProjectListMember[];
    projectLabels: ProjectListLabel[];
+   projectStatuses: ProjectListStatus[];
    onUpdateProject?: (projectId: string, update: ProjectListUpdate) => Promise<void>;
 }
 
@@ -25,6 +31,7 @@ export default function ProjectLine({
    workspaceId,
    workspaceMembers,
    projectLabels,
+   projectStatuses,
    onUpdateProject,
 }: ProjectLineProps) {
    const { orgId } = useParams<{ orgId: string }>();
@@ -131,6 +138,7 @@ export default function ProjectLine({
             <div className="w-[90px] shrink-0">
                <StatusWithPercent
                   status={project.status}
+                  statuses={projectStatuses}
                   percentComplete={project.percentComplete}
                   disabled={!onUpdateProject}
                   onStatusChange={
