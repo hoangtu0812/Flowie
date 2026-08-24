@@ -18,6 +18,7 @@ import { UpdateProjectCustomFieldDto } from './dto/update-project-custom-field.d
 import { CreateMilestoneDto } from './dto/create-milestone.dto';
 import { UpdateMilestoneDto } from './dto/update-milestone.dto';
 import { CreateProjectTemplateDto } from './dto/create-project-template.dto';
+import { CreateProjectUpdateDto } from './dto/create-project-update.dto';
 import { ProjectsService } from './projects.service';
 @UseGuards(AuthGuard)
 @Controller('projects')
@@ -80,6 +81,43 @@ export class ProjectsController {
       @Req() request: AuthenticatedRequest
    ): Promise<{ data: unknown }> {
       return { data: await this.projects.createTemplate(dto, request.auth!.userId) };
+   }
+   @Get(':projectId/updates') async listUpdates(
+      @Param('projectId') projectId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.projects.listUpdates(projectId, workspaceId, request.auth!.userId) };
+   }
+   @Post(':projectId/updates') async createUpdate(
+      @Param('projectId') projectId: string,
+      @Body() dto: CreateProjectUpdateDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.projects.createUpdate(projectId, dto, request.auth!.userId) };
+   }
+   @Get(':projectId/subscription') async subscription(
+      @Param('projectId') projectId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.projects.subscription(projectId, workspaceId, request.auth!.userId),
+      };
+   }
+   @Post(':projectId/subscription') async subscribe(
+      @Param('projectId') projectId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.projects.subscribe(projectId, workspaceId, request.auth!.userId) };
+   }
+   @Delete(':projectId/subscription') async unsubscribe(
+      @Param('projectId') projectId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.projects.unsubscribe(projectId, workspaceId, request.auth!.userId) };
    }
    @Get(':projectId/issues') async issues(
       @Param('projectId') projectId: string,

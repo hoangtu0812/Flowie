@@ -13,12 +13,14 @@ import type { ProjectListMember, ProjectListUpdate } from './projects';
 
 interface ProjectLineProps {
    project: Project & { issueCount?: number };
+   workspaceId?: string;
    workspaceMembers: ProjectListMember[];
    onUpdateProject?: (projectId: string, update: ProjectListUpdate) => Promise<void>;
 }
 
 export default function ProjectLine({
    project,
+   workspaceId,
    workspaceMembers,
    onUpdateProject,
 }: ProjectLineProps) {
@@ -59,7 +61,7 @@ export default function ProjectLine({
 
          {displayProperties.health && (
             <div className="hidden sm:block w-[120px] shrink-0">
-               <HealthPopover project={project} />
+               <HealthPopover project={project} workspaceId={workspaceId} />
             </div>
          )}
          {displayProperties.priority && (

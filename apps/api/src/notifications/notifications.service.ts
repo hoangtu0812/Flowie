@@ -29,24 +29,45 @@ export class NotificationsService {
       data: Record<string, unknown>,
       discordContent: string
    ) {
-      const [recipients, actor] = await Promise.all([
-         this.prisma.workspaceMember.findMany({
-            where: { workspaceId, status: 'ACTIVE', userId: { not: actorId } },
-            select: { userId: true },
-         }),
-         this.prisma.user.findUnique({
-            where: { id: actorId },
-            select: { id: true, name: true, avatarUrl: true },
-         }),
-      ]);
+      const recipients = await this.prisma.workspaceMember.findMany({
+         where: { workspaceId, status: 'ACTIVE', userId: { not: actorId } },
+         select: { userId: true },
+      });
+      return this.notifyUsers(
+         recipients.map((recipient) => recipient.userId),
+         workspaceId,
+         actorId,
+         type,
+         entityType,
+         entityId,
+         data,
+         discordContent
+      );
+   }
+
+   async notifyUsers(
+      recipientIds: string[],
+      workspaceId: string,
+      actorId: string,
+      type: string,
+      entityType: string,
+      entityId: string,
+      data: Record<string, unknown>,
+      discordContent: string
+   ) {
+      const recipientIdsWithoutActor = [...new Set(recipientIds)].filter((id) => id !== actorId);
+      const actor = await this.prisma.user.findUnique({
+         where: { id: actorId },
+         select: { id: true, name: true, avatarUrl: true },
+      });
       const notificationData = {
          ...data,
          ...(actor ? { actor } : {}),
       } as Prisma.InputJsonValue;
-      if (recipients.length) {
+      if (recipientIdsWithoutActor.length) {
          await this.prisma.notification.createMany({
-            data: recipients.map((recipient) => ({
-               userId: recipient.userId,
+            data: recipientIdsWithoutActor.map((userId) => ({
+               userId,
                type,
                entityType,
                entityId,

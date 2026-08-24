@@ -332,6 +332,7 @@ export default function Projects({ teamId }: { teamId?: string }) {
                {viewType === 'list' && (
                   <ProjectsList
                      groups={groups}
+                     workspaceId={workspaceId}
                      workspaceMembers={workspaceMembers}
                      onUpdateProject={updateProject}
                   />

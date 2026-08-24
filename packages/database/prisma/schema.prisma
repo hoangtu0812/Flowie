@@ -110,6 +110,8 @@ model User {
   createdIssues Issue[] @relation("IssueCreator")
   assignedIssues Issue[] @relation("IssueAssignee")
   issueSubscriptions IssueSubscription[]
+  projectSubscriptions ProjectSubscription[]
+  projectUpdates ProjectUpdate[] @relation("ProjectUpdateAuthor")
   createdDocuments Document[] @relation("DocumentCreator")
   updatedDocuments Document[] @relation("DocumentUpdater")
   comments Comment[]
@@ -229,6 +231,7 @@ model Workspace {
   projectCustomFields ProjectCustomField[]
   projectTemplates ProjectTemplate[]
   projectMilestones ProjectMilestone[]
+  projectUpdates ProjectUpdate[]
   savedViews SavedView[]
   initiatives Initiative[]
 
@@ -315,6 +318,8 @@ model Project {
   milestones ProjectMilestone[]
   customFieldValues ProjectCustomFieldValue[]
   initiativeLinks InitiativeProject[]
+  subscriptions ProjectSubscription[]
+  updates ProjectUpdate[]
 
   @@unique([workspaceId, identifier])
   @@index([workspaceId, teamId])
@@ -373,6 +378,37 @@ model ProjectMilestone {
 
   @@index([projectId, position])
   @@map("project_milestones")
+}
+
+model ProjectSubscription {
+  projectId String @map("project_id")
+  userId    String @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@index([userId, createdAt])
+  @@map("project_subscriptions")
+}
+
+model ProjectUpdate {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  projectId   String   @map("project_id")
+  authorId    String   @map("author_id")
+  body        String
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author    User      @relation("ProjectUpdateAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([projectId, createdAt])
+  @@index([workspaceId, createdAt])
+  @@map("project_updates")
 }
 
 model ProjectTemplate {

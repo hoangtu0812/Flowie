@@ -7,10 +7,12 @@ import type { ProjectGroup, ProjectListMember, ProjectListUpdate } from './proje
 /** Projects "List" view: grouped table (team sections by default). */
 export default function ProjectsList({
    groups,
+   workspaceId,
    workspaceMembers = [],
    onUpdateProject,
 }: {
    groups: ProjectGroup[];
+   workspaceId?: string;
    workspaceMembers?: ProjectListMember[];
    onUpdateProject?: (projectId: string, update: ProjectListUpdate) => Promise<void>;
 }) {
@@ -51,6 +53,7 @@ export default function ProjectsList({
                   <ProjectLine
                      key={project.id}
                      project={project}
+                     workspaceId={workspaceId}
                      workspaceMembers={workspaceMembers}
                      onUpdateProject={onUpdateProject}
                   />

@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@circle/database';
 import { PrismaService } from '../database/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
@@ -8,6 +8,7 @@ import { UpdateProjectCustomFieldDto } from './dto/update-project-custom-field.d
 import { CreateMilestoneDto } from './dto/create-milestone.dto';
 import { UpdateMilestoneDto } from './dto/update-milestone.dto';
 import { CreateProjectTemplateDto } from './dto/create-project-template.dto';
+import { CreateProjectUpdateDto } from './dto/create-project-update.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 
 const projectInclude = {
@@ -140,6 +141,83 @@ export class ProjectsService {
             include: projectInclude,
          });
       });
+   }
+   async listUpdates(projectId: string, workspaceId: string, userId: string) {
+      await this.get(projectId, workspaceId, userId);
+      return this.prisma.projectUpdate.findMany({
+         where: { projectId, workspaceId },
+         include: { author: { select: { id: true, name: true, avatarUrl: true } } },
+         orderBy: { createdAt: 'desc' },
+         take: 25,
+      });
+   }
+   async createUpdate(projectId: string, dto: CreateProjectUpdateDto, userId: string) {
+      const project = await this.get(projectId, dto.workspaceId, userId);
+      const body = dto.body.trim();
+      if (!body) throw new BadRequestException('Project update cannot be empty.');
+      const update = await this.prisma.$transaction(async (tx) => {
+         const created = await tx.projectUpdate.create({
+            data: {
+               workspaceId: dto.workspaceId,
+               projectId: project.id,
+               authorId: userId,
+               body,
+            },
+            include: { author: { select: { id: true, name: true, avatarUrl: true } } },
+         });
+         await tx.projectSubscription.upsert({
+            where: { projectId_userId: { projectId: project.id, userId } },
+            create: { projectId: project.id, userId },
+            update: {},
+         });
+         await tx.activity.create({
+            data: {
+               workspaceId: dto.workspaceId,
+               projectId: project.id,
+               actorId: userId,
+               type: 'project.update.created',
+               data: { updateId: created.id, preview: body.slice(0, 200) },
+            },
+         });
+         return created;
+      });
+      const subscribers = await this.prisma.projectSubscription.findMany({
+         where: { projectId: project.id },
+         select: { userId: true },
+      });
+      void this.notifications.notifyUsers(
+         subscribers.map((subscriber) => subscriber.userId),
+         dto.workspaceId,
+         userId,
+         'project.update.created',
+         'project',
+         project.id,
+         { name: project.name, updateId: update.id, preview: body.slice(0, 200) },
+         `📣 Project update: ${project.name}\n${body.slice(0, 1500)}`
+      );
+      return update;
+   }
+   async subscription(projectId: string, workspaceId: string, userId: string) {
+      await this.get(projectId, workspaceId, userId);
+      const subscription = await this.prisma.projectSubscription.findUnique({
+         where: { projectId_userId: { projectId, userId } },
+         select: { createdAt: true },
+      });
+      return { subscribed: Boolean(subscription), subscribedAt: subscription?.createdAt ?? null };
+   }
+   async subscribe(projectId: string, workspaceId: string, userId: string) {
+      await this.get(projectId, workspaceId, userId);
+      const subscription = await this.prisma.projectSubscription.upsert({
+         where: { projectId_userId: { projectId, userId } },
+         create: { projectId, userId },
+         update: {},
+      });
+      return { subscribed: true, subscribedAt: subscription.createdAt };
+   }
+   async unsubscribe(projectId: string, workspaceId: string, userId: string) {
+      await this.get(projectId, workspaceId, userId);
+      await this.prisma.projectSubscription.deleteMany({ where: { projectId, userId } });
+      return { subscribed: false, subscribedAt: null };
    }
    async listCustomFields(workspaceId: string, userId: string): Promise<unknown> {
       await this.authorize(workspaceId, userId);
