@@ -34,7 +34,7 @@ import {
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { parseAsStringLiteral, useQueryState } from 'nuqs';
-import { useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { InitiativeProgressPanel } from './initiative-progress-panel';
 import { InitiativeStatusIcon } from './initiative-status-icon';
 import {
@@ -48,6 +48,7 @@ import {
 import {
    LiveInitiative,
    LiveInitiativeActivity,
+   LiveWorkspaceMember,
    LiveWorkspaceProject,
    useInitiativeActivity,
    useLiveInitiatives,
@@ -244,6 +245,78 @@ function InitiativeResourceDialog({
    );
 }
 
+function InitiativeFieldDialog({
+   title,
+   value,
+   type,
+   trigger,
+   onSave,
+}: {
+   title: string;
+   value: string;
+   type: 'date' | 'description';
+   trigger: ReactNode;
+   onSave: (value: string | null) => Promise<void>;
+}) {
+   const [open, setOpen] = useState(false);
+   const [draft, setDraft] = useState(value);
+   const [saving, setSaving] = useState(false);
+   const [error, setError] = useState<string>();
+   const show = () => {
+      setDraft(value);
+      setError(undefined);
+      setOpen(true);
+   };
+   const save = async () => {
+      setSaving(true);
+      setError(undefined);
+      try {
+         await onSave(draft.trim() || null);
+         setOpen(false);
+      } catch (caught) {
+         setError(caught instanceof Error ? caught.message : `Could not update ${title}.`);
+      } finally {
+         setSaving(false);
+      }
+   };
+   return (
+      <Dialog open={open} onOpenChange={setOpen}>
+         <button type="button" className="text-left" onClick={show}>
+            {trigger}
+         </button>
+         <DialogContent>
+            <DialogHeader>
+               <DialogTitle>{title}</DialogTitle>
+               <DialogDescription>Update this initiative property.</DialogDescription>
+            </DialogHeader>
+            {type === 'date' ? (
+               <Input
+                  type="date"
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+               />
+            ) : (
+               <Textarea
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  rows={8}
+                  autoFocus
+               />
+            )}
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <DialogFooter>
+               <Button variant="outline" onClick={() => setOpen(false)}>
+                  Cancel
+               </Button>
+               <Button disabled={saving} onClick={() => void save()}>
+                  {saving ? 'Saving…' : 'Save'}
+               </Button>
+            </DialogFooter>
+         </DialogContent>
+      </Dialog>
+   );
+}
+
 /* ------------------------------ projects table ---------------------------- */
 
 const GROUP_ORDER: { key: string; label: string; match: (project: Project) => boolean }[] = [
@@ -419,7 +492,7 @@ function ProjectsSection({
 
 /* ------------------------------- overview tab ----------------------------- */
 
-function PropertyRow({ label, children }: { label: string; children: React.ReactNode }) {
+function PropertyRow({ label, children }: { label: string; children: ReactNode }) {
    return (
       <div className="flex items-center gap-2 text-sm">
          <span className="w-24 text-muted-foreground text-xs shrink-0">{label}</span>
@@ -433,6 +506,7 @@ function Overview({
    liveInitiative,
    workspaceId,
    workspaceProjects,
+   workspaceMembers,
    activities,
    reloadActivity,
    reload,
@@ -441,6 +515,7 @@ function Overview({
    liveInitiative: LiveInitiative;
    workspaceId?: string;
    workspaceProjects: LiveWorkspaceProject[];
+   workspaceMembers: LiveWorkspaceMember[];
    activities: LiveInitiativeActivity[];
    reloadActivity: () => void;
    reload: () => void;
@@ -449,6 +524,26 @@ function Overview({
    const total = initiative.projects.length;
    const resources = liveInitiative.resources;
    const recentActivity = activities.slice(0, 3);
+   const [mutationError, setMutationError] = useState<string>();
+   const updateInitiative = async (data: Record<string, unknown>) => {
+      if (!workspaceId) throw new Error('Workspace is unavailable.');
+      setMutationError(undefined);
+      const query = new URLSearchParams({ workspaceId });
+      const response = await fetch(`${api}/initiatives/${initiative.id}?${query}`, {
+         method: 'PATCH',
+         credentials: 'include',
+         headers: { 'content-type': 'application/json' },
+         body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+         const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+         const message = payload?.message ?? 'Could not update the initiative.';
+         setMutationError(message);
+         throw new Error(message);
+      }
+      reload();
+      reloadActivity();
+   };
 
    return (
       <div className="w-full h-full flex overflow-hidden">
@@ -537,10 +632,20 @@ function Overview({
 
                <div className="flex flex-col gap-2">
                   <h2 className="text-sm font-medium">Description</h2>
-                  <p className="text-sm text-muted-foreground">
-                     {initiative.description ?? 'Add description…'}
-                  </p>
+                  <InitiativeFieldDialog
+                     title="Initiative description"
+                     type="description"
+                     value={initiative.description ?? ''}
+                     onSave={(description) => updateInitiative({ description })}
+                     trigger={
+                        <p className="text-sm text-muted-foreground">
+                           {initiative.description ?? 'Add description…'}
+                        </p>
+                     }
+                  />
                </div>
+
+               {mutationError && <p className="text-sm text-destructive">{mutationError}</p>}
 
                <ProjectsSection
                   initiative={initiative}
@@ -555,42 +660,74 @@ function Overview({
             <div className="flex flex-col gap-3">
                <span className="text-sm font-medium">Properties</span>
                <PropertyRow label="Status">
-                  <span className="inline-flex items-center gap-1.5">
-                     <InitiativeStatusIcon status={initiative.status} />
-                     {INITIATIVE_STATUS_META[initiative.status].label}
-                  </span>
+                  <Select
+                     value={liveInitiative.status}
+                     onValueChange={(status) => void updateInitiative({ status })}
+                  >
+                     <SelectTrigger className="h-auto w-full border-0 bg-transparent p-0 shadow-none">
+                        <SelectValue />
+                     </SelectTrigger>
+                     <SelectContent>
+                        {Object.entries(INITIATIVE_STATUS_META).map(([value, meta]) => (
+                           <SelectItem key={value} value={value}>
+                              {meta.label}
+                           </SelectItem>
+                        ))}
+                     </SelectContent>
+                  </Select>
                </PropertyRow>
                <PropertyRow label="Priority">
-                  <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                     <initiative.priority.icon className="size-4" />
-                     {initiative.priority.name}
-                  </span>
+                  <Select
+                     value={initiative.priority.id}
+                     onValueChange={(priority) => void updateInitiative({ priority })}
+                  >
+                     <SelectTrigger className="h-auto w-full border-0 bg-transparent p-0 shadow-none text-muted-foreground">
+                        <SelectValue />
+                     </SelectTrigger>
+                     <SelectContent>
+                        {['none', 'urgent', 'high', 'medium', 'low'].map((value) => (
+                           <SelectItem key={value} value={value}>
+                              {value[0].toUpperCase() + value.slice(1)}
+                           </SelectItem>
+                        ))}
+                     </SelectContent>
+                  </Select>
                </PropertyRow>
                <PropertyRow label="Owner">
-                  {initiative.owner ? (
-                     <span className="inline-flex items-center gap-1.5">
-                        <Avatar className="size-4">
-                           <AvatarImage
-                              src={initiative.owner.avatarUrl ?? undefined}
-                              alt={initiative.owner.name}
-                           />
-                           <AvatarFallback className="text-[8px]">
-                              {initiative.owner.name[0]}
-                           </AvatarFallback>
-                        </Avatar>
-                        {initiative.owner.name}
-                     </span>
-                  ) : (
-                     <span className="text-muted-foreground inline-flex items-center gap-1.5">
-                        <UserRound className="size-4" /> Add owner
-                     </span>
-                  )}
+                  <Select
+                     value={initiative.owner?.id ?? 'unassigned'}
+                     onValueChange={(ownerId) =>
+                        void updateInitiative({
+                           ownerId: ownerId === 'unassigned' ? null : ownerId,
+                        })
+                     }
+                  >
+                     <SelectTrigger className="h-auto w-full border-0 bg-transparent p-0 shadow-none">
+                        <SelectValue placeholder="Add owner" />
+                     </SelectTrigger>
+                     <SelectContent>
+                        <SelectItem value="unassigned">Unassigned</SelectItem>
+                        {workspaceMembers.map((member) => (
+                           <SelectItem key={member.user.id} value={member.user.id}>
+                              {member.user.name}
+                           </SelectItem>
+                        ))}
+                     </SelectContent>
+                  </Select>
                </PropertyRow>
                <PropertyRow label="Target date">
-                  <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                     <CalendarRange className="size-4" />
-                     {initiative.target ?? 'Add target date'}
-                  </span>
+                  <InitiativeFieldDialog
+                     title="Target date"
+                     type="date"
+                     value={liveInitiative.targetDate?.slice(0, 10) ?? ''}
+                     onSave={(targetDate) => updateInitiative({ targetDate })}
+                     trigger={
+                        <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                           <CalendarRange className="size-4" />
+                           {initiative.target ?? 'Add target date'}
+                        </span>
+                     }
+                  />
                </PropertyRow>
                <PropertyRow label="Labels">
                   <span className="text-muted-foreground inline-flex items-center gap-1.5">
@@ -681,7 +818,8 @@ function Activity({
 /** Initiative detail page: Overview / Activity / Projects tabs. */
 export default function InitiativeDetails({ initiativeId }: { initiativeId: string }) {
    const [tab] = useQueryState('tab', parseAsStringLiteral(TABS).withDefault('overview'));
-   const { workspaceId, initiatives, projects, loading, error, reload } = useLiveInitiatives();
+   const { workspaceId, initiatives, projects, members, loading, error, reload } =
+      useLiveInitiatives();
    const liveInitiative = initiatives.find((item) => item.id === initiativeId);
    const initiative = useMemo(
       () => (liveInitiative ? adaptInitiative(liveInitiative) : undefined),
@@ -733,6 +871,7 @@ export default function InitiativeDetails({ initiativeId }: { initiativeId: stri
          liveInitiative={liveInitiative!}
          workspaceId={workspaceId}
          workspaceProjects={projects}
+         workspaceMembers={members}
          activities={activities}
          reloadActivity={reloadActivity}
          reload={reload}

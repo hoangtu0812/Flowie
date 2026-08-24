@@ -7,6 +7,6 @@ export class UpdateInitiativeDto {
    @IsOptional() @IsString() @MaxLength(32) priority?: string;
    @IsOptional() @IsString() @MaxLength(32) health?: string;
    @IsOptional() @IsString() @MaxLength(16) icon?: string | null;
-   @IsOptional() @IsString() ownerId?: string;
+   @IsOptional() @IsString() ownerId?: string | null;
    @IsOptional() @IsDateString() targetDate?: string | null;
 }

@@ -134,7 +134,7 @@ export class PortfolioService {
          where: { id: initiativeId, workspaceId, archivedAt: null },
       });
       if (!initiative) throw new NotFoundException('Initiative not found.');
-      if (dto.ownerId !== undefined) await this.assertWorkspaceOwner(workspaceId, dto.ownerId);
+      if (dto.ownerId) await this.assertWorkspaceOwner(workspaceId, dto.ownerId);
       const updated = await this.prisma.initiative.update({
          where: { id: initiativeId },
          data: {

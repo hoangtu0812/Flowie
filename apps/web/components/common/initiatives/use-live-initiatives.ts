@@ -49,6 +49,11 @@ export type LiveInitiative = {
 };
 
 export type LiveWorkspaceProject = LiveInitiativeProject;
+export type LiveWorkspaceMember = {
+   userId: string;
+   status: string;
+   user: { id: string; name: string; avatarUrl: string | null };
+};
 export type LiveInitiativeActivity = {
    id: string;
    action: string;
@@ -62,6 +67,7 @@ export function useLiveInitiatives() {
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [initiatives, setInitiatives] = useState<LiveInitiative[]>([]);
    const [projects, setProjects] = useState<LiveWorkspaceProject[]>([]);
+   const [members, setMembers] = useState<LiveWorkspaceMember[]>([]);
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState<string>();
    const [refreshKey, setRefreshKey] = useState(0);
@@ -72,15 +78,18 @@ export function useLiveInitiatives() {
          setError(undefined);
          try {
             const currentWorkspaceId = (await loadCurrentWorkspace()).id;
-            const [initiativeResponse, projectResponse] = await Promise.all([
+            const [initiativeResponse, projectResponse, membersResponse] = await Promise.all([
                fetch(`${api}/initiatives?workspaceId=${currentWorkspaceId}`, {
                   credentials: 'include',
                }),
                fetch(`${api}/projects?workspaceId=${currentWorkspaceId}`, {
                   credentials: 'include',
                }),
+               fetch(`${api}/workspaces/${currentWorkspaceId}/members`, {
+                  credentials: 'include',
+               }),
             ]);
-            if (!initiativeResponse.ok || !projectResponse.ok)
+            if (!initiativeResponse.ok || !projectResponse.ok || !membersResponse.ok)
                throw new Error('Could not load initiatives.');
             if (current) {
                setWorkspaceId(currentWorkspaceId);
@@ -89,6 +98,11 @@ export function useLiveInitiatives() {
                );
                setProjects(
                   ((await projectResponse.json()) as { data: LiveWorkspaceProject[] }).data
+               );
+               setMembers(
+                  ((await membersResponse.json()) as { data: LiveWorkspaceMember[] }).data.filter(
+                     (member) => member.status === 'ACTIVE'
+                  )
                );
             }
          } catch (caught) {
@@ -103,7 +117,7 @@ export function useLiveInitiatives() {
       };
    }, [refreshKey]);
    const reload = useCallback(() => setRefreshKey((value) => value + 1), []);
-   return { workspaceId, initiatives, projects, loading, error, reload };
+   return { workspaceId, initiatives, projects, members, loading, error, reload };
 }
 
 export function useInitiativeActivity(initiativeId?: string, workspaceId?: string) {
