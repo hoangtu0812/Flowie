@@ -26,6 +26,7 @@ export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
       activities,
       availableLabels,
       availableMembers,
+      availableTeams,
       availableStatuses,
       updateLabels,
       updateMembers,
@@ -80,6 +81,7 @@ export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
                insightsIssues={displayedIssues}
                availableLabels={availableLabels}
                availableMembers={availableMembers}
+               availableTeams={availableTeams}
                availableStatuses={availableStatuses}
                onProjectChange={updateProject}
                onLabelsChange={updateLabels}

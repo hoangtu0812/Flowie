@@ -21,7 +21,7 @@ import {
    SelectValue,
 } from '@/components/ui/select';
 import { format, parseISO } from 'date-fns';
-import { ArrowRight, Calendar, CalendarPlus, ChevronRight, Plus, Star, X } from 'lucide-react';
+import { ArrowRight, ChevronRight, Plus, Star, X } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -31,6 +31,7 @@ import { useLiveProject } from './details/use-live-project';
 import type { LiveProjectCustomField } from './details/use-live-project';
 import { ProjectLabelSelector } from './project-label-selector';
 import { ProjectMemberSelector } from './project-member-selector';
+import { ProjectDateDialog } from './details/project-date-dialog';
 
 interface ProjectPeekPanelProps {
    projectId: string;
@@ -72,11 +73,13 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
       milestones,
       availableLabels,
       availableMembers,
+      availableTeams,
       customFields,
       loading,
       error,
       updateLabels,
       updateMembers,
+      updateProject,
       updateCustomFields,
       createMilestone,
       toggleFavorite,
@@ -248,22 +251,39 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
                   />
                </PropertyRow>
                <PropertyRow label="Dates">
-                  <span className="inline-flex items-center gap-1">
-                     <Calendar className="size-3.5 text-muted-foreground" />
-                     {formatDay(chartStartDate)}
-                  </span>
+                  <ProjectDateDialog
+                     value={project.startDate}
+                     title="Project start date"
+                     fallback="Start"
+                     onSave={(startDate) => updateProject({ startDate })}
+                  />
                   <ArrowRight className="size-3 text-muted-foreground" />
-                  <span className="inline-flex items-center gap-1 text-muted-foreground">
-                     <CalendarPlus className="size-3.5" />
-                     {project.targetDate ? (
-                        <span className="text-foreground">{formatDay(project.targetDate)}</span>
-                     ) : (
-                        'Target'
-                     )}
-                  </span>
+                  <ProjectDateDialog
+                     value={project.targetDate}
+                     title="Project target date"
+                     fallback="Target"
+                     onSave={(targetDate) => updateProject({ targetDate })}
+                  />
                </PropertyRow>
                <PropertyRow label="Teams">
-                  <span>{project.team?.name ?? 'No team'}</span>
+                  <Select
+                     value={project.team?.id ?? 'no-team'}
+                     onValueChange={(teamId) =>
+                        void updateProject({ teamId: teamId === 'no-team' ? null : teamId })
+                     }
+                  >
+                     <SelectTrigger className="h-auto w-40 border-0 bg-transparent p-0 shadow-none">
+                        <SelectValue />
+                     </SelectTrigger>
+                     <SelectContent>
+                        <SelectItem value="no-team">No team</SelectItem>
+                        {availableTeams.map((team) => (
+                           <SelectItem key={team.id} value={team.id}>
+                              {team.icon ?? '👥'} {team.name}
+                           </SelectItem>
+                        ))}
+                     </SelectContent>
+                  </Select>
                </PropertyRow>
                <PropertyRow label="Initiatives">
                   {initiativeNames.length ? (

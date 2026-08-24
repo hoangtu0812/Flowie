@@ -205,6 +205,7 @@ export class ProjectsService {
             throw new NotFoundException('Project lead must be an active workspace member.');
          }
       }
+      if (dto.teamId) await this.authorizeTeam(workspaceId, dto.teamId, userId);
       const { labelIds, ...projectData } = dto;
       if (labelIds) await this.assertProjectLabels(workspaceId, labelIds);
       if (dto.status) await this.assertProjectStatus(workspaceId, dto.status);
@@ -497,7 +498,12 @@ export class ProjectsService {
          ...update,
          attachments: attachments
             .filter((attachment) => attachment.entityId === update.id)
-            .map(({ entityId: _entityId, ...attachment }) => attachment),
+            .map((attachment) => ({
+               id: attachment.id,
+               filename: attachment.filename,
+               mimeType: attachment.mimeType,
+               size: attachment.size,
+            })),
       }));
    }
    async subscription(projectId: string, workspaceId: string, userId: string) {

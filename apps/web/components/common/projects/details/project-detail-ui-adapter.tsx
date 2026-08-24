@@ -19,6 +19,7 @@ import type {
 
 export type ProjectDetailUiProject = Project & {
    team?: { id: string; name: string; identifier: string; icon: string | null } | null;
+   persistedStartDate: string | null;
    members: LiveProject['members'];
 };
 
@@ -158,6 +159,7 @@ export function toProjectUi(
       icon: FolderKanban,
       percentComplete: issues.length ? Math.round((completed / issues.length) * 100) : 0,
       startDate: project.startDate ?? project.createdAt,
+      persistedStartDate: project.startDate,
       targetDate: project.targetDate ?? undefined,
       lead: memberPresentation(project.lead, project.createdAt),
       priority:

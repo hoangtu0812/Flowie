@@ -100,6 +100,7 @@ export default function ProjectActivity({ projectId }: ProjectActivityProps) {
       createUpdate,
       availableLabels,
       availableMembers,
+      availableTeams,
       availableStatuses,
       updateLabels,
       updateMembers,
@@ -349,6 +350,7 @@ export default function ProjectActivity({ projectId }: ProjectActivityProps) {
             issues={uiIssues}
             availableLabels={availableLabels}
             availableMembers={availableMembers}
+            availableTeams={availableTeams}
             availableStatuses={availableStatuses}
             onProjectChange={updateProject}
             onLabelsChange={updateLabels}

@@ -8,6 +8,8 @@ export class UpdateProjectDto {
    @IsOptional() @IsString() @MaxLength(32) priority?: string;
    @IsOptional() @IsString() @MaxLength(32) health?: string;
    @IsOptional() @IsString() leadId?: string | null;
+   @IsOptional() @IsString() @MinLength(1) teamId?: string | null;
+   @IsOptional() @IsDateString() startDate?: string | null;
    @IsOptional() @IsDateString() targetDate?: string | null;
    @IsOptional() @IsArray() @IsString({ each: true }) labelIds?: string[];
    @IsOptional() @IsEnum(ProjectType) type?: ProjectType;

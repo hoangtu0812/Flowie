@@ -90,6 +90,13 @@ export type LiveProjectUpdate = {
 export type LiveProjectLabel = { id: string; name: string; color: string };
 export type LiveProjectInitiative = { id: string; name: string };
 export type LiveProjectStatus = { id: string; name: string; color: string; category: string };
+export type LiveWorkspaceTeam = {
+   id: string;
+   name: string;
+   identifier: string;
+   icon: string | null;
+   joined: boolean;
+};
 
 export type LiveProjectCustomField = {
    id: string;
@@ -117,6 +124,7 @@ export function useLiveProject(projectId: string) {
    const [availableStatuses, setAvailableStatuses] = useState<LiveProjectStatus[]>([]);
    const [customFields, setCustomFields] = useState<LiveProjectCustomField[]>([]);
    const [availableMembers, setAvailableMembers] = useState<LiveWorkspaceMember[]>([]);
+   const [availableTeams, setAvailableTeams] = useState<LiveWorkspaceTeam[]>([]);
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState<string>();
    const [refreshKey, setRefreshKey] = useState(0);
@@ -140,6 +148,7 @@ export function useLiveProject(projectId: string) {
                initiativesResponse,
                membersResponse,
                statusesResponse,
+               teamsResponse,
             ] = await Promise.all([
                fetch(`${api}/projects/${projectId}?${query}`, { credentials: 'include' }),
                fetch(`${api}/projects/${projectId}/issues?${query}`, { credentials: 'include' }),
@@ -159,6 +168,7 @@ export function useLiveProject(projectId: string) {
                fetch(`${api}/initiatives?${query}`, { credentials: 'include' }),
                fetch(`${api}/workspaces/${workspaceId}/members`, { credentials: 'include' }),
                fetch(`${api}/projects/statuses?${query}`, { credentials: 'include' }),
+               fetch(`${api}/teams?${query}`, { credentials: 'include' }),
             ]);
             if (
                !projectResponse.ok ||
@@ -170,7 +180,8 @@ export function useLiveProject(projectId: string) {
                !customFieldsResponse.ok ||
                !initiativesResponse.ok ||
                !membersResponse.ok ||
-               !statusesResponse.ok
+               !statusesResponse.ok ||
+               !teamsResponse.ok
             ) {
                throw new Error('Could not load project details.');
             }
@@ -197,6 +208,11 @@ export function useLiveProject(projectId: string) {
             );
             setAvailableStatuses(
                ((await statusesResponse.json()) as { data: LiveProjectStatus[] }).data
+            );
+            setAvailableTeams(
+               ((await teamsResponse.json()) as { data: LiveWorkspaceTeam[] }).data.filter(
+                  (team) => team.joined
+               )
             );
          } catch (caught) {
             if (current)
@@ -490,6 +506,7 @@ export function useLiveProject(projectId: string) {
       availableInitiatives,
       availableStatuses,
       availableMembers,
+      availableTeams,
       customFields,
       loading,
       error,

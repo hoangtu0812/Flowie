@@ -5,7 +5,12 @@ import { ProjectDetail } from '@/mock-data/project-details';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import type { ProjectDetailUiIssue, ProjectDetailUiProject } from './project-detail-ui-adapter';
 import { ProjectPropertiesPanel } from './project-properties-panel';
-import type { LiveProjectLabel, LiveProjectStatus, LiveWorkspaceMember } from './use-live-project';
+import type {
+   LiveProjectLabel,
+   LiveProjectStatus,
+   LiveWorkspaceMember,
+   LiveWorkspaceTeam,
+} from './use-live-project';
 
 interface ProjectSidePanelProps {
    project: ProjectDetailUiProject;
@@ -15,6 +20,7 @@ interface ProjectSidePanelProps {
    insightsIssues?: ProjectDetailUiIssue[];
    availableLabels?: LiveProjectLabel[];
    availableMembers: LiveWorkspaceMember[];
+   availableTeams: LiveWorkspaceTeam[];
    availableStatuses: LiveProjectStatus[];
    onProjectChange: (data: Record<string, unknown>) => Promise<unknown>;
    onLabelsChange?: (labelIds: string[]) => Promise<void>;
@@ -35,6 +41,7 @@ export function ProjectSidePanel({
    insightsIssues,
    availableLabels = [],
    availableMembers,
+   availableTeams,
    availableStatuses,
    onProjectChange,
    onLabelsChange,
@@ -57,6 +64,7 @@ export function ProjectSidePanel({
                issues={issues}
                availableLabels={availableLabels}
                availableMembers={availableMembers}
+               availableTeams={availableTeams}
                availableStatuses={availableStatuses}
                onProjectChange={onProjectChange}
                onLabelsChange={onLabelsChange}

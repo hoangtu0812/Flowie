@@ -25,15 +25,21 @@ import { PanelFilterTarget, usePanelFilter } from '@/components/common/issues/us
 import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { ProjectProgressChart } from './project-progress-chart';
-import { ArrowRight, Calendar, Check, Compass, MessageCircle, Plus, Tag } from 'lucide-react';
+import { ArrowRight, Check, Compass, MessageCircle, Plus, Tag } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { ProjectLabelSelector } from '../project-label-selector';
-import type { LiveProjectLabel, LiveProjectStatus, LiveWorkspaceMember } from './use-live-project';
+import type {
+   LiveProjectLabel,
+   LiveProjectStatus,
+   LiveWorkspaceMember,
+   LiveWorkspaceTeam,
+} from './use-live-project';
 import type { ProjectDetailUiIssue, ProjectDetailUiProject } from './project-detail-ui-adapter';
 import { ProjectMemberSelector } from '../project-member-selector';
+import { ProjectDateDialog } from './project-date-dialog';
 
 interface ProjectPropertiesPanelProps {
    project: ProjectDetailUiProject;
@@ -41,6 +47,7 @@ interface ProjectPropertiesPanelProps {
    issues: ProjectDetailUiIssue[];
    availableLabels: LiveProjectLabel[];
    availableMembers: LiveWorkspaceMember[];
+   availableTeams: LiveWorkspaceTeam[];
    availableStatuses: LiveProjectStatus[];
    onProjectChange: (data: Record<string, unknown>) => Promise<unknown>;
    onLabelsChange?: (labelIds: string[]) => Promise<void>;
@@ -210,58 +217,6 @@ function MilestoneDialog({
    );
 }
 
-function ProjectTargetDateDialog({
-   value,
-   onSave,
-}: {
-   value?: string;
-   onSave: (targetDate: string | null) => Promise<unknown>;
-}) {
-   const [open, setOpen] = useState(false);
-   const [draft, setDraft] = useState(value?.slice(0, 10) ?? '');
-   const [saving, setSaving] = useState(false);
-   const save = async () => {
-      setSaving(true);
-      try {
-         await onSave(draft || null);
-         setOpen(false);
-      } catch (caught) {
-         toast.error(caught instanceof Error ? caught.message : 'Could not update target date.');
-      } finally {
-         setSaving(false);
-      }
-   };
-   return (
-      <Dialog open={open} onOpenChange={setOpen}>
-         <button
-            type="button"
-            className="inline-flex items-center gap-1"
-            onClick={() => {
-               setDraft(value?.slice(0, 10) ?? '');
-               setOpen(true);
-            }}
-         >
-            <Calendar className="size-3.5 text-muted-foreground" />
-            {value ? formatDay(value) : 'Target'}
-         </button>
-         <DialogContent>
-            <DialogHeader>
-               <DialogTitle>Project target date</DialogTitle>
-            </DialogHeader>
-            <Input type="date" value={draft} onChange={(event) => setDraft(event.target.value)} />
-            <DialogFooter>
-               <Button variant="outline" onClick={() => setOpen(false)}>
-                  Cancel
-               </Button>
-               <Button disabled={saving} onClick={() => void save()}>
-                  {saving ? 'Saving…' : 'Save'}
-               </Button>
-            </DialogFooter>
-         </DialogContent>
-      </Dialog>
-   );
-}
-
 /**
  * Right-side panel of the project pages: properties, milestones,
  * progress breakdowns and a compact activity feed.
@@ -272,6 +227,7 @@ export function ProjectPropertiesPanel({
    issues,
    availableLabels,
    availableMembers,
+   availableTeams,
    availableStatuses,
    onProjectChange,
    onLabelsChange,
@@ -431,20 +387,39 @@ export function ProjectPropertiesPanel({
                   />
                </PropertyRow>
                <PropertyRow label="Dates">
-                  <span className="inline-flex items-center gap-1">
-                     <Calendar className="size-3.5 text-muted-foreground" />
-                     {formatDay(project.startDate)}
-                  </span>
+                  <ProjectDateDialog
+                     value={project.persistedStartDate}
+                     title="Project start date"
+                     fallback="Start"
+                     onSave={(startDate) => onProjectChange({ startDate })}
+                  />
                   <ArrowRight className="size-3 text-muted-foreground" />
-                  <ProjectTargetDateDialog
+                  <ProjectDateDialog
                      value={project.targetDate}
+                     title="Project target date"
+                     fallback="Target"
                      onSave={(targetDate) => onProjectChange({ targetDate })}
                   />
                </PropertyRow>
                <PropertyRow label="Teams">
-                  <span className="inline-flex items-center gap-1.5">
-                     {team?.icon ?? '👥'} {team?.name ?? project.teamId}
-                  </span>
+                  <Select
+                     value={team?.id ?? 'no-team'}
+                     onValueChange={(teamId) =>
+                        void mutate({ teamId: teamId === 'no-team' ? null : teamId })
+                     }
+                  >
+                     <SelectTrigger className="h-auto w-40 border-0 bg-transparent p-0 shadow-none">
+                        <SelectValue />
+                     </SelectTrigger>
+                     <SelectContent>
+                        <SelectItem value="no-team">No team</SelectItem>
+                        {availableTeams.map((option) => (
+                           <SelectItem key={option.id} value={option.id}>
+                              {option.icon ?? '👥'} {option.name}
+                           </SelectItem>
+                        ))}
+                     </SelectContent>
+                  </Select>
                </PropertyRow>
                <PropertyRow label="Discord">
                   <span className="flex items-center gap-1.5 text-muted-foreground">

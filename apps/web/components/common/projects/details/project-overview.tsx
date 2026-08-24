@@ -288,6 +288,7 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
       availableLabels,
       availableInitiatives,
       availableMembers,
+      availableTeams,
       availableStatuses,
       updateLabels,
       updateInitiatives,
@@ -488,6 +489,7 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
             issues={uiIssues}
             availableLabels={availableLabels}
             availableMembers={availableMembers}
+            availableTeams={availableTeams}
             availableStatuses={availableStatuses}
             onProjectChange={updateProject}
             onLabelsChange={updateLabels}
