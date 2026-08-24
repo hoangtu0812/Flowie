@@ -4,7 +4,6 @@ import { GroupedIssuesView } from '@/components/common/issues/grouped-issues-vie
 import { InsightsPanel } from '@/components/common/issues/insights-panel';
 import ProjectsList from '@/components/common/projects/projects-list';
 import { ProjectGroup } from '@/components/common/projects/projects';
-import { displayOrderedStatus } from '@/mock-data/status';
 import { useIssuesStore } from '@/store/issues-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { useEffect, useMemo } from 'react';
@@ -14,7 +13,7 @@ import { useLiveViews } from './use-live-views';
 /** Saved view detail applies the persisted server filter to live issue/project data. */
 export default function ViewDetails({ viewId }: { viewId: string }) {
    const { views, loading, error } = useLiveViews();
-   const { issues, projects, loadIssues, isLoading } = useIssuesStore();
+   const { issues, projects, statuses, loadIssues, isLoading } = useIssuesStore();
    const { openPanel } = useRightPanelStore();
    useEffect(() => {
       void loadIssues();
@@ -49,7 +48,7 @@ export default function ViewDetails({ viewId }: { viewId: string }) {
                <GroupedIssuesView
                   issues={scopedIssues}
                   totalIssues={scopedIssues}
-                  statuses={displayOrderedStatus}
+                  statuses={statuses}
                   isViewTypeGrid={false}
                />
             </div>
