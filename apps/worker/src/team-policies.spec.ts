@@ -8,6 +8,7 @@ type FakeOptions = {
    autoArchiveDays?: number | null;
    activeSla?: boolean;
    claim?: () => number;
+   issueCompletedPreference?: boolean;
 };
 
 function createFakePrisma(options: FakeOptions = {}) {
@@ -58,6 +59,12 @@ function createFakePrisma(options: FakeOptions = {}) {
             calls.notificationWorkspaceIds.push(...data.map(({ workspaceId }) => workspaceId));
             return { count: data.length };
          },
+      },
+      notificationPreference: {
+         findMany: async ({ where }: { where: { userId: { in: string[] } } }) =>
+            options.issueCompletedPreference === false
+               ? []
+               : where.userId.in.map((userId) => ({ userId })),
       },
    };
    const prisma = {
@@ -119,6 +126,17 @@ test('auto-close leaves an issue with an active SLA unchanged', async () => {
    assert.deepEqual(result, { teams: 1, closed: 0, archived: 0 });
    assert.equal(calls.updates, 0);
    assert.equal(calls.activities, 0);
+   assert.equal(calls.notifications, 0);
+});
+
+test('auto-close does not create an inbox item when completion notifications are disabled', async () => {
+   const { prisma, calls } = createFakePrisma({
+      autoCloseDays: 30,
+      issueCompletedPreference: false,
+   });
+   const result = await runTeamPolicies(prisma, new Date('2026-08-24T12:00:00.000Z'));
+
+   assert.deepEqual(result, { teams: 1, closed: 1, archived: 0 });
    assert.equal(calls.notifications, 0);
 });
 

@@ -2,6 +2,22 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@circle/database';
 import { PrismaService } from '../database/prisma.service';
 import { JobsService } from '../jobs/jobs.service';
+import { UpdateNotificationPreferencesDto } from './dto/update-notification-preferences.dto';
+
+export const NOTIFICATION_PREFERENCE_EVENT_MAP = {
+   'issue.created': 'teamIssueAdded',
+   'issue.team_added': 'teamIssueAdded',
+   'issue.completed': 'issueCompleted',
+   'issue.canceled': 'issueCompleted',
+   'issue.auto_closed': 'issueCompleted',
+   'issue.triage_added': 'issueAddedToTriage',
+} as const;
+
+const DEFAULT_NOTIFICATION_PREFERENCES = {
+   teamIssueAdded: false,
+   issueCompleted: false,
+   issueAddedToTriage: false,
+};
 
 export type NotificationResponse = {
    id: string;
@@ -67,6 +83,30 @@ export class NotificationsService {
               select: { userId: true },
            })
          : [];
+      const preferenceKey =
+         NOTIFICATION_PREFERENCE_EVENT_MAP[type as keyof typeof NOTIFICATION_PREFERENCE_EVENT_MAP];
+      const preferences = preferenceKey
+         ? await this.prisma.notificationPreference.findMany({
+              where: {
+                 workspaceId,
+                 userId: { in: activeRecipients.map(({ userId }) => userId) },
+              },
+              select: {
+                 userId: true,
+                 teamIssueAdded: true,
+                 issueCompleted: true,
+                 issueAddedToTriage: true,
+              },
+           })
+         : [];
+      const preferencesByUser = new Map(
+         preferences.map((preference) => [preference.userId, preference])
+      );
+      const eligibleRecipients = preferenceKey
+         ? activeRecipients.filter(
+              ({ userId }) => preferencesByUser.get(userId)?.[preferenceKey] === true
+           )
+         : activeRecipients;
       const actor = await this.prisma.user.findUnique({
          where: { id: actorId },
          select: { id: true, name: true, avatarUrl: true },
@@ -75,9 +115,9 @@ export class NotificationsService {
          ...data,
          ...(actor ? { actor } : {}),
       } as Prisma.InputJsonValue;
-      if (activeRecipients.length) {
+      if (eligibleRecipients.length) {
          await this.prisma.notification.createMany({
-            data: activeRecipients.map(({ userId }) => ({
+            data: eligibleRecipients.map(({ userId }) => ({
                workspaceId,
                userId,
                type,
@@ -88,6 +128,50 @@ export class NotificationsService {
          });
       }
       await this.jobs.enqueueDiscord({ workspaceId, content: discordContent });
+   }
+
+   async preferences(workspaceId: string, userId: string) {
+      await this.authorize(workspaceId, userId);
+      const preferences = await this.prisma.notificationPreference.findUnique({
+         where: { workspaceId_userId: { workspaceId, userId } },
+         select: {
+            teamIssueAdded: true,
+            issueCompleted: true,
+            issueAddedToTriage: true,
+         },
+      });
+      return preferences ?? DEFAULT_NOTIFICATION_PREFERENCES;
+   }
+
+   async updatePreferences(
+      workspaceId: string,
+      userId: string,
+      dto: UpdateNotificationPreferencesDto
+   ) {
+      await this.authorize(workspaceId, userId);
+      return this.prisma.$transaction(async (tx) => {
+         const preferences = await tx.notificationPreference.upsert({
+            where: { workspaceId_userId: { workspaceId, userId } },
+            create: { workspaceId, userId, ...dto },
+            update: dto,
+            select: {
+               teamIssueAdded: true,
+               issueCompleted: true,
+               issueAddedToTriage: true,
+            },
+         });
+         await tx.auditLog.create({
+            data: {
+               workspaceId,
+               actorId: userId,
+               action: 'notification.preferences.updated',
+               entityType: 'user',
+               entityId: userId,
+               metadata: dto as unknown as Prisma.InputJsonValue,
+            },
+         });
+         return preferences;
+      });
    }
 
    async list(workspaceId: string, userId: string): Promise<NotificationResponse[]> {
@@ -142,7 +226,9 @@ export class NotificationsService {
          where: { workspaceId, userId, entityType: 'issue' },
          select: { entityId: true },
       });
-      const issueIds = [...new Set(issueNotifications.map((notification) => notification.entityId))];
+      const issueIds = [
+         ...new Set(issueNotifications.map((notification) => notification.entityId)),
+      ];
       if (!issueIds.length) return { count: 0 };
 
       const completedIssues = await this.prisma.issue.findMany({

@@ -1,6 +1,18 @@
-import { Controller, Delete, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+   Body,
+   Controller,
+   Delete,
+   Get,
+   Param,
+   Patch,
+   Post,
+   Query,
+   Req,
+   UseGuards,
+} from '@nestjs/common';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { NotificationsService, type NotificationResponse } from './notifications.service';
+import { UpdateNotificationPreferencesDto } from './dto/update-notification-preferences.dto';
 
 @UseGuards(AuthGuard)
 @Controller('notifications')
@@ -13,6 +25,27 @@ export class NotificationsController {
       @Req() request: AuthenticatedRequest
    ): Promise<{ data: NotificationResponse[] }> {
       return { data: await this.notifications.list(workspaceId, request.auth!.userId) };
+   }
+
+   @Get('preferences')
+   async preferences(
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.notifications.preferences(workspaceId, request.auth!.userId),
+      };
+   }
+
+   @Patch('preferences')
+   async updatePreferences(
+      @Query('workspaceId') workspaceId: string,
+      @Body() dto: UpdateNotificationPreferencesDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.notifications.updatePreferences(workspaceId, request.auth!.userId, dto),
+      };
    }
 
    @Post('read-all')
@@ -46,10 +79,7 @@ export class NotificationsController {
       @Req() request: AuthenticatedRequest
    ) {
       return {
-         data: await this.notifications.deleteForCompletedIssues(
-            workspaceId,
-            request.auth!.userId
-         ),
+         data: await this.notifications.deleteForCompletedIssues(workspaceId, request.auth!.userId),
       };
    }
 
@@ -60,11 +90,7 @@ export class NotificationsController {
       @Req() request: AuthenticatedRequest
    ): Promise<{ data: NotificationResponse }> {
       return {
-         data: await this.notifications.markRead(
-            notificationId,
-            workspaceId,
-            request.auth!.userId
-         ),
+         data: await this.notifications.markRead(notificationId, workspaceId, request.auth!.userId),
       };
    }
 }

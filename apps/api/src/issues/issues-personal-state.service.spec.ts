@@ -28,12 +28,14 @@ describe('IssuesService personal state', () => {
          enqueueIssueReminder: jest.fn().mockResolvedValue(undefined),
          cancelIssueReminder: jest.fn().mockResolvedValue(undefined),
       };
+      const notifications = { notifyWorkspace: jest.fn().mockResolvedValue(undefined) };
       return {
          prisma,
          jobs,
+         notifications,
          service: new IssuesService(
             prisma as never,
-            {} as never,
+            notifications as never,
             {} as never,
             jobs as never
          ),
@@ -56,11 +58,7 @@ describe('IssuesService personal state', () => {
       const { service, prisma, jobs } = serviceWith();
       const remindAt = new Date(Date.now() + 60_000).toISOString();
 
-      await service.setReminder(
-         'issue-1',
-         { workspaceId: 'workspace-1', remindAt },
-         'user-1'
-      );
+      await service.setReminder('issue-1', { workspaceId: 'workspace-1', remindAt }, 'user-1');
 
       expect(prisma.issueReminder.upsert).toHaveBeenCalledWith(
          expect.objectContaining({
@@ -75,6 +73,8 @@ describe('IssuesService personal state', () => {
          ...accessibleIssue,
          teamId: 'team-2',
          identifier: 'OPS-7',
+         title: 'Moved issue',
+         team: { id: 'team-2', name: 'Operations', identifier: 'OPS' },
       };
       const tx = {
          team: {
@@ -93,16 +93,12 @@ describe('IssuesService personal state', () => {
          },
          activity: { create: jest.fn().mockResolvedValue({ id: 'activity-1' }) },
       };
-      const { service } = serviceWith({
+      const { service, notifications } = serviceWith({
          $transaction: jest.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
       });
 
       await expect(
-         service.move(
-            'issue-1',
-            { workspaceId: 'workspace-1', teamId: 'team-2' },
-            'user-1'
-         )
+         service.move('issue-1', { workspaceId: 'workspace-1', teamId: 'team-2' }, 'user-1')
       ).resolves.toMatchObject({ identifier: 'OPS-7', teamId: 'team-2' });
       expect(tx.issue.update).toHaveBeenCalledWith(
          expect.objectContaining({
@@ -112,6 +108,15 @@ describe('IssuesService personal state', () => {
                number: 7,
             }),
          })
+      );
+      expect(notifications.notifyWorkspace).toHaveBeenCalledWith(
+         'workspace-1',
+         'user-1',
+         'issue.team_added',
+         'issue',
+         'issue-1',
+         expect.objectContaining({ identifier: 'OPS-7', teamId: 'team-2' }),
+         expect.stringContaining('Operations')
       );
    });
 

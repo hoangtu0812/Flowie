@@ -131,6 +131,7 @@ model User {
   comments Comment[]
   activities Activity[] @relation("ActivityActor")
   notifications Notification[]
+  notificationPreferences NotificationPreference[]
   uploadedAttachments Attachment[]
   savedViews SavedView[] @relation("SavedViewCreator")
   ledProjects Project[] @relation("ProjectLead")
@@ -270,6 +271,7 @@ model Workspace {
   attachments  Attachment[]
   activities   Activity[]
   notifications Notification[]
+  notificationPreferences NotificationPreference[]
   discordWebhook DiscordWebhook?
   projectCustomFields ProjectCustomField[]
   projectTemplates ProjectTemplate[]
@@ -1149,6 +1151,23 @@ model Notification {
   @@index([userId, readAt, createdAt])
   @@index([workspaceId, userId, readAt, createdAt])
   @@map("notifications")
+}
+
+model NotificationPreference {
+  workspaceId          String   @map("workspace_id")
+  userId               String   @map("user_id")
+  teamIssueAdded       Boolean  @default(false) @map("team_issue_added")
+  issueCompleted       Boolean  @default(false) @map("issue_completed")
+  issueAddedToTriage   Boolean  @default(false) @map("issue_added_to_triage")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, userId])
+  @@index([userId])
+  @@map("notification_preferences")
 }
 
 model Attachment {

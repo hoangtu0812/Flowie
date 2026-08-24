@@ -344,15 +344,30 @@ export class IssuesService {
          }
          return issue;
       });
-      void this.notifications.notifyWorkspace(
-         dto.workspaceId,
-         userId,
-         'issue.created',
-         'issue',
-         issue.id,
-         { title: issue.title, identifier: issue.identifier },
-         `🆕 Issue ${issue.identifier}: ${issue.title}`
-      );
+      void this.notifications
+         .notifyWorkspace(
+            dto.workspaceId,
+            userId,
+            'issue.created',
+            'issue',
+            issue.id,
+            { title: issue.title, identifier: issue.identifier },
+            `🆕 Issue ${issue.identifier}: ${issue.title}`
+         )
+         .catch(() => undefined);
+      if (issue.status.category === IssueStatusCategory.TRIAGE) {
+         void this.notifications
+            .notifyWorkspace(
+               dto.workspaceId,
+               userId,
+               'issue.triage_added',
+               'issue',
+               issue.id,
+               { title: issue.title, identifier: issue.identifier },
+               `📥 Issue added to triage: ${issue.identifier} — ${issue.title}`
+            )
+            .catch(() => undefined);
+      }
       return issue;
    }
 
@@ -585,7 +600,7 @@ export class IssuesService {
             throw new NotFoundException('One or more releases were not found.');
          }
       }
-      return this.prisma.$transaction(async (tx) => {
+      const updated = await this.prisma.$transaction(async (tx) => {
          const updated = await tx.issue.update({
             where: { id: issueId },
             data: {
@@ -636,6 +651,30 @@ export class IssuesService {
          });
          return updated;
       });
+      if (status && status.category !== issue.status.category) {
+         const notificationType =
+            status.category === IssueStatusCategory.COMPLETED
+               ? 'issue.completed'
+               : status.category === IssueStatusCategory.CANCELED
+                 ? 'issue.canceled'
+                 : status.category === IssueStatusCategory.TRIAGE
+                   ? 'issue.triage_added'
+                   : undefined;
+         if (notificationType) {
+            void this.notifications
+               .notifyWorkspace(
+                  workspaceId,
+                  userId,
+                  notificationType,
+                  'issue',
+                  updated.id,
+                  { title: updated.title, identifier: updated.identifier },
+                  `🔔 ${updated.identifier} moved to ${status.name}: ${updated.title}`
+               )
+               .catch(() => undefined);
+         }
+      }
+      return updated;
    }
 
    async convertToComment(issueId: string, dto: ConvertIssueToCommentDto, userId: string) {
@@ -766,7 +805,7 @@ export class IssuesService {
       const issue = await this.get(issueId, dto.workspaceId, userId);
       if (issue.teamId === dto.teamId) return issue;
       await this.authorize(dto.workspaceId, userId, dto.teamId);
-      return this.prisma.$transaction(async (tx) => {
+      const moved = await this.prisma.$transaction(async (tx) => {
          const destination = await tx.team.update({
             where: { id: dto.teamId },
             data: { issueSequence: { increment: 1 } },
@@ -828,6 +867,31 @@ export class IssuesService {
          });
          return moved;
       });
+      void this.notifications
+         .notifyWorkspace(
+            dto.workspaceId,
+            userId,
+            'issue.team_added',
+            'issue',
+            moved.id,
+            { title: moved.title, identifier: moved.identifier, teamId: moved.team.id },
+            `📥 Issue added to ${moved.team.name}: ${moved.identifier} — ${moved.title}`
+         )
+         .catch(() => undefined);
+      if (moved.status.category === IssueStatusCategory.TRIAGE) {
+         void this.notifications
+            .notifyWorkspace(
+               dto.workspaceId,
+               userId,
+               'issue.triage_added',
+               'issue',
+               moved.id,
+               { title: moved.title, identifier: moved.identifier },
+               `📥 Issue added to triage: ${moved.identifier} — ${moved.title}`
+            )
+            .catch(() => undefined);
+      }
+      return moved;
    }
 
    async classify(issueId: string, dto: ClassifyIssueDto, userId: string) {
@@ -874,7 +938,7 @@ export class IssuesService {
          throw new NotFoundException('No canceled status is configured for this team.');
       }
 
-      return this.prisma.$transaction(async (tx) => {
+      const classified = await this.prisma.$transaction(async (tx) => {
          const classified = await tx.issue.update({
             where: { id: issueId },
             data: {
@@ -897,6 +961,20 @@ export class IssuesService {
          });
          return classified;
       });
+      if (issue.status.category !== IssueStatusCategory.CANCELED) {
+         void this.notifications
+            .notifyWorkspace(
+               dto.workspaceId,
+               userId,
+               'issue.canceled',
+               'issue',
+               classified.id,
+               { title: classified.title, identifier: classified.identifier },
+               `🚫 Issue canceled: ${classified.identifier} — ${classified.title}`
+            )
+            .catch(() => undefined);
+      }
+      return classified;
    }
 
    async archive(issueId: string, workspaceId: string, userId: string) {

@@ -259,20 +259,30 @@ async function applyAutoClose(
          });
          const recipientIds = [...new Set(issue.subscribers.map(({ userId }) => userId))];
          if (recipientIds.length) {
-            await tx.notification.createMany({
-               data: recipientIds.map((userId) => ({
+            const enabledRecipients = await tx.notificationPreference.findMany({
+               where: {
                   workspaceId: issue.workspaceId,
-                  userId,
-                  type: 'issue.auto_closed',
-                  entityType: 'issue',
-                  entityId: issue.id,
-                  data: {
-                     identifier: issue.identifier,
-                     title: issue.title,
-                     inactivityDays: team.autoCloseDays,
-                  },
-               })),
+                  userId: { in: recipientIds },
+                  issueCompleted: true,
+               },
+               select: { userId: true },
             });
+            if (enabledRecipients.length) {
+               await tx.notification.createMany({
+                  data: enabledRecipients.map(({ userId }) => ({
+                     workspaceId: issue.workspaceId,
+                     userId,
+                     type: 'issue.auto_closed',
+                     entityType: 'issue',
+                     entityId: issue.id,
+                     data: {
+                        identifier: issue.identifier,
+                        title: issue.title,
+                        inactivityDays: team.autoCloseDays,
+                     },
+                  })),
+               });
+            }
          }
          return true;
       });
