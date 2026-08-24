@@ -23,6 +23,8 @@ export interface Issue {
    isSubscribed?: boolean;
    isFavorite?: boolean;
    reminderAt?: string;
+   /** Workspace release links returned by the API-backed issue list. */
+   releaseIds?: string[];
    resolution?: 'DUPLICATE' | 'WONT_FIX';
    duplicateOfId?: string;
    hasActivity?: boolean;

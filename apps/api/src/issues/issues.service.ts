@@ -40,6 +40,7 @@ const issueInclude = {
    assignee: { select: { id: true, name: true, avatarUrl: true } },
    labelLinks: { include: { label: { select: { id: true, name: true, color: true } } } },
    cycleLinks: { select: { cycleId: true } },
+   releaseLinks: { select: { releaseId: true } },
 } as const;
 
 const relatedIssueSelect = {
@@ -116,7 +117,7 @@ export class IssuesService {
          ? { teamMemberships: { some: { teamId } } }
          : { memberships: { some: { workspaceId, status: 'ACTIVE' as const } } };
 
-      const [statuses, projects, members, labels, cycles, templates] = await Promise.all([
+      const [statuses, projects, members, labels, cycles, templates, releases] = await Promise.all([
          this.prisma.issueStatus.findMany({
             where: {
                workspaceId,
@@ -167,9 +168,20 @@ export class IssuesService {
             include: { createdBy: { select: { id: true, name: true, avatarUrl: true } } },
             orderBy: { name: 'asc' },
          }),
+         this.prisma.release.findMany({
+            where: { workspaceId, archivedAt: null },
+            select: {
+               id: true,
+               name: true,
+               version: true,
+               status: true,
+               targetDate: true,
+            },
+            orderBy: [{ targetDate: 'desc' }, { createdAt: 'desc' }],
+         }),
       ]);
 
-      return { statuses, projects, members, labels, cycles, templates };
+      return { statuses, projects, members, labels, cycles, templates, releases };
    }
 
    async templates(workspaceId: string, userId: string) {
@@ -536,7 +548,7 @@ export class IssuesService {
 
    async update(issueId: string, workspaceId: string, dto: UpdateIssueDto, userId: string) {
       const issue = await this.get(issueId, workspaceId, userId);
-      const { labelIds, ...issueData } = dto;
+      const { labelIds, releaseIds, ...issueData } = dto;
       const status = dto.statusId
          ? await this.prisma.issueStatus.findFirst({ where: { id: dto.statusId, workspaceId } })
          : undefined;
@@ -563,6 +575,15 @@ export class IssuesService {
             throw new NotFoundException('One or more labels were not found.');
          }
       }
+      if (releaseIds) {
+         const uniqueReleaseIds = [...new Set(releaseIds)];
+         const releaseCount = await this.prisma.release.count({
+            where: { workspaceId, archivedAt: null, id: { in: uniqueReleaseIds } },
+         });
+         if (releaseCount !== uniqueReleaseIds.length) {
+            throw new NotFoundException('One or more releases were not found.');
+         }
+      }
       return this.prisma.$transaction(async (tx) => {
          const updated = await tx.issue.update({
             where: { id: issueId },
@@ -573,6 +594,14 @@ export class IssuesService {
                        labelLinks: {
                           deleteMany: {},
                           create: labelIds.map((labelId) => ({ labelId })),
+                       },
+                    }
+                  : {}),
+               ...(releaseIds
+                  ? {
+                       releaseLinks: {
+                          deleteMany: {},
+                          create: [...new Set(releaseIds)].map((releaseId) => ({ releaseId })),
                        },
                     }
                   : {}),

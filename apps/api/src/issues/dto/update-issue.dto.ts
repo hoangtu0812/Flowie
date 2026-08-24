@@ -20,6 +20,7 @@ export class UpdateIssueDto {
    @IsOptional() @IsString() assigneeId?: string;
    @IsOptional() @IsEnum(IssuePriority) priority?: IssuePriority;
    @IsOptional() @IsArray() @IsString({ each: true }) labelIds?: string[];
+   @IsOptional() @IsArray() @IsString({ each: true }) releaseIds?: string[];
    @IsOptional() @IsDateString() dueDate?: string | null;
    @IsOptional()
    @Transform(({ value }) => Number(value))

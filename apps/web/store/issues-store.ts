@@ -47,6 +47,7 @@ type ApiIssue = {
    creator: ApiPerson;
    labelLinks: Array<{ label: ApiLabel }>;
    cycleLinks: Array<{ cycleId: string }>;
+   releaseLinks: Array<{ releaseId: string }>;
    subscribers?: Array<{ userId: string }>;
    activities?: Array<{ id: string }>;
    favorites?: Array<{ userId: string }>;
@@ -67,6 +68,7 @@ type ApiIssueOptions = {
       endDate: string | null;
    }>;
    templates: IssueTemplateOption[];
+   releases: IssueReleaseOption[];
 };
 
 export type IssueCycleOption = {
@@ -75,6 +77,14 @@ export type IssueCycleOption = {
    status: string;
    startDate: string | null;
    endDate: string | null;
+};
+
+export type IssueReleaseOption = {
+   id: string;
+   name: string;
+   version: string;
+   status: string;
+   targetDate: string | null;
 };
 
 export type IssueTeamOption = { id: string; name: string; identifier: string; joined: boolean };
@@ -121,6 +131,7 @@ interface IssuesState {
    members: User[];
    labels: LabelInterface[];
    cycles: IssueCycleOption[];
+   releases: IssueReleaseOption[];
    templates: IssueTemplateOption[];
    teams: IssueTeamOption[];
    workspaceId?: string;
@@ -151,6 +162,7 @@ interface IssuesState {
    updateIssueDueDate: (issueId: string, dueDate?: string) => Promise<void>;
    updateIssueTitle: (issueId: string, title: string) => Promise<void>;
    updateIssueCycle: (issueId: string, cycleId?: string) => Promise<void>;
+   updateIssueReleases: (issueId: string, releaseIds: string[]) => Promise<void>;
    setIssueSubscription: (issueId: string, subscribed: boolean) => Promise<void>;
    setIssueFavorite: (issueId: string, favorite: boolean) => Promise<void>;
    setIssueReminder: (issueId: string, remindAt?: string) => Promise<void>;
@@ -280,6 +292,7 @@ const mapIssue = (issue: ApiIssue): Issue => ({
    duplicateOfId: issue.duplicateOfId ?? undefined,
    hasActivity: Boolean(issue.activities?.length),
    cycleId: issue.cycleLinks[0]?.cycleId ?? '',
+   releaseIds: issue.releaseLinks.map((link) => link.releaseId),
    project: issue.project ? mapProject(issue.project) : undefined,
    rank: issue.createdAt,
    dueDate: issue.dueDate ?? undefined,
@@ -306,6 +319,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
    members: [],
    labels: [],
    cycles: [],
+   releases: [],
    templates: [],
    teams: [],
    isLoading: false,
@@ -353,6 +367,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
             members: optionsData.data.members.map(mapUser),
             labels: optionsData.data.labels.map(mapLabel),
             cycles: optionsData.data.cycles,
+            releases: optionsData.data.releases,
             templates: optionsData.data.templates,
             teams: joinedTeams,
             workspaceId,
@@ -368,6 +383,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
             members: [],
             labels: [],
             cycles: [],
+            releases: [],
             templates: [],
             teams: [],
             currentUserId: undefined,
@@ -515,6 +531,11 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
             throw new Error('Could not remove the issue from its current cycle.');
       }
       get().updateIssue(issueId, { cycleId: cycleId ?? '' });
+   },
+   updateIssueReleases: async (issueId, releaseIds) => {
+      const uniqueReleaseIds = [...new Set(releaseIds)];
+      await patchIssue(issueId, get().workspaceId, { releaseIds: uniqueReleaseIds });
+      get().updateIssue(issueId, { releaseIds: uniqueReleaseIds });
    },
    setIssueSubscription: async (issueId, subscribed) => {
       const workspaceId = get().workspaceId;

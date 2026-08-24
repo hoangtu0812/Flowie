@@ -43,7 +43,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 type PaletteRoute =
-   'root' | 'assign' | 'status' | 'priority' | 'labels' | 'project' | 'team' | 'cycle' | 'due-date';
+   | 'root'
+   | 'assign'
+   | 'status'
+   | 'priority'
+   | 'labels'
+   | 'project'
+   | 'team'
+   | 'cycle'
+   | 'release'
+   | 'due-date';
 
 const dueDateFromToday = (daysFromToday: number) => {
    const date = new Date();
@@ -108,8 +117,10 @@ export function CommandPalette() {
       labels,
       projects,
       cycles,
+      releases,
       teams,
       moveIssue,
+      updateIssueReleases,
    } = useIssuesStore();
    const { openModal } = useCreateIssueStore();
 
@@ -342,7 +353,12 @@ export function CommandPalette() {
                               Move to cycle…
                               <Keys keys={['⇧', 'C']} />
                            </CommandItem>
-                           <CommandItem disabled title="Releases are not available yet">
+                           <CommandItem
+                              onSelect={() => {
+                                 setRoute('release');
+                                 setQuery('');
+                              }}
+                           >
                               <PackagePlus className="text-muted-foreground" />
                               Add to release…
                               <Keys keys={['⌥', 'R']} />
@@ -649,6 +665,46 @@ export function CommandPalette() {
                               {issue.cycleId === cycle.id && <Check className="ml-auto size-4" />}
                            </CommandItem>
                         ))}
+                     </CommandGroup>
+                  )}
+
+                  {route === 'release' && issue && (
+                     <CommandGroup heading="Add to release…">
+                        {releases.map((release) => {
+                           const active = issue.releaseIds?.includes(release.id) ?? false;
+                           const releaseIds = issue.releaseIds ?? [];
+                           return (
+                              <CommandItem
+                                 key={release.id}
+                                 onSelect={() =>
+                                    void runIssueMutation(
+                                       () =>
+                                          updateIssueReleases(
+                                             issue.id,
+                                             active
+                                                ? releaseIds.filter((id) => id !== release.id)
+                                                : [...releaseIds, release.id]
+                                          ),
+                                       active
+                                          ? `Removed from ${release.name}`
+                                          : `Added to ${release.name}`,
+                                       'Could not update releases',
+                                       false
+                                    )
+                                 }
+                              >
+                                 <PackagePlus className="text-muted-foreground" />
+                                 <span>{release.name}</span>
+                                 <span className="text-xs text-muted-foreground">
+                                    {release.version}
+                                 </span>
+                                 {active && <Check className="ml-auto size-4" />}
+                              </CommandItem>
+                           );
+                        })}
+                        {releases.length === 0 && (
+                           <CommandItem disabled>No releases are available</CommandItem>
+                        )}
                      </CommandGroup>
                   )}
 

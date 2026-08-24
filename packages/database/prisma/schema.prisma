@@ -663,6 +663,7 @@ model Release {
   workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdBy   User             @relation("ReleaseCreator", fields: [createdById], references: [id], onDelete: Restrict)
   projectLinks ReleaseProject[]
+  issueLinks   IssueRelease[]
 
   @@unique([workspaceId, version])
   @@index([workspaceId, archivedAt])
@@ -680,6 +681,19 @@ model ReleaseProject {
   @@id([releaseId, projectId])
   @@index([projectId])
   @@map("release_projects")
+}
+
+model IssueRelease {
+  releaseId String   @map("release_id")
+  issueId   String   @map("issue_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  release Release @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  issue   Issue   @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@id([releaseId, issueId])
+  @@index([issueId])
+  @@map("issue_releases")
 }
 
 model CustomerRequest {
@@ -853,6 +867,7 @@ model Issue {
   creator   User        @relation("IssueCreator", fields: [creatorId], references: [id], onDelete: Restrict)
   assignee  User?       @relation("IssueAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   cycleLinks IssueCycle[]
+  releaseLinks IssueRelease[]
   outgoingRelations IssueRelation[] @relation("IssueRelationSource")
   incomingRelations IssueRelation[] @relation("IssueRelationTarget")
   comments Comment[]
