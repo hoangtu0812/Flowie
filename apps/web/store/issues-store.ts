@@ -82,6 +82,7 @@ interface FilterOptions {
 }
 
 interface CreateIssueInput {
+   teamId?: string;
    title: string;
    description?: string;
    statusId?: string;
@@ -106,7 +107,7 @@ interface IssuesState {
    error?: string;
    getAllIssues: () => Issue[];
    loadIssues: (teamIdentifier?: string) => Promise<void>;
-   createIssue: (input: CreateIssueInput) => Promise<void>;
+   createIssue: (input: CreateIssueInput) => Promise<Issue>;
    addIssue: (issue: Issue) => void;
    updateIssue: (id: string, updatedIssue: Partial<Issue>) => void;
    deleteIssue: (id: string) => void;
@@ -125,6 +126,7 @@ interface IssuesState {
    removeIssueLabel: (issueId: string, labelId: string) => Promise<void>;
    updateIssueProject: (issueId: string, newProject: Project | undefined) => Promise<void>;
    updateIssueDueDate: (issueId: string, dueDate?: string) => Promise<void>;
+   updateIssueTitle: (issueId: string, title: string) => Promise<void>;
    updateIssueCycle: (issueId: string, cycleId?: string) => Promise<void>;
    setIssueSubscription: (issueId: string, subscribed: boolean) => Promise<void>;
    archiveIssue: (issueId: string) => Promise<void>;
@@ -341,7 +343,8 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
 
    createIssue: async (input) => {
       const { workspaceId, teamId } = get();
-      if (!workspaceId || !teamId)
+      const destinationTeamId = input.teamId ?? teamId;
+      if (!workspaceId || !destinationTeamId)
          throw new Error('Open a team issue view before creating an issue.');
       const response = await fetch(`${api}/issues`, {
          method: 'POST',
@@ -349,14 +352,16 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
          headers: { 'content-type': 'application/json' },
          body: JSON.stringify({
             workspaceId,
-            teamId,
+            teamId: destinationTeamId,
             ...input,
             priority: input.priority?.toUpperCase(),
          }),
       });
       if (!response.ok) throw new Error('Could not create the issue.');
       const data = (await response.json()) as { data: ApiIssue };
-      get().addIssue(mapIssue(data.data));
+      const issue = mapIssue(data.data);
+      get().addIssue(issue);
+      return issue;
    },
 
    addIssue: (issue) => set((state) => issueState([issue, ...state.issues])),
@@ -444,6 +449,10 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
    updateIssueDueDate: async (issueId, dueDate) => {
       await patchIssue(issueId, get().workspaceId, { dueDate: dueDate ?? null });
       get().updateIssue(issueId, { dueDate });
+   },
+   updateIssueTitle: async (issueId, title) => {
+      await patchIssue(issueId, get().workspaceId, { title });
+      get().updateIssue(issueId, { title });
    },
    updateIssueCycle: async (issueId, cycleId) => {
       const workspaceId = get().workspaceId;

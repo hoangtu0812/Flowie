@@ -52,6 +52,9 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       addIssueLabel,
       removeIssueLabel,
       updateIssueProject,
+      updateIssueDueDate,
+      updateIssueTitle,
+      createIssue,
       getIssueById,
       setIssueSubscription,
       archiveIssue,
@@ -59,7 +62,10 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       members,
       projects,
       labels: workspaceLabels,
+      workspaceId,
    } = useIssuesStore();
+
+   const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
    const handleStatusChange = async (statusId: string) => {
       if (!issueId) return;
@@ -141,6 +147,121 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       } catch {
          toast.error('Could not update subscription');
       }
+   };
+
+   const handleDueDate = async () => {
+      if (!issueId) return;
+      const issue = getIssueById(issueId);
+      if (!issue) return;
+      const value = window.prompt(
+         'Due date (YYYY-MM-DD). Leave empty to clear.',
+         issue.dueDate?.slice(0, 10) ?? ''
+      );
+      if (value === null) return;
+      if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+         toast.error('Use the YYYY-MM-DD date format');
+         return;
+      }
+      try {
+         await updateIssueDueDate(issueId, value || undefined);
+         toast.success(value ? 'Due date updated' : 'Due date cleared');
+      } catch {
+         toast.error('Could not update due date');
+      }
+   };
+
+   const handleRename = async () => {
+      if (!issueId) return;
+      const issue = getIssueById(issueId);
+      if (!issue) return;
+      const title = window.prompt('Issue title', issue.title)?.trim();
+      if (!title || title === issue.title) return;
+      try {
+         await updateIssueTitle(issueId, title);
+         toast.success('Issue renamed');
+      } catch {
+         toast.error('Could not rename issue');
+      }
+   };
+
+   const handleMakeCopy = async () => {
+      if (!issueId) return;
+      const issue = getIssueById(issueId);
+      if (!issue?.team) return;
+      try {
+         const copied = await createIssue({
+            teamId: issue.team.id,
+            title: `${issue.title} (copy)`,
+            description: issue.description,
+            statusId: issue.status.id,
+            priority: issue.priority.id,
+            assigneeId: issue.assignee?.id,
+            projectId: issue.project?.id,
+            labelIds: issue.labels.map((label) => label.id),
+         });
+         toast.success(`Created ${copied.identifier}`);
+      } catch {
+         toast.error('Could not copy issue');
+      }
+   };
+
+   const handleCreateRelated = async () => {
+      if (!issueId || !workspaceId) return;
+      const issue = getIssueById(issueId);
+      if (!issue?.team) return;
+      const title = window.prompt('Related issue title')?.trim();
+      if (!title) return;
+      try {
+         const related = await createIssue({ teamId: issue.team.id, title });
+         const response = await fetch(`${api}/issues/${issueId}/relations`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ workspaceId, relatedIssueId: related.id }),
+         });
+         if (!response.ok) throw new Error('Could not link issue.');
+         window.dispatchEvent(
+            new CustomEvent('flowie:issue-relations-changed', {
+               detail: { issueIds: [issueId, related.id] },
+            })
+         );
+         toast.success(`Created and linked ${related.identifier}`);
+      } catch {
+         toast.error('Could not create related issue');
+      }
+   };
+
+   const handleConvertToDocument = async () => {
+      if (!issueId || !workspaceId) return;
+      const issue = getIssueById(issueId);
+      if (!issue?.team) return;
+      try {
+         const response = await fetch(`${api}/documents`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+               workspaceId,
+               teamId: issue.team.id,
+               title: issue.title,
+               content: issue.description,
+            }),
+         });
+         if (!response.ok) throw new Error('Could not create document.');
+         toast.success('Document created from issue');
+      } catch {
+         toast.error('Could not convert issue to document');
+      }
+   };
+
+   const handleMarkCompleted = async () => {
+      if (!issueId) return;
+      const completed = statuses.find((status) => status.category === 'completed');
+      if (!completed) {
+         toast.error('No completed status is configured');
+         return;
+      }
+      await handleStatusChange(completed.id);
    };
 
    const handleCopy = () => {
@@ -262,12 +383,12 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                </ContextMenuSubContent>
             </ContextMenuSub>
 
-            <ContextMenuItem disabled title="Choose a date from the command palette">
+            <ContextMenuItem onClick={() => void handleDueDate()}>
                <CalendarClock className="size-4" /> Set due date...
                <ContextMenuShortcut>D</ContextMenuShortcut>
             </ContextMenuItem>
 
-            <ContextMenuItem disabled title="Rename is not available yet">
+            <ContextMenuItem onClick={() => void handleRename()}>
                <Pencil className="size-4" /> Rename...
                <ContextMenuShortcut>R</ContextMenuShortcut>
             </ContextMenuItem>
@@ -284,7 +405,7 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                   <Repeat2 className="mr-2 size-4" /> Convert into
                </ContextMenuSubTrigger>
                <ContextMenuSubContent className="w-48">
-                  <ContextMenuItem disabled title="Conversion is not available yet">
+                  <ContextMenuItem onClick={() => void handleConvertToDocument()}>
                      <FileText className="size-4" /> Document
                   </ContextMenuItem>
                   <ContextMenuItem disabled title="Conversion is not available yet">
@@ -293,14 +414,14 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                </ContextMenuSubContent>
             </ContextMenuSub>
 
-            <ContextMenuItem disabled title="Copying issues is not available yet">
+            <ContextMenuItem onClick={() => void handleMakeCopy()}>
                <CopyIcon className="size-4" /> Make a copy...
             </ContextMenuItem>
          </ContextMenuGroup>
 
          <ContextMenuSeparator />
 
-         <ContextMenuItem disabled title="Related issues are not available yet">
+         <ContextMenuItem onClick={() => void handleCreateRelated()}>
             <PlusSquare className="size-4" /> Create related
          </ContextMenuItem>
 
@@ -309,7 +430,7 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                <Flag className="mr-2 size-4" /> Mark as
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-48">
-               <ContextMenuItem disabled title="Marking issue types is not available yet">
+               <ContextMenuItem onClick={() => void handleMarkCompleted()}>
                   <CheckCircle2 className="size-4" /> Completed
                </ContextMenuItem>
                <ContextMenuItem disabled title="Marking issue types is not available yet">
