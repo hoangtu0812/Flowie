@@ -106,6 +106,7 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 | `0c8ca1c` | Docker PostgreSQL's default host port changed to `5433`, avoiding a local `5432` conflict with another project. Container-to-container connections remain on `postgres:5432`. |
 | `098d5f8` | Original Project list now persists lead, priority, status, and target date through `PATCH /projects/:id`. Leads come from active workspace members; target dates are validated; an update creates project activity; list selectors never apply a local-only change. Project selectors rendered through Saved Views are disabled because that screen has no project mutation contract. API tests (4 suites/8 tests), API build, frontend TypeScript check, Docker API/web rebuild/recreate, API health, and web login route passed. Authenticated mutation acceptance testing remains pending. |
 | `cf59ca6` | Issue store mutations for status, priority, assignee, labels, and project now wait for `PATCH /issues/:id` before updating browser state. Original context menu, command palette, detail selectors, assignee menu, and board drag/drop report errors or retain their server-backed values on failure; a missing workspace no longer produces a local-only write. Frontend TypeScript check, API tests (4 suites/8 tests), Docker web production build/recreate, API health, and web login route passed. Authenticated mutation acceptance testing remains pending. |
+| `37d7b67` | Original Project timeline peek no longer reads mock Project/detail/team data. It loads persisted project, issue, milestone, and initiative-link data through the existing Project APIs, and has loading/error/empty states. Unsupported favorites, Slack, project labels, and custom-property controls are explicitly unavailable. Frontend TypeScript check, API build/tests (4 suites/8 tests), Docker API/web production rebuild/recreate, API health, and web login route passed. Browser automation found the local app at Login with no reusable session, so authenticated acceptance remains pending. |
 
 ### Capability status at the handoff point
 
@@ -114,7 +115,7 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 | Runtime, Docker, DB | Implemented | Existing images run offline through `scripts/start-local.ps1`; PostgreSQL, Redis, MinIO, API, web, and worker are composed together. API/web were rebuilt and recreated on 2026-08-24; API health and web login routes returned HTTP 200. PostgreSQL uses host port 5433 by default. |
 | Authentication and workspace access | Implemented baseline | Login/session/workspace resolution are real. OAuth, email verification, password reset, and enterprise SSO are deferred. |
 | Teams and members | Implemented baseline | Original Teams, team overview, team members, and workspace members use API data; team/member creation actions covered by the migrated screens persist. |
-| Projects | Implemented baseline | Original project list, creation, issue progress, overview, issues, activity, and project header use API data. Project-list lead/priority/status/target-date controls now persist through the Projects API and record activity; workspace members are the only selectable leads. Project settings still need their final audit. |
+| Projects | Implemented baseline | Original project list, creation, issue progress, overview, issues, activity, timeline peek, and project header use API data. Project-list lead/priority/status/target-date controls now persist through the Projects API and record activity; workspace members are the only selectable leads. Timeline peek's unsupported controls are disabled instead of mock. Project settings still need their final audit. |
 | Issues, labels, cycles, saved views | Implemented baseline | Original issues list/filter options, My issues scopes, labels CRUD, cycles/timeline, subscriptions, saved views, due dates, archive action, and command palette use API data. Original Issue detail, Activity/Comments/Subscribe, properties, assignee changes, Issue attachments, and truthful context-menu actions are in the rebuilt Docker images. Status/priority/assignee/label/project changes do not optimistically invent browser state. Authenticated end-to-end mutations still require manual acceptance verification. Label editing, sub-issues, reactions, and relations remain deferred. |
 | Initiatives and documents | Implemented baseline | Initiative list/detail/create/linking and team documents are live. Advanced relationships/workflows remain deferred. |
 | Inbox and Discord | Implemented baseline | Inbox persists notifications/read/delete and workspace Discord integration exists. No fake delivery channels are enabled. |
@@ -123,23 +124,24 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 
 ## Exact restart point
 
-The next agent should first complete **authenticated acceptance verification for original Project list controls, Issue mutations/attachments, due dates, context-menu actions, command palette, sidebar navigation, and Team settings**. Features in `098d5f8` / `cf59ca6` / `8c6bbd8` / `603c994` / `ca19039` / `74e21c7` / `f7994e1` / `398a432` / `c5d2d73` are already included in rebuilt/running Docker API/web images. On 2026-08-24, API health and the web login route returned HTTP 200; this does not prove authenticated mutations.
+The next agent should first complete **authenticated acceptance verification for original Project list/timeline controls, Issue mutations/attachments, due dates, context-menu actions, command palette, sidebar navigation, and Team settings**. Features in `098d5f8` / `cf59ca6` / `37d7b67` / `8c6bbd8` / `603c994` / `ca19039` / `74e21c7` / `f7994e1` / `398a432` / `c5d2d73` are already included in rebuilt/running Docker API/web images. On 2026-08-24, API health and the web login route returned HTTP 200; browser automation reached Login with no session, so this does not prove authenticated mutations.
 
 `apps/web/components/common/issues/details/issue-details.tsx`
 
 Required verification sequence:
 
-1. Verify an authenticated Project list, Issue detail route, and command palette. Rebuild only if source/image changes and the user confirms 5G.
-2. Change a disposable project's lead, priority, status, and target date from the original list; refresh after each mutation and verify the Project Activity audit entry. Attempt a non-workspace lead only through the protected API if a suitable account exists; it must be rejected.
-3. In the original Issue detail/context menu/command palette, mutate status, priority, assignee, label, and project; refresh after each mutation and trigger one failed request if safely possible to confirm the UI keeps its former data and displays an error.
-4. Manually upload a small file, refresh, download it, then verify the 10 MB client error. Do not claim full attachment runtime verification from a route `307` alone.
-5. Set and clear a due date from the original command palette; refresh to prove both operations persisted through the API.
-6. From the original Issue context menu, subscribe/unsubscribe then refresh; archive a disposable Issue after confirmation and verify it disappears from the live list.
-7. In command palette, confirm assignee/status/labels/project options are real workspace records, then move an Issue to a cycle and clear it; refresh after each mutation.
-8. Confirm the Inbox badge matches persisted notifications and Settings “Your teams” lists only real workspace teams. Reviews and Agent must remain unavailable.
-9. Open a real Team settings page and verify team identity, member count, status count, cycle count and overview/members links. Unsupported settings must not be clickable.
-10. Record the result in this document and `CONTINUATION.md`, then commit/push the documentation.
-11. Only after that, continue with **Issue label editing** if its API contract covers it; otherwise leave it explicitly unavailable. Sub-issues, reactions, comment attachments, and relations require separate contracts.
+1. Verify an authenticated Project list, timeline peek, Issue detail route, and command palette. Rebuild only if source/image changes and the user confirms 5G.
+2. Click a project timeline bar and verify its peek values against the Project overview: project/team/lead, issue scope, milestones, and initiative links must be persisted values; unsupported favorite/Slack/labels controls must remain disabled or unavailable.
+3. Change a disposable project's lead, priority, status, and target date from the original list; refresh after each mutation and verify the Project Activity audit entry. Attempt a non-workspace lead only through the protected API if a suitable account exists; it must be rejected.
+4. In the original Issue detail/context menu/command palette, mutate status, priority, assignee, label, and project; refresh after each mutation and trigger one failed request if safely possible to confirm the UI keeps its former data and displays an error.
+5. Manually upload a small file, refresh, download it, then verify the 10 MB client error. Do not claim full attachment runtime verification from a route `307` alone.
+6. Set and clear a due date from the original command palette; refresh to prove both operations persisted through the API.
+7. From the original Issue context menu, subscribe/unsubscribe then refresh; archive a disposable Issue after confirmation and verify it disappears from the live list.
+8. In command palette, confirm assignee/status/labels/project options are real workspace records, then move an Issue to a cycle and clear it; refresh after each mutation.
+9. Confirm the Inbox badge matches persisted notifications and Settings “Your teams” lists only real workspace teams. Reviews and Agent must remain unavailable.
+10. Open a real Team settings page and verify team identity, member count, status count, cycle count and overview/members links. Unsupported settings must not be clickable.
+11. Record the result in this document and `CONTINUATION.md`, then commit/push the documentation.
+12. Only after that, continue with **Issue label editing** if its API contract covers it; otherwise leave it explicitly unavailable. Sub-issues, reactions, comment attachments, and relations require separate contracts.
 
 This is a backend/API integration priority, not a UI redesign task.
 
