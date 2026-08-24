@@ -4,11 +4,17 @@ import {
    Injectable,
    NotFoundException,
 } from '@nestjs/common';
-import { IssuePriority, IssueResolution, IssueStatusCategory } from '@circle/database';
+import {
+   IssuePriority,
+   IssueRelationType,
+   IssueResolution,
+   IssueStatusCategory,
+} from '@circle/database';
 import { PrismaService } from '../database/prisma.service';
 import { CreateIssueDto } from './dto/create-issue.dto';
 import { CreateIssueTemplateDto } from './dto/create-issue-template.dto';
 import { LinkIssueDto } from './dto/link-issue.dto';
+import { UpdateIssueRelationDto } from './dto/update-issue-relation.dto';
 import { issueReactionEmojis, IssueReactionDto } from './dto/issue-reaction.dto';
 import { UpdateIssueDto } from './dto/update-issue.dto';
 import { UpdateIssueTemplateDto } from './dto/update-issue-template.dto';
@@ -77,6 +83,17 @@ const relatedIssueSelect = {
    status: { select: { id: true, name: true, color: true, category: true } },
    team: { select: { id: true, name: true, identifier: true } },
 } as const;
+
+type RelationKind = 'RELATED' | 'BLOCKS' | 'BLOCKED_BY';
+
+const relationKindFor = (
+   type: IssueRelationType,
+   sourceIssueId: string,
+   perspectiveIssueId: string
+): RelationKind => {
+   if (type === IssueRelationType.RELATED) return 'RELATED';
+   return sourceIssueId === perspectiveIssueId ? 'BLOCKS' : 'BLOCKED_BY';
+};
 
 const subIssueSelect = {
    id: true,
@@ -485,12 +502,16 @@ export class IssuesService {
          select: {
             issueId: true,
             relatedIssueId: true,
+            type: true,
             issue: { select: relatedIssueSelect },
             relatedIssue: { select: relatedIssueSelect },
          },
          orderBy: { createdAt: 'desc' },
       });
-      return links.map((link) => (link.issueId === issue.id ? link.relatedIssue : link.issue));
+      return links.map((link) => ({
+         ...(link.issueId === issue.id ? link.relatedIssue : link.issue),
+         relationKind: relationKindFor(link.type, link.issueId, issue.id),
+      }));
    }
 
    async addRelation(issueId: string, dto: LinkIssueDto, userId: string) {
@@ -498,31 +519,65 @@ export class IssuesService {
       const related = await this.get(dto.relatedIssueId, dto.workspaceId, userId);
       if (issue.id === related.id)
          throw new BadRequestException('An issue cannot be related to itself.');
-      const [firstIssueId, secondIssueId] = [issue.id, related.id].sort();
-      const existing = await this.prisma.issueRelation.findUnique({
+      const type = dto.type ?? IssueRelationType.RELATED;
+      const [sourceIssueId, targetIssueId] =
+         type === IssueRelationType.RELATED
+            ? [issue.id, related.id].sort()
+            : [related.id, issue.id];
+      const existing = await this.prisma.issueRelation.findFirst({
          where: {
-            issueId_relatedIssueId: { issueId: firstIssueId, relatedIssueId: secondIssueId },
+            workspaceId: dto.workspaceId,
+            OR: [
+               { issueId: issue.id, relatedIssueId: related.id },
+               { issueId: related.id, relatedIssueId: issue.id },
+            ],
          },
          include: {
             issue: { select: relatedIssueSelect },
             relatedIssue: { select: relatedIssueSelect },
          },
       });
-      if (existing) return existing;
+      if (
+         existing?.type === type &&
+         existing.issueId === sourceIssueId &&
+         existing.relatedIssueId === targetIssueId
+      ) {
+         return existing;
+      }
 
       return this.prisma.$transaction(async (tx) => {
-         const relation = await tx.issueRelation.create({
-            data: {
-               workspaceId: dto.workspaceId,
-               issueId: firstIssueId,
-               relatedIssueId: secondIssueId,
-               createdById: userId,
-            },
-            include: {
-               issue: { select: relatedIssueSelect },
-               relatedIssue: { select: relatedIssueSelect },
-            },
-         });
+         const relation = existing
+            ? await tx.issueRelation.update({
+                 where: {
+                    issueId_relatedIssueId: {
+                       issueId: existing.issueId,
+                       relatedIssueId: existing.relatedIssueId,
+                    },
+                 },
+                 data: {
+                    issueId: sourceIssueId,
+                    relatedIssueId: targetIssueId,
+                    type,
+                    createdById: userId,
+                 },
+                 include: {
+                    issue: { select: relatedIssueSelect },
+                    relatedIssue: { select: relatedIssueSelect },
+                 },
+              })
+            : await tx.issueRelation.create({
+                 data: {
+                    workspaceId: dto.workspaceId,
+                    issueId: sourceIssueId,
+                    relatedIssueId: targetIssueId,
+                    type,
+                    createdById: userId,
+                 },
+                 include: {
+                    issue: { select: relatedIssueSelect },
+                    relatedIssue: { select: relatedIssueSelect },
+                 },
+              });
          await tx.activity.createMany({
             data: [
                {
@@ -530,19 +585,42 @@ export class IssuesService {
                   issueId: issue.id,
                   actorId: userId,
                   type: 'issue.related',
-                  data: { relatedIssueId: related.id, relatedIdentifier: related.identifier },
+                  data: {
+                     relatedIssueId: related.id,
+                     relatedIdentifier: related.identifier,
+                     relationType: type,
+                     relationKind: relationKindFor(type, sourceIssueId, issue.id),
+                  },
                },
                {
                   workspaceId: dto.workspaceId,
                   issueId: related.id,
                   actorId: userId,
                   type: 'issue.related',
-                  data: { relatedIssueId: issue.id, relatedIdentifier: issue.identifier },
+                  data: {
+                     relatedIssueId: issue.id,
+                     relatedIdentifier: issue.identifier,
+                     relationType: type,
+                     relationKind: relationKindFor(type, sourceIssueId, related.id),
+                  },
                },
             ],
          });
          return relation;
       });
+   }
+
+   async updateRelation(
+      issueId: string,
+      relatedIssueId: string,
+      dto: UpdateIssueRelationDto,
+      userId: string
+   ) {
+      return this.addRelation(
+         issueId,
+         { workspaceId: dto.workspaceId, relatedIssueId, type: dto.type },
+         userId
+      );
    }
 
    async removeRelation(
@@ -553,17 +631,23 @@ export class IssuesService {
    ) {
       const issue = await this.get(issueId, workspaceId, userId);
       const related = await this.get(relatedIssueId, workspaceId, userId);
-      const [firstIssueId, secondIssueId] = [issue.id, related.id].sort();
-      const relation = await this.prisma.issueRelation.findUnique({
+      const relation = await this.prisma.issueRelation.findFirst({
          where: {
-            issueId_relatedIssueId: { issueId: firstIssueId, relatedIssueId: secondIssueId },
+            workspaceId,
+            OR: [
+               { issueId: issue.id, relatedIssueId: related.id },
+               { issueId: related.id, relatedIssueId: issue.id },
+            ],
          },
       });
       if (!relation) throw new NotFoundException('Issues are not linked.');
       await this.prisma.$transaction([
          this.prisma.issueRelation.delete({
             where: {
-               issueId_relatedIssueId: { issueId: firstIssueId, relatedIssueId: secondIssueId },
+               issueId_relatedIssueId: {
+                  issueId: relation.issueId,
+                  relatedIssueId: relation.relatedIssueId,
+               },
             },
          }),
          this.prisma.activity.createMany({
@@ -573,14 +657,24 @@ export class IssuesService {
                   issueId: issue.id,
                   actorId: userId,
                   type: 'issue.unrelated',
-                  data: { relatedIssueId: related.id, relatedIdentifier: related.identifier },
+                  data: {
+                     relatedIssueId: related.id,
+                     relatedIdentifier: related.identifier,
+                     relationType: relation.type,
+                     relationKind: relationKindFor(relation.type, relation.issueId, issue.id),
+                  },
                },
                {
                   workspaceId,
                   issueId: related.id,
                   actorId: userId,
                   type: 'issue.unrelated',
-                  data: { relatedIssueId: issue.id, relatedIdentifier: issue.identifier },
+                  data: {
+                     relatedIssueId: issue.id,
+                     relatedIdentifier: issue.identifier,
+                     relationType: relation.type,
+                     relationKind: relationKindFor(relation.type, relation.issueId, related.id),
+                  },
                },
             ],
          }),

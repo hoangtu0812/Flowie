@@ -15,6 +15,7 @@ import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { CreateIssueDto } from './dto/create-issue.dto';
 import { CreateIssueTemplateDto } from './dto/create-issue-template.dto';
 import { LinkIssueDto } from './dto/link-issue.dto';
+import { UpdateIssueRelationDto } from './dto/update-issue-relation.dto';
 import { IssueReactionDto } from './dto/issue-reaction.dto';
 import { UpdateIssueDto } from './dto/update-issue.dto';
 import { UpdateIssueTemplateDto } from './dto/update-issue-template.dto';
@@ -163,6 +164,18 @@ export class IssuesController {
       @Req() request: AuthenticatedRequest
    ) {
       return { data: await this.issues.addRelation(issueId, dto, request.auth!.userId) };
+   }
+
+   @Patch(':issueId/relations/:relatedIssueId')
+   async updateRelation(
+      @Param('issueId') issueId: string,
+      @Param('relatedIssueId') relatedIssueId: string,
+      @Body() dto: UpdateIssueRelationDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.issues.updateRelation(issueId, relatedIssueId, dto, request.auth!.userId),
+      };
    }
 
    @Delete(':issueId/relations/:relatedIssueId')

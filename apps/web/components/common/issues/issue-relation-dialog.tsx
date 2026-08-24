@@ -21,6 +21,7 @@ export function IssueRelationDialog() {
    const { open, issueId, close } = useIssueRelationDialogStore();
    const { issues, workspaceId } = useIssuesStore();
    const [relatedIssueId, setRelatedIssueId] = useState('');
+   const [relationType, setRelationType] = useState<'RELATED' | 'BLOCKS'>('RELATED');
    const [saving, setSaving] = useState(false);
    const [error, setError] = useState<string>();
 
@@ -33,6 +34,7 @@ export function IssueRelationDialog() {
    useEffect(() => {
       if (open) {
          setRelatedIssueId('');
+         setRelationType('RELATED');
          setError(undefined);
       }
    }, [open, issueId]);
@@ -46,7 +48,7 @@ export function IssueRelationDialog() {
             method: 'POST',
             credentials: 'include',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ workspaceId, relatedIssueId }),
+            body: JSON.stringify({ workspaceId, relatedIssueId, type: relationType }),
          });
          if (!response.ok) {
             const payload = (await response.json().catch(() => null)) as {
@@ -79,13 +81,29 @@ export function IssueRelationDialog() {
                </DialogDescription>
             </DialogHeader>
             <div className="space-y-3">
+               <label className="block space-y-1.5 text-sm">
+                  <span className="text-muted-foreground">Relation</span>
+                  <select
+                     value={relationType}
+                     onChange={(event) =>
+                        setRelationType(event.target.value as 'RELATED' | 'BLOCKS')
+                     }
+                     disabled={saving}
+                     className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
+                  >
+                     <option value="RELATED">Related</option>
+                     <option value="BLOCKS">Blocked by</option>
+                  </select>
+               </label>
                <select
                   value={relatedIssueId}
                   onChange={(event) => setRelatedIssueId(event.target.value)}
                   disabled={!workspaceId || candidates.length === 0 || saving}
                   className="h-9 w-full rounded-md border bg-transparent px-3 text-sm"
                >
-                  <option value="">Select an issue…</option>
+                  <option value="">
+                     {relationType === 'BLOCKS' ? 'Select a blocker…' : 'Select an issue…'}
+                  </option>
                   {candidates.map((issue) => (
                      <option key={issue.id} value={issue.id}>
                         {issue.identifier} · {issue.title}

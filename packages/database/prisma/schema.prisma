@@ -61,6 +61,11 @@ enum IssueResolution {
   WONT_FIX
 }
 
+enum IssueRelationType {
+  RELATED
+  BLOCKS
+}
+
 enum ProjectType {
   GENERAL
   PRODUCT
@@ -912,11 +917,12 @@ model Issue {
 }
 
 model IssueRelation {
-  workspaceId    String   @map("workspace_id")
-  issueId        String   @map("issue_id")
-  relatedIssueId String   @map("related_issue_id")
-  createdAt      DateTime @default(now()) @map("created_at")
-  createdById    String   @map("created_by")
+  workspaceId    String            @map("workspace_id")
+  issueId        String            @map("issue_id")
+  relatedIssueId String            @map("related_issue_id")
+  type           IssueRelationType @default(RELATED)
+  createdAt      DateTime          @default(now()) @map("created_at")
+  createdById    String            @map("created_by")
 
   workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   issue        Issue     @relation("IssueRelationSource", fields: [issueId], references: [id], onDelete: Cascade)

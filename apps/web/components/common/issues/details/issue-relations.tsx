@@ -1,37 +1,22 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
-import { useIssueRelationDialogStore } from '@/store/issue-relation-dialog-store';
 import { useIssuesStore } from '@/store/issues-store';
-import { Link2, X } from 'lucide-react';
-import Link from 'next/link';
+import { Ban } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { IssueRefRow } from './content-blocks';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 type RelatedIssue = {
    id: string;
    identifier: string;
-   title: string;
-   status: { id: string; name: string; color: string; category: string };
-   team: { id: string; name: string; identifier: string };
+   relationKind: 'RELATED' | 'BLOCKS' | 'BLOCKED_BY';
 };
 
-/** Original detail-area relation list, backed by the persisted IssueRelation API. */
-export function IssueRelations({
-   issueId,
-   orgId,
-   compact = false,
-}: {
-   issueId: string;
-   orgId: string;
-   compact?: boolean;
-}) {
+/** Original conditional relation sections, backed by perspective-aware relation data. */
+export function IssueRelations({ issueId }: { issueId: string; orgId: string; compact?: boolean }) {
    const workspaceId = useIssuesStore((state) => state.workspaceId);
-   const { openForIssue } = useIssueRelationDialogStore();
    const [relations, setRelations] = useState<RelatedIssue[]>([]);
-   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
-   const [savingId, setSavingId] = useState<string>();
 
    const load = useCallback(async () => {
       if (!workspaceId) return;
@@ -46,125 +31,47 @@ export function IssueRelations({
 
    useEffect(() => {
       if (!workspaceId) return;
-      setState('loading');
-      void load()
-         .then(() => setState('ready'))
-         .catch(() => setState('error'));
+      void load().catch(() => setRelations([]));
    }, [load, workspaceId]);
 
    useEffect(() => {
       const reload = (event: Event) => {
          const affected = (event as CustomEvent<{ issueIds?: string[] }>).detail?.issueIds ?? [];
-         if (affected.includes(issueId)) void load().catch(() => setState('error'));
+         if (affected.includes(issueId)) void load().catch(() => setRelations([]));
       };
       window.addEventListener('flowie:issue-relations-changed', reload);
       return () => window.removeEventListener('flowie:issue-relations-changed', reload);
    }, [issueId, load]);
 
-   const unlink = async (relatedIssueId: string) => {
-      if (!workspaceId) return;
-      setSavingId(relatedIssueId);
-      try {
-         const query = new URLSearchParams({ workspaceId });
-         const response = await fetch(
-            `${api}/issues/${issueId}/relations/${relatedIssueId}?${query}`,
-            { method: 'DELETE', credentials: 'include' }
-         );
-         if (!response.ok) throw new Error('Could not remove issue link.');
-         await load();
-         window.dispatchEvent(
-            new CustomEvent('flowie:issue-relations-changed', {
-               detail: { issueIds: [issueId, relatedIssueId] },
-            })
-         );
-      } catch {
-         setState('error');
-      } finally {
-         setSavingId(undefined);
-      }
-   };
+   const blockedBy = relations.filter((relation) => relation.relationKind === 'BLOCKED_BY');
+   const related = relations.filter((relation) => relation.relationKind === 'RELATED');
 
    return (
-      <section className={compact ? '' : 'mt-8'}>
-         <div className="flex items-center justify-between gap-3">
-            <h2
-               className={
-                  compact
-                     ? 'text-xs font-medium text-muted-foreground mb-2'
-                     : 'text-base font-semibold'
-               }
-            >
-               {compact ? 'Related' : 'Related issues'}
-            </h2>
-            <Button
-               size={compact ? 'icon' : 'xs'}
-               variant="ghost"
-               className={compact ? 'size-6 rounded-full border' : undefined}
-               aria-label="Add related issue"
-               onClick={() => openForIssue(issueId)}
-            >
-               <Link2 className="size-3.5" />
-               {!compact && 'Add link'}
-            </Button>
-         </div>
-         {state === 'loading' && (
-            <p
-               className={
-                  compact ? 'text-sm text-muted-foreground' : 'mt-3 text-sm text-muted-foreground'
-               }
-            >
-               Loading links…
-            </p>
-         )}
-         {state === 'error' && (
-            <p className={compact ? 'text-sm text-destructive' : 'mt-3 text-sm text-destructive'}>
-               Could not load issue links.
-            </p>
-         )}
-         {state === 'ready' && relations.length === 0 && (
-            <p
-               className={
-                  compact ? 'text-sm text-muted-foreground' : 'mt-3 text-sm text-muted-foreground'
-               }
-            >
-               No related issues.
-            </p>
-         )}
-         {state === 'ready' && relations.length > 0 && (
-            <div className={compact ? 'flex flex-col' : 'mt-3 space-y-1'}>
-               {relations.map((related) => (
-                  <div
-                     key={related.id}
-                     className={
-                        compact
-                           ? 'group flex items-center gap-1.5 min-w-0 py-0.5'
-                           : 'group flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent'
-                     }
-                  >
-                     <span
-                        className="size-2 rounded-full"
-                        style={{ backgroundColor: related.status.color }}
-                     />
-                     <Link
-                        href={`/${orgId}/issue/${related.identifier}`}
-                        className="min-w-0 truncate text-sm hover:underline"
-                     >
-                        <span className="mr-1.5 text-muted-foreground">{related.identifier}</span>
-                        {related.title}
-                     </Link>
-                     <button
-                        type="button"
-                        className="ml-auto opacity-0 text-muted-foreground hover:text-foreground group-hover:opacity-100 disabled:opacity-50"
-                        aria-label={`Remove link to ${related.identifier}`}
-                        disabled={savingId === related.id}
-                        onClick={() => void unlink(related.id)}
-                     >
-                        <X className="size-3.5" />
-                     </button>
-                  </div>
-               ))}
+      <>
+         {blockedBy.length > 0 && (
+            <div>
+               <h3 className="text-xs font-medium text-muted-foreground mb-2">Blocked by</h3>
+               <div className="flex flex-col">
+                  {blockedBy.map((relation) => (
+                     <div key={relation.id} className="flex items-center gap-1.5 min-w-0">
+                        <Ban className="size-3.5 text-red-500 shrink-0" />
+                        <IssueRefRow identifier={relation.identifier} />
+                     </div>
+                  ))}
+               </div>
             </div>
          )}
-      </section>
+
+         {related.length > 0 && (
+            <div>
+               <h3 className="text-xs font-medium text-muted-foreground mb-2">Related</h3>
+               <div className="flex flex-col">
+                  {related.map((relation) => (
+                     <IssueRefRow key={relation.id} identifier={relation.identifier} />
+                  ))}
+               </div>
+            </div>
+         )}
+      </>
    );
 }
