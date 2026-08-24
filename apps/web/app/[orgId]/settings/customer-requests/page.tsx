@@ -1,12 +1,11 @@
-import SettingsPlaceholder from '@/components/common/settings/settings-placeholder';
-import { PLACEHOLDER_SECTIONS } from '@/components/common/settings/placeholder-sections';
+import CustomerRequestsSettings from '@/components/common/settings/customer-requests-settings';
 import MainLayout from '@/components/layout/main-layout';
 import Header from '@/components/layout/headers/settings/header';
 
 export default function CustomerRequestsSettingsPage() {
    return (
       <MainLayout header={<Header />} headersNumber={1}>
-         <SettingsPlaceholder config={PLACEHOLDER_SECTIONS['customer-requests']} />
+         <CustomerRequestsSettings />
       </MainLayout>
    );
 }
