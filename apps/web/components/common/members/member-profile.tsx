@@ -9,7 +9,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Issue } from '@/mock-data/issues';
 import { priorities } from '@/mock-data/priorities';
-import { statusUserColors } from '@/mock-data/users';
 import { useFilterStore } from '@/store/filter-store';
 import { useIssuesStore } from '@/store/issues-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
@@ -58,15 +57,37 @@ function BreakdownList({ rows }: { rows: BreakdownRow[] }) {
 }
 
 /** Client-only relative/local time values (avoid SSR hydration mismatches). */
-function useClientTimes(joinedAt?: string) {
+function useClientTimes(joinedAt?: string, timezone?: string) {
    const [joinedAgo, setJoinedAgo] = useState<string | null>(null);
+   const [localTime, setLocalTime] = useState<string | null>(null);
 
    useEffect(() => {
       if (joinedAt)
          setJoinedAgo(formatDistanceToNowStrict(new Date(joinedAt), { addSuffix: true }));
    }, [joinedAt]);
 
-   return { localTime: null, joinedAgo };
+   useEffect(() => {
+      if (!timezone) return;
+      const update = () => {
+         try {
+            setLocalTime(
+               new Intl.DateTimeFormat(undefined, {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  timeZone: timezone,
+                  timeZoneName: 'short',
+               }).format(new Date())
+            );
+         } catch {
+            setLocalTime(null);
+         }
+      };
+      update();
+      const interval = window.setInterval(update, 60_000);
+      return () => window.clearInterval(interval);
+   }, [timezone]);
+
+   return { localTime, joinedAgo };
 }
 
 /**
@@ -84,7 +105,7 @@ export default function MemberProfile({ memberId }: { memberId: string }) {
       error: issuesError,
    } = useIssuesStore();
    const [activeTab] = useQueryState('tab', parseAsString.withDefault('assigned'));
-   const { localTime, joinedAgo } = useClientTimes(member?.joinedAt);
+   const { localTime, joinedAgo } = useClientTimes(member?.joinedAt, member?.timezone);
    const { isSearchOpen, searchQuery } = useSearchStore();
    const { viewType } = useViewStore();
    const { filters } = useFilterStore();
@@ -111,17 +132,7 @@ export default function MemberProfile({ memberId }: { memberId: string }) {
 
    const memberTeams = useMemo(() => member?.teams ?? [], [member?.teams]);
 
-   const memberProjects = useMemo(() => {
-      const fromIssues = displayedIssues
-         .map((issue) => issue.project)
-         .filter((project): project is NonNullable<typeof project> => Boolean(project));
-      const seen = new Set<string>();
-      return fromIssues.filter((project) => {
-         if (seen.has(project.id)) return false;
-         seen.add(project.id);
-         return true;
-      });
-   }, [displayedIssues]);
+   const memberProjects = useMemo(() => member?.projects ?? [], [member?.projects]);
 
    const labelRows = useMemo<BreakdownRow[]>(() => {
       const counts = countBy(displayedIssues, (issue) => issue.labels.map((label) => label.id));
@@ -230,21 +241,16 @@ export default function MemberProfile({ memberId }: { memberId: string }) {
                <aside className="hidden lg:flex flex-col w-[340px] shrink-0 border-l h-full overflow-y-auto bg-container">
                   <div className="px-5 pt-5 pb-4 border-b">
                      <div className="flex items-center gap-3">
-                        <div className="relative">
+                        <div>
                            <Avatar className="size-11">
                               <AvatarImage src={member.avatarUrl ?? undefined} alt={member.name} />
                               <AvatarFallback>{member.name[0]}</AvatarFallback>
                            </Avatar>
-                           <span
-                              className="border-background absolute -end-0.5 -bottom-0.5 size-3 rounded-full border-2"
-                              style={{ backgroundColor: statusUserColors.offline }}
-                           />
                         </div>
                         <div className="min-w-0">
                            <h2 className="text-base font-semibold truncate">{member.name}</h2>
                            <p className="text-xs text-muted-foreground truncate">
-                              {member.title || member.username || member.email} · Presence
-                              unavailable
+                              {member.title || member.username || member.email}
                            </p>
                         </div>
                      </div>

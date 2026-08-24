@@ -44,8 +44,15 @@ export class UsersService {
                         team: { select: { id: true, name: true, identifier: true, icon: true } },
                      },
                   },
+                  projectMemberships: {
+                     where: { project: { workspaceId, archivedAt: null } },
+                     select: {
+                        project: { select: { id: true, name: true, identifier: true } },
+                     },
+                  },
                },
             },
+            workspace: { select: { timezone: true } },
          },
          orderBy: { joinedAt: 'asc' },
       });
@@ -67,8 +74,15 @@ export class UsersService {
                         team: { select: { id: true, name: true, identifier: true, icon: true } },
                      },
                   },
+                  projectMemberships: {
+                     where: { project: { workspaceId, archivedAt: null } },
+                     select: {
+                        project: { select: { id: true, name: true, identifier: true } },
+                     },
+                  },
                },
             },
+            workspace: { select: { timezone: true } },
          },
       });
       if (!member) throw new NotFoundException('Member not found.');
@@ -99,21 +113,28 @@ export class UsersService {
       role: string;
       joinedAt: Date | null;
       createdAt: Date;
+      workspace: { timezone: string };
       user: Profile & {
          teamMemberships: Array<{
             role: string;
             team: { id: string; name: string; identifier: string; icon: string | null };
          }>;
+         projectMemberships: Array<{
+            project: { id: string; name: string; identifier: string };
+         }>;
       };
    }) {
+      const { teamMemberships, projectMemberships, ...user } = member.user;
       return {
-         ...member.user,
+         ...user,
          workspaceRole: member.role,
          joinedAt: member.joinedAt ?? member.createdAt,
-         teams: member.user.teamMemberships.map((membership) => ({
+         timezone: member.workspace.timezone,
+         teams: teamMemberships.map((membership) => ({
             ...membership.team,
             role: membership.role,
          })),
+         projects: projectMemberships.map((membership) => membership.project),
       };
    }
 }

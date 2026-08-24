@@ -12,6 +12,7 @@ export type LiveMember = {
    avatarUrl: string | null;
    createdAt: string;
    joinedAt: string;
+   timezone: string;
    workspaceRole: 'OWNER' | 'ADMIN' | 'MEMBER';
    teams: Array<{
       id: string;
@@ -19,6 +20,11 @@ export type LiveMember = {
       identifier: string;
       icon: string | null;
       role: string;
+   }>;
+   projects: Array<{
+      id: string;
+      name: string;
+      identifier: string;
    }>;
 };
 
