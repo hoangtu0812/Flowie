@@ -252,6 +252,7 @@ model Workspace {
   description    String?
   timezone       String            @default("UTC")
   projectDisplayDefaults Json?     @map("project_display_defaults")
+  issueDisplayDefaults   Json?     @map("issue_display_defaults")
   createdAt      DateTime          @default(now()) @map("created_at")
   updatedAt      DateTime          @updatedAt @map("updated_at")
 

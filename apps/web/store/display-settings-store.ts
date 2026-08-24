@@ -40,7 +40,7 @@ const DEFAULT_DISPLAY_PROPERTIES: Record<DisplayPropertyKey, boolean> = {
    cycle: false,
 };
 
-interface DisplaySettingsState {
+export interface IssueDisplaySettings {
    grouping: GroupingKey;
    ordering: OrderingKey;
    orderCompletedByRecency: boolean;
@@ -48,6 +48,11 @@ interface DisplaySettingsState {
    showSubIssues: boolean;
    showEmptyGroups: boolean;
    displayProperties: Record<DisplayPropertyKey, boolean>;
+}
+
+interface DisplaySettingsState extends IssueDisplaySettings {
+   workspaceDefaultsId?: string;
+   workspaceDefaultsUpdatedAt?: string;
 
    setGrouping: (grouping: GroupingKey) => void;
    setOrdering: (ordering: OrderingKey) => void;
@@ -57,6 +62,11 @@ interface DisplaySettingsState {
    setShowEmptyGroups: (value: boolean) => void;
    toggleDisplayProperty: (key: DisplayPropertyKey) => void;
    resetDisplaySettings: () => void;
+   applyWorkspaceDefaults: (
+      workspaceId: string,
+      updatedAt: string,
+      settings: IssueDisplaySettings
+   ) => boolean;
 }
 
 const DEFAULTS = {
@@ -76,7 +86,7 @@ const DEFAULTS = {
  */
 export const useDisplaySettingsStore = create<DisplaySettingsState>()(
    persist(
-      (set) => ({
+      (set, get) => ({
          ...DEFAULTS,
 
          setGrouping: (grouping) => set({ grouping }),
@@ -93,6 +103,22 @@ export const useDisplaySettingsStore = create<DisplaySettingsState>()(
                },
             })),
          resetDisplaySettings: () => set({ ...DEFAULTS }),
+         applyWorkspaceDefaults: (workspaceId, updatedAt, settings) => {
+            const state = get();
+            const remoteTimestamp = Date.parse(updatedAt);
+            const localTimestamp = Date.parse(state.workspaceDefaultsUpdatedAt ?? '');
+            const shouldApply =
+               state.workspaceDefaultsId !== workspaceId ||
+               Number.isNaN(localTimestamp) ||
+               remoteTimestamp > localTimestamp;
+            if (!shouldApply) return false;
+            set({
+               ...settings,
+               workspaceDefaultsId: workspaceId,
+               workspaceDefaultsUpdatedAt: updatedAt,
+            });
+            return true;
+         },
       }),
       {
          name: 'display-settings',

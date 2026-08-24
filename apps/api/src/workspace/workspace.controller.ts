@@ -6,6 +6,7 @@ import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { InviteMemberDto } from './dto/invite-member.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
 import { UpdateProjectDisplayDefaultsDto } from './dto/update-project-display-defaults.dto';
+import { UpdateIssueDisplayDefaultsDto } from './dto/update-issue-display-defaults.dto';
 
 @ApiTags('workspaces')
 @ApiCookieAuth('flowie_access')
@@ -51,6 +52,31 @@ export class WorkspaceController {
    ): Promise<{ data: unknown }> {
       return {
          data: await this.workspaces.updateProjectDisplayDefaults(
+            workspaceId,
+            dto,
+            request.auth!.userId
+         ),
+      };
+   }
+
+   @Get(':workspaceId/issue-display-defaults')
+   async issueDisplayDefaults(
+      @Param('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ): Promise<{ data: unknown }> {
+      return {
+         data: await this.workspaces.issueDisplayDefaults(workspaceId, request.auth!.userId),
+      };
+   }
+
+   @Patch(':workspaceId/issue-display-defaults')
+   async updateIssueDisplayDefaults(
+      @Param('workspaceId') workspaceId: string,
+      @Body() dto: UpdateIssueDisplayDefaultsDto,
+      @Req() request: AuthenticatedRequest
+   ): Promise<{ data: unknown }> {
+      return {
+         data: await this.workspaces.updateIssueDisplayDefaults(
             workspaceId,
             dto,
             request.auth!.userId

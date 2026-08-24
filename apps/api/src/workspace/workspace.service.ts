@@ -9,7 +9,29 @@ import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { InviteMemberDto } from './dto/invite-member.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
 import { UpdateProjectDisplayDefaultsDto } from './dto/update-project-display-defaults.dto';
+import { UpdateIssueDisplayDefaultsDto } from './dto/update-issue-display-defaults.dto';
 import { Prisma } from '@circle/database';
+
+const DEFAULT_ISSUE_DISPLAY_SETTINGS = {
+   viewType: 'list',
+   grouping: 'status',
+   ordering: 'priority',
+   orderCompletedByRecency: false,
+   completedIssues: 'all',
+   showSubIssues: true,
+   showEmptyGroups: false,
+   displayProperties: {
+      id: true,
+      status: true,
+      priority: true,
+      assignee: true,
+      labels: true,
+      project: true,
+      dueDate: false,
+      created: true,
+      cycle: false,
+   },
+};
 
 const DEFAULT_PROJECT_DISPLAY_SETTINGS = {
    viewTypes: { all: 'list', active: 'timeline' },
@@ -103,6 +125,45 @@ export class WorkspaceService {
             },
          });
          return { settings: workspace.projectDisplayDefaults, updatedAt: workspace.updatedAt };
+      });
+   }
+
+   async issueDisplayDefaults(workspaceId: string, userId: string) {
+      await this.authorizeMember(workspaceId, userId);
+      const workspace = await this.prisma.workspace.findUnique({
+         where: { id: workspaceId },
+         select: { issueDisplayDefaults: true, updatedAt: true },
+      });
+      if (!workspace) throw new NotFoundException('Workspace not found.');
+      return {
+         settings: workspace.issueDisplayDefaults ?? DEFAULT_ISSUE_DISPLAY_SETTINGS,
+         updatedAt: workspace.updatedAt,
+      };
+   }
+
+   async updateIssueDisplayDefaults(
+      workspaceId: string,
+      dto: UpdateIssueDisplayDefaultsDto,
+      userId: string
+   ) {
+      await this.authorizeManager(workspaceId, userId);
+      return this.prisma.$transaction(async (tx) => {
+         const workspace = await tx.workspace.update({
+            where: { id: workspaceId },
+            data: { issueDisplayDefaults: dto as unknown as Prisma.InputJsonValue },
+            select: { issueDisplayDefaults: true, updatedAt: true },
+         });
+         await tx.auditLog.create({
+            data: {
+               workspaceId,
+               actorId: userId,
+               action: 'workspace.issue-display-defaults.updated',
+               entityType: 'workspace',
+               entityId: workspaceId,
+               metadata: {},
+            },
+         });
+         return { settings: workspace.issueDisplayDefaults, updatedAt: workspace.updatedAt };
       });
    }
 

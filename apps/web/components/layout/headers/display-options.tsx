@@ -12,11 +12,13 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
+import { loadCurrentWorkspaceMembership } from '@/lib/workspaces';
 import {
    CompletedIssuesFilter,
    DISPLAY_PROPERTIES,
    GroupingKey,
    OrderingKey,
+   IssueDisplaySettings,
    useDisplaySettingsStore,
 } from '@/store/display-settings-store';
 import { useViewStore } from '@/store/view-store';
@@ -27,6 +29,7 @@ import {
    LayoutList,
    SlidersHorizontal,
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 const GROUPINGS: { value: GroupingKey; label: string }[] = [
    { value: 'status', label: 'Status' },
@@ -64,7 +67,85 @@ export function DisplayOptions() {
       setShowEmptyGroups,
       toggleDisplayProperty,
       resetDisplaySettings,
+      applyWorkspaceDefaults,
    } = useDisplaySettingsStore();
+   const [workspaceId, setWorkspaceId] = useState<string>();
+   const [canManageDefaults, setCanManageDefaults] = useState(false);
+   const [defaultState, setDefaultState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+   useEffect(() => {
+      let current = true;
+      void (async () => {
+         const membership = await loadCurrentWorkspaceMembership();
+         const response = await fetch(
+            `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'}/workspaces/${membership.workspace.id}/issue-display-defaults`,
+            { credentials: 'include' }
+         );
+         if (!response.ok) throw new Error('Could not load workspace display defaults.');
+         const payload = (await response.json()) as {
+            data: {
+               settings: IssueDisplaySettings & { viewType: 'list' | 'grid' };
+               updatedAt: string;
+            };
+         };
+         if (!current) return;
+         setWorkspaceId(membership.workspace.id);
+         setCanManageDefaults(['OWNER', 'ADMIN'].includes(membership.role));
+         const { viewType: defaultViewType, ...settings } = payload.data.settings;
+         if (applyWorkspaceDefaults(membership.workspace.id, payload.data.updatedAt, settings)) {
+            setViewType(defaultViewType);
+         }
+      })().catch(() => {
+         if (current) setDefaultState('error');
+      });
+      return () => {
+         current = false;
+      };
+   }, [applyWorkspaceDefaults, setViewType]);
+
+   const saveWorkspaceDefaults = async () => {
+      if (!workspaceId || !canManageDefaults) return;
+      setDefaultState('saving');
+      const settings: IssueDisplaySettings & { viewType: 'list' | 'grid' } = {
+         viewType,
+         grouping,
+         ordering,
+         orderCompletedByRecency,
+         completedIssues,
+         showSubIssues,
+         showEmptyGroups,
+         displayProperties,
+      };
+      try {
+         const response = await fetch(
+            `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'}/workspaces/${workspaceId}/issue-display-defaults`,
+            {
+               method: 'PATCH',
+               credentials: 'include',
+               headers: { 'content-type': 'application/json' },
+               body: JSON.stringify(settings),
+            }
+         );
+         if (!response.ok) throw new Error('Could not save workspace display defaults.');
+         const payload = (await response.json()) as {
+            data: { settings: typeof settings; updatedAt: string };
+         };
+         const displaySettings: IssueDisplaySettings = {
+            grouping: payload.data.settings.grouping,
+            ordering: payload.data.settings.ordering,
+            orderCompletedByRecency: payload.data.settings.orderCompletedByRecency,
+            completedIssues: payload.data.settings.completedIssues,
+            showSubIssues: payload.data.settings.showSubIssues,
+            showEmptyGroups: payload.data.settings.showEmptyGroups,
+            displayProperties: payload.data.settings.displayProperties,
+         };
+         applyWorkspaceDefaults(workspaceId, payload.data.updatedAt, displaySettings);
+         setDefaultState('saved');
+         window.setTimeout(() => setDefaultState('idle'), 1800);
+      } catch {
+         setDefaultState('error');
+      }
+   };
 
    const isDefault =
       grouping === 'status' &&
@@ -259,11 +340,22 @@ export function DisplayOptions() {
                </button>
                <button
                   type="button"
-                  disabled
-                  title="Workspace display defaults are not available yet."
-                  className="text-xs text-muted-foreground cursor-not-allowed"
+                  disabled={!workspaceId || !canManageDefaults || defaultState === 'saving'}
+                  title={
+                     canManageDefaults
+                        ? defaultState === 'error'
+                           ? 'Could not save workspace display defaults.'
+                           : 'Use these display options as the workspace default.'
+                        : 'Workspace administrator access is required.'
+                  }
+                  className="text-xs text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => void saveWorkspaceDefaults()}
                >
-                  Set default for everyone
+                  {defaultState === 'saving'
+                     ? 'Saving…'
+                     : defaultState === 'saved'
+                       ? 'Saved for everyone'
+                       : 'Set default for everyone'}
                </button>
             </div>
          </PopoverContent>
