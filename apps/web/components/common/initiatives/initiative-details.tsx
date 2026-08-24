@@ -10,6 +10,7 @@ import {
    DialogHeader,
    DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import {
    Select,
    SelectContent,
@@ -17,9 +18,19 @@ import {
    SelectTrigger,
    SelectValue,
 } from '@/components/ui/select';
-import { CalendarRange, FileText, FolderKanban, Plus, UserRound, X } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import {
+   Archive,
+   CalendarRange,
+   FileText,
+   FolderKanban,
+   Pencil,
+   Plus,
+   UserRound,
+   X,
+} from 'lucide-react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { parseAsStringLiteral, useQueryState } from 'nuqs';
 import { useMemo, useState } from 'react';
 import { useLiveInitiatives } from './use-live-initiatives';
@@ -35,13 +46,38 @@ const dateLabel = (value: string | null) =>
            year: 'numeric',
         }).format(new Date(value))
       : 'No target date';
+const dateInputValue = (value: string | null) => (value ? value.slice(0, 10) : '');
+const initiativeStatuses = ['planned', 'active', 'completed', 'canceled'];
+const initiativePriorities = ['none', 'low', 'medium', 'high', 'urgent'];
+const initiativeHealth = ['no-update', 'on-track', 'at-risk', 'off-track'];
+
+type InitiativeDraft = {
+   name: string;
+   description: string;
+   status: string;
+   priority: string;
+   health: string;
+   icon: string;
+   targetDate: string;
+};
 
 export default function InitiativeDetails({ initiativeId }: { initiativeId: string }) {
    const { orgId } = useParams<{ orgId: string }>();
+   const router = useRouter();
    const [tab] = useQueryState('tab', parseAsStringLiteral(TABS).withDefault('overview'));
    const { workspaceId, initiatives, projects, loading, error, reload } = useLiveInitiatives();
    const [open, setOpen] = useState(false);
+   const [editOpen, setEditOpen] = useState(false);
    const [projectId, setProjectId] = useState('');
+   const [editDraft, setEditDraft] = useState<InitiativeDraft>({
+      name: '',
+      description: '',
+      status: 'planned',
+      priority: 'none',
+      health: 'no-update',
+      icon: '',
+      targetDate: '',
+   });
    const [submitting, setSubmitting] = useState(false);
    const [formError, setFormError] = useState<string>();
    const initiative = initiatives.find((item) => item.id === initiativeId);
@@ -50,6 +86,20 @@ export default function InitiativeDetails({ initiativeId }: { initiativeId: stri
       [initiative]
    );
    const availableProjects = projects.filter((project) => !linkedIds.has(project.id));
+   const openEdit = () => {
+      if (!initiative) return;
+      setFormError(undefined);
+      setEditDraft({
+         name: initiative.name,
+         description: initiative.description ?? '',
+         status: initiative.status,
+         priority: initiative.priority,
+         health: initiative.health,
+         icon: initiative.icon ?? '',
+         targetDate: dateInputValue(initiative.targetDate),
+      });
+      setEditOpen(true);
+   };
    const linkProject = async () => {
       if (!initiative || !workspaceId || !projectId) return;
       setSubmitting(true);
@@ -95,6 +145,66 @@ export default function InitiativeDetails({ initiativeId }: { initiativeId: stri
          reload();
       } catch (caught) {
          setFormError(caught instanceof Error ? caught.message : 'Could not remove project.');
+      } finally {
+         setSubmitting(false);
+      }
+   };
+   const saveInitiative = async () => {
+      if (!initiative || !workspaceId) return;
+      if (editDraft.name.trim().length < 2) {
+         setFormError('Initiative name must contain at least 2 characters.');
+         return;
+      }
+      setSubmitting(true);
+      setFormError(undefined);
+      try {
+         const query = new URLSearchParams({ workspaceId });
+         const response = await fetch(`${api}/initiatives/${initiative.id}?${query}`, {
+            method: 'PATCH',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+               name: editDraft.name.trim(),
+               description: editDraft.description.trim() || null,
+               status: editDraft.status,
+               priority: editDraft.priority,
+               health: editDraft.health,
+               icon: editDraft.icon.trim() || null,
+               targetDate: editDraft.targetDate || null,
+            }),
+         });
+         if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as {
+               message?: string | string[];
+            } | null;
+            throw new Error(
+               Array.isArray(payload?.message)
+                  ? payload.message[0]
+                  : (payload?.message ?? 'Could not update initiative.')
+            );
+         }
+         setEditOpen(false);
+         reload();
+      } catch (caught) {
+         setFormError(caught instanceof Error ? caught.message : 'Could not update initiative.');
+      } finally {
+         setSubmitting(false);
+      }
+   };
+   const archiveInitiative = async () => {
+      if (!initiative || !workspaceId || !window.confirm(`Archive ${initiative.name}?`)) return;
+      setSubmitting(true);
+      setFormError(undefined);
+      try {
+         const query = new URLSearchParams({ workspaceId });
+         const response = await fetch(`${api}/initiatives/${initiative.id}?${query}`, {
+            method: 'DELETE',
+            credentials: 'include',
+         });
+         if (!response.ok) throw new Error('Could not archive initiative.');
+         router.push(`/${orgId}/initiatives`);
+      } catch (caught) {
+         setFormError(caught instanceof Error ? caught.message : 'Could not archive initiative.');
       } finally {
          setSubmitting(false);
       }
@@ -228,11 +338,16 @@ export default function InitiativeDetails({ initiativeId }: { initiativeId: stri
                <span className="inline-flex size-10 items-center justify-center rounded-md bg-muted/50 text-2xl">
                   {initiative.icon ?? '🎯'}
                </span>
-               <div>
-                  <h1 className="text-2xl font-semibold">{initiative.name}</h1>
-                  <p className="mt-2 text-sm text-muted-foreground whitespace-pre-wrap">
-                     {initiative.description || 'No description yet.'}
-                  </p>
+               <div className="flex items-start justify-between gap-4">
+                  <div>
+                     <h1 className="text-2xl font-semibold">{initiative.name}</h1>
+                     <p className="mt-2 text-sm text-muted-foreground whitespace-pre-wrap">
+                        {initiative.description || 'No description yet.'}
+                     </p>
+                  </div>
+                  <Button size="xs" variant="secondary" onClick={openEdit} disabled={submitting}>
+                     <Pencil className="size-3.5" /> Edit
+                  </Button>
                </div>
                <div className="flex items-center gap-3 flex-wrap text-sm">
                   <span className="text-muted-foreground text-xs w-24">Properties</span>
@@ -297,6 +412,16 @@ export default function InitiativeDetails({ initiativeId }: { initiativeId: stri
                <Plus className="size-4 mr-1" />
                Add project
             </Button>
+            <Button
+               size="xs"
+               variant="ghost"
+               className="text-destructive hover:text-destructive"
+               disabled={submitting}
+               onClick={() => void archiveInitiative()}
+            >
+               <Archive className="size-3.5" /> Archive
+            </Button>
+            {formError && <p className="text-sm text-destructive">{formError}</p>}
          </aside>
          <Dialog open={open} onOpenChange={setOpen}>
             <DialogContent>
@@ -325,6 +450,120 @@ export default function InitiativeDetails({ initiativeId }: { initiativeId: stri
                   </Button>
                   <Button onClick={() => void linkProject()} disabled={!projectId || submitting}>
                      {submitting ? 'Adding…' : 'Add project'}
+                  </Button>
+               </DialogFooter>
+            </DialogContent>
+         </Dialog>
+         <Dialog open={editOpen} onOpenChange={setEditOpen}>
+            <DialogContent>
+               <DialogHeader>
+                  <DialogTitle>Edit initiative</DialogTitle>
+                  <DialogDescription>
+                     Update the initiative details for this workspace.
+                  </DialogDescription>
+               </DialogHeader>
+               <div className="space-y-3">
+                  <Input
+                     value={editDraft.name}
+                     onChange={(event) =>
+                        setEditDraft((current) => ({ ...current, name: event.target.value }))
+                     }
+                     placeholder="Initiative name"
+                  />
+                  <Textarea
+                     value={editDraft.description}
+                     onChange={(event) =>
+                        setEditDraft((current) => ({ ...current, description: event.target.value }))
+                     }
+                     placeholder="Description"
+                  />
+                  <div className="grid grid-cols-3 gap-3">
+                     <Select
+                        value={editDraft.status}
+                        onValueChange={(status) =>
+                           setEditDraft((current) => ({ ...current, status }))
+                        }
+                     >
+                        <SelectTrigger>
+                           <SelectValue placeholder="Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                           {initiativeStatuses.map((status) => (
+                              <SelectItem key={status} value={status}>
+                                 {label(status)}
+                              </SelectItem>
+                           ))}
+                        </SelectContent>
+                     </Select>
+                     <Select
+                        value={editDraft.priority}
+                        onValueChange={(priority) =>
+                           setEditDraft((current) => ({ ...current, priority }))
+                        }
+                     >
+                        <SelectTrigger>
+                           <SelectValue placeholder="Priority" />
+                        </SelectTrigger>
+                        <SelectContent>
+                           {initiativePriorities.map((priority) => (
+                              <SelectItem key={priority} value={priority}>
+                                 {label(priority)}
+                              </SelectItem>
+                           ))}
+                        </SelectContent>
+                     </Select>
+                     <Select
+                        value={editDraft.health}
+                        onValueChange={(health) =>
+                           setEditDraft((current) => ({ ...current, health }))
+                        }
+                     >
+                        <SelectTrigger>
+                           <SelectValue placeholder="Health" />
+                        </SelectTrigger>
+                        <SelectContent>
+                           {initiativeHealth.map((health) => (
+                              <SelectItem key={health} value={health}>
+                                 {label(health)}
+                              </SelectItem>
+                           ))}
+                        </SelectContent>
+                     </Select>
+                  </div>
+                  <div className="grid grid-cols-[90px_1fr] gap-3">
+                     <Input
+                        value={editDraft.icon}
+                        maxLength={16}
+                        onChange={(event) =>
+                           setEditDraft((current) => ({ ...current, icon: event.target.value }))
+                        }
+                        placeholder="Icon"
+                        aria-label="Icon"
+                     />
+                     <Input
+                        type="date"
+                        value={editDraft.targetDate}
+                        onChange={(event) =>
+                           setEditDraft((current) => ({
+                              ...current,
+                              targetDate: event.target.value,
+                           }))
+                        }
+                        aria-label="Target date"
+                     />
+                  </div>
+                  {formError && <p className="text-sm text-destructive">{formError}</p>}
+               </div>
+               <DialogFooter>
+                  <Button
+                     variant="outline"
+                     onClick={() => setEditOpen(false)}
+                     disabled={submitting}
+                  >
+                     Cancel
+                  </Button>
+                  <Button onClick={() => void saveInitiative()} disabled={submitting}>
+                     {submitting ? 'Saving…' : 'Save changes'}
                   </Button>
                </DialogFooter>
             </DialogContent>

@@ -106,7 +106,12 @@ export class PortfolioService {
       if (dto.ownerId !== undefined) await this.assertWorkspaceOwner(workspaceId, dto.ownerId);
       return this.prisma.initiative.update({
          where: { id: initiativeId },
-         data: { ...dto, targetDate: dto.targetDate ? new Date(dto.targetDate) : undefined },
+         data: {
+            ...dto,
+            ...(dto.targetDate !== undefined
+               ? { targetDate: dto.targetDate ? new Date(dto.targetDate) : null }
+               : {}),
+         },
          include: initiativeInclude,
       });
    }
@@ -173,6 +178,7 @@ export class PortfolioService {
       const member = await this.prisma.workspaceMember.findFirst({
          where: { workspaceId, userId, status: 'ACTIVE' },
       });
-      if (!member) throw new NotFoundException('Initiative owner must be an active workspace member.');
+      if (!member)
+         throw new NotFoundException('Initiative owner must be an active workspace member.');
    }
 }
