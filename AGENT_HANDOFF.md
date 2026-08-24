@@ -101,6 +101,7 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 | `d6524a4` | All remaining shared Settings placeholders retain their original layout but now disable filter/create actions and identify missing configuration services instead of presenting fake writes. The unused Project templates placeholder config was removed. Frontend build and Docker checks of SLA/Documents Settings routes passed. |
 | `54252b7` | Original Issue detail Activity now loads persisted comments/events, creates comments through the API, and subscribes/unsubscribes through real endpoints. Comment-created activity events are de-duplicated against the comment card. Composer attachments/reactions are not simulated. Frontend build, Docker route/API-auth checks, and the existing API test suite (2/2) passed. |
 | `dfd0496` | Original Issue detail, right properties panel, assignee picker, and issue header now derive their data from the live Issues store/API. Persisted status/priority/assignee selectors remain available; mock description, team, cycle, milestone, relation, PR, and sub-issue records were removed. Reactions, sub-issues, and the original-layout attachment action are explicitly unavailable until their contracts are implemented. Frontend build and Docker route verification passed. |
+| `8c6bbd8` | Original Issue detail Paperclip now uploads a real Issue attachment through the existing Attachment API, lists persisted records, and downloads through the protected endpoint. It includes client feedback for the 10 MB limit plus loading/error/empty/upload states; reactions and comment attachments remain unavailable. Frontend production build passed. Docker runtime verification is pending the user's 5G confirmation. |
 
 ### Capability status at the handoff point
 
@@ -110,7 +111,7 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 | Authentication and workspace access | Implemented baseline | Login/session/workspace resolution are real. OAuth, email verification, password reset, and enterprise SSO are deferred. |
 | Teams and members | Implemented baseline | Original Teams, team overview, team members, and workspace members use API data; team/member creation actions covered by the migrated screens persist. |
 | Projects | Implemented baseline | Original project list, creation, lead, issue progress, overview, issues, activity, and project header use API data. Project settings still need their final audit. |
-| Issues, labels, cycles, saved views | Implemented baseline | Original issues list/filter options, My issues scopes, labels CRUD, cycles/timeline, subscriptions, and saved views use API data. Original Issue detail, Activity/Comments/Subscribe, properties and assignee changes are live. Attachments, label editing, sub-issues, reactions, and relations remain deferred. |
+| Issues, labels, cycles, saved views | Implemented baseline | Original issues list/filter options, My issues scopes, labels CRUD, cycles/timeline, subscriptions, and saved views use API data. Original Issue detail, Activity/Comments/Subscribe, properties, assignee changes, and Issue attachments are live in source. Docker runtime verification of the latest attachment UI is pending 5G. Label editing, sub-issues, reactions, and relations remain deferred. |
 | Initiatives and documents | Implemented baseline | Initiative list/detail/create/linking and team documents are live. Advanced relationships/workflows remain deferred. |
 | Inbox and Discord | Implemented baseline | Inbox persists notifications/read/delete and workspace Discord integration exists. No fake delivery channels are enabled. |
 | Settings | Audited baseline | Profile, issue labels, project statuses, project templates, and actionable browser-local preferences are live. Unsupported Notification, Security, Issue templates, desktop and issue-automation preferences are truthful. Generic configuration placeholders are visibly unavailable. Template application/editing is deferred because the API currently provides list/create only. |
@@ -118,18 +119,16 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 
 ## Exact restart point
 
-The next agent should start with **Core issue collaboration → original issue attachments**. The backend Attachment API is implemented (upload/list/download), but the original Issue detail Paperclip action is deliberately disabled until it has a live original-layout implementation:
+The next agent should first complete **runtime verification for original Issue attachments**. The feature is committed in `8c6bbd8` and the web production build passed; it has not yet been included in the running Docker web image because Docker rebuilding awaits the user's 5G confirmation.
 
 `apps/web/components/common/issues/details/issue-details.tsx`
 
-Preferred next vertical slice:
+Required verification sequence:
 
-1. Inspect `attachments.controller.ts` / `attachments.service.ts` and preserve their workspace/entity authorization contract.
-2. Turn the existing Paperclip affordance into a file picker/upload action in the original layout; render a concise list of persisted attachment records beneath the description or activity without redesigning the page.
-3. Support download through the existing protected endpoint. Include upload/loading/error/empty states and the 10 MB server limit in client feedback.
-4. Do not add comment attachment support or fake reactions; those require a distinct entity/contract decision.
-5. Add appropriate API tests for tenant isolation/mutations when backend behavior changes.
-6. Build and, only with the user on 5G, rebuild/recreate the API/web image(s), verify routes, commit/push, and record the remaining detail blocks.
+1. With the user on 5G, rebuild only `web`, recreate it with `--no-build --pull never`, and verify the authenticated Issue detail route.
+2. Manually upload a small file, refresh, download it, then verify the 10 MB client error. Do not claim full attachment runtime verification from a route `307` alone.
+3. Record the result in this document and `CONTINUATION.md`, then commit/push the documentation.
+4. Only after that, continue with **Issue label editing** if its API contract covers it; otherwise leave it explicitly unavailable. Sub-issues, reactions, comment attachments, and relations require separate contracts.
 
 This is a backend/API integration priority, not a UI redesign task.
 

@@ -46,7 +46,7 @@ docker compose --profile app up -d --no-build --pull never --force-recreate api 
 
 ## 4. Tiến độ đã xác minh
 
-Tất cả commit bên dưới đã được push. Commit tài liệu gần nhất là `dfb4bb5`; commit tính năng gần nhất là `dfd0496`.
+Tất cả commit bên dưới đã được push. Commit tài liệu gần nhất là `0097207`; commit tính năng gần nhất là `8c6bbd8`.
 
 | Nhóm chức năng | Trạng thái thực tế |
 | --- | --- |
@@ -54,7 +54,7 @@ Tất cả commit bên dưới đã được push. Commit tài liệu gần nh�
 | Auth và workspace | Login/session/workspace resolution thật; OAuth, reset password, email verification, SSO chưa làm. |
 | Teams và members | Màn Teams, team overview/members/documents và workspace members dùng API; các tạo mới đã có trên màn đã migrate. |
 | Projects | Danh sách, tạo project, lead, issue progress, header, Overview/Issues/Activity dùng API. |
-| Issues | Danh sách, tạo/sửa trường cơ bản, filter options, My issues, labels CRUD, cycles, saved views và subscriptions dùng dữ liệu thật. Issue detail, properties, assignee, status/priority, comments/activity/subscribe đã live. |
+| Issues | Danh sách, tạo/sửa trường cơ bản, filter options, My issues, labels CRUD, cycles, saved views và subscriptions dùng dữ liệu thật. Issue detail, properties, assignee, status/priority, comments/activity/subscribe và Issue attachment đã live trong source. Docker runtime verification cho attachment đang chờ 5G. |
 | Initiatives & documents | Initiative list/detail/create/link project; team documents đã live. |
 | Inbox & Discord | Inbox read/delete/unread badge lưu thật; cấu hình Discord workspace đã có. |
 | Settings | Profile, issue labels, project statuses, project templates và preference browser-local đã được audit/nối phù hợp. Các option không có backend đã được disable minh bạch. |
@@ -70,30 +70,28 @@ Các commit mốc quan trọng:
 - `7aa709a`: Issue labels CRUD thật.
 - `54252b7`: Issue comments/activity/subscribe thật.
 - `dfd0496`: Issue detail và properties/assignee/header lấy dữ liệu API.
+- `8c6bbd8`: Paperclip UI gốc upload/list/download Issue attachment qua API thật; production web build đã pass, Docker verification đang chờ 5G.
 
 Lịch sử đầy đủ và kiểm chứng từng commit nằm trong `AGENT_HANDOFF.md`.
 
 ## 5. Điểm bắt đầu chính xác
 
-### Lát cắt tiếp theo: Attachment của Issue detail
+### Việc cần làm trước khi tiếp tục: runtime verification Attachment của Issue detail
 
 UI đích: `apps/web/components/common/issues/details/issue-details.tsx`.
 
-Hiện tại Paperclip ở Issue detail bị disable có chủ đích. Backend Attachment đã có upload/list/download. Agent tiếp theo cần:
+Paperclip ở Issue detail đã được nối vào Attachment API tại `8c6bbd8`. Mã nguồn và production web build đã được xác minh, nhưng container `web` đang chạy chưa chứa thay đổi vì chưa được phép rebuild Docker. Agent tiếp theo cần:
 
-1. Đọc `apps/api/src/attachments/attachments.controller.ts` và `attachments.service.ts`; giữ nguyên kiểm tra workspace/entity authorization.
-2. Nối Paperclip gốc với file picker/upload; không tạo trang hay layout mới.
-3. Hiện danh sách attachment đã lưu ở vị trí gọn trong Issue detail; link download dùng endpoint bảo vệ hiện có.
-4. Có loading, upload, empty và error state thật; thông báo giới hạn 10 MB trước khi upload.
-5. Không làm attachment cho comment, reaction, sub-issue hay relation trong lát cắt này.
-6. Nếu sửa backend, thêm test authorization/tenant isolation. Nếu chỉ nối frontend, web build là tối thiểu.
-7. Với 5G: rebuild đúng service đã thay đổi, verify, commit/push feature, rồi update cả `AGENT_HANDOFF.md` và file này.
+1. Chỉ khi người dùng xác nhận 5G: rebuild `web`, recreate với `--no-build --pull never`, và vào Issue detail đã đăng nhập.
+2. Upload file nhỏ từ Paperclip, refresh trang để xác nhận persistence, tải file xuống, và thử file lớn hơn 10 MB để xác nhận feedback client.
+3. Ghi rõ kết quả runtime vào hai tài liệu này rồi commit/push documentation.
+4. Không mở rộng sang comment attachment, reaction, sub-issue hay relation trong lần xác minh này.
 
 ## 6. Backlog theo thứ tự ưu tiên
 
 Chỉ làm **một vertical slice** rồi xác minh/commit/push trước khi sang mục tiếp theo.
 
-1. **Issue attachments** — mô tả chính xác ở phần 5.
+1. **Xác minh runtime Issue attachments** — mô tả chính xác ở phần 5.
 2. **Issue detail còn lại** — label editing nếu API hỗ trợ; sub-issues, reactions, relations chỉ làm khi có schema/API/permission đầy đủ. Nếu chưa có thì giữ unavailable.
 3. **Command palette, sidebar, search** — audit mọi mock team/project/user; dùng live loaders hoặc ghi unavailable. Chỉ thiết kế server search khi cần thật.
 4. **Audit toàn bộ mock data** — chạy:
