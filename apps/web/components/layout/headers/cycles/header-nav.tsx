@@ -1,8 +1,9 @@
 'use client';
 
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { Button } from '@/components/ui/button';
 import { loadCurrentWorkspaceTeams, WorkspaceTeam } from '@/components/common/teams/team-types';
-import { ChevronRight, Star } from 'lucide-react';
+import { ChevronRight, Plus, Star } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -41,6 +42,15 @@ export default function HeaderNav() {
             <span className="text-sm font-medium">Cycles</span>
             <Star className="size-3.5 text-muted-foreground shrink-0 ml-1" />
          </div>
+         <Button
+            type="button"
+            size="xs"
+            variant="secondary"
+            onClick={() => window.dispatchEvent(new Event('flowie:create-cycle'))}
+         >
+            <Plus className="size-4" />
+            New cycle
+         </Button>
       </div>
    );
 }

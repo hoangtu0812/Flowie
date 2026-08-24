@@ -17,11 +17,37 @@ export class CyclesService {
 
    async list(workspaceId: string, teamId: string, userId: string, status?: CycleStatus) {
       await this.authorize(workspaceId, teamId, userId);
-      return this.prisma.cycle.findMany({
+      const cycles = await this.prisma.cycle.findMany({
          where: { workspaceId, teamId, ...(status ? { status } : {}) },
-         include: { _count: { select: { issueLinks: true } } },
+         include: {
+            _count: { select: { issueLinks: true } },
+            issueLinks: {
+               select: {
+                  createdAt: true,
+                  issue: {
+                     select: {
+                        updatedAt: true,
+                        completedAt: true,
+                        status: { select: { category: true } },
+                     },
+                  },
+               },
+            },
+         },
          orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }],
       });
+      return cycles.map(({ issueLinks, ...cycle }) => ({
+         ...cycle,
+         progress: buildCycleProgress(
+            {
+               status: cycle.status,
+               startDate: cycle.startDate,
+               endDate: cycle.endDate,
+               createdAt: cycle.createdAt,
+            },
+            issueLinks
+         ),
+      }));
    }
 
    async create(dto: CreateCycleDto, userId: string) {
@@ -188,4 +214,92 @@ export class CyclesService {
          throw new BadRequestException('Cycle end date must be after the start date.');
       }
    }
+}
+
+type ProgressCycle = {
+   status: CycleStatus;
+   startDate: Date | null;
+   endDate: Date | null;
+   createdAt: Date;
+};
+
+type ProgressIssueLink = {
+   createdAt: Date;
+   issue: {
+      updatedAt: Date;
+      completedAt: Date | null;
+      status: { category: string };
+   };
+};
+
+const startOfUtcDay = (value: Date) =>
+   new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
+const endOfUtcDay = (value: Date) => new Date(startOfUtcDay(value).getTime() + 86_399_999);
+const isoDay = (value: Date) => startOfUtcDay(value).toISOString().slice(0, 10);
+
+/**
+ * Builds the Circle burn-up model exclusively from persisted cycle links and
+ * issue timestamps. Historical status transitions were not stored by older
+ * releases, so the started line uses the first persisted update of issues
+ * which are currently started; completedAt remains exact.
+ */
+export function buildCycleProgress(cycle: ProgressCycle, links: ProgressIssueLink[]) {
+   const start = startOfUtcDay(cycle.startDate ?? cycle.createdAt);
+   const requestedEnd = startOfUtcDay(cycle.endDate ?? new Date());
+   const today = startOfUtcDay(new Date());
+   const end =
+      cycle.status === 'ACTIVE' && requestedEnd.getTime() > today.getTime() ? today : requestedEnd;
+   const finalDay = end.getTime() < start.getTime() ? start : end;
+
+   if (cycle.status === 'UPCOMING' || cycle.status === 'CANCELED') {
+      return {
+         scope: links.length,
+         scopeDelta: 0,
+         started: 0,
+         completed: 0,
+         burnup: [],
+      };
+   }
+
+   const totalDays = Math.max(0, Math.round((finalDay.getTime() - start.getTime()) / 86_400_000));
+   const step = Math.max(1, Math.ceil((totalDays + 1) / 120));
+   const days: Date[] = [];
+   for (let offset = 0; offset <= totalDays; offset += step) {
+      days.push(new Date(start.getTime() + offset * 86_400_000));
+   }
+   if (days.at(-1)?.getTime() !== finalDay.getTime()) days.push(finalDay);
+
+   const burnup = days.map((day) => {
+      const cutoff = endOfUtcDay(day);
+      const linked = links.filter((link) => link.createdAt.getTime() <= cutoff.getTime());
+      const completed = linked.filter(
+         (link) => link.issue.completedAt && link.issue.completedAt.getTime() <= cutoff.getTime()
+      ).length;
+      const currentlyStarted = linked.filter(
+         (link) =>
+            link.issue.status.category === 'STARTED' &&
+            link.issue.updatedAt.getTime() <= cutoff.getTime()
+      ).length;
+      const elapsed =
+         totalDays === 0 ? 1 : (day.getTime() - start.getTime()) / 86_400_000 / totalDays;
+      return {
+         date: isoDay(day),
+         scope: linked.length,
+         started: completed + currentlyStarted,
+         completed,
+         ideal: Math.round(links.length * Math.min(1, Math.max(0, elapsed))),
+      };
+   });
+
+   const initialScope = burnup[0]?.scope ?? 0;
+   const scope = burnup.at(-1)?.scope ?? links.length;
+   const completed = links.filter((link) => Boolean(link.issue.completedAt)).length;
+   const started = links.filter((link) => link.issue.status.category === 'STARTED').length;
+   return {
+      scope,
+      scopeDelta: initialScope > 0 ? Math.round(((scope - initialScope) / initialScope) * 100) : 0,
+      started,
+      completed,
+      burnup,
+   };
 }

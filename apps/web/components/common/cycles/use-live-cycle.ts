@@ -16,15 +16,13 @@ type ApiCycle = {
    endDate: string | null;
    createdAt: string;
    _count: { issueLinks: number };
+   progress: Pick<Cycle, 'scope' | 'scopeDelta' | 'started' | 'completed' | 'burnup'>;
 };
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 const mapCycle = (cycle: ApiCycle, team: WorkspaceTeam): Cycle => {
-   const issues = useIssuesStore.getState().issues.filter((issue) => issue.cycleId === cycle.id);
-   const scope = issues.length || cycle._count.issueLinks;
-   const completed = issues.filter((issue) => issue.status.category === 'completed').length;
-   const started = issues.filter((issue) => issue.status.category === 'started').length;
+   const { scope, scopeDelta, started, completed, burnup } = cycle.progress;
    const progress = scope ? Math.round((completed / scope) * 100) : 0;
    return {
       id: cycle.id,
@@ -34,12 +32,13 @@ const mapCycle = (cycle: ApiCycle, team: WorkspaceTeam): Cycle => {
       status: cycle.status === 'ACTIVE' ? 'current' : 'upcoming',
       startDate: cycle.startDate ?? cycle.createdAt,
       endDate: cycle.endDate ?? cycle.startDate ?? cycle.createdAt,
-      capacity: progress,
+      capacity: scope ? Math.round(((started + completed) / scope) * 100) : 0,
       scope,
-      scopeDelta: 0,
+      scopeDelta,
       started,
       completed,
       successRate: progress,
+      burnup,
    };
 };
 

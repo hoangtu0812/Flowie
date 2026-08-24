@@ -14,7 +14,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { formatDistanceToNowStrict } from 'date-fns';
-import { ChevronRight, FileText, Plus, SlidersHorizontal } from 'lucide-react';
+import { ChevronRight, FileText, Plus, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { useLiveTeam } from './use-live-team';
@@ -27,6 +27,7 @@ export default function TeamDocuments() {
    const { teamId } = useParams<{ orgId: string; teamId: string }>();
    const { workspaceId, team, documents, loading, error, reload } = useLiveTeam(teamId);
    const [open, setOpen] = useState(false);
+   const [editingDocumentId, setEditingDocumentId] = useState<string>();
    const [title, setTitle] = useState('');
    const [content, setContent] = useState('');
    const [submitting, setSubmitting] = useState(false);
@@ -39,7 +40,25 @@ export default function TeamDocuments() {
          <div className="px-8 py-10 text-sm text-destructive">{error ?? 'Team not found.'}</div>
       );
 
-   const createDocument = async () => {
+   const openCreateDialog = () => {
+      setEditingDocumentId(undefined);
+      setTitle('');
+      setContent('');
+      setFormError(undefined);
+      setOpen(true);
+   };
+
+   const openEditDialog = (documentId: string) => {
+      const document = documents.find((candidate) => candidate.id === documentId);
+      if (!document) return;
+      setEditingDocumentId(document.id);
+      setTitle(document.title);
+      setContent(document.content);
+      setFormError(undefined);
+      setOpen(true);
+   };
+
+   const saveDocument = async () => {
       if (title.trim().length < 2) {
          setFormError('Document title must contain at least 2 characters.');
          return;
@@ -47,24 +66,53 @@ export default function TeamDocuments() {
       setSubmitting(true);
       setFormError(undefined);
       try {
-         const response = await fetch(`${api}/documents`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ workspaceId, teamId: team.id, title: title.trim(), content }),
-         });
+         const response = await fetch(
+            editingDocumentId
+               ? `${api}/documents/${editingDocumentId}?${new URLSearchParams({ workspaceId }).toString()}`
+               : `${api}/documents`,
+            {
+               method: editingDocumentId ? 'PATCH' : 'POST',
+               credentials: 'include',
+               headers: { 'content-type': 'application/json' },
+               body: JSON.stringify(
+                  editingDocumentId
+                     ? { title: title.trim(), content }
+                     : { workspaceId, teamId: team.id, title: title.trim(), content }
+               ),
+            }
+         );
          if (!response.ok) {
             const payload = (await response.json().catch(() => null)) as {
                message?: string;
             } | null;
-            throw new Error(payload?.message ?? 'Could not create document.');
+            throw new Error(payload?.message ?? 'Could not save document.');
          }
          setOpen(false);
          setTitle('');
          setContent('');
          reload();
       } catch (caught) {
-         setFormError(caught instanceof Error ? caught.message : 'Could not create document.');
+         setFormError(caught instanceof Error ? caught.message : 'Could not save document.');
+      } finally {
+         setSubmitting(false);
+      }
+   };
+
+   const archiveDocument = async () => {
+      if (!editingDocumentId) return;
+      setSubmitting(true);
+      setFormError(undefined);
+      try {
+         const response = await fetch(
+            `${api}/documents/${editingDocumentId}?${new URLSearchParams({ workspaceId }).toString()}`,
+            { method: 'DELETE', credentials: 'include' }
+         );
+         if (!response.ok) throw new Error('Could not archive document.');
+         setOpen(false);
+         setEditingDocumentId(undefined);
+         reload();
+      } catch (caught) {
+         setFormError(caught instanceof Error ? caught.message : 'Could not archive document.');
       } finally {
          setSubmitting(false);
       }
@@ -80,7 +128,7 @@ export default function TeamDocuments() {
                <span />
             </div>
             <div className="flex items-center gap-2 shrink-0">
-               <Button size="xs" variant="secondary" onClick={() => setOpen(true)}>
+               <Button size="xs" variant="secondary" onClick={openCreateDialog}>
                   <Plus className="size-4 md:mr-1" />
                   <span className="hidden md:inline">New document</span>
                </Button>
@@ -104,9 +152,11 @@ export default function TeamDocuments() {
                   <p className="px-12 py-5 text-sm text-muted-foreground">No documents yet.</p>
                ) : (
                   documents.map((document) => (
-                     <div
+                     <button
                         key={document.id}
-                        className="grid grid-cols-[1fr_40px] md:grid-cols-[1fr_90px_90px_40px] items-center px-6 h-11 hover:bg-sidebar/50 border-b border-border/30 text-sm"
+                        type="button"
+                        onClick={() => openEditDialog(document.id)}
+                        className="grid w-full grid-cols-[1fr_40px] md:grid-cols-[1fr_90px_90px_40px] items-center px-6 h-11 hover:bg-sidebar/50 border-b border-border/30 text-sm text-left"
                      >
                         <div className="flex items-center gap-2 min-w-0 pl-6">
                            <FileText className="size-4 text-muted-foreground shrink-0" />
@@ -125,7 +175,7 @@ export default function TeamDocuments() {
                            />
                            <AvatarFallback>{document.updatedBy.name[0]}</AvatarFallback>
                         </Avatar>
-                     </div>
+                     </button>
                   ))
                )}
             </CollapsibleContent>
@@ -134,8 +184,12 @@ export default function TeamDocuments() {
          <Dialog open={open} onOpenChange={setOpen}>
             <DialogContent>
                <DialogHeader>
-                  <DialogTitle>New document</DialogTitle>
-                  <DialogDescription>Create a document in {team.name}.</DialogDescription>
+                  <DialogTitle>{editingDocumentId ? 'Edit document' : 'New document'}</DialogTitle>
+                  <DialogDescription>
+                     {editingDocumentId
+                        ? `Update this document in ${team.name}.`
+                        : `Create a document in ${team.name}.`}
+                  </DialogDescription>
                </DialogHeader>
                <div className="space-y-3">
                   <Input
@@ -152,11 +206,26 @@ export default function TeamDocuments() {
                   {formError && <p className="text-sm text-destructive">{formError}</p>}
                </div>
                <DialogFooter>
+                  {editingDocumentId && (
+                     <Button
+                        variant="destructive"
+                        onClick={() => void archiveDocument()}
+                        disabled={submitting}
+                        className="mr-auto"
+                     >
+                        <Trash2 className="size-4" />
+                        Archive
+                     </Button>
+                  )}
                   <Button variant="outline" onClick={() => setOpen(false)}>
                      Cancel
                   </Button>
-                  <Button onClick={() => void createDocument()} disabled={submitting}>
-                     {submitting ? 'Creating…' : 'Create document'}
+                  <Button onClick={() => void saveDocument()} disabled={submitting}>
+                     {submitting
+                        ? 'Saving…'
+                        : editingDocumentId
+                          ? 'Save changes'
+                          : 'Create document'}
                   </Button>
                </DialogFooter>
             </DialogContent>
