@@ -119,6 +119,9 @@
 - `f404306` — persist workspace Project display defaults through the original Display action.
 - `29f868a` — connect the original Project Overview initiative/label `+` affordances to real APIs.
 - `233f2ed` — persist workspace Issue display defaults through the original Display action.
+- `ece6933` — connect the original Issue command palette Release picker to persisted releases.
+- `50c81d2` — generate current/upcoming team cycles from the persisted cadence in the Worker.
+- `de3690e` — convert an Issue into a real comment using the original context-menu action.
 
 ### Kiểm tra gần nhất
 
@@ -171,6 +174,15 @@
   `20260824330000_workspace_issue_display_defaults` đã apply/xác minh trực tiếp trong PostgreSQL.
   Test Issue defaults **6/6 passed**, API/Next production build và Docker API/web đều passed; các
   lớp cài dependency trong Docker đều dùng cache.
+- Issue–Release dùng bảng liên kết PostgreSQL riêng; Issue options/list trả release thật và dòng
+  `Add to release…` trong Command Palette gốc hỗ trợ liên kết/gỡ nhiều release atomically. Migration
+  `20260824340000_issue_releases` đã apply/xác minh; test DTO/service **7/7 passed**.
+- Worker đã thực thi `cycleCadenceWeeks`: tự tạo current/upcoming cycle, activate/complete theo UTC,
+  idempotent khi scan lặp và ghi audit cho cycle được sinh. Cả cadence + retention test **6/6 passed**;
+  runtime scan kết nối Redis thành công. Build kế tiếp đã xác nhận `pnpm install` là `CACHED`.
+- `Convert into → Comment` trong context menu gốc tạo comment trên issue đích, ghi activity cho cả
+  hai issue và archive issue nguồn trong một transaction; kiểm tra quyền trên cả nguồn/đích và cấm
+  tự-convert. DTO/service test **5/5 passed**, API/web Docker trả HTTP 200.
 - Audit frontend đã đối chiếu **308 file baseline** trong `app/components/hooks/lib/store` với
   `upstream/master`. Đã xóa 18 component `real-*` rút gọn không còn route nào dùng; runtime chỉ
   còn cây component gốc được nối API.
@@ -189,9 +201,9 @@
 | P0 | Notifications đa workspace | Hoàn thành: notification có workspace FK, API/store scope đúng workspace và preview xử lý cả issue/project thật. |
 | P0 | Settings Notifications/Integrations | Hoàn thành: shell/card/search gốc được giữ lại; Discord dùng row/dialog thật, không quảng cáo Slack/email/desktop. |
 | P0 | Team membership | Hoàn thành: API trả all team + membership thật, self-join idempotent và mọi consumer được phân loại đúng giữa all/joined mà không đổi bảng/nút gốc. |
-| P0 | Visible issue command no-op | Move Team trong command palette đã dùng API thật; team chưa join bị loại khỏi Issue store. Agent không còn là default home hoặc phím Tab mặc định. Release picker vẫn cần quan hệ Issue–Release nếu giữ affordance này. |
-| P1 | Issue actions còn thiếu | Convert-to-comment còn cần semantics/backend. Duplicate/Won't Fix, move team, favorite và reminder đã hoàn thành; taxonomy issue type không có control tương ứng trong UI gốc hiện tại. |
-| P1 | Team settings nâng cao | Cycle cadence, triage, auto-close/archive policy, hierarchy và template default đã persistence/UI; Worker auto-close/archive đã hoàn thành. Tự sinh cycle theo cadence vẫn chưa triển khai. |
+| P0 | Visible issue command no-op | Hoàn thành trong phạm vi project-management: Move Team, Release picker, labels/project/cycle/due date và Agent default đều đã dùng dữ liệu thật hoặc bị loại khỏi default. Code Reviews vẫn unavailable theo phạm vi. |
+| P1 | Issue actions còn thiếu | Hoàn thành: Convert-to-comment, Duplicate/Won't Fix, move team, favorite và reminder đều có backend. Taxonomy issue type không có control tương ứng trong UI gốc hiện tại. |
+| P1 | Team settings nâng cao | Hoàn thành: cadence, triage, auto-close/archive, hierarchy và template default đều persistence/UI; Worker tự sinh cycle và thực thi retention policy. |
 | P1 | Account security | Session management và Personal API Key đã hoàn thành. Passkeys cần WebAuthn dependency/RP configuration; signing key không có consumer và lệch phạm vi project-management nên vẫn unavailable. |
 | P1 | Project extras | Hoàn thành: favorite, Update attachment, resource, typed custom-property values/definitions, workspace Display defaults và affordance Initiative/Label trong Overview đều dùng dữ liệu thật mà giữ layout gốc. |
 | P1 | Issue display/insights | Workspace Display defaults đã hoàn thành. Footer `Set default for everyone` trong Insights vẫn là visible no-op; cần persistence cho cấu hình analytics trước khi bật. |
@@ -201,9 +213,11 @@
 
 ## Thứ tự tiếp tục đề xuất
 
-1. Triển khai quan hệ Issue–Release cho picker đang hiển thị trong Issue command/property UI gốc.
-2. Loại visible no-op Insights defaults, rồi xử lý cycle auto-generation và convert-to-comment.
-3. Tạo phiên test workspace-member và chụp đối chiếu từng route chính với `upstream/master`.
+1. Quyết định semantics/persistence cho footer `Set default for everyone` trong Insights; hiện các
+   selector analytics chỉ có một lựa chọn nên lưu cấu hình chưa mang thêm giá trị.
+2. Audit các control disabled còn lại: tách rõ điều kiện hợp lệ, tính năng cố ý excluded và no-op.
+3. Đăng nhập sẵn một phiên workspace-member trong in-app browser rồi chụp đối chiếu từng route
+   chính với `upstream/master`; browser sạch hiện xác nhận route guard/login và console không lỗi.
 
 ## 1. Mục tiêu
 
