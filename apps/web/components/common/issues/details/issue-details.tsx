@@ -4,14 +4,37 @@ import { useIssuesStore } from '@/store/issues-store';
 import { Paperclip, SmilePlus } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useEffect, useMemo } from 'react';
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityFeed } from './activity-feed';
 import { IssuePropertiesPanel } from './issue-properties-panel';
+
+const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+
+type Attachment = {
+   id: string;
+   filename: string;
+   mimeType: string;
+   size: number;
+   createdAt: string;
+   uploadedBy: { id: string; name: string; avatarUrl: string | null };
+};
+
+const formatFileSize = (size: number) => {
+   if (size < 1024) return `${size} B`;
+   if (size < 1024 * 1024) return `${Math.ceil(size / 1024)} KB`;
+   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+};
 
 /** Original issue-detail layout backed by the live Issues store and API data. */
 export default function IssueDetails() {
    const { orgId, issueId } = useParams<{ orgId: string; issueId: string }>();
-   const { issues, isLoading, error, loadIssues } = useIssuesStore();
+   const { issues, isLoading, error, loadIssues, workspaceId } = useIssuesStore();
+   const [attachments, setAttachments] = useState<Attachment[]>([]);
+   const [isLoadingAttachments, setIsLoadingAttachments] = useState(false);
+   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+   const [attachmentError, setAttachmentError] = useState<string>();
+   const attachmentInputRef = useRef<HTMLInputElement>(null);
 
    useEffect(() => {
       void loadIssues();
@@ -21,6 +44,78 @@ export default function IssueDetails() {
       () => issues.find((candidate) => candidate.identifier === issueId),
       [issues, issueId]
    );
+   const issueEntityId = issue?.id;
+
+   const loadAttachments = useCallback(async () => {
+      if (!workspaceId || !issueEntityId) return;
+
+      setIsLoadingAttachments(true);
+      setAttachmentError(undefined);
+      try {
+         const query = new URLSearchParams({
+            workspaceId,
+            entityType: 'issue',
+            entityId: issueEntityId,
+         });
+         const response = await fetch(`${api}/attachments?${query}`, { credentials: 'include' });
+         if (!response.ok) throw new Error('Could not load issue attachments.');
+         const payload = (await response.json()) as { data: Attachment[] };
+         setAttachments(payload.data);
+      } catch (caught) {
+         setAttachments([]);
+         setAttachmentError(
+            caught instanceof Error ? caught.message : 'Could not load issue attachments.'
+         );
+      } finally {
+         setIsLoadingAttachments(false);
+      }
+   }, [issueEntityId, workspaceId]);
+
+   useEffect(() => {
+      void loadAttachments();
+   }, [loadAttachments]);
+
+   const uploadAttachment = async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      if (!file) return;
+      if (!workspaceId || !issueEntityId) {
+         setAttachmentError('The issue is not ready for attachments yet.');
+         return;
+      }
+      if (file.size > MAX_ATTACHMENT_SIZE) {
+         setAttachmentError('Files must be 10 MB or smaller.');
+         return;
+      }
+
+      setIsUploadingAttachment(true);
+      setAttachmentError(undefined);
+      try {
+         const form = new FormData();
+         form.set('workspaceId', workspaceId);
+         form.set('entityType', 'issue');
+         form.set('entityId', issueEntityId);
+         form.set('file', file);
+         const response = await fetch(`${api}/attachments`, {
+            method: 'POST',
+            credentials: 'include',
+            body: form,
+         });
+         if (!response.ok) {
+            const body = (await response.json().catch(() => undefined)) as
+               { message?: string | string[] } | undefined;
+            const message = Array.isArray(body?.message) ? body.message[0] : body?.message;
+            throw new Error(message ?? 'Could not upload attachment.');
+         }
+         await loadAttachments();
+      } catch (caught) {
+         setAttachmentError(
+            caught instanceof Error ? caught.message : 'Could not upload attachment.'
+         );
+      } finally {
+         setIsUploadingAttachment(false);
+      }
+   };
 
    if (isLoading) {
       return (
@@ -67,13 +162,48 @@ export default function IssueDetails() {
                   </button>
                   <button
                      type="button"
-                     disabled
-                     title="Issue attachments are not available in this layout yet"
-                     className="opacity-50 cursor-not-allowed"
-                     aria-label="Issue attachments are not available in this layout yet"
+                     disabled={isUploadingAttachment}
+                     title={isUploadingAttachment ? 'Uploading attachment…' : 'Add attachment'}
+                     className="disabled:opacity-50 disabled:cursor-not-allowed"
+                     aria-label={isUploadingAttachment ? 'Uploading attachment' : 'Add attachment'}
+                     onClick={() => attachmentInputRef.current?.click()}
                   >
                      <Paperclip className="size-4" />
                   </button>
+                  <input
+                     ref={attachmentInputRef}
+                     type="file"
+                     className="sr-only"
+                     onChange={uploadAttachment}
+                     aria-label="Upload issue attachment"
+                  />
+               </div>
+
+               <div className="mt-4 text-sm">
+                  {isLoadingAttachments ? (
+                     <p className="text-muted-foreground">Loading attachments…</p>
+                  ) : attachmentError ? (
+                     <p className="text-destructive">{attachmentError}</p>
+                  ) : attachments.length ? (
+                     <ul className="space-y-2">
+                        {attachments.map((attachment) => (
+                           <li className="flex items-center gap-3" key={attachment.id}>
+                              <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
+                              <a
+                                 className="min-w-0 truncate hover:underline"
+                                 href={`${api}/attachments/${attachment.id}/download`}
+                              >
+                                 {attachment.filename}
+                              </a>
+                              <span className="shrink-0 text-xs text-muted-foreground">
+                                 {formatFileSize(attachment.size)}
+                              </span>
+                           </li>
+                        ))}
+                     </ul>
+                  ) : (
+                     <p className="text-muted-foreground">No attachments yet.</p>
+                  )}
                </div>
 
                <div className="mt-8 text-sm text-muted-foreground">
