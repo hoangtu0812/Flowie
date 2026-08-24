@@ -31,12 +31,7 @@ export default function Home() {
          };
          const workspace = payload.data[0]?.workspace;
          if (workspace) {
-            const homePath =
-               defaultHome === 'inbox'
-                  ? 'inbox'
-                  : defaultHome === 'my-issues'
-                    ? 'my-issues'
-                    : 'agent';
+            const homePath = defaultHome === 'my-issues' ? 'my-issues' : 'inbox';
             router.replace(`/${workspace.slug}/${homePath}`);
             return;
          }

@@ -43,7 +43,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 type PaletteRoute =
-   'root' | 'assign' | 'status' | 'priority' | 'labels' | 'project' | 'cycle' | 'due-date';
+   'root' | 'assign' | 'status' | 'priority' | 'labels' | 'project' | 'team' | 'cycle' | 'due-date';
 
 const dueDateFromToday = (daysFromToday: number) => {
    const date = new Date();
@@ -108,7 +108,8 @@ export function CommandPalette() {
       labels,
       projects,
       cycles,
-      currentUserId,
+      teams,
+      moveIssue,
    } = useIssuesStore();
    const { openModal } = useCreateIssueStore();
 
@@ -121,6 +122,7 @@ export function CommandPalette() {
    }, [pathname, issues]);
 
    const issue = contextCleared ? undefined : contextIssue;
+   const issueTeamId = issue?.team?.id;
 
    const reset = useCallback(() => {
       setRoute('root');
@@ -190,17 +192,21 @@ export function CommandPalette() {
    const issueUrl = issue
       ? `${typeof window !== 'undefined' ? window.location.origin : ''}/${orgId}/issue/${issue.identifier}`
       : '';
-   const branchName = issue
-      ? `${currentUserId ?? 'user'}/${issue.identifier.toLowerCase()}-${issue.title
-           .toLowerCase()
-           .replace(/[^a-z0-9]+/g, '-')
-           .replace(/^-|-$/g, '')
-           .slice(0, 40)}`
-      : '';
-
    const go = (path: string) => {
       router.push(`/${orgId}${path}`);
       close();
+   };
+
+   const moveIssueToTeam = async (team: { id: string; name: string }) => {
+      if (!issue) return;
+      try {
+         const moved = await moveIssue(issue.id, team.id);
+         toast.success(`Moved to ${team.name} as ${moved.identifier}`);
+         router.push(`/${orgId}/issue/${moved.identifier}`);
+         close();
+      } catch {
+         toast.error('Could not move issue');
+      }
    };
 
    const input = (
@@ -220,20 +226,8 @@ export function CommandPalette() {
                if (event.key === 'Backspace' && query === '' && route !== 'root') {
                   setRoute('root');
                }
-               if (event.key === 'Tab' && route === 'root') {
-                  event.preventDefault();
-                  go('/agent');
-               }
             }}
          />
-         {route === 'root' && (
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-xs text-muted-foreground pointer-events-none">
-               Ask Agent
-               <kbd className="h-5 px-1.5 inline-flex items-center rounded border bg-muted/50 text-[11px] font-sans">
-                  Tab
-               </kbd>
-            </span>
-         )}
       </div>
    );
 
@@ -354,8 +348,10 @@ export function CommandPalette() {
                               <Keys keys={['⌥', 'R']} />
                            </CommandItem>
                            <CommandItem
-                              disabled
-                              title="Moving issues between teams is not available yet"
+                              onSelect={() => {
+                                 setRoute('team');
+                                 setQuery('');
+                              }}
                            >
                               <Users className="text-muted-foreground" />
                               Move to a different team…
@@ -417,23 +413,6 @@ export function CommandPalette() {
                               <ClipboardType className="text-muted-foreground" />
                               Copy issue content as Markdown
                               <Keys keys={['⌘', '⌥', 'C']} />
-                           </CommandItem>
-                           <CommandItem onSelect={() => copy('Branch name', branchName)}>
-                              <GitBranch className="text-muted-foreground" />
-                              Copy git branch name
-                              <Keys keys={['⌘', '⇧', '.']} />
-                           </CommandItem>
-                           <CommandItem
-                              onSelect={() =>
-                                 copy(
-                                    'Prompt',
-                                    `Work on the following issue.\n\nIssue ${issue.identifier}: ${issue.title}\n${issue.description || ''}\nStatus: ${issue.status.name} — Priority: ${issue.priority.name}`
-                                 )
-                              }
-                           >
-                              <ClipboardList className="text-muted-foreground" />
-                              Copy as prompt
-                              <Keys keys={['⌘', '⌥', 'P']} />
                            </CommandItem>
                         </CommandGroup>
                      </>
@@ -670,6 +649,28 @@ export function CommandPalette() {
                               {issue.cycleId === cycle.id && <Check className="ml-auto size-4" />}
                            </CommandItem>
                         ))}
+                     </CommandGroup>
+                  )}
+
+                  {route === 'team' && issue && issueTeamId && (
+                     <CommandGroup heading="Move to a different team…">
+                        {teams
+                           .filter((team) => team.id !== issueTeamId)
+                           .map((team) => (
+                              <CommandItem
+                                 key={team.id}
+                                 onSelect={() => void moveIssueToTeam(team)}
+                              >
+                                 <Users className="text-muted-foreground" />
+                                 {team.name}
+                                 <span className="ml-auto text-xs text-muted-foreground">
+                                    {team.identifier}
+                                 </span>
+                              </CommandItem>
+                           ))}
+                        {teams.every((team) => team.id === issueTeamId) && (
+                           <CommandItem disabled>No other joined team is available</CommandItem>
+                        )}
                      </CommandGroup>
                   )}
 

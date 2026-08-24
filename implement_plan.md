@@ -108,6 +108,7 @@
 - `554ff59` — enforce Team auto-close/archive retention policies in the Worker.
 - `38ad4af` — resolve every runtime loader against the workspace slug in the current route.
 - `05e8595` — isolate notifications by workspace and restore the original settings shells.
+- `336a235` — persist team membership state and connect the original Join affordance.
 
 ### Kiểm tra gần nhất
 
@@ -160,6 +161,7 @@
 | P0 | Notifications đa workspace | Hoàn thành: notification có workspace FK, API/store scope đúng workspace và preview xử lý cả issue/project thật. |
 | P0 | Settings Notifications/Integrations | Hoàn thành: shell/card/search gốc được giữ lại; Discord dùng row/dialog thật, không quảng cáo Slack/email/desktop. |
 | P0 | Team membership | Hoàn thành: API trả all team + membership thật, self-join idempotent và mọi consumer được phân loại đúng giữa all/joined mà không đổi bảng/nút gốc. |
+| P0 | Visible issue command no-op | Move Team trong command palette đã dùng API thật; team chưa join bị loại khỏi Issue store. Agent không còn là default home hoặc phím Tab mặc định. Release picker vẫn cần quan hệ Issue–Release nếu giữ affordance này. |
 | P1 | Issue actions còn thiếu | Convert-to-comment còn cần semantics/backend. Duplicate/Won't Fix, move team, favorite và reminder đã hoàn thành; taxonomy issue type không có control tương ứng trong UI gốc hiện tại. |
 | P1 | Team settings nâng cao | Cycle cadence, triage, auto-close/archive policy, hierarchy và template default đã persistence/UI; Worker auto-close/archive đã hoàn thành. Tự sinh cycle theo cadence vẫn chưa triển khai. |
 | P1 | Account security | Session management và Personal API Key đã hoàn thành. Passkeys cần WebAuthn dependency/RP configuration; signing key không có consumer và lệch phạm vi project-management nên vẫn unavailable. |

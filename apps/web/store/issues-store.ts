@@ -77,7 +77,7 @@ export type IssueCycleOption = {
    endDate: string | null;
 };
 
-export type IssueTeamOption = { id: string; name: string; identifier: string };
+export type IssueTeamOption = { id: string; name: string; identifier: string; joined: boolean };
 
 export type IssueTemplateOption = {
    id: string;
@@ -323,8 +323,9 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
          const teamsData = (await teamsResponse.json()) as {
             data: IssueTeamOption[];
          };
+         const joinedTeams = teamsData.data.filter((item) => item.joined);
          const team = teamIdentifier
-            ? teamsData.data.find(
+            ? joinedTeams.find(
                  (item) =>
                     item.id === teamIdentifier ||
                     item.identifier.toLowerCase() === teamIdentifier.toLowerCase()
@@ -353,7 +354,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
             labels: optionsData.data.labels.map(mapLabel),
             cycles: optionsData.data.cycles,
             templates: optionsData.data.templates,
-            teams: teamsData.data,
+            teams: joinedTeams,
             workspaceId,
             teamId: team?.id,
             currentUserId: currentUserData.data.id,

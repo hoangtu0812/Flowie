@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type DefaultHome = 'agent' | 'inbox' | 'my-issues';
+export type DefaultHome = 'inbox' | 'my-issues';
 export type FontSize = 'default' | 'small' | 'large';
 
 interface UiPreferencesState {
@@ -21,7 +21,7 @@ interface UiPreferencesState {
 export const useUiPreferencesStore = create<UiPreferencesState>()(
    persist(
       (set) => ({
-         defaultHome: 'agent',
+         defaultHome: 'inbox',
          fontSize: 'default',
          pointerCursors: true,
          underlineLinks: false,
@@ -34,6 +34,15 @@ export const useUiPreferencesStore = create<UiPreferencesState>()(
       }),
       {
          name: 'ui-preferences',
+         version: 1,
+         migrate: (persisted) => {
+            const preferences = persisted as Partial<UiPreferencesState> | undefined;
+            return {
+               ...preferences,
+               defaultHome:
+                  preferences?.defaultHome === 'my-issues' ? 'my-issues' : ('inbox' as const),
+            } as UiPreferencesState;
+         },
          partialize: ({ hasHydrated: _hasHydrated, ...preferences }) => preferences,
          onRehydrateStorage: () => (state) => state?.setHasHydrated(true),
       }

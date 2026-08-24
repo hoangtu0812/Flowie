@@ -30,20 +30,10 @@ export default function Preferences() {
                   description="Select which view to display when launching the app"
                   trailing={
                      <SelectMenu
-                        options={['Agent', 'Inbox', 'My issues']}
-                        value={
-                           defaultHome === 'my-issues'
-                              ? 'My issues'
-                              : defaultHome[0].toUpperCase() + defaultHome.slice(1)
-                        }
+                        options={['Inbox', 'My issues']}
+                        value={defaultHome === 'my-issues' ? 'My issues' : 'Inbox'}
                         onChange={(value) =>
-                           setDefaultHome(
-                              value === 'Inbox'
-                                 ? 'inbox'
-                                 : value === 'My issues'
-                                   ? 'my-issues'
-                                   : 'agent'
-                           )
+                           setDefaultHome(value === 'Inbox' ? 'inbox' : 'my-issues')
                         }
                      />
                   }
