@@ -78,6 +78,15 @@
 - Views, Inbox, My Issues, Member Profile: dữ liệu API thật và cấu trúc UI gốc.
 - Notifications/Integrations: inbox thật và Discord webhook; Slack/email/desktop không quảng cáo
   là đã hoạt động.
+- Notification preferences: ba checkbox trong popover header gốc được lưu theo user + workspace;
+  backend lọc thật các sự kiện issue created/moved, completed/canceled/auto-closed và triage, đồng
+  thời ghi audit khi thay đổi. Footer Slack đã được bỏ mà không đổi composition của popover.
+- Zero-workspace onboarding: tài khoản đăng nhập nhưng chưa thuộc workspace nào được đưa vào card
+  tạo workspace dùng component auth hiện hữu, thay vì bị lặp về login; thứ tự admin/workspace/
+  invitation vẫn giữ nguyên.
+- UI parity checkpoint: Initiative Detail đã bỏ Edit/X tự thêm và trở lại title/project-row của
+  upstream; Project Overview/Peek chỉ render các row có dữ liệu giống baseline. Nút `+` gốc của
+  Views và Project Timeline nay mở dialog tạo thật, không thêm toolbar/control mới.
 - Docker Compose: Postgres, Redis, MinIO, API, worker, web; dependency layer đã cache nên
   `docker compose up` trong mạng nội bộ không tải lại khi lockfile/image base không đổi.
 
@@ -122,14 +131,19 @@
 - `ece6933` — connect the original Issue command palette Release picker to persisted releases.
 - `50c81d2` — generate current/upcoming team cycles from the persisted cadence in the Worker.
 - `de3690e` — convert an Issue into a real comment using the original context-menu action.
+- `5ab6ac9` — connect workspace defaults/create/leave through existing affordances.
+- `67ac9c5` — remove unavailable Agent/Code Review/Desktop/Slack product surfaces.
+- `5d67e22` — onboard authenticated accounts that do not have a workspace yet.
+- `685b082` — restore upstream Initiative/Project affordances and connect existing create buttons.
+- `8f20e5b` — persist inbox notification preferences and enforce them in API/Worker events.
 
 ### Kiểm tra gần nhất
 
-- API Jest: **26 suites, 64 tests passed**, gồm validation Ask, Issue actions,
-  Project attachment, Team settings, Personal API Key one-time token và Bearer guard.
+- API Jest: **40 suites, 109 tests passed**, gồm notification preferences, workspace isolation,
+  Issue actions, Project attachment, Team settings, Personal API Key và Bearer guard.
 - NestJS build: passed.
 - Next.js 15 production build: passed.
-- Worker production build và unit test Team policy: **4/4 passed**; runtime scan kết nối Redis và
+- Worker production build và unit test cadence/Team policy: **7/7 passed**; runtime scan kết nối Redis và
   trả `0 teams, 0 closed, 0 archived` vì database hiện chưa bật retention policy cho team nào.
 - Docker `api` và `web`: rebuilt; `http://localhost:4000/api/v1/health` và
   `http://localhost:3000/auth/login` trả HTTP 200.
@@ -160,6 +174,9 @@
   được backfill từ audit metadata sang hai bảng có workspace/initiative/user FK riêng.
 - Migration `20260824310000_project_resources` đã được apply; bảng resource có workspace/project/
   creator FK và route tạo resource đã được kiểm tra bằng unit test + Docker runtime.
+- Migration `20260824350000_workspace_issue_insight_defaults` và
+  `20260824360000_notification_preferences` đã apply; bảng notification preference được xác minh
+  trực tiếp trong PostgreSQL Docker.
 - Project custom properties dùng schema sẵn có; hai route đọc/lưu giá trị kiểm tra quyền project,
   workspace ownership, kiểu TEXT/NUMBER/DATE/SELECT/MULTI_SELECT/BOOLEAN/URL và ghi Activity.
   Nút `+` trong card Properties của Project Peek gốc đã được bật, không thay layout khi chưa có
@@ -197,7 +214,7 @@
 
 | Ưu tiên | Phần còn lại | Trạng thái/chỉ dẫn |
 | --- | --- | --- |
-| P0 | Visual parity toàn route | Source audit 305 TS/TSX xác nhận bảng Projects/Teams/Issues vẫn giữ composition gốc; sai lệch rõ còn lại là Notifications/Integrations custom và một số visible no-op. Visual acceptance nội bộ vẫn cần phiên workspace-member; browser sạch hiện mới xác nhận route guard/login và không có console error. |
+| P0 | Visual parity toàn route | Source parity đã khôi phục Initiative Detail, Project Overview/Peek, Views và Project Timeline; notification popover giữ layout gốc. Visual acceptance từng route vẫn cần phiên workspace-member trong in-app browser; phiên sạch hiện chỉ xác nhận guard/login. |
 | P0 | Notifications đa workspace | Hoàn thành: notification có workspace FK, API/store scope đúng workspace và preview xử lý cả issue/project thật. |
 | P0 | Settings Notifications/Integrations | Hoàn thành: shell/card/search gốc được giữ lại; Discord dùng row/dialog thật, không quảng cáo Slack/email/desktop. |
 | P0 | Team membership | Hoàn thành: API trả all team + membership thật, self-join idempotent và mọi consumer được phân loại đúng giữa all/joined mà không đổi bảng/nút gốc. |
@@ -207,6 +224,9 @@
 | P1 | Account security | Session management và Personal API Key đã hoàn thành. Passkeys cần WebAuthn dependency/RP configuration; signing key không có consumer và lệch phạm vi project-management nên vẫn unavailable. |
 | P1 | Project extras | Hoàn thành: favorite, Update attachment, resource, typed custom-property values/definitions, workspace Display defaults và affordance Initiative/Label trong Overview đều dùng dữ liệu thật mà giữ layout gốc. |
 | P1 | Issue display/insights | Workspace Display defaults đã hoàn thành. Footer `Set default for everyone` trong Insights vẫn là visible no-op; cần persistence cho cấu hình analytics trước khi bật. |
+| P1 | Team danger zone | Leave/Retire/Delete vẫn là control disabled. Backend có archive và member removal nhưng chưa có self-leave an toàn, semantics retire và soft-delete 30 ngày tách biệt; phải hoàn thiện trước khi bật đúng ba nút upstream. |
+| P1 | Project/member/detail parity | Project Peek chưa có ProjectMember entity nên empty Members vẫn dựa trên issue assignee; Issue comment/relation chưa đủ rich content/relation type như baseline. |
+| P1 | Team documents | Document thật đã có, nhưng folder/pinned và các slider của màn Team Documents chưa có persistence tương ứng. |
 | P2 | Automation/webhook | Worker/Redis foundation có, nhưng rule builder, persisted automation và generic webhook chưa hoàn chỉnh. |
 | P2 | OAuth/enterprise identity | Google, Microsoft Entra, OIDC/SAML chưa triển khai; local email/password đang hoạt động. |
 | Excluded | AI Agent, Code Reviews | Cố ý unavailable theo phạm vi sản phẩm hiện tại; fixture/canned-response cũ đã được xóa khỏi source. |
