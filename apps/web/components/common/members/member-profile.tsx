@@ -3,7 +3,6 @@
 import { GroupedIssuesView } from '@/components/common/issues/grouped-issues-view';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { displayOrderedStatus } from '@/mock-data/status';
 import { useIssuesStore } from '@/store/issues-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { formatDistanceToNowStrict } from 'date-fns';
@@ -18,7 +17,7 @@ interface MemberProfileProps {
 /** Original profile layout backed by workspace members and live issue creator/assignee fields. */
 export default function MemberProfile({ memberId }: MemberProfileProps) {
    const { member, loading, error } = useLiveMember(memberId);
-   const { issues, loadIssues, isLoading: issuesLoading } = useIssuesStore();
+   const { issues, statuses, loadIssues, isLoading: issuesLoading } = useIssuesStore();
    const [activeTab] = useQueryState('tab', parseAsString.withDefault('assigned'));
    const { openPanel } = useRightPanelStore();
 
@@ -76,7 +75,7 @@ export default function MemberProfile({ memberId }: MemberProfileProps) {
                <GroupedIssuesView
                   issues={scopedIssues}
                   totalIssues={scopedIssues}
-                  statuses={displayOrderedStatus}
+                  statuses={statuses}
                   isViewTypeGrid={false}
                />
             </div>
