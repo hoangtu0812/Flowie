@@ -46,6 +46,9 @@
 - Team Settings: các row General, Templates, Workflows, Triage, Cycles và Team hierarchy trong
   layout gốc đã lưu cấu hình thật; backend kiểm tra template cùng workspace, ngăn hierarchy cycle
   và kiểm tra thứ tự auto-close/auto-archive. Slack/AI vẫn unavailable đúng phạm vi.
+- Account Security: khôi phục bốn section/card của UI gốc; Sessions list IP/browser thật, nhận diện
+  current session và revoke session khác. Personal API Key lưu hash/prefix/expiry, secret chỉ trả
+  một lần, hỗ trợ revoke và Bearer authentication; không còn record mẫu Paris/iOS/LNDEV key.
 - Initiatives: list/detail/create/update/archive, project links, real progress chart, resources,
   updates và activity; Settings Initiatives đã thay placeholder bằng CRUD thật.
 - Releases: Settings giữ nguyên shell/toolbar/empty-state gốc; list/filter/create/update/archive,
@@ -93,11 +96,12 @@
 - `126f5db` — move issues between teams without changing the original menu.
 - `94f5f3e` — persist Duplicate/Won't Fix issue classifications.
 - `93e2341` — attach private MinIO files to project updates.
+- `9fdca7f` — persist Team workflow settings in the original page.
 
 ### Kiểm tra gần nhất
 
-- API Jest: **22 suites, 48 tests passed** trong Docker image, gồm validation Ask, workflow
-  chuyển Ask thành Issue thật, Pulse, Emoji, Issue actions, Project attachment và Team settings.
+- API Jest: **24 suites, 53 tests passed** trong Docker image, gồm validation Ask, Issue actions,
+  Project attachment, Team settings, Personal API Key one-time token và Bearer guard.
 - NestJS build: passed.
 - Next.js 15 production build: passed.
 - Docker `api` và `web`: rebuilt; `http://localhost:4000/api/v1/health` và
@@ -121,6 +125,8 @@
   duplicate target và route classification đã được xác minh trực tiếp.
 - Migration `20260824270000_team_workflow_settings` đã được apply; sáu cột preference, hai foreign
   key và các index đã được xác minh trực tiếp trong PostgreSQL Docker.
+- Migration `20260824280000_personal_api_keys` đã được apply; bảng/key index và sáu route
+  session/API-key đã được xác minh trong Docker.
 - Audit frontend đã đối chiếu **308 file baseline** trong `app/components/hooks/lib/store` với
   `upstream/master`. Đã xóa 18 component `real-*` rút gọn không còn route nào dùng; runtime chỉ
   còn cây component gốc được nối API.
@@ -138,7 +144,7 @@
 | P0 | Visual parity toàn route | So sánh từng route với `upstream/master`; visual acceptance cần một phiên đăng nhập workspace-member. Phiên browser kiểm thử hiện chưa đăng nhập nên mới xác nhận được route guard/login, chưa chụp được các màn hình nội bộ. |
 | P1 | Issue actions còn thiếu | Convert-to-comment còn cần semantics/backend. Duplicate/Won't Fix, move team, favorite và reminder đã hoàn thành; taxonomy issue type không có control tương ứng trong UI gốc hiện tại. |
 | P1 | Team settings nâng cao | Cycle cadence, triage, auto-close/archive policy, hierarchy và template default đã persistence/UI. Worker thực thi auto-close/archive theo lịch và tự sinh cycle theo cadence vẫn chưa triển khai, nên chưa được coi là automation hoàn chỉnh. |
-| P1 | Account security | Session management, passkeys, personal API keys và signing keys chưa có backend. |
+| P1 | Account security | Session management và Personal API Key đã hoàn thành. Passkeys cần WebAuthn dependency/RP configuration; signing key không có consumer và lệch phạm vi project-management nên vẫn unavailable. |
 | P1 | Project extras | Favorite project và attachment cho Project Update đã hoàn thành bằng dữ liệu thật. |
 | P2 | Automation/webhook | Worker/Redis foundation có, nhưng rule builder, persisted automation và generic webhook chưa hoàn chỉnh. |
 | P2 | OAuth/enterprise identity | Google, Microsoft Entra, OIDC/SAML chưa triển khai; local email/password đang hoạt động. |

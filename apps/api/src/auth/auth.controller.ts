@@ -1,4 +1,16 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, Req, Res } from '@nestjs/common';
+import {
+   Body,
+   Controller,
+   Delete,
+   Get,
+   HttpCode,
+   HttpStatus,
+   Param,
+   Post,
+   Req,
+   Res,
+   UseGuards,
+} from '@nestjs/common';
 import { ApiCookieAuth, ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
@@ -8,6 +20,8 @@ import { AuthService, type AuthSession, type RequestMetadata } from './auth.serv
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { RegisterDto } from './dto/register.dto';
+import { AuthGuard, type AuthenticatedRequest } from './auth.guard';
+import { CreateApiKeyDto } from './dto/create-api-key.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -72,6 +86,64 @@ export class AuthController {
       await this.authService.logout(this.readCookie(request, 'flowie_refresh'));
       response.clearCookie('flowie_access', this.cookieOptions());
       response.clearCookie('flowie_refresh', this.cookieOptions());
+   }
+
+   @Get('sessions')
+   @UseGuards(AuthGuard)
+   async sessions(@Req() request: AuthenticatedRequest) {
+      return {
+         data: await this.authService.listSessions(
+            request.auth!.userId,
+            this.readCookie(request, 'flowie_refresh')
+         ),
+      };
+   }
+
+   @Delete('sessions')
+   @UseGuards(AuthGuard)
+   async revokeOtherSessions(@Req() request: AuthenticatedRequest) {
+      return {
+         data: await this.authService.revokeOtherSessions(
+            request.auth!.userId,
+            this.readCookie(request, 'flowie_refresh')
+         ),
+      };
+   }
+
+   @Delete('sessions/:sessionId')
+   @UseGuards(AuthGuard)
+   async revokeSession(
+      @Param('sessionId') sessionId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.authService.revokeSession(
+            sessionId,
+            request.auth!.userId,
+            this.readCookie(request, 'flowie_refresh')
+         ),
+      };
+   }
+
+   @Get('api-keys')
+   @UseGuards(AuthGuard)
+   async apiKeys(@Req() request: AuthenticatedRequest) {
+      return { data: await this.authService.listApiKeys(request.auth!.userId) };
+   }
+
+   @Post('api-keys')
+   @UseGuards(AuthGuard)
+   async createApiKey(
+      @Body() dto: CreateApiKeyDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.authService.createApiKey(request.auth!.userId, dto) };
+   }
+
+   @Delete('api-keys/:keyId')
+   @UseGuards(AuthGuard)
+   async revokeApiKey(@Param('keyId') keyId: string, @Req() request: AuthenticatedRequest) {
+      return { data: await this.authService.revokeApiKey(keyId, request.auth!.userId) };
    }
 
    private setAuthCookies(response: Response, session: AuthSession): void {

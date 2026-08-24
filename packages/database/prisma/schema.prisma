@@ -106,6 +106,7 @@ model User {
 
   identities    UserIdentity[]
   sessions      Session[]
+  personalApiKeys PersonalApiKey[]
   passwordResetTokens PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
   memberships   WorkspaceMember[]
@@ -157,6 +158,24 @@ model Session {
   @@index([userId])
   @@index([expiresAt])
   @@map("sessions")
+}
+
+model PersonalApiKey {
+  id          String    @id @default(cuid())
+  userId      String    @map("user_id")
+  name        String
+  prefix      String
+  tokenHash   String    @unique @map("token_hash")
+  expiresAt   DateTime? @map("expires_at")
+  lastUsedAt  DateTime? @map("last_used_at")
+  revokedAt   DateTime? @map("revoked_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt, createdAt])
+  @@index([expiresAt])
+  @@map("personal_api_keys")
 }
 
 model PasswordResetToken {

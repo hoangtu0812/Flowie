@@ -1,4 +1,11 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+   BadRequestException,
+   ConflictException,
+   ForbiddenException,
+   Injectable,
+   NotFoundException,
+   UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
@@ -9,6 +16,7 @@ import type { User } from '@circle/database';
 import { PrismaService } from '../database/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { CreateApiKeyDto } from './dto/create-api-key.dto';
 
 export interface RequestMetadata {
    ipAddress?: string;
@@ -162,6 +170,115 @@ export class AuthService {
          where: { refreshTokenHash: this.hashToken(refreshToken), revokedAt: null },
          data: { revokedAt: new Date() },
       });
+   }
+
+   async listSessions(userId: string, refreshToken?: string) {
+      const currentHash = refreshToken ? this.hashToken(refreshToken) : undefined;
+      const sessions = await this.prisma.session.findMany({
+         where: { userId, revokedAt: null, expiresAt: { gt: new Date() } },
+         select: {
+            id: true,
+            refreshTokenHash: true,
+            ipAddress: true,
+            userAgent: true,
+            expiresAt: true,
+            createdAt: true,
+            lastUsedAt: true,
+         },
+         orderBy: { lastUsedAt: 'desc' },
+      });
+      return sessions.map(({ refreshTokenHash, ...session }) => ({
+         ...session,
+         current: Boolean(currentHash && refreshTokenHash === currentHash),
+      }));
+   }
+
+   async revokeSession(sessionId: string, userId: string, refreshToken?: string) {
+      const session = await this.prisma.session.findFirst({
+         where: { id: sessionId, userId, revokedAt: null },
+      });
+      if (!session) throw new NotFoundException('Session not found.');
+      if (refreshToken && session.refreshTokenHash === this.hashToken(refreshToken)) {
+         throw new BadRequestException('Use sign out to revoke the current session.');
+      }
+      await this.prisma.session.update({
+         where: { id: session.id },
+         data: { revokedAt: new Date() },
+      });
+      return { id: session.id, revoked: true };
+   }
+
+   async revokeOtherSessions(userId: string, refreshToken?: string) {
+      if (!refreshToken) throw new ForbiddenException('The current session could not be identified.');
+      const result = await this.prisma.session.updateMany({
+         where: {
+            userId,
+            revokedAt: null,
+            expiresAt: { gt: new Date() },
+            refreshTokenHash: { not: this.hashToken(refreshToken) },
+         },
+         data: { revokedAt: new Date() },
+      });
+      return { revoked: result.count };
+   }
+
+   async listApiKeys(userId: string) {
+      return this.prisma.personalApiKey.findMany({
+         where: {
+            userId,
+            revokedAt: null,
+            OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+         },
+         select: {
+            id: true,
+            name: true,
+            prefix: true,
+            expiresAt: true,
+            lastUsedAt: true,
+            createdAt: true,
+         },
+         orderBy: { createdAt: 'desc' },
+      });
+   }
+
+   async createApiKey(userId: string, dto: CreateApiKeyDto) {
+      const name = dto.name.trim();
+      if (name.length < 2) throw new BadRequestException('API key name is too short.');
+      const expiresAt = dto.expiresAt ? new Date(dto.expiresAt) : null;
+      if (expiresAt && expiresAt.getTime() <= Date.now()) {
+         throw new BadRequestException('API key expiry must be in the future.');
+      }
+      const token = `flowie_pat_${randomBytes(32).toString('base64url')}`;
+      const key = await this.prisma.personalApiKey.create({
+         data: {
+            userId,
+            name,
+            prefix: token.slice(0, 18),
+            tokenHash: this.hashToken(token),
+            expiresAt,
+         },
+         select: {
+            id: true,
+            name: true,
+            prefix: true,
+            expiresAt: true,
+            lastUsedAt: true,
+            createdAt: true,
+         },
+      });
+      return { ...key, token };
+   }
+
+   async revokeApiKey(keyId: string, userId: string) {
+      const key = await this.prisma.personalApiKey.findFirst({
+         where: { id: keyId, userId, revokedAt: null },
+      });
+      if (!key) throw new NotFoundException('API key not found.');
+      await this.prisma.personalApiKey.update({
+         where: { id: key.id },
+         data: { revokedAt: new Date() },
+      });
+      return { id: key.id, revoked: true };
    }
 
    private async createAuthSession(user: User, metadata: RequestMetadata): Promise<AuthSession> {
