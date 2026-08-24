@@ -113,6 +113,8 @@ interface IssuesState {
    removeIssueLabel: (issueId: string, labelId: string) => void;
    updateIssueProject: (issueId: string, newProject: Project | undefined) => void;
    updateIssueDueDate: (issueId: string, dueDate?: string) => Promise<void>;
+   setIssueSubscription: (issueId: string, subscribed: boolean) => Promise<void>;
+   archiveIssue: (issueId: string) => Promise<void>;
    getIssueById: (id: string) => Issue | undefined;
 }
 
@@ -407,6 +409,26 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
    updateIssueDueDate: async (issueId, dueDate) => {
       await patchIssue(issueId, get().workspaceId, { dueDate: dueDate ?? null });
       get().updateIssue(issueId, { dueDate });
+   },
+   setIssueSubscription: async (issueId, subscribed) => {
+      const workspaceId = get().workspaceId;
+      if (!workspaceId) throw new Error('No workspace is available.');
+      const response = await fetch(
+         `${api}/issues/${issueId}/subscribers/me?workspaceId=${workspaceId}`,
+         { method: subscribed ? 'POST' : 'DELETE', credentials: 'include' }
+      );
+      if (!response.ok) throw new Error('Could not update subscription.');
+      get().updateIssue(issueId, { isSubscribed: subscribed });
+   },
+   archiveIssue: async (issueId) => {
+      const workspaceId = get().workspaceId;
+      if (!workspaceId) throw new Error('No workspace is available.');
+      const response = await fetch(`${api}/issues/${issueId}?workspaceId=${workspaceId}`, {
+         method: 'DELETE',
+         credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Could not archive issue.');
+      get().deleteIssue(issueId);
    },
    getIssueById: (id) => get().issues.find((issue) => issue.id === id),
 }));

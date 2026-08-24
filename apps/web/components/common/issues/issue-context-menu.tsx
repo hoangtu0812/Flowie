@@ -33,7 +33,7 @@ import {
    MessageSquare,
    Clipboard,
 } from 'lucide-react';
-import React, { useState } from 'react';
+import React from 'react';
 import { useIssuesStore } from '@/store/issues-store';
 import { priorities } from '@/mock-data/priorities';
 import { toast } from 'sonner';
@@ -43,9 +43,6 @@ interface IssueContextMenuProps {
 }
 
 export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
-   const [isSubscribed, setIsSubscribed] = useState(false);
-   const [isFavorite, setIsFavorite] = useState(false);
-
    const {
       updateIssueStatus,
       updateIssuePriority,
@@ -54,6 +51,8 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       removeIssueLabel,
       updateIssueProject,
       getIssueById,
+      setIssueSubscription,
+      archiveIssue,
       statuses,
       members,
       projects,
@@ -110,34 +109,16 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       toast.success(newProject ? `Project set to ${newProject.name}` : 'Project removed');
    };
 
-   const handleAddLink = () => {
-      toast.success('Link added');
-   };
-
-   const handleMakeCopy = () => {
-      toast.success('Issue copied');
-   };
-
-   const handleCreateRelated = () => {
-      toast.success('Related issue created');
-   };
-
-   const handleMarkAs = (type: string) => {
-      toast.success(`Marked as ${type}`);
-   };
-
-   const handleMove = () => {
-      toast.success('Issue moved');
-   };
-
-   const handleSubscribe = () => {
-      setIsSubscribed(!isSubscribed);
-      toast.success(isSubscribed ? 'Unsubscribed from issue' : 'Subscribed to issue');
-   };
-
-   const handleFavorite = () => {
-      setIsFavorite(!isFavorite);
-      toast.success(isFavorite ? 'Removed from favorites' : 'Added to favorites');
+   const handleSubscribe = async () => {
+      if (!issueId) return;
+      const issue = getIssueById(issueId);
+      if (!issue) return;
+      try {
+         await setIssueSubscription(issueId, !issue.isSubscribed);
+         toast.success(issue.isSubscribed ? 'Unsubscribed from issue' : 'Subscribed to issue');
+      } catch {
+         toast.error('Could not update subscription');
+      }
    };
 
    const handleCopy = () => {
@@ -149,8 +130,16 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       }
    };
 
-   const handleRemindMe = () => {
-      toast.success('Reminder set');
+   const handleArchive = async () => {
+      if (!issueId) return;
+      const issue = getIssueById(issueId);
+      if (!issue || !window.confirm(`Archive ${issue.identifier}?`)) return;
+      try {
+         await archiveIssue(issueId);
+         toast.success('Issue archived');
+      } catch {
+         toast.error('Could not archive issue');
+      }
    };
 
    return (
@@ -250,14 +239,14 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                <ContextMenuShortcut>D</ContextMenuShortcut>
             </ContextMenuItem>
 
-            <ContextMenuItem>
+            <ContextMenuItem disabled title="Rename is not available yet">
                <Pencil className="size-4" /> Rename...
                <ContextMenuShortcut>R</ContextMenuShortcut>
             </ContextMenuItem>
 
             <ContextMenuSeparator />
 
-            <ContextMenuItem onClick={handleAddLink}>
+            <ContextMenuItem disabled title="Issue links are not available yet">
                <LinkIcon className="size-4" /> Add link...
                <ContextMenuShortcut>Ctrl L</ContextMenuShortcut>
             </ContextMenuItem>
@@ -267,23 +256,23 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                   <Repeat2 className="mr-2 size-4" /> Convert into
                </ContextMenuSubTrigger>
                <ContextMenuSubContent className="w-48">
-                  <ContextMenuItem>
+                  <ContextMenuItem disabled title="Conversion is not available yet">
                      <FileText className="size-4" /> Document
                   </ContextMenuItem>
-                  <ContextMenuItem>
+                  <ContextMenuItem disabled title="Conversion is not available yet">
                      <MessageSquare className="size-4" /> Comment
                   </ContextMenuItem>
                </ContextMenuSubContent>
             </ContextMenuSub>
 
-            <ContextMenuItem onClick={handleMakeCopy}>
+            <ContextMenuItem disabled title="Copying issues is not available yet">
                <CopyIcon className="size-4" /> Make a copy...
             </ContextMenuItem>
          </ContextMenuGroup>
 
          <ContextMenuSeparator />
 
-         <ContextMenuItem onClick={handleCreateRelated}>
+         <ContextMenuItem disabled title="Related issues are not available yet">
             <PlusSquare className="size-4" /> Create related
          </ContextMenuItem>
 
@@ -292,31 +281,32 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                <Flag className="mr-2 size-4" /> Mark as
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-48">
-               <ContextMenuItem onClick={() => handleMarkAs('Completed')}>
+               <ContextMenuItem disabled title="Marking issue types is not available yet">
                   <CheckCircle2 className="size-4" /> Completed
                </ContextMenuItem>
-               <ContextMenuItem onClick={() => handleMarkAs('Duplicate')}>
+               <ContextMenuItem disabled title="Marking issue types is not available yet">
                   <CopyIcon className="size-4" /> Duplicate
                </ContextMenuItem>
-               <ContextMenuItem onClick={() => handleMarkAs("Won't Fix")}>
+               <ContextMenuItem disabled title="Marking issue types is not available yet">
                   <Clock className="size-4" /> Won&apos;t Fix
                </ContextMenuItem>
             </ContextMenuSubContent>
          </ContextMenuSub>
 
-         <ContextMenuItem onClick={handleMove}>
+         <ContextMenuItem disabled title="Moving issues between teams is not available yet">
             <ArrowRightLeft className="size-4" /> Move
          </ContextMenuItem>
 
          <ContextMenuSeparator />
 
          <ContextMenuItem onClick={handleSubscribe}>
-            <Bell className="size-4" /> {isSubscribed ? 'Unsubscribe' : 'Subscribe'}
+            <Bell className="size-4" />
+            {getIssueById(issueId ?? '')?.isSubscribed ? 'Unsubscribe' : 'Subscribe'}
             <ContextMenuShortcut>S</ContextMenuShortcut>
          </ContextMenuItem>
 
-         <ContextMenuItem onClick={handleFavorite}>
-            <Star className="size-4" /> {isFavorite ? 'Unfavorite' : 'Favorite'}
+         <ContextMenuItem disabled title="Favorites are not available yet">
+            <Star className="size-4" /> Favorite
             <ContextMenuShortcut>F</ContextMenuShortcut>
          </ContextMenuItem>
 
@@ -324,15 +314,15 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
             <Clipboard className="size-4" /> Copy
          </ContextMenuItem>
 
-         <ContextMenuItem onClick={handleRemindMe}>
+         <ContextMenuItem disabled title="Reminders are not available yet">
             <AlarmClock className="size-4" /> Remind me
             <ContextMenuShortcut>H</ContextMenuShortcut>
          </ContextMenuItem>
 
          <ContextMenuSeparator />
 
-         <ContextMenuItem variant="destructive">
-            <Trash2 className="size-4" /> Delete...
+         <ContextMenuItem variant="destructive" onClick={() => void handleArchive()}>
+            <Trash2 className="size-4" /> Archive
             <ContextMenuShortcut>⌘⌫</ContextMenuShortcut>
          </ContextMenuItem>
       </ContextMenuContent>
