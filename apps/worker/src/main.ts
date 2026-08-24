@@ -1,9 +1,11 @@
 import { PrismaClient } from '@circle/database';
-import { Worker } from 'bullmq';
+import { Queue, Worker } from 'bullmq';
+import { runTeamPolicies } from './team-policies.js';
 
 type DiscordJob = { workspaceId: string; content: string };
 type IssueReminderJob = { reminderId: string };
-type FlowieJob = DiscordJob | IssueReminderJob;
+type TeamPolicyJob = Record<string, never>;
+type FlowieJob = DiscordJob | IssueReminderJob | TeamPolicyJob;
 const redisUrl = new URL(process.env.REDIS_URL ?? 'redis://localhost:6379');
 const connection = {
    host: redisUrl.hostname,
@@ -11,6 +13,7 @@ const connection = {
    ...(redisUrl.password ? { password: redisUrl.password } : {}),
 };
 const prisma = new PrismaClient();
+const queue = new Queue<FlowieJob>('flowie-jobs', { connection });
 
 const worker = new Worker<FlowieJob>(
    'flowie-jobs',
@@ -69,6 +72,13 @@ const worker = new Worker<FlowieJob>(
          ]);
          return { delivered: true };
       }
+      if (job.name === 'team-policy-scan') {
+         const result = await runTeamPolicies(prisma);
+         console.log(
+            `Team policy scan completed: ${result.teams} teams, ${result.closed} closed, ${result.archived} archived.`
+         );
+         return result;
+      }
       throw new Error(`Unsupported job: ${job.name}`);
    },
    { connection }
@@ -82,9 +92,47 @@ worker.on('failed', (job, error) => {
    console.error(`Job ${job?.id ?? 'unknown'} failed:`, error);
 });
 
+async function scheduleTeamPolicies() {
+   const configuredInterval = Number(process.env.TEAM_POLICY_SCAN_INTERVAL_MS ?? 60 * 60 * 1_000);
+   const every = Number.isFinite(configuredInterval)
+      ? Math.max(configuredInterval, 60_000)
+      : 60 * 60 * 1_000;
+   await queue.upsertJobScheduler(
+      'team-policy-scan',
+      { every },
+      {
+         name: 'team-policy-scan',
+         data: {},
+         opts: {
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 5_000 },
+            removeOnComplete: 100,
+            removeOnFail: 500,
+         },
+      }
+   );
+   const initial = await queue.getJob('team-policy-scan-initial');
+   if (!initial) {
+      await queue.add(
+         'team-policy-scan',
+         {},
+         {
+            jobId: 'team-policy-scan-initial',
+            removeOnComplete: true,
+            removeOnFail: 100,
+         }
+      );
+   }
+}
+
+void scheduleTeamPolicies().catch((error: unknown) => {
+   console.error('Could not schedule team policy scans:', error);
+});
+
 async function shutdown(signal: NodeJS.Signals) {
    console.log(`Received ${signal}; closing worker.`);
    await worker.close();
+   await queue.close();
    await prisma.$disconnect();
    process.exit(0);
 }
