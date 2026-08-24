@@ -1,6 +1,7 @@
 import { Transform } from 'class-transformer';
 import {
    IsArray,
+   IsDateString,
    IsEnum,
    IsInt,
    IsOptional,
@@ -21,6 +22,7 @@ export class CreateIssueDto {
    @IsOptional() @IsString() parentIssueId?: string;
    @IsOptional() @IsString() assigneeId?: string;
    @IsOptional() @IsEnum(IssuePriority) priority?: IssuePriority;
+   @IsOptional() @IsDateString() dueDate?: string | null;
    @IsOptional() @IsArray() @IsString({ each: true }) labelIds?: string[];
    @IsOptional()
    @Transform(({ value }) => Number(value))

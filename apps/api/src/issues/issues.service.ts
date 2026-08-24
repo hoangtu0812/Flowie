@@ -4,7 +4,7 @@ import {
    Injectable,
    NotFoundException,
 } from '@nestjs/common';
-import { IssueStatusCategory } from '@circle/database';
+import { IssuePriority, IssueStatusCategory } from '@circle/database';
 import { PrismaService } from '../database/prisma.service';
 import { CreateIssueDto } from './dto/create-issue.dto';
 import { CreateIssueTemplateDto } from './dto/create-issue-template.dto';
@@ -13,6 +13,7 @@ import { issueReactionEmojis, IssueReactionDto } from './dto/issue-reaction.dto'
 import { UpdateIssueDto } from './dto/update-issue.dto';
 import { UpdateIssueTemplateDto } from './dto/update-issue-template.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { SlasService } from '../slas/slas.service';
 
 const issueInclude = {
    team: { select: { id: true, name: true, identifier: true } },
@@ -57,7 +58,8 @@ const subIssueSelect = {
 export class IssuesService {
    constructor(
       private readonly prisma: PrismaService,
-      private readonly notifications: NotificationsService
+      private readonly notifications: NotificationsService,
+      private readonly slas: SlasService
    ) {}
 
    async list(
@@ -216,6 +218,13 @@ export class IssuesService {
 
    async create(dto: CreateIssueDto, userId: string) {
       await this.authorize(dto.workspaceId, userId, dto.teamId);
+      const slaDeadline = dto.dueDate
+         ? undefined
+         : await this.slas.resolveDeadline(
+              dto.workspaceId,
+              dto.teamId,
+              dto.priority ?? IssuePriority.NONE
+           );
       const issue = await this.prisma.$transaction(async (tx) => {
          const { labelIds, parentIssueId, ...issueData } = dto;
          const subscriberIds = [...new Set([userId, ...(dto.assigneeId ? [dto.assigneeId] : [])])];
@@ -271,6 +280,7 @@ export class IssuesService {
                identifier: `${team.identifier}-${team.issueSequence}`,
                number: team.issueSequence,
                creatorId: userId,
+               ...(slaDeadline ? { dueDate: slaDeadline.dueDate } : {}),
                ...(parentIssueId ? { parentIssueId } : {}),
                ...(labelIds?.length
                   ? { labelLinks: { create: labelIds.map((labelId) => ({ labelId })) } }
@@ -287,7 +297,11 @@ export class IssuesService {
                issueId: issue.id,
                actorId: userId,
                type: 'issue.created',
-               data: { title: issue.title, identifier: issue.identifier },
+               data: {
+                  title: issue.title,
+                  identifier: issue.identifier,
+                  ...(slaDeadline ? { slaPolicyId: slaDeadline.policyId } : {}),
+               },
             },
          });
          if (parentIssueId) {

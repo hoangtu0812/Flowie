@@ -126,6 +126,7 @@ model User {
   createdIssueTemplates IssueTemplate[] @relation("IssueTemplateCreator")
   createdReleases Release[] @relation("ReleaseCreator")
   createdCustomerRequests CustomerRequest[] @relation("CustomerRequestCreator")
+  createdSlaPolicies SlaPolicy[] @relation("SlaPolicyCreator")
 
   @@map("users")
 }
@@ -245,6 +246,7 @@ model Workspace {
   issueTemplates IssueTemplate[]
   releases Release[]
   customerRequests CustomerRequest[]
+  slaPolicies SlaPolicy[]
 
   @@index([organizationId])
   @@map("workspaces")
@@ -297,6 +299,7 @@ model Team {
   issueSequence Int @default(0) @map("issue_sequence")
   cycles    Cycle[]
   documents Document[]
+  slaPolicies SlaPolicy[]
 
   @@unique([workspaceId, identifier])
   @@index([workspaceId])
@@ -577,6 +580,29 @@ model CustomerRequest {
   @@index([projectId])
   @@index([issueId])
   @@map("customer_requests")
+}
+
+model SlaPolicy {
+  id              String        @id @default(cuid())
+  workspaceId     String        @map("workspace_id")
+  name            String
+  description     String?
+  teamId          String?       @map("team_id")
+  priority        IssuePriority?
+  deadlineMinutes Int           @map("deadline_minutes")
+  enabled         Boolean       @default(true)
+  createdById     String        @map("created_by")
+  archivedAt      DateTime?     @map("archived_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  team      Team?     @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  createdBy User      @relation("SlaPolicyCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId, archivedAt, enabled])
+  @@index([teamId])
+  @@map("sla_policies")
 }
 
 model TeamMember {
