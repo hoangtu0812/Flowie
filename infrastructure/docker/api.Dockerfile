@@ -25,6 +25,7 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=build /app/apps/api/package.json ./apps/api/package.json
+COPY --from=build /app/packages/contracts ./packages/contracts
 COPY --from=build /app/packages/database ./packages/database
 EXPOSE 4000
 CMD ["sh", "-c", "./packages/database/node_modules/.bin/prisma migrate deploy --schema packages/database/prisma/schema.prisma && node apps/api/dist/main.js"]
