@@ -9,16 +9,12 @@ describe('TeamsService membership', () => {
             findMany: jest.fn().mockResolvedValue([
                {
                   id: 'team-joined',
-                  members: [
-                     { role: 'MEMBER', user: { id: 'user-1', name: 'Current user' } },
-                  ],
+                  members: [{ role: 'MEMBER', user: { id: 'user-1', name: 'Current user' } }],
                   _count: { projects: 1, cycles: 0 },
                },
                {
                   id: 'team-available',
-                  members: [
-                     { role: 'LEAD', user: { id: 'user-2', name: 'Another user' } },
-                  ],
+                  members: [{ role: 'LEAD', user: { id: 'user-2', name: 'Another user' } }],
                   _count: { projects: 2, cycles: 1 },
                },
             ]),
@@ -88,5 +84,48 @@ describe('TeamsService membership', () => {
          select: { id: true },
       });
       expect(prisma.teamMember.upsert).not.toHaveBeenCalled();
+   });
+
+   it('lets an active member leave their own team and records an audit event', async () => {
+      const tx = {
+         teamMember: { delete: jest.fn().mockResolvedValue({}) },
+         auditLog: { create: jest.fn().mockResolvedValue({ id: 'audit-1' }) },
+      };
+      const prisma = {
+         workspaceMember: { findFirst: jest.fn().mockResolvedValue({ id: 'workspace-member-1' }) },
+         teamMember: { findFirst: jest.fn().mockResolvedValue({ role: 'MEMBER' }) },
+         $transaction: jest.fn((operation: (client: typeof tx) => unknown) => operation(tx)),
+      };
+      const service = new TeamsService(prisma as never);
+
+      await expect(service.leave('team-1', 'workspace-1', 'user-1')).resolves.toEqual({
+         teamId: 'team-1',
+         userId: 'user-1',
+         removed: true,
+      });
+      expect(tx.teamMember.delete).toHaveBeenCalledWith({
+         where: { teamId_userId: { teamId: 'team-1', userId: 'user-1' } },
+      });
+      expect(tx.auditLog.create).toHaveBeenCalledWith({
+         data: expect.objectContaining({
+            workspaceId: 'workspace-1',
+            actorId: 'user-1',
+            action: 'team.member.left',
+         }),
+      });
+   });
+
+   it('does not let a workspace member leave a team they have not joined', async () => {
+      const prisma = {
+         workspaceMember: { findFirst: jest.fn().mockResolvedValue({ id: 'workspace-member-1' }) },
+         teamMember: { findFirst: jest.fn().mockResolvedValue(null) },
+         $transaction: jest.fn(),
+      };
+      const service = new TeamsService(prisma as never);
+
+      await expect(service.leave('team-1', 'workspace-1', 'user-1')).rejects.toBeInstanceOf(
+         NotFoundException
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
    });
 });

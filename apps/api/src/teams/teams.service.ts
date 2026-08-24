@@ -47,14 +47,14 @@ export class TeamsService {
       await this.authorizeManager(dto.workspaceId, userId);
       return this.prisma.team.create({
          data: { ...dto, members: { create: { userId, role: 'LEAD' } } },
-          include: teamDetailInclude,
+         include: teamDetailInclude,
       });
    }
    async get(teamId: string, workspaceId: string, userId: string) {
       await this.authorize(workspaceId, userId);
       const team = await this.prisma.team.findFirst({
          where: { id: teamId, workspaceId, archivedAt: null, members: { some: { userId } } },
-          include: teamDetailInclude,
+         include: teamDetailInclude,
       });
       if (!team) throw new NotFoundException('Team not found.');
       return team;
@@ -99,7 +99,7 @@ export class TeamsService {
       return this.prisma.team.update({
          where: { id: teamId },
          data: dto,
-          include: teamDetailInclude,
+         include: teamDetailInclude,
       });
    }
    async archive(teamId: string, workspaceId: string, userId: string) {
@@ -108,7 +108,22 @@ export class TeamsService {
          where: { id: teamId, workspaceId, archivedAt: null },
       });
       if (!team) throw new NotFoundException('Team not found.');
-      return this.prisma.team.update({ where: { id: teamId }, data: { archivedAt: new Date() } });
+      return this.prisma.$transaction(async (tx) => {
+         const retired = await tx.team.update({
+            where: { id: teamId },
+            data: { archivedAt: new Date() },
+         });
+         await tx.auditLog.create({
+            data: {
+               workspaceId,
+               actorId: userId,
+               action: 'team.retired',
+               entityType: 'team',
+               entityId: teamId,
+            },
+         });
+         return retired;
+      });
    }
    async addMember(teamId: string, dto: AddTeamMemberDto, userId: string) {
       await this.authorizeManager(dto.workspaceId, userId);
@@ -126,7 +141,7 @@ export class TeamsService {
       if (existing) throw new ConflictException('This person is already in the team.');
       return this.prisma.teamMember.create({
          data: { teamId, userId: dto.userId, role: dto.role },
-          include: { user: teamMemberUser },
+         include: { user: teamMemberUser },
       });
    }
    async join(teamId: string, workspaceId: string, userId: string) {
@@ -141,6 +156,29 @@ export class TeamsService {
          create: { teamId, userId, role: 'MEMBER' },
          update: {},
          include: { user: teamMemberUser },
+      });
+   }
+   async leave(teamId: string, workspaceId: string, userId: string) {
+      await this.authorize(workspaceId, userId);
+      const member = await this.prisma.teamMember.findFirst({
+         where: { teamId, userId, team: { workspaceId, archivedAt: null } },
+      });
+      if (!member) throw new NotFoundException('Team membership not found.');
+      return this.prisma.$transaction(async (tx) => {
+         await tx.teamMember.delete({
+            where: { teamId_userId: { teamId, userId } },
+         });
+         await tx.auditLog.create({
+            data: {
+               workspaceId,
+               actorId: userId,
+               action: 'team.member.left',
+               entityType: 'team',
+               entityId: teamId,
+               metadata: { userId },
+            },
+         });
+         return { teamId, userId, removed: true };
       });
    }
    async updateMember(
@@ -158,7 +196,7 @@ export class TeamsService {
       return this.prisma.teamMember.update({
          where: { teamId_userId: { teamId, userId: targetUserId } },
          data: { role },
-          include: { user: teamMemberUser },
+         include: { user: teamMemberUser },
       });
    }
    async removeMember(teamId: string, targetUserId: string, workspaceId: string, userId: string) {

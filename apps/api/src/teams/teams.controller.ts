@@ -66,6 +66,13 @@ export class TeamsController {
    ) {
       return { data: await this.teams.join(teamId, workspaceId, request.auth!.userId) };
    }
+   @Post(':teamId/leave') async leave(
+      @Param('teamId') teamId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.teams.leave(teamId, workspaceId, request.auth!.userId) };
+   }
    @Patch(':teamId/members/:userId') async updateMember(
       @Param('teamId') teamId: string,
       @Param('userId') userId: string,

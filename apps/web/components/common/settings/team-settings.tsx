@@ -181,6 +181,40 @@ export default function TeamSettings({ teamId }: TeamSettingsProps) {
       void updateTeam({ parentTeamId: parent?.id ?? null });
    };
 
+   const leaveTeam = async () => {
+      if (!workspaceId || !window.confirm(`Leave ${team.name}?`)) return;
+      const response = await fetch(
+         `${api}/teams/${team.id}/leave?${new URLSearchParams({ workspaceId })}`,
+         { method: 'POST', credentials: 'include' }
+      );
+      if (!response.ok) {
+         const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+         window.alert(payload?.message ?? 'Could not leave this team.');
+         return;
+      }
+      router.push(`/${orgId}/teams`);
+      router.refresh();
+   };
+
+   const retireTeam = async () => {
+      if (
+         !workspaceId ||
+         !window.confirm(`Retire ${team.name}? Its historical data will be preserved.`)
+      )
+         return;
+      const response = await fetch(
+         `${api}/teams/${team.id}?${new URLSearchParams({ workspaceId })}`,
+         { method: 'DELETE', credentials: 'include' }
+      );
+      if (!response.ok) {
+         const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+         window.alert(payload?.message ?? 'Could not retire this team.');
+         return;
+      }
+      router.push(`/${orgId}/teams`);
+      router.refresh();
+   };
+
    return (
       <div className="w-full overflow-y-auto h-full">
          <div className="max-w-2xl mx-auto px-6 py-10 pb-20">
@@ -348,9 +382,8 @@ export default function TeamSettings({ teamId }: TeamSettingsProps) {
                      <SettingsRow
                         title="Leave team"
                         description="Remove yourself as a member of this team"
-                        muted
                         trailing={
-                           <Button size="xs" variant="ghost" disabled>
+                           <Button size="xs" variant="ghost" onClick={() => void leaveTeam()}>
                               Leave team...
                            </Button>
                         }
@@ -360,7 +393,7 @@ export default function TeamSettings({ teamId }: TeamSettingsProps) {
                         description="Prevent creating and updating issues in this team while preserving all historical data"
                         muted
                         trailing={
-                           <Button size="xs" variant="ghost" disabled>
+                           <Button size="xs" variant="ghost" onClick={() => void retireTeam()}>
                               Retire...
                            </Button>
                         }
