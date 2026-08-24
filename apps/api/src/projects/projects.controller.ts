@@ -212,6 +212,20 @@ export class ProjectsController {
    ) {
       return { data: await this.projects.unsubscribe(projectId, workspaceId, request.auth!.userId) };
    }
+   @Post(':projectId/favorite') async favorite(
+      @Param('projectId') projectId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.projects.favorite(projectId, workspaceId, request.auth!.userId) };
+   }
+   @Delete(':projectId/favorite') async unfavorite(
+      @Param('projectId') projectId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.projects.unfavorite(projectId, workspaceId, request.auth!.userId) };
+   }
    @Get(':projectId/issues') async issues(
       @Param('projectId') projectId: string,
       @Query('workspaceId') workspaceId: string,

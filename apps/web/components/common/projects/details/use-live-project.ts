@@ -18,6 +18,7 @@ export type LiveProject = {
    _count: { issues: number };
    initiativeLinks: Array<{ initiative: { id: string; name: string } }>;
    labelLinks: Array<{ label: { id: string; name: string; color: string } }>;
+   favorites: Array<{ userId: string }>;
 };
 
 export type LiveProjectIssue = {
@@ -181,7 +182,11 @@ export function useLiveProject(projectId: string) {
             body: JSON.stringify({ labelIds }),
          });
          if (!response.ok) throw new Error('Could not update project labels.');
-         setProject(((await response.json()) as { data: LiveProject }).data);
+         const updated = ((await response.json()) as { data: LiveProject }).data;
+         setProject((current) => ({
+            ...updated,
+            favorites: updated.favorites ?? current?.favorites ?? [],
+         }));
       },
       [projectId, workspaceId]
    );
@@ -225,6 +230,21 @@ export function useLiveProject(projectId: string) {
       [projectId, workspaceId]
    );
 
+   const toggleFavorite = useCallback(
+      async (favorite: boolean) => {
+         if (!workspaceId) throw new Error('Workspace is not available yet.');
+         const response = await fetch(
+            `${api}/projects/${projectId}/favorite?${new URLSearchParams({ workspaceId })}`,
+            { method: favorite ? 'POST' : 'DELETE', credentials: 'include' }
+         );
+         if (!response.ok) throw new Error('Could not update project favorite.');
+         setProject((current) =>
+            current ? { ...current, favorites: favorite ? [{ userId: 'current' }] : [] } : current
+         );
+      },
+      [projectId, workspaceId]
+   );
+
    return {
       workspaceId,
       project,
@@ -239,6 +259,7 @@ export function useLiveProject(projectId: string) {
       updateLabels,
       createMilestone,
       toggleMilestone,
+      toggleFavorite,
       reload,
    };
 }

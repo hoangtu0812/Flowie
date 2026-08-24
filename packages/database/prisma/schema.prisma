@@ -115,6 +115,7 @@ model User {
   issueFavorites IssueFavorite[]
   issueReminders IssueReminder[]
   projectSubscriptions ProjectSubscription[]
+  projectFavorites ProjectFavorite[]
   projectUpdates ProjectUpdate[] @relation("ProjectUpdateAuthor")
   createdDocuments Document[] @relation("DocumentCreator")
   updatedDocuments Document[] @relation("DocumentUpdater")
@@ -344,6 +345,7 @@ model Project {
   asks Ask[]
   labelLinks ProjectLabelLink[]
   subscriptions ProjectSubscription[]
+  favorites ProjectFavorite[]
   updates ProjectUpdate[]
 
   @@unique([workspaceId, identifier])
@@ -416,6 +418,19 @@ model ProjectSubscription {
   @@id([projectId, userId])
   @@index([userId, createdAt])
   @@map("project_subscriptions")
+}
+
+model ProjectFavorite {
+  projectId String   @map("project_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@index([userId, createdAt])
+  @@map("project_favorites")
 }
 
 model ProjectUpdate {

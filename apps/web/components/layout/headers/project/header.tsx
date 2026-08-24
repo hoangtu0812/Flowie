@@ -8,6 +8,7 @@ import { useRightPanelStore } from '@/store/right-panel-store';
 import { BarChart3, ChevronRight, Link2, MoreHorizontal, PanelRight, Star } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
+import { toast } from 'sonner';
 
 const PROJECT_TABS = [
    { label: 'Overview', segment: 'overview' },
@@ -71,7 +72,17 @@ function PanelToggles() {
 
 export default function Header({ projectId }: { projectId: string }) {
    const { orgId } = useParams<{ orgId: string }>();
-   const { project } = useLiveProject(projectId);
+   const { project, toggleFavorite } = useLiveProject(projectId);
+   const isFavorite = Boolean(project?.favorites.length);
+
+   const changeFavorite = async () => {
+      try {
+         await toggleFavorite(!isFavorite);
+         toast.success(isFavorite ? 'Removed from favorites' : 'Added to favorites');
+      } catch {
+         toast.error('Could not update project favorite');
+      }
+   };
 
    return (
       <>
@@ -90,8 +101,15 @@ export default function Header({ projectId }: { projectId: string }) {
                      <span className="text-xs">📁</span>
                   </span>
                   <span className="font-medium truncate">{project?.name ?? 'Project'}</span>
-                  <Button variant="ghost" size="icon" className="size-6 text-muted-foreground">
-                     <Star className="size-3.5" />
+                  <Button
+                     variant="ghost"
+                     size="icon"
+                     className="size-6 text-muted-foreground"
+                     title={isFavorite ? 'Unfavorite project' : 'Favorite project'}
+                     aria-label={isFavorite ? 'Unfavorite project' : 'Favorite project'}
+                     onClick={() => void changeFavorite()}
+                  >
+                     <Star className={cn('size-3.5', isFavorite && 'fill-current')} />
                   </Button>
                </div>
             </div>

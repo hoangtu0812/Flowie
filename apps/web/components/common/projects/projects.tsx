@@ -46,6 +46,7 @@ type ApiProject = {
       assignee: { id: string; name: string; avatarUrl: string | null } | null;
    }>;
    _count: { issues: number };
+   favorites?: Array<{ userId: string }>;
 };
 type ApiProjectStatus = {
    id: string;
@@ -202,6 +203,7 @@ const mapProject = (project: ApiProject): Project & { issueCount: number } => {
       teamId: project.teamId ?? '',
       labels: project.labelLinks.map((link) => link.label),
       issueCount: project._count.issues,
+      isFavorite: Boolean(project.favorites?.length),
    };
 };
 

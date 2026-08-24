@@ -66,6 +66,7 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
       error,
       updateLabels,
       createMilestone,
+      toggleFavorite,
    } = useLiveProject(projectId);
    const [milestoneDialogOpen, setMilestoneDialogOpen] = useState(false);
    const [milestoneTitle, setMilestoneTitle] = useState('');
@@ -156,12 +157,12 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
                <ChevronRight className="size-4 shrink-0 text-muted-foreground group-hover:text-foreground transition-colors" />
             </Link>
             <button
-               disabled
-               title="Favorites are not available yet"
-               className="text-muted-foreground/50 shrink-0"
-               aria-label="Favorites are not available yet"
+               title={project.favorites.length ? 'Unfavorite project' : 'Favorite project'}
+               className="text-muted-foreground hover:text-foreground shrink-0"
+               aria-label={project.favorites.length ? 'Unfavorite project' : 'Favorite project'}
+               onClick={() => void toggleFavorite(!project.favorites.length)}
             >
-               <Star className="size-4" />
+               <Star className={`size-4 ${project.favorites.length ? 'fill-current' : ''}`} />
             </button>
             <button
                onClick={onClose}

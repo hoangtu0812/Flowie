@@ -44,6 +44,8 @@ export interface Project {
    initiative?: string;
    /** Days since the last health update (undefined = no update yet). */
    healthUpdatedAgoDays?: number;
+   /** Per-current-user state returned by the Project API. */
+   isFavorite?: boolean;
 }
 
 type BaseProject = Omit<

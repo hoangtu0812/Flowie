@@ -49,7 +49,10 @@ export class ProjectsService {
       await this.authorize(workspaceId, userId);
       return this.prisma.project.findMany({
          where: { workspaceId, archivedAt: null, ...(teamId ? { teamId } : {}) },
-         include: projectInclude,
+         include: {
+            ...projectInclude,
+            favorites: { where: { userId }, select: { userId: true } },
+         },
          orderBy: { createdAt: 'desc' },
       });
    }
@@ -113,7 +116,10 @@ export class ProjectsService {
       await this.authorize(workspaceId, userId);
       const project = await this.prisma.project.findFirst({
          where: { id: projectId, workspaceId, archivedAt: null },
-         include: projectInclude,
+         include: {
+            ...projectInclude,
+            favorites: { where: { userId }, select: { userId: true } },
+         },
       });
       if (!project) throw new NotFoundException('Project not found.');
       if (project.teamId) await this.authorizeTeam(workspaceId, project.teamId, userId);
@@ -295,6 +301,20 @@ export class ProjectsService {
       await this.get(projectId, workspaceId, userId);
       await this.prisma.projectSubscription.deleteMany({ where: { projectId, userId } });
       return { subscribed: false, subscribedAt: null };
+   }
+   async favorite(projectId: string, workspaceId: string, userId: string) {
+      await this.get(projectId, workspaceId, userId);
+      const favorite = await this.prisma.projectFavorite.upsert({
+         where: { projectId_userId: { projectId, userId } },
+         create: { projectId, userId },
+         update: {},
+      });
+      return { favorite: true, favoritedAt: favorite.createdAt };
+   }
+   async unfavorite(projectId: string, workspaceId: string, userId: string) {
+      await this.get(projectId, workspaceId, userId);
+      await this.prisma.projectFavorite.deleteMany({ where: { projectId, userId } });
+      return { favorite: false, favoritedAt: null };
    }
    async listCustomFields(workspaceId: string, userId: string): Promise<unknown> {
       await this.authorize(workspaceId, userId);
