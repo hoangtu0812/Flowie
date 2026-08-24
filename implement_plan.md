@@ -115,6 +115,10 @@
 - `03554c1` — persist Initiative updates/resources as first-class workspace entities.
 - `0f2b21c` — persist Project resources through the original Overview `+` affordance.
 - `fc30bf6` — persist typed Project custom-property values through the original Project Peek `+`.
+- `d86d732` — manage Project custom-field definitions in the original Settings list/dialog shell.
+- `f404306` — persist workspace Project display defaults through the original Display action.
+- `29f868a` — connect the original Project Overview initiative/label `+` affordances to real APIs.
+- `233f2ed` — persist workspace Issue display defaults through the original Display action.
 
 ### Kiểm tra gần nhất
 
@@ -156,16 +160,26 @@
 - Project custom properties dùng schema sẵn có; hai route đọc/lưu giá trị kiểm tra quyền project,
   workspace ownership, kiểu TEXT/NUMBER/DATE/SELECT/MULTI_SELECT/BOOLEAN/URL và ghi Activity.
   Nút `+` trong card Properties của Project Peek gốc đã được bật, không thay layout khi chưa có
-  custom field. Unit test mới **3/3 passed**; API/web/worker build và Docker API/web đều passed.
+  custom field. Settings Projects/Properties quản trị định nghĩa field thật bằng shell/list/dialog
+  gốc. Unit test validation/service mới **5/5 passed**; API/web/worker build và Docker API/web đều
+  passed.
+- Project Overview giữ nguyên Properties rows gốc; dấu `+` Initiative và Label đã gọi API quan hệ
+  thật, hỗ trợ liên kết/gỡ liên kết và không thêm row khi workspace chưa có Initiative.
+- Project và Issue Display defaults đều lưu JSONB theo workspace, chỉ OWNER/ADMIN được PATCH,
+  member được GET, có DTO validation và audit. Migration
+  `20260824320000_workspace_project_display_defaults` và
+  `20260824330000_workspace_issue_display_defaults` đã apply/xác minh trực tiếp trong PostgreSQL.
+  Test Issue defaults **6/6 passed**, API/Next production build và Docker API/web đều passed; các
+  lớp cài dependency trong Docker đều dùng cache.
 - Audit frontend đã đối chiếu **308 file baseline** trong `app/components/hooks/lib/store` với
   `upstream/master`. Đã xóa 18 component `real-*` rút gọn không còn route nào dùng; runtime chỉ
   còn cây component gốc được nối API.
 - Docker dependency install dùng cache; không tải package mới trong các checkpoint trên.
 - Audit runtime mới nhất không còn route dùng `SettingsPlaceholder` và không còn import mảng
   record nghiệp vụ mock; các import từ `mock-data` chỉ còn type hoặc catalog icon/màu/status.
-- Lưu ý môi trường host hiện thiếu binary `jest`/`prettier` trong `node_modules`, dù lockfile có
-  khai báo; không cài lại package chỉ để chạy test vì Docker build đã kiểm tra compile bằng đúng
-  dependency graph. DTO spec cho Issue Templates đã được thêm để chạy ở lần cài dependency đầy đủ.
+- Host hiện đã chạy được Jest/Prettier từ dependency cache. Prisma generate trên mạng nội bộ cần
+  trỏ `PRISMA_SCHEMA_ENGINE_BINARY` tới binary đã cache để tránh checksum download; không cần cài
+  thêm package. Docker build vẫn là kiểm chứng dependency graph chính thức.
 
 ## Phần chưa hoàn thành — không được đánh dấu là đã triển khai
 
@@ -179,15 +193,16 @@
 | P1 | Issue actions còn thiếu | Convert-to-comment còn cần semantics/backend. Duplicate/Won't Fix, move team, favorite và reminder đã hoàn thành; taxonomy issue type không có control tương ứng trong UI gốc hiện tại. |
 | P1 | Team settings nâng cao | Cycle cadence, triage, auto-close/archive policy, hierarchy và template default đã persistence/UI; Worker auto-close/archive đã hoàn thành. Tự sinh cycle theo cadence vẫn chưa triển khai. |
 | P1 | Account security | Session management và Personal API Key đã hoàn thành. Passkeys cần WebAuthn dependency/RP configuration; signing key không có consumer và lệch phạm vi project-management nên vẫn unavailable. |
-| P1 | Project extras | Favorite, Project Update attachment, resource links và typed custom-property values đã hoàn thành bằng dữ liệu thật. Còn cần UI Settings để quản trị định nghĩa custom field và nối affordance initiative/label còn rỗng trong Overview nếu baseline có hiển thị. |
+| P1 | Project extras | Hoàn thành: favorite, Update attachment, resource, typed custom-property values/definitions, workspace Display defaults và affordance Initiative/Label trong Overview đều dùng dữ liệu thật mà giữ layout gốc. |
+| P1 | Issue display/insights | Workspace Display defaults đã hoàn thành. Footer `Set default for everyone` trong Insights vẫn là visible no-op; cần persistence cho cấu hình analytics trước khi bật. |
 | P2 | Automation/webhook | Worker/Redis foundation có, nhưng rule builder, persisted automation và generic webhook chưa hoàn chỉnh. |
 | P2 | OAuth/enterprise identity | Google, Microsoft Entra, OIDC/SAML chưa triển khai; local email/password đang hoạt động. |
 | Excluded | AI Agent, Code Reviews | Cố ý unavailable theo phạm vi sản phẩm hiện tại; fixture/canned-response cũ đã được xóa khỏi source. |
 
 ## Thứ tự tiếp tục đề xuất
 
-1. Tách notification theo workspace và khôi phục Notifications/Integrations shell gốc với Discord.
-2. Loại các visible no-op P0 (command palette/Agent default) rồi xử lý P1 theo audit.
+1. Triển khai quan hệ Issue–Release cho picker đang hiển thị trong Issue command/property UI gốc.
+2. Loại visible no-op Insights defaults, rồi xử lý cycle auto-generation và convert-to-comment.
 3. Tạo phiên test workspace-member và chụp đối chiếu từng route chính với `upstream/master`.
 
 ## 1. Mục tiêu
