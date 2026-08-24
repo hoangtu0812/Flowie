@@ -7,6 +7,7 @@ import { useParams } from 'next/navigation';
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityFeed } from './activity-feed';
 import { IssuePropertiesPanel } from './issue-properties-panel';
+import { IssueRelations } from './issue-relations';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
@@ -206,7 +207,9 @@ export default function IssueDetails() {
                   )}
                </div>
 
-               <div className="mt-8 text-sm text-muted-foreground">
+               <IssueRelations issueId={issue.id} orgId={orgId ?? 'lndev-ui'} />
+
+               <div className="mt-6 text-sm text-muted-foreground">
                   Sub-issues are not available yet.
                </div>
 

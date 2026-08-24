@@ -13,6 +13,7 @@ import {
 import { IssueStatusCategory } from '@circle/database';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { CreateIssueDto } from './dto/create-issue.dto';
+import { LinkIssueDto } from './dto/link-issue.dto';
 import { UpdateIssueDto } from './dto/update-issue.dto';
 import { IssuesService } from './issues.service';
 
@@ -51,6 +52,41 @@ export class IssuesController {
       @Req() request: AuthenticatedRequest
    ) {
       return { data: await this.issues.options(workspaceId, request.auth!.userId, teamId) };
+   }
+
+   @Get(':issueId/relations')
+   async relations(
+      @Param('issueId') issueId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.issues.relations(issueId, workspaceId, request.auth!.userId) };
+   }
+
+   @Post(':issueId/relations')
+   async addRelation(
+      @Param('issueId') issueId: string,
+      @Body() dto: LinkIssueDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.issues.addRelation(issueId, dto, request.auth!.userId) };
+   }
+
+   @Delete(':issueId/relations/:relatedIssueId')
+   async removeRelation(
+      @Param('issueId') issueId: string,
+      @Param('relatedIssueId') relatedIssueId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.issues.removeRelation(
+            issueId,
+            relatedIssueId,
+            workspaceId,
+            request.auth!.userId
+         ),
+      };
    }
 
    @Get(':issueId')

@@ -109,6 +109,7 @@ model User {
   organizations Organization[] @relation("OrganizationOwner")
   createdIssues Issue[] @relation("IssueCreator")
   assignedIssues Issue[] @relation("IssueAssignee")
+  createdIssueRelations IssueRelation[]
   issueSubscriptions IssueSubscription[]
   projectSubscriptions ProjectSubscription[]
   projectUpdates ProjectUpdate[] @relation("ProjectUpdateAuthor")
@@ -222,6 +223,7 @@ model Workspace {
   projects     Project[]
   issueStatuses IssueStatus[]
   issues       Issue[]
+  issueRelations IssueRelation[]
   cycles       Cycle[]
   documents    Document[]
   labels       Label[]
@@ -546,6 +548,8 @@ model Issue {
   creator   User        @relation("IssueCreator", fields: [creatorId], references: [id], onDelete: Restrict)
   assignee  User?       @relation("IssueAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   cycleLinks IssueCycle[]
+  outgoingRelations IssueRelation[] @relation("IssueRelationSource")
+  incomingRelations IssueRelation[] @relation("IssueRelationTarget")
   comments Comment[]
   activities Activity[]
   labelLinks IssueLabel[]
@@ -557,6 +561,24 @@ model Issue {
   @@index([projectId])
   @@index([assigneeId])
   @@map("issues")
+}
+
+model IssueRelation {
+  workspaceId    String   @map("workspace_id")
+  issueId        String   @map("issue_id")
+  relatedIssueId String   @map("related_issue_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  createdById    String   @map("created_by")
+
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  issue        Issue     @relation("IssueRelationSource", fields: [issueId], references: [id], onDelete: Cascade)
+  relatedIssue Issue     @relation("IssueRelationTarget", fields: [relatedIssueId], references: [id], onDelete: Cascade)
+  createdBy    User      @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@id([issueId, relatedIssueId])
+  @@index([workspaceId, createdAt])
+  @@index([relatedIssueId])
+  @@map("issue_relations")
 }
 
 model IssueSubscription {

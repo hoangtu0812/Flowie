@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import React from 'react';
 import { useIssuesStore } from '@/store/issues-store';
+import { useIssueRelationDialogStore } from '@/store/issue-relation-dialog-store';
 import { priorities } from '@/mock-data/priorities';
 import { toast } from 'sonner';
 
@@ -43,6 +44,7 @@ interface IssueContextMenuProps {
 }
 
 export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
+   const { openForIssue } = useIssueRelationDialogStore();
    const {
       updateIssueStatus,
       updateIssuePriority,
@@ -272,7 +274,7 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
 
             <ContextMenuSeparator />
 
-            <ContextMenuItem disabled title="Issue links are not available yet">
+            <ContextMenuItem onClick={() => issueId && openForIssue(issueId)}>
                <LinkIcon className="size-4" /> Add link...
                <ContextMenuShortcut>Ctrl L</ContextMenuShortcut>
             </ContextMenuItem>

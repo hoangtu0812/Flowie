@@ -17,7 +17,7 @@ import { Cycle, cycleStatusLabel, formatCycleDateRange } from '@/mock-data/cycle
 import { Issue } from '@/mock-data/issues';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { FileText, Plus, User, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { loadCurrentWorkspaceTeams } from '../teams/team-types';
 import { CapacityRing } from './capacity-ring';
 import { CycleBurnupChart } from './cycle-burnup-chart';
@@ -240,15 +240,18 @@ export function CycleDetailsPanel({ cycle, issues }: CycleDetailsPanelProps) {
       [issues]
    );
 
-   const loadDocuments = async (id: string) => {
-      const response = await fetch(
-         `${api}/cycles/${cycle.id}/documents?${new URLSearchParams({ workspaceId: id }).toString()}`,
-         { credentials: 'include' }
-      );
-      if (!response.ok) throw new Error('Could not load cycle documents.');
-      const payload = (await response.json()) as { data: CycleDocument[] };
-      setDocuments(payload.data);
-   };
+   const loadDocuments = useCallback(
+      async (id: string) => {
+         const response = await fetch(
+            `${api}/cycles/${cycle.id}/documents?${new URLSearchParams({ workspaceId: id }).toString()}`,
+            { credentials: 'include' }
+         );
+         if (!response.ok) throw new Error('Could not load cycle documents.');
+         const payload = (await response.json()) as { data: CycleDocument[] };
+         setDocuments(payload.data);
+      },
+      [cycle.id]
+   );
 
    useEffect(() => {
       let active = true;
@@ -274,7 +277,7 @@ export function CycleDetailsPanel({ cycle, issues }: CycleDetailsPanelProps) {
       return () => {
          active = false;
       };
-   }, [cycle.id]);
+   }, [loadDocuments]);
 
    const openLinkDialog = async () => {
       if (!workspaceId) return;

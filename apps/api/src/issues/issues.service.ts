@@ -1,7 +1,13 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+   BadRequestException,
+   ForbiddenException,
+   Injectable,
+   NotFoundException,
+} from '@nestjs/common';
 import { IssueStatusCategory } from '@circle/database';
 import { PrismaService } from '../database/prisma.service';
 import { CreateIssueDto } from './dto/create-issue.dto';
+import { LinkIssueDto } from './dto/link-issue.dto';
 import { UpdateIssueDto } from './dto/update-issue.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -26,6 +32,14 @@ const issueInclude = {
    assignee: { select: { id: true, name: true, avatarUrl: true } },
    labelLinks: { include: { label: { select: { id: true, name: true, color: true } } } },
    cycleLinks: { select: { cycleId: true } },
+} as const;
+
+const relatedIssueSelect = {
+   id: true,
+   identifier: true,
+   title: true,
+   status: { select: { id: true, name: true, color: true, category: true } },
+   team: { select: { id: true, name: true, identifier: true } },
 } as const;
 
 @Injectable()
@@ -175,7 +189,9 @@ export class IssuesService {
                ...(labelIds?.length
                   ? { labelLinks: { create: labelIds.map((labelId) => ({ labelId })) } }
                   : {}),
-               subscribers: { create: subscriberIds.map((subscriberId) => ({ userId: subscriberId })) },
+               subscribers: {
+                  create: subscriberIds.map((subscriberId) => ({ userId: subscriberId })),
+               },
             },
             include: issueInclude,
          });
@@ -213,6 +229,134 @@ export class IssuesService {
       if (!issue) throw new NotFoundException('Issue not found.');
       await this.authorize(workspaceId, userId, issue.teamId);
       return issue;
+   }
+
+   async relations(issueId: string, workspaceId: string, userId: string) {
+      const issue = await this.get(issueId, workspaceId, userId);
+      const links = await this.prisma.issueRelation.findMany({
+         where: {
+            workspaceId,
+            OR: [
+               {
+                  issueId: issue.id,
+                  relatedIssue: {
+                     archivedAt: null,
+                     team: { members: { some: { userId } } },
+                  },
+               },
+               {
+                  relatedIssueId: issue.id,
+                  issue: {
+                     archivedAt: null,
+                     team: { members: { some: { userId } } },
+                  },
+               },
+            ],
+         },
+         select: {
+            issueId: true,
+            relatedIssueId: true,
+            issue: { select: relatedIssueSelect },
+            relatedIssue: { select: relatedIssueSelect },
+         },
+         orderBy: { createdAt: 'desc' },
+      });
+      return links.map((link) => (link.issueId === issue.id ? link.relatedIssue : link.issue));
+   }
+
+   async addRelation(issueId: string, dto: LinkIssueDto, userId: string) {
+      const issue = await this.get(issueId, dto.workspaceId, userId);
+      const related = await this.get(dto.relatedIssueId, dto.workspaceId, userId);
+      if (issue.id === related.id)
+         throw new BadRequestException('An issue cannot be related to itself.');
+      const [firstIssueId, secondIssueId] = [issue.id, related.id].sort();
+      const existing = await this.prisma.issueRelation.findUnique({
+         where: {
+            issueId_relatedIssueId: { issueId: firstIssueId, relatedIssueId: secondIssueId },
+         },
+         include: {
+            issue: { select: relatedIssueSelect },
+            relatedIssue: { select: relatedIssueSelect },
+         },
+      });
+      if (existing) return existing;
+
+      return this.prisma.$transaction(async (tx) => {
+         const relation = await tx.issueRelation.create({
+            data: {
+               workspaceId: dto.workspaceId,
+               issueId: firstIssueId,
+               relatedIssueId: secondIssueId,
+               createdById: userId,
+            },
+            include: {
+               issue: { select: relatedIssueSelect },
+               relatedIssue: { select: relatedIssueSelect },
+            },
+         });
+         await tx.activity.createMany({
+            data: [
+               {
+                  workspaceId: dto.workspaceId,
+                  issueId: issue.id,
+                  actorId: userId,
+                  type: 'issue.related',
+                  data: { relatedIssueId: related.id, relatedIdentifier: related.identifier },
+               },
+               {
+                  workspaceId: dto.workspaceId,
+                  issueId: related.id,
+                  actorId: userId,
+                  type: 'issue.related',
+                  data: { relatedIssueId: issue.id, relatedIdentifier: issue.identifier },
+               },
+            ],
+         });
+         return relation;
+      });
+   }
+
+   async removeRelation(
+      issueId: string,
+      relatedIssueId: string,
+      workspaceId: string,
+      userId: string
+   ) {
+      const issue = await this.get(issueId, workspaceId, userId);
+      const related = await this.get(relatedIssueId, workspaceId, userId);
+      const [firstIssueId, secondIssueId] = [issue.id, related.id].sort();
+      const relation = await this.prisma.issueRelation.findUnique({
+         where: {
+            issueId_relatedIssueId: { issueId: firstIssueId, relatedIssueId: secondIssueId },
+         },
+      });
+      if (!relation) throw new NotFoundException('Issues are not linked.');
+      await this.prisma.$transaction([
+         this.prisma.issueRelation.delete({
+            where: {
+               issueId_relatedIssueId: { issueId: firstIssueId, relatedIssueId: secondIssueId },
+            },
+         }),
+         this.prisma.activity.createMany({
+            data: [
+               {
+                  workspaceId,
+                  issueId: issue.id,
+                  actorId: userId,
+                  type: 'issue.unrelated',
+                  data: { relatedIssueId: related.id, relatedIdentifier: related.identifier },
+               },
+               {
+                  workspaceId,
+                  issueId: related.id,
+                  actorId: userId,
+                  type: 'issue.unrelated',
+                  data: { relatedIssueId: issue.id, relatedIdentifier: issue.identifier },
+               },
+            ],
+         }),
+      ]);
+      return { issueId: issue.id, relatedIssueId: related.id, removed: true };
    }
 
    async update(issueId: string, workspaceId: string, dto: UpdateIssueDto, userId: string) {
