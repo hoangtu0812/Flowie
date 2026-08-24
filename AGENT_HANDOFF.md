@@ -103,6 +103,7 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 | `dfd0496` | Original Issue detail, right properties panel, assignee picker, and issue header now derive their data from the live Issues store/API. Persisted status/priority/assignee selectors remain available; mock description, team, cycle, milestone, relation, PR, and sub-issue records were removed. Reactions, sub-issues, and the original-layout attachment action are explicitly unavailable until their contracts are implemented. Frontend build and Docker route verification passed. |
 | `8c6bbd8` | Original Issue detail Paperclip now uploads a real Issue attachment through the existing Attachment API, lists persisted records, and downloads through the protected endpoint. It includes client feedback for the 10 MB limit plus loading/error/empty/upload states; reactions and comment attachments remain unavailable. Frontend production build passed. Docker runtime verification is pending the user's 5G confirmation. |
 | `603c994` | Issue due dates now persist through `PATCH /issues/:issueId`: the original command-palette presets calculate from the current date instead of fixed mock dates, and clearing persists `null`. The context-menu's former browser-only “set 7 days” write is disabled. Due-date DTO validation tests plus all API tests (3 suites/5 tests) and the frontend production build passed. Docker runtime verification is pending 5G. |
+| `ca19039` | Original Issue context menu now persists subscribe/unsubscribe and archive through existing API endpoints. Browser-only fake actions (favorite, link, conversion, copies, related issues, mark-as, team moves, reminders) remain in their original positions but are explicitly disabled. Frontend production build passed; Docker runtime verification is pending 5G. |
 
 ### Capability status at the handoff point
 
@@ -112,7 +113,7 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 | Authentication and workspace access | Implemented baseline | Login/session/workspace resolution are real. OAuth, email verification, password reset, and enterprise SSO are deferred. |
 | Teams and members | Implemented baseline | Original Teams, team overview, team members, and workspace members use API data; team/member creation actions covered by the migrated screens persist. |
 | Projects | Implemented baseline | Original project list, creation, lead, issue progress, overview, issues, activity, and project header use API data. Project settings still need their final audit. |
-| Issues, labels, cycles, saved views | Implemented baseline | Original issues list/filter options, My issues scopes, labels CRUD, cycles/timeline, subscriptions, saved views, and due dates use API data. Original Issue detail, Activity/Comments/Subscribe, properties, assignee changes, and Issue attachments are live in source. Docker runtime verification of the latest attachment/due-date UI is pending 5G. Label editing, sub-issues, reactions, and relations remain deferred. |
+| Issues, labels, cycles, saved views | Implemented baseline | Original issues list/filter options, My issues scopes, labels CRUD, cycles/timeline, subscriptions, saved views, due dates, and archive action use API data. Original Issue detail, Activity/Comments/Subscribe, properties, assignee changes, Issue attachments, and truthful context-menu actions are live in source. Docker runtime verification of the latest attachment/due-date/context-menu UI is pending 5G. Label editing, sub-issues, reactions, and relations remain deferred. |
 | Initiatives and documents | Implemented baseline | Initiative list/detail/create/linking and team documents are live. Advanced relationships/workflows remain deferred. |
 | Inbox and Discord | Implemented baseline | Inbox persists notifications/read/delete and workspace Discord integration exists. No fake delivery channels are enabled. |
 | Settings | Audited baseline | Profile, issue labels, project statuses, project templates, and actionable browser-local preferences are live. Unsupported Notification, Security, Issue templates, desktop and issue-automation preferences are truthful. Generic configuration placeholders are visibly unavailable. Template application/editing is deferred because the API currently provides list/create only. |
@@ -120,7 +121,7 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 
 ## Exact restart point
 
-The next agent should first complete **runtime verification for original Issue attachments and due dates**. These features are committed in `8c6bbd8` / `603c994`; API and web builds passed, but they have not yet been included in the running Docker API/web images because Docker rebuilding awaits the user's 5G confirmation.
+The next agent should first complete **runtime verification for original Issue attachments, due dates, and context-menu actions**. These features are committed in `8c6bbd8` / `603c994` / `ca19039`; API and web builds passed, but they have not yet been included in the running Docker API/web images because Docker rebuilding awaits the user's 5G confirmation.
 
 `apps/web/components/common/issues/details/issue-details.tsx`
 
@@ -129,8 +130,9 @@ Required verification sequence:
 1. With the user on 5G, rebuild `api` and `web`, recreate them with `--no-build --pull never`, and verify an authenticated Issue detail route plus command palette.
 2. Manually upload a small file, refresh, download it, then verify the 10 MB client error. Do not claim full attachment runtime verification from a route `307` alone.
 3. Set and clear a due date from the original command palette; refresh to prove both operations persisted through the API.
-4. Record the result in this document and `CONTINUATION.md`, then commit/push the documentation.
-5. Only after that, continue with **Issue label editing** if its API contract covers it; otherwise leave it explicitly unavailable. Sub-issues, reactions, comment attachments, and relations require separate contracts.
+4. From the original Issue context menu, subscribe/unsubscribe then refresh; archive a disposable Issue after confirmation and verify it disappears from the live list.
+5. Record the result in this document and `CONTINUATION.md`, then commit/push the documentation.
+6. Only after that, continue with **Issue label editing** if its API contract covers it; otherwise leave it explicitly unavailable. Sub-issues, reactions, comment attachments, and relations require separate contracts.
 
 This is a backend/API integration priority, not a UI redesign task.
 
