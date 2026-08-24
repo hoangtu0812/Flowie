@@ -210,7 +210,9 @@ const statusIcon = (status: ApiStatus, category: StatusCategory) => {
            : category === 'backlog' || category === 'triage'
              ? CircleDashed
              : Circle;
-   return () => createElement(Icon, { className: 'size-4' });
+   return function FallbackStatusIcon() {
+      return createElement(Icon, { className: 'size-4' });
+   };
 };
 
 const mapStatus = (status: ApiStatus): Status => ({

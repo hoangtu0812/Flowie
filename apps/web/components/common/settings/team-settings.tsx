@@ -3,7 +3,6 @@
 import { Button } from '@/components/ui/button';
 import { loadJoinedWorkspaceTeams, type WorkspaceTeam } from '@/components/common/teams/team-types';
 import {
-   Bot,
    ChevronRight,
    FileText,
    Lock,
@@ -11,12 +10,10 @@ import {
    RefreshCcw,
    Repeat,
    Settings,
-   Sparkles,
    Tag,
    Target,
    Users,
    Workflow,
-   Zap,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -238,13 +235,6 @@ export default function TeamSettings({ teamId }: TeamSettingsProps) {
                         chevron
                         onClick={() => router.push(`/${orgId}/team/${team.identifier}/members`)}
                      />
-                     <SettingsRow
-                        icon={<Zap className="size-4" />}
-                        title="Slack notifications"
-                        description="Broadcast notifications to Slack"
-                        trailing={unavailable}
-                        muted
-                     />
                   </SettingsCard>
                </SettingsSection>
 
@@ -330,46 +320,6 @@ export default function TeamSettings({ teamId }: TeamSettingsProps) {
                               12
                            )
                         }
-                     />
-                  </SettingsCard>
-               </SettingsSection>
-
-               <SettingsSection title="AI & Agents">
-                  <SettingsCard>
-                     <SettingsRow
-                        icon={<Bot className="size-4" />}
-                        title="Team agents"
-                        description="Add guidance for how agents should operate within this team"
-                        trailing={unavailable}
-                        muted
-                     />
-                     <SettingsRow
-                        icon={<Sparkles className="size-4" />}
-                        title="Agent skills"
-                        description="Agent skills shared with this team"
-                        trailing={unavailable}
-                        muted
-                     />
-                     <SettingsRow
-                        icon={<RefreshCcw className="size-4" />}
-                        title="Loops"
-                        description="Automated agent workflows that run on a schedule or when an issue is updated"
-                        trailing={unavailable}
-                        muted
-                     />
-                     <SettingsRow
-                        icon={<Zap className="size-4" />}
-                        title="Project updates"
-                        description="Automatically generate updates using recent activity and defined rules"
-                        trailing={unavailable}
-                        muted
-                     />
-                     <SettingsRow
-                        icon={<FileText className="size-4" />}
-                        title="Resolved thread summaries"
-                        description="Automatically generate summaries for resolved threads"
-                        trailing={unavailable}
-                        muted
                      />
                   </SettingsCard>
                </SettingsSection>

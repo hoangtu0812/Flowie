@@ -10,7 +10,6 @@ import {
 import {
    Bell,
    Blocks,
-   Bot,
    Compass,
    FileText,
    Flame,
@@ -22,7 +21,6 @@ import {
    Rocket,
    Settings,
    Smile,
-   Sparkles,
    Tag,
    Target,
    UserRound,
@@ -52,7 +50,6 @@ export const settingsNav: SettingsNavGroup[] = [
          { name: 'Profile', url: '/settings/profile', icon: UserRound },
          { name: 'Notifications', url: '/settings/notifications', icon: Bell },
          { name: 'Security & access', url: '/settings/security', icon: KeyRound },
-         { name: 'Agent personalization', url: '/settings/agent-personalization', icon: Bot },
       ],
    },
    {
@@ -76,7 +73,6 @@ export const settingsNav: SettingsNavGroup[] = [
    {
       label: 'Features',
       items: [
-         { name: 'AI & Agents', url: '/settings/ai', icon: Sparkles },
          { name: 'Initiatives', url: '/settings/initiatives', icon: Compass },
          { name: 'Documents', url: '/settings/documents', icon: FileText },
          { name: 'Customer requests', url: '/settings/customer-requests', icon: HeartHandshake },

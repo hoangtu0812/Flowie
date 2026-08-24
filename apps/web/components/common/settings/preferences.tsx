@@ -101,17 +101,6 @@ export default function Preferences() {
             <ThemePreferences />
          </SettingsSection>
 
-         <SettingsSection title="Desktop application">
-            <SettingsCard>
-               <SettingsRow
-                  title="Open in desktop app"
-                  description="The desktop application is not available"
-                  trailing={<Switch checked={false} disabled />}
-                  muted
-               />
-            </SettingsCard>
-         </SettingsSection>
-
          <SettingsSection title="Automations and workflows">
             <SettingsCard>
                <SettingsRow

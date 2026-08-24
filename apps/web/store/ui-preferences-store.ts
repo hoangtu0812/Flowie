@@ -43,7 +43,11 @@ export const useUiPreferencesStore = create<UiPreferencesState>()(
                   preferences?.defaultHome === 'my-issues' ? 'my-issues' : ('inbox' as const),
             } as UiPreferencesState;
          },
-         partialize: ({ hasHydrated: _hasHydrated, ...preferences }) => preferences,
+         partialize: (state) => {
+            const { hasHydrated, ...preferences } = state;
+            void hasHydrated;
+            return preferences;
+         },
          onRehydrateStorage: () => (state) => state?.setHasHydrated(true),
       }
    )
