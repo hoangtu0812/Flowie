@@ -99,7 +99,9 @@ export default function ProjectActivity({ projectId }: ProjectActivityProps) {
       error,
       createUpdate,
       availableLabels,
+      availableMembers,
       updateLabels,
+      updateMembers,
       createMilestone,
       toggleMilestone,
    } = useLiveProject(projectId);
@@ -354,7 +356,9 @@ export default function ProjectActivity({ projectId }: ProjectActivityProps) {
             detail={detail}
             issues={uiIssues}
             availableLabels={availableLabels}
+            availableMembers={availableMembers}
             onLabelsChange={updateLabels}
+            onMembersChange={updateMembers}
             onCreateMilestone={createMilestone}
             onToggleMilestone={toggleMilestone}
          />

@@ -19,6 +19,7 @@ import type {
 
 export type ProjectDetailUiProject = Project & {
    team?: { id: string; name: string; identifier: string; icon: string | null } | null;
+   members: LiveProject['members'];
 };
 
 export type ProjectDetailUiIssue = Issue & { cycleName?: string };
@@ -167,6 +168,7 @@ export function toProjectUi(
       health: projectHealth.find((health) => health.id === project.health) ?? projectHealth[0],
       teamId: project.team?.identifier ?? '',
       team: project.team,
+      members: project.members,
       labels: project.labelLinks.map((link) => link.label),
       initiative: project.initiativeLinks[0]?.initiative.name,
    };

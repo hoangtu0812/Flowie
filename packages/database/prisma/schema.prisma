@@ -122,6 +122,7 @@ model User {
   issueReminders IssueReminder[]
   projectSubscriptions ProjectSubscription[]
   projectFavorites ProjectFavorite[]
+  projectMemberships ProjectMember[]
   projectUpdates ProjectUpdate[] @relation("ProjectUpdateAuthor")
   initiativeUpdates InitiativeUpdate[] @relation("InitiativeUpdateAuthor")
   initiativeResources InitiativeResource[] @relation("InitiativeResourceCreator")
@@ -395,10 +396,24 @@ model Project {
   favorites ProjectFavorite[]
   updates ProjectUpdate[]
   resources ProjectResource[]
+  members ProjectMember[]
 
   @@unique([workspaceId, identifier])
   @@index([workspaceId, teamId])
   @@map("projects")
+}
+
+model ProjectMember {
+  projectId String   @map("project_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@index([userId])
+  @@map("project_members")
 }
 
 model ProjectCustomField {

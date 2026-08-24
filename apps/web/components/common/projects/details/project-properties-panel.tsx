@@ -18,30 +18,24 @@ import { PanelFilterTarget, usePanelFilter } from '@/components/common/issues/us
 import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { ProjectProgressChart } from './project-progress-chart';
-import {
-   ArrowRight,
-   Calendar,
-   Check,
-   Compass,
-   MessageCircle,
-   Plus,
-   Tag,
-   UserPlus,
-} from 'lucide-react';
+import { ArrowRight, Calendar, Check, Compass, MessageCircle, Plus, Tag } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { ProjectLabelSelector } from '../project-label-selector';
-import type { LiveProjectLabel } from './use-live-project';
+import type { LiveProjectLabel, LiveWorkspaceMember } from './use-live-project';
 import type { ProjectDetailUiIssue, ProjectDetailUiProject } from './project-detail-ui-adapter';
+import { ProjectMemberSelector } from '../project-member-selector';
 
 interface ProjectPropertiesPanelProps {
    project: ProjectDetailUiProject;
    detail: ProjectDetail;
    issues: ProjectDetailUiIssue[];
    availableLabels: LiveProjectLabel[];
+   availableMembers: LiveWorkspaceMember[];
    onLabelsChange?: (labelIds: string[]) => Promise<void>;
+   onMembersChange: (userIds: string[]) => Promise<void>;
    onCreateMilestone?: (title: string, targetDate?: string) => Promise<unknown>;
    onToggleMilestone?: (milestoneId: string, completed: boolean) => Promise<void>;
 }
@@ -216,7 +210,9 @@ export function ProjectPropertiesPanel({
    detail,
    issues,
    availableLabels,
+   availableMembers,
    onLabelsChange,
+   onMembersChange,
    onCreateMilestone,
    onToggleMilestone,
 }: ProjectPropertiesPanelProps) {
@@ -227,17 +223,6 @@ export function ProjectPropertiesPanel({
    const team = project.team;
 
    const started = issues.filter((issue) => issue.status.category === 'started').length;
-
-   const members = useMemo(() => {
-      const seen = new Set<string>();
-      return issues
-         .map((issue) => issue.assignee)
-         .filter((assignee): assignee is NonNullable<typeof assignee> => {
-            if (!assignee || seen.has(assignee.id)) return false;
-            seen.add(assignee.id);
-            return true;
-         });
-   }, [issues]);
 
    const assigneeRows = useMemo(
       () =>
@@ -330,30 +315,11 @@ export function ProjectPropertiesPanel({
                   <span className="truncate max-w-36">{project.lead.name}</span>
                </PropertyRow>
                <PropertyRow label="Members">
-                  {members.length > 0 ? (
-                     <span className="inline-flex items-center gap-1.5">
-                        <span className="flex -space-x-1.5">
-                           {members.slice(0, 3).map((member) => (
-                              <Avatar key={member.id} className="size-5 border-2 border-container">
-                                 <AvatarImage
-                                    src={member.avatarUrl || undefined}
-                                    alt={member.name}
-                                 />
-                                 <AvatarFallback>{member.name[0]}</AvatarFallback>
-                              </Avatar>
-                           ))}
-                        </span>
-                        {members.length} {members.length === 1 ? 'member' : 'members'}
-                     </span>
-                  ) : (
-                     <span
-                        className="flex items-center gap-1.5 text-muted-foreground"
-                        title="Members appear here when project issues are assigned"
-                     >
-                        <UserPlus className="size-3.5" />
-                        No assigned members
-                     </span>
-                  )}
+                  <ProjectMemberSelector
+                     members={project.members}
+                     availableMembers={availableMembers}
+                     onMembersChange={onMembersChange}
+                  />
                </PropertyRow>
                <PropertyRow label="Dates">
                   <span className="inline-flex items-center gap-1">

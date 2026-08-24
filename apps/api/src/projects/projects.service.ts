@@ -42,6 +42,10 @@ const projectInclude = {
       include: { createdBy: { select: { id: true, name: true, avatarUrl: true } } },
       orderBy: { createdAt: 'asc' },
    },
+   members: {
+      include: { user: { select: { id: true, name: true, avatarUrl: true } } },
+      orderBy: { createdAt: 'asc' },
+   },
 } satisfies Prisma.ProjectInclude;
 
 @Injectable()
@@ -147,6 +151,46 @@ export class ProjectsService {
             },
          },
          orderBy: { updatedAt: 'desc' },
+      });
+   }
+   async updateMembers(
+      projectId: string,
+      workspaceId: string,
+      requestedUserIds: string[],
+      userId: string
+   ) {
+      await this.get(projectId, workspaceId, userId);
+      const memberIds = [...new Set(requestedUserIds)];
+      const activeMembers = memberIds.length
+         ? await this.prisma.workspaceMember.findMany({
+              where: { workspaceId, userId: { in: memberIds }, status: 'ACTIVE' },
+              select: { userId: true },
+           })
+         : [];
+      if (activeMembers.length !== memberIds.length) {
+         throw new BadRequestException('Project members must be active workspace members.');
+      }
+      return this.prisma.$transaction(async (tx) => {
+         await tx.projectMember.deleteMany({ where: { projectId } });
+         if (memberIds.length) {
+            await tx.projectMember.createMany({
+               data: memberIds.map((memberId) => ({ projectId, userId: memberId })),
+            });
+         }
+         await tx.activity.create({
+            data: {
+               workspaceId,
+               projectId,
+               actorId: userId,
+               type: 'project.members.updated',
+               data: { memberIds },
+            },
+         });
+         return tx.projectMember.findMany({
+            where: { projectId },
+            include: { user: { select: { id: true, name: true, avatarUrl: true } } },
+            orderBy: { createdAt: 'asc' },
+         });
       });
    }
    async update(projectId: string, workspaceId: string, dto: UpdateProjectDto, userId: string) {

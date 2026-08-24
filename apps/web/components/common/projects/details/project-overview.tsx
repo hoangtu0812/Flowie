@@ -212,8 +212,10 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
       activities,
       availableLabels,
       availableInitiatives,
+      availableMembers,
       updateLabels,
       updateInitiatives,
+      updateMembers,
       createMilestone,
       toggleMilestone,
       createResource,
@@ -396,7 +398,9 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
             detail={detail}
             issues={uiIssues}
             availableLabels={availableLabels}
+            availableMembers={availableMembers}
             onLabelsChange={updateLabels}
+            onMembersChange={updateMembers}
             onCreateMilestone={createMilestone}
             onToggleMilestone={toggleMilestone}
          />

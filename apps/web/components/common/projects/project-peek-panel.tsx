@@ -30,6 +30,7 @@ import { toProjectUi } from './details/project-detail-ui-adapter';
 import { useLiveProject } from './details/use-live-project';
 import type { LiveProjectCustomField } from './details/use-live-project';
 import { ProjectLabelSelector } from './project-label-selector';
+import { ProjectMemberSelector } from './project-member-selector';
 
 interface ProjectPeekPanelProps {
    projectId: string;
@@ -70,10 +71,12 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
       issues,
       milestones,
       availableLabels,
+      availableMembers,
       customFields,
       loading,
       error,
       updateLabels,
+      updateMembers,
       updateCustomFields,
       createMilestone,
       toggleFavorite,
@@ -99,17 +102,6 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
       window.addEventListener('keydown', onKeyDown);
       return () => window.removeEventListener('keydown', onKeyDown);
    }, [onClose]);
-
-   const members = useMemo(() => {
-      const seen = new Set<string>();
-      return issues
-         .map((issue) => issue.assignee)
-         .filter((assignee): assignee is NonNullable<typeof assignee> => {
-            if (!assignee || seen.has(assignee.id)) return false;
-            seen.add(assignee.id);
-            return true;
-         });
-   }, [issues]);
 
    if (loading) {
       return (
@@ -249,24 +241,11 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
                   )}
                </PropertyRow>
                <PropertyRow label="Members">
-                  {members.length > 0 ? (
-                     <span className="inline-flex items-center gap-1.5">
-                        <span className="flex -space-x-1.5">
-                           {members.slice(0, 3).map((member) => (
-                              <Avatar key={member.id} className="size-5 border-2 border-container">
-                                 <AvatarImage
-                                    src={member.avatarUrl ?? undefined}
-                                    alt={member.name}
-                                 />
-                                 <AvatarFallback>{member.name[0]}</AvatarFallback>
-                              </Avatar>
-                           ))}
-                        </span>
-                        {members.length} {members.length === 1 ? 'member' : 'members'}
-                     </span>
-                  ) : (
-                     <span className="text-muted-foreground">No issue assignees yet</span>
-                  )}
+                  <ProjectMemberSelector
+                     members={project.members}
+                     availableMembers={availableMembers}
+                     onMembersChange={updateMembers}
+                  />
                </PropertyRow>
                <PropertyRow label="Dates">
                   <span className="inline-flex items-center gap-1">

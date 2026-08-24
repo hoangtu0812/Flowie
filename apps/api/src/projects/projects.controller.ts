@@ -26,6 +26,7 @@ import { UpdateProjectLabelDto } from './dto/update-project-label.dto';
 import { CreateProjectStatusDto } from './dto/create-project-status.dto';
 import { UpdateProjectStatusDto } from './dto/update-project-status.dto';
 import { CreateProjectResourceDto } from './dto/create-project-resource.dto';
+import { UpdateProjectMembersDto } from './dto/update-project-members.dto';
 import { ProjectsService } from './projects.service';
 @UseGuards(AuthGuard)
 @Controller('projects')
@@ -276,6 +277,20 @@ export class ProjectsController {
       @Req() request: AuthenticatedRequest
    ) {
       return { data: await this.projects.issues(projectId, workspaceId, request.auth!.userId) };
+   }
+   @Patch(':projectId/members') async updateMembers(
+      @Param('projectId') projectId: string,
+      @Body() dto: UpdateProjectMembersDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.projects.updateMembers(
+            projectId,
+            dto.workspaceId,
+            dto.userIds,
+            request.auth!.userId
+         ),
+      };
    }
    @Get(':projectId/milestones') async listMilestones(
       @Param('projectId') projectId: string,

@@ -5,7 +5,7 @@ import { ProjectDetail } from '@/mock-data/project-details';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import type { ProjectDetailUiIssue, ProjectDetailUiProject } from './project-detail-ui-adapter';
 import { ProjectPropertiesPanel } from './project-properties-panel';
-import type { LiveProjectLabel } from './use-live-project';
+import type { LiveProjectLabel, LiveWorkspaceMember } from './use-live-project';
 
 interface ProjectSidePanelProps {
    project: ProjectDetailUiProject;
@@ -14,7 +14,9 @@ interface ProjectSidePanelProps {
    /** Issues shown by the insights panel (e.g. after filters); defaults to `issues`. */
    insightsIssues?: ProjectDetailUiIssue[];
    availableLabels?: LiveProjectLabel[];
+   availableMembers: LiveWorkspaceMember[];
    onLabelsChange?: (labelIds: string[]) => Promise<void>;
+   onMembersChange: (userIds: string[]) => Promise<void>;
    onCreateMilestone?: (title: string, targetDate?: string) => Promise<unknown>;
    onToggleMilestone?: (milestoneId: string, completed: boolean) => Promise<void>;
 }
@@ -30,7 +32,9 @@ export function ProjectSidePanel({
    issues,
    insightsIssues,
    availableLabels = [],
+   availableMembers,
    onLabelsChange,
+   onMembersChange,
    onCreateMilestone,
    onToggleMilestone,
 }: ProjectSidePanelProps) {
@@ -48,7 +52,9 @@ export function ProjectSidePanel({
                detail={detail}
                issues={issues}
                availableLabels={availableLabels}
+               availableMembers={availableMembers}
                onLabelsChange={onLabelsChange}
+               onMembersChange={onMembersChange}
                onCreateMilestone={onCreateMilestone}
                onToggleMilestone={onToggleMilestone}
             />

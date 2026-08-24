@@ -27,6 +27,18 @@ export type LiveProject = {
       createdAt: string;
       createdBy: { id: string; name: string; avatarUrl: string | null };
    }>;
+   members: LiveProjectMember[];
+};
+
+export type LiveProjectMember = {
+   createdAt: string;
+   user: { id: string; name: string; avatarUrl: string | null };
+};
+
+export type LiveWorkspaceMember = {
+   userId: string;
+   status: 'ACTIVE' | 'INVITED' | 'SUSPENDED';
+   user: { id: string; name: string; avatarUrl: string | null };
 };
 
 export type LiveProjectIssue = {
@@ -102,6 +114,7 @@ export function useLiveProject(projectId: string) {
    const [availableLabels, setAvailableLabels] = useState<LiveProjectLabel[]>([]);
    const [availableInitiatives, setAvailableInitiatives] = useState<LiveProjectInitiative[]>([]);
    const [customFields, setCustomFields] = useState<LiveProjectCustomField[]>([]);
+   const [availableMembers, setAvailableMembers] = useState<LiveWorkspaceMember[]>([]);
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState<string>();
    const [refreshKey, setRefreshKey] = useState(0);
@@ -123,6 +136,7 @@ export function useLiveProject(projectId: string) {
                labelsResponse,
                customFieldsResponse,
                initiativesResponse,
+               membersResponse,
             ] = await Promise.all([
                fetch(`${api}/projects/${projectId}?${query}`, { credentials: 'include' }),
                fetch(`${api}/projects/${projectId}/issues?${query}`, { credentials: 'include' }),
@@ -140,6 +154,7 @@ export function useLiveProject(projectId: string) {
                   credentials: 'include',
                }),
                fetch(`${api}/initiatives?${query}`, { credentials: 'include' }),
+               fetch(`${api}/workspaces/${workspaceId}/members`, { credentials: 'include' }),
             ]);
             if (
                !projectResponse.ok ||
@@ -149,7 +164,8 @@ export function useLiveProject(projectId: string) {
                !updatesResponse.ok ||
                !labelsResponse.ok ||
                !customFieldsResponse.ok ||
-               !initiativesResponse.ok
+               !initiativesResponse.ok ||
+               !membersResponse.ok
             ) {
                throw new Error('Could not load project details.');
             }
@@ -168,6 +184,11 @@ export function useLiveProject(projectId: string) {
             );
             setAvailableInitiatives(
                ((await initiativesResponse.json()) as { data: LiveProjectInitiative[] }).data
+            );
+            setAvailableMembers(
+               ((await membersResponse.json()) as { data: LiveWorkspaceMember[] }).data.filter(
+                  (member) => member.status === 'ACTIVE'
+               )
             );
          } catch (caught) {
             if (current)
@@ -345,6 +366,27 @@ export function useLiveProject(projectId: string) {
       [project, projectId, reload, workspaceId]
    );
 
+   const updateMembers = useCallback(
+      async (userIds: string[]) => {
+         if (!workspaceId) throw new Error('Workspace is not available yet.');
+         const response = await fetch(`${api}/projects/${projectId}/members`, {
+            method: 'PATCH',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ workspaceId, userIds }),
+         });
+         if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as {
+               message?: string;
+            } | null;
+            throw new Error(payload?.message ?? 'Could not update project members.');
+         }
+         const members = ((await response.json()) as { data: LiveProjectMember[] }).data;
+         setProject((current) => (current ? { ...current, members } : current));
+      },
+      [projectId, workspaceId]
+   );
+
    const createMilestone = useCallback(
       async (title: string, targetDate?: string) => {
          if (!workspaceId) throw new Error('Workspace is not available yet.');
@@ -408,6 +450,7 @@ export function useLiveProject(projectId: string) {
       updates,
       availableLabels,
       availableInitiatives,
+      availableMembers,
       customFields,
       loading,
       error,
@@ -416,6 +459,7 @@ export function useLiveProject(projectId: string) {
       updateLabels,
       updateCustomFields,
       updateInitiatives,
+      updateMembers,
       createMilestone,
       toggleMilestone,
       toggleFavorite,

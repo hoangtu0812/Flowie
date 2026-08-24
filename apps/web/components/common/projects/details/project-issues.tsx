@@ -25,7 +25,9 @@ export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
       updates,
       activities,
       availableLabels,
+      availableMembers,
       updateLabels,
+      updateMembers,
       createMilestone,
       toggleMilestone,
       loading,
@@ -75,7 +77,9 @@ export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
                issues={uiIssues}
                insightsIssues={displayedIssues}
                availableLabels={availableLabels}
+               availableMembers={availableMembers}
                onLabelsChange={updateLabels}
+               onMembersChange={updateMembers}
                onCreateMilestone={createMilestone}
                onToggleMilestone={toggleMilestone}
             />
