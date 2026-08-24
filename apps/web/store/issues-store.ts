@@ -112,6 +112,7 @@ interface IssuesState {
    addIssueLabel: (issueId: string, label: LabelInterface) => void;
    removeIssueLabel: (issueId: string, labelId: string) => void;
    updateIssueProject: (issueId: string, newProject: Project | undefined) => void;
+   updateIssueDueDate: (issueId: string, dueDate?: string) => Promise<void>;
    getIssueById: (id: string) => Issue | undefined;
 }
 
@@ -402,6 +403,10 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
    updateIssueProject: (issueId, newProject) => {
       get().updateIssue(issueId, { project: newProject });
       void patchIssue(issueId, get().workspaceId, { projectId: newProject?.id ?? null });
+   },
+   updateIssueDueDate: async (issueId, dueDate) => {
+      await patchIssue(issueId, get().workspaceId, { dueDate: dueDate ?? null });
+      get().updateIssue(issueId, { dueDate });
    },
    getIssueById: (id) => get().issues.find((issue) => issue.id === id),
 }));

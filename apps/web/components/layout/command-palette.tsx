@@ -51,6 +51,20 @@ import { toast } from 'sonner';
 type PaletteRoute =
    'root' | 'assign' | 'status' | 'priority' | 'labels' | 'project' | 'cycle' | 'team' | 'due-date';
 
+const dueDateFromToday = (daysFromToday: number) => {
+   const date = new Date();
+   date.setHours(12, 0, 0, 0);
+   date.setDate(date.getDate() + daysFromToday);
+   return date.toISOString();
+};
+
+const endOfCurrentWeek = () => {
+   const date = new Date();
+   date.setHours(12, 0, 0, 0);
+   date.setDate(date.getDate() + ((6 - date.getDay() + 7) % 7));
+   return date.toISOString();
+};
+
 /** Small keyboard hint chips on the right of a command row. */
 function Keys({ keys }: { keys: string[] }) {
    return (
@@ -85,6 +99,7 @@ export function CommandPalette() {
       addIssueLabel,
       removeIssueLabel,
       updateIssueProject,
+      updateIssueDueDate,
       updateIssue,
    } = useIssuesStore();
    const { openModal } = useCreateIssueStore();
@@ -137,6 +152,17 @@ export function CommandPalette() {
       },
       [close]
    );
+
+   const setIssueDueDate = async (date: string | undefined, label: string) => {
+      if (!issue) return;
+      try {
+         await updateIssueDueDate(issue.id, date);
+         toast.success(label);
+         close();
+      } catch {
+         toast.error('Could not update due date');
+      }
+   };
 
    const issueUrl = issue
       ? `${typeof window !== 'undefined' ? window.location.origin : ''}/${orgId}/issue/${issue.identifier}`
@@ -630,18 +656,19 @@ export function CommandPalette() {
                      <CommandGroup heading="Set due date…">
                         {(
                            [
-                              ['Today', '2026-08-04'],
-                              ['Tomorrow', '2026-08-05'],
-                              ['End of this week', '2026-08-09'],
-                              ['In one week', '2026-08-11'],
+                              ['Today', dueDateFromToday(0)],
+                              ['Tomorrow', dueDateFromToday(1)],
+                              ['End of this week', endOfCurrentWeek()],
+                              ['In one week', dueDateFromToday(7)],
                            ] as const
                         ).map(([label, date]) => (
                            <CommandItem
                               key={label}
                               onSelect={() => {
-                                 updateIssue(issue.id, { dueDate: date });
-                                 toast.success(`Due date set to ${label.toLowerCase()}`);
-                                 close();
+                                 void setIssueDueDate(
+                                    date,
+                                    `Due date set to ${label.toLowerCase()}`
+                                 );
                               }}
                            >
                               <CalendarPlus className="text-muted-foreground" />
@@ -650,9 +677,7 @@ export function CommandPalette() {
                         ))}
                         <CommandItem
                            onSelect={() => {
-                              updateIssue(issue.id, { dueDate: undefined });
-                              toast.success('Due date cleared');
-                              close();
+                              void setIssueDueDate(undefined, 'Due date cleared');
                            }}
                         >
                            <CalendarPlus className="text-muted-foreground" />

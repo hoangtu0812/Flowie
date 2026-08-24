@@ -53,7 +53,6 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       addIssueLabel,
       removeIssueLabel,
       updateIssueProject,
-      updateIssue,
       getIssueById,
       statuses,
       members,
@@ -109,14 +108,6 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       const newProject = projectId ? projects.find((p) => p.id === projectId) : undefined;
       updateIssueProject(issueId, newProject);
       toast.success(newProject ? `Project set to ${newProject.name}` : 'Project removed');
-   };
-
-   const handleSetDueDate = () => {
-      if (!issueId) return;
-      const dueDate = new Date();
-      dueDate.setDate(dueDate.getDate() + 7);
-      updateIssue(issueId, { dueDate: dueDate.toISOString() });
-      toast.success('Due date set to 7 days from now');
    };
 
    const handleAddLink = () => {
@@ -254,7 +245,7 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                </ContextMenuSubContent>
             </ContextMenuSub>
 
-            <ContextMenuItem onClick={handleSetDueDate}>
+            <ContextMenuItem disabled title="Choose a date from the command palette">
                <CalendarClock className="size-4" /> Set due date...
                <ContextMenuShortcut>D</ContextMenuShortcut>
             </ContextMenuItem>

@@ -1,5 +1,15 @@
 import { Transform } from 'class-transformer';
-import { IsArray, IsEnum, IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
+import {
+   IsArray,
+   IsDateString,
+   IsEnum,
+   IsInt,
+   IsOptional,
+   IsString,
+   MaxLength,
+   Min,
+   MinLength,
+} from 'class-validator';
 import { IssuePriority } from '@circle/database';
 
 export class UpdateIssueDto {
@@ -10,6 +20,7 @@ export class UpdateIssueDto {
    @IsOptional() @IsString() assigneeId?: string;
    @IsOptional() @IsEnum(IssuePriority) priority?: IssuePriority;
    @IsOptional() @IsArray() @IsString({ each: true }) labelIds?: string[];
+   @IsOptional() @IsDateString() dueDate?: string | null;
    @IsOptional()
    @Transform(({ value }) => Number(value))
    @IsInt()
