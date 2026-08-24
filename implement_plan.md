@@ -1,6 +1,6 @@
 # Kế hoạch triển khai Circle thành Project Management Platform hoàn chỉnh
 
-> **Trạng thái bàn giao cập nhật: 2026-08-24**  
+> **Trạng thái bàn giao cập nhật: 2026-08-25**
 > Đây là phần phải đọc đầu tiên khi agent khác tiếp tục công việc. Các checkbox trong kế hoạch
 > lịch sử phía dưới chưa được dùng làm nguồn trạng thái; bảng kiểm ở phần này mới là trạng thái
 > thực tế đã xác minh bằng source, test và Docker.
@@ -98,6 +98,16 @@
 - Team Documents: khôi phục folder `Collapsible`, icon, pin, creator, compact time và hàng header
   đúng upstream; folder/document metadata được lưu PostgreSQL, sort gốc đã hoạt động và Team
   Overview chỉ hiển thị document được pin. Dialog CRUD chỉ xuất hiện sau affordance gốc.
+- Rich comments/reactions: comment body dùng document JSON có runtime validation; reaction được
+  lưu riêng và toggle/aggregate bằng API. Activity Feed giữ card/reaction row upstream.
+- Issue relations: quan hệ lưu hướng `RELATED`/`BLOCKS`, API trả perspective
+  `RELATED`/`BLOCKS`/`BLOCKED_BY`; sidebar chỉ render đúng hai row upstream khi có dữ liệu.
+- Team deletion: Delete và Retire là hai lifecycle riêng. Delete đặt `deletedAt` + `archivedAt`,
+  OWNER/ADMIN có thể restore trong 30 ngày từ trang Join/Create Team; mọi action ghi audit.
+- Initiative properties: status, priority, owner, target date và description đã nối PATCH thật
+  qua đúng property row; danh sách owner lấy workspace member active.
+- Team navigation: Team Projects resolve identifier URL sang database ID; Show empty groups dùng
+  toàn bộ team thật. Menu ba chấm chỉ còn Settings/Copy link/Leave và cả ba đã có action thật.
 - Docker Compose: Postgres, Redis, MinIO, API, worker, web; dependency layer đã cache nên
   `docker compose up` trong mạng nội bộ không tải lại khi lockfile/image base không đổi.
 
@@ -154,10 +164,18 @@
 - `5091b2c` — persist Team Document folders, icons, pin and ordering.
 - `5922a8c` — block comment and attachment access to retired teams.
 - `9a61082` — connect the original Team Members sort affordance to live data.
+- `df3828f` — persist rich Issue comments and reactions.
+- `f894d97` — persist directional Issue relations.
+- `a6ec42f` — add recoverable Team deletion with a 30-day restore window.
+- `d90f19b` — restore empty-state Project affordances and remove excluded nav surfaces.
+- `82fa916` — connect Initiative properties to live workspace data and PATCH.
+- `54c257a` — fix Team Projects identifier resolution and connect Team menu actions.
+- `65b1f11` — remove Project Agent/More no-ops and connect Copy link.
+- `2dd3f58` — package the contracts workspace in the API runtime image.
 
 ### Kiểm tra gần nhất
 
-- API Jest: **45 suites, 131 tests passed**, gồm notification preferences, workspace isolation,
+- API Jest: **52 suites, 159 tests passed**, gồm notification preferences, workspace isolation,
   Issue actions, Project attachment, Team settings, Personal API Key và Bearer guard.
 - NestJS build: passed.
 - Next.js 15 production build: passed.
@@ -222,6 +240,13 @@
   `upstream/master`. Đã xóa 18 component `real-*` rút gọn không còn route nào dùng; runtime chỉ
   còn cây component gốc được nối API.
 - Docker dependency install dùng cache; không tải package mới trong các checkpoint trên.
+- Docker API/Web/Worker đã rebuild sau khi workspace contracts được thêm. Dependency layer bị
+  invalidation một lần và tải trên 5G; build API kế tiếp đã xác nhận toàn bộ install/build layer
+  `CACHED`. API runtime thiếu contracts đã được phát hiện bằng health check, sửa tại `2dd3f58`,
+  sau đó API health và Web login đều trả HTTP 200.
+- Ba migration `20260824390000_comment_bodies_reactions`,
+  `20260824400000_issue_relation_types`, `20260824410000_team_soft_deletion` đã apply và xác minh
+  trực tiếp trong PostgreSQL Docker; cột `teams.deleted_at` tồn tại.
 - Migration `20260824370000_project_members` đã apply; bảng `project_members` được xác minh trực tiếp
   trong PostgreSQL Docker. API/web production build, Docker API/web và HTTP health/login đều pass.
 - Project Members và Issue Activity đã được push lên `origin/codex/foundation` tại `258ab82`.
@@ -255,9 +280,13 @@
 | P1 | Account security | Session management và Personal API Key đã hoàn thành. Passkeys cần WebAuthn dependency/RP configuration; signing key không có consumer và lệch phạm vi project-management nên vẫn unavailable. |
 | P1 | Project extras | Hoàn thành: favorite, Update attachment, resource, typed custom-property values/definitions, workspace Display defaults và affordance Initiative/Label trong Overview đều dùng dữ liệu thật mà giữ layout gốc. |
 | P1 | Issue display/insights | Workspace Display defaults đã hoàn thành. Footer `Set default for everyone` trong Insights vẫn là visible no-op; cần persistence cho cấu hình analytics trước khi bật. |
-| P1 | Team danger zone | Leave và Retire đã hoàn thành bằng backend/audit thật. Delete vẫn khóa vì cần mô hình soft-delete + restore 30 ngày tách biệt; không được ánh xạ Delete sang archive vì sai semantics. |
-| P1 | Project/member/detail parity | ProjectMember đã hoàn thành và dùng đúng affordance gốc. Issue comment/reaction/relation vẫn chưa đủ rich content và directional relation type như baseline. |
+| P1 | Team danger zone | Hoàn thành: Leave, Retire và Delete là ba action riêng; Delete có soft-delete + restore 30 ngày và chỉ OWNER/ADMIN được thao tác. Permanent purge job sau ngày 30 vẫn là hardening P2 vì cần xóa object MinIO an toàn. |
+| P1 | Project/member/detail parity | ProjectMember, rich comment/reaction và directional relation đã hoàn thành. Project Detail status/priority/lead/dates/team/initiative và summary/description vẫn read-only dù API PATCH có sẵn; phải nối vào property row gốc. |
 | P1 | Team documents | Hoàn thành: folder/icon/pin/position, CRUD, sort và Overview pinned dùng backend thật trong component tree upstream. |
+| P1 | Saved Views parity | Cần thêm `description` vào SavedView và avatar creator vào API mapping; hiện row dùng mô tả generic vì backend thiếu dữ liệu. |
+| P1 | Member Profile parity | Cần timezone/presence thật và lấy project membership từ `ProjectMember`; hiện local time/presence là placeholder và project suy ra từ assigned issue. |
+| P1 | Native browser dialogs | Một số action Team Settings/Issue context/Security còn dùng `prompt/confirm/alert`; thay dần bằng Dialog/AlertDialog gắn sau affordance upstream, không đổi default tree. |
+| P1 | Visible no-op còn lại | Inbox snoozed, label groups, Team access/recurring issue, một số Preferences/Passkeys/Help/Sub-grouping vẫn disabled hoặc unavailable; chỉ bật khi schema/service thật tồn tại, nếu ngoài phạm vi thì ẩn. |
 | P2 | Automation/webhook | Worker/Redis foundation có, nhưng rule builder, persisted automation và generic webhook chưa hoàn chỉnh. |
 | P2 | OAuth/enterprise identity | Google, Microsoft Entra, OIDC/SAML chưa triển khai; local email/password đang hoạt động. |
 | Excluded | AI Agent, Code Reviews | Cố ý unavailable theo phạm vi sản phẩm hiện tại; fixture/canned-response cũ đã được xóa khỏi source. |
