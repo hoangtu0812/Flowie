@@ -63,6 +63,9 @@
 - `2f525b2` — persist workspace Issue Templates and apply them in Create Issue.
 - `aeb03dc` — restore original Issue Detail structure and remove 18 unused simplified UIs.
 - `62f1b32` — restore live labels, status/priority presentation and milestone action in Project Peek.
+- `9187041` — remove disabled Agent/Reviews fixture trees and other unused mock-only UI.
+- `88a7127` — persist workspace Releases in the original Settings shell.
+- `0b3f4cd` — persist Customer Requests with real project/issue links.
 
 ### Kiểm tra gần nhất
 
