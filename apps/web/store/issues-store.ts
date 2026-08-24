@@ -61,6 +61,7 @@ type ApiIssueOptions = {
       startDate: string | null;
       endDate: string | null;
    }>;
+   templates: IssueTemplateOption[];
 };
 
 export type IssueCycleOption = {
@@ -69,6 +70,19 @@ export type IssueCycleOption = {
    status: string;
    startDate: string | null;
    endDate: string | null;
+};
+
+export type IssueTemplateOption = {
+   id: string;
+   name: string;
+   description: string | null;
+   title: string;
+   issueDescription: string | null;
+   statusId: string | null;
+   priority: string;
+   projectId: string | null;
+   assigneeId: string | null;
+   labelIds: string[];
 };
 
 interface FilterOptions {
@@ -100,6 +114,7 @@ interface IssuesState {
    members: User[];
    labels: LabelInterface[];
    cycles: IssueCycleOption[];
+   templates: IssueTemplateOption[];
    workspaceId?: string;
    teamId?: string;
    currentUserId?: string;
@@ -271,6 +286,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
    members: [],
    labels: [],
    cycles: [],
+   templates: [],
    isLoading: false,
    getAllIssues: () => get().issues,
 
@@ -321,6 +337,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
             members: optionsData.data.members.map(mapUser),
             labels: optionsData.data.labels.map(mapLabel),
             cycles: optionsData.data.cycles,
+            templates: optionsData.data.templates,
             workspaceId,
             teamId: team?.id,
             currentUserId: currentUserData.data.id,
@@ -334,6 +351,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
             members: [],
             labels: [],
             cycles: [],
+            templates: [],
             currentUserId: undefined,
             isLoading: false,
             error: caught instanceof Error ? caught.message : 'Could not load issues.',
@@ -354,7 +372,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
             workspaceId,
             teamId: destinationTeamId,
             ...input,
-            priority: input.priority?.toUpperCase(),
+            priority: input.priority === 'no-priority' ? 'NONE' : input.priority?.toUpperCase(),
          }),
       });
       if (!response.ok) throw new Error('Could not create the issue.');

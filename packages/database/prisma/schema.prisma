@@ -123,6 +123,7 @@ model User {
   savedViews SavedView[] @relation("SavedViewCreator")
   ledProjects Project[] @relation("ProjectLead")
   ownedInitiatives Initiative[] @relation("InitiativeOwner")
+  createdIssueTemplates IssueTemplate[] @relation("IssueTemplateCreator")
 
   @@map("users")
 }
@@ -239,6 +240,7 @@ model Workspace {
   projectUpdates ProjectUpdate[]
   savedViews SavedView[]
   initiatives Initiative[]
+  issueTemplates IssueTemplate[]
 
   @@index([organizationId])
   @@map("workspaces")
@@ -539,6 +541,30 @@ model IssueStatus {
 
   @@index([workspaceId, teamId])
   @@map("issue_statuses")
+}
+
+model IssueTemplate {
+  id               String        @id @default(cuid())
+  workspaceId      String        @map("workspace_id")
+  name             String
+  description      String?
+  title            String
+  issueDescription String?       @map("issue_description")
+  statusId         String?       @map("status_id")
+  priority         IssuePriority @default(NONE)
+  projectId        String?       @map("project_id")
+  assigneeId       String?       @map("assignee_id")
+  labelIds         String[]      @default([]) @map("label_ids")
+  createdById      String        @map("created_by")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy User      @relation("IssueTemplateCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@map("issue_templates")
 }
 
 model Issue {

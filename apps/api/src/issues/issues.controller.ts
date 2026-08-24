@@ -13,9 +13,11 @@ import {
 import { IssueStatusCategory } from '@circle/database';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { CreateIssueDto } from './dto/create-issue.dto';
+import { CreateIssueTemplateDto } from './dto/create-issue-template.dto';
 import { LinkIssueDto } from './dto/link-issue.dto';
 import { IssueReactionDto } from './dto/issue-reaction.dto';
 import { UpdateIssueDto } from './dto/update-issue.dto';
+import { UpdateIssueTemplateDto } from './dto/update-issue-template.dto';
 import { IssuesService } from './issues.service';
 
 @UseGuards(AuthGuard)
@@ -53,6 +55,42 @@ export class IssuesController {
       @Req() request: AuthenticatedRequest
    ) {
       return { data: await this.issues.options(workspaceId, request.auth!.userId, teamId) };
+   }
+
+   @Get('templates')
+   async templates(
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.issues.templates(workspaceId, request.auth!.userId) };
+   }
+
+   @Post('templates')
+   async createTemplate(@Body() dto: CreateIssueTemplateDto, @Req() request: AuthenticatedRequest) {
+      return { data: await this.issues.createTemplate(dto, request.auth!.userId) };
+   }
+
+   @Patch('templates/:templateId')
+   async updateTemplate(
+      @Param('templateId') templateId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Body() dto: UpdateIssueTemplateDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.issues.updateTemplate(templateId, workspaceId, dto, request.auth!.userId),
+      };
+   }
+
+   @Delete('templates/:templateId')
+   async removeTemplate(
+      @Param('templateId') templateId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.issues.removeTemplate(templateId, workspaceId, request.auth!.userId),
+      };
    }
 
    @Get(':issueId/sub-issues')

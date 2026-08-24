@@ -27,6 +27,9 @@
 - Workspace, Teams, Members: danh sách, tạo/sửa team, thành viên và phân quyền cơ bản.
 - Issues: danh sách/group/filter, create/update/archive, status/priority/assignee/label/project/
   cycle/due date, comment/activity, reaction, subscriber, relation/sub-issue, attachment.
+- Issue templates: Prisma/API CRUD thật trong đúng màn hình Settings gốc; template được chọn và
+  áp dụng vào dialog Create Issue gốc (title, description, status, priority, project, assignee,
+  labels).
 - Issue context menu: rename, due date, copy, create-related-and-link, convert to document,
   mark completed, subscribe và archive đều gọi backend.
 - Projects: list/board/timeline, create/update/archive, overview/activity/issues, update, health,
@@ -59,7 +62,11 @@
 - Next.js 15 production build: passed.
 - Docker `api` và `web`: rebuilt; `http://localhost:4000/api/v1/health` và
   `http://localhost:3000/auth/login` trả HTTP 200.
+- Migration `20260824180000_issue_templates` đã được apply trong Postgres Docker.
 - Docker dependency install dùng cache; không tải package mới trong các checkpoint trên.
+- Lưu ý môi trường host hiện thiếu binary `jest`/`prettier` trong `node_modules`, dù lockfile có
+  khai báo; không cài lại package chỉ để chạy test vì Docker build đã kiểm tra compile bằng đúng
+  dependency graph. DTO spec cho Issue Templates đã được thêm để chạy ở lần cài dependency đầy đủ.
 
 ## Phần chưa hoàn thành — không được đánh dấu là đã triển khai
 

@@ -21,6 +21,13 @@ import { AssigneeSelector } from './assignee-selector';
 import { ProjectSelector } from './project-selector';
 import { LabelSelector } from './label-selector';
 import { DialogTitle } from '@radix-ui/react-dialog';
+import {
+   Select,
+   SelectContent,
+   SelectItem,
+   SelectTrigger,
+   SelectValue,
+} from '@/components/ui/select';
 
 interface IssueDraft {
    title: string;
@@ -35,7 +42,14 @@ interface IssueDraft {
 export function CreateNewIssue() {
    const [createMore, setCreateMore] = useState<boolean>(false);
    const { isOpen, defaultStatus, openModal, closeModal } = useCreateIssueStore();
-   const { createIssue: createIssueRecord, statuses } = useIssuesStore();
+   const {
+      createIssue: createIssueRecord,
+      statuses,
+      templates,
+      members,
+      projects,
+      labels,
+   } = useIssuesStore();
 
    const createDefaultData = useCallback(() => {
       return {
@@ -54,6 +68,27 @@ export function CreateNewIssue() {
    }, [defaultStatus, statuses]);
 
    const [addIssueForm, setAddIssueForm] = useState<IssueDraft>(createDefaultData());
+
+   const applyTemplate = (templateId: string) => {
+      const template = templates.find((candidate) => candidate.id === templateId);
+      if (!template) return;
+      setAddIssueForm({
+         title: template.title,
+         description: template.issueDescription ?? '',
+         status:
+            statuses.find((candidate) => candidate.id === template.statusId) ??
+            createDefaultData().status,
+         priority:
+            priorities.find(
+               (candidate) =>
+                  candidate.id ===
+                  (template.priority === 'NONE' ? 'no-priority' : template.priority.toLowerCase())
+            ) ?? priorities[0],
+         assignee: members.find((candidate) => candidate.id === template.assigneeId) ?? null,
+         project: projects.find((candidate) => candidate.id === template.projectId),
+         labels: labels.filter((candidate) => template.labelIds.includes(candidate.id)),
+      });
+   };
 
    useEffect(() => {
       setAddIssueForm(createDefaultData());
@@ -103,6 +138,20 @@ export function CreateNewIssue() {
                         <Heart className="size-4 text-orange-500 fill-orange-500" />
                         <span className="font-medium">CORE</span>
                      </Button>
+                     {templates.length > 0 && (
+                        <Select onValueChange={applyTemplate}>
+                           <SelectTrigger className="h-9 w-48">
+                              <SelectValue placeholder="Use template…" />
+                           </SelectTrigger>
+                           <SelectContent>
+                              {templates.map((template) => (
+                                 <SelectItem key={template.id} value={template.id}>
+                                    {template.name}
+                                 </SelectItem>
+                              ))}
+                           </SelectContent>
+                        </Select>
+                     )}
                   </div>
                </DialogTitle>
             </DialogHeader>

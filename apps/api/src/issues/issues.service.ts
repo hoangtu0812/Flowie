@@ -7,9 +7,11 @@ import {
 import { IssueStatusCategory } from '@circle/database';
 import { PrismaService } from '../database/prisma.service';
 import { CreateIssueDto } from './dto/create-issue.dto';
+import { CreateIssueTemplateDto } from './dto/create-issue-template.dto';
 import { LinkIssueDto } from './dto/link-issue.dto';
 import { issueReactionEmojis, IssueReactionDto } from './dto/issue-reaction.dto';
 import { UpdateIssueDto } from './dto/update-issue.dto';
+import { UpdateIssueTemplateDto } from './dto/update-issue-template.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 
 const issueInclude = {
@@ -97,7 +99,7 @@ export class IssuesService {
          ? { teamMemberships: { some: { teamId } } }
          : { memberships: { some: { workspaceId, status: 'ACTIVE' as const } } };
 
-      const [statuses, projects, members, labels, cycles] = await Promise.all([
+      const [statuses, projects, members, labels, cycles, templates] = await Promise.all([
          this.prisma.issueStatus.findMany({
             where: {
                workspaceId,
@@ -143,9 +145,72 @@ export class IssuesService {
             select: { id: true, name: true, status: true, startDate: true, endDate: true },
             orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }],
          }),
+         this.prisma.issueTemplate.findMany({
+            where: { workspaceId },
+            include: { createdBy: { select: { id: true, name: true, avatarUrl: true } } },
+            orderBy: { name: 'asc' },
+         }),
       ]);
 
-      return { statuses, projects, members, labels, cycles };
+      return { statuses, projects, members, labels, cycles, templates };
+   }
+
+   async templates(workspaceId: string, userId: string) {
+      await this.authorize(workspaceId, userId);
+      return this.prisma.issueTemplate.findMany({
+         where: { workspaceId },
+         include: { createdBy: { select: { id: true, name: true, avatarUrl: true } } },
+         orderBy: { name: 'asc' },
+      });
+   }
+
+   async createTemplate(dto: CreateIssueTemplateDto, userId: string) {
+      await this.authorizeManager(dto.workspaceId, userId);
+      await this.assertTemplateReferences(dto.workspaceId, dto);
+      return this.prisma.issueTemplate.create({
+         data: {
+            ...dto,
+            name: dto.name.trim(),
+            title: dto.title.trim(),
+            labelIds: [...new Set(dto.labelIds ?? [])],
+            createdById: userId,
+         },
+         include: { createdBy: { select: { id: true, name: true, avatarUrl: true } } },
+      });
+   }
+
+   async updateTemplate(
+      templateId: string,
+      workspaceId: string,
+      dto: UpdateIssueTemplateDto,
+      userId: string
+   ) {
+      await this.authorizeManager(workspaceId, userId);
+      const template = await this.prisma.issueTemplate.findFirst({
+         where: { id: templateId, workspaceId },
+      });
+      if (!template) throw new NotFoundException('Issue template not found.');
+      await this.assertTemplateReferences(workspaceId, dto);
+      return this.prisma.issueTemplate.update({
+         where: { id: templateId },
+         data: {
+            ...dto,
+            ...(dto.name ? { name: dto.name.trim() } : {}),
+            ...(dto.title ? { title: dto.title.trim() } : {}),
+            ...(dto.labelIds ? { labelIds: [...new Set(dto.labelIds)] } : {}),
+         },
+         include: { createdBy: { select: { id: true, name: true, avatarUrl: true } } },
+      });
+   }
+
+   async removeTemplate(templateId: string, workspaceId: string, userId: string) {
+      await this.authorizeManager(workspaceId, userId);
+      const template = await this.prisma.issueTemplate.findFirst({
+         where: { id: templateId, workspaceId },
+      });
+      if (!template) throw new NotFoundException('Issue template not found.');
+      await this.prisma.issueTemplate.delete({ where: { id: templateId } });
+      return { id: templateId, deleted: true };
    }
 
    async create(dto: CreateIssueDto, userId: string) {
@@ -550,5 +615,48 @@ export class IssuesService {
          where: { id: teamId, workspaceId, archivedAt: null, members: { some: { userId } } },
       });
       if (!team) throw new ForbiddenException('You do not have access to this team.');
+   }
+
+   private async authorizeManager(workspaceId: string, userId: string) {
+      const membership = await this.prisma.workspaceMember.findFirst({
+         where: { workspaceId, userId, status: 'ACTIVE', role: { in: ['OWNER', 'ADMIN'] } },
+      });
+      if (!membership) throw new ForbiddenException('Workspace administrator access is required.');
+   }
+
+   private async assertTemplateReferences(
+      workspaceId: string,
+      dto: Pick<
+         CreateIssueTemplateDto | UpdateIssueTemplateDto,
+         'statusId' | 'projectId' | 'assigneeId' | 'labelIds'
+      >
+   ) {
+      const [status, project, assignee, labelCount] = await Promise.all([
+         dto.statusId
+            ? this.prisma.issueStatus.findFirst({ where: { id: dto.statusId, workspaceId } })
+            : undefined,
+         dto.projectId
+            ? this.prisma.project.findFirst({
+                 where: { id: dto.projectId, workspaceId, archivedAt: null },
+              })
+            : undefined,
+         dto.assigneeId
+            ? this.prisma.workspaceMember.findFirst({
+                 where: { workspaceId, userId: dto.assigneeId, status: 'ACTIVE' },
+              })
+            : undefined,
+         dto.labelIds?.length
+            ? this.prisma.label.count({
+                 where: { workspaceId, id: { in: [...new Set(dto.labelIds)] } },
+              })
+            : 0,
+      ]);
+      if (dto.statusId && !status) throw new NotFoundException('Issue status not found.');
+      if (dto.projectId && !project) throw new NotFoundException('Project not found.');
+      if (dto.assigneeId && !assignee)
+         throw new NotFoundException('Assignee is not a workspace member.');
+      if (dto.labelIds && labelCount !== new Set(dto.labelIds).size) {
+         throw new NotFoundException('One or more labels were not found.');
+      }
    }
 }
