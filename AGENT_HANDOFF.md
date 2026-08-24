@@ -107,6 +107,7 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 | `74e21c7` | Original command palette now reads members, statuses, labels, projects, and cycles from the live Issue store/API rather than mock records. Move-to-cycle uses the Cycle API and updates local state only after successful requests; cycle option dates are returned by Issue options. Release/team move and code-review navigation are explicitly unavailable. API build, API tests (3 suites/5 tests), and frontend production build passed; Docker runtime verification is pending 5G. |
 | `f7994e1` | Sidebar Inbox badge now uses only notification API data, and Settings “Your teams” uses the live workspace-team loader. Reviews and Agent retain their original sidebar locations but are visibly unavailable instead of navigating to mock code-review/AI data. Frontend production build passed; Docker runtime verification is pending 5G. |
 | `398a432` | Original Team settings now resolves its team/member/cycle data through the live workspace-team loader and team-scoped Issue options. It has real loading/error states, links to real Team overview/members, and no longer renders mock counts or empty clickable rows. Unsupported configuration and destructive controls are explicitly unavailable. Frontend production build passed; Docker runtime verification is pending 5G. |
+| `c5d2d73` | Original Issue list cycle badge now resolves its cycle from the live Issue store instead of mock cycle records. Frontend production build passed; Docker runtime verification is pending 5G. |
 
 ### Capability status at the handoff point
 
@@ -211,6 +212,7 @@ The shared placeholder has disabled filter/action controls and an explicit unava
 | Module | Classification | Notes |
 | --- | --- | --- |
 | Issue command palette | `migrated` | Members/statuses/labels/projects/cycles come from live Issue store; priority metadata is presentation-only. |
+| Issue list cycle badge | `migrated` | Uses the live `cycles` store rather than `getCycleById` mock data. |
 | Sidebar Inbox | `migrated` | Badge comes from notification API; no review count. |
 | Settings sidebar teams | `migrated` | Workspace team loader replaces mock joined-team records. |
 | Team settings | `migrated` / `unavailable` | Team/member/status/cycle values are API-backed; configuration without APIs is disabled. |

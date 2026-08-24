@@ -46,7 +46,7 @@ docker compose --profile app up -d --no-build --pull never --force-recreate api 
 
 ## 4. Tiến độ đã xác minh
 
-Tất cả commit bên dưới đã được push. Commit tài liệu gần nhất là `ae7d155`; commit tính năng gần nhất là `398a432`.
+Tất cả commit bên dưới đã được push. Commit tài liệu gần nhất là `fc5b83e`; commit tính năng gần nhất là `c5d2d73`.
 
 | Nhóm chức năng | Trạng thái thực tế |
 | --- | --- |
@@ -77,6 +77,7 @@ Các commit mốc quan trọng:
 - `74e21c7`: Command palette dùng dữ liệu workspace thật và Move to cycle qua Cycle API; API/web build cùng tests đã pass, Docker verification đang chờ 5G.
 - `f7994e1`: Sidebar Inbox/Settings teams bỏ mock records; web build đã pass, Docker verification đang chờ 5G.
 - `398a432`: Team settings dùng team/issue API thật, bỏ mock counts và click rỗng; web build đã pass, Docker verification đang chờ 5G.
+- `c5d2d73`: Cycle badge trong Issue list dùng Issue store thật; web build đã pass, Docker verification đang chờ 5G.
 
 Lịch sử đầy đủ và kiểm chứng từng commit nằm trong `AGENT_HANDOFF.md`.
 
