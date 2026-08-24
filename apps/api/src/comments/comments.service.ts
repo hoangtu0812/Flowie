@@ -11,11 +11,38 @@ export class CommentsService {
 
    async list(workspaceId: string, issueId: string, userId: string) {
       await this.authorizeIssue(workspaceId, issueId, userId);
-      return this.prisma.comment.findMany({
+      const comments = await this.prisma.comment.findMany({
          where: { issueId, deletedAt: null },
          include: commentInclude,
          orderBy: { createdAt: 'asc' },
       });
+      const attachments = await this.prisma.attachment.findMany({
+         where: {
+            workspaceId,
+            entityType: 'comment',
+            entityId: { in: comments.map((comment) => comment.id) },
+         },
+         select: {
+            id: true,
+            filename: true,
+            mimeType: true,
+            size: true,
+            createdAt: true,
+            entityId: true,
+         },
+         orderBy: { createdAt: 'asc' },
+      });
+      const attachmentsByComment = new Map<string, typeof attachments>();
+      for (const attachment of attachments) {
+         attachmentsByComment.set(attachment.entityId, [
+            ...(attachmentsByComment.get(attachment.entityId) ?? []),
+            attachment,
+         ]);
+      }
+      return comments.map((comment) => ({
+         ...comment,
+         attachments: attachmentsByComment.get(comment.id) ?? [],
+      }));
    }
 
    async create(dto: CreateCommentDto, userId: string) {

@@ -2,11 +2,37 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Ban, CircleDot, Link2, PenLine, Plus, RefreshCcw, Tag, Unlock } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+   Ban,
+   CircleDot,
+   Link2,
+   Paperclip,
+   PenLine,
+   Plus,
+   RefreshCcw,
+   Tag,
+   Unlock,
+   X,
+} from 'lucide-react';
+import {
+   useCallback,
+   useEffect,
+   useMemo,
+   useRef,
+   useState,
+   type ChangeEvent,
+   type ReactNode,
+} from 'react';
 
 type ApiActor = { id: string; name: string; avatarUrl: string | null } | null;
-type ApiComment = { id: string; content: string; createdAt: string; author: NonNullable<ApiActor> };
+type ApiAttachment = { id: string; filename: string; mimeType: string; size: number };
+type ApiComment = {
+   id: string;
+   content: string;
+   createdAt: string;
+   author: NonNullable<ApiActor>;
+   attachments: ApiAttachment[];
+};
 type ApiActivity = { id: string; type: string; createdAt: string; actor: ApiActor };
 type FeedItem =
    | { kind: 'event'; id: string; type: string; createdAt: string; actor: ApiActor }
@@ -16,9 +42,16 @@ type FeedItem =
         content: string;
         createdAt: string;
         author: NonNullable<ApiActor>;
+        attachments: ApiAttachment[];
      };
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+
+const formatFileSize = (size: number) =>
+   size < 1024 * 1024
+      ? `${Math.max(1, Math.round(size / 1024))} KB`
+      : `${(size / 1024 / 1024).toFixed(1)} MB`;
 
 const EVENT_ICONS: Record<string, ReactNode> = {
    'issue.created': <PenLine className="size-3.5" />,
@@ -82,6 +115,24 @@ function CommentCard({ item }: { item: Extract<FeedItem, { kind: 'comment' }> })
             <span className="text-xs text-muted-foreground">{relativeTime(item.createdAt)}</span>
          </div>
          <p className="whitespace-pre-wrap text-sm leading-6">{item.content}</p>
+         {item.attachments.length > 0 && (
+            <ul className="mt-2 space-y-1.5">
+               {item.attachments.map((attachment) => (
+                  <li className="flex items-center gap-2 text-xs" key={attachment.id}>
+                     <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
+                     <a
+                        className="min-w-0 truncate hover:underline"
+                        href={`${api}/attachments/${attachment.id}/download`}
+                     >
+                        {attachment.filename}
+                     </a>
+                     <span className="shrink-0 text-muted-foreground">
+                        {formatFileSize(attachment.size)}
+                     </span>
+                  </li>
+               ))}
+            </ul>
+         )}
       </div>
    );
 }
@@ -99,9 +150,11 @@ export function ActivityFeed({
    const [activities, setActivities] = useState<ApiActivity[]>([]);
    const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
    const [draft, setDraft] = useState('');
+   const [pendingAttachment, setPendingAttachment] = useState<File>();
    const [saving, setSaving] = useState(false);
    const [subscribed, setSubscribed] = useState(initialSubscribed);
    const [error, setError] = useState<string>();
+   const attachmentInputRef = useRef<HTMLInputElement>(null);
 
    const load = useCallback(async () => {
       const workspaceResponse = await fetch(`${api}/workspaces/me`, { credentials: 'include' });
@@ -154,15 +207,29 @@ export function ActivityFeed({
                content: comment.content,
                createdAt: comment.createdAt,
                author: comment.author,
+               attachments: comment.attachments,
             })),
          ].sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
       [activities, comments]
    );
 
+   const selectAttachment = (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      if (!file) return;
+      if (file.size > MAX_ATTACHMENT_SIZE) {
+         setError('Files must be 10 MB or smaller.');
+         return;
+      }
+      setError(undefined);
+      setPendingAttachment(file);
+   };
+
    const submitComment = async () => {
       if (!workspaceId || !draft.trim()) return;
       setSaving(true);
       setError(undefined);
+      let commentCreated = false;
       try {
          const response = await fetch(`${api}/comments`, {
             method: 'POST',
@@ -171,10 +238,30 @@ export function ActivityFeed({
             body: JSON.stringify({ workspaceId, issueId, content: draft.trim() }),
          });
          if (!response.ok) throw new Error('Could not add the comment.');
+         const payload = (await response.json()) as { data: { id: string } };
+         const attachment = pendingAttachment;
+         commentCreated = true;
          setDraft('');
+         setPendingAttachment(undefined);
+         if (attachment) {
+            const form = new FormData();
+            form.set('workspaceId', workspaceId);
+            form.set('entityType', 'comment');
+            form.set('entityId', payload.data.id);
+            form.set('file', attachment);
+            const uploadResponse = await fetch(`${api}/attachments`, {
+               method: 'POST',
+               credentials: 'include',
+               body: form,
+            });
+            if (!uploadResponse.ok) {
+               throw new Error('Comment was saved, but its attachment could not be uploaded.');
+            }
+         }
          await load();
       } catch (caught) {
          setError(caught instanceof Error ? caught.message : 'Could not add the comment.');
+         if (commentCreated) void load();
       } finally {
          setSaving(false);
       }
@@ -235,6 +322,22 @@ export function ActivityFeed({
          )}
 
          <div className="mt-3 rounded-lg border border-border/60 bg-container p-3 flex flex-col gap-2">
+            {pendingAttachment && (
+               <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Paperclip className="size-3.5 shrink-0" />
+                  <span className="min-w-0 truncate">{pendingAttachment.name}</span>
+                  <span className="shrink-0">{formatFileSize(pendingAttachment.size)}</span>
+                  <button
+                     type="button"
+                     className="ml-auto rounded p-0.5 hover:bg-accent hover:text-foreground"
+                     aria-label="Remove comment attachment"
+                     onClick={() => setPendingAttachment(undefined)}
+                     disabled={saving}
+                  >
+                     <X className="size-3.5" />
+                  </button>
+               </div>
+            )}
             <textarea
                value={draft}
                onChange={(event) => setDraft(event.target.value)}
@@ -250,9 +353,22 @@ export function ActivityFeed({
                className="w-full resize-none bg-transparent outline-none text-sm placeholder:text-muted-foreground disabled:cursor-not-allowed"
             />
             <div className="flex items-center justify-between">
-               <Plus
-                  className="size-4 text-muted-foreground opacity-50"
-                  aria-label="Attachments in comments are not available yet"
+               <button
+                  type="button"
+                  className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
+                  aria-label="Add comment attachment"
+                  title="Add attachment"
+                  disabled={state !== 'ready' || saving}
+                  onClick={() => attachmentInputRef.current?.click()}
+               >
+                  <Plus className="size-4" />
+               </button>
+               <input
+                  ref={attachmentInputRef}
+                  type="file"
+                  className="sr-only"
+                  onChange={selectAttachment}
+                  aria-label="Upload comment attachment"
                />
                <Button
                   size="xs"
