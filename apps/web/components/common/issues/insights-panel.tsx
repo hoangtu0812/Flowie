@@ -11,7 +11,8 @@ import {
 import { cn } from '@/lib/utils';
 import { Issue } from '@/mock-data/issues';
 import { priorities } from '@/mock-data/priorities';
-import { Status, workflowOrderedStatus } from '@/mock-data/status';
+import type { Status } from '@/mock-data/status';
+import { useIssuesStore } from '@/store/issues-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { X } from 'lucide-react';
 import { useMemo } from 'react';
@@ -36,10 +37,28 @@ interface InsightsPanelProps {
    issues: Issue[];
 }
 
+const STATUS_CATEGORY_ORDER: Record<Status['category'], number> = {
+   triage: 0,
+   backlog: 1,
+   unstarted: 2,
+   started: 3,
+   completed: 4,
+   canceled: 5,
+};
+
 /** Custom X axis tick rendering the status icon under each bar. */
-function StatusTick(props: { x?: number; y?: number; payload?: { value: string } }) {
-   const { x = 0, y = 0, payload } = props;
-   const currentStatus = workflowOrderedStatus.find((s) => s.id === payload?.value);
+function StatusTick({
+   x = 0,
+   y = 0,
+   payload,
+   statuses,
+}: {
+   x?: number;
+   y?: number;
+   payload?: { value: string };
+   statuses: Status[];
+}) {
+   const currentStatus = statuses.find((status) => status.id === payload?.value);
    if (!currentStatus) return <g />;
 
    const Icon = currentStatus.icon;
@@ -56,10 +75,22 @@ function StatusTick(props: { x?: number; y?: number; payload?: { value: string }
  */
 export function InsightsPanel({ issues }: InsightsPanelProps) {
    const { closePanel } = useRightPanelStore();
+   const { statuses } = useIssuesStore();
    const { isActive, toggle } = usePanelFilter();
 
+   const workflowStatuses = useMemo<Status[]>(() => {
+      const source = statuses.length
+         ? statuses
+         : [...new Map(issues.map((issue) => [issue.status.id, issue.status])).values()];
+      return [...source].sort(
+         (left, right) =>
+            STATUS_CATEGORY_ORDER[left.category] - STATUS_CATEGORY_ORDER[right.category] ||
+            left.name.localeCompare(right.name)
+      );
+   }, [issues, statuses]);
+
    const rows = useMemo<InsightsRow[]>(() => {
-      return workflowOrderedStatus
+      return workflowStatuses
          .map((s) => {
             const statusIssues = issues.filter((issue) => issue.status.id === s.id);
             const byPriority: Record<string, number> = {};
@@ -71,7 +102,7 @@ export function InsightsPanel({ issues }: InsightsPanelProps) {
             return { status: s, total: statusIssues.length, byPriority };
          })
          .filter((row) => row.total > 0);
-   }, [issues]);
+   }, [issues, workflowStatuses]);
 
    const chartData = useMemo(
       () =>
@@ -139,7 +170,7 @@ export function InsightsPanel({ issues }: InsightsPanelProps) {
                <BarChart data={chartData} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
                   <XAxis
                      dataKey="id"
-                     tick={<StatusTick />}
+                     tick={<StatusTick statuses={workflowStatuses} />}
                      axisLine={false}
                      tickLine={false}
                      interval={0}
@@ -236,7 +267,12 @@ export function InsightsPanel({ issues }: InsightsPanelProps) {
          </div>
 
          <div className="shrink-0 border-t px-4 py-3">
-            <button className="text-xs text-indigo-500 dark:text-indigo-400 hover:underline">
+            <button
+               type="button"
+               disabled
+               title="Workspace insight defaults are not available yet."
+               className="text-xs text-muted-foreground cursor-not-allowed"
+            >
                Set default for everyone
             </button>
          </div>
