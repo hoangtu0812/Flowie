@@ -19,6 +19,31 @@ export async function loadWorkspaceMemberships(): Promise<WorkspaceMembership[]>
    return ((await response.json()) as { data: WorkspaceMembership[] }).data;
 }
 
+export async function createWorkspace(name: string): Promise<WorkspaceSummary> {
+   const response = await fetch(`${api}/workspaces`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: name.trim() }),
+   });
+   if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as {
+         message?: string | string[];
+      } | null;
+      throw new Error(
+         Array.isArray(payload?.message)
+            ? payload.message[0]
+            : (payload?.message ?? 'Could not create workspace.')
+      );
+   }
+   const payload = (await response.json()) as {
+      data: { workspaces?: WorkspaceSummary[] };
+   };
+   const workspace = payload.data.workspaces?.[0];
+   if (!workspace) throw new Error('The workspace was created without a valid destination.');
+   return workspace;
+}
+
 export function workspaceSlugFromLocation(): string | undefined {
    if (typeof window === 'undefined') return undefined;
    const segment = window.location.pathname.split('/').filter(Boolean)[0];

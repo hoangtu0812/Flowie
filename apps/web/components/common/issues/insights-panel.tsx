@@ -13,11 +13,13 @@ import { Issue } from '@/mock-data/issues';
 import { priorities } from '@/mock-data/priorities';
 import type { Status } from '@/mock-data/status';
 import { useIssuesStore } from '@/store/issues-store';
+import { useIssueInsightsStore } from '@/store/issue-insights-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { X } from 'lucide-react';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { usePanelFilter } from './use-panel-filter';
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { toast } from 'sonner';
 
 const PRIORITY_COLORS: Record<string, string> = {
    'no-priority': '#64748b',
@@ -76,7 +78,12 @@ function StatusTick({
 export function InsightsPanel({ issues }: InsightsPanelProps) {
    const { closePanel } = useRightPanelStore();
    const { statuses } = useIssuesStore();
+   const { settings, loadDefaults, saveDefaults } = useIssueInsightsStore();
    const { isActive, toggle } = usePanelFilter();
+
+   useEffect(() => {
+      void loadDefaults().catch(() => undefined);
+   }, [loadDefaults]);
 
    const workflowStatuses = useMemo<Status[]>(() => {
       const source = statuses.length
@@ -131,7 +138,7 @@ export function InsightsPanel({ issues }: InsightsPanelProps) {
          <div className="grid grid-cols-3 gap-2 px-4 pb-4 shrink-0">
             <div className="flex flex-col gap-1">
                <span className="text-xs text-muted-foreground">Measure</span>
-               <Select defaultValue="issue-count">
+               <Select value={settings.measure}>
                   <SelectTrigger className="h-8 text-xs w-full">
                      <SelectValue />
                   </SelectTrigger>
@@ -142,7 +149,7 @@ export function InsightsPanel({ issues }: InsightsPanelProps) {
             </div>
             <div className="flex flex-col gap-1">
                <span className="text-xs text-muted-foreground">Slice</span>
-               <Select defaultValue="status">
+               <Select value={settings.slice}>
                   <SelectTrigger className="h-8 text-xs w-full">
                      <SelectValue />
                   </SelectTrigger>
@@ -153,7 +160,7 @@ export function InsightsPanel({ issues }: InsightsPanelProps) {
             </div>
             <div className="flex flex-col gap-1">
                <span className="text-xs text-muted-foreground">Segment</span>
-               <Select defaultValue="priority">
+               <Select value={settings.segment}>
                   <SelectTrigger className="h-8 text-xs w-full">
                      <SelectValue />
                   </SelectTrigger>
@@ -269,9 +276,18 @@ export function InsightsPanel({ issues }: InsightsPanelProps) {
          <div className="shrink-0 border-t px-4 py-3">
             <button
                type="button"
-               disabled
-               title="Workspace insight defaults are not available yet."
-               className="text-xs text-muted-foreground cursor-not-allowed"
+               className="text-xs text-indigo-500 dark:text-indigo-400 hover:underline"
+               onClick={() =>
+                  void saveDefaults()
+                     .then(() => toast.success('Workspace insight default saved.'))
+                     .catch((error: unknown) =>
+                        toast.error(
+                           error instanceof Error
+                              ? error.message
+                              : 'Could not save workspace insight default.'
+                        )
+                     )
+               }
             >
                Set default for everyone
             </button>

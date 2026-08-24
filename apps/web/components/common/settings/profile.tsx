@@ -4,7 +4,13 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Pencil } from 'lucide-react';
+import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import {
+   loadCurrentWorkspaceMembership,
+   loadWorkspaceMemberships,
+   type WorkspaceMembership,
+} from '@/lib/workspaces';
 import { SettingsCard, SettingsRow, SettingsSection, SettingsShell } from './shared';
 
 type Profile = {
@@ -21,10 +27,14 @@ const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 /** Personal "Profile" settings. */
 export default function Profile() {
+   const { orgId } = useParams<{ orgId: string }>();
+   const router = useRouter();
    const [profile, setProfile] = useState<Profile>();
+   const [workspaceMembership, setWorkspaceMembership] = useState<WorkspaceMembership>();
    const [draft, setDraft] = useState({ name: '', username: '', title: '' });
    const [error, setError] = useState<string>();
    const [saving, setSaving] = useState<EditableProfileField>();
+   const [leaving, setLeaving] = useState(false);
 
    useEffect(() => {
       void fetch(`${api}/users/me`, { credentials: 'include' })
@@ -38,7 +48,10 @@ export default function Profile() {
             });
          })
          .catch(() => setError('Could not load profile.'));
-   }, []);
+      void loadCurrentWorkspaceMembership(orgId)
+         .then(setWorkspaceMembership)
+         .catch(() => setError('Could not load workspace membership.'));
+   }, [orgId]);
 
    const save = async (field: EditableProfileField) => {
       if (!profile || saving || draft[field] === (profile[field] ?? '')) return;
@@ -73,6 +86,34 @@ export default function Profile() {
          setError(caught instanceof Error ? caught.message : 'Could not save profile.');
       } finally {
          setSaving(undefined);
+      }
+   };
+
+   const leaveWorkspace = async () => {
+      if (!workspaceMembership || leaving || workspaceMembership.role === 'OWNER') return;
+      if (!window.confirm(`Leave ${workspaceMembership.workspace.name}?`)) return;
+
+      setLeaving(true);
+      setError(undefined);
+      try {
+         const response = await fetch(
+            `${api}/workspaces/${encodeURIComponent(workspaceMembership.workspace.id)}/leave`,
+            { method: 'DELETE', credentials: 'include' }
+         );
+         const payload = (await response.json()) as { message?: string | string[] };
+         if (!response.ok) {
+            throw new Error(
+               Array.isArray(payload.message)
+                  ? payload.message[0]
+                  : (payload.message ?? 'Could not leave workspace.')
+            );
+         }
+         const memberships = await loadWorkspaceMemberships();
+         router.replace(memberships[0] ? `/${memberships[0].workspace.slug}/inbox` : '/');
+         router.refresh();
+      } catch (caught) {
+         setError(caught instanceof Error ? caught.message : 'Could not leave workspace.');
+         setLeaving(false);
       }
    };
 
@@ -170,10 +211,17 @@ export default function Profile() {
                         size="xs"
                         variant="ghost"
                         className="text-red-500 hover:text-red-500"
-                        disabled
-                        title="Leaving a workspace is not enabled yet."
+                        disabled={
+                           leaving || !workspaceMembership || workspaceMembership.role === 'OWNER'
+                        }
+                        title={
+                           workspaceMembership?.role === 'OWNER'
+                              ? 'Transfer workspace ownership before leaving.'
+                              : undefined
+                        }
+                        onClick={() => void leaveWorkspace()}
                      >
-                        Leave workspace
+                        {leaving ? 'Leaving…' : 'Leave workspace'}
                      </Button>
                   }
                />

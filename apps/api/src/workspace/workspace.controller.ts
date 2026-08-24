@@ -7,6 +7,7 @@ import { InviteMemberDto } from './dto/invite-member.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
 import { UpdateProjectDisplayDefaultsDto } from './dto/update-project-display-defaults.dto';
 import { UpdateIssueDisplayDefaultsDto } from './dto/update-issue-display-defaults.dto';
+import { UpdateIssueInsightDefaultsDto } from './dto/update-issue-insight-defaults.dto';
 
 @ApiTags('workspaces')
 @ApiCookieAuth('flowie_access')
@@ -84,6 +85,31 @@ export class WorkspaceController {
       };
    }
 
+   @Get(':workspaceId/issue-insight-defaults')
+   async issueInsightDefaults(
+      @Param('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ): Promise<{ data: unknown }> {
+      return {
+         data: await this.workspaces.issueInsightDefaults(workspaceId, request.auth!.userId),
+      };
+   }
+
+   @Patch(':workspaceId/issue-insight-defaults')
+   async updateIssueInsightDefaults(
+      @Param('workspaceId') workspaceId: string,
+      @Body() dto: UpdateIssueInsightDefaultsDto,
+      @Req() request: AuthenticatedRequest
+   ): Promise<{ data: unknown }> {
+      return {
+         data: await this.workspaces.updateIssueInsightDefaults(
+            workspaceId,
+            dto,
+            request.auth!.userId
+         ),
+      };
+   }
+
    @Get(':workspaceId/members')
    async members(
       @Param('workspaceId') workspaceId: string,
@@ -115,6 +141,14 @@ export class WorkspaceController {
       @Req() request: AuthenticatedRequest
    ): Promise<{ data: unknown }> {
       return { data: await this.workspaces.declineInvitation(memberId, request.auth!.userId) };
+   }
+
+   @Delete(':workspaceId/leave')
+   async leave(
+      @Param('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ): Promise<{ data: unknown }> {
+      return { data: await this.workspaces.leave(workspaceId, request.auth!.userId) };
    }
 
    @Patch(':workspaceId/members/:memberId')

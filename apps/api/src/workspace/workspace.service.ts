@@ -10,6 +10,7 @@ import { InviteMemberDto } from './dto/invite-member.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
 import { UpdateProjectDisplayDefaultsDto } from './dto/update-project-display-defaults.dto';
 import { UpdateIssueDisplayDefaultsDto } from './dto/update-issue-display-defaults.dto';
+import { UpdateIssueInsightDefaultsDto } from './dto/update-issue-insight-defaults.dto';
 import { Prisma } from '@circle/database';
 
 const DEFAULT_ISSUE_DISPLAY_SETTINGS = {
@@ -52,6 +53,12 @@ const DEFAULT_PROJECT_DISPLAY_SETTINGS = {
       issues: true,
       labels: false,
    },
+};
+
+const DEFAULT_ISSUE_INSIGHT_SETTINGS = {
+   measure: 'issue-count',
+   slice: 'status',
+   segment: 'priority',
 };
 
 @Injectable()
@@ -167,6 +174,45 @@ export class WorkspaceService {
       });
    }
 
+   async issueInsightDefaults(workspaceId: string, userId: string) {
+      await this.authorizeMember(workspaceId, userId);
+      const workspace = await this.prisma.workspace.findUnique({
+         where: { id: workspaceId },
+         select: { issueInsightDefaults: true, updatedAt: true },
+      });
+      if (!workspace) throw new NotFoundException('Workspace not found.');
+      return {
+         settings: workspace.issueInsightDefaults ?? DEFAULT_ISSUE_INSIGHT_SETTINGS,
+         updatedAt: workspace.updatedAt,
+      };
+   }
+
+   async updateIssueInsightDefaults(
+      workspaceId: string,
+      dto: UpdateIssueInsightDefaultsDto,
+      userId: string
+   ) {
+      await this.authorizeManager(workspaceId, userId);
+      return this.prisma.$transaction(async (tx) => {
+         const workspace = await tx.workspace.update({
+            where: { id: workspaceId },
+            data: { issueInsightDefaults: dto as unknown as Prisma.InputJsonValue },
+            select: { issueInsightDefaults: true, updatedAt: true },
+         });
+         await tx.auditLog.create({
+            data: {
+               workspaceId,
+               actorId: userId,
+               action: 'workspace.issue-insight-defaults.updated',
+               entityType: 'workspace',
+               entityId: workspaceId,
+               metadata: {},
+            },
+         });
+         return { settings: workspace.issueInsightDefaults, updatedAt: workspace.updatedAt };
+      });
+   }
+
    async create(dto: CreateWorkspaceDto, userId: string) {
       const slug = await this.uniqueSlug(dto.name);
       return this.prisma.organization.create({
@@ -250,6 +296,34 @@ export class WorkspaceService {
       if (!invitation) throw new NotFoundException('Invitation not found.');
       await this.prisma.workspaceMember.delete({ where: { id: memberId } });
       return { id: memberId, declined: true };
+   }
+
+   async leave(workspaceId: string, userId: string) {
+      const membership = await this.prisma.workspaceMember.findFirst({
+         where: { workspaceId, userId, status: 'ACTIVE' },
+         select: { id: true, role: true },
+      });
+      if (!membership) throw new NotFoundException('Workspace not found.');
+      if (membership.role === 'OWNER') {
+         throw new ForbiddenException('Transfer workspace ownership before leaving.');
+      }
+
+      await this.prisma.$transaction(async (tx) => {
+         await tx.auditLog.create({
+            data: {
+               workspaceId,
+               actorId: userId,
+               action: 'workspace.member.left',
+               entityType: 'workspace-member',
+               entityId: membership.id,
+               metadata: {},
+            },
+         });
+         await tx.teamMember.deleteMany({ where: { userId, team: { workspaceId } } });
+         await tx.workspaceMember.delete({ where: { id: membership.id } });
+      });
+
+      return { id: membership.id, left: true };
    }
 
    async updateMember(memberId: string, workspaceId: string, dto: UpdateMemberDto, userId: string) {
