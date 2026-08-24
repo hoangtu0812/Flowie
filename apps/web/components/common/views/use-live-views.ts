@@ -6,12 +6,13 @@ import { loadCurrentWorkspace } from '@/lib/workspaces';
 export type LiveView = {
    id: string;
    name: string;
+   description: string | null;
    entityType: 'issue' | 'project';
    filters: Record<string, unknown>;
    isShared: boolean;
    createdAt: string;
    updatedAt: string;
-   createdBy: { id: string; name: string };
+   createdBy: { id: string; name: string; avatarUrl: string | null };
 };
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';

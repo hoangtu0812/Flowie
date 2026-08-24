@@ -584,6 +584,7 @@ model SavedView {
   workspaceId String   @map("workspace_id")
   createdById String   @map("created_by")
   name        String
+  description String?
   entityType  String   @map("entity_type")
   filters     Json     @default("{}")
   isShared    Boolean  @default(false) @map("is_shared")

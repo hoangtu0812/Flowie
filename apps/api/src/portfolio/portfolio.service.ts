@@ -56,7 +56,7 @@ export class PortfolioService {
       await this.authorize(workspaceId, userId);
       return this.prisma.savedView.findMany({
          where: { workspaceId, OR: [{ isShared: true }, { createdById: userId }] },
-         include: { createdBy: { select: { id: true, name: true } } },
+         include: { createdBy: { select: { id: true, name: true, avatarUrl: true } } },
          orderBy: [{ isShared: 'desc' }, { updatedAt: 'desc' }],
       });
    }
@@ -68,11 +68,12 @@ export class PortfolioService {
             workspaceId: dto.workspaceId,
             createdById: userId,
             name: dto.name.trim(),
+            description: dto.description?.trim() || null,
             entityType: dto.entityType,
             filters: (dto.filters ?? {}) as Prisma.InputJsonValue,
             isShared: dto.isShared ?? false,
          },
-         include: { createdBy: { select: { id: true, name: true } } },
+         include: { createdBy: { select: { id: true, name: true, avatarUrl: true } } },
       });
    }
 

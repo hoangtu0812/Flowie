@@ -1,6 +1,6 @@
 'use client';
 
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
    Dialog,
@@ -105,9 +105,7 @@ function ViewRow({ view, orgId }: { view: LiveView; orgId: string }) {
          </span>
          <span className="flex flex-col min-w-0 flex-1">
             <span className="text-sm font-medium truncate">{view.name}</span>
-            <span className="text-xs text-muted-foreground truncate">
-               {view.isShared ? 'Shared workspace view' : 'Private saved view'}
-            </span>
+            <span className="text-xs text-muted-foreground truncate">{view.description}</span>
          </span>
          {displayProperties.created && (
             <span className="hidden sm:block text-xs text-muted-foreground w-24 shrink-0">
@@ -122,6 +120,10 @@ function ViewRow({ view, orgId }: { view: LiveView; orgId: string }) {
          {displayProperties.owner && (
             <span className="flex items-center gap-1.5 w-32 shrink-0 justify-end">
                <Avatar className="size-5">
+                  <AvatarImage
+                     src={view.createdBy.avatarUrl ?? undefined}
+                     alt={view.createdBy.name}
+                  />
                   <AvatarFallback className="text-[9px]">{view.createdBy.name[0]}</AvatarFallback>
                </Avatar>
                <span className="text-xs text-muted-foreground truncate max-w-24">
@@ -141,6 +143,7 @@ export default function Views({ teamId }: { teamId?: string }) {
    const { team } = useLiveTeam(teamId ?? '');
    const [open, setOpen] = useState(false);
    const [name, setName] = useState('');
+   const [description, setDescription] = useState('');
    const [submitting, setSubmitting] = useState(false);
    const [formError, setFormError] = useState<string>();
    useEffect(() => {
@@ -179,6 +182,7 @@ export default function Views({ teamId }: { teamId?: string }) {
             body: JSON.stringify({
                workspaceId,
                name: name.trim(),
+               description: description.trim() || undefined,
                entityType: tab === 'issues' ? 'issue' : 'project',
                filters: team ? { teamId: team.id } : {},
                isShared: true,
@@ -192,6 +196,7 @@ export default function Views({ teamId }: { teamId?: string }) {
          }
          setOpen(false);
          setName('');
+         setDescription('');
          reload();
       } catch (caught) {
          setFormError(caught instanceof Error ? caught.message : 'Could not create view.');
@@ -262,6 +267,11 @@ export default function Views({ teamId }: { teamId?: string }) {
                   onChange={(event) => setName(event.target.value)}
                   placeholder="View name"
                   autoFocus
+               />
+               <Input
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  placeholder="Description (optional)"
                />
                {formError && <p className="text-sm text-destructive">{formError}</p>}
                <DialogFooter>
