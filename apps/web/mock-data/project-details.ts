@@ -1,4 +1,4 @@
-import { ContentBlock } from './issue-details';
+import type { ContentBlock } from '@circle/contracts';
 import { User, users } from './users';
 
 /* -------------------------------------------------------------------------- */

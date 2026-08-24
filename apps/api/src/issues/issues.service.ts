@@ -19,6 +19,32 @@ import { SetIssueReminderDto } from './dto/set-issue-reminder.dto';
 import { MoveIssueDto } from './dto/move-issue.dto';
 import { ClassifyIssueDto } from './dto/classify-issue.dto';
 import { ConvertIssueToCommentDto } from './dto/convert-issue-to-comment.dto';
+import {
+   contentDocumentFromText,
+   normalizeContentDocument,
+   type ContentDocument,
+} from '@circle/contracts';
+
+export type ConvertedIssueCommentResponse = {
+   comment: {
+      id: string;
+      issueId: string;
+      authorId: string;
+      content: string;
+      body: ContentDocument;
+      createdAt: Date;
+      updatedAt: Date;
+      deletedAt: Date | null;
+      author: {
+         id: string;
+         name: string;
+         avatarUrl: string | null;
+      };
+   };
+   sourceIssueId: string;
+   targetIssueId: string;
+   targetIdentifier: string;
+};
 
 const issueInclude = {
    team: { select: { id: true, name: true, identifier: true } },
@@ -677,7 +703,11 @@ export class IssuesService {
       return updated;
    }
 
-   async convertToComment(issueId: string, dto: ConvertIssueToCommentDto, userId: string) {
+   async convertToComment(
+      issueId: string,
+      dto: ConvertIssueToCommentDto,
+      userId: string
+   ): Promise<ConvertedIssueCommentResponse> {
       const source = await this.get(issueId, dto.workspaceId, userId);
       const targetReference = await this.prisma.issue.findFirst({
          where: {
@@ -698,7 +728,12 @@ export class IssuesService {
 
       return this.prisma.$transaction(async (tx) => {
          const comment = await tx.comment.create({
-            data: { issueId: target.id, authorId: userId, content },
+            data: {
+               issueId: target.id,
+               authorId: userId,
+               content,
+               body: contentDocumentFromText(content),
+            },
             include: {
                author: { select: { id: true, name: true, avatarUrl: true } },
             },
@@ -734,7 +769,10 @@ export class IssuesService {
             data: { archivedAt: new Date() },
          });
          return {
-            comment,
+            comment: {
+               ...comment,
+               body: normalizeContentDocument(comment.body, comment.content),
+            },
             sourceIssueId: source.id,
             targetIssueId: target.id,
             targetIdentifier: target.identifier,

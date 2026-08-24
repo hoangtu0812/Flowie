@@ -14,6 +14,7 @@ FROM dependencies AS build
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 COPY apps/web apps/web
+COPY packages/contracts packages/contracts
 RUN pnpm --filter @circle/web build
 
 FROM node:22-alpine AS runtime

@@ -22,7 +22,7 @@ import { SetIssueReminderDto } from './dto/set-issue-reminder.dto';
 import { MoveIssueDto } from './dto/move-issue.dto';
 import { ClassifyIssueDto } from './dto/classify-issue.dto';
 import { ConvertIssueToCommentDto } from './dto/convert-issue-to-comment.dto';
-import { IssuesService } from './issues.service';
+import { IssuesService, type ConvertedIssueCommentResponse } from './issues.service';
 
 @UseGuards(AuthGuard)
 @Controller('issues')
@@ -57,7 +57,7 @@ export class IssuesController {
       @Param('issueId') issueId: string,
       @Body() dto: ConvertIssueToCommentDto,
       @Req() request: AuthenticatedRequest
-   ) {
+   ): Promise<{ data: ConvertedIssueCommentResponse }> {
       return {
          data: await this.issues.convertToComment(issueId, dto, request.auth!.userId),
       };

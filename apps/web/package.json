@@ -11,6 +11,7 @@
       "prepare": "husky install"
    },
    "dependencies": {
+      "@circle/contracts": "workspace:*",
       "@hookform/resolvers": "^4.1.2",
       "@kayron013/lexorank": "^2.0.0",
       "@radix-ui/react-alert-dialog": "^1.1.6",

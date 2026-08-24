@@ -1,26 +1,10 @@
 import { Issue } from './issues';
 import { User, users } from './users';
+import type { ContentBlock } from '@circle/contracts';
 
 /* -------------------------------------------------------------------------- */
 /*                         Rich content block model                           */
 /* -------------------------------------------------------------------------- */
-
-/**
- * Structured description content. Text supports lightweight inline
- * formatting: `code` and **bold** (parsed by the block renderer).
- */
-export type ContentBlock =
-   | { type: 'heading'; text: string; level?: 1 | 2 }
-   | { type: 'paragraph'; text: string }
-   | { type: 'bullet-list'; items: string[] }
-   | { type: 'numbered-list'; items: string[] }
-   | { type: 'checklist'; items: { text: string; checked: boolean }[] }
-   | { type: 'code'; language: string; code: string }
-   | { type: 'image'; alt: string; caption?: string; aspect?: 'wide' | 'video' | 'square' }
-   | { type: 'video'; title: string; duration?: string }
-   | { type: 'quote'; text: string; author?: string }
-   | { type: 'divider' }
-   | { type: 'issue-ref'; identifier: string; note?: string };
 
 export interface CommentReaction {
    emoji: string;

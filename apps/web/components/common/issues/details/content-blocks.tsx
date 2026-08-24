@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { ContentBlock } from '@/mock-data/issue-details';
+import type { ContentBlock } from '@circle/contracts';
 import { useIssuesStore } from '@/store/issues-store';
 import { Check, ImageIcon, Play } from 'lucide-react';
 import Link from 'next/link';
@@ -233,7 +233,6 @@ export function ContentBlocks({ blocks }: { blocks: ContentBlock[] }) {
    );
 }
 
-export type { ContentBlock };
 export { ImagePlaceholder, VideoPlaceholder };
 
 /** Small helper used by lists of referenced issues in the side panel. */

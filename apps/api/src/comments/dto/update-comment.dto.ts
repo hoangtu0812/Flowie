@@ -1,5 +1,6 @@
-import { IsString, MaxLength, MinLength } from 'class-validator';
+import { IsObject, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class UpdateCommentDto {
-   @IsString() @MinLength(1) @MaxLength(20000) content!: string;
+   @IsOptional() @IsString() @MinLength(1) @MaxLength(20000) content?: string;
+   @IsOptional() @IsObject() body?: Record<string, unknown>;
 }

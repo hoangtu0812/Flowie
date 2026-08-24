@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { getNotificationIcon } from '@/lib/notification-utils';
 import { loadCurrentWorkspace } from '@/lib/workspaces';
-import type { ContentBlock } from '@/mock-data/issue-details';
+import type { ContentBlock } from '@circle/contracts';
 import { useIssuesStore } from '@/store/issues-store';
 import { type InboxNotification, useNotificationsStore } from '@/store/notifications-store';
 import { ArrowUpRight, Check, Paperclip, Send } from 'lucide-react';

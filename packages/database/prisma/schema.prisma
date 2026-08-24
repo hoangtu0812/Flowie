@@ -118,6 +118,7 @@ model User {
   createdIssueRelations    IssueRelation[]
   issueSubscriptions       IssueSubscription[]
   issueReactions           IssueReaction[]
+  commentReactions         CommentReaction[]
   issueFavorites           IssueFavorite[]
   issueReminders           IssueReminder[]
   projectSubscriptions     ProjectSubscription[]
@@ -1084,15 +1085,31 @@ model Comment {
   issueId   String    @map("issue_id")
   authorId  String    @map("author_id")
   content   String
+  body      Json?
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  issue  Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
-  author User  @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  issue     Issue             @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  author    User              @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  reactions CommentReaction[]
 
   @@index([issueId, createdAt])
   @@map("comments")
+}
+
+model CommentReaction {
+  commentId String   @map("comment_id")
+  userId    String   @map("user_id")
+  emoji     String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([commentId, userId, emoji])
+  @@index([userId])
+  @@map("comment_reactions")
 }
 
 model Activity {

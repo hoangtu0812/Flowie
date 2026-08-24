@@ -3,6 +3,17 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
+   DropdownMenu,
+   DropdownMenuContent,
+   DropdownMenuItem,
+   DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+   contentDocumentFromText,
+   normalizeContentDocument,
+   type ContentDocument,
+} from '@circle/contracts';
+import {
    Ban,
    CircleDot,
    Link2,
@@ -10,6 +21,7 @@ import {
    PenLine,
    Plus,
    RefreshCcw,
+   SmilePlus,
    Tag,
    Unlock,
    X,
@@ -24,16 +36,20 @@ import {
    type ReactNode,
 } from 'react';
 import { loadCurrentWorkspace } from '@/lib/workspaces';
+import { ContentBlocks } from './content-blocks';
 
 type ApiActor = { id: string; name: string; avatarUrl: string | null } | null;
 type ApiAttachment = { id: string; filename: string; mimeType: string; size: number };
 type ApiComment = {
    id: string;
    content: string;
+   body: ContentDocument | null;
    createdAt: string;
    author: NonNullable<ApiActor>;
    attachments: ApiAttachment[];
+   reactions: CommentReaction[];
 };
+type CommentReaction = { emoji: string; count: number; reacted: boolean };
 type ApiActivity = {
    id: string;
    type: string;
@@ -53,10 +69,11 @@ type FeedItem =
    | {
         kind: 'comment';
         id: string;
-        content: string;
+        body: ContentDocument;
         createdAt: string;
         author: NonNullable<ApiActor>;
         attachments: ApiAttachment[];
+        reactions: CommentReaction[];
      };
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
@@ -195,7 +212,17 @@ function EventRow({ item }: { item: Extract<FeedItem, { kind: 'event' }> }) {
    );
 }
 
-function CommentCard({ item }: { item: Extract<FeedItem, { kind: 'comment' }> }) {
+const QUICK_REACTIONS = ['👍', '❤️', '🎉', '👀', '🚀'];
+
+function CommentCard({
+   item,
+   reacting,
+   onToggleReaction,
+}: {
+   item: Extract<FeedItem, { kind: 'comment' }>;
+   reacting: boolean;
+   onToggleReaction: (emoji: string) => void;
+}) {
    return (
       <div className="my-2 rounded-lg border border-border/60 bg-container p-3.5">
          <div className="flex items-center gap-2 mb-1.5">
@@ -206,7 +233,9 @@ function CommentCard({ item }: { item: Extract<FeedItem, { kind: 'comment' }> })
             <span className="text-sm font-medium">{item.author.name}</span>
             <span className="text-xs text-muted-foreground">{relativeTime(item.createdAt)}</span>
          </div>
-         <p className="whitespace-pre-wrap text-sm leading-6">{item.content}</p>
+         <div className="text-sm [&_p]:my-1.5">
+            <ContentBlocks blocks={item.body.blocks} />
+         </div>
          {item.attachments.length > 0 && (
             <ul className="mt-2 space-y-1.5">
                {item.attachments.map((attachment) => (
@@ -225,6 +254,46 @@ function CommentCard({ item }: { item: Extract<FeedItem, { kind: 'comment' }> })
                ))}
             </ul>
          )}
+         <div className="flex items-center gap-1.5 mt-1">
+            {item.reactions.map((reaction) => (
+               <button
+                  type="button"
+                  key={reaction.emoji}
+                  disabled={reacting}
+                  aria-pressed={reaction.reacted}
+                  onClick={() => onToggleReaction(reaction.emoji)}
+                  className={`inline-flex items-center gap-1 text-xs border border-border/60 rounded-full px-2 py-0.5 disabled:opacity-50 ${
+                     reaction.reacted ? 'bg-accent text-foreground' : 'bg-accent/60'
+                  }`}
+               >
+                  {reaction.emoji} {reaction.count}
+               </button>
+            ))}
+            <DropdownMenu>
+               <DropdownMenuTrigger asChild>
+                  <button
+                     type="button"
+                     disabled={reacting}
+                     aria-label="Add reaction"
+                     className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+                  >
+                     <SmilePlus className="size-3.5" />
+                  </button>
+               </DropdownMenuTrigger>
+               <DropdownMenuContent align="start" className="min-w-0 flex gap-0.5">
+                  {QUICK_REACTIONS.map((emoji) => (
+                     <DropdownMenuItem
+                        key={emoji}
+                        aria-label={`React with ${emoji}`}
+                        className="text-base px-2"
+                        onSelect={() => onToggleReaction(emoji)}
+                     >
+                        {emoji}
+                     </DropdownMenuItem>
+                  ))}
+               </DropdownMenuContent>
+            </DropdownMenu>
+         </div>
       </div>
    );
 }
@@ -244,6 +313,7 @@ export function ActivityFeed({
    const [draft, setDraft] = useState('');
    const [pendingAttachment, setPendingAttachment] = useState<File>();
    const [saving, setSaving] = useState(false);
+   const [reactingCommentId, setReactingCommentId] = useState<string>();
    const [subscribed, setSubscribed] = useState(initialSubscribed);
    const [error, setError] = useState<string>();
    const attachmentInputRef = useRef<HTMLInputElement>(null);
@@ -291,10 +361,11 @@ export function ActivityFeed({
             ...comments.map((comment) => ({
                kind: 'comment' as const,
                id: comment.id,
-               content: comment.content,
+               body: normalizeContentDocument(comment.body, comment.content),
                createdAt: comment.createdAt,
                author: comment.author,
                attachments: comment.attachments,
+               reactions: comment.reactions,
             })),
          ].sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
       [activities, comments]
@@ -322,7 +393,12 @@ export function ActivityFeed({
             method: 'POST',
             credentials: 'include',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ workspaceId, issueId, content: draft.trim() }),
+            body: JSON.stringify({
+               workspaceId,
+               issueId,
+               content: draft.trim(),
+               body: contentDocumentFromText(draft.trim()),
+            }),
          });
          if (!response.ok) throw new Error('Could not add the comment.');
          const payload = (await response.json()) as { data: { id: string } };
@@ -351,6 +427,31 @@ export function ActivityFeed({
          if (commentCreated) void load();
       } finally {
          setSaving(false);
+      }
+   };
+
+   const toggleReaction = async (commentId: string, emoji: string) => {
+      if (!workspaceId || reactingCommentId) return;
+      setReactingCommentId(commentId);
+      setError(undefined);
+      try {
+         const response = await fetch(`${api}/comments/${commentId}/reactions/toggle`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ workspaceId, emoji }),
+         });
+         if (!response.ok) throw new Error('Could not update the reaction.');
+         const reactions = ((await response.json()) as { data: CommentReaction[] }).data;
+         setComments((current) =>
+            current.map((comment) =>
+               comment.id === commentId ? { ...comment, reactions } : comment
+            )
+         );
+      } catch (caught) {
+         setError(caught instanceof Error ? caught.message : 'Could not update the reaction.');
+      } finally {
+         setReactingCommentId(undefined);
       }
    };
 
@@ -402,7 +503,12 @@ export function ActivityFeed({
                   item.kind === 'event' ? (
                      <EventRow key={item.id} item={item} />
                   ) : (
-                     <CommentCard key={item.id} item={item} />
+                     <CommentCard
+                        key={item.id}
+                        item={item}
+                        reacting={reactingCommentId === item.id}
+                        onToggleReaction={(emoji) => void toggleReaction(item.id, emoji)}
+                     />
                   )
                )}
             </div>

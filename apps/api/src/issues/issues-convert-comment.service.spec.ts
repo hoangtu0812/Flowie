@@ -53,6 +53,10 @@ describe('IssuesService convertToComment', () => {
             data: expect.objectContaining({
                issueId: target.id,
                content: expect.stringContaining(source.title),
+               body: {
+                  version: 1,
+                  blocks: [{ type: 'paragraph', text: expect.stringContaining(source.title) }],
+               },
             }),
          })
       );
