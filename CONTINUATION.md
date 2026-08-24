@@ -2,7 +2,7 @@
 
 > **Tài liệu bắt đầu dành cho agent tiếp theo.** Đọc tài liệu này trước, sau đó đọc `AGENT_HANDOFF.md` để có lịch sử commit và hướng dẫn kỹ thuật chi tiết. `implement_plan.md` là kế hoạch kiến trúc ban đầu; không phản ánh đầy đủ trạng thái đã hoàn thành.
 
-Last updated: 2026-08-23  
+Last updated: 2026-08-24
 Branch: `codex/foundation`  
 Remote: `https://github.com/hoangtu0812/Flowie.git`
 
@@ -30,6 +30,7 @@ Mục tiêu không phải là viết lại giao diện. Chỉ được bổ sung
 - UI: `http://localhost:3000`
 - API: `http://localhost:4000/api/v1`
 - Health: `http://localhost:4000/api/v1/health`
+- PostgreSQL host port mặc định: `5433` (container nội bộ vẫn là `5432`, có thể override bằng `POSTGRES_PORT`).
 
 Chạy offline:
 
@@ -46,15 +47,15 @@ docker compose --profile app up -d --no-build --pull never --force-recreate api 
 
 ## 4. Tiến độ đã xác minh
 
-Tất cả commit bên dưới đã được push. Commit tài liệu gần nhất là `fc5b83e`; commit tính năng gần nhất là `c5d2d73`.
+Tất cả commit bên dưới đã được push. Commit cấu hình runtime gần nhất là `0c8ca1c`; commit tính năng gần nhất là `c5d2d73`.
 
 | Nhóm chức năng | Trạng thái thực tế |
 | --- | --- |
-| Runtime/Docker/database | Hoạt động; các image hiện có khởi chạy offline bằng script. |
+| Runtime/Docker/database | Hoạt động; API và web mới nhất đã rebuild/recreate, health API và login route đều HTTP 200. PostgreSQL host port mặc định là 5433 để không đụng project khác. |
 | Auth và workspace | Login/session/workspace resolution thật; OAuth, reset password, email verification, SSO chưa làm. |
 | Teams và members | Màn Teams, team overview/members/documents và workspace members dùng API; các tạo mới đã có trên màn đã migrate. |
 | Projects | Danh sách, tạo project, lead, issue progress, header, Overview/Issues/Activity dùng API. |
-| Issues | Danh sách, tạo/sửa trường cơ bản, filter options, My issues, labels CRUD, cycles, saved views, subscriptions, due dates, archive và command palette dùng dữ liệu thật. Issue detail, properties, assignee, status/priority, comments/activity/subscribe, Issue attachment và context-menu actions đã live trong source. Docker runtime verification đang chờ 5G. |
+| Issues | Danh sách, tạo/sửa trường cơ bản, filter options, My issues, labels CRUD, cycles, saved views, subscriptions, due dates, archive và command palette dùng dữ liệu thật. Issue detail, properties, assignee, status/priority, comments/activity/subscribe, Issue attachment và context-menu actions đã live trong Docker. Thao tác authenticated end-to-end còn cần xác minh thủ công. |
 | Initiatives & documents | Initiative list/detail/create/link project; team documents đã live. |
 | Inbox & Discord | Inbox read/delete/unread badge lưu thật; cấu hình Discord workspace đã có. |
 | Sidebar navigation | Inbox badge và Settings “Your teams” dùng API thật. Reviews/Agent giữ UI gốc nhưng unavailable, không đi vào mock workflow. |
@@ -71,25 +72,20 @@ Các commit mốc quan trọng:
 - `7aa709a`: Issue labels CRUD thật.
 - `54252b7`: Issue comments/activity/subscribe thật.
 - `dfd0496`: Issue detail và properties/assignee/header lấy dữ liệu API.
-- `8c6bbd8`: Paperclip UI gốc upload/list/download Issue attachment qua API thật; production web build đã pass, Docker verification đang chờ 5G.
-- `603c994`: Due date persist thật qua API, thay preset ngày mock cố định; API tests và production web build đã pass, Docker verification đang chờ 5G.
-- `ca19039`: Context menu nối subscribe/archive thật; các action chưa có backend bị disable minh bạch; production web build đã pass, Docker verification đang chờ 5G.
-- `74e21c7`: Command palette dùng dữ liệu workspace thật và Move to cycle qua Cycle API; API/web build cùng tests đã pass, Docker verification đang chờ 5G.
-- `f7994e1`: Sidebar Inbox/Settings teams bỏ mock records; web build đã pass, Docker verification đang chờ 5G.
-- `398a432`: Team settings dùng team/issue API thật, bỏ mock counts và click rỗng; web build đã pass, Docker verification đang chờ 5G.
-- `c5d2d73`: Cycle badge trong Issue list dùng Issue store thật; web build đã pass, Docker verification đang chờ 5G.
+- `8c6bbd8` đến `c5d2d73`: Attachment, due date, context menu, command palette, sidebar, Team settings và cycle badge đã nằm trong image API/web đã rebuild; Docker API health và web login route đều HTTP 200. Xác minh mutation khi đã đăng nhập vẫn chưa thực hiện.
+- `0c8ca1c`: Docker PostgreSQL host port mặc định chuyển sang `5433`, tránh xung đột cổng `5432` với project khác.
 
 Lịch sử đầy đủ và kiểm chứng từng commit nằm trong `AGENT_HANDOFF.md`.
 
 ## 5. Điểm bắt đầu chính xác
 
-### Việc cần làm trước khi tiếp tục: runtime verification Attachment, Due date, Context menu, Command palette, Sidebar và Team settings
+### Việc cần làm trước khi tiếp tục: authenticated acceptance verification Attachment, Due date, Context menu, Command palette, Sidebar và Team settings
 
 UI đích: `apps/web/components/common/issues/details/issue-details.tsx`.
 
-Paperclip ở Issue detail đã được nối vào Attachment API tại `8c6bbd8`, due date đã được nối vào `PATCH /issues` tại `603c994`, context menu đã nối subscription/archive tại `ca19039`, command palette đã nối API workspace/cycle tại `74e21c7`, sidebar đã bỏ mock records tại `f7994e1`, và Team settings đã bỏ mock data/click rỗng tại `398a432`. Mã nguồn, API tests và production web build đã được xác minh, nhưng container `api`/`web` đang chạy chưa chứa thay đổi vì chưa được phép rebuild Docker. Agent tiếp theo cần:
+Paperclip ở Issue detail đã được nối vào Attachment API tại `8c6bbd8`, due date đã được nối vào `PATCH /issues` tại `603c994`, context menu đã nối subscription/archive tại `ca19039`, command palette đã nối API workspace/cycle tại `74e21c7`, sidebar đã bỏ mock records tại `f7994e1`, và Team settings đã bỏ mock data/click rỗng tại `398a432`. Image `api`/`web` đã rebuild/recreate ngày 2026-08-24; `GET /health` và `/auth/login` đều HTTP 200. Agent tiếp theo cần xác minh các mutation trong một browser đã đăng nhập:
 
-1. Chỉ khi người dùng xác nhận 5G: rebuild `api` và `web`, recreate với `--no-build --pull never`, rồi vào Issue detail/command palette đã đăng nhập.
+1. Vào Issue detail/command palette đã đăng nhập (chỉ rebuild lại khi source/image đã thay đổi và người dùng xác nhận 5G).
 2. Upload file nhỏ từ Paperclip, refresh trang để xác nhận persistence, tải file xuống, và thử file lớn hơn 10 MB để xác nhận feedback client.
 3. Đặt và xoá due date trong command palette, refresh để xác nhận hai mutation đều persisted.
 4. Trong context menu, subscribe/unsubscribe rồi refresh; archive một Issue thử nghiệm sau confirm và xác nhận item biến mất khỏi danh sách thật.

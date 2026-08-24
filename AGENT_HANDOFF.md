@@ -2,7 +2,7 @@
 
 > Bắt đầu từ [`CONTINUATION.md`](CONTINUATION.md) để có mục tiêu, tiến độ và backlog ngắn gọn. Tài liệu này giữ lịch sử kiểm chứng, quy ước kỹ thuật và hướng dẫn chi tiết cho việc tiếp quản.
 
-Last updated: 2026-08-23
+Last updated: 2026-08-24
 
 ## Immutable objective
 
@@ -52,6 +52,7 @@ The application must support real authenticated users, workspaces, teams, projec
 - API prefix: `http://localhost:4000/api/v1`
 - Web: `http://localhost:3000`
 - API health: `http://localhost:4000/api/v1/health`
+- Default PostgreSQL host port: `5433` (the container network remains `postgres:5432`; override with `POSTGRES_PORT` when needed).
 
 ### Safe local startup (no network / no install)
 
@@ -101,23 +102,18 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 | `d6524a4` | All remaining shared Settings placeholders retain their original layout but now disable filter/create actions and identify missing configuration services instead of presenting fake writes. The unused Project templates placeholder config was removed. Frontend build and Docker checks of SLA/Documents Settings routes passed. |
 | `54252b7` | Original Issue detail Activity now loads persisted comments/events, creates comments through the API, and subscribes/unsubscribes through real endpoints. Comment-created activity events are de-duplicated against the comment card. Composer attachments/reactions are not simulated. Frontend build, Docker route/API-auth checks, and the existing API test suite (2/2) passed. |
 | `dfd0496` | Original Issue detail, right properties panel, assignee picker, and issue header now derive their data from the live Issues store/API. Persisted status/priority/assignee selectors remain available; mock description, team, cycle, milestone, relation, PR, and sub-issue records were removed. Reactions, sub-issues, and the original-layout attachment action are explicitly unavailable until their contracts are implemented. Frontend build and Docker route verification passed. |
-| `8c6bbd8` | Original Issue detail Paperclip now uploads a real Issue attachment through the existing Attachment API, lists persisted records, and downloads through the protected endpoint. It includes client feedback for the 10 MB limit plus loading/error/empty/upload states; reactions and comment attachments remain unavailable. Frontend production build passed. Docker runtime verification is pending the user's 5G confirmation. |
-| `603c994` | Issue due dates now persist through `PATCH /issues/:issueId`: the original command-palette presets calculate from the current date instead of fixed mock dates, and clearing persists `null`. The context-menu's former browser-only “set 7 days” write is disabled. Due-date DTO validation tests plus all API tests (3 suites/5 tests) and the frontend production build passed. Docker runtime verification is pending 5G. |
-| `ca19039` | Original Issue context menu now persists subscribe/unsubscribe and archive through existing API endpoints. Browser-only fake actions (favorite, link, conversion, copies, related issues, mark-as, team moves, reminders) remain in their original positions but are explicitly disabled. Frontend production build passed; Docker runtime verification is pending 5G. |
-| `74e21c7` | Original command palette now reads members, statuses, labels, projects, and cycles from the live Issue store/API rather than mock records. Move-to-cycle uses the Cycle API and updates local state only after successful requests; cycle option dates are returned by Issue options. Release/team move and code-review navigation are explicitly unavailable. API build, API tests (3 suites/5 tests), and frontend production build passed; Docker runtime verification is pending 5G. |
-| `f7994e1` | Sidebar Inbox badge now uses only notification API data, and Settings “Your teams” uses the live workspace-team loader. Reviews and Agent retain their original sidebar locations but are visibly unavailable instead of navigating to mock code-review/AI data. Frontend production build passed; Docker runtime verification is pending 5G. |
-| `398a432` | Original Team settings now resolves its team/member/cycle data through the live workspace-team loader and team-scoped Issue options. It has real loading/error states, links to real Team overview/members, and no longer renders mock counts or empty clickable rows. Unsupported configuration and destructive controls are explicitly unavailable. Frontend production build passed; Docker runtime verification is pending 5G. |
-| `c5d2d73` | Original Issue list cycle badge now resolves its cycle from the live Issue store instead of mock cycle records. Frontend production build passed; Docker runtime verification is pending 5G. |
+| `8c6bbd8` / `603c994` / `ca19039` / `74e21c7` / `f7994e1` / `398a432` / `c5d2d73` | Attachment, due dates, truthful context menu, command palette, sidebar/settings-team loader, Team settings, and live cycle badge were rebuilt into the API/web Docker images on 2026-08-24. API health and web login route returned HTTP 200. Authenticated mutation acceptance testing remains explicitly pending. |
+| `0c8ca1c` | Docker PostgreSQL's default host port changed to `5433`, avoiding a local `5432` conflict with another project. Container-to-container connections remain on `postgres:5432`. |
 
 ### Capability status at the handoff point
 
 | Area | Status | Practical state |
 | --- | --- | --- |
-| Runtime, Docker, DB | Implemented | Existing images run offline through `scripts/start-local.ps1`; PostgreSQL, Redis, MinIO, API, web, and worker are composed together. |
+| Runtime, Docker, DB | Implemented | Existing images run offline through `scripts/start-local.ps1`; PostgreSQL, Redis, MinIO, API, web, and worker are composed together. API/web were rebuilt and recreated on 2026-08-24; API health and web login routes returned HTTP 200. PostgreSQL uses host port 5433 by default. |
 | Authentication and workspace access | Implemented baseline | Login/session/workspace resolution are real. OAuth, email verification, password reset, and enterprise SSO are deferred. |
 | Teams and members | Implemented baseline | Original Teams, team overview, team members, and workspace members use API data; team/member creation actions covered by the migrated screens persist. |
 | Projects | Implemented baseline | Original project list, creation, lead, issue progress, overview, issues, activity, and project header use API data. Project settings still need their final audit. |
-| Issues, labels, cycles, saved views | Implemented baseline | Original issues list/filter options, My issues scopes, labels CRUD, cycles/timeline, subscriptions, saved views, due dates, archive action, and command palette use API data. Original Issue detail, Activity/Comments/Subscribe, properties, assignee changes, Issue attachments, and truthful context-menu actions are live in source. Docker runtime verification of the latest attachment/due-date/context-menu/command-palette UI is pending 5G. Label editing, sub-issues, reactions, and relations remain deferred. |
+| Issues, labels, cycles, saved views | Implemented baseline | Original issues list/filter options, My issues scopes, labels CRUD, cycles/timeline, subscriptions, saved views, due dates, archive action, and command palette use API data. Original Issue detail, Activity/Comments/Subscribe, properties, assignee changes, Issue attachments, and truthful context-menu actions are in the rebuilt Docker images. Authenticated end-to-end mutations still require manual acceptance verification. Label editing, sub-issues, reactions, and relations remain deferred. |
 | Initiatives and documents | Implemented baseline | Initiative list/detail/create/linking and team documents are live. Advanced relationships/workflows remain deferred. |
 | Inbox and Discord | Implemented baseline | Inbox persists notifications/read/delete and workspace Discord integration exists. No fake delivery channels are enabled. |
 | Settings | Audited baseline | Profile, Team settings, issue labels, project statuses, project templates, and actionable browser-local preferences are live/read-only as their APIs allow. Unsupported Notification, Security, Issue templates, desktop and issue-automation preferences are truthful. Generic configuration placeholders are visibly unavailable. Template application/editing is deferred because the API currently provides list/create only. |
@@ -125,13 +121,13 @@ The following commits are pushed to `origin/codex/foundation` and their relevant
 
 ## Exact restart point
 
-The next agent should first complete **runtime verification for original Issue attachments, due dates, context-menu actions, command palette, sidebar navigation, and Team settings**. These features are committed in `8c6bbd8` / `603c994` / `ca19039` / `74e21c7` / `f7994e1` / `398a432`; API and web builds passed, but they have not yet been included in the running Docker API/web images because Docker rebuilding awaits the user's 5G confirmation.
+The next agent should first complete **authenticated acceptance verification for original Issue attachments, due dates, context-menu actions, command palette, sidebar navigation, and Team settings**. Features in `8c6bbd8` / `603c994` / `ca19039` / `74e21c7` / `f7994e1` / `398a432` / `c5d2d73` are already included in rebuilt/running Docker API/web images. On 2026-08-24, API health and the web login route returned HTTP 200; this does not prove authenticated mutations.
 
 `apps/web/components/common/issues/details/issue-details.tsx`
 
 Required verification sequence:
 
-1. With the user on 5G, rebuild `api` and `web`, recreate them with `--no-build --pull never`, and verify an authenticated Issue detail route plus command palette.
+1. Verify an authenticated Issue detail route plus command palette. Rebuild only if source/image changes and the user confirms 5G.
 2. Manually upload a small file, refresh, download it, then verify the 10 MB client error. Do not claim full attachment runtime verification from a route `307` alone.
 3. Set and clear a due date from the original command palette; refresh to prove both operations persisted through the API.
 4. From the original Issue context menu, subscribe/unsubscribe then refresh; archive a disposable Issue after confirmation and verify it disappears from the live list.
