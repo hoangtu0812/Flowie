@@ -103,6 +103,19 @@ export async function joinWorkspaceTeam(workspaceId: string, teamId: string) {
    return response.json();
 }
 
+export async function leaveWorkspaceTeam(workspaceId: string, teamId: string) {
+   const query = new URLSearchParams({ workspaceId });
+   const response = await fetch(`${api}/teams/${teamId}/leave?${query}`, {
+      method: 'POST',
+      credentials: 'include',
+   });
+   if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+      throw new Error(payload?.message ?? 'Could not leave this team.');
+   }
+   return response.json();
+}
+
 export async function loadDeletedWorkspaceTeams(
    workspaceId: string
 ): Promise<DeletedWorkspaceTeam[]> {

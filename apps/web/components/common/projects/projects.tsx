@@ -55,6 +55,12 @@ type ApiProjectStatus = {
    category: 'backlog' | 'planned' | 'in-progress' | 'completed' | 'canceled';
    color: string;
 };
+type ApiWorkspaceTeam = {
+   id: string;
+   identifier: string;
+   name: string;
+   icon: string | null;
+};
 
 export type ProjectListMember = {
    id: string;
@@ -235,6 +241,7 @@ export default function Projects({ teamId }: { teamId?: string }) {
       []
    );
    const [workspaceId, setWorkspaceId] = useState<string>();
+   const [resolvedTeamId, setResolvedTeamId] = useState<string>();
    const [workspaceMembers, setWorkspaceMembers] = useState<ProjectListMember[]>([]);
    const [projectLabels, setProjectLabels] = useState<ProjectListLabel[]>([]);
    const [projectStatuses, setProjectStatuses] = useState<ProjectListStatus[]>([]);
@@ -244,15 +251,25 @@ export default function Projects({ teamId }: { teamId?: string }) {
    useEffect(() => {
       void (async () => {
          const workspaceId = (await loadCurrentWorkspace()).id;
-         const [response, membersResponse, labelsResponse, statusesResponse] = await Promise.all([
-            fetch(`${api}/projects?workspaceId=${workspaceId}`, { credentials: 'include' }),
-            fetch(`${api}/workspaces/${workspaceId}/members`, { credentials: 'include' }),
-            fetch(`${api}/projects/labels?workspaceId=${workspaceId}`, { credentials: 'include' }),
-            fetch(`${api}/projects/statuses?workspaceId=${workspaceId}`, {
-               credentials: 'include',
-            }),
-         ]);
-         if (!response.ok || !membersResponse.ok || !labelsResponse.ok || !statusesResponse.ok)
+         const [response, membersResponse, labelsResponse, statusesResponse, teamsResponse] =
+            await Promise.all([
+               fetch(`${api}/projects?workspaceId=${workspaceId}`, { credentials: 'include' }),
+               fetch(`${api}/workspaces/${workspaceId}/members`, { credentials: 'include' }),
+               fetch(`${api}/projects/labels?workspaceId=${workspaceId}`, {
+                  credentials: 'include',
+               }),
+               fetch(`${api}/projects/statuses?workspaceId=${workspaceId}`, {
+                  credentials: 'include',
+               }),
+               fetch(`${api}/teams?workspaceId=${workspaceId}`, { credentials: 'include' }),
+            ]);
+         if (
+            !response.ok ||
+            !membersResponse.ok ||
+            !labelsResponse.ok ||
+            !statusesResponse.ok ||
+            !teamsResponse.ok
+         )
             throw new Error('Could not load projects.');
          const payload = (await response.json()) as { data: ApiProject[] };
          const membersPayload = (await membersResponse.json()) as {
@@ -263,7 +280,14 @@ export default function Projects({ teamId }: { teamId?: string }) {
          };
          const labelsPayload = (await labelsResponse.json()) as { data: ProjectListLabel[] };
          const statusesPayload = (await statusesResponse.json()) as { data: ApiProjectStatus[] };
+         const teamsPayload = (await teamsResponse.json()) as { data: ApiWorkspaceTeam[] };
          setWorkspaceId(workspaceId);
+         setResolvedTeamId(
+            teamId
+               ? teamsPayload.data.find((team) => team.id === teamId || team.identifier === teamId)
+                    ?.id
+               : undefined
+         );
          setWorkspaceMembers(
             membersPayload.data
                .filter((member) => member.status === 'ACTIVE')
@@ -277,22 +301,16 @@ export default function Projects({ teamId }: { teamId?: string }) {
                : uniqueProjectStatuses(payload.data)
          );
          setTeamGroups(
-            Array.from(
-               new Map(
-                  payload.data
-                     .map((project) => project.team)
-                     .filter((team): team is NonNullable<typeof team> => Boolean(team))
-                     .map((team) => [
-                        team.id,
-                        { id: team.id, name: team.name, icon: team.icon ?? undefined },
-                     ])
-               ).values()
-            )
+            teamsPayload.data.map((team) => ({
+               id: team.id,
+               name: team.name,
+               icon: team.icon ?? undefined,
+            }))
          );
       })().catch((error: unknown) =>
          setLoadError(error instanceof Error ? error.message : 'Could not load projects.')
       );
-   }, []);
+   }, [teamId]);
 
    const updateProject = async (projectId: string, update: ProjectListUpdate) => {
       if (!workspaceId) throw new Error('Workspace is not ready yet.');
@@ -329,7 +347,8 @@ export default function Projects({ teamId }: { teamId?: string }) {
       let list = allProjects.slice();
 
       if (teamId) {
-         list = list.filter((project) => project.teamId === teamId);
+         if (!resolvedTeamId) return [];
+         list = list.filter((project) => project.teamId === resolvedTeamId);
       }
       if (tab === 'active') {
          list = list.filter((project) => ACTIVE_CATEGORIES.has(project.status.category));
@@ -358,7 +377,7 @@ export default function Projects({ teamId }: { teamId?: string }) {
          }
       };
       return list.sort(compare);
-   }, [allProjects, tab, closedProjects, filters, ordering, teamId]);
+   }, [allProjects, tab, closedProjects, filters, ordering, resolvedTeamId, teamId]);
 
    const groups = useMemo<ProjectGroup[]>(() => {
       if (grouping === 'none') {
