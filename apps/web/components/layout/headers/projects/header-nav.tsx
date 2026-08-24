@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Plus } from 'lucide-react';
 import { FormEvent, useEffect, useState } from 'react';
+import { loadCurrentWorkspace } from '@/lib/workspaces';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -39,13 +40,7 @@ function CreateProjectDialog({
    useEffect(() => {
       if (!open) return;
       void (async () => {
-         const workspacesResponse = await fetch(`${api}/workspaces/me`, { credentials: 'include' });
-         if (!workspacesResponse.ok) throw new Error('Could not load the current workspace.');
-         const workspaces = (await workspacesResponse.json()) as {
-            data: Array<{ workspace: { id: string } }>;
-         };
-         const currentWorkspaceId = workspaces.data[0]?.workspace.id;
-         if (!currentWorkspaceId) throw new Error('No workspace is available for this account.');
+         const currentWorkspaceId = (await loadCurrentWorkspace()).id;
          setWorkspaceId(currentWorkspaceId);
          const [teamsResponse, templatesResponse] = await Promise.all([
             fetch(`${api}/teams?workspaceId=${currentWorkspaceId}`, {
@@ -177,20 +172,14 @@ export default function HeaderNav() {
 
    useEffect(() => {
       void (async () => {
-         const workspacesResponse = await fetch(`${api}/workspaces/me`, { credentials: 'include' });
-         if (!workspacesResponse.ok) return;
-         const workspaces = (await workspacesResponse.json()) as {
-            data: Array<{ workspace: { id: string } }>;
-         };
-         const workspaceId = workspaces.data[0]?.workspace.id;
-         if (!workspaceId) return;
+         const workspaceId = (await loadCurrentWorkspace()).id;
          const projectsResponse = await fetch(`${api}/projects?workspaceId=${workspaceId}`, {
             credentials: 'include',
          });
          if (!projectsResponse.ok) return;
          const payload = (await projectsResponse.json()) as { data: unknown[] };
          setCount(payload.data.length);
-      })();
+      })().catch(() => setCount(undefined));
    }, []);
 
    return (

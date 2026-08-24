@@ -23,6 +23,7 @@ import {
    type ChangeEvent,
    type ReactNode,
 } from 'react';
+import { loadCurrentWorkspace } from '@/lib/workspaces';
 
 type ApiActor = { id: string; name: string; avatarUrl: string | null } | null;
 type ApiAttachment = { id: string; filename: string; mimeType: string; size: number };
@@ -157,13 +158,7 @@ export function ActivityFeed({
    const attachmentInputRef = useRef<HTMLInputElement>(null);
 
    const load = useCallback(async () => {
-      const workspaceResponse = await fetch(`${api}/workspaces/me`, { credentials: 'include' });
-      if (!workspaceResponse.ok) throw new Error('Could not load workspace.');
-      const workspacePayload = (await workspaceResponse.json()) as {
-         data: Array<{ workspace: { id: string } }>;
-      };
-      const id = workspacePayload.data[0]?.workspace.id;
-      if (!id) throw new Error('No workspace is available.');
+      const id = (await loadCurrentWorkspace()).id;
       setWorkspaceId(id);
 
       const query = new URLSearchParams({ workspaceId: id, issueId });

@@ -95,7 +95,7 @@ function IssueRef({ identifier, note }: { identifier: string; note?: string }) {
          <span className="mt-1 size-1 rounded-full bg-muted-foreground shrink-0" />
          <div className="min-w-0">
             <Link
-               href={`/${orgId ?? 'lndev-ui'}/issue/${identifier}`}
+               href={`/${orgId}/issue/${identifier}`}
                className="inline-flex items-center gap-1.5 bg-accent/60 rounded px-1.5 py-0.5 hover:bg-accent"
             >
                {issue && <issue.status.icon />}
@@ -245,7 +245,7 @@ export function IssueRefRow({ identifier }: { identifier: string }) {
 
    return (
       <Link
-         href={`/${orgId ?? 'lndev-ui'}/issue/${identifier}`}
+         href={`/${orgId}/issue/${identifier}`}
          className="flex items-center gap-2 py-1 text-sm hover:bg-sidebar/50 rounded px-1.5 -mx-1.5 min-w-0"
       >
          <issue.status.icon />

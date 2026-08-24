@@ -45,7 +45,12 @@
   thị link tải trong update card sau khi reload.
 - Team Settings: các row General, Templates, Workflows, Triage, Cycles và Team hierarchy trong
   layout gốc đã lưu cấu hình thật; backend kiểm tra template cùng workspace, ngăn hierarchy cycle
-  và kiểm tra thứ tự auto-close/auto-archive. Slack/AI vẫn unavailable đúng phạm vi.
+  và kiểm tra thứ tự auto-close/auto-archive. Worker quét theo lịch và thực thi hai retention
+  policy bằng transaction/idempotent activity + notification thật. Slack/AI vẫn unavailable đúng
+  phạm vi.
+- Workspace context: mọi loader runtime khớp workspace `slug` trong URL thay vì lấy membership
+  đầu tiên; Org Switcher, Inbox/My Issues, Back to app, Project badge và global Create Issue dùng
+  workspace/team thật mà không thay composition UI gốc. Logout và chuyển workspace đã hoạt động.
 - Account Security: khôi phục bốn section/card của UI gốc; Sessions list IP/browser thật, nhận diện
   current session và revoke session khác. Personal API Key lưu hash/prefix/expiry, secret chỉ trả
   một lần, hỗ trợ revoke và Bearer authentication; không còn record mẫu Paris/iOS/LNDEV key.
@@ -97,6 +102,8 @@
 - `94f5f3e` — persist Duplicate/Won't Fix issue classifications.
 - `93e2341` — attach private MinIO files to project updates.
 - `9fdca7f` — persist Team workflow settings in the original page.
+- `6244e3b` — manage real sessions and personal API keys in the original Security shell.
+- `554ff59` — enforce Team auto-close/archive retention policies in the Worker.
 
 ### Kiểm tra gần nhất
 
@@ -104,6 +111,8 @@
   Project attachment, Team settings, Personal API Key one-time token và Bearer guard.
 - NestJS build: passed.
 - Next.js 15 production build: passed.
+- Worker production build và unit test Team policy: **4/4 passed**; runtime scan kết nối Redis và
+  trả `0 teams, 0 closed, 0 archived` vì database hiện chưa bật retention policy cho team nào.
 - Docker `api` và `web`: rebuilt; `http://localhost:4000/api/v1/health` và
   `http://localhost:3000/auth/login` trả HTTP 200.
 - Migration `20260824180000_issue_templates` đã được apply trong Postgres Docker.
@@ -141,9 +150,12 @@
 
 | Ưu tiên | Phần còn lại | Trạng thái/chỉ dẫn |
 | --- | --- | --- |
-| P0 | Visual parity toàn route | So sánh từng route với `upstream/master`; visual acceptance cần một phiên đăng nhập workspace-member. Phiên browser kiểm thử hiện chưa đăng nhập nên mới xác nhận được route guard/login, chưa chụp được các màn hình nội bộ. |
+| P0 | Visual parity toàn route | Source audit 305 TS/TSX xác nhận bảng Projects/Teams/Issues vẫn giữ composition gốc; sai lệch rõ còn lại là Notifications/Integrations custom và một số visible no-op. Visual acceptance nội bộ vẫn cần phiên workspace-member; browser sạch hiện mới xác nhận route guard/login và không có console error. |
+| P0 | Notifications đa workspace | `Notification` chưa có `workspaceId`, nên Inbox có thể trộn record giữa workspace. Cần migration/FK, filter API/store theo workspace và preview entity-aware cho issue/project. |
+| P0 | Settings Notifications/Integrations | Khôi phục shell/card/search gốc; đưa Discord vào row/dialog thật, không quảng cáo Slack/email/desktop đã hoạt động. |
+| P0 | Team membership | API list hiện chỉ trả team đã join và frontend ép `joined=true`; cần list all + computed membership + self-join policy, đấu nối đúng bảng/nút Join gốc. |
 | P1 | Issue actions còn thiếu | Convert-to-comment còn cần semantics/backend. Duplicate/Won't Fix, move team, favorite và reminder đã hoàn thành; taxonomy issue type không có control tương ứng trong UI gốc hiện tại. |
-| P1 | Team settings nâng cao | Cycle cadence, triage, auto-close/archive policy, hierarchy và template default đã persistence/UI. Worker thực thi auto-close/archive theo lịch và tự sinh cycle theo cadence vẫn chưa triển khai, nên chưa được coi là automation hoàn chỉnh. |
+| P1 | Team settings nâng cao | Cycle cadence, triage, auto-close/archive policy, hierarchy và template default đã persistence/UI; Worker auto-close/archive đã hoàn thành. Tự sinh cycle theo cadence vẫn chưa triển khai. |
 | P1 | Account security | Session management và Personal API Key đã hoàn thành. Passkeys cần WebAuthn dependency/RP configuration; signing key không có consumer và lệch phạm vi project-management nên vẫn unavailable. |
 | P1 | Project extras | Favorite project và attachment cho Project Update đã hoàn thành bằng dữ liệu thật. |
 | P2 | Automation/webhook | Worker/Redis foundation có, nhưng rule builder, persisted automation và generic webhook chưa hoàn chỉnh. |
@@ -152,10 +164,10 @@
 
 ## Thứ tự tiếp tục đề xuất
 
-1. Tạo user workspace-member/phiên test và chụp đối chiếu các route chính với UI gốc.
-2. Xác định semantics cho Convert-to-comment mà không làm lệch UI gốc.
-3. Hoàn thiện team automation/cycle policy và Account Security.
-4. Tiếp tục audit visual bằng phiên workspace-member và ghi lại screenshot acceptance cho từng route.
+1. Tách notification theo workspace và khôi phục Notifications/Integrations shell gốc với Discord.
+2. Hoàn thiện Team membership list/join trong đúng bảng gốc.
+3. Loại các visible no-op P0 (command palette/Agent default) rồi xử lý P1 theo audit.
+4. Tạo phiên test workspace-member và chụp đối chiếu từng route chính với `upstream/master`.
 
 ## 1. Mục tiêu
 

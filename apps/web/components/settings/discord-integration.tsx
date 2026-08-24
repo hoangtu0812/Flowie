@@ -3,6 +3,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { loadCurrentWorkspace } from '@/lib/workspaces';
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 export function DiscordIntegration() {
    const [workspaceId, setWorkspaceId] = useState<string>();
@@ -12,14 +13,13 @@ export function DiscordIntegration() {
    const [saving, setSaving] = useState(false);
    const [configured, setConfigured] = useState(false);
    useEffect(() => {
-      void fetch(`${api}/workspaces/me`, { credentials: 'include' })
-         .then((r) => (r.ok ? r.json() : Promise.reject()))
-         .then((p: { data: Array<{ workspace: { id: string } }> }) => {
-            const id = p.data[0]?.workspace.id;
+      void loadCurrentWorkspace()
+         .then((workspace) => {
+            const id = workspace.id;
             setWorkspaceId(id);
-            return id
-               ? fetch(`${api}/integrations/discord?workspaceId=${id}`, { credentials: 'include' })
-               : undefined;
+            return fetch(`${api}/integrations/discord?workspaceId=${id}`, {
+               credentials: 'include',
+            });
          })
          .then(async (r) => {
             if (!r?.ok) return;

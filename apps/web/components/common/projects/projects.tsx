@@ -13,6 +13,7 @@ import { useRightPanelStore } from '@/store/right-panel-store';
 import { BarChart3 } from 'lucide-react';
 import { parseAsStringLiteral, useQueryState } from 'nuqs';
 import { useEffect, useMemo, useState } from 'react';
+import { loadCurrentWorkspace } from '@/lib/workspaces';
 import { Filter } from '@/components/layout/headers/projects/filter';
 import ProjectsBoard from './projects-board';
 import { ProjectsDisplayOptions } from './projects-display-options';
@@ -242,13 +243,7 @@ export default function Projects({ teamId }: { teamId?: string }) {
 
    useEffect(() => {
       void (async () => {
-         const workspacesResponse = await fetch(`${api}/workspaces/me`, { credentials: 'include' });
-         if (!workspacesResponse.ok) throw new Error('Could not load the current workspace.');
-         const workspaces = (await workspacesResponse.json()) as {
-            data: Array<{ workspace: { id: string } }>;
-         };
-         const workspaceId = workspaces.data[0]?.workspace.id;
-         if (!workspaceId) throw new Error('No workspace is available for this account.');
+         const workspaceId = (await loadCurrentWorkspace()).id;
          const [response, membersResponse, labelsResponse, statusesResponse] = await Promise.all([
             fetch(`${api}/projects?workspaceId=${workspaceId}`, { credentials: 'include' }),
             fetch(`${api}/workspaces/${workspaceId}/members`, { credentials: 'include' }),

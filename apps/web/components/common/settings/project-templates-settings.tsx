@@ -15,6 +15,7 @@ import {
 import { FileStack } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { DashedSmiley } from './settings-placeholder';
+import { loadCurrentWorkspace } from '@/lib/workspaces';
 
 type Template = {
    id: string;
@@ -45,13 +46,7 @@ export default function ProjectTemplatesSettings() {
    const [message, setMessage] = useState<string>();
 
    const load = useCallback(async () => {
-      const workspaceResponse = await fetch(`${api}/workspaces/me`, { credentials: 'include' });
-      if (!workspaceResponse.ok) throw new Error('Could not load workspace.');
-      const workspacePayload = (await workspaceResponse.json()) as {
-         data: Array<{ workspace: { id: string } }>;
-      };
-      const id = workspacePayload.data[0]?.workspace.id;
-      if (!id) throw new Error('No workspace is available.');
+      const id = (await loadCurrentWorkspace()).id;
       setWorkspaceId(id);
 
       const response = await fetch(`${api}/projects/templates?workspaceId=${id}`, {

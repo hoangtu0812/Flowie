@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DashedSmiley } from './settings-placeholder';
+import { loadCurrentWorkspace } from '@/lib/workspaces';
 
 type ProjectUpdate = {
    id: string;
@@ -24,13 +25,7 @@ export default function ProjectUpdatesSettings() {
    const [query, setQuery] = useState('');
    const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
    const load = useCallback(async () => {
-      const workspaceResponse = await fetch(`${api}/workspaces/me`, { credentials: 'include' });
-      if (!workspaceResponse.ok) throw new Error('Could not load workspace.');
-      const workspacePayload = (await workspaceResponse.json()) as {
-         data: Array<{ workspace: { id: string } }>;
-      };
-      const workspaceId = workspacePayload.data[0]?.workspace.id;
-      if (!workspaceId) throw new Error('No workspace is available.');
+      const workspaceId = (await loadCurrentWorkspace()).id;
       const response = await fetch(`${api}/projects/updates?workspaceId=${workspaceId}`, {
          credentials: 'include',
       });

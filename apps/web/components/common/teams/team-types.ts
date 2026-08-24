@@ -1,5 +1,7 @@
 'use client';
 
+import { loadCurrentWorkspace } from '@/lib/workspaces';
+
 export type TeamMember = {
    id: string;
    name: string;
@@ -39,14 +41,7 @@ export async function loadCurrentWorkspaceTeams(): Promise<{
    workspaceId: string;
    teams: WorkspaceTeam[];
 }> {
-   const workspaceResponse = await fetch(`${api}/workspaces/me`, { credentials: 'include' });
-   if (!workspaceResponse.ok) throw new Error('Could not load the current workspace.');
-
-   const workspaces = (await workspaceResponse.json()) as {
-      data: Array<{ workspace: { id: string } }>;
-   };
-   const workspaceId = workspaces.data[0]?.workspace.id;
-   if (!workspaceId) throw new Error('No workspace is available for this account.');
+   const workspaceId = (await loadCurrentWorkspace()).id;
 
    const teamsResponse = await fetch(`${api}/teams?workspaceId=${workspaceId}`, {
       credentials: 'include',

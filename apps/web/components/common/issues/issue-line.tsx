@@ -46,7 +46,7 @@ export function IssueLine({ issue, layoutId = false }: { issue: Issue; layoutId?
                   )}
                </div>
                <Link
-                  href={`/${orgId ?? 'lndev-ui'}/issue/${issue.identifier}`}
+                  href={`/${orgId}/issue/${issue.identifier}`}
                   className="min-w-0 flex items-center justify-start mr-1 ml-0.5"
                >
                   <span className="text-xs sm:text-sm font-medium sm:font-semibold truncate">

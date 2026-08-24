@@ -15,6 +15,7 @@ import {
    useSidebarPrefsStore,
 } from '@/store/sidebar-prefs-store';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Bot, FolderKanban, GitPullRequestArrow, Inbox } from 'lucide-react';
 
@@ -45,6 +46,7 @@ const ITEM_KEYS: Record<string, SidebarItemKey> = {
 };
 
 export function NavInbox() {
+   const { orgId } = useParams<{ orgId: string }>();
    const { visibility, badgeStyle, order } = useSidebarPrefsStore();
    const { getUnreadCount, loadNotifications } = useNotificationsStore();
    const [mounted, setMounted] = useState(false);
@@ -76,7 +78,7 @@ export function NavInbox() {
                <SidebarMenuItem key={item.name}>
                   <SidebarMenuButton asChild>
                      {item.available ? (
-                        <Link href={item.url}>
+                        <Link href={`/${orgId}${item.url}`}>
                            <item.icon />
                            <span>{item.name}</span>
                         </Link>

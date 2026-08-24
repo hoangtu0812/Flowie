@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/select';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { SettingsShell } from './shared';
+import { loadCurrentWorkspace } from '@/lib/workspaces';
 
 type WorkflowCategory = 'backlog' | 'planned' | 'in-progress' | 'completed' | 'canceled';
 type ProjectStatus = {
@@ -71,13 +72,7 @@ export default function ProjectStatusesSettings() {
    const [message, setMessage] = useState<string>();
 
    const load = useCallback(async () => {
-      const workspaceResponse = await fetch(`${api}/workspaces/me`, { credentials: 'include' });
-      if (!workspaceResponse.ok) throw new Error('Could not load workspace.');
-      const workspacePayload = (await workspaceResponse.json()) as {
-         data: Array<{ workspace: { id: string } }>;
-      };
-      const workspaceId = workspacePayload.data[0]?.workspace.id;
-      if (!workspaceId) throw new Error('No workspace is available.');
+      const workspaceId = (await loadCurrentWorkspace()).id;
       setWorkspaceId(workspaceId);
 
       const projectResponse = await fetch(`${api}/projects/statuses?workspaceId=${workspaceId}`, {

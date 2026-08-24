@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { loadCurrentWorkspace } from '@/lib/workspaces';
 
 export type LiveTeamMember = {
    role: string;
@@ -58,15 +59,7 @@ export function useLiveTeam(teamReference: string) {
          setLoading(true);
          setError(undefined);
          try {
-            const workspaceResponse = await fetch(`${api}/workspaces/me`, {
-               credentials: 'include',
-            });
-            if (!workspaceResponse.ok) throw new Error('Could not load workspace.');
-            const workspacePayload = (await workspaceResponse.json()) as {
-               data: Array<{ workspace: { id: string } }>;
-            };
-            const currentWorkspaceId = workspacePayload.data[0]?.workspace.id;
-            if (!currentWorkspaceId) throw new Error('No workspace is available.');
+            const currentWorkspaceId = (await loadCurrentWorkspace()).id;
 
             const teamsResponse = await fetch(`${api}/teams?workspaceId=${currentWorkspaceId}`, {
                credentials: 'include',

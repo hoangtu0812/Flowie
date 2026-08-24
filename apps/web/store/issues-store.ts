@@ -7,6 +7,7 @@ import { Project } from '@/mock-data/projects';
 import { status as statusPresentations, Status, StatusCategory } from '@/mock-data/status';
 import { User } from '@/mock-data/users';
 import { create } from 'zustand';
+import { loadCurrentWorkspace } from '@/lib/workspaces';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -313,13 +314,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
    loadIssues: async (teamIdentifier) => {
       set({ isLoading: true, error: undefined });
       try {
-         const workspaceResponse = await fetch(`${api}/workspaces/me`, { credentials: 'include' });
-         if (!workspaceResponse.ok) throw new Error('Could not load workspace.');
-         const workspaceData = (await workspaceResponse.json()) as {
-            data: Array<{ workspace: { id: string } }>;
-         };
-         const workspaceId = workspaceData.data[0]?.workspace.id;
-         if (!workspaceId) throw new Error('No workspace is available.');
+         const workspaceId = (await loadCurrentWorkspace()).id;
 
          const teamsResponse = await fetch(`${api}/teams?workspaceId=${workspaceId}`, {
             credentials: 'include',

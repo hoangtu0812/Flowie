@@ -141,7 +141,7 @@ export default function IssueDetails() {
       return (
          <div className="flex flex-col items-center justify-center h-full gap-2 text-sm text-muted-foreground">
             <p>{error ? 'Could not load this issue.' : `Issue ${issueId} not found.`}</p>
-            <Link href={`/${orgId ?? 'lndev-ui'}/teams`} className="underline">
+            <Link href={`/${orgId}/teams`} className="underline">
                Back to issues
             </Link>
          </div>
@@ -211,11 +211,7 @@ export default function IssueDetails() {
                )}
 
                {issue.team && (
-                  <IssueSubIssues
-                     issueId={issue.id}
-                     teamId={issue.team.id}
-                     orgId={orgId ?? 'lndev-ui'}
-                  />
+                  <IssueSubIssues issueId={issue.id} teamId={issue.team.id} orgId={orgId} />
                )}
 
                <div className="border-t border-border/60 mt-8" />
@@ -225,7 +221,7 @@ export default function IssueDetails() {
          </div>
 
          <aside className="hidden lg:block w-80 shrink-0 border-l h-full overflow-y-auto bg-container px-5 py-6">
-            <IssuePropertiesPanel issue={issue} orgId={orgId ?? 'lndev-ui'} />
+            <IssuePropertiesPanel issue={issue} orgId={orgId} />
          </aside>
       </div>
    );

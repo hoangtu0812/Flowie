@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { loadCurrentWorkspace } from '@/lib/workspaces';
 
 type ApiLabel = {
    id: string;
@@ -46,13 +47,7 @@ export function LabelsSettings({ scope }: { scope: LabelScope }) {
    const [message, setMessage] = useState<string>();
 
    const load = useCallback(async () => {
-      const workspaceResponse = await fetch(`${api}/workspaces/me`, { credentials: 'include' });
-      if (!workspaceResponse.ok) throw new Error('Could not load workspace.');
-      const workspacePayload = (await workspaceResponse.json()) as {
-         data: Array<{ workspace: { id: string } }>;
-      };
-      const id = workspacePayload.data[0]?.workspace.id;
-      if (!id) throw new Error('No workspace is available.');
+      const id = (await loadCurrentWorkspace()).id;
       setWorkspaceId(id);
       const response = await fetch(`${api}${endpoint}?workspaceId=${id}`, {
          credentials: 'include',

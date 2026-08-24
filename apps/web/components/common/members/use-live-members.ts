@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { loadCurrentWorkspace } from '@/lib/workspaces';
 
 export type LiveMember = {
    id: string;
@@ -24,12 +25,7 @@ export type LiveMember = {
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 async function currentWorkspaceId() {
-   const response = await fetch(`${api}/workspaces/me`, { credentials: 'include' });
-   if (!response.ok) throw new Error('Could not load workspace.');
-   const payload = (await response.json()) as { data: Array<{ workspace: { id: string } }> };
-   const workspaceId = payload.data[0]?.workspace.id;
-   if (!workspaceId) throw new Error('No workspace is available.');
-   return workspaceId;
+   return (await loadCurrentWorkspace()).id;
 }
 
 export function useLiveMembers() {

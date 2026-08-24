@@ -13,6 +13,7 @@ import { User } from '@/mock-data/users';
 import { Project } from '@/mock-data/projects';
 import { LabelInterface } from '@/mock-data/labels';
 import { useIssuesStore } from '@/store/issues-store';
+import { loadCurrentWorkspaceTeams } from '@/components/common/teams/team-types';
 import { useCreateIssueStore } from '@/store/create-issue-store';
 import { toast } from 'sonner';
 import { StatusSelector } from './status-selector';
@@ -28,6 +29,7 @@ import {
    SelectTrigger,
    SelectValue,
 } from '@/components/ui/select';
+import { useParams } from 'next/navigation';
 
 interface IssueDraft {
    title: string;
@@ -40,6 +42,7 @@ interface IssueDraft {
 }
 
 export function CreateNewIssue() {
+   const { teamId: routeTeamId } = useParams<{ teamId?: string }>();
    const [createMore, setCreateMore] = useState<boolean>(false);
    const { isOpen, defaultStatus, openModal, closeModal } = useCreateIssueStore();
    const {
@@ -49,7 +52,28 @@ export function CreateNewIssue() {
       members,
       projects,
       labels,
+      teams,
+      teamId,
+      loadIssues,
    } = useIssuesStore();
+
+   useEffect(() => {
+      if (!isOpen) return;
+      void loadCurrentWorkspaceTeams()
+         .then(async ({ teams: availableTeams }) => {
+            const selected =
+               availableTeams.find(
+                  (team) => team.id === teamId || team.identifier === routeTeamId
+               ) ?? availableTeams[0];
+            if (!selected) throw new Error('No team is available in this workspace.');
+            if (selected.id !== teamId || statuses.length === 0) {
+               await loadIssues(selected.identifier);
+            }
+         })
+         .catch((error: unknown) =>
+            toast.error(error instanceof Error ? error.message : 'Could not load issue options.')
+         );
+   }, [isOpen, loadIssues, routeTeamId, statuses.length, teamId]);
 
    const createDefaultData = useCallback(() => {
       return {
@@ -105,6 +129,7 @@ export function CreateNewIssue() {
       }
       try {
          await createIssueRecord({
+            teamId,
             title: addIssueForm.title,
             description: addIssueForm.description || undefined,
             statusId: addIssueForm.status.id,
@@ -134,10 +159,25 @@ export function CreateNewIssue() {
             <DialogHeader>
                <DialogTitle>
                   <div className="flex items-center px-4 pt-4 gap-2">
-                     <Button size="sm" variant="outline" className="gap-1.5">
-                        <Heart className="size-4 text-orange-500 fill-orange-500" />
-                        <span className="font-medium">CORE</span>
-                     </Button>
+                     <Select
+                        value={teamId}
+                        onValueChange={(value) => {
+                           const selected = teams.find((team) => team.id === value);
+                           if (selected) void loadIssues(selected.identifier);
+                        }}
+                     >
+                        <SelectTrigger className="h-9 w-auto gap-1.5">
+                           <Heart className="size-4 text-orange-500 fill-orange-500" />
+                           <SelectValue placeholder="Select team" />
+                        </SelectTrigger>
+                        <SelectContent>
+                           {teams.map((team) => (
+                              <SelectItem key={team.id} value={team.id}>
+                                 {team.identifier}
+                              </SelectItem>
+                           ))}
+                        </SelectContent>
+                     </Select>
                      {templates.length > 0 && (
                         <Select onValueChange={applyTemplate}>
                            <SelectTrigger className="h-9 w-48">
@@ -219,7 +259,11 @@ export function CreateNewIssue() {
                      <Label htmlFor="create-more">Create more</Label>
                   </div>
                </div>
-               <Button size="sm" onClick={() => void createIssue()}>
+               <Button
+                  size="sm"
+                  disabled={!teamId || !addIssueForm.status}
+                  onClick={() => void createIssue()}
+               >
                   Create issue
                </Button>
             </div>

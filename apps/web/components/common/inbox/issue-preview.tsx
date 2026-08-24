@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { getNotificationIcon } from '@/lib/notification-utils';
+import { loadCurrentWorkspace } from '@/lib/workspaces';
 import type { ContentBlock } from '@/mock-data/issue-details';
 import { useIssuesStore } from '@/store/issues-store';
 import { type InboxNotification, useNotificationsStore } from '@/store/notifications-store';
@@ -47,14 +48,8 @@ export default function IssuePreview({ notification, onMarkAsRead }: IssuePrevie
    }, [loadIssues]);
 
    useEffect(() => {
-      void fetch(`${api}/workspaces/me`, { credentials: 'include' })
-         .then(async (response) => {
-            if (!response.ok) throw new Error();
-            const payload = (await response.json()) as {
-               data: Array<{ workspace: { id: string } }>;
-            };
-            setWorkspaceId(payload.data[0]?.workspace.id);
-         })
+      void loadCurrentWorkspace()
+         .then((workspace) => setWorkspaceId(workspace.id))
          .catch(() => setWorkspaceId(undefined));
    }, []);
 
@@ -268,7 +263,7 @@ export default function IssuePreview({ notification, onMarkAsRead }: IssuePrevie
 
             {issue && (
                <aside className="hidden xl:block w-64 shrink-0 border-l overflow-y-auto bg-container px-4 py-5">
-                  <IssuePropertiesPanel issue={issue} orgId={orgId ?? 'lndev-ui'} />
+                  <IssuePropertiesPanel issue={issue} orgId={orgId} />
                </aside>
             )}
          </div>

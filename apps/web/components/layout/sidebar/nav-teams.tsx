@@ -39,7 +39,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 
 export function NavTeams() {
-   const { orgId } = useParams<{ orgId?: string }>();
+   const { orgId } = useParams<{ orgId: string }>();
    const [joinedTeams, setJoinedTeams] = useState<WorkspaceTeam[]>([]);
 
    useEffect(() => {
@@ -48,7 +48,7 @@ export function NavTeams() {
          .catch(() => setJoinedTeams([]));
    }, []);
 
-   const organization = orgId ?? 'lndev-ui';
+   const organization = orgId;
    return (
       <SidebarGroup>
          <SidebarGroupLabel>Your teams</SidebarGroupLabel>
