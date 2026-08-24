@@ -170,6 +170,18 @@ export class ProjectsService {
          take: 25,
       });
    }
+   async workspaceUpdates(workspaceId: string, userId: string) {
+      await this.authorize(workspaceId, userId);
+      return this.prisma.projectUpdate.findMany({
+         where: { workspaceId, project: { archivedAt: null } },
+         include: {
+            project: { select: { id: true, name: true, identifier: true } },
+            author: { select: { id: true, name: true, avatarUrl: true } },
+         },
+         orderBy: { createdAt: 'desc' },
+         take: 100,
+      });
+   }
    async createUpdate(projectId: string, dto: CreateProjectUpdateDto, userId: string) {
       const project = await this.get(projectId, dto.workspaceId, userId);
       const body = dto.body.trim();

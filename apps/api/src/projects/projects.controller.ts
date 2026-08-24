@@ -169,6 +169,12 @@ export class ProjectsController {
    ) {
       return { data: await this.projects.removeLabel(labelId, workspaceId, request.auth!.userId) };
    }
+   @Get('updates') async workspaceUpdates(
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.projects.workspaceUpdates(workspaceId, request.auth!.userId) };
+   }
    @Get(':projectId/updates') async listUpdates(
       @Param('projectId') projectId: string,
       @Query('workspaceId') workspaceId: string,
