@@ -9,14 +9,8 @@ import {
    CommandItem,
    CommandList,
 } from '@/components/ui/command';
-import { cycles, formatCycleDateRange } from '@/mock-data/cycles';
-import { Issue } from '@/mock-data/issues';
-import { labels as allLabels } from '@/mock-data/labels';
+import type { Issue } from '@/mock-data/issues';
 import { priorities } from '@/mock-data/priorities';
-import { projects as allProjects } from '@/mock-data/projects';
-import { status as allStatus } from '@/mock-data/status';
-import { teams } from '@/mock-data/teams';
-import { users } from '@/mock-data/users';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useCreateIssueStore } from '@/store/create-issue-store';
 import { useIssuesStore } from '@/store/issues-store';
@@ -49,7 +43,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 type PaletteRoute =
-   'root' | 'assign' | 'status' | 'priority' | 'labels' | 'project' | 'cycle' | 'team' | 'due-date';
+   'root' | 'assign' | 'status' | 'priority' | 'labels' | 'project' | 'cycle' | 'due-date';
 
 const dueDateFromToday = (daysFromToday: number) => {
    const date = new Date();
@@ -63,6 +57,14 @@ const endOfCurrentWeek = () => {
    date.setHours(12, 0, 0, 0);
    date.setDate(date.getDate() + ((6 - date.getDay() + 7) % 7));
    return date.toISOString();
+};
+
+const formatCycleDateRange = (cycle: { startDate: string | null; endDate: string | null }) => {
+   const format = (date: string) =>
+      new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(date));
+   if (cycle.startDate && cycle.endDate)
+      return `${format(cycle.startDate)} – ${format(cycle.endDate)}`;
+   return cycle.startDate ? `Starts ${format(cycle.startDate)}` : '';
 };
 
 /** Small keyboard hint chips on the right of a command row. */
@@ -100,7 +102,13 @@ export function CommandPalette() {
       removeIssueLabel,
       updateIssueProject,
       updateIssueDueDate,
-      updateIssue,
+      updateIssueCycle,
+      members,
+      statuses,
+      labels,
+      projects,
+      cycles,
+      currentUserId,
    } = useIssuesStore();
    const { openModal } = useCreateIssueStore();
 
@@ -168,7 +176,7 @@ export function CommandPalette() {
       ? `${typeof window !== 'undefined' ? window.location.origin : ''}/${orgId}/issue/${issue.identifier}`
       : '';
    const branchName = issue
-      ? `${users[0].id}/${issue.identifier.toLowerCase()}-${issue.title
+      ? `${currentUserId ?? 'user'}/${issue.identifier.toLowerCase()}-${issue.title
            .toLowerCase()
            .replace(/[^a-z0-9]+/g, '-')
            .replace(/^-|-$/g, '')
@@ -323,21 +331,14 @@ export function CommandPalette() {
                               Move to cycle…
                               <Keys keys={['⇧', 'C']} />
                            </CommandItem>
-                           <CommandItem
-                              onSelect={() => {
-                                 toast.success('Added to the next release');
-                                 close();
-                              }}
-                           >
+                           <CommandItem disabled title="Releases are not available yet">
                               <PackagePlus className="text-muted-foreground" />
                               Add to release…
                               <Keys keys={['⌥', 'R']} />
                            </CommandItem>
                            <CommandItem
-                              onSelect={() => {
-                                 setRoute('team');
-                                 setQuery('');
-                              }}
+                              disabled
+                              title="Moving issues between teams is not available yet"
                            >
                               <Users className="text-muted-foreground" />
                               Move to a different team…
@@ -444,7 +445,7 @@ export function CommandPalette() {
                               <ClipboardList className="text-muted-foreground" /> My issues
                               <Keys keys={['G', 'M']} />
                            </CommandItem>
-                           <CommandItem onSelect={() => go('/reviews')}>
+                           <CommandItem disabled title="Code reviews are not available">
                               <GitBranch className="text-muted-foreground" /> Reviews
                            </CommandItem>
                            <CommandItem onSelect={() => go('/initiatives')}>
@@ -473,7 +474,7 @@ export function CommandPalette() {
 
                   {route === 'assign' && issue && (
                      <CommandGroup heading="Assign to…">
-                        {users.slice(0, 12).map((user) => (
+                        {members.slice(0, 12).map((user) => (
                            <CommandItem
                               key={user.id}
                               onSelect={() => {
@@ -499,7 +500,7 @@ export function CommandPalette() {
 
                   {route === 'status' && issue && (
                      <CommandGroup heading="Change status…">
-                        {allStatus.map((candidate) => (
+                        {statuses.map((candidate) => (
                            <CommandItem
                               key={candidate.id}
                               onSelect={() => {
@@ -541,7 +542,7 @@ export function CommandPalette() {
 
                   {route === 'labels' && issue && (
                      <CommandGroup heading="Change or add labels…">
-                        {allLabels.map((label) => {
+                        {labels.map((label) => {
                            const active = issue.labels.some(
                               (candidate) => candidate.id === label.id
                            );
@@ -582,7 +583,7 @@ export function CommandPalette() {
                            <Box className="text-muted-foreground" />
                            No project
                         </CommandItem>
-                        {allProjects.map((project) => (
+                        {projects.map((project) => (
                            <CommandItem
                               key={project.id}
                               onSelect={() => {
@@ -605,9 +606,12 @@ export function CommandPalette() {
                      <CommandGroup heading="Move to cycle…">
                         <CommandItem
                            onSelect={() => {
-                              updateIssue(issue.id, { cycleId: '' });
-                              toast.success('Removed from cycle');
-                              close();
+                              void updateIssueCycle(issue.id, undefined)
+                                 .then(() => {
+                                    toast.success('Removed from cycle');
+                                    close();
+                                 })
+                                 .catch(() => toast.error('Could not update cycle'));
                            }}
                         >
                            <CircleDot className="text-muted-foreground" />
@@ -617,38 +621,24 @@ export function CommandPalette() {
                            <CommandItem
                               key={cycle.id}
                               onSelect={() => {
-                                 updateIssue(issue.id, { cycleId: cycle.id });
-                                 toast.success(`Moved to ${cycle.name}`);
-                                 close();
+                                 void updateIssueCycle(issue.id, cycle.id)
+                                    .then(() => {
+                                       toast.success(`Moved to ${cycle.name}`);
+                                       close();
+                                    })
+                                    .catch(() => toast.error('Could not update cycle'));
                               }}
                            >
                               <CircleDot className="text-muted-foreground" />
                               {cycle.name}
-                              <span className="text-xs text-muted-foreground ml-2">
-                                 {formatCycleDateRange(cycle)}
-                              </span>
+                              {formatCycleDateRange(cycle) && (
+                                 <span className="text-xs text-muted-foreground ml-2">
+                                    {formatCycleDateRange(cycle)}
+                                 </span>
+                              )}
                               {issue.cycleId === cycle.id && <Check className="ml-auto size-4" />}
                            </CommandItem>
                         ))}
-                     </CommandGroup>
-                  )}
-
-                  {route === 'team' && issue && (
-                     <CommandGroup heading="Move to a different team…">
-                        {teams
-                           .filter((team) => team.joined)
-                           .map((team) => (
-                              <CommandItem
-                                 key={team.id}
-                                 onSelect={() => {
-                                    toast.success(`Moved to ${team.name}`);
-                                    close();
-                                 }}
-                              >
-                                 <span className="text-sm">{team.icon}</span>
-                                 {team.name}
-                              </CommandItem>
-                           ))}
                      </CommandGroup>
                   )}
 

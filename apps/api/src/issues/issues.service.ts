@@ -118,7 +118,7 @@ export class IssuesService {
                workspaceId,
                ...(teamId ? { teamId } : { team: { members: { some: { userId } } } }),
             },
-            select: { id: true, name: true, status: true },
+            select: { id: true, name: true, status: true, startDate: true, endDate: true },
             orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }],
          }),
       ]);

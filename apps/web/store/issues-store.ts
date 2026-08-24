@@ -54,10 +54,22 @@ type ApiIssueOptions = {
    projects: ApiProject[];
    members: ApiPerson[];
    labels: ApiLabel[];
-   cycles: Array<{ id: string; name: string; status: string }>;
+   cycles: Array<{
+      id: string;
+      name: string;
+      status: string;
+      startDate: string | null;
+      endDate: string | null;
+   }>;
 };
 
-export type IssueCycleOption = { id: string; name: string; status: string };
+export type IssueCycleOption = {
+   id: string;
+   name: string;
+   status: string;
+   startDate: string | null;
+   endDate: string | null;
+};
 
 interface FilterOptions {
    status?: string[];
@@ -113,6 +125,7 @@ interface IssuesState {
    removeIssueLabel: (issueId: string, labelId: string) => void;
    updateIssueProject: (issueId: string, newProject: Project | undefined) => void;
    updateIssueDueDate: (issueId: string, dueDate?: string) => Promise<void>;
+   updateIssueCycle: (issueId: string, cycleId?: string) => Promise<void>;
    setIssueSubscription: (issueId: string, subscribed: boolean) => Promise<void>;
    archiveIssue: (issueId: string) => Promise<void>;
    getIssueById: (id: string) => Issue | undefined;
@@ -409,6 +422,32 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
    updateIssueDueDate: async (issueId, dueDate) => {
       await patchIssue(issueId, get().workspaceId, { dueDate: dueDate ?? null });
       get().updateIssue(issueId, { dueDate });
+   },
+   updateIssueCycle: async (issueId, cycleId) => {
+      const workspaceId = get().workspaceId;
+      const issue = get().getIssueById(issueId);
+      if (!workspaceId) throw new Error('No workspace is available.');
+      if (!issue) throw new Error('Issue not found.');
+      if (issue.cycleId === (cycleId ?? '')) return;
+
+      if (cycleId) {
+         const addResponse = await fetch(`${api}/cycles/${cycleId}/issues`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ workspaceId, issueId }),
+         });
+         if (!addResponse.ok) throw new Error('Could not add the issue to this cycle.');
+      }
+      if (issue.cycleId) {
+         const removeResponse = await fetch(
+            `${api}/cycles/${issue.cycleId}/issues/${issueId}?workspaceId=${workspaceId}`,
+            { method: 'DELETE', credentials: 'include' }
+         );
+         if (!removeResponse.ok)
+            throw new Error('Could not remove the issue from its current cycle.');
+      }
+      get().updateIssue(issueId, { cycleId: cycleId ?? '' });
    },
    setIssueSubscription: async (issueId, subscribed) => {
       const workspaceId = get().workspaceId;
