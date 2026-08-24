@@ -299,24 +299,26 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
                         </div>
                      </div>
 
-                     {project.initiativeLinks.length > 0 && (
-                        <div className="flex items-center gap-3">
-                           <span className="w-24 text-muted-foreground shrink-0">Initiatives</span>
-                           <span className="inline-flex items-center gap-1.5">
-                              📄{' '}
-                              {project.initiativeLinks
-                                 .map((link) => link.initiative.name)
-                                 .join(', ')}
-                              <ProjectInitiativesDialog
-                                 initiatives={availableInitiatives}
-                                 selectedIds={project.initiativeLinks.map(
-                                    (link) => link.initiative.id
-                                 )}
-                                 onSave={updateInitiatives}
-                              />
-                           </span>
-                        </div>
-                     )}
+                     <div className="flex items-center gap-3">
+                        <span className="w-24 text-muted-foreground shrink-0">Initiatives</span>
+                        <span className="inline-flex items-center gap-1.5">
+                           {project.initiativeLinks.length > 0 && (
+                              <>
+                                 📄{' '}
+                                 {project.initiativeLinks
+                                    .map((link) => link.initiative.name)
+                                    .join(', ')}
+                              </>
+                           )}
+                           <ProjectInitiativesDialog
+                              initiatives={availableInitiatives}
+                              selectedIds={project.initiativeLinks.map(
+                                 (link) => link.initiative.id
+                              )}
+                              onSave={updateInitiatives}
+                           />
+                        </span>
+                     </div>
 
                      <div className="flex items-center gap-3">
                         <span className="w-24 text-muted-foreground shrink-0">Labels</span>
@@ -343,26 +345,24 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
                         </div>
                      </div>
 
-                     {detail.resources.length > 0 && (
-                        <div className="flex items-center gap-3">
-                           <span className="w-24 text-muted-foreground shrink-0">Resources</span>
-                           <div className="flex items-center gap-2 flex-wrap">
-                              {detail.resources.map((resource) => (
-                                 <a
-                                    key={`${resource.label}-${resource.url}`}
-                                    href={resource.url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="inline-flex items-center gap-1.5 text-xs border rounded-md px-2 py-1 hover:bg-accent/50 transition-colors"
-                                 >
-                                    <FileText className="size-3.5 text-muted-foreground" />
-                                    {resource.label}
-                                 </a>
-                              ))}
-                              <ProjectResourceDialog onCreate={createResource} />
-                           </div>
+                     <div className="flex items-center gap-3">
+                        <span className="w-24 text-muted-foreground shrink-0">Resources</span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                           {detail.resources.map((resource) => (
+                              <a
+                                 key={`${resource.label}-${resource.url}`}
+                                 href={resource.url}
+                                 target="_blank"
+                                 rel="noreferrer"
+                                 className="inline-flex items-center gap-1.5 text-xs border rounded-md px-2 py-1 hover:bg-accent/50 transition-colors"
+                              >
+                                 <FileText className="size-3.5 text-muted-foreground" />
+                                 {resource.label}
+                              </a>
+                           ))}
+                           <ProjectResourceDialog onCreate={createResource} />
                         </div>
-                     )}
+                     </div>
                   </div>
 
                   {/* Update CTA */}

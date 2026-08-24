@@ -25,7 +25,6 @@ import {
    Compass,
    ContactRound,
    FileText,
-   GitBranch,
    Inbox,
    Layers,
    Link2,
@@ -456,9 +455,6 @@ export function CommandPalette() {
                            <CommandItem onSelect={() => go('/my-issues')}>
                               <ClipboardList className="text-muted-foreground" /> My issues
                               <Keys keys={['G', 'M']} />
-                           </CommandItem>
-                           <CommandItem disabled title="Code reviews are not available">
-                              <GitBranch className="text-muted-foreground" /> Reviews
                            </CommandItem>
                            <CommandItem onSelect={() => go('/initiatives')}>
                               <Compass className="text-muted-foreground" /> Initiatives

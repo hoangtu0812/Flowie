@@ -17,32 +17,16 @@ import {
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Bot, FolderKanban, GitPullRequestArrow, Inbox } from 'lucide-react';
+import { FolderKanban, Inbox } from 'lucide-react';
 
 const inboxItems = [
    { name: 'Inbox', url: '/inbox', icon: Inbox, available: true },
-   {
-      name: 'Reviews',
-      url: '/reviews',
-      icon: GitPullRequestArrow,
-      available: false,
-      unavailableReason: 'Code reviews are not available',
-   },
    { name: 'My issues', url: '/my-issues', icon: FolderKanban, available: true },
-   {
-      name: 'Agent',
-      url: '/agent',
-      icon: Bot,
-      available: false,
-      unavailableReason: 'AI Agent is not available yet',
-   },
 ] as const;
 
 const ITEM_KEYS: Record<string, SidebarItemKey> = {
    'Inbox': 'inbox',
-   'Reviews': 'reviews',
    'My issues': 'my-issues',
-   'Agent': 'agent',
 };
 
 export function NavInbox() {
@@ -77,21 +61,10 @@ export function NavInbox() {
             {items.map((item) => (
                <SidebarMenuItem key={item.name}>
                   <SidebarMenuButton asChild>
-                     {item.available ? (
-                        <Link href={`/${orgId}${item.url}`}>
-                           <item.icon />
-                           <span>{item.name}</span>
-                        </Link>
-                     ) : (
-                        <span
-                           className="flex items-center gap-2 opacity-50 cursor-not-allowed"
-                           title={item.unavailableReason}
-                           aria-disabled="true"
-                        >
-                           <item.icon />
-                           <span>{item.name}</span>
-                        </span>
-                     )}
+                     <Link href={`/${orgId}${item.url}`}>
+                        <item.icon />
+                        <span>{item.name}</span>
+                     </Link>
                   </SidebarMenuButton>
                   {mounted && item.name === 'Inbox' && unread > 0 && (
                      <SidebarMenuBadge className="text-muted-foreground">
