@@ -17,7 +17,7 @@ import {
    SelectTrigger,
    SelectValue,
 } from '@/components/ui/select';
-import { CalendarRange, FileText, FolderKanban, Plus, UserRound } from 'lucide-react';
+import { CalendarRange, FileText, FolderKanban, Plus, UserRound, X } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { parseAsStringLiteral, useQueryState } from 'nuqs';
@@ -76,6 +76,29 @@ export default function InitiativeDetails({ initiativeId }: { initiativeId: stri
          setSubmitting(false);
       }
    };
+   const unlinkProject = async (linkedProjectId: string) => {
+      if (!initiative || !workspaceId) return;
+      setSubmitting(true);
+      setFormError(undefined);
+      try {
+         const query = new URLSearchParams({ workspaceId });
+         const response = await fetch(
+            `${api}/initiatives/${initiative.id}/projects/${linkedProjectId}?${query}`,
+            { method: 'DELETE', credentials: 'include' }
+         );
+         if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as {
+               message?: string;
+            } | null;
+            throw new Error(payload?.message ?? 'Could not remove project.');
+         }
+         reload();
+      } catch (caught) {
+         setFormError(caught instanceof Error ? caught.message : 'Could not remove project.');
+      } finally {
+         setSubmitting(false);
+      }
+   };
    if (loading)
       return <div className="px-8 py-10 text-sm text-muted-foreground">Loading initiative…</div>;
    if (error || !initiative)
@@ -126,20 +149,36 @@ export default function InitiativeDetails({ initiativeId }: { initiativeId: stri
                <div className="border rounded-lg">
                   {projectList.length ? (
                      projectList.map((project) => (
-                        <Link
+                        <div
                            key={project.id}
-                           href={`/${orgId}/project/${project.id}/overview`}
-                           className="flex items-center gap-3 px-4 py-3 border-b last:border-b-0 hover:bg-sidebar/50"
+                           className="flex items-center border-b last:border-b-0 hover:bg-sidebar/50"
                         >
-                           <FolderKanban className="size-4 text-muted-foreground" />
-                           <span className="flex-1 text-sm font-medium">{project.name}</span>
-                           <span className="capitalize text-xs text-muted-foreground">
-                              {label(project.status)}
-                           </span>
-                           <span className="text-xs text-muted-foreground">
-                              {dateLabel(project.targetDate)}
-                           </span>
-                        </Link>
+                           <Link
+                              href={`/${orgId}/project/${project.id}/overview`}
+                              className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3"
+                           >
+                              <FolderKanban className="size-4 shrink-0 text-muted-foreground" />
+                              <span className="flex-1 truncate text-sm font-medium">
+                                 {project.name}
+                              </span>
+                              <span className="capitalize text-xs text-muted-foreground">
+                                 {label(project.status)}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                 {dateLabel(project.targetDate)}
+                              </span>
+                           </Link>
+                           <button
+                              type="button"
+                              className="mr-3 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
+                              aria-label={`Remove ${project.name} from this initiative`}
+                              title="Remove project"
+                              disabled={submitting}
+                              onClick={() => void unlinkProject(project.id)}
+                           >
+                              <X className="size-3.5" />
+                           </button>
+                        </div>
                      ))
                   ) : (
                      <p className="px-4 py-8 text-sm text-muted-foreground text-center">
@@ -147,6 +186,7 @@ export default function InitiativeDetails({ initiativeId }: { initiativeId: stri
                      </p>
                   )}
                </div>
+               {formError && <p className="mt-3 text-sm text-destructive">{formError}</p>}
             </div>
             <Dialog open={open} onOpenChange={setOpen}>
                <DialogContent>
