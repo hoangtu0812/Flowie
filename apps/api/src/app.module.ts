@@ -27,6 +27,7 @@ import { CustomerRequestsModule } from './customer-requests/customer-requests.mo
 import { SlasModule } from './slas/slas.module';
 import { AsksModule } from './asks/asks.module';
 import { PulseModule } from './pulse/pulse.module';
+import { EmojisModule } from './emojis/emojis.module';
 
 @Module({
    imports: [
@@ -45,6 +46,7 @@ import { PulseModule } from './pulse/pulse.module';
       SlasModule,
       AsksModule,
       PulseModule,
+      EmojisModule,
       WorkspaceModule,
       TeamsModule,
       ProjectsModule,
