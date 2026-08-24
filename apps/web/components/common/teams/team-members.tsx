@@ -11,6 +11,13 @@ import {
    DialogTitle,
 } from '@/components/ui/dialog';
 import {
+   DropdownMenu,
+   DropdownMenuContent,
+   DropdownMenuRadioGroup,
+   DropdownMenuRadioItem,
+   DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
    Select,
    SelectContent,
    SelectItem,
@@ -23,6 +30,13 @@ import { useMemo, useState } from 'react';
 import { useLiveTeam } from './use-live-team';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+type MemberSort = 'name' | 'role' | 'joined';
+
+const sortLabels: Record<MemberSort, string> = {
+   name: 'Name',
+   role: 'Role',
+   joined: 'Joined date',
+};
 
 /** Team members table keeps the original UI and uses the Teams API for membership. */
 export default function TeamMembers() {
@@ -31,6 +45,7 @@ export default function TeamMembers() {
    const [open, setOpen] = useState(false);
    const [userId, setUserId] = useState('');
    const [role, setRole] = useState('MEMBER');
+   const [sortBy, setSortBy] = useState<MemberSort>('name');
    const [submitting, setSubmitting] = useState(false);
    const [formError, setFormError] = useState<string>();
 
@@ -48,7 +63,12 @@ export default function TeamMembers() {
          <div className="px-8 py-10 text-sm text-destructive">{error ?? 'Team not found.'}</div>
       );
 
-   const members = [...team.members].sort((a, b) => a.user.name.localeCompare(b.user.name));
+   const members = [...team.members].sort((a, b) => {
+      const byName = a.user.name.localeCompare(b.user.name);
+      if (sortBy === 'role') return a.role.localeCompare(b.role) || byName;
+      if (sortBy === 'joined') return b.createdAt.localeCompare(a.createdAt) || byName;
+      return byName;
+   });
    const addMember = async () => {
       if (!userId) return;
       setSubmitting(true);
@@ -79,7 +99,9 @@ export default function TeamMembers() {
    return (
       <div className="w-full">
          <div className="flex items-center justify-between px-6 py-3">
-            <span className="text-sm text-muted-foreground font-medium">Name ↓</span>
+            <span className="text-sm text-muted-foreground font-medium">
+               {sortLabels[sortBy]} ↓
+            </span>
             <div className="flex items-center gap-2">
                <Button
                   size="xs"
@@ -90,9 +112,23 @@ export default function TeamMembers() {
                   <Plus className="size-4 mr-1" />
                   Add a member
                </Button>
-               <Button size="xs" variant="ghost">
-                  <SlidersHorizontal className="size-4" />
-               </Button>
+               <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                     <Button size="xs" variant="ghost">
+                        <SlidersHorizontal className="size-4" />
+                     </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                     <DropdownMenuRadioGroup
+                        value={sortBy}
+                        onValueChange={(value) => setSortBy(value as MemberSort)}
+                     >
+                        <DropdownMenuRadioItem value="name">Name</DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="role">Role</DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="joined">Joined date</DropdownMenuRadioItem>
+                     </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+               </DropdownMenu>
             </div>
          </div>
 

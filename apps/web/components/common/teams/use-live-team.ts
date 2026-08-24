@@ -5,6 +5,7 @@ import { loadCurrentWorkspace } from '@/lib/workspaces';
 
 export type LiveTeamMember = {
    role: string;
+   createdAt: string;
    user: {
       id: string;
       name: string;
