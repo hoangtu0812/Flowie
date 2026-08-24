@@ -1,6 +1,7 @@
 import { PrismaClient } from '@circle/database';
 import { Queue, Worker } from 'bullmq';
 import { runTeamPolicies } from './team-policies.js';
+import { runCycleCadence } from './cycle-cadence.js';
 
 type DiscordJob = { workspaceId: string; content: string };
 type IssueReminderJob = { reminderId: string };
@@ -75,11 +76,14 @@ const worker = new Worker<FlowieJob>(
          return { delivered: true };
       }
       if (job.name === 'team-policy-scan') {
-         const result = await runTeamPolicies(prisma);
+         const [policies, cycles] = await Promise.all([
+            runTeamPolicies(prisma),
+            runCycleCadence(prisma),
+         ]);
          console.log(
-            `Team policy scan completed: ${result.teams} teams, ${result.closed} closed, ${result.archived} archived.`
+            `Team policy scan completed: ${policies.teams} retention teams, ${policies.closed} closed, ${policies.archived} archived; ${cycles.teams} cadence teams, ${cycles.created} cycles created, ${cycles.activated} activated, ${cycles.completed} completed.`
          );
-         return result;
+         return { policies, cycles };
       }
       throw new Error(`Unsupported job: ${job.name}`);
    },
