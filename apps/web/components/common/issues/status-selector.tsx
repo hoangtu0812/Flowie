@@ -32,15 +32,15 @@ export function StatusSelector({ status, issueId }: StatusSelectorProps) {
       setValue(status.id);
    }, [status.id]);
 
-   const handleStatusChange = (statusId: string) => {
-      setValue(statusId);
-      setOpen(false);
-
-      if (issueId) {
-         const newStatus = statuses.find((s) => s.id === statusId);
-         if (newStatus) {
-            updateIssueStatus(issueId, newStatus);
-         }
+   const handleStatusChange = async (statusId: string) => {
+      const newStatus = statuses.find((status) => status.id === statusId);
+      if (!newStatus) return;
+      try {
+         await updateIssueStatus(issueId, newStatus);
+         setValue(statusId);
+         setOpen(false);
+      } catch {
+         // The Issue store retains its server-backed value on a failed mutation.
       }
    };
 

@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useIssuesStore } from '@/store/issues-store';
 import { CheckIcon, CircleUserRound, UserIcon } from 'lucide-react';
+import { toast } from 'sonner';
 
 type Person = { id: string; name: string; avatarUrl?: string | null };
 
@@ -42,6 +43,14 @@ export function AssigneeUser({ user, issueId }: AssigneeUserProps) {
 
    if (!issueId) return <AssigneeAvatar user={user} />;
 
+   const assign = async (assignee: (typeof members)[number] | null) => {
+      try {
+         await updateIssueAssignee(issueId, assignee);
+      } catch {
+         toast.error('Could not update assignee');
+      }
+   };
+
    return (
       <DropdownMenu>
          <DropdownMenuTrigger asChild>
@@ -55,7 +64,7 @@ export function AssigneeUser({ user, issueId }: AssigneeUserProps) {
          </DropdownMenuTrigger>
          <DropdownMenuContent align="start" className="w-[206px]">
             <DropdownMenuLabel>Assign to...</DropdownMenuLabel>
-            <DropdownMenuItem onClick={() => updateIssueAssignee(issueId, null)}>
+            <DropdownMenuItem onClick={() => void assign(null)}>
                <div className="flex items-center gap-2">
                   <UserIcon className="h-5 w-5" />
                   <span>No assignee</span>
@@ -64,10 +73,7 @@ export function AssigneeUser({ user, issueId }: AssigneeUserProps) {
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             {members.map((member) => (
-               <DropdownMenuItem
-                  key={member.id}
-                  onClick={() => updateIssueAssignee(issueId, member)}
-               >
+               <DropdownMenuItem key={member.id} onClick={() => void assign(member)}>
                   <div className="flex items-center gap-2">
                      <Avatar className="h-5 w-5">
                         <AvatarImage src={member.avatarUrl || undefined} alt={member.name} />

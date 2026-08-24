@@ -59,32 +59,44 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       labels: workspaceLabels,
    } = useIssuesStore();
 
-   const handleStatusChange = (statusId: string) => {
+   const handleStatusChange = async (statusId: string) => {
       if (!issueId) return;
       const newStatus = statuses.find((s) => s.id === statusId);
       if (newStatus) {
-         updateIssueStatus(issueId, newStatus);
-         toast.success(`Status updated to ${newStatus.name}`);
+         try {
+            await updateIssueStatus(issueId, newStatus);
+            toast.success(`Status updated to ${newStatus.name}`);
+         } catch {
+            toast.error('Could not update status');
+         }
       }
    };
 
-   const handlePriorityChange = (priorityId: string) => {
+   const handlePriorityChange = async (priorityId: string) => {
       if (!issueId) return;
       const newPriority = priorities.find((p) => p.id === priorityId);
       if (newPriority) {
-         updateIssuePriority(issueId, newPriority);
-         toast.success(`Priority updated to ${newPriority.name}`);
+         try {
+            await updateIssuePriority(issueId, newPriority);
+            toast.success(`Priority updated to ${newPriority.name}`);
+         } catch {
+            toast.error('Could not update priority');
+         }
       }
    };
 
-   const handleAssigneeChange = (userId: string | null) => {
+   const handleAssigneeChange = async (userId: string | null) => {
       if (!issueId) return;
       const newAssignee = userId ? members.find((u) => u.id === userId) || null : null;
-      updateIssueAssignee(issueId, newAssignee);
-      toast.success(newAssignee ? `Assigned to ${newAssignee.name}` : 'Unassigned');
+      try {
+         await updateIssueAssignee(issueId, newAssignee);
+         toast.success(newAssignee ? `Assigned to ${newAssignee.name}` : 'Unassigned');
+      } catch {
+         toast.error('Could not update assignee');
+      }
    };
 
-   const handleLabelToggle = (labelId: string) => {
+   const handleLabelToggle = async (labelId: string) => {
       if (!issueId) return;
       const issue = getIssueById(issueId);
       const label = workspaceLabels.find((l) => l.id === labelId);
@@ -93,20 +105,28 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
 
       const hasLabel = issue.labels.some((l) => l.id === labelId);
 
-      if (hasLabel) {
-         removeIssueLabel(issueId, labelId);
-         toast.success(`Removed label: ${label.name}`);
-      } else {
-         addIssueLabel(issueId, label);
-         toast.success(`Added label: ${label.name}`);
+      try {
+         if (hasLabel) {
+            await removeIssueLabel(issueId, labelId);
+            toast.success(`Removed label: ${label.name}`);
+         } else {
+            await addIssueLabel(issueId, label);
+            toast.success(`Added label: ${label.name}`);
+         }
+      } catch {
+         toast.error('Could not update labels');
       }
    };
 
-   const handleProjectChange = (projectId: string | null) => {
+   const handleProjectChange = async (projectId: string | null) => {
       if (!issueId) return;
       const newProject = projectId ? projects.find((p) => p.id === projectId) : undefined;
-      updateIssueProject(issueId, newProject);
-      toast.success(newProject ? `Project set to ${newProject.name}` : 'Project removed');
+      try {
+         await updateIssueProject(issueId, newProject);
+         toast.success(newProject ? `Project set to ${newProject.name}` : 'Project removed');
+      } catch {
+         toast.error('Could not update project');
+      }
    };
 
    const handleSubscribe = async () => {
@@ -153,7 +173,7 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                   {statuses.map((s) => {
                      const Icon = s.icon;
                      return (
-                        <ContextMenuItem key={s.id} onClick={() => handleStatusChange(s.id)}>
+                        <ContextMenuItem key={s.id} onClick={() => void handleStatusChange(s.id)}>
                            <Icon /> {s.name}
                         </ContextMenuItem>
                      );
@@ -166,11 +186,14 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                   <User className="mr-2 size-4" /> Assignee
                </ContextMenuSubTrigger>
                <ContextMenuSubContent className="w-48">
-                  <ContextMenuItem onClick={() => handleAssigneeChange(null)}>
+                  <ContextMenuItem onClick={() => void handleAssigneeChange(null)}>
                      <User className="size-4" /> Unassigned
                   </ContextMenuItem>
                   {members.map((user) => (
-                     <ContextMenuItem key={user.id} onClick={() => handleAssigneeChange(user.id)}>
+                     <ContextMenuItem
+                        key={user.id}
+                        onClick={() => void handleAssigneeChange(user.id)}
+                     >
                         <Avatar className="size-4">
                            <AvatarImage src={user.avatarUrl} alt={user.name} />
                            <AvatarFallback>{user.name[0]}</AvatarFallback>
@@ -189,7 +212,7 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                   {priorities.map((priority) => (
                      <ContextMenuItem
                         key={priority.id}
-                        onClick={() => handlePriorityChange(priority.id)}
+                        onClick={() => void handlePriorityChange(priority.id)}
                      >
                         <priority.icon className="size-4" /> {priority.name}
                      </ContextMenuItem>
@@ -203,7 +226,10 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                </ContextMenuSubTrigger>
                <ContextMenuSubContent className="w-48">
                   {workspaceLabels.map((label) => (
-                     <ContextMenuItem key={label.id} onClick={() => handleLabelToggle(label.id)}>
+                     <ContextMenuItem
+                        key={label.id}
+                        onClick={() => void handleLabelToggle(label.id)}
+                     >
                         <span
                            className="inline-block size-3 rounded-full"
                            style={{ backgroundColor: label.color }}
@@ -220,13 +246,13 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                   <Folder className="mr-2 size-4" /> Project
                </ContextMenuSubTrigger>
                <ContextMenuSubContent className="w-64">
-                  <ContextMenuItem onClick={() => handleProjectChange(null)}>
+                  <ContextMenuItem onClick={() => void handleProjectChange(null)}>
                      <Folder className="size-4" /> No Project
                   </ContextMenuItem>
                   {projects.slice(0, 5).map((project) => (
                      <ContextMenuItem
                         key={project.id}
-                        onClick={() => handleProjectChange(project.id)}
+                        onClick={() => void handleProjectChange(project.id)}
                      >
                         <project.icon className="size-4" /> {project.name}
                      </ContextMenuItem>

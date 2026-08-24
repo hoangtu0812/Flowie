@@ -172,6 +172,21 @@ export function CommandPalette() {
       }
    };
 
+   const runIssueMutation = async (
+      operation: () => Promise<void>,
+      successMessage: string,
+      errorMessage: string,
+      closeOnSuccess = true
+   ) => {
+      try {
+         await operation();
+         toast.success(successMessage);
+         if (closeOnSuccess) close();
+      } catch {
+         toast.error(errorMessage);
+      }
+   };
+
    const issueUrl = issue
       ? `${typeof window !== 'undefined' ? window.location.origin : ''}/${orgId}/issue/${issue.identifier}`
       : '';
@@ -271,11 +286,13 @@ export function CommandPalette() {
                               <Keys keys={['A']} />
                            </CommandItem>
                            <CommandItem
-                              onSelect={() => {
-                                 updateIssueAssignee(issue.id, null);
-                                 toast.success('Un-assigned');
-                                 close();
-                              }}
+                              onSelect={() =>
+                                 void runIssueMutation(
+                                    () => updateIssueAssignee(issue.id, null),
+                                    'Un-assigned',
+                                    'Could not update assignee'
+                                 )
+                              }
                            >
                               <UserRoundMinus className="text-muted-foreground" />
                               Un-assign from me
@@ -477,11 +494,13 @@ export function CommandPalette() {
                         {members.slice(0, 12).map((user) => (
                            <CommandItem
                               key={user.id}
-                              onSelect={() => {
-                                 updateIssueAssignee(issue.id, user);
-                                 toast.success(`Assigned to ${user.name}`);
-                                 close();
-                              }}
+                              onSelect={() =>
+                                 void runIssueMutation(
+                                    () => updateIssueAssignee(issue.id, user),
+                                    `Assigned to ${user.name}`,
+                                    'Could not update assignee'
+                                 )
+                              }
                            >
                               <Avatar className="size-5">
                                  <AvatarImage src={user.avatarUrl} alt={user.name} />
@@ -503,11 +522,13 @@ export function CommandPalette() {
                         {statuses.map((candidate) => (
                            <CommandItem
                               key={candidate.id}
-                              onSelect={() => {
-                                 updateIssueStatus(issue.id, candidate);
-                                 toast.success(`Status set to ${candidate.name}`);
-                                 close();
-                              }}
+                              onSelect={() =>
+                                 void runIssueMutation(
+                                    () => updateIssueStatus(issue.id, candidate),
+                                    `Status set to ${candidate.name}`,
+                                    'Could not update status'
+                                 )
+                              }
                            >
                               <candidate.icon />
                               {candidate.name}
@@ -524,11 +545,13 @@ export function CommandPalette() {
                         {priorities.map((candidate) => (
                            <CommandItem
                               key={candidate.id}
-                              onSelect={() => {
-                                 updateIssuePriority(issue.id, candidate);
-                                 toast.success(`Priority set to ${candidate.name}`);
-                                 close();
-                              }}
+                              onSelect={() =>
+                                 void runIssueMutation(
+                                    () => updateIssuePriority(issue.id, candidate),
+                                    `Priority set to ${candidate.name}`,
+                                    'Could not update priority'
+                                 )
+                              }
                            >
                               <candidate.icon className="text-muted-foreground" />
                               {candidate.name}
@@ -549,15 +572,19 @@ export function CommandPalette() {
                            return (
                               <CommandItem
                                  key={label.id}
-                                 onSelect={() => {
-                                    if (active) removeIssueLabel(issue.id, label.id);
-                                    else addIssueLabel(issue.id, label);
-                                    toast.success(
+                                 onSelect={() =>
+                                    void runIssueMutation(
+                                       () =>
+                                          active
+                                             ? removeIssueLabel(issue.id, label.id)
+                                             : addIssueLabel(issue.id, label),
                                        active
                                           ? `Label ${label.name} removed`
-                                          : `Label ${label.name} added`
-                                    );
-                                 }}
+                                          : `Label ${label.name} added`,
+                                       'Could not update labels',
+                                       false
+                                    )
+                                 }
                               >
                                  <span
                                     className="size-3 rounded-full"
@@ -574,11 +601,13 @@ export function CommandPalette() {
                   {route === 'project' && issue && (
                      <CommandGroup heading="Move to project…">
                         <CommandItem
-                           onSelect={() => {
-                              updateIssueProject(issue.id, undefined);
-                              toast.success('Removed from project');
-                              close();
-                           }}
+                           onSelect={() =>
+                              void runIssueMutation(
+                                 () => updateIssueProject(issue.id, undefined),
+                                 'Removed from project',
+                                 'Could not update project'
+                              )
+                           }
                         >
                            <Box className="text-muted-foreground" />
                            No project
@@ -586,11 +615,13 @@ export function CommandPalette() {
                         {projects.map((project) => (
                            <CommandItem
                               key={project.id}
-                              onSelect={() => {
-                                 updateIssueProject(issue.id, project);
-                                 toast.success(`Moved to ${project.name}`);
-                                 close();
-                              }}
+                              onSelect={() =>
+                                 void runIssueMutation(
+                                    () => updateIssueProject(issue.id, project),
+                                    `Moved to ${project.name}`,
+                                    'Could not update project'
+                                 )
+                              }
                            >
                               <project.icon className="text-muted-foreground" />
                               {project.name}

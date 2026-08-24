@@ -118,12 +118,12 @@ interface IssuesState {
    filterByCycle: (cycleId: string) => Issue[];
    searchIssues: (query: string) => Issue[];
    filterIssues: (filters: FilterOptions) => Issue[];
-   updateIssueStatus: (issueId: string, newStatus: Status) => void;
-   updateIssuePriority: (issueId: string, newPriority: Priority) => void;
-   updateIssueAssignee: (issueId: string, newAssignee: User | null) => void;
-   addIssueLabel: (issueId: string, label: LabelInterface) => void;
-   removeIssueLabel: (issueId: string, labelId: string) => void;
-   updateIssueProject: (issueId: string, newProject: Project | undefined) => void;
+   updateIssueStatus: (issueId: string, newStatus: Status) => Promise<void>;
+   updateIssuePriority: (issueId: string, newPriority: Priority) => Promise<void>;
+   updateIssueAssignee: (issueId: string, newAssignee: User | null) => Promise<void>;
+   addIssueLabel: (issueId: string, label: LabelInterface) => Promise<void>;
+   removeIssueLabel: (issueId: string, labelId: string) => Promise<void>;
+   updateIssueProject: (issueId: string, newProject: Project | undefined) => Promise<void>;
    updateIssueDueDate: (issueId: string, dueDate?: string) => Promise<void>;
    updateIssueCycle: (issueId: string, cycleId?: string) => Promise<void>;
    setIssueSubscription: (issueId: string, subscribed: boolean) => Promise<void>;
@@ -228,7 +228,7 @@ const mapIssue = (issue: ApiIssue): Issue => ({
 const issueState = (issues: Issue[]) => ({ issues, issuesByStatus: groupIssuesByStatus(issues) });
 
 const patchIssue = async (issueId: string, workspaceId: string | undefined, data: unknown) => {
-   if (!workspaceId) return;
+   if (!workspaceId) throw new Error('No workspace is available.');
    const response = await fetch(`${api}/issues/${issueId}?workspaceId=${workspaceId}`, {
       method: 'PATCH',
       credentials: 'include',
@@ -387,37 +387,36 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
          filtered = filtered.filter((issue) => filters.statusType!.includes(issue.status.category));
       return filtered;
    },
-   updateIssueStatus: (issueId, newStatus) => {
+   updateIssueStatus: async (issueId, newStatus) => {
+      await patchIssue(issueId, get().workspaceId, { statusId: newStatus.id });
       get().updateIssue(issueId, { status: newStatus });
-      void patchIssue(issueId, get().workspaceId, { statusId: newStatus.id });
    },
-   updateIssuePriority: (issueId, newPriority) => {
+   updateIssuePriority: async (issueId, newPriority) => {
+      await patchIssue(issueId, get().workspaceId, { priority: newPriority.id.toUpperCase() });
       get().updateIssue(issueId, { priority: newPriority });
-      void patchIssue(issueId, get().workspaceId, { priority: newPriority.id.toUpperCase() });
    },
-   updateIssueAssignee: (issueId, newAssignee) => {
+   updateIssueAssignee: async (issueId, newAssignee) => {
+      await patchIssue(issueId, get().workspaceId, { assigneeId: newAssignee?.id ?? null });
       get().updateIssue(issueId, { assignee: newAssignee });
-      void patchIssue(issueId, get().workspaceId, { assigneeId: newAssignee?.id ?? null });
    },
-   addIssueLabel: (issueId, label) => {
+   addIssueLabel: async (issueId, label) => {
       const issue = get().getIssueById(issueId);
-      if (issue) {
-         const labels = [...issue.labels, label];
-         get().updateIssue(issueId, { labels });
-         void patchIssue(issueId, get().workspaceId, { labelIds: labels.map((item) => item.id) });
-      }
+      if (!issue) throw new Error('Issue not found.');
+      if (issue.labels.some((candidate) => candidate.id === label.id)) return;
+      const labels = [...issue.labels, label];
+      await patchIssue(issueId, get().workspaceId, { labelIds: labels.map((item) => item.id) });
+      get().updateIssue(issueId, { labels });
    },
-   removeIssueLabel: (issueId, labelId) => {
+   removeIssueLabel: async (issueId, labelId) => {
       const issue = get().getIssueById(issueId);
-      if (issue) {
-         const labels = issue.labels.filter((label) => label.id !== labelId);
-         get().updateIssue(issueId, { labels });
-         void patchIssue(issueId, get().workspaceId, { labelIds: labels.map((item) => item.id) });
-      }
+      if (!issue) throw new Error('Issue not found.');
+      const labels = issue.labels.filter((label) => label.id !== labelId);
+      await patchIssue(issueId, get().workspaceId, { labelIds: labels.map((item) => item.id) });
+      get().updateIssue(issueId, { labels });
    },
-   updateIssueProject: (issueId, newProject) => {
+   updateIssueProject: async (issueId, newProject) => {
+      await patchIssue(issueId, get().workspaceId, { projectId: newProject?.id ?? null });
       get().updateIssue(issueId, { project: newProject });
-      void patchIssue(issueId, get().workspaceId, { projectId: newProject?.id ?? null });
    },
    updateIssueDueDate: async (issueId, dueDate) => {
       await patchIssue(issueId, get().workspaceId, { dueDate: dueDate ?? null });

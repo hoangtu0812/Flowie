@@ -106,7 +106,7 @@ const IssueGridList: FC<{ issues: Issue[]; status?: Status }> = ({ issues, statu
       canDrop: () => status !== undefined,
       drop(item: Issue, monitor) {
          if (status && monitor.didDrop() && item.status.id !== status.id) {
-            updateIssueStatus(item.id, status);
+            void updateIssueStatus(item.id, status).catch(() => undefined);
          }
       },
       collect: (monitor) => ({

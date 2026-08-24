@@ -31,15 +31,16 @@ export function PrioritySelector({ priority, issueId }: PrioritySelectorProps) {
       setValue(priority.id);
    }, [priority.id]);
 
-   const handlePriorityChange = (priorityId: string) => {
-      setValue(priorityId);
-      setOpen(false);
-
-      if (issueId) {
-         const newPriority = priorities.find((p) => p.id === priorityId);
-         if (newPriority) {
-            updateIssuePriority(issueId, newPriority);
-         }
+   const handlePriorityChange = async (priorityId: string) => {
+      if (!issueId) return;
+      const newPriority = priorities.find((priority) => priority.id === priorityId);
+      if (!newPriority) return;
+      try {
+         await updateIssuePriority(issueId, newPriority);
+         setValue(priorityId);
+         setOpen(false);
+      } catch {
+         // The Issue store retains its server-backed value on a failed mutation.
       }
    };
 
