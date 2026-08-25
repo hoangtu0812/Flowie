@@ -15,6 +15,7 @@ from .core.errors import ApiError, api_error_handler, validation_error_handler
 from .core.readiness import dependency_status
 from .db.session import create_session_factory
 from .domains.auth import router as auth_router
+from .domains.native_activities import router as native_activities_router
 from .domains.native_attachments import router as native_attachments_router
 from .domains.native_comments import router as native_comments_router
 from .domains.native_cycles import router as native_cycles_router
@@ -68,6 +69,7 @@ def create_app(
     app.add_exception_handler(ApiError, api_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.include_router(auth_router)
+    app.include_router(native_activities_router)
     app.include_router(native_attachments_router)
     app.include_router(native_comments_router)
     app.include_router(native_cycles_router)
