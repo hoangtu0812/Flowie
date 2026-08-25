@@ -1158,6 +1158,7 @@ async def convert_issue_to_comment(
 
 
 @router.post('/{issue_id}/reminder')
+@public_router.post('/{issue_id}/reminder')
 async def set_issue_reminder(
     issue_id: str,
     payload: IssueReminderInput,
@@ -1191,6 +1192,7 @@ async def set_issue_reminder(
 
 
 @router.delete('/{issue_id}/reminder')
+@public_router.delete('/{issue_id}/reminder')
 async def cancel_issue_reminder(
     issue_id: str,
     workspaceId: str = Query(min_length=1),
