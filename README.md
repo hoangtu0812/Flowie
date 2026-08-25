@@ -38,7 +38,7 @@ và không tải package. Nếu image chưa tồn tại hoặc mã nguồn/depen
 lệnh sẽ dừng và báo thiếu tài nguyên thay vì âm thầm truy cập Internet.
 
 Chỉ các thao tác dưới đây mới có thể cần Internet, vì vậy hãy chuyển sang 5G trước
-khi chạy hoặc báo Codex thực hiện:
+khi chạy:
 
 ```bash
 pnpm install          # dependency mới hoặc lockfile thay đổi
@@ -46,6 +46,17 @@ pnpm docker:build     # build image lần đầu / sau khi thay Dockerfile, sour
 pnpm docker:rebuild   # build lại rồi chạy container
 docker compose pull   # cập nhật base image
 ```
+
+Sau khi đã chuyển sang 5G, dùng script có chủ đích dưới đây để build và tự smoke-test
+FastAPI facade, API legacy và trang đăng nhập. Script dừng ngay nếu không truyền
+`-AllowNetwork`, nên không có lần build nào tự âm thầm dùng Internet:
+
+```powershell
+.\scripts\build-and-test.ps1 -AllowNetwork
+```
+
+Khi script báo thành công, quay về mạng nội bộ và dùng `.\scripts\start-local.ps1` cho các lần
+chạy thường ngày.
 
 Sau khi đã có image và dependency cache, `pnpm docker:up` chạy được trong mạng nội
 bộ. Dừng các container với `pnpm docker:down`.
@@ -59,8 +70,9 @@ bộ. Dừng các container với `pnpm docker:down`.
 5. Start all applications: `pnpm dev`.
 
 The web app runs at `http://localhost:3000`. The API health endpoint is
-`http://localhost:4000/api/v1/health` and Swagger is at
-`http://localhost:4000/api/docs`.
+`http://localhost:4000/api/v1/health`, the FastAPI readiness endpoint is
+`http://localhost:4000/readyz`, and the Python API docs are at
+`http://localhost:4000/docs`.
 
 Lần build Docker đầu tiên dùng `pnpm docker:build`; các lần chạy sau dùng
 `pnpm docker:up`.

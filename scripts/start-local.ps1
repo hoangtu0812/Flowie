@@ -37,7 +37,8 @@ if ($apiReady) {
    Write-Host 'Flowie is ready:' -ForegroundColor Green
    Write-Host '  Web:    http://localhost:3000'
    Write-Host '  API:    http://localhost:4000/api/v1/health'
-   Write-Host '  Swagger: http://localhost:4000/api/docs'
+   Write-Host '  Readiness: http://localhost:4000/readyz'
+   Write-Host '  API docs:  http://localhost:4000/docs'
 } else {
    Write-Warning 'Containers started, but the API health check is not ready yet. Run: pnpm docker:logs'
 }

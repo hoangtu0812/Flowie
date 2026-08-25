@@ -239,7 +239,7 @@ Tiến độ hiện tại:
   các phase backend tiếp theo.
 - [x] Build production và lint thành công; chỉ còn 2 warning vốn có của Circle baseline.
 
-### P2 — FastAPI foundation và legacy facade
+### P2 — FastAPI foundation và legacy facade — completed 2026-08-25
 
 Việc làm:
 
@@ -260,8 +260,10 @@ Tiến độ hiện tại:
 - [x] Cập nhật Compose để FastAPI public `:4000`, NestJS legacy internal `api-legacy:4001`.
 - [x] Khôi phục middleware cookie gate: có `flowie_access` **hoặc** `flowie_refresh` thì F5 không
   bị đưa về login; trang Login/Đăng ký có logo Flowie và animation loading độc lập với Circle UI.
-- [ ] Build image Python, smoke test proxy/login qua Docker và kiểm tra offline start. Bước này cần
-  5G lần đầu để pull image `python:3.12-slim` và tải Python packages đã pin.
+- [x] Build image Python, smoke test proxy/login qua Docker và kiểm tra offline start. Lần build
+  5G đã pull `python:3.12-slim` và tải packages đã pin; `./scripts/build-and-test.ps1 -AllowNetwork`
+  passed readiness, legacy proxy và login page. `./scripts/start-local.ps1` sau đó passed mà không
+  build/pull/install; authenticated smoke test cũng xác minh login, profile và refresh-safe page.
 
 Nghiệm thu:
 
@@ -500,6 +502,7 @@ Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modu
 | 2026-08-25 | Tool compatibility | `fix: support Windows PowerShell parity scripts` | Verified under Windows PowerShell 5.1 | Toàn bộ NestJS/worker | Restore Circle presentation |
 | 2026-08-25 | P1 Project List | `refactor: remove non-baseline project label control` | Removed row-level label mutation UI | Toàn bộ NestJS/worker | Restore Project presentation |
 | 2026-08-25 | P2 facade (local verification) | `bc05139` | Python proxy test + Web production build passed; Docker image smoke pending 5G | Toàn bộ NestJS/worker qua FastAPI facade | Build FastAPI image và smoke Docker |
+| 2026-08-25 | P2 Docker acceptance | pending commit | Python image built on 5G; `/readyz`, legacy health, login, authenticated profile and offline start passed | Toàn bộ NestJS/worker qua FastAPI facade | P3 Auth/Profile/Workspace native Python |
 
 ## 13. Definition of Done toàn dự án
 
