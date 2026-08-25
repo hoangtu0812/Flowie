@@ -1,6 +1,6 @@
 'use client';
 
-import { Issue } from '@/mock-data/issues';
+import { Issue } from '@/types/issues';
 import { StatusCategory } from '@/mock-data/status';
 import { useFilterStore } from '@/store/filter-store';
 import { useIssuesStore } from '@/store/issues-store';

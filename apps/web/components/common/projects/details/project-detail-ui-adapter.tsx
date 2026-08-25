@@ -1,7 +1,7 @@
 'use client';
 
 import type { ContentBlock } from '@circle/contracts';
-import type { Issue } from '@/mock-data/issues';
+import type { Issue } from '@/types/issues';
 import { priorities } from '@/mock-data/priorities';
 import { health as projectHealth, type Project } from '@/mock-data/projects';
 import type { ProjectDetail, ProjectUpdateHealth } from '@/mock-data/project-details';

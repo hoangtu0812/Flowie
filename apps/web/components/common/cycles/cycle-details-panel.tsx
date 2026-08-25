@@ -14,7 +14,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { Cycle, cycleStatusLabel, formatCycleDateRange } from '@/mock-data/cycles';
-import { Issue } from '@/mock-data/issues';
+import { Issue } from '@/types/issues';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { FileText, Plus, User, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';

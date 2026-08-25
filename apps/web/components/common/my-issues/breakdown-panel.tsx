@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { Issue } from '@/mock-data/issues';
+import { Issue } from '@/types/issues';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { X } from 'lucide-react';
 import { useMemo, useState } from 'react';

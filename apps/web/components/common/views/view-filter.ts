@@ -1,4 +1,4 @@
-import type { Issue } from '@/mock-data/issues';
+import type { Issue } from '@/types/issues';
 import type { Project } from '@/mock-data/projects';
 import type { LiveView } from './use-live-views';
 

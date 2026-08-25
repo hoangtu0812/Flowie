@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import { Circle, CircleCheck, CircleDashed, CircleX } from 'lucide-react';
-import { groupIssuesByStatus, Issue } from '@/mock-data/issues';
+import { groupIssuesByStatus, Issue } from '@/types/issues';
 import { LabelInterface } from '@/mock-data/labels';
 import { priorities, Priority } from '@/mock-data/priorities';
 import { Project } from '@/mock-data/projects';

@@ -1,6 +1,6 @@
 'use client';
 
-import { Issue } from '@/mock-data/issues';
+import { Issue } from '@/types/issues';
 import { useDisplaySettingsStore } from '@/store/display-settings-store';
 import { useIssuesStore } from '@/store/issues-store';
 import { format } from 'date-fns';

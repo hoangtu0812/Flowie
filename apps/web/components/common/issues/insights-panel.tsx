@@ -9,7 +9,7 @@ import {
    SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { Issue } from '@/mock-data/issues';
+import { Issue } from '@/types/issues';
 import { priorities } from '@/mock-data/priorities';
 import type { Status } from '@/mock-data/status';
 import { useIssuesStore } from '@/store/issues-store';

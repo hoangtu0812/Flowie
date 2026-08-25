@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { createColumnConfigHelper } from '@/components/data-table-filter/core/filters';
 import type { ColumnOption, FiltersState } from '@/components/data-table-filter/core/types';
 import { multiOptionFilterFn, optionFilterFn } from '@/components/data-table-filter/lib/filter-fns';
-import type { Issue } from '@/mock-data/issues';
+import type { Issue } from '@/types/issues';
 import type { LabelInterface } from '@/mock-data/labels';
 import type { Project } from '@/mock-data/projects';
 import type { Status, StatusCategory } from '@/mock-data/status';
