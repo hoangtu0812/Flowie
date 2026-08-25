@@ -37,7 +37,6 @@ import React, { useState } from 'react';
 import { useIssuesStore } from '@/store/issues-store';
 import { status } from '@/mock-data/status';
 import { priorities } from '@/mock-data/priorities';
-import { users } from '@/mock-data/users';
 import { labels } from '@/mock-data/labels';
 import { projects } from '@/mock-data/projects';
 import { toast } from 'sonner';
@@ -59,6 +58,7 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       updateIssueProject,
       updateIssue,
       getIssueById,
+      members,
    } = useIssuesStore();
 
    const handleStatusChange = (statusId: string) => {
@@ -79,11 +79,12 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       }
    };
 
-   const handleAssigneeChange = (userId: string | null) => {
+   const handleAssigneeChange = async (userId: string | null) => {
       if (!issueId) return;
-      const newAssignee = userId ? users.find((u) => u.id === userId) || null : null;
-      updateIssueAssignee(issueId, newAssignee);
-      toast.success(newAssignee ? `Assigned to ${newAssignee.name}` : 'Unassigned');
+      const newAssignee = userId ? members.find((u) => u.id === userId) || null : null;
+      if (await updateIssueAssignee(issueId, newAssignee)) {
+         toast.success(newAssignee ? `Assigned to ${newAssignee.name}` : 'Unassigned');
+      }
    };
 
    const handleLabelToggle = (labelId: string) => {
@@ -186,23 +187,21 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                   <User className="mr-2 size-4" /> Assignee
                </ContextMenuSubTrigger>
                <ContextMenuSubContent className="w-48">
-                  <ContextMenuItem onClick={() => handleAssigneeChange(null)}>
+                  <ContextMenuItem onClick={() => void handleAssigneeChange(null)}>
                      <User className="size-4" /> Unassigned
                   </ContextMenuItem>
-                  {users
-                     .filter((user) => user.teamIds.includes('CORE'))
-                     .map((user) => (
-                        <ContextMenuItem
-                           key={user.id}
-                           onClick={() => handleAssigneeChange(user.id)}
-                        >
-                           <Avatar className="size-4">
-                              <AvatarImage src={user.avatarUrl} alt={user.name} />
-                              <AvatarFallback>{user.name[0]}</AvatarFallback>
-                           </Avatar>
-                           {user.name}
-                        </ContextMenuItem>
-                     ))}
+                  {members.map((user) => (
+                     <ContextMenuItem
+                        key={user.id}
+                        onClick={() => void handleAssigneeChange(user.id)}
+                     >
+                        <Avatar className="size-4">
+                           <AvatarImage src={user.avatarUrl} alt={user.name} />
+                           <AvatarFallback>{user.name[0]}</AvatarFallback>
+                        </Avatar>
+                        {user.name}
+                     </ContextMenuItem>
+                  ))}
                </ContextMenuSubContent>
             </ContextMenuSub>
 

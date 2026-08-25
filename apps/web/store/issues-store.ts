@@ -35,6 +35,13 @@ type NativeIssueStatus = {
    category: string;
 };
 
+type NativeIssueOptions = {
+   statuses: NativeIssueStatus[];
+   projects: Array<{ id: string; name: string }>;
+   members: Array<{ id: string; name: string; email: string; avatarUrl?: string | null }>;
+   labels: LabelInterface[];
+};
+
 const normaliseStatusName = (value: string) => value.trim().toLowerCase();
 
 const priorityId: Record<NativeIssue['priority'], string> = {
@@ -107,6 +114,24 @@ function asIssue(native: NativeIssue): Issue {
    };
 }
 
+function asMember(native: NativeIssueOptions['members'][number]): User {
+   return {
+      id: native.id,
+      name: native.name,
+      avatarUrl: native.avatarUrl ?? '',
+      email: native.email,
+      status: 'offline',
+      role: 'Member',
+      joinedDate: '',
+      teamIds: [],
+      timezone: 'UTC',
+   };
+}
+
+function asProjectOption(native: NativeIssueOptions['projects'][number]): Project {
+   return { id: native.id, name: native.name, icon: Box } as Project;
+}
+
 interface FilterOptions {
    status?: string[];
    assignee?: string[];
@@ -121,6 +146,9 @@ interface IssuesState {
    // Data
    issues: Issue[];
    statuses: Status[];
+   members: User[];
+   projects: Project[];
+   labels: LabelInterface[];
    issuesByStatus: Record<string, Issue[]>;
    workspaceId?: string;
    loading: boolean;
@@ -151,7 +179,7 @@ interface IssuesState {
    updateIssuePriority: (issueId: string, newPriority: Priority) => Promise<boolean>;
 
    // Assignee management
-   updateIssueAssignee: (issueId: string, newAssignee: User | null) => void;
+   updateIssueAssignee: (issueId: string, newAssignee: User | null) => Promise<boolean>;
 
    // Labels management
    addIssueLabel: (issueId: string, label: LabelInterface) => void;
@@ -168,6 +196,9 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
    // Initial state
    issues: [],
    statuses: [],
+   members: [],
+   projects: [],
+   labels: [],
    issuesByStatus: {},
    workspaceId: undefined,
    loading: false,
@@ -192,17 +223,28 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
          const [payload, optionsPayload] = (await Promise.all([
             response.json(),
             optionsResponse.json(),
-         ])) as [{ data: NativeIssue[] }, { data: { statuses: NativeIssueStatus[] } }];
+         ])) as [{ data: NativeIssue[] }, { data: NativeIssueOptions }];
          const issues = payload.data.map(asIssue);
          set({
             workspaceId: workspace.id,
             issues,
             statuses: optionsPayload.data.statuses.map(asStatus),
+            members: optionsPayload.data.members.map(asMember),
+            projects: optionsPayload.data.projects.map(asProjectOption),
+            labels: optionsPayload.data.labels,
             issuesByStatus: groupIssuesByStatus(issues),
             loading: false,
          });
       } catch {
-         set({ issues: [], statuses: [], issuesByStatus: {}, loading: false });
+         set({
+            issues: [],
+            statuses: [],
+            members: [],
+            projects: [],
+            labels: [],
+            issuesByStatus: {},
+            loading: false,
+         });
       }
    },
 
@@ -427,8 +469,41 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
    },
 
    // Assignee management
-   updateIssueAssignee: (issueId: string, newAssignee: User | null) => {
-      get().updateIssue(issueId, { assignee: newAssignee });
+   updateIssueAssignee: async (issueId: string, newAssignee: User | null) => {
+      try {
+         const issue = get().getIssueById(issueId);
+         const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
+         if (!issue) {
+            toast.error('This issue is not ready yet.');
+            return false;
+         }
+         const response = await authenticatedFetch(
+            `${api}/issues/${issue.id}?${new URLSearchParams({ workspaceId })}`,
+            {
+               method: 'PATCH',
+               headers: { 'content-type': 'application/json' },
+               body: JSON.stringify({ assigneeId: newAssignee?.id ?? null }),
+            }
+         );
+         if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as {
+               message?: string;
+            } | null;
+            throw new Error(payload?.message ?? 'Could not update issue assignee.');
+         }
+         const payload = (await response.json()) as { data: NativeIssue };
+         const updatedIssue = asIssue(payload.data);
+         set((state) => {
+            const issues = state.issues.map((candidate) =>
+               candidate.id === issueId ? updatedIssue : candidate
+            );
+            return { issues, issuesByStatus: groupIssuesByStatus(issues) };
+         });
+         return true;
+      } catch (error) {
+         toast.error(error instanceof Error ? error.message : 'Could not update issue assignee.');
+         return false;
+      }
    },
 
    // Labels management

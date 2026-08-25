@@ -440,6 +440,8 @@ Tiến độ thực hiện:
   status thật; đổi status gọi `PATCH /issues/{id}` Python và chỉ cập nhật UI khi response thành công.
 - [x] P6s-priority-mutation: Circle Priority selector giữ nguyên icon/catalog; đổi priority gọi
   `PATCH /issues/{id}` Python và chỉ cập nhật UI sau response thành công.
+- [x] P6t-assignee-mutation: Issue options hydrate member thật vào store; Circle context menu và
+  command palette dùng member thật, gán/bỏ gán gọi `PATCH /issues/{id}` Python.
 
 Nghiệm thu:
 
@@ -634,6 +636,7 @@ Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modu
 | 2026-08-25 | P6q Circle Create Issue adapter | current change-set | Existing Circle Create Issue markup/class catalogue is retained; live status/member/project/label options come from Python, submit posts a persisted Issue and refreshes the real Team list. Web production build passed | Docker/browser acceptance: create Issue, refresh and verify it survives | Rebuild web on 5G, then test the Create Issue dialog |
 | 2026-08-25 | P6r Circle Issue status mutation | current change-set | Status selector retains Circle presentation; live CUID status maps to the exact Circle status name (then category only as fallback), popup count resolves live IDs and `PATCH /issues/{id}` persists the selected status before the list is updated | Docker/browser acceptance of change + refresh | Rebuild web on 5G, change an Issue status and refresh |
 | 2026-08-25 | P6s Circle Issue priority mutation | current change-set | Priority selector retains the Circle catalog and icons; its selected value is persisted through Python `PATCH /issues/{id}` before local state is refreshed from the returned record | Docker/browser acceptance of change + refresh | Rebuild web on 5G, change an Issue priority and refresh |
+| 2026-08-25 | P6t Circle Issue assignee mutation | current change-set | Issue option hydration now includes real workspace members; unchanged Circle context menu and command palette assign/unassign them through Python `PATCH /issues/{id}` and refresh the returned Issue | Docker/browser acceptance of assign/unassign + refresh | Rebuild web on 5G and test a real workspace member |
 | 2026-08-25 | P3d Circle Workspace UI cutover | `8a2ccd1` | Web build + FastAPI regression đạt; browser smoke ghi nhận `401 → /auth/refresh 200 → /workspaces/me 200`; switcher không còn hard-code workspace | Members presentation còn fixture; invite API native đã sẵn sàng | Tạo workspace đầu tiên rồi nối Members UI |
 | 2026-08-25 | P4d Circle Teams/Members UI cutover | current change-set | Web production build và Docker web build đạt; Team/Member list, tạo Team, invite, role và remove đều dùng Python API, không còn mock ở scope này | Cần một workspace có ít nhất hai tài khoản đã đăng ký để nghiệm thu UI thao tác thật | Người dùng tạo workspace, tạo Team và mời tài khoản Flowie thứ hai để test |
 | 2026-08-25 | P4e Join Team/Workspace | current change-set | Web production build đạt; Join Team và Workspace invitation đã có entry point trong UI gốc | Cần tài khoản thứ hai để xác nhận invitation/join thực tế | Rebuild Docker, sau đó nghiệm thu hai-account flow |
