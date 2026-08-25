@@ -41,6 +41,7 @@ export default function RegisterPage() {
                name: formData.get('name'),
                email: formData.get('email'),
                password,
+               timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             }),
          });
          const payload = (await response.json()) as AuthPayload & { message?: string | string[] };

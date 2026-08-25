@@ -6,13 +6,13 @@ describe('UsersService workspace profiles', () => {
       role: 'MEMBER',
       joinedAt: new Date('2026-01-02T00:00:00.000Z'),
       createdAt: new Date('2026-01-01T00:00:00.000Z'),
-      workspace: { timezone: 'Asia/Ho_Chi_Minh' },
       user: {
          id: 'member-1',
          name: 'Member One',
          email: 'member@example.com',
          username: 'member.one',
          title: 'Operator',
+         timezone: 'Asia/Ho_Chi_Minh',
          avatarUrl: null,
          createdAt: new Date('2025-12-01T00:00:00.000Z'),
          teamMemberships: [
@@ -52,7 +52,9 @@ describe('UsersService workspace profiles', () => {
          expect.objectContaining({
             where: { workspaceId: 'workspace-1', userId: 'member-1', status: 'ACTIVE' },
             include: expect.objectContaining({
-               workspace: { select: { timezone: true } },
+               user: expect.objectContaining({
+                  select: expect.objectContaining({ timezone: true }),
+               }),
             }),
          })
       );

@@ -21,4 +21,9 @@ export class UpdateProfileDto {
    @IsUrl({ require_tld: false })
    @MaxLength(2048)
    avatarUrl?: string;
+
+   @IsOptional()
+   @IsString()
+   @MaxLength(100)
+   timezone?: string;
 }

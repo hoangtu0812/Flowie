@@ -33,6 +33,7 @@ export default function LoginPage() {
             body: JSON.stringify({
                email: formData.get('email'),
                password: formData.get('password'),
+               timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             }),
          });
          const payload = (await response.json()) as AuthPayload & { message?: string | string[] };

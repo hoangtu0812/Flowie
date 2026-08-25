@@ -1,4 +1,9 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+   BadRequestException,
+   ForbiddenException,
+   Injectable,
+   NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
@@ -8,6 +13,7 @@ const profile = {
    email: true,
    username: true,
    title: true,
+   timezone: true,
    avatarUrl: true,
    createdAt: true,
 } as const;
@@ -17,6 +23,7 @@ type Profile = {
    email: string;
    username: string | null;
    title: string | null;
+   timezone: string;
    avatarUrl: string | null;
    createdAt: Date;
 };
@@ -52,7 +59,6 @@ export class UsersService {
                   },
                },
             },
-            workspace: { select: { timezone: true } },
          },
          orderBy: { joinedAt: 'asc' },
       });
@@ -82,7 +88,6 @@ export class UsersService {
                   },
                },
             },
-            workspace: { select: { timezone: true } },
          },
       });
       if (!member) throw new NotFoundException('Member not found.');
@@ -97,6 +102,7 @@ export class UsersService {
             ...(dto.username !== undefined ? { username: dto.username.trim() || null } : {}),
             ...(dto.title !== undefined ? { title: dto.title.trim() || null } : {}),
             ...(dto.avatarUrl !== undefined ? { avatarUrl: dto.avatarUrl.trim() || null } : {}),
+            ...(dto.timezone !== undefined ? { timezone: this.requireTimezone(dto.timezone) } : {}),
          },
          select: profile,
       });
@@ -113,7 +119,6 @@ export class UsersService {
       role: string;
       joinedAt: Date | null;
       createdAt: Date;
-      workspace: { timezone: string };
       user: Profile & {
          teamMemberships: Array<{
             role: string;
@@ -129,12 +134,20 @@ export class UsersService {
          ...user,
          workspaceRole: member.role,
          joinedAt: member.joinedAt ?? member.createdAt,
-         timezone: member.workspace.timezone,
          teams: teamMemberships.map((membership) => ({
             ...membership.team,
             role: membership.role,
          })),
          projects: projectMemberships.map((membership) => membership.project),
       };
+   }
+
+   private requireTimezone(value: string): string {
+      try {
+         new Intl.DateTimeFormat('en-US', { timeZone: value }).format();
+         return value;
+      } catch {
+         throw new BadRequestException('Timezone is invalid.');
+      }
    }
 }

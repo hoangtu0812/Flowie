@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsEmail, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class LoginDto {
@@ -14,4 +14,10 @@ export class LoginDto {
    @MinLength(1)
    @MaxLength(128)
    password!: string;
+
+   @ApiProperty({ example: 'Asia/Ho_Chi_Minh', required: false })
+   @IsOptional()
+   @IsString()
+   @MaxLength(100)
+   timezone?: string;
 }

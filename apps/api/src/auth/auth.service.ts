@@ -57,6 +57,7 @@ export class AuthService {
             data: {
                email: dto.email,
                name: dto.name,
+               timezone: this.validTimezone(dto.timezone) ?? 'UTC',
                passwordHash,
                identities: {
                   create: {
@@ -136,9 +137,13 @@ export class AuthService {
          throw new UnauthorizedException('Invalid email or password.');
       }
 
+      const timezone = this.validTimezone(dto.timezone);
       await this.prisma.user.update({
          where: { id: user.id },
-         data: { lastLoginAt: new Date() },
+         data: {
+            lastLoginAt: new Date(),
+            ...(timezone ? { timezone } : {}),
+         },
       });
 
       return this.createAuthSession(user, metadata);
@@ -344,6 +349,16 @@ export class AuthService {
 
    private hashToken(token: string): string {
       return createHash('sha256').update(token).digest('hex');
+   }
+
+   private validTimezone(value?: string): string | undefined {
+      if (!value) return undefined;
+      try {
+         new Intl.DateTimeFormat('en-US', { timeZone: value }).format();
+         return value;
+      } catch {
+         return undefined;
+      }
    }
 
    private refreshExpiryDate(): Date {
