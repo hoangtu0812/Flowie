@@ -4,6 +4,16 @@ import { useLiveViews } from '@/components/common/views/use-live-views';
 import { viewIssues, viewProjects } from '@/components/common/views/view-filter';
 import { Button } from '@/components/ui/button';
 import {
+   AlertDialog,
+   AlertDialogAction,
+   AlertDialogCancel,
+   AlertDialogContent,
+   AlertDialogDescription,
+   AlertDialogFooter,
+   AlertDialogHeader,
+   AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
    DropdownMenu,
    DropdownMenuContent,
    DropdownMenuItem,
@@ -26,6 +36,7 @@ export default function Header() {
    const { openPanel, togglePanel } = useRightPanelStore();
    const [deleting, setDeleting] = useState(false);
    const [error, setError] = useState<string>();
+   const [deleteOpen, setDeleteOpen] = useState(false);
    const view = views.find((entry) => entry.id === viewId);
    const isIssue = view?.entityType === 'issue';
    const count = view
@@ -35,7 +46,7 @@ export default function Header() {
       : 0;
    const canDelete = Boolean(view && currentUserId === view.createdBy.id);
    const removeView = async () => {
-      if (!view || !workspaceId || !canDelete || !window.confirm(`Delete ${view.name}?`)) return;
+      if (!view || !workspaceId || !canDelete) return;
       setDeleting(true);
       setError(undefined);
       try {
@@ -82,7 +93,7 @@ export default function Header() {
                         <DropdownMenuItem
                            variant="destructive"
                            disabled={deleting}
-                           onClick={() => void removeView()}
+                           onClick={() => setDeleteOpen(true)}
                         >
                            <Trash2 className="size-4" />
                            {deleting ? 'Deleting…' : 'Delete view'}
@@ -109,6 +120,33 @@ export default function Header() {
             )}
             {error && <span className="text-xs text-destructive">{error}</span>}
          </div>
+         <AlertDialog
+            open={deleteOpen}
+            onOpenChange={(visible) => !deleting && setDeleteOpen(visible)}
+         >
+            <AlertDialogContent>
+               <AlertDialogHeader>
+                  <AlertDialogTitle>Delete {view?.name ?? 'saved view'}?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                     This saved view will be permanently removed.
+                  </AlertDialogDescription>
+               </AlertDialogHeader>
+               {error && <p className="text-sm text-destructive">{error}</p>}
+               <AlertDialogFooter>
+                  <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                     disabled={deleting}
+                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                     onClick={(event) => {
+                        event.preventDefault();
+                        void removeView();
+                     }}
+                  >
+                     {deleting ? 'Deleting…' : 'Delete view'}
+                  </AlertDialogAction>
+               </AlertDialogFooter>
+            </AlertDialogContent>
+         </AlertDialog>
       </div>
    );
 }

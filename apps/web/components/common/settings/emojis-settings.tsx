@@ -3,6 +3,16 @@
 import { loadCurrentWorkspaceTeams } from '@/components/common/teams/team-types';
 import { Button } from '@/components/ui/button';
 import {
+   AlertDialog,
+   AlertDialogAction,
+   AlertDialogCancel,
+   AlertDialogContent,
+   AlertDialogDescription,
+   AlertDialogFooter,
+   AlertDialogHeader,
+   AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
    Dialog,
    DialogContent,
    DialogDescription,
@@ -47,6 +57,8 @@ export default function EmojisSettings() {
    const [file, setFile] = useState<File>();
    const [saving, setSaving] = useState(false);
    const [formError, setFormError] = useState<string>();
+   const [removing, setRemoving] = useState(false);
+   const [removeTarget, setRemoveTarget] = useState<WorkspaceEmoji>();
 
    const load = useCallback(async () => {
       setLoading(true);
@@ -134,7 +146,8 @@ export default function EmojisSettings() {
    };
 
    const archive = async (emoji: WorkspaceEmoji) => {
-      if (!workspaceId || !window.confirm(`Remove :${emoji.name}: from this workspace?`)) return;
+      if (!workspaceId || removing) return;
+      setRemoving(true);
       const response = await fetch(
          `${api}/emojis/${emoji.id}?${new URLSearchParams({ workspaceId })}`,
          { method: 'DELETE', credentials: 'include' }
@@ -142,9 +155,12 @@ export default function EmojisSettings() {
       if (!response.ok) {
          const payload = await response.json().catch(() => undefined);
          setLoadError(apiError(payload, 'Could not remove emoji.'));
+         setRemoving(false);
          return;
       }
       setEmojis((current) => current.filter((item) => item.id !== emoji.id));
+      setRemoveTarget(undefined);
+      setRemoving(false);
    };
 
    return (
@@ -203,7 +219,7 @@ export default function EmojisSettings() {
                            className="px-1.5"
                            title={`Remove :${emoji.name}:`}
                            aria-label={`Remove :${emoji.name}:`}
-                           onClick={() => void archive(emoji)}
+                           onClick={() => setRemoveTarget(emoji)}
                         >
                            <Trash2 className="size-3.5" />
                         </Button>
@@ -260,6 +276,32 @@ export default function EmojisSettings() {
                </DialogFooter>
             </DialogContent>
          </Dialog>
+         <AlertDialog
+            open={Boolean(removeTarget)}
+            onOpenChange={(visible) => !visible && !removing && setRemoveTarget(undefined)}
+         >
+            <AlertDialogContent>
+               <AlertDialogHeader>
+                  <AlertDialogTitle>Remove :{removeTarget?.name}:?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                     This emoji will no longer be available in the workspace.
+                  </AlertDialogDescription>
+               </AlertDialogHeader>
+               <AlertDialogFooter>
+                  <AlertDialogCancel disabled={removing}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                     disabled={removing}
+                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                     onClick={(event) => {
+                        event.preventDefault();
+                        if (removeTarget) void archive(removeTarget);
+                     }}
+                  >
+                     {removing ? 'Removing…' : 'Remove'}
+                  </AlertDialogAction>
+               </AlertDialogFooter>
+            </AlertDialogContent>
+         </AlertDialog>
       </div>
    );
 }

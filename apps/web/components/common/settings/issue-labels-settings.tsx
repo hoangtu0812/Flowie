@@ -1,6 +1,16 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import {
+   AlertDialog,
+   AlertDialogAction,
+   AlertDialogCancel,
+   AlertDialogContent,
+   AlertDialogDescription,
+   AlertDialogFooter,
+   AlertDialogHeader,
+   AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -45,6 +55,7 @@ export function LabelsSettings({ scope }: { scope: LabelScope }) {
    const [draft, setDraft] = useState<LabelDraft>(EMPTY_DRAFT);
    const [saving, setSaving] = useState(false);
    const [message, setMessage] = useState<string>();
+   const [deleteOpen, setDeleteOpen] = useState(false);
 
    const load = useCallback(async () => {
       const id = (await loadCurrentWorkspace()).id;
@@ -121,8 +132,6 @@ export function LabelsSettings({ scope }: { scope: LabelScope }) {
 
    const remove = async () => {
       if (!workspaceId || !selected) return;
-      if (!window.confirm(`Delete “${selected.name}”? It will be removed from linked issues.`))
-         return;
       setSaving(true);
       setMessage(undefined);
       try {
@@ -139,6 +148,7 @@ export function LabelsSettings({ scope }: { scope: LabelScope }) {
             );
          await load();
          setDialog(undefined);
+         setDeleteOpen(false);
       } catch (caught) {
          setMessage(caught instanceof Error ? caught.message : 'Could not delete label.');
       } finally {
@@ -278,7 +288,7 @@ export function LabelsSettings({ scope }: { scope: LabelScope }) {
                            variant="ghost"
                            className="text-destructive"
                            disabled={saving}
-                           onClick={() => void remove()}
+                           onClick={() => setDeleteOpen(true)}
                         >
                            Delete
                         </Button>
@@ -305,6 +315,33 @@ export function LabelsSettings({ scope }: { scope: LabelScope }) {
                </form>
             </DialogContent>
          </Dialog>
+         <AlertDialog
+            open={deleteOpen}
+            onOpenChange={(visible) => !saving && setDeleteOpen(visible)}
+         >
+            <AlertDialogContent>
+               <AlertDialogHeader>
+                  <AlertDialogTitle>Delete “{selected?.name}”?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                     It will be removed from every linked {isProject ? 'project' : 'issue'}.
+                  </AlertDialogDescription>
+               </AlertDialogHeader>
+               {message && <p className="text-sm text-destructive">{message}</p>}
+               <AlertDialogFooter>
+                  <AlertDialogCancel disabled={saving}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                     disabled={saving}
+                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                     onClick={(event) => {
+                        event.preventDefault();
+                        void remove();
+                     }}
+                  >
+                     {saving ? 'Deleting…' : 'Delete'}
+                  </AlertDialogAction>
+               </AlertDialogFooter>
+            </AlertDialogContent>
+         </AlertDialog>
       </div>
    );
 }

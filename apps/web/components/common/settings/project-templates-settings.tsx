@@ -1,6 +1,16 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import {
+   AlertDialog,
+   AlertDialogAction,
+   AlertDialogCancel,
+   AlertDialogContent,
+   AlertDialogDescription,
+   AlertDialogFooter,
+   AlertDialogHeader,
+   AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -44,6 +54,7 @@ export default function ProjectTemplatesSettings() {
    const [draft, setDraft] = useState<TemplateDraft>(EMPTY_DRAFT);
    const [saving, setSaving] = useState(false);
    const [message, setMessage] = useState<string>();
+   const [deleteOpen, setDeleteOpen] = useState(false);
 
    const load = useCallback(async () => {
       const id = (await loadCurrentWorkspace()).id;
@@ -128,7 +139,6 @@ export default function ProjectTemplatesSettings() {
    };
    const remove = async () => {
       if (!workspaceId || !selected) return;
-      if (!window.confirm(`Delete “${selected.name}”?`)) return;
       setSaving(true);
       setMessage(undefined);
       try {
@@ -139,6 +149,7 @@ export default function ProjectTemplatesSettings() {
          if (!response.ok) throw new Error('Could not delete project template.');
          await load();
          setOpen(false);
+         setDeleteOpen(false);
       } catch (caught) {
          setMessage(
             caught instanceof Error ? caught.message : 'Could not delete project template.'
@@ -269,7 +280,7 @@ export default function ProjectTemplatesSettings() {
                            variant="ghost"
                            className="text-destructive"
                            disabled={saving}
-                           onClick={() => void remove()}
+                           onClick={() => setDeleteOpen(true)}
                         >
                            Delete
                         </Button>
@@ -288,6 +299,33 @@ export default function ProjectTemplatesSettings() {
                </form>
             </DialogContent>
          </Dialog>
+         <AlertDialog
+            open={deleteOpen}
+            onOpenChange={(visible) => !saving && setDeleteOpen(visible)}
+         >
+            <AlertDialogContent>
+               <AlertDialogHeader>
+                  <AlertDialogTitle>Delete “{selected?.name}”?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                     This project template will be permanently removed.
+                  </AlertDialogDescription>
+               </AlertDialogHeader>
+               {message && <p className="text-sm text-destructive">{message}</p>}
+               <AlertDialogFooter>
+                  <AlertDialogCancel disabled={saving}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                     disabled={saving}
+                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                     onClick={(event) => {
+                        event.preventDefault();
+                        void remove();
+                     }}
+                  >
+                     {saving ? 'Deleting…' : 'Delete'}
+                  </AlertDialogAction>
+               </AlertDialogFooter>
+            </AlertDialogContent>
+         </AlertDialog>
       </div>
    );
 }
