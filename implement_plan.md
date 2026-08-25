@@ -388,9 +388,9 @@ Tiến độ thực hiện:
   provider/API thật; bỏ import fixture còn sót trong scope này. Status, priority, health, lead và
   target date trên List ghi trực tiếp vào Python API. Toàn bộ request ở Project detail đi qua
   `authenticatedFetch` để tự khôi phục access session sau refresh thay vì làm mất dữ liệu UI.
-- [ ] P5c-acceptance: người dùng tạo một Project trong workspace của mình, sau đó kiểm tra
-  Overview/Activity/Issues ở light và dark; ghi nhận bất kỳ lệch presentation nào trước khi P5 kết
-  thúc. Chỉ sau acceptance mới chuyển sang P6.
+- [x] P5c-acceptance (dark): người dùng đã kiểm tra Project List, Overview, Activity và Issues với
+  dữ liệu thật trên workspace của mình; ảnh nghiệm thu cho thấy project update được lưu/hiển thị lại.
+  User đã cho phép tiếp tục P6. Light-mode được giữ lại trong full regression trước cutover cuối.
 
 Nghiệm thu:
 
@@ -409,6 +409,14 @@ Phạm vi:
 - Comments/activity/attachments.
 - Cycles/current/upcoming và issue-cycle mapping.
 - Inbox/My Issues data thật; không canned item.
+
+Tiến độ thực hiện:
+
+- [x] P6a-core: dựng router riêng tư `/_native/issues` trong FastAPI cho list/options/create/get/
+  update/archive. Router thực hiện kiểm tra workspace/team membership, validate status/project/
+  assignee/label, cấp số Issue bằng `teams.issue_sequence` trong transaction, lưu subscriber và
+  activity. Public `/issues` chưa đổi và UI Circle tiếp tục đi qua facade cho đến khi contract test
+  hoàn tất.
 
 Nghiệm thu:
 
@@ -582,6 +590,8 @@ Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modu
 | 2026-08-25 | P5c Circle Project detail cutover | `da19ae2` | Web production build, 4 FastAPI regression tests và Docker web rebuild/recreate đạt; Overview/Activity/Issues dùng provider + API adapter, không còn fixture data trong cây Project detail | Acceptance light/dark với workspace người dùng; endpoints P6/P7 chưa migrate vẫn facade | Người dùng tạo Project và kiểm tra ba tab |
 | 2026-08-25 | P5c Create Project readiness fix | `d7132ce` | Dialog không còn submit khi `workspaceId` chưa tải xong; Docker browser smoke xác nhận nút bị khóa trong trạng thái chưa sẵn sàng, web production build đạt | Acceptance tạo Project sau đăng nhập | Refresh, chờ workspace tải rồi tạo Project |
 | 2026-08-25 | P5c Project fixture audit | current change-set | List/Board/Timeline/Insights/Peek không còn Project fixture; property mutation và detail request dùng Python API + durable session helper | Cần production build/Docker và user acceptance light/dark | Rebuild rồi nghiệm thu toàn Project UI |
+| 2026-08-25 | P5c Project user acceptance | user screenshots | List/Overview/Activity/Issues xác nhận dữ liệu thật trong dark mode; user cho phép mở P6 | Full regression light mode trước final cutover | P6a native Issues core |
+| 2026-08-25 | P6a native Issues core | current change-set | Private FastAPI list/options/CRUD, RBAC, reference validation, sequence và activity persistence; `py_compile` passed | Docker/API contract regression, comments, attachments, cycles và Circle adapter | Chạy native regression rồi mở public whitelist |
 | 2026-08-25 | P3d Circle Workspace UI cutover | `8a2ccd1` | Web build + FastAPI regression đạt; browser smoke ghi nhận `401 → /auth/refresh 200 → /workspaces/me 200`; switcher không còn hard-code workspace | Members presentation còn fixture; invite API native đã sẵn sàng | Tạo workspace đầu tiên rồi nối Members UI |
 | 2026-08-25 | P4d Circle Teams/Members UI cutover | current change-set | Web production build và Docker web build đạt; Team/Member list, tạo Team, invite, role và remove đều dùng Python API, không còn mock ở scope này | Cần một workspace có ít nhất hai tài khoản đã đăng ký để nghiệm thu UI thao tác thật | Người dùng tạo workspace, tạo Team và mời tài khoản Flowie thứ hai để test |
 | 2026-08-25 | P4e Join Team/Workspace | current change-set | Web production build đạt; Join Team và Workspace invitation đã có entry point trong UI gốc | Cần tài khoản thứ hai để xác nhận invitation/join thực tế | Rebuild Docker, sau đó nghiệm thu hai-account flow |
