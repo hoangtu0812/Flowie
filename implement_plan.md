@@ -365,6 +365,10 @@ Tiến độ thực hiện:
   milestone, update, resource, member, favorite và subscription đã đạt.
 - [x] P5c-precutover: đối chiếu response Project create/get của Python với facade Legacy trên cùng
   database; top-level và object Team không còn trường thiếu/thừa.
+- [x] P5c-list/create: chuyển whitelist route public Projects sang Python cho list/detail/create/update,
+  resource, members, milestones và favorite; các route chưa port tiếp tục facade. Màn hình Circle
+  Projects và Team Projects đã đọc PostgreSQL thật; dialog Create project ghi record thật mà không
+  thay layout/stylesheet baseline.
 - [ ] P5c: đối chiếu payload với adapter Circle, chuyển route public theo một lát cắt hoàn chỉnh,
   sau đó mới yêu cầu người dùng kiểm tra UI light/dark.
 
@@ -554,6 +558,7 @@ Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modu
 | 2026-08-25 | P5a native Project core (private staging) | `f1ef4e9` | Docker regression: register/workspace/team, create/list/update/detail/archive Project passed | Public Projects contract, Issues, worker | P5b Project read-side and related mutations |
 | 2026-08-25 | P5b native Project collaboration data | `4211c89` | Docker regression: members, favorite/subscription, milestone CRUD, updates/resources/activity and Project detail hydration passed | Project settings/templates/custom fields, public payload parity, Issues/worker | P5c compare Circle adapter and public cutover |
 | 2026-08-25 | P5c pre-cutover Project contract | `1924448` | Docker parity audit: Legacy/Python Project create/get top-level và Team payload không có key thiếu/thừa | Route public, adapter Circle, settings/templates/custom fields, Issues/worker | Báo người dùng trước khi bắt đầu nối UI |
+| 2026-08-25 | P5c Circle Project list/create cutover | `ebf5bab` | Public API regression + browser: unchanged Circle layout, real empty workspace state, Create project dialog opens, no console errors; web build passed | Project detail page adapters, Issue/Activity read-side, settings routes | Nối Overview/Activity/Issues theo whitelist |
 
 ## 13. Definition of Done toàn dự án
 
