@@ -31,14 +31,15 @@ export function PrioritySelector({ priority, issueId }: PrioritySelectorProps) {
       setValue(priority.id);
    }, [priority.id]);
 
-   const handlePriorityChange = (priorityId: string) => {
-      setValue(priorityId);
-      setOpen(false);
-
+   const handlePriorityChange = async (priorityId: string) => {
       if (issueId) {
          const newPriority = priorities.find((p) => p.id === priorityId);
          if (newPriority) {
-            updateIssuePriority(issueId, newPriority);
+            const updated = await updateIssuePriority(issueId, newPriority);
+            if (updated) {
+               setValue(priorityId);
+               setOpen(false);
+            }
          }
       }
    };
@@ -78,7 +79,7 @@ export function PrioritySelector({ priority, issueId }: PrioritySelectorProps) {
                            <CommandItem
                               key={item.id}
                               value={item.id}
-                              onSelect={handlePriorityChange}
+                              onSelect={() => void handlePriorityChange(item.id)}
                               className="flex items-center justify-between"
                            >
                               <div className="flex items-center gap-2">

@@ -45,6 +45,14 @@ const priorityId: Record<NativeIssue['priority'], string> = {
    URGENT: 'urgent',
 };
 
+const apiPriority: Record<string, NativeIssue['priority']> = {
+   'no-priority': 'NONE',
+   'low': 'LOW',
+   'medium': 'MEDIUM',
+   'high': 'HIGH',
+   'urgent': 'URGENT',
+};
+
 function asStatus(native: NativeIssueStatus): Status {
    const category = native.category.toLowerCase() as StatusCategory;
    const presentation =
@@ -140,7 +148,7 @@ interface IssuesState {
    updateIssueStatus: (issueId: string, newStatus: Status) => Promise<boolean>;
 
    // Priority management
-   updateIssuePriority: (issueId: string, newPriority: Priority) => void;
+   updateIssuePriority: (issueId: string, newPriority: Priority) => Promise<boolean>;
 
    // Assignee management
    updateIssueAssignee: (issueId: string, newAssignee: User | null) => void;
@@ -380,8 +388,42 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
    },
 
    // Priority management
-   updateIssuePriority: (issueId: string, newPriority: Priority) => {
-      get().updateIssue(issueId, { priority: newPriority });
+   updateIssuePriority: async (issueId: string, newPriority: Priority) => {
+      try {
+         const issue = get().getIssueById(issueId);
+         const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
+         const priority = apiPriority[newPriority.id];
+         if (!issue || !priority) {
+            toast.error('This issue priority is not ready yet.');
+            return false;
+         }
+         const response = await authenticatedFetch(
+            `${api}/issues/${issue.id}?${new URLSearchParams({ workspaceId })}`,
+            {
+               method: 'PATCH',
+               headers: { 'content-type': 'application/json' },
+               body: JSON.stringify({ priority }),
+            }
+         );
+         if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as {
+               message?: string;
+            } | null;
+            throw new Error(payload?.message ?? 'Could not update issue priority.');
+         }
+         const payload = (await response.json()) as { data: NativeIssue };
+         const updatedIssue = asIssue(payload.data);
+         set((state) => {
+            const issues = state.issues.map((candidate) =>
+               candidate.id === issueId ? updatedIssue : candidate
+            );
+            return { issues, issuesByStatus: groupIssuesByStatus(issues) };
+         });
+         return true;
+      } catch (error) {
+         toast.error(error instanceof Error ? error.message : 'Could not update issue priority.');
+         return false;
+      }
    },
 
    // Assignee management
