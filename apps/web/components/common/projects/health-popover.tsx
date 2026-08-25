@@ -2,17 +2,19 @@
 
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { health as healthOptions } from '@/lib/project-presentations';
 import { CircleCheck, CircleX, AlertCircle, HelpCircle, Bell } from 'lucide-react';
-import { Project } from '@/mock-data/projects';
+import type { Project } from '@/types/projects';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 
 interface HealthPopoverProps {
    project: Project;
+   onHealthChange?: (healthId: string) => void;
 }
 
-export function HealthPopover({ project }: HealthPopoverProps) {
+export function HealthPopover({ project, onHealthChange }: HealthPopoverProps) {
    const getHealthIcon = (healthId: string) => {
       switch (healthId) {
          case 'on-track':
@@ -90,6 +92,26 @@ export function HealthPopover({ project }: HealthPopoverProps) {
                <div>
                   <p className="text-sm text-muted-foreground">{project.health.description}</p>
                </div>
+               {onHealthChange && (
+                  <div className="grid grid-cols-2 gap-1 pt-1">
+                     {healthOptions.map((health) => (
+                        <Button
+                           key={health.id}
+                           type="button"
+                           size="sm"
+                           variant={health.id === project.health.id ? 'secondary' : 'ghost'}
+                           className="justify-start text-xs"
+                           onClick={() => onHealthChange(health.id)}
+                        >
+                           <span
+                              className="mr-1.5 size-2 rounded-full"
+                              style={{ backgroundColor: health.color }}
+                           />
+                           {health.name}
+                        </Button>
+                     ))}
+                  </div>
+               )}
             </div>
          </PopoverContent>
       </Popover>

@@ -3,7 +3,7 @@
 import { health as healthOptions } from '@/lib/project-presentations';
 import { priorities } from '@/lib/priority-presentations';
 import type { Status, StatusCategory } from '@/lib/status-presentations';
-import { loadCurrentWorkspace } from '@/lib/workspaces';
+import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import type { Project } from '@/types/projects';
 import { Circle, CircleCheck, CircleDashed, CirclePlay, CircleX, FolderKanban } from 'lucide-react';
 import {
@@ -73,6 +73,7 @@ export type ProjectListStatus = Status;
 export type ProjectListUpdate = {
    leadId?: string | null;
    priority?: string;
+   health?: string;
    status?: string;
    targetDate?: string | null;
    labelIds?: string[];
@@ -240,12 +241,10 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
          const workspace = await loadCurrentWorkspace();
          const [projectsResponse, membersResponse, statusesResponse, teamsResponse] =
             await Promise.all([
-               fetch(`${api}/projects?workspaceId=${workspace.id}`, { credentials: 'include' }),
-               fetch(`${api}/workspaces/${workspace.id}/members`, { credentials: 'include' }),
-               fetch(`${api}/projects/statuses?workspaceId=${workspace.id}`, {
-                  credentials: 'include',
-               }),
-               fetch(`${api}/teams?workspaceId=${workspace.id}`, { credentials: 'include' }),
+               authenticatedFetch(`${api}/projects?workspaceId=${workspace.id}`),
+               authenticatedFetch(`${api}/workspaces/${workspace.id}/members`),
+               authenticatedFetch(`${api}/projects/statuses?workspaceId=${workspace.id}`),
+               authenticatedFetch(`${api}/teams?workspaceId=${workspace.id}`),
             ]);
          if (
             !projectsResponse.ok ||
@@ -311,12 +310,15 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
    const updateProject = useCallback(
       async (projectId: string, update: ProjectListUpdate) => {
          if (!workspaceId) throw new Error('Workspace is not ready yet.');
-         const response = await fetch(`${api}/projects/${projectId}?workspaceId=${workspaceId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify(update),
-         });
+         const response = await authenticatedFetch(
+            `${api}/projects/${projectId}?workspaceId=${workspaceId}`,
+            {
+               method: 'PATCH',
+               headers: { 'Content-Type': 'application/json' },
+               credentials: 'include',
+               body: JSON.stringify(update),
+            }
+         );
          if (!response.ok) {
             const payload = (await response.json().catch(() => null)) as {
                message?: string | string[];
@@ -346,7 +348,7 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
    const createProject = useCallback(
       async ({ name, identifier, teamId, description }: CreateProjectValues) => {
          if (!workspaceId) throw new Error('Workspace is not ready yet.');
-         const response = await fetch(`${api}/projects`, {
+         const response = await authenticatedFetch(`${api}/projects`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',

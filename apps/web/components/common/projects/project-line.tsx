@@ -1,30 +1,30 @@
 'use client';
 
-import { Issue } from '@/mock-data/issues';
-import { Project } from '@/mock-data/projects';
-import { useIssuesStore } from '@/store/issues-store';
+import type { Project } from '@/types/projects';
+import { useProjectsData } from '@/features/projects/projects-data';
 import { useProjectsDisplayStore } from '@/store/projects-display-store';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useMemo } from 'react';
 import { HealthPopover } from './health-popover';
 import { PrioritySelector } from './priority-selector';
 import { LeadSelector } from './lead-selector';
 import { StatusWithPercent } from './status-with-percent';
 import { DatePicker } from './date-picker';
+import { toast } from 'sonner';
 
 interface ProjectLineProps {
-   project: Project;
+   project: Project & { issueCount?: number };
 }
-
-const countIssues = (issues: Issue[], projectId: string) =>
-   issues.filter((issue) => issue.project?.id === projectId).length;
 
 export default function ProjectLine({ project }: ProjectLineProps) {
    const { orgId } = useParams<{ orgId: string }>();
-   const { issues } = useIssuesStore();
+   const { projectStatuses, updateProject, workspaceMembers } = useProjectsData();
    const { displayProperties } = useProjectsDisplayStore();
-   const issueCount = useMemo(() => countIssues(issues, project.id), [issues, project.id]);
+   const persistUpdate = (update: Parameters<typeof updateProject>[1]) => {
+      void updateProject(project.id, update).catch((error: unknown) => {
+         toast.error(error instanceof Error ? error.message : 'Could not update project.');
+      });
+   };
 
    return (
       <div className="w-full flex items-center py-3 px-6 border-b hover:bg-sidebar/50 border-muted-foreground/5 text-sm">
@@ -59,27 +59,42 @@ export default function ProjectLine({ project }: ProjectLineProps) {
 
          {displayProperties.health && (
             <div className="hidden sm:block w-[120px] shrink-0">
-               <HealthPopover project={project} />
+               <HealthPopover
+                  project={project}
+                  onHealthChange={(health) => persistUpdate({ health })}
+               />
             </div>
          )}
          {displayProperties.priority && (
             <div className="hidden md:block w-[70px] shrink-0">
-               <PrioritySelector priority={project.priority} />
+               <PrioritySelector
+                  priority={project.priority}
+                  onPriorityChange={(priority) => persistUpdate({ priority })}
+               />
             </div>
          )}
          {displayProperties.lead && (
             <div className="hidden xl:block w-[130px] shrink-0">
-               <LeadSelector lead={project.lead} />
+               <LeadSelector
+                  lead={project.lead}
+                  members={workspaceMembers}
+                  onLeadChange={(leadId) => persistUpdate({ leadId })}
+               />
             </div>
          )}
          {displayProperties.targetDate && (
             <div className="hidden xl:block w-[110px] shrink-0">
-               <DatePicker date={project.targetDate ? new Date(project.targetDate) : undefined} />
+               <DatePicker
+                  date={project.targetDate ? new Date(project.targetDate) : undefined}
+                  onDateChange={(date) =>
+                     persistUpdate({ targetDate: date?.toISOString() ?? null })
+                  }
+               />
             </div>
          )}
          {displayProperties.issues && (
             <div className="hidden xl:block w-[60px] shrink-0 text-muted-foreground text-xs pl-2.5">
-               {issueCount}
+               {project.issueCount ?? 0}
             </div>
          )}
          {displayProperties.status && (
@@ -87,6 +102,8 @@ export default function ProjectLine({ project }: ProjectLineProps) {
                <StatusWithPercent
                   status={project.status}
                   percentComplete={project.percentComplete}
+                  statuses={projectStatuses}
+                  onStatusChange={(status) => persistUpdate({ status })}
                />
             </div>
          )}

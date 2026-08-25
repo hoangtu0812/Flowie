@@ -1,10 +1,8 @@
 'use client';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { getProjectDetail } from '@/mock-data/project-details';
-import { getProjectById } from '@/mock-data/projects';
-import { teams } from '@/mock-data/teams';
-import { useIssuesStore } from '@/store/issues-store';
+import { toProjectDetailUi, toProjectUi } from './details/project-detail-ui-adapter';
+import { useLiveProject } from './details/use-live-project';
 import { format, parseISO } from 'date-fns';
 import {
    ArrowRight,
@@ -55,14 +53,21 @@ function Card({ children, className }: { children: React.ReactNode; className?: 
  */
 export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) {
    const { orgId } = useParams<{ orgId: string }>();
-   const { issues: allIssues } = useIssuesStore();
-
-   const project = getProjectById(projectId);
-   const detail = getProjectDetail(projectId);
-
-   const issues = useMemo(
-      () => allIssues.filter((issue) => issue.project?.id === projectId),
-      [allIssues, projectId]
+   const {
+      project: liveProject,
+      issues,
+      milestones,
+      updates,
+      activities,
+   } = useLiveProject(projectId);
+   const project = useMemo(
+      () => (liveProject ? toProjectUi(liveProject, issues) : undefined),
+      [issues, liveProject]
+   );
+   const detail = useMemo(
+      () =>
+         liveProject ? toProjectDetailUi(liveProject, milestones, updates, activities) : undefined,
+      [activities, liveProject, milestones, updates]
    );
 
    useEffect(() => {
@@ -73,20 +78,11 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
       return () => window.removeEventListener('keydown', onKeyDown);
    }, [onClose]);
 
-   const members = useMemo(() => {
-      const seen = new Set<string>();
-      return issues
-         .map((issue) => issue.assignee)
-         .filter((assignee): assignee is NonNullable<typeof assignee> => {
-            if (!assignee || seen.has(assignee.id)) return false;
-            seen.add(assignee.id);
-            return true;
-         });
-   }, [issues]);
+   const members = liveProject?.members.map((member) => member.user) ?? [];
 
-   if (!project) return null;
+   if (!project || !detail) return null;
 
-   const team = teams.find((candidate) => candidate.id === project.teamId);
+   const team = project.team;
    const started = issues.filter((issue) => issue.status.category === 'started').length;
    const completed = issues.filter((issue) => issue.status.category === 'completed').length;
 
@@ -149,7 +145,10 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
                         <span className="flex -space-x-1.5">
                            {members.slice(0, 3).map((member) => (
                               <Avatar key={member.id} className="size-5 border-2 border-container">
-                                 <AvatarImage src={member.avatarUrl} alt={member.name} />
+                                 <AvatarImage
+                                    src={member.avatarUrl ?? undefined}
+                                    alt={member.name}
+                                 />
                                  <AvatarFallback>{member.name[0]}</AvatarFallback>
                               </Avatar>
                            ))}

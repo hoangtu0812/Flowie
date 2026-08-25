@@ -384,6 +384,10 @@ Tiến độ thực hiện:
   dữ liệu thật; header, side panel, cycle breakdown, tiến độ và timeline không còn đọc `mock-data`
   hay Zustand fixture. Activity post update ghi vào API/DB thật; các request chưa thuộc public
   whitelist vẫn đi an toàn qua facade. Web production build và FastAPI regression đạt.
+- [x] P5c-audit: Project List, Board, Timeline, Insights và Timeline Peek cùng dùng Project
+  provider/API thật; bỏ import fixture còn sót trong scope này. Status, priority, health, lead và
+  target date trên List ghi trực tiếp vào Python API. Toàn bộ request ở Project detail đi qua
+  `authenticatedFetch` để tự khôi phục access session sau refresh thay vì làm mất dữ liệu UI.
 - [ ] P5c-acceptance: người dùng tạo một Project trong workspace của mình, sau đó kiểm tra
   Overview/Activity/Issues ở light và dark; ghi nhận bất kỳ lệch presentation nào trước khi P5 kết
   thúc. Chỉ sau acceptance mới chuyển sang P6.
@@ -577,6 +581,7 @@ Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modu
 | 2026-08-25 | P5c Circle Project list/create cutover | `ebf5bab` | Public API regression + browser: unchanged Circle layout, real empty workspace state, Create project dialog opens, no console errors; web build passed | Project detail page adapters, Issue/Activity read-side, settings routes | Nối Overview/Activity/Issues theo whitelist |
 | 2026-08-25 | P5c Circle Project detail cutover | `da19ae2` | Web production build, 4 FastAPI regression tests và Docker web rebuild/recreate đạt; Overview/Activity/Issues dùng provider + API adapter, không còn fixture data trong cây Project detail | Acceptance light/dark với workspace người dùng; endpoints P6/P7 chưa migrate vẫn facade | Người dùng tạo Project và kiểm tra ba tab |
 | 2026-08-25 | P5c Create Project readiness fix | `d7132ce` | Dialog không còn submit khi `workspaceId` chưa tải xong; Docker browser smoke xác nhận nút bị khóa trong trạng thái chưa sẵn sàng, web production build đạt | Acceptance tạo Project sau đăng nhập | Refresh, chờ workspace tải rồi tạo Project |
+| 2026-08-25 | P5c Project fixture audit | current change-set | List/Board/Timeline/Insights/Peek không còn Project fixture; property mutation và detail request dùng Python API + durable session helper | Cần production build/Docker và user acceptance light/dark | Rebuild rồi nghiệm thu toàn Project UI |
 | 2026-08-25 | P3d Circle Workspace UI cutover | `8a2ccd1` | Web build + FastAPI regression đạt; browser smoke ghi nhận `401 → /auth/refresh 200 → /workspaces/me 200`; switcher không còn hard-code workspace | Members presentation còn fixture; invite API native đã sẵn sàng | Tạo workspace đầu tiên rồi nối Members UI |
 | 2026-08-25 | P4d Circle Teams/Members UI cutover | current change-set | Web production build và Docker web build đạt; Team/Member list, tạo Team, invite, role và remove đều dùng Python API, không còn mock ở scope này | Cần một workspace có ít nhất hai tài khoản đã đăng ký để nghiệm thu UI thao tác thật | Người dùng tạo workspace, tạo Team và mời tài khoản Flowie thứ hai để test |
 | 2026-08-25 | P4e Join Team/Workspace | current change-set | Web production build đạt; Join Team và Workspace invitation đã có entry point trong UI gốc | Cần tài khoản thứ hai để xác nhận invitation/join thực tế | Rebuild Docker, sau đó nghiệm thu hai-account flow |

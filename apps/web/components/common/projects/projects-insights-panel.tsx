@@ -3,10 +3,10 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useProjectsData } from '@/features/projects/projects-data';
+import { health as healthList } from '@/lib/project-presentations';
 import { cn } from '@/lib/utils';
-import { health as healthList, Project } from '@/mock-data/projects';
-import { teams } from '@/mock-data/teams';
-import { users } from '@/mock-data/users';
+import type { Project } from '@/types/projects';
 import { useProjectsFilterStore } from '@/store/projects-filter-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { X } from 'lucide-react';
@@ -65,6 +65,7 @@ function CountList({ rows }: { rows: CountRow[] }) {
 /** Right panel of the Projects page: counters by health / team / lead. */
 export default function ProjectsInsightsPanel({ projects }: ProjectsInsightsPanelProps) {
    const { closePanel } = useRightPanelStore();
+   const { teamGroups } = useProjectsData();
    const { filters, toggleFilter } = useProjectsFilterStore();
 
    const healthRows = useMemo<CountRow[]>(
@@ -73,7 +74,10 @@ export default function ProjectsInsightsPanel({ projects }: ProjectsInsightsPane
             key: entry.id,
             label: entry.id === 'no-update' ? 'No update expected' : entry.name,
             leading: (
-               <span className="size-2.5 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
+               <span
+                  className="size-2.5 rounded-full shrink-0"
+                  style={{ backgroundColor: entry.color }}
+               />
             ),
             count: projects.filter((project) => project.health.id === entry.id).length,
             onClick: () => toggleFilter('health', entry.id),
@@ -84,7 +88,7 @@ export default function ProjectsInsightsPanel({ projects }: ProjectsInsightsPane
 
    const teamRows = useMemo<CountRow[]>(
       () =>
-         teams
+         teamGroups
             .map((team) => ({
                key: team.id,
                label: team.name,
@@ -93,23 +97,27 @@ export default function ProjectsInsightsPanel({ projects }: ProjectsInsightsPane
             }))
             .filter((row) => row.count > 0)
             .sort((a, b) => b.count - a.count),
-      [projects]
+      [projects, teamGroups]
    );
 
    const leadRows = useMemo<CountRow[]>(
       () =>
-         users
-            .map((user) => ({
-               key: user.id,
-               label: user.name,
+         projects
+            .map((project) => ({
+               key: project.lead.id,
+               label: project.lead.name,
                leading: (
                   <Avatar className="size-5 shrink-0">
-                     <AvatarImage src={user.avatarUrl} alt={user.name} />
-                     <AvatarFallback>{user.name[0]}</AvatarFallback>
+                     <AvatarImage
+                        src={project.lead.avatarUrl || undefined}
+                        alt={project.lead.name}
+                     />
+                     <AvatarFallback>{project.lead.name[0]}</AvatarFallback>
                   </Avatar>
                ),
-               count: projects.filter((project) => project.lead.id === user.id).length,
+               count: projects.filter((candidate) => candidate.lead.id === project.lead.id).length,
             }))
+            .filter((row, index, rows) => rows.findIndex((item) => item.key === row.key) === index)
             .filter((row) => row.count > 0)
             .sort((a, b) => b.count - a.count),
       [projects]

@@ -9,7 +9,7 @@ import {
    useEffect,
    useState,
 } from 'react';
-import { loadCurrentWorkspace } from '@/lib/workspaces';
+import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 
 export type LiveProject = {
    id: string;
@@ -161,25 +161,28 @@ export function useLiveProject(projectId: string) {
                statusesResponse,
                teamsResponse,
             ] = await Promise.all([
-               fetch(`${api}/projects/${projectId}?${query}`, { credentials: 'include' }),
-               fetch(`${api}/projects/${projectId}/issues?${query}`, { credentials: 'include' }),
-               fetch(`${api}/projects/${projectId}/milestones?${query}`, {
+               authenticatedFetch(`${api}/projects/${projectId}?${query}`),
+               authenticatedFetch(`${api}/projects/${projectId}/issues?${query}`),
+               authenticatedFetch(`${api}/projects/${projectId}/milestones?${query}`, {
                   credentials: 'include',
                }),
-               fetch(`${api}/activities?${new URLSearchParams({ workspaceId, projectId })}`, {
+               authenticatedFetch(
+                  `${api}/activities?${new URLSearchParams({ workspaceId, projectId })}`,
+                  {
+                     credentials: 'include',
+                  }
+               ),
+               authenticatedFetch(`${api}/projects/${projectId}/updates?${query}`, {
                   credentials: 'include',
                }),
-               fetch(`${api}/projects/${projectId}/updates?${query}`, {
+               authenticatedFetch(`${api}/projects/labels?${query}`),
+               authenticatedFetch(`${api}/projects/${projectId}/custom-fields?${query}`, {
                   credentials: 'include',
                }),
-               fetch(`${api}/projects/labels?${query}`, { credentials: 'include' }),
-               fetch(`${api}/projects/${projectId}/custom-fields?${query}`, {
-                  credentials: 'include',
-               }),
-               fetch(`${api}/initiatives?${query}`, { credentials: 'include' }),
-               fetch(`${api}/workspaces/${workspaceId}/members`, { credentials: 'include' }),
-               fetch(`${api}/projects/statuses?${query}`, { credentials: 'include' }),
-               fetch(`${api}/teams?${query}`, { credentials: 'include' }),
+               authenticatedFetch(`${api}/initiatives?${query}`),
+               authenticatedFetch(`${api}/workspaces/${workspaceId}/members`),
+               authenticatedFetch(`${api}/projects/statuses?${query}`),
+               authenticatedFetch(`${api}/teams?${query}`),
             ]);
             if (
                !projectResponse.ok ||
@@ -242,7 +245,7 @@ export function useLiveProject(projectId: string) {
    const createUpdate = useCallback(
       async (body: string, health: string, kind: 'update' | 'comment', attachment?: File) => {
          if (!workspaceId) throw new Error('Workspace is not available yet.');
-         const response = await fetch(`${api}/projects/${projectId}/updates`, {
+         const response = await authenticatedFetch(`${api}/projects/${projectId}/updates`, {
             method: 'POST',
             credentials: 'include',
             headers: { 'content-type': 'application/json' },
@@ -263,7 +266,7 @@ export function useLiveProject(projectId: string) {
          form.set('entityType', 'project-update');
          form.set('entityId', created.id);
          form.set('file', attachment);
-         const uploadResponse = await fetch(`${api}/attachments`, {
+         const uploadResponse = await authenticatedFetch(`${api}/attachments`, {
             method: 'POST',
             credentials: 'include',
             body: form,
@@ -287,7 +290,7 @@ export function useLiveProject(projectId: string) {
       async (data: Record<string, unknown>) => {
          if (!workspaceId) throw new Error('Workspace is not available yet.');
          const query = new URLSearchParams({ workspaceId });
-         const response = await fetch(`${api}/projects/${projectId}?${query}`, {
+         const response = await authenticatedFetch(`${api}/projects/${projectId}?${query}`, {
             method: 'PATCH',
             credentials: 'include',
             headers: { 'content-type': 'application/json' },
@@ -316,7 +319,7 @@ export function useLiveProject(projectId: string) {
    const createResource = useCallback(
       async (label: string, url: string) => {
          if (!workspaceId) throw new Error('Workspace is not available yet.');
-         const response = await fetch(`${api}/projects/${projectId}/resources`, {
+         const response = await authenticatedFetch(`${api}/projects/${projectId}/resources`, {
             method: 'POST',
             credentials: 'include',
             headers: { 'content-type': 'application/json' },
@@ -345,7 +348,7 @@ export function useLiveProject(projectId: string) {
       async (labelIds: string[]) => {
          if (!workspaceId) throw new Error('Workspace is not available yet.');
          const query = new URLSearchParams({ workspaceId });
-         const response = await fetch(`${api}/projects/${projectId}?${query}`, {
+         const response = await authenticatedFetch(`${api}/projects/${projectId}?${query}`, {
             method: 'PATCH',
             credentials: 'include',
             headers: { 'content-type': 'application/json' },
@@ -370,7 +373,7 @@ export function useLiveProject(projectId: string) {
          );
          const updated = await Promise.all(
             changedFields.map(async (field) => {
-               const response = await fetch(
+               const response = await authenticatedFetch(
                   `${api}/projects/${projectId}/custom-fields/${field.id}`,
                   {
                      method: 'PATCH',
@@ -404,13 +407,13 @@ export function useLiveProject(projectId: string) {
          const additions = [...requestedIds].filter((id) => !currentIds.has(id));
          const responses = await Promise.all([
             ...removals.map((initiativeId) =>
-               fetch(
+               authenticatedFetch(
                   `${api}/initiatives/${initiativeId}/projects/${projectId}?${new URLSearchParams({ workspaceId })}`,
                   { method: 'DELETE', credentials: 'include' }
                )
             ),
             ...additions.map((initiativeId) =>
-               fetch(`${api}/initiatives/${initiativeId}/projects`, {
+               authenticatedFetch(`${api}/initiatives/${initiativeId}/projects`, {
                   method: 'POST',
                   credentials: 'include',
                   headers: { 'content-type': 'application/json' },
@@ -434,7 +437,7 @@ export function useLiveProject(projectId: string) {
    const updateMembers = useCallback(
       async (userIds: string[]) => {
          if (!workspaceId) throw new Error('Workspace is not available yet.');
-         const response = await fetch(`${api}/projects/${projectId}/members`, {
+         const response = await authenticatedFetch(`${api}/projects/${projectId}/members`, {
             method: 'PATCH',
             credentials: 'include',
             headers: { 'content-type': 'application/json' },
@@ -455,7 +458,7 @@ export function useLiveProject(projectId: string) {
    const createMilestone = useCallback(
       async (title: string, targetDate?: string) => {
          if (!workspaceId) throw new Error('Workspace is not available yet.');
-         const response = await fetch(`${api}/projects/${projectId}/milestones`, {
+         const response = await authenticatedFetch(`${api}/projects/${projectId}/milestones`, {
             method: 'POST',
             credentials: 'include',
             headers: { 'content-type': 'application/json' },
@@ -473,7 +476,7 @@ export function useLiveProject(projectId: string) {
       async (milestoneId: string, completed: boolean) => {
          if (!workspaceId) throw new Error('Workspace is not available yet.');
          const query = new URLSearchParams({ workspaceId });
-         const response = await fetch(
+         const response = await authenticatedFetch(
             `${api}/projects/${projectId}/milestones/${milestoneId}?${query}`,
             {
                method: 'PATCH',
@@ -494,7 +497,7 @@ export function useLiveProject(projectId: string) {
    const toggleFavorite = useCallback(
       async (favorite: boolean) => {
          if (!workspaceId) throw new Error('Workspace is not available yet.');
-         const response = await fetch(
+         const response = await authenticatedFetch(
             `${api}/projects/${projectId}/favorite?${new URLSearchParams({ workspaceId })}`,
             { method: favorite ? 'POST' : 'DELETE', credentials: 'include' }
          );

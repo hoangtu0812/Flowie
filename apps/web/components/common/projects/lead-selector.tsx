@@ -10,17 +10,19 @@ import {
    CommandList,
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { users, User } from '@/mock-data/users';
+import type { ProjectListMember } from '@/features/projects/projects-data';
+import type { User } from '@/types/users';
 import { CheckIcon } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useId, useState } from 'react';
 
 interface LeadSelectorProps {
    lead: User;
+   members: ProjectListMember[];
    onLeadChange?: (userId: string) => void;
 }
 
-export function LeadSelector({ lead, onLeadChange }: LeadSelectorProps) {
+export function LeadSelector({ lead, members, onLeadChange }: LeadSelectorProps) {
    const id = useId();
    const [open, setOpen] = useState<boolean>(false);
    const [value, setValue] = useState<string>(lead.id);
@@ -47,13 +49,13 @@ export function LeadSelector({ lead, onLeadChange }: LeadSelectorProps) {
                   aria-expanded={open}
                >
                   {(() => {
-                     const selectedUser = users.find((user) => user.id === value);
+                     const selectedUser = members.find((user) => user.id === value) ?? lead;
                      if (selectedUser) {
                         return (
                            <>
                               <Avatar className="size-5 mr-1">
                                  <AvatarImage
-                                    src={selectedUser.avatarUrl}
+                                    src={selectedUser.avatarUrl ?? undefined}
                                     alt={selectedUser.name}
                                  />
                                  <AvatarFallback>{selectedUser.name.charAt(0)}</AvatarFallback>
@@ -72,7 +74,7 @@ export function LeadSelector({ lead, onLeadChange }: LeadSelectorProps) {
                   <CommandList>
                      <CommandEmpty>No user found.</CommandEmpty>
                      <CommandGroup>
-                        {users.map((user) => (
+                        {members.map((user) => (
                            <CommandItem
                               key={user.id}
                               value={user.id}
@@ -81,7 +83,10 @@ export function LeadSelector({ lead, onLeadChange }: LeadSelectorProps) {
                            >
                               <div className="flex items-center gap-2">
                                  <Avatar className="size-5">
-                                    <AvatarImage src={user.avatarUrl} alt={user.name} />
+                                    <AvatarImage
+                                       src={user.avatarUrl ?? undefined}
+                                       alt={user.name}
+                                    />
                                     <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
                                  </Avatar>
                                  <span className="text-xs">{user.name}</span>
