@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import asyncio
 from typing import Final
 
 import httpx
@@ -24,6 +25,7 @@ from .domains.teams import router as teams_router
 from .domains.users import router as users_router
 from .domains.workspaces import router as workspaces_router
 from .legacy.proxy import proxy_legacy_request
+from .jobs.reminders import reminder_loop
 
 API_METHODS: Final = ['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT']
 
@@ -39,6 +41,8 @@ def create_app(
     async def lifespan(app: FastAPI):
         session_factory, engine = create_session_factory(runtime)
         app.state.session_factory = session_factory
+        reminder_stop = asyncio.Event()
+        reminder_task = asyncio.create_task(reminder_loop(session_factory, reminder_stop))
         async with httpx.AsyncClient(
             base_url=runtime.legacy_api_url,
             timeout=runtime.legacy_timeout_seconds,
@@ -48,6 +52,8 @@ def create_app(
             try:
                 yield
             finally:
+                reminder_stop.set()
+                await reminder_task
                 await engine.dispose()
 
     app = FastAPI(title='Flowie Python API', version='0.1.0', lifespan=lifespan)

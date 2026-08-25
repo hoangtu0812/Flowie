@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query
@@ -82,6 +83,11 @@ class ClassifyIssueInput(BaseModel):
 class ConvertIssueToCommentInput(BaseModel):
     workspaceId: str = Field(min_length=1)
     targetIdentifier: str = Field(min_length=3, max_length=100, pattern=r'^[A-Za-z0-9][A-Za-z0-9_-]*-\d+$')
+
+
+class IssueReminderInput(BaseModel):
+    workspaceId: str = Field(min_length=1)
+    remindAt: datetime
 
 
 class CreateIssueTemplateInput(BaseModel):
@@ -1053,6 +1059,52 @@ async def convert_issue_to_comment(
         'comment': {'id': comment_id, 'issueId': target['id'], 'authorId': user['id'], 'content': content, 'body': body, 'createdAt': now, 'updatedAt': now, 'deletedAt': None, 'author': {'id': actor_row['id'], 'name': actor_row['name'], 'avatarUrl': actor_row['avatar_url']}},
         'sourceIssueId': source['id'], 'targetIssueId': target['id'], 'targetIdentifier': target['identifier'],
     }}
+
+
+@router.post('/{issue_id}/reminder')
+async def set_issue_reminder(
+    issue_id: str,
+    payload: IssueReminderInput,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    await _issue_row(db, issue_id, payload.workspaceId, user['id'])
+    remind_at = (
+        payload.remindAt.astimezone(timezone.utc).replace(tzinfo=None)
+        if payload.remindAt.tzinfo
+        else payload.remindAt
+    )
+    now = _utcnow()
+    if remind_at <= now:
+        raise ApiError(400, 'Reminder time must be in the future.', 'Bad Request')
+    if remind_at > now + timedelta(days=366):
+        raise ApiError(400, 'Reminder time may not be more than one year away.', 'Bad Request')
+    result = await db.execute(
+        text(
+            '''INSERT INTO issue_reminders (id, issue_id, user_id, remind_at, delivered_at, created_at, updated_at)
+               VALUES (:id, :issue_id, :user_id, :remind_at, NULL, :now, :now)
+               ON CONFLICT (issue_id, user_id) DO UPDATE
+               SET remind_at = EXCLUDED.remind_at, delivered_at = NULL, updated_at = EXCLUDED.updated_at
+               RETURNING id, issue_id, user_id, remind_at, delivered_at, created_at, updated_at'''
+        ),
+        {'id': _cuid(), 'issue_id': issue_id, 'user_id': user['id'], 'remind_at': remind_at, 'now': now},
+    )
+    reminder = result.mappings().one()
+    await db.commit()
+    return {'data': {'id': reminder['id'], 'issueId': reminder['issue_id'], 'userId': reminder['user_id'], 'remindAt': reminder['remind_at'], 'deliveredAt': reminder['delivered_at'], 'createdAt': reminder['created_at'], 'updatedAt': reminder['updated_at']}}
+
+
+@router.delete('/{issue_id}/reminder')
+async def cancel_issue_reminder(
+    issue_id: str,
+    workspaceId: str = Query(min_length=1),
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    await _issue_row(db, issue_id, workspaceId, user['id'])
+    await db.execute(text('DELETE FROM issue_reminders WHERE issue_id = :issue_id AND user_id = :user_id'), {'issue_id': issue_id, 'user_id': user['id']})
+    await db.commit()
+    return {'data': {'issueId': issue_id, 'reminder': None}}
 
 
 @router.get('/{issue_id}')
