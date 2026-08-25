@@ -311,8 +311,12 @@ Tiến độ hiện tại (P3a — completed 2026-08-25):
   local đạt register `201`, login `200`, workspace `200`, 2 session, revoke `200`, logout `204`.
   Alias timezone Chrome/Windows `Asia/Saigon` được normalize thành `Asia/Ho_Chi_Minh` và có unit
   regression, nên form đăng ký không còn bị chặn bởi timezone cũ.
-- [ ] P3b2: workspace create, membership và invitation. Các endpoint này tiếp tục proxy legacy cho
-  đến khi RBAC và transaction được port/test riêng, nên không làm gián đoạn UI hay session hiện có.
+- [x] P3b2: Native Python `POST /workspaces`, member list, invite/accept/decline, role update,
+  leave và remove member. Giữ response `organization.workspaces[0]` cho UI hiện có; kiểm tra owner/
+  admin, workspace isolation và audit khi rời workspace. Docker regression hai tài khoản đạt toàn bộ
+  lifecycle `200`; member remove bị chặn `403`, owner remove thành công `200`.
+- [ ] P3c: Personal API keys và workspace display-preference endpoints. Chúng vẫn proxy legacy cho
+  tới khi secrets/audit và JSON validation được port/test riêng.
 
 ### P4 — Teams bằng Python
 
@@ -525,6 +529,7 @@ Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modu
 | 2026-08-25 | P3a native session/profile/workspace | `3c45779` | Native session/profile/current-workspace + Node Argon2 compatibility and cross-token regression passed | Register, session management, workspace mutation/invitations | P3b auth/workspace mutations |
 | 2026-08-25 | P3b1 native register/session management | `361d4cb` | Docker build, Python unit regression and isolated-account register/login/workspace/session revoke/logout regression passed | Workspace create/membership/invitations, API keys | P3b2 workspace mutations |
 | 2026-08-25 | P3b1 timezone compatibility | `9473085` | Native register with browser `Asia/Saigon` persisted canonical `Asia/Ho_Chi_Minh`; 4 Python tests passed | Workspace create/membership/invitations, API keys | P3b2 workspace mutations |
+| 2026-08-25 | P3b2 native workspace membership | `ae85f7d` | Docker smoke + two-account create/invite/pending/accept/role/leave/decline and owner/member RBAC regression passed | Personal API keys, workspace display preferences | P3c settings/security endpoints |
 
 ## 13. Definition of Done toàn dự án
 
