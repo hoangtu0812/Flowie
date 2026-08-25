@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.config import Settings
@@ -37,6 +38,13 @@ class LoginInput(BaseModel):
 
 class RefreshInput(BaseModel):
     refreshToken: str | None = Field(default=None, max_length=512)
+
+
+class RegisterInput(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    email: str = Field(max_length=320)
+    password: str = Field(min_length=12, max_length=128)
+    timezone: str | None = Field(default=None, max_length=100)
 
 
 def _utcnow() -> datetime:
@@ -82,6 +90,13 @@ def _valid_timezone(value: str | None) -> str | None:
     return value
 
 
+def _normalized_name(value: str) -> str:
+    name = value.strip()
+    if not 2 <= len(name) <= 120:
+        raise ApiError(400, 'name must be longer than or equal to 2 characters', 'Bad Request')
+    return name
+
+
 def _authenticated_user(row: Any) -> dict[str, Any]:
     return {
         'id': row['id'],
@@ -120,6 +135,100 @@ async def _first_workspace(db: AsyncSession, user_id: str) -> dict[str, str] | N
     )
     row = result.mappings().first()
     return dict(row) if row else None
+
+
+async def _unique_workspace_slug(db: AsyncSession, name: str) -> str:
+    # Mirror the legacy service: user-facing slugs are predictable and receive
+    # an increment only when the workspace name is already taken.
+    base = re.sub(r'(^-|-$)', '', re.sub(r'[^a-z0-9]+', '-', name.lower().strip()))[:42] or 'workspace'
+    slug = base
+    suffix = 2
+    while True:
+        exists = await db.execute(text('SELECT 1 FROM workspaces WHERE slug = :slug LIMIT 1'), {'slug': slug})
+        if exists.scalar_one_or_none() is None:
+            return slug
+        slug = f'{base}-{suffix}'
+        suffix += 1
+
+
+async def _create_registered_workspace(
+    db: AsyncSession,
+    *,
+    user_id: str,
+    name: str,
+    now: datetime,
+) -> None:
+    slug = await _unique_workspace_slug(db, name)
+    organization_id = _cuid()
+    workspace_id = _cuid()
+    team_id = _cuid()
+    await db.execute(
+        text(
+            '''
+            INSERT INTO organizations (id, name, slug, owner_id, created_at, updated_at)
+            VALUES (:id, :name, :slug, :owner_id, :now, :now)
+            '''
+        ),
+        {'id': organization_id, 'name': f"{name}'s organization", 'slug': slug, 'owner_id': user_id, 'now': now},
+    )
+    await db.execute(
+        text(
+            '''
+            INSERT INTO workspaces (id, organization_id, name, slug, timezone, created_at, updated_at)
+            VALUES (:id, :organization_id, :name, :slug, 'UTC', :now, :now)
+            '''
+        ),
+        {'id': workspace_id, 'organization_id': organization_id, 'name': f"{name}'s workspace", 'slug': slug, 'now': now},
+    )
+    await db.execute(
+        text(
+            '''
+            INSERT INTO workspace_members (id, workspace_id, user_id, status, role, joined_at, created_at, updated_at)
+            VALUES (:id, :workspace_id, :user_id, 'ACTIVE', 'OWNER', :now, :now, :now)
+            '''
+        ),
+        {'id': _cuid(), 'workspace_id': workspace_id, 'user_id': user_id, 'now': now},
+    )
+    await db.execute(
+        text(
+            '''
+            INSERT INTO teams (id, workspace_id, name, identifier, description, created_at, updated_at)
+            VALUES (:id, :workspace_id, 'General', 'GEN', 'Default team for this workspace.', :now, :now)
+            '''
+        ),
+        {'id': team_id, 'workspace_id': workspace_id, 'now': now},
+    )
+    await db.execute(
+        text("INSERT INTO team_members (team_id, user_id, role) VALUES (:team_id, :user_id, 'LEAD')"),
+        {'team_id': team_id, 'user_id': user_id},
+    )
+    for position, (status_name, category, color) in enumerate(
+        (
+            ('Triage', 'TRIAGE', '#94a3b8'),
+            ('Backlog', 'BACKLOG', '#64748b'),
+            ('Todo', 'UNSTARTED', '#94a3b8'),
+            ('In progress', 'STARTED', '#f59e0b'),
+            ('Done', 'COMPLETED', '#22c55e'),
+            ('Canceled', 'CANCELED', '#ef4444'),
+        )
+    ):
+        await db.execute(
+            text(
+                '''
+                INSERT INTO issue_statuses (id, workspace_id, name, category, color, position, created_at, updated_at)
+                VALUES (:id, :workspace_id, :name, :category, :color, :position, :now, :now)
+                '''
+            ),
+            {
+                'id': _cuid(),
+                'workspace_id': workspace_id,
+                'name': status_name,
+                'category': category,
+                'color': color,
+                'position': position,
+                'now': now,
+            },
+        )
 
 
 def _request_metadata(request: Request) -> dict[str, str | None]:
@@ -218,6 +327,70 @@ async def current_user(
     return user
 
 
+@router.post('/register')
+async def register(
+    payload: RegisterInput,
+    request: Request,
+    db: AsyncSession = Depends(get_session),
+) -> JSONResponse:
+    name = _normalized_name(payload.name)
+    email = _normalized_email(payload.email)
+    timezone_name = _valid_timezone(payload.timezone) or 'UTC'
+    now = _utcnow()
+    user = {
+        'id': _cuid(),
+        'email': email,
+        'name': name,
+        'username': None,
+        'title': None,
+        'timezone': timezone_name,
+        'avatar_url': None,
+        'password_hash': password_hasher.hash(payload.password),
+        'is_platform_admin': False,
+        'email_verified_at': None,
+        'status': 'ACTIVE',
+        'created_at': now,
+    }
+    try:
+        async with db.begin():
+            if await _find_user_by_email(db, email):
+                raise ApiError(409, 'An account already exists for this email address.', 'Conflict')
+            await db.execute(
+                text(
+                    '''
+                    INSERT INTO users (
+                        id, email, name, timezone, password_hash, is_platform_admin,
+                        status, created_at, updated_at
+                    ) VALUES (
+                        :id, :email, :name, :timezone, :password_hash, :is_platform_admin,
+                        :status, :created_at, :updated_at
+                    )
+                    '''
+                ),
+                {**user, 'updated_at': now},
+            )
+            await db.execute(
+                text(
+                    '''
+                    INSERT INTO user_identities (
+                        id, user_id, provider, provider_account_id, email, created_at, updated_at
+                    ) VALUES (:id, :user_id, 'LOCAL', :provider_account_id, :email, :now, :now)
+                    '''
+                ),
+                {'id': _cuid(), 'user_id': user['id'], 'provider_account_id': email, 'email': email, 'now': now},
+            )
+            await _create_registered_workspace(db, user_id=user['id'], name=name, now=now)
+            access_token, refresh_token, data = await _create_session(db, user, request, request.app.state.settings)
+    except IntegrityError as error:
+        # A concurrent request can pass the pre-check; retain the legacy API
+        # contract instead of leaking the database constraint.
+        raise ApiError(409, 'An account already exists for this email address.', 'Conflict') from error
+
+    response = JSONResponse({'data': data}, status_code=201)
+    _set_cookies(response, access_token, refresh_token, request.app.state.settings)
+    return response
+
+
 @router.post('/login')
 async def login(payload: LoginInput, request: Request, db: AsyncSession = Depends(get_session)) -> JSONResponse:
     email = _normalized_email(payload.email)
@@ -293,3 +466,93 @@ async def logout(request: Request, db: AsyncSession = Depends(get_session)) -> R
     response = Response(status_code=204)
     _clear_cookies(response, request.app.state.settings)
     return response
+
+
+@router.get('/sessions')
+async def list_sessions(
+    request: Request,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, list[dict[str, Any]]]:
+    current_refresh = request.cookies.get('flowie_refresh')
+    current_hash = _hash_token(current_refresh) if current_refresh else None
+    result = await db.execute(
+        text(
+            '''
+            SELECT id, refresh_token_hash, ip_address, user_agent, expires_at, created_at, last_used_at
+            FROM sessions
+            WHERE user_id = :user_id AND revoked_at IS NULL AND expires_at > :now
+            ORDER BY last_used_at DESC
+            '''
+        ),
+        {'user_id': user['id'], 'now': _utcnow()},
+    )
+    sessions = []
+    for session in result.mappings():
+        sessions.append(
+            {
+                'id': session['id'],
+                'ipAddress': session['ip_address'],
+                'userAgent': session['user_agent'],
+                'expiresAt': session['expires_at'],
+                'createdAt': session['created_at'],
+                'lastUsedAt': session['last_used_at'],
+                'current': bool(current_hash and session['refresh_token_hash'] == current_hash),
+            }
+        )
+    return {'data': sessions}
+
+
+@router.delete('/sessions')
+async def revoke_other_sessions(
+    request: Request,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, int]]:
+    refresh_token = request.cookies.get('flowie_refresh')
+    if not refresh_token:
+        raise ApiError(403, 'The current session could not be identified.', 'Forbidden')
+    result = await db.execute(
+        text(
+            '''
+            UPDATE sessions
+            SET revoked_at = :now
+            WHERE user_id = :user_id
+              AND revoked_at IS NULL
+              AND expires_at > :now
+              AND refresh_token_hash <> :current_hash
+            '''
+        ),
+        {'now': _utcnow(), 'user_id': user['id'], 'current_hash': _hash_token(refresh_token)},
+    )
+    await db.commit()
+    return {'data': {'revoked': max(result.rowcount or 0, 0)}}
+
+
+@router.delete('/sessions/{session_id}')
+async def revoke_session(
+    session_id: str,
+    request: Request,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    result = await db.execute(
+        text(
+            '''
+            SELECT id, refresh_token_hash
+            FROM sessions
+            WHERE id = :id AND user_id = :user_id AND revoked_at IS NULL
+            LIMIT 1
+            '''
+        ),
+        {'id': session_id, 'user_id': user['id']},
+    )
+    session = result.mappings().first()
+    if not session:
+        raise ApiError(404, 'Session not found.', 'Not Found')
+    refresh_token = request.cookies.get('flowie_refresh')
+    if refresh_token and session['refresh_token_hash'] == _hash_token(refresh_token):
+        raise ApiError(400, 'Use sign out to revoke the current session.', 'Bad Request')
+    await db.execute(text('UPDATE sessions SET revoked_at = :now WHERE id = :id'), {'id': session_id, 'now': _utcnow()})
+    await db.commit()
+    return {'data': {'id': session_id, 'revoked': True}}
