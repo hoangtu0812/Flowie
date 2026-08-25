@@ -450,7 +450,7 @@ Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modu
 
 | Ngày | Phase | Commit | Evidence | Legacy còn lại | Việc tiếp theo |
 | --- | --- | --- | --- | --- | --- |
-| 2026-08-25 | Quyết định kiến trúc | Chưa commit | Chốt UI Circle + FastAPI strangler migration | Toàn bộ NestJS/worker | P0 inventory |
+| 2026-08-25 | Quyết định kiến trúc | `1736872` | Chốt UI Circle + FastAPI strangler migration | Toàn bộ NestJS/worker | P0 inventory |
 
 ## 13. Definition of Done toàn dự án
 
