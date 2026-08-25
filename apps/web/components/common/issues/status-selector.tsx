@@ -14,32 +14,35 @@ import { useIssuesStore } from '@/store/issues-store';
 import { status as allStatus, Status } from '@/mock-data/status';
 import { CheckIcon } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
-import { renderStatusIcon } from '@/lib/status-utils';
 
 interface StatusSelectorProps {
    status: Status;
    issueId: string;
 }
 
+const presentationIdFor = (candidate: Status) =>
+   allStatus.find((item) => item.name.toLowerCase() === candidate.name.toLowerCase())?.id ?? '';
+
 export function StatusSelector({ status, issueId }: StatusSelectorProps) {
    const id = useId();
    const [open, setOpen] = useState<boolean>(false);
-   const [value, setValue] = useState<string>(status.id);
+   const [value, setValue] = useState<string>(presentationIdFor(status));
 
-   const { updateIssueStatus, filterByStatus } = useIssuesStore();
+   const { updateIssueStatus, filterByStatus, statuses } = useIssuesStore();
 
    useEffect(() => {
-      setValue(status.id);
-   }, [status.id]);
+      setValue(presentationIdFor(status));
+   }, [status]);
 
-   const handleStatusChange = (statusId: string) => {
-      setValue(statusId);
-      setOpen(false);
-
+   const handleStatusChange = async (statusId: string) => {
       if (issueId) {
          const newStatus = allStatus.find((s) => s.id === statusId);
          if (newStatus) {
-            updateIssueStatus(issueId, newStatus);
+            const updated = await updateIssueStatus(issueId, newStatus);
+            if (updated) {
+               setValue(statusId);
+               setOpen(false);
+            }
          }
       }
    };
@@ -56,7 +59,7 @@ export function StatusSelector({ status, issueId }: StatusSelectorProps) {
                   role="combobox"
                   aria-expanded={open}
                >
-                  {renderStatusIcon(value)}
+                  <status.icon />
                </Button>
             </PopoverTrigger>
             <PopoverContent
@@ -72,7 +75,7 @@ export function StatusSelector({ status, issueId }: StatusSelectorProps) {
                            <CommandItem
                               key={item.id}
                               value={item.id}
-                              onSelect={handleStatusChange}
+                              onSelect={() => void handleStatusChange(item.id)}
                               className="flex items-center justify-between"
                            >
                               <div className="flex items-center gap-2">
@@ -81,7 +84,15 @@ export function StatusSelector({ status, issueId }: StatusSelectorProps) {
                               </div>
                               {value === item.id && <CheckIcon size={16} className="ml-auto" />}
                               <span className="text-muted-foreground text-xs">
-                                 {filterByStatus(item.id).length}
+                                 {
+                                    filterByStatus(
+                                       statuses.find(
+                                          (candidate) =>
+                                             candidate.name.toLowerCase() ===
+                                             item.name.toLowerCase()
+                                       )?.id ?? item.id
+                                    ).length
+                                 }
                               </span>
                            </CommandItem>
                         ))}

@@ -8,6 +8,7 @@ import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import { loadJoinedWorkspaceTeams } from '@/components/common/teams/team-types';
 import { create } from 'zustand';
 import { Box } from 'lucide-react';
+import { toast } from 'sonner';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -33,6 +34,8 @@ type NativeIssueStatus = {
    color: string;
    category: string;
 };
+
+const normaliseStatusName = (value: string) => value.trim().toLowerCase();
 
 const priorityId: Record<NativeIssue['priority'], string> = {
    NONE: 'no-priority',
@@ -131,7 +134,7 @@ interface IssuesState {
    filterIssues: (filters: FilterOptions) => Issue[];
 
    // Status management
-   updateIssueStatus: (issueId: string, newStatus: Status) => void;
+   updateIssueStatus: (issueId: string, newStatus: Status) => Promise<boolean>;
 
    // Priority management
    updateIssuePriority: (issueId: string, newPriority: Priority) => void;
@@ -332,8 +335,45 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
    },
 
    // Status management
-   updateIssueStatus: (issueId: string, newStatus: Status) => {
-      get().updateIssue(issueId, { status: newStatus });
+   updateIssueStatus: async (issueId: string, newStatus: Status) => {
+      try {
+         const issue = get().getIssueById(issueId);
+         const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
+         const liveStatus = get().statuses.find(
+            (candidate) =>
+               normaliseStatusName(candidate.name) === normaliseStatusName(newStatus.name)
+         );
+         if (!issue || !liveStatus) {
+            toast.error('This issue status is not ready yet.');
+            return false;
+         }
+         const response = await authenticatedFetch(
+            `${api}/issues/${issue.id}?${new URLSearchParams({ workspaceId })}`,
+            {
+               method: 'PATCH',
+               headers: { 'content-type': 'application/json' },
+               body: JSON.stringify({ statusId: liveStatus.id }),
+            }
+         );
+         if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as {
+               message?: string;
+            } | null;
+            throw new Error(payload?.message ?? 'Could not update issue status.');
+         }
+         const payload = (await response.json()) as { data: NativeIssue };
+         const updatedIssue = asIssue(payload.data);
+         set((state) => {
+            const issues = state.issues.map((candidate) =>
+               candidate.id === issueId ? updatedIssue : candidate
+            );
+            return { issues, issuesByStatus: groupIssuesByStatus(issues) };
+         });
+         return true;
+      } catch (error) {
+         toast.error(error instanceof Error ? error.message : 'Could not update issue status.');
+         return false;
+      }
    },
 
    // Priority management
