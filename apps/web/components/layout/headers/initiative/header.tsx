@@ -2,23 +2,29 @@
 
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
-import { getInitiativeById } from '@/mock-data/initiatives';
+import { adaptInitiatives } from '@/components/common/initiatives/initiative-ui-adapter';
+import { useLiveInitiatives } from '@/components/common/initiatives/use-live-initiatives';
 import { ChevronRight, MoreHorizontal, Star } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { parseAsStringLiteral, useQueryState } from 'nuqs';
+import { useMemo } from 'react';
 
 const TABS = ['overview', 'activity', 'projects'] as const;
 
 export default function Header() {
    const { orgId, initiativeId } = useParams<{ orgId: string; initiativeId: string }>();
-   const initiative = getInitiativeById(initiativeId);
+   const { initiatives: liveInitiatives, loading } = useLiveInitiatives();
+   const initiative = useMemo(
+      () => adaptInitiatives(liveInitiatives).find((item) => item.id === initiativeId),
+      [initiativeId, liveInitiatives]
+   );
    const [tab, setTab] = useQueryState(
       'tab',
       parseAsStringLiteral(TABS).withDefault('overview')
    );
 
-   if (!initiative) return null;
+   if (loading || !initiative) return null;
 
    return (
       <div className="w-full flex flex-col">
