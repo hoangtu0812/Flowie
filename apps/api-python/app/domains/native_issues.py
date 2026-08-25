@@ -704,6 +704,7 @@ async def delete_issue_template(
 
 
 @router.get('/{issue_id}/sub-issues')
+@public_router.get('/{issue_id}/sub-issues')
 async def list_sub_issues(
     issue_id: str,
     workspaceId: str = Query(min_length=1),
@@ -753,6 +754,7 @@ async def list_sub_issues(
 
 
 @router.get('/{issue_id}/relations')
+@public_router.get('/{issue_id}/relations')
 async def list_issue_relations(
     issue_id: str,
     workspaceId: str = Query(min_length=1),
@@ -893,6 +895,7 @@ async def _add_issue_relation(
 
 
 @router.post('/{issue_id}/relations')
+@public_router.post('/{issue_id}/relations')
 async def add_issue_relation(
     issue_id: str,
     payload: IssueRelationInput,
@@ -905,6 +908,7 @@ async def add_issue_relation(
 
 
 @router.patch('/{issue_id}/relations/{related_issue_id}')
+@public_router.patch('/{issue_id}/relations/{related_issue_id}')
 async def update_issue_relation(
     issue_id: str,
     related_issue_id: str,
@@ -918,6 +922,7 @@ async def update_issue_relation(
 
 
 @router.delete('/{issue_id}/relations/{related_issue_id}')
+@public_router.delete('/{issue_id}/relations/{related_issue_id}')
 async def remove_issue_relation(
     issue_id: str,
     related_issue_id: str,
