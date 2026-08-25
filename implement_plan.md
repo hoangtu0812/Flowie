@@ -1,345 +1,479 @@
-# Flowie — Kế hoạch thực thi dành cho Terra
+# Flowie — Kế hoạch khôi phục UI Circle và chuyển backend sang Python
 
-> **Đây là nguồn trạng thái và kế hoạch duy nhất cần đọc.**
-> Tài liệu cũ đã chuyển vào `docs/history/`; chỉ đọc khi cần tra lịch sử.
+> **Tài liệu này là nguồn mục tiêu, trạng thái và thứ tự thực thi duy nhất để giao Terra.**
+> Các kế hoạch cũ trong `docs/history/` chỉ dùng để tra cứu, không dùng làm chỉ thị triển khai.
 
 ## 0. Chỉ thị ngắn để giao Terra
 
-Terra hãy tiếp tục repository Flowie từ branch `codex/foundation`. Mục tiêu không phải viết lại
-frontend. Hãy dùng clone Circle local tại
-`C:\Users\Hoang Tu\Desktop\BSR\1. Source Code\circle`, commit `7785985`, làm chuẩn tuyệt đối cho
-UI. Khôi phục frontend theo từng route, bắt đầu với Project, và chuyển mọi request/mapping ra lớp
-`features/<domain>`. Chỉ thay dữ liệu mock/no-op bằng backend thật; không thay JSX, `className`,
-component tree hoặc interaction pattern nếu không bắt buộc. Mỗi lát phải test, so sánh light/dark,
-rebuild Docker khi người dùng đang dùng 5G, commit và push riêng.
+Tiếp tục Flowie từ checkpoint `013c447` trên `codex/foundation`. Trước khi sửa, tạo branch
+`codex/python-rebuild`; không xóa branch hoặc lịch sử hiện tại. Clone Circle local tại
+`C:\Users\Hoang Tu\Desktop\BSR\1. Source Code\circle`, commit
+`778598503e680b4c658d694dd9f65351ee48b3d3`, là chuẩn tuyệt đối của frontend.
 
-## 1. Mục tiêu cuối cùng
+Mục tiêu gồm hai luồng độc lập nhưng phối hợp:
 
-Biến UI gốc `ln-dev7/circle` thành Flowie — hệ thống quản lý nhiều loại dự án có backend thật —
-với các điều kiện đồng thời:
+1. Khôi phục presentation của `apps/web` về Circle gốc; chỉ giữ ngoại lệ đã được duyệt.
+2. Dựng FastAPI song song với NestJS và chuyển từng domain qua Python bằng contract test.
 
-1. UI nhìn và hoạt động giống Circle baseline tại commit `7785985`.
-2. Record nghiệp vụ đến từ NestJS API/PostgreSQL, không từ fixture hoặc local state giả.
-3. Mutation phải lưu thật, giữ nguyên sau refresh/restart Docker và tuân thủ workspace/RBAC.
-4. Auth, admin, worker, Redis, MinIO và Docker hiện có tiếp tục hoạt động.
-5. Startup trong mạng nội bộ không cài package, không pull image và không build lại.
-6. Mỗi phần hoàn chỉnh được commit/push lên `origin/codex/foundation`.
+Frontend luôn gọi `/api/v1` với contract ổn định. Trong giai đoạn chuyển tiếp, Python làm API
+facade: endpoint đã chuyển chạy bằng Python, endpoint chưa chuyển được chuyển tiếp sang NestJS.
+Không xóa NestJS, Prisma hoặc worker Node cho đến khi toàn bộ endpoint/domain liên quan đã đạt
+parity và có bằng chứng nghiệm thu.
 
-## 2. Quy tắc không được vi phạm
+Lát chạy thử sớm nhất là **UI Project gốc dùng dữ liệu thật qua facade**. Thứ tự backend Python là:
+Auth/Profile/Workspace → Teams → Projects → Issues/Cycles → Initiatives/Project Settings → phần
+còn lại → worker/cutover.
 
-- Baseline UI: `C:\Users\Hoang Tu\Desktop\BSR\1. Source Code\circle` (`7785985`).
-- Không tự thiết kế lại bảng, card, panel, sidebar, header, popover, dialog hoặc empty state.
-- Không thêm control vào list chỉ vì backend có field. Chỉ dùng affordance đã có trong UI gốc.
-- Dialog bổ sung chỉ được mở từ affordance gốc chưa có action; không làm thay đổi màn hình khi đóng.
-- Không import `@/mock-data` và không copy thư mục `mock-data` vào production.
-- Không tạo user/team/project giả trong adapter để lấp field null. Dùng nullable/empty presentation
-  hợp lệ của UI.
-- Không đặt `fetch`, API DTO hoặc mapper lớn trong `components/common/**` hay header/sidebar.
-- Không khôi phục banner quảng cáo open-source/Vercel/GitHub đã được người dùng yêu cầu bỏ.
-- Agent và Code Reviews không có backend: không mang canned data trở lại.
-- Slack, email, desktop notification không hỗ trợ; Discord là integration outbound thật.
-- Không dùng `git reset --hard`, `git checkout --` hoặc copy đè toàn bộ `apps/web`.
-- Trước khi install dependency, pull image hoặc rebuild Docker, phải báo người dùng chuyển 5G.
+## 1. Quyết định kiến trúc đã chốt
 
-## 3. Trạng thái repository đã xác minh
+### 1.1. Điều sẽ làm
 
-| Hạng mục            | Giá trị                                                                       |
-| ------------------- | ----------------------------------------------------------------------------- |
-| Workspace           | `C:\Users\Hoang Tu\Desktop\BSR\1. Source Code\Flowie`                         |
-| Branch              | `codex/foundation`                                                            |
-| Remote              | `https://github.com/hoangtu0812/Flowie.git`                                   |
-| Baseline Circle     | commit `778598503e680b4c658d694dd9f65351ee48b3d3`                             |
-| Checkpoint backend  | `3329f5b` — persisted Issue Label Groups                                      |
-| Checkpoint kế hoạch | `91219ec` — audit và quyết định UI rebase                                     |
-| Stack               | Next.js 15.2.8, NestJS, Prisma/PostgreSQL, Redis, MinIO, BullMQ worker        |
-| Web/API             | `http://localhost:3000`, `http://localhost:4000/api/v1`                       |
-| Health              | `http://localhost:4000/api/v1/health`                                         |
-| Test gần nhất       | API **55 suites / 182 tests passed**; API/Web lint và production build passed |
-| Docker gần nhất     | API/Web rebuilt; health và login HTTP 200                                     |
-| Migration gần nhất  | `20260825030000_label_groups` đã apply trong PostgreSQL                       |
+- Dùng nguyên UI Circle gốc, không thiết kế lại.
+- Backend đích là Python/FastAPI.
+- Chuyển dần theo domain, không big-bang rewrite.
+- Tái sử dụng PostgreSQL, Redis, MinIO và dữ liệu hiện tại.
+- Giữ API contract `/api/v1` để frontend không phụ thuộc backend đang là NestJS hay Python.
+- Chỉ chuyển quyền migration từ Prisma sang Alembic sau khi NestJS đã ngừng ghi schema.
+- Mỗi lát hoàn chỉnh phải test, chạy Docker, commit và push riêng.
 
-Worktree phải được kiểm tra lại bằng `git status --short` trước khi Terra sửa file. Không giả định
-worktree sạch dựa trên tài liệu này.
+### 1.2. Điều sẽ không làm
 
-## 4. Kết luận audit UI hiện tại
+- Không xóa repository, lịch sử Git hoặc checkpoint `013c447`.
+- Không xóa backend NestJS trước khi có parity test và rollback path.
+- Không chạy Prisma migration và Alembic migration song song trên cùng schema.
+- Không chuyển đổi mã TypeScript sang Python bằng dịch tự động rồi coi là hoàn tất.
+- Không nhét fetch, DTO, mapper hoặc business state vào component UI gốc.
+- Không thay JSX, `className`, component tree hoặc interaction pattern để thuận tiện cho backend.
+- Không tạo record giả để lấp dữ liệu null/empty.
+- Không cài dependency, pull image hoặc rebuild Docker nếu người dùng chưa xác nhận đang dùng 5G.
 
-Clone local là repository Circle gốc và trùng `upstream/master`.
+## 2. Mục tiêu cuối cùng
 
-| Thư mục baseline | Tổng file | Giống hoàn toàn | Đã thay đổi | Thiếu |
-| ---------------- | --------: | --------------: | ----------: | ----: |
-| `app`            |        63 |              32 |          28 |     3 |
-| `components`     |       221 |              64 |         144 |    13 |
-| `hooks`          |         1 |               1 |           0 |     0 |
-| `lib`            |         3 |               1 |           2 |     0 |
-| `store`          |        20 |               8 |          10 |     2 |
-| `public`         |         4 |               4 |           0 |     0 |
+Flowie là hệ thống quản lý nhiều loại dự án, dùng UI Circle gốc và dữ liệu thật, với các điều kiện:
 
-Riêng `components/common/projects` lệch khoảng **3.282 dòng thêm / 504 dòng xóa**. Nguyên nhân
-chính là fetch, DTO, mapper và mutation được nhét trực tiếp vào component trình bày. Không tiếp tục
-vá từng điểm trên cấu trúc này.
+1. Các route nghiệp vụ nhìn và tương tác giống baseline Circle `7785985` ở light/dark mode.
+2. Không còn fixture, mock record, canned response hoặc mutation no-op trong production path.
+3. Dữ liệu tạo/sửa/xóa được lưu PostgreSQL và còn nguyên sau refresh/restart Docker.
+4. Auth, workspace isolation, RBAC, audit và validation được thực thi ở backend Python.
+5. Redis, MinIO, notification/Discord và background jobs hoạt động thật.
+6. Docker đã build có thể start trong mạng nội bộ bằng `--pull never`, không cài thêm thư viện.
+7. NestJS/Prisma chỉ được gỡ khi Python đã đạt 100% contract/behavior parity trong phạm vi đã chốt.
 
-Các phần Project shell đã giống baseline hoặc chỉ có ngoại lệ hợp lệ:
+## 3. Trạng thái đã xác minh tại checkpoint
 
-- `app/[orgId]/projects/page.tsx`: giống baseline.
-- `components/layout/main-layout.tsx`: giống baseline.
-- Project header/header-options: giống baseline.
-- `nav-workspace.tsx`: giống baseline.
-- `app-sidebar.tsx`: khác vì đã bỏ banner quảng cáo — phải giữ khác biệt này.
-- `nav-teams.tsx` và `org-switcher.tsx`: khác do dữ liệu/auth thật; phải giữ presentation gốc và
-  chuyển logic sang hook/provider.
+| Hạng mục | Giá trị |
+| --- | --- |
+| Workspace | `C:\Users\Hoang Tu\Desktop\BSR\1. Source Code\Flowie` |
+| Branch hiện tại | `codex/foundation` |
+| Checkpoint bàn giao | `013c447` — `docs: consolidate terra execution handoff` |
+| Remote | `https://github.com/hoangtu0812/Flowie.git` |
+| Circle baseline | `778598503e680b4c658d694dd9f65351ee48b3d3` |
+| Frontend hiện tại | Next.js 15.2.8; đã lệch đáng kể so với Circle baseline |
+| Backend hiện tại | NestJS, Prisma/PostgreSQL, Redis, MinIO, BullMQ worker |
+| Quy mô API | 212 file TS, khoảng 13.469 dòng, 24 controller, 27 service |
+| Data model | 60 Prisma model, 13 enum, 61 migration |
+| Test gần nhất | 55 suite / 182 test API passed |
+| Docker hiện tại | Web `3000`, API `4000`, PostgreSQL, Redis, MinIO, worker |
 
-## 5. Backend hiện có — không viết lại trước khi đấu UI
+Backend hiện tại là nguồn hành vi tham chiếu và rollback, không phải mã bỏ đi ngay lập tức.
 
-Project backend đã đủ cho lát ưu tiên:
+## 4. UI baseline và ngoại lệ được phép
 
-- Project list/create/get/update/archive.
-- Status, priority, health, lead, team, start/target date, labels.
-- Project issues, updates, attachments, resources.
-- Members, milestones, favorite, subscription.
-- Initiative links và custom-field values.
-- Settings: project labels, statuses, templates, properties, update feed/display defaults.
-- Workspace members và teams dùng làm option thật.
+### 4.1. Quy tắc baseline
 
-API chính nằm tại `apps/api/src/projects`, `apps/api/src/portfolio`, `apps/api/src/issues`,
-`apps/api/src/workspace` và Prisma schema tại `packages/database/prisma/schema.prisma`.
+- Mọi file presentation trước tiên phải so với file tương ứng trong clone Circle local.
+- Nếu file tồn tại ở Circle, phiên bản Circle là mặc định; mọi khác biệt phải có mục trong allowlist.
+- Logic dữ liệu mới đặt ngoài presentation tree, ưu tiên `apps/web/features/<domain>/**`.
+- Component Circle chỉ nhận record, loading/error state và callback qua props/context/hook mỏng.
+- Empty/loading/error state phải dùng affordance và ngôn ngữ thị giác của UI gốc.
 
-Chỉ bổ sung backend khi một affordance tồn tại trong baseline nhưng không có contract thật. Trước
-khi thêm schema/API, Terra phải ghi rõ affordance nào chứng minh nhu cầu đó.
+### 4.2. Ngoại lệ UI được duyệt
 
-## 6. Kiến trúc frontend đích
+- Bỏ banner quảng cáo open-source/Vercel/GitHub ở sidebar/footer.
+- Thêm route auth và admin vì Circle baseline không cung cấp đầy đủ nghiệp vụ này.
+- Không hiện Agent/Code Reviews như tính năng hoạt động khi chưa có backend thật.
+- Không hiện Slack, email hoặc desktop notification như đã kết nối.
+- Discord được phép bổ sung trong Integration/Notification bằng component pattern sẵn có.
+- Có thể thêm file provider/hook/feature, nhưng không đổi presentation khi dialog/panel đóng.
 
-Mỗi domain dùng cấu trúc sau:
+Mọi ngoại lệ mới phải được người dùng duyệt trước khi code.
+
+## 5. Kiến trúc đích
 
 ```text
-apps/web/features/projects/
-├── api.ts                 # HTTP request/response, credentials, error mapping
-├── adapters.ts            # API record -> UI shape của Circle
-├── types.ts               # API types, không chứa record
-├── context.tsx            # data/action context khi nhiều component con dùng chung
-└── hooks/
-    ├── use-projects.ts
-    └── use-project.ts
+apps/
+├── web/                    # Next.js; presentation khôi phục từ Circle gốc
+├── api-python/             # FastAPI — backend đích và facade chuyển tiếp
+│   ├── app/
+│   │   ├── main.py
+│   │   ├── core/           # config, errors, logging, security, middleware
+│   │   ├── db/             # session, mappings, repositories
+│   │   ├── domains/        # auth, teams, projects, issues, ...
+│   │   ├── legacy/         # proxy các endpoint chưa migrate
+│   │   └── tests/
+│   └── pyproject.toml
+├── api/                    # NestJS legacy; giữ đến khi parity hoàn tất
+└── worker/                 # BullMQ legacy; chuyển sau API
+
+infrastructure/docker/
+├── python-api.Dockerfile
+├── api.Dockerfile          # legacy trong giai đoạn chuyển tiếp
+├── web.Dockerfile
+└── worker.Dockerfile
 ```
 
-`apps/web/components/**` phải gần baseline nhất có thể:
+### 5.1. Python stack
 
-- giữ nguyên JSX và `className`;
-- nhận record/callback qua props hoặc context;
-- không biết URL API, workspace loader hoặc JSON DTO;
-- selector có thể nhận option/callback thật nhưng không đổi DOM/class khi đóng.
+- FastAPI + Pydantic cho HTTP contract/validation.
+- SQLAlchemy async cho PostgreSQL mappings và transaction.
+- Alembic cho migration **sau thời điểm chuyển quyền schema**.
+- pytest cho unit, integration và contract tests.
+- Redis client và S3-compatible client cho Redis/MinIO.
+- Dependency được khóa trong `pyproject.toml` và lockfile; Docker image chứa sẵn dependency.
 
-## 7. Backlog thực thi — làm đúng thứ tự
+Không chốt package/version bằng suy đoán. Khi bắt đầu P1, kiểm tra version tương thích, cài lúc đang
+dùng 5G, khóa version và commit lockfile.
 
-### T0 — Baseline guard và báo cáo diff
+### 5.2. Luồng request trong giai đoạn chuyển tiếp
 
-Mục tiêu: mọi thay đổi UI sau này có bằng chứng so với clone gốc.
+```text
+Circle UI /apps/web
+        |
+        | /api/v1 (một base URL ổn định)
+        v
+FastAPI facade :4000
+        |-- domain đã migrate ------> Python service/repository ------> PostgreSQL/Redis/MinIO
+        |
+        `-- domain chưa migrate -----> NestJS legacy :4001 ----------> hạ tầng hiện tại
+```
 
-Việc làm:
+Facade phải chuyển tiếp method, query, body, cookie, authorization header, status, response body và
+`Set-Cookie` cần thiết. Không được biến lỗi backend legacy thành HTTP 200.
 
-1. Tạo script read-only `scripts/audit-ui-parity.ps1` nhận hai tham số baseline/current.
-2. Script báo `IDENTICAL/CHANGED/MISSING/EXTRA` theo route/domain và xuất summary JSON hoặc Markdown.
-3. Có allowlist rõ ràng cho auth/admin, banner quảng cáo bị bỏ và file `features/**` mới.
-4. Không tự động sửa/copy file.
+### 5.3. Quyền sở hữu database migration
 
-Nghiệm thu:
+1. Khi còn domain NestJS: Prisma là nguồn migration duy nhất; Python chỉ map schema hiện hữu.
+2. Trong thời gian này không chạy `alembic upgrade` vào database chung.
+3. Sau khi tất cả domain ghi dữ liệu đã chuyển và NestJS ở read-only/off: chụp schema checksum,
+   tạo Alembic baseline trùng schema đang chạy.
+4. Từ cutover trở đi: Alembic là nguồn migration duy nhất; Prisma migration được archive/read-only.
 
-- chạy được với baseline local và `apps/web`;
-- output tái lập được;
-- không cần Internet;
-- commit: `chore: add circle ui parity audit`.
+## 6. Chiến lược contract và parity
 
-### T1 — Project List: khôi phục UI gốc và tách adapter
+Mỗi endpoint chuyển sang Python phải đi qua bốn lớp kiểm chứng:
 
-Đây là lát đầu tiên để người dùng chạy thử.
+1. **Contract fixture**: cùng request hợp lệ/không hợp lệ gửi vào NestJS và Python.
+2. **Response parity**: status code, field, nullable behavior, pagination và error shape tương đương.
+3. **Persistence parity**: transaction, unique constraint, workspace isolation và RBAC tương đương.
+4. **Frontend acceptance**: UI Circle gốc chạy không cần nhánh JSX riêng cho Python.
 
-File baseline phải đọc trực tiếp trước khi sửa:
+Khác biệt có chủ đích phải ghi trong `docs/python-migration/contract-differences.md` và được duyệt.
 
-- `components/common/projects/projects.tsx`
-- `projects-list.tsx`, `project-line.tsx`, `projects-board.tsx`
-- `projects-timeline.tsx`, `projects-insights-panel.tsx`
-- `health-popover.tsx`, `priority-selector.tsx`, `lead-selector.tsx`
-- `status-with-percent.tsx`, `date-picker.tsx`
-- `components/layout/headers/projects/**`
+## 7. Backlog thực thi bắt buộc
 
-Việc làm:
-
-1. Chuyển toàn bộ API type, `mapStatus`, `mapProject`, workspace/member/team loading và PATCH ra
-   `features/projects/**`.
-2. Khôi phục `projects.tsx` về composition gốc; container chỉ lấy hook result rồi truyền data.
-3. Khôi phục `projects-list.tsx` về props `groups` như baseline; dùng context cho action chung.
-4. Khôi phục `project-line.tsx` về DOM/class baseline.
-5. Xóa `ProjectLabelSelector` khỏi Project List vì baseline chỉ hiển thị label, không có nút chỉnh
-   label trong row. Việc gán label tiếp tục qua affordance gốc ở Project detail.
-6. Selector status/priority/lead/date dùng option thật và PATCH thật nhưng giữ trigger/menu gốc.
-7. Không tạo user `Unassigned` giả trong adapter; xử lý lead null bằng empty presentation.
-8. Giữ list/board/timeline/insights, grouping/filter/order/display options như baseline.
-9. Nút Create Project gốc gọi backend qua dialog hiện hữu; chuyển fetch ra feature service.
-
-Contract dữ liệu tối thiểu:
-
-- `GET /projects?workspaceId=...`
-- `GET /projects/statuses`, `/projects/labels`
-- `GET /teams`, `/workspaces/:id/members`
-- `PATCH /projects/:id?workspaceId=...`
-- `POST /projects`
-
-Nghiệm thu:
-
-- list có dữ liệu thật và empty state đều giống baseline;
-- create/update survive refresh;
-- không có mock import;
-- audit script cho thấy mọi class/DOM khác biệt đều được giải thích;
-- light/dark screenshot ở cùng viewport;
-- commit: `refactor: restore original project list with api adapter`.
-
-### T2 — Project Detail: Overview, Activity, Issues và Peek
-
-File baseline bắt buộc:
-
-- `components/common/projects/project-peek-panel.tsx`
-- `components/common/projects/details/**`
-- `components/layout/headers/project/**`
-- ba route `app/[orgId]/project/[projectId]/**`
+### P0 — Safety checkpoint và inventory
 
 Việc làm:
 
-1. Tạo `useProject(projectId)` và adapter detail riêng.
-2. Khôi phục title, property rows, description, right panel và tab composition gốc.
-3. Nối status, priority, lead, dates, team và description qua PATCH.
-4. Nối update, attachment, resource, milestone, member, initiative và label từ affordance gốc.
-5. Issues tab dùng Issue API thật; Activity dùng Project Update/Activity thật.
-6. Không render row mới nếu baseline không có; row optional chỉ hiện theo điều kiện baseline.
+1. Xác minh `git status --short` sạch và HEAD là `013c447` hoặc hậu duệ đã biết.
+2. Tạo `codex/python-rebuild` từ checkpoint; push branch trước thay đổi lớn.
+3. Ghi manifest route, endpoint, Prisma model, migration, job và external integration hiện có.
+4. Tạo bảng mapping `endpoint → domain → Nest test → Python status → frontend route`.
+5. Lưu schema dump/checksum chỉ chứa cấu trúc, không chứa secret hoặc dữ liệu người dùng.
 
 Nghiệm thu:
 
-- mọi mutation survive refresh;
-- project ID khác workspace trả đúng 403/404;
-- overview/activity/issues/peek screenshot light/dark;
-- commit: `refactor: restore original project detail with api adapter`.
+- Có rollback rõ về `013c447`.
+- Không file production nào bị xóa trong P0.
+- Commit: `docs: baseline python migration inventory`.
 
-### T3 — Project Settings
+### P1 — Khôi phục UI Circle và dựng parity guard
+
+Mục tiêu: giải quyết dứt điểm việc UI lệch trước khi viết thêm màn hình.
+
+Việc làm:
+
+1. Tạo script read-only `scripts/audit-ui-parity.ps1` so `apps/web` với clone Circle local.
+2. Tạo allowlist cho auth, admin, banner bị bỏ và `features/**`.
+3. Khôi phục toàn bộ file presentation theo manifest Circle, domain-by-domain; baseline luôn thắng.
+4. Chuyển code dữ liệu Flowie cần giữ sang `features/<domain>/**`, không bỏ mất contract đang dùng.
+5. Chạy Circle baseline ở `3001`, Flowie ở `3000`; chụp cùng route/viewport/theme.
+6. Audit toàn production import: mock data, local fixture, random record, mutation no-op.
+
+Nghiệm thu:
+
+- Audit xuất `IDENTICAL/ALLOWED/CHANGED/MISSING/EXTRA`; không còn `CHANGED` chưa giải thích.
+- Project list/detail và sidebar đạt parity light/dark, trừ ngoại lệ được duyệt.
+- Chưa yêu cầu Python hoàn tất; UI có thể dùng NestJS qua facade/legacy để chạy thử sớm.
+- Commit: `refactor: restore circle ui baseline`.
+
+### P2 — FastAPI foundation và legacy facade
+
+Việc làm:
+
+1. Tạo `apps/api-python`, cấu trúc domain, config, structured logging và error middleware.
+2. Kết nối PostgreSQL, Redis, MinIO bằng health/readiness checks.
+3. Tạo proxy legacy an toàn tới NestJS; giới hạn host cố định từ config, không nhận URL từ user.
+4. Chuyển NestJS nội bộ sang port `4001`; FastAPI giữ public API port `4000`.
+5. Cập nhật Docker Compose: `api` là FastAPI facade, `api-legacy` là NestJS.
+6. Thêm smoke test để toàn bộ endpoint chưa migrate vẫn hoạt động qua facade.
+7. Khóa dependency và build image trong 5G; sau đó chứng minh start offline bằng `--pull never`.
+
+Nghiệm thu:
+
+- `/api/v1/health` và `/readyz` phản ánh đúng dependency health.
+- Login hiện tại, cookie và Project legacy hoạt động qua facade không đổi UI.
+- API legacy không public ra ngoài Docker network trừ khi bật profile debug.
+- Commit: `feat: add fastapi facade with legacy routing`.
+
+### P3 — Auth, Profile và Workspace bằng Python
 
 Phạm vi:
 
-- Project labels.
-- Project statuses.
-- Project templates.
-- Project properties/custom fields.
-- Project updates/display defaults.
+- Login/logout/current session, password hashing compatibility và cookie lifecycle.
+- Profile read/update.
+- Workspace list/current membership và workspace isolation.
+- RBAC dependency dùng lại cho các domain tiếp theo.
 
 Việc làm:
 
-1. Khôi phục từng settings component từ baseline.
-2. Tách request/mapping ra `features/project-settings/**`.
-3. Dùng list/card/dialog/empty state gốc; không tạo trang quản trị mới.
-4. Kiểm tra OWNER/ADMIN cho mutation; member thường chỉ đọc theo contract.
-5. Project label group vẫn unavailable nếu chưa có schema riêng; không dùng Issue Label Group thay
-   thế sai domain.
+1. Map bảng hiện tại bằng SQLAlchemy, không tạo Alembic migration.
+2. Viết contract tests song song NestJS/Python.
+3. Chuyển route domain từ proxy sang Python khi test đạt.
+4. Kiểm tra session cũ và session Python không làm người dùng bị logout bất ngờ.
 
 Nghiệm thu:
 
-- CRUD thật, reload không mất dữ liệu;
-- RBAC test;
-- screenshot từng màn chính;
-- commit: `refactor: restore original project settings with live data`.
+- Login/logout/profile/update và protected redirect hoạt động từ UI gốc.
+- 401/403/404 không làm lộ workspace khác.
+- Password/session secret không log và không hard-code.
+- Commit: `feat: migrate auth profile and workspace to python`.
 
-### T4 — Nghiệm thu Project trước khi sang domain khác
+### P4 — Teams bằng Python
 
-Checklist bắt buộc:
+Phạm vi:
 
-- [ ] Project List light/dark parity.
-- [ ] List, board, timeline và insights dùng cùng dữ liệu thật.
-- [ ] Create/edit/archive hoạt động.
-- [ ] Project Detail Overview/Activity/Issues/Peek hoạt động.
-- [ ] Project Settings CRUD hoạt động.
-- [ ] Không import mock record.
-- [ ] API tests, Web/API lint/build passed.
-- [ ] Docker API/Web chạy image mới; health/login HTTP 200.
-- [ ] Người dùng chạy thử và xác nhận Project trước khi chuyển domain.
+- Team list/detail/create/update/archive.
+- Membership và role.
+- Dữ liệu team ở sidebar/org switcher.
 
-Commit tài liệu nghiệm thu: `docs: record project ui rebase acceptance`.
+Nghiệm thu:
 
-### T5 — Các domain tiếp theo
+- UI Teams và sidebar giữ presentation Circle gốc.
+- CRUD và membership survive refresh/restart.
+- RBAC/duplicate identifier/workspace isolation có test.
+- Commit: `feat: migrate teams to python`.
 
-Chỉ bắt đầu sau T4:
+### P5 — Projects bằng Python — mốc cho người dùng chạy thử
 
-1. Teams + Issues + Cycles.
-2. Initiatives + Views + Members + Documents.
-3. Profile/Security/Notifications/Discord và Settings còn lại.
-4. Audit toàn route và loại mọi record mock/no-op còn lại.
+Phạm vi API:
 
-Mỗi domain lặp lại pattern: baseline → feature adapter → test → screenshot → Docker → commit/push.
+- Project list/create/get/update/archive.
+- Status, priority, health, lead, team, start/target date, labels.
+- Detail Overview/Activity/Issues/Peek.
+- Members, milestones, favorite, subscription, resources, attachments và updates.
 
-## 8. Verification commands
+Việc làm:
 
-Không cần mạng:
+1. Giữ Project presentation đã khôi phục ở P1; chỉ đổi adapter/provider sang endpoint Python.
+2. Port business rules và transaction từ NestJS, không port mù cấu trúc framework.
+3. Dùng Team/Workspace Python làm dependency; endpoint chưa port tiếp tục legacy proxy.
+4. Test list/board/timeline/insights cùng một nguồn dữ liệu thật.
+
+Nghiệm thu:
+
+- Create/edit/archive và mọi property mutation survive refresh/restart Docker.
+- Overview/Activity/Issues/Peek dùng record thật và giữ UI Circle.
+- Không import `@/mock-data`, không fallback record giả.
+- Contract, RBAC, API integration, Web build và screenshot light/dark đều passed.
+- Người dùng xác nhận mốc chạy thử trước khi mở rộng domain.
+- Commit: `feat: migrate projects to python with circle ui parity`.
+
+### P6 — Issues, Comments, Attachments và Cycles bằng Python
+
+Phạm vi:
+
+- Issue CRUD, status, priority, assignee, labels và relations.
+- Comments/activity/attachments.
+- Cycles/current/upcoming và issue-cycle mapping.
+- Inbox/My Issues data thật; không canned item.
+
+Nghiệm thu:
+
+- Issue mutation từ Project tab và Team Issues dùng cùng contract.
+- Upload/download MinIO có authorization.
+- Cycle state/date constraints và pagination có test.
+- Commit: `feat: migrate issues comments and cycles to python`.
+
+### P7 — Initiatives và Project Settings bằng Python
+
+Thứ tự trong phase:
+
+1. Initiatives list/detail/project links.
+2. Project labels.
+3. Project statuses.
+4. Project templates.
+5. Project properties/custom fields.
+6. Project update/display defaults.
+
+Nghiệm thu:
+
+- Chỉ dùng control/dialog tồn tại trong Circle baseline.
+- CRUD thật, reload không mất dữ liệu và RBAC đúng.
+- Không dùng Issue Label Group thay sai cho Project Label Group.
+- Commit: `feat: migrate initiatives and project settings to python`.
+
+### P8 — Các domain còn lại
+
+Chuyển từng commit độc lập:
+
+1. Views, Members, Documents.
+2. Notifications inbox và preference.
+3. Discord outbound integration; retry, timeout, secret masking và audit.
+4. Customer Requests, Releases, SLAs, Pulse/Portfolio nếu còn trong product scope.
+5. Admin management và audit log.
+
+Slack/email/desktop/mobile không được hiển thị là enabled nếu chưa có implementation thật.
+
+Nghiệm thu mỗi domain:
+
+- UI baseline hoặc ngoại lệ đã duyệt.
+- Không mock/no-op.
+- Contract/RBAC/persistence test.
+- Docker smoke test và commit/push riêng.
+
+### P9 — Worker, schema ownership và final cutover
+
+Việc làm:
+
+1. Inventory từng BullMQ job: producer, payload, retry, idempotency và schedule.
+2. Chuyển job sang Python worker hoặc thay bằng outbox/worker đã test; không để hai consumer xử lý
+   cùng job ngoài bài test có chủ đích.
+3. Freeze Prisma migration; checksum schema và tạo Alembic baseline.
+4. Chạy rehearsal trên database clone/backup; xác minh rollback.
+5. Tắt `api-legacy` và worker Node trong staging/local acceptance.
+6. Xóa mã legacy trong commit riêng chỉ sau tối thiểu một vòng full regression passed.
+
+Nghiệm thu:
+
+- Không request production nào đi qua legacy proxy.
+- Không queue/job nào còn phụ thuộc Node.
+- Alembic là migration authority duy nhất và baseline trùng database.
+- Full UI/API regression, restart Docker và offline-start passed.
+- Commit 1: `chore: cut over database migrations and workers to python`.
+- Commit 2 sau acceptance: `chore: remove legacy nestjs backend`.
+
+## 8. Cổng nghiệm thu và ước lượng
+
+Ước lượng là effort kỹ thuật, không phải cam kết lịch; Terra phải cập nhật sau mỗi phase.
+
+| Mốc | Kết quả người dùng nhìn thấy | Ước lượng từ lúc bắt đầu |
+| --- | --- | --- |
+| P0–P1 | UI Circle được khôi phục, có báo cáo parity | 2–4 ngày làm việc |
+| P2 | UI gọi qua FastAPI facade, chức năng legacy vẫn chạy | thêm 2–3 ngày |
+| P3–P5 | Auth, Teams và Projects chạy native Python | thêm 7–12 ngày |
+| P6–P8 | Các domain nghiệp vụ còn lại chạy Python | cần audit lại sau P5; nhiều tuần |
+| P9 | Gỡ NestJS/Prisma/worker Node an toàn | chỉ ước lượng sau full parity |
+
+Không đợi P9 mới cho người dùng kiểm tra. Bắt buộc demo/acceptance ở cuối P1, P2 và P5.
+
+## 9. Mock/no-op audit checklist
+
+Chạy lại cuối mỗi phase:
+
+```powershell
+rg -n "@/mock-data|mock-data|fixture|faker|Math\.random|setTimeout" apps/web apps/api-python
+rg -n "TODO|not implemented|coming soon|sample data|no-op|placeholder" apps/web apps/api-python
+rg -n "localStorage|sessionStorage" apps/web -g "*.ts" -g "*.tsx"
+```
+
+Không coi mọi kết quả là lỗi: static option/icon/demo test có thể hợp lệ. Mỗi kết quả production phải
+được phân loại `REMOVE`, `REPLACE_WITH_API`, `STATIC_UI_ALLOWED` hoặc `TEST_ONLY` trong báo cáo.
+
+## 10. Verification commands
+
+Không cần Internet sau khi dependency/image đã được cache:
 
 ```powershell
 git status --short
-rg -n "@/mock-data" apps/web -g "*.ts" -g "*.tsx"
-pnpm --filter @circle/api run test -- --runInBand
-pnpm --filter @circle/api lint
-pnpm --filter @circle/web lint
-pnpm --filter @circle/api build
-pnpm --filter @circle/web build
 git diff --check
+pnpm --filter @circle/web lint
+pnpm --filter @circle/web build
+pytest apps/api-python
+docker compose config --quiet
 ```
 
-Khởi động bình thường trong mạng nội bộ, không build/pull/install:
+Trong giai đoạn legacy còn tồn tại:
+
+```powershell
+pnpm --filter @circle/api run test -- --runInBand
+pnpm --filter @circle/api lint
+pnpm --filter @circle/api build
+```
+
+Start trong mạng nội bộ, không build/pull/install:
 
 ```powershell
 .\scripts\start-local.ps1
+docker compose --profile app up -d --no-build --pull never
 ```
 
-Rebuild chỉ khi người dùng xác nhận đang dùng 5G:
+Rebuild chỉ sau khi người dùng xác nhận 5G:
 
 ```powershell
-docker compose build api web
-docker compose up -d --no-build --pull never api web
+docker compose --profile app build
+docker compose --profile app up -d --no-build --pull never
 ```
 
-Smoke test:
+Smoke test tối thiểu:
 
 ```powershell
 (Invoke-WebRequest -UseBasicParsing http://localhost:4000/api/v1/health).StatusCode
+(Invoke-WebRequest -UseBasicParsing http://localhost:4000/readyz).StatusCode
 (Invoke-WebRequest -UseBasicParsing http://localhost:3000/auth/login).StatusCode
 ```
 
-Visual reference:
+## 11. Quy tắc commit, push và báo cáo Terra
 
-- Circle gốc: chạy clone local tại port `3001`.
-- Flowie: port `3000`.
-- Dùng cùng viewport, route tương ứng và theme.
-- Flowie cần phiên workspace-member đã đăng nhập; không dùng credential hard-code trong source/test.
+Sau mỗi phase hoặc vertical slice hoàn chỉnh:
 
-## 9. Quy tắc commit và báo cáo
+1. Chạy test/lint/build tương ứng và `git diff --check`.
+2. Stage đúng file của phase, không dùng `git add .` mù quáng.
+3. Commit message theo mục kế hoạch.
+4. Push branch `codex/python-rebuild` lên `origin`.
+5. Cập nhật bảng nhật ký bằng commit, evidence, endpoint đã chuyển và endpoint còn proxy.
 
-Sau mỗi task hoàn chỉnh:
+Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modules`, virtualenv, cache hoặc
+ảnh tạm.
 
-1. `git diff --check`.
-2. Stage đúng file của task, không stage cả workspace mù quáng.
-3. Commit message đúng mục task.
-4. Push `origin codex/foundation`.
-5. Cập nhật phần **Nhật ký Terra** bên dưới bằng commit, test và phần còn thiếu.
+## 12. Nhật ký thực thi
 
-Không commit `.env`, secret, `.next`, `node_modules`, cache hoặc ảnh tạm.
+| Ngày | Phase | Commit | Evidence | Legacy còn lại | Việc tiếp theo |
+| --- | --- | --- | --- | --- | --- |
+| 2026-08-25 | Quyết định kiến trúc | Chưa commit | Chốt UI Circle + FastAPI strangler migration | Toàn bộ NestJS/worker | P0 inventory |
 
-## 10. Nhật ký Terra
+## 13. Definition of Done toàn dự án
 
-Terra thêm một dòng sau mỗi lát:
+- [ ] Tất cả route trong scope đạt Circle UI parity hoặc có ngoại lệ được duyệt.
+- [ ] Không còn record mock, canned response hoặc mutation no-op trong production.
+- [ ] Tất cả API trong scope chạy native Python; legacy proxy count bằng 0.
+- [ ] Auth, RBAC, workspace isolation và audit có regression test.
+- [ ] PostgreSQL/Redis/MinIO/Discord/background jobs hoạt động thật.
+- [ ] Alembic là migration authority duy nhất; rollback rehearsal thành công.
+- [ ] NestJS, Prisma runtime và Node worker đã được gỡ trong commit có thể revert.
+- [ ] Docker start offline bằng image đã build, không pull/install.
+- [ ] Người dùng đã nghiệm thu Project và full regression light/dark.
 
-| Ngày       | Task            | Commit                   | Evidence                                           | Việc tiếp theo    |
-| ---------- | --------------- | ------------------------ | -------------------------------------------------- | ----------------- |
-| 2026-08-25 | Handoff cleanup | commit bàn giao hiện tại | Một kế hoạch authoritative; tài liệu cũ đã archive | T0 baseline guard |
-
-## 11. Điều kiện dừng và hỏi người dùng
+## 14. Điều kiện dừng và hỏi người dùng
 
 Chỉ dừng để hỏi khi:
 
-- cần cài dependency/pull image mà người dùng chưa xác nhận 5G;
-- một lựa chọn sẽ thay đổi product scope hoặc UI baseline;
-- cần credential/session mà không thể kiểm chứng bằng source/test;
-- phát hiện thay đổi người dùng chưa commit chồng lên file cần sửa.
+- cần cài dependency/pull image/rebuild mà người dùng chưa xác nhận 5G;
+- một thay đổi làm lệch Circle UI hoặc mở rộng product scope;
+- contract Python buộc phải khác NestJS theo cách frontend/người dùng nhìn thấy;
+- cần credential/secret/integration thật chưa được cung cấp;
+- phát hiện thay đổi chưa commit của người dùng chồng lên file cần sửa;
+- chuẩn bị freeze Prisma, chuyển Alembic authority hoặc xóa legacy backend.
 
-Không dừng chỉ vì visual browser chưa login: tiếp tục source parity, test và adapter work; ghi rõ
-visual acceptance đang chờ session.
+Không dừng chỉ vì một endpoint chưa migrate: giữ route đó qua legacy facade, ghi rõ trong nhật ký và
+tiếp tục endpoint độc lập kế tiếp.
