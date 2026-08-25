@@ -858,6 +858,16 @@ async def create_resource(project_id: str, payload: ProjectResourceInput, user: 
 # Public cutover: only endpoints consumed by the unchanged Project UI whose
 # response contracts are now audited. Issue detail, project settings and any
 # future route not listed here deliberately remain on the legacy facade.
+def _public_project_id(project_suffix: str) -> str:
+    """Restore the CUID prefix consumed by the static-safe public route.
+
+    The public routes use ``/c{project_suffix}`` so they do not shadow
+    settings endpoints such as ``/updates``.  Project CUIDs always begin with
+    ``c``; the database helper still expects the complete identifier.
+    """
+    return f'c{project_suffix}'
+
+
 @public_router.get('')
 async def public_list_projects(workspaceId: str = Query(min_length=1), teamId: str | None = None, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
     return await list_projects(workspaceId, teamId, user, db)
