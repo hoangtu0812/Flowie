@@ -2,19 +2,12 @@
 
 import { health as healthOptions } from '@/lib/project-presentations';
 import { priorities } from '@/lib/priority-presentations';
-import type { Status, StatusCategory } from '@/lib/status-presentations';
+import type { Status } from '@/lib/status-presentations';
+import { status as circleStatuses } from '@/mock-data/status';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import type { Project } from '@/types/projects';
-import { Circle, CircleCheck, CircleDashed, CirclePlay, CircleX, FolderKanban } from 'lucide-react';
-import {
-   createContext,
-   createElement,
-   type ReactNode,
-   useCallback,
-   useContext,
-   useEffect,
-   useState,
-} from 'react';
+import { FolderKanban } from 'lucide-react';
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 type ApiProject = {
@@ -33,13 +26,6 @@ type ApiProject = {
    issues: Array<{ id: string; status: { category: string } }>;
    _count: { issues: number };
    favorites?: Array<{ userId: string }>;
-};
-
-type ApiProjectStatus = {
-   id: string;
-   name: string;
-   category: 'backlog' | 'planned' | 'in-progress' | 'completed' | 'canceled';
-   color: string;
 };
 
 type ApiWorkspaceTeam = {
@@ -68,8 +54,6 @@ export type ProjectListLabel = {
    color: string;
 };
 
-export type ProjectListStatus = Status;
-
 export type ProjectListUpdate = {
    leadId?: string | null;
    priority?: string;
@@ -93,7 +77,6 @@ type ProjectData = {
    allProjects: Array<Project & { issueCount: number }>;
    teamGroups: Array<{ id: string; name: string; icon?: string }>;
    workspaceMembers: ProjectListMember[];
-   projectStatuses: ProjectListStatus[];
    createProject: (values: CreateProjectValues) => Promise<void>;
    updateProject: (projectId: string, update: ProjectListUpdate) => Promise<void>;
 };
@@ -101,73 +84,25 @@ type ProjectData = {
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 const ProjectsDataContext = createContext<ProjectData | null>(null);
 
-const mapStatus = (value: string): ProjectListStatus => {
-   const normalized = value.trim().toLowerCase().replace(/_/g, '-');
-   const category =
-      normalized === 'completed' || normalized === 'done'
-         ? 'completed'
-         : normalized === 'canceled' || normalized === 'cancelled'
-           ? 'canceled'
-           : normalized === 'started' || normalized === 'in-progress' || normalized === 'active'
-             ? 'started'
-             : normalized === 'backlog'
-               ? 'backlog'
-               : 'unstarted';
-   const Icon =
-      category === 'completed'
-         ? CircleCheck
-         : category === 'canceled'
-           ? CircleX
-           : category === 'started'
-             ? CirclePlay
-             : category === 'backlog'
-               ? CircleDashed
-               : Circle;
-   return {
-      id: value,
-      name: value
-         .trim()
-         .replace(/[_-]+/g, ' ')
-         .replace(/\b\w/g, (character) => character.toUpperCase()),
-      color:
-         category === 'completed'
-            ? '#5e6ad2'
-            : category === 'canceled' || category === 'backlog'
-              ? '#95a2b3'
-              : category === 'started'
-                ? '#facc15'
-                : '#99a2b2',
-      category: category as StatusCategory,
-      icon: () => createElement(Icon, { className: 'size-4' }),
-   };
+const projectStatusAliases: Record<string, string> = {
+   planned: 'to-do',
+   completed: 'done',
+   todo: 'to-do',
+   active: 'in-progress',
+   started: 'in-progress',
+   cancelled: 'canceled',
 };
 
-const mapConfiguredStatus = (status: ApiProjectStatus): ProjectListStatus => {
-   const category: StatusCategory =
-      status.category === 'planned'
-         ? 'unstarted'
-         : status.category === 'in-progress'
-           ? 'started'
-           : status.category;
-   const Icon =
-      category === 'completed'
-         ? CircleCheck
-         : category === 'canceled'
-           ? CircleX
-           : category === 'started'
-             ? CirclePlay
-             : category === 'backlog'
-               ? CircleDashed
-               : Circle;
-   return {
-      id: status.name,
-      name: status.name
-         .replace(/[_-]+/g, ' ')
-         .replace(/\b\w/g, (character) => character.toUpperCase()),
-      color: status.color,
-      category,
-      icon: () => createElement(Icon, { className: 'size-4' }),
-   };
+const mapStatus = (value: string): Status => {
+   const normalized = value
+      .trim()
+      .toLowerCase()
+      .replace(/[_\s]+/g, '-');
+   const identifier = projectStatusAliases[normalized] ?? normalized;
+   return (
+      circleStatuses.find((candidate) => candidate.id === identifier) ??
+      circleStatuses.find((candidate) => candidate.id === 'to-do')!
+   );
 };
 
 const mapProject = (project: ApiProject): Project & { issueCount: number } => {
@@ -232,33 +167,24 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
    const [workspaceLoading, setWorkspaceLoading] = useState(true);
    const [resolvedTeamId, setResolvedTeamId] = useState<string>();
    const [workspaceMembers, setWorkspaceMembers] = useState<ProjectListMember[]>([]);
-   const [projectStatuses, setProjectStatuses] = useState<ProjectListStatus[]>([]);
 
    useEffect(() => {
       let current = true;
       setWorkspaceLoading(true);
       void (async () => {
          const workspace = await loadCurrentWorkspace();
-         const [projectsResponse, membersResponse, statusesResponse, teamsResponse] =
-            await Promise.all([
-               authenticatedFetch(`${api}/projects?workspaceId=${workspace.id}`),
-               authenticatedFetch(`${api}/workspaces/${workspace.id}/members`),
-               authenticatedFetch(`${api}/projects/statuses?workspaceId=${workspace.id}`),
-               authenticatedFetch(`${api}/teams?workspaceId=${workspace.id}`),
-            ]);
-         if (
-            !projectsResponse.ok ||
-            !membersResponse.ok ||
-            !statusesResponse.ok ||
-            !teamsResponse.ok
-         ) {
+         const [projectsResponse, membersResponse, teamsResponse] = await Promise.all([
+            authenticatedFetch(`${api}/projects?workspaceId=${workspace.id}`),
+            authenticatedFetch(`${api}/workspaces/${workspace.id}/members`),
+            authenticatedFetch(`${api}/teams?workspaceId=${workspace.id}`),
+         ]);
+         if (!projectsResponse.ok || !membersResponse.ok || !teamsResponse.ok) {
             throw new Error('Could not load projects.');
          }
          const projectsPayload = (await projectsResponse.json()) as { data: ApiProject[] };
          const membersPayload = (await membersResponse.json()) as {
             data: Array<{ status: string; user: ProjectListMember }>;
          };
-         const statusesPayload = (await statusesResponse.json()) as { data: ApiProjectStatus[] };
          const teamsPayload = (await teamsResponse.json()) as { data: ApiWorkspaceTeam[] };
          if (!current) return;
          setWorkspaceId(workspace.id);
@@ -275,18 +201,6 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
                .map((member) => member.user)
          );
          setAllProjects(projectsPayload.data.map(mapProject));
-         setProjectStatuses(
-            statusesPayload.data.length
-               ? statusesPayload.data.map(mapConfiguredStatus)
-               : [
-                    ...new Map(
-                       projectsPayload.data.map((project) => [
-                          project.status,
-                          mapStatus(project.status),
-                       ])
-                    ).values(),
-                 ]
-         );
          setTeamGroups(
             teamsPayload.data.map((team) => ({
                id: team.id,
@@ -330,12 +244,6 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
             );
          }
          const payload = (await response.json()) as { data: ApiProject };
-         setProjectStatuses((statuses) => {
-            const updated = mapStatus(payload.data.status);
-            return statuses.some((status) => status.id === updated.id)
-               ? statuses
-               : [...statuses, updated];
-         });
          setAllProjects((projects) =>
             projects.map((project) =>
                project.id === projectId ? mapProject(payload.data) : project
@@ -383,7 +291,6 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
       allProjects,
       teamGroups,
       workspaceMembers,
-      projectStatuses,
       createProject,
       updateProject,
    };

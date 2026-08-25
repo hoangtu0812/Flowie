@@ -10,21 +10,19 @@ import {
    CommandList,
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import type { Status } from '@/lib/status-presentations';
+import { status as allStatus, Status } from '@/mock-data/status';
 import { CheckIcon } from 'lucide-react';
 import { useId, useState } from 'react';
 
 interface StatusWithPercentProps {
    status: Status;
    percentComplete: number;
-   statuses: Status[];
    onStatusChange?: (statusId: string) => void;
 }
 
 export function StatusWithPercent({
    status,
    percentComplete,
-   statuses,
    onStatusChange,
 }: StatusWithPercentProps) {
    const id = useId();
@@ -52,7 +50,7 @@ export function StatusWithPercent({
                aria-expanded={open}
             >
                {(() => {
-                  const selectedItem = statuses.find((item) => item.id === value) ?? status;
+                  const selectedItem = allStatus.find((item) => item.id === value);
                   if (selectedItem) {
                      const Icon = selectedItem.icon;
                      return <Icon />;
@@ -68,7 +66,7 @@ export function StatusWithPercent({
                <CommandList>
                   <CommandEmpty>No status found.</CommandEmpty>
                   <CommandGroup>
-                     {statuses.map((item) => {
+                     {allStatus.map((item) => {
                         const Icon = item.icon;
                         return (
                            <CommandItem

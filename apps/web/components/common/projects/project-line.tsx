@@ -18,7 +18,7 @@ interface ProjectLineProps {
 
 export default function ProjectLine({ project }: ProjectLineProps) {
    const { orgId } = useParams<{ orgId: string }>();
-   const { projectStatuses, updateProject, workspaceMembers } = useProjectsData();
+   const { updateProject, workspaceMembers } = useProjectsData();
    const { displayProperties } = useProjectsDisplayStore();
    const persistUpdate = (update: Parameters<typeof updateProject>[1]) => {
       void updateProject(project.id, update).catch((error: unknown) => {
@@ -102,7 +102,6 @@ export default function ProjectLine({ project }: ProjectLineProps) {
                <StatusWithPercent
                   status={project.status}
                   percentComplete={project.percentComplete}
-                  statuses={projectStatuses}
                   onStatusChange={(status) => persistUpdate({ status })}
                />
             </div>

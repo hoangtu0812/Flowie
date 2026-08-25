@@ -28,6 +28,25 @@ public_router = APIRouter(prefix='/api/v1/projects', tags=['projects'])
 ProjectType = Literal['GENERAL', 'PRODUCT', 'MARKETING', 'OPERATIONS', 'EVENT', 'CLIENT', 'RESEARCH', 'CUSTOM']
 PROXY_METHODS = ['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT']
 
+# Keep the persisted Project workflow compatible with Circle's unchanged
+# selector. The original UI has this fixed catalog, so presentation does not
+# depend on whichever partial status rows happened to exist before migration.
+CIRCLE_PROJECT_STATUSES = (
+    ('in-progress', 'in-progress', '#facc15'),
+    ('technical-review', 'in-progress', '#22c55e'),
+    ('done', 'completed', '#5e6ad2'),
+    ('paused', 'in-progress', '#26b5ce'),
+    ('to-do', 'planned', '#99a2b2'),
+    ('backlog', 'backlog', '#95a2b3'),
+    ('triage', 'backlog', '#f2790f'),
+    ('idea', 'backlog', '#5e6ad2'),
+    ('product-feedback', 'in-progress', '#f2994a'),
+    ('blocked', 'in-progress', '#eb5757'),
+    ('shipped', 'completed', '#4cb782'),
+    ('canceled', 'canceled', '#95a2b3'),
+    ('duplicate', 'canceled', '#95a2b3'),
+)
+
 
 class CreateProjectInput(BaseModel):
     workspaceId: str = Field(min_length=1)
@@ -104,6 +123,28 @@ async def _workspace_access(db: AsyncSession, workspace_id: str, user_id: str) -
     result = await db.execute(text("SELECT 1 FROM workspace_members WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'"), {'workspace_id': workspace_id, 'user_id': user_id})
     if result.scalar_one_or_none() is None:
         raise ApiError(403, 'You do not have access to this workspace.', 'Forbidden')
+
+
+async def _ensure_circle_project_statuses(db: AsyncSession, workspace_id: str) -> None:
+    now = _utcnow()
+    for position, (name, category, color) in enumerate(CIRCLE_PROJECT_STATUSES):
+        await db.execute(
+            text(
+                '''INSERT INTO project_statuses
+                   (id, workspace_id, name, category, color, position, created_at, updated_at)
+                   VALUES (:id, :workspace_id, :name, :category, :color, :position, :now, :now)
+                   ON CONFLICT (workspace_id, name) DO NOTHING'''
+            ),
+            {
+                'id': _cuid(),
+                'workspace_id': workspace_id,
+                'name': name,
+                'category': category,
+                'color': color,
+                'position': position,
+                'now': now,
+            },
+        )
 
 
 async def _team_access(db: AsyncSession, workspace_id: str, team_id: str, user_id: str) -> None:
@@ -209,6 +250,7 @@ async def update_project(project_id: str, payload: UpdateProjectInput, workspace
         if lead.scalar_one_or_none() is None: raise ApiError(404, 'Project lead must be an active workspace member.', 'Not Found')
     if values.get('teamId'): await _team_access(db, workspaceId, values['teamId'], user['id'])
     if values.get('status'):
+        await _ensure_circle_project_statuses(db, workspaceId)
         status = await db.execute(text('SELECT 1 FROM project_statuses WHERE workspace_id = :workspace_id AND name = :name'), {'workspace_id': workspaceId, 'name': values['status']})
         if status.scalar_one_or_none() is None: raise ApiError(404, 'Project status is not configured in this workspace.', 'Not Found')
     label_ids = values.pop('labelIds', None)
