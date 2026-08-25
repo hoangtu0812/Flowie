@@ -30,16 +30,16 @@ type LabelGroup = {
    _count: { labels: number };
 };
 
-type IssueLabel = {
+type WorkspaceLabel = {
    id: string;
    name: string;
    color: string;
    description: string | null;
    createdAt: string;
-   lastApplied: string | null;
-   groupId: string | null;
-   group: { id: string; name: string } | null;
-   _count: { issueLinks: number };
+   lastApplied?: string | null;
+   groupId?: string | null;
+   group?: { id: string; name: string } | null;
+   _count: { issueLinks?: number; projectLinks?: number };
 };
 
 type LabelDraft = { name: string; color: string; description: string; groupId: string };
@@ -62,16 +62,19 @@ async function errorMessage(response: Response, fallback: string) {
    return Array.isArray(payload?.message) ? payload.message[0] : (payload?.message ?? fallback);
 }
 
-/** Workspace "Issue labels" settings, backed by the persisted Python Labels API. */
-export default function IssueLabelsSettings() {
+/** Workspace labels settings, backed by persisted Python APIs for each Circle scope. */
+export default function IssueLabelsSettings({ scope = 'issue' }: { scope?: 'issue' | 'project' }) {
+   const isProject = scope === 'project';
+   const kind = isProject ? 'project' : 'issue';
+   const labelPath = isProject ? 'projects/labels' : 'labels';
    const [workspaceId, setWorkspaceId] = useState<string>();
-   const [labels, setLabels] = useState<IssueLabel[]>([]);
+   const [labels, setLabels] = useState<WorkspaceLabel[]>([]);
    const [groups, setGroups] = useState<LabelGroup[]>([]);
    const [query, setQuery] = useState('');
    const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
    const [labelOpen, setLabelOpen] = useState(false);
    const [groupOpen, setGroupOpen] = useState(false);
-   const [editingLabel, setEditingLabel] = useState<IssueLabel>();
+   const [editingLabel, setEditingLabel] = useState<WorkspaceLabel>();
    const [editingGroup, setEditingGroup] = useState<LabelGroup>();
    const [labelDraft, setLabelDraft] = useState<LabelDraft>(EMPTY_LABEL);
    const [groupDraft, setGroupDraft] = useState<GroupDraft>(EMPTY_GROUP);
@@ -80,17 +83,17 @@ export default function IssueLabelsSettings() {
 
    const load = useCallback(async () => {
       const id = (await loadCurrentWorkspace()).id;
-      const [labelsResponse, groupsResponse] = await Promise.all([
-         authenticatedFetch(`${api}/labels?workspaceId=${id}`),
-         authenticatedFetch(`${api}/labels/groups?workspaceId=${id}`),
-      ]);
-      if (!labelsResponse.ok || !groupsResponse.ok) {
-         throw new Error('Could not load issue labels.');
+      const labelsResponse = await authenticatedFetch(`${api}/${labelPath}?workspaceId=${id}`);
+      const groupsResponse = isProject
+         ? undefined
+         : await authenticatedFetch(`${api}/labels/groups?workspaceId=${id}`);
+      if (!labelsResponse.ok || (groupsResponse && !groupsResponse.ok)) {
+         throw new Error(`Could not load ${kind} labels.`);
       }
       setWorkspaceId(id);
-      setLabels(((await labelsResponse.json()) as { data: IssueLabel[] }).data);
-      setGroups(((await groupsResponse.json()) as { data: LabelGroup[] }).data);
-   }, []);
+      setLabels(((await labelsResponse.json()) as { data: WorkspaceLabel[] }).data);
+      setGroups(groupsResponse ? ((await groupsResponse.json()) as { data: LabelGroup[] }).data : []);
+   }, [isProject, kind, labelPath]);
 
    useEffect(() => {
       void load()
@@ -112,7 +115,7 @@ export default function IssueLabelsSettings() {
       setLabelOpen(true);
    };
 
-   const showEditLabel = (label: IssueLabel) => {
+   const showEditLabel = (label: WorkspaceLabel) => {
       setEditingLabel(label);
       setLabelDraft({
          name: label.name,
@@ -146,8 +149,8 @@ export default function IssueLabelsSettings() {
       try {
          const response = await authenticatedFetch(
             editingLabel
-               ? `${api}/labels/${editingLabel.id}?workspaceId=${workspaceId}`
-               : `${api}/labels`,
+               ? `${api}/${labelPath}/${editingLabel.id}?workspaceId=${workspaceId}`
+               : `${api}/${labelPath}`,
             {
                method: editingLabel ? 'PATCH' : 'POST',
                headers: { 'content-type': 'application/json' },
@@ -156,15 +159,15 @@ export default function IssueLabelsSettings() {
                   name: labelDraft.name.trim(),
                   color: labelDraft.color,
                   description: labelDraft.description.trim() || null,
-                  groupId: labelDraft.groupId || null,
+                  ...(!isProject ? { groupId: labelDraft.groupId || null } : {}),
                }),
             }
          );
-         if (!response.ok) throw new Error(await errorMessage(response, 'Could not save label.'));
+         if (!response.ok) throw new Error(await errorMessage(response, `Could not save ${kind} label.`));
          await load();
          setLabelOpen(false);
       } catch (caught) {
-         setMessage(caught instanceof Error ? caught.message : 'Could not save label.');
+         setMessage(caught instanceof Error ? caught.message : `Could not save ${kind} label.`);
       } finally {
          setSaving(false);
       }
@@ -207,14 +210,14 @@ export default function IssueLabelsSettings() {
       setMessage(undefined);
       try {
          const response = await authenticatedFetch(
-            `${api}/labels/${editingLabel.id}?workspaceId=${workspaceId}`,
+            `${api}/${labelPath}/${editingLabel.id}?workspaceId=${workspaceId}`,
             { method: 'DELETE' }
          );
-         if (!response.ok) throw new Error(await errorMessage(response, 'Could not delete label.'));
+         if (!response.ok) throw new Error(await errorMessage(response, `Could not delete ${kind} label.`));
          await load();
          setLabelOpen(false);
       } catch (caught) {
-         setMessage(caught instanceof Error ? caught.message : 'Could not delete label.');
+         setMessage(caught instanceof Error ? caught.message : `Could not delete ${kind} label.`);
       } finally {
          setSaving(false);
       }
@@ -243,7 +246,7 @@ export default function IssueLabelsSettings() {
    return (
       <div className="w-full overflow-y-auto h-full">
          <div className="max-w-5xl mx-auto px-6 py-10 pb-20">
-            <h1 className="text-2xl font-medium mb-6">Issue labels</h1>
+            <h1 className="text-2xl font-medium mb-6">{isProject ? 'Project labels' : 'Issue labels'}</h1>
 
             <div className="flex items-center justify-between gap-3 mb-6">
                <div className="flex items-center gap-2">
@@ -256,9 +259,9 @@ export default function IssueLabelsSettings() {
                   <SelectMenu options={['Workspace', 'All teams']} />
                </div>
                <div className="flex items-center gap-2">
-                  <Button size="xs" variant="secondary" onClick={showCreateGroup}>
+                  {!isProject && <Button size="xs" variant="secondary" onClick={showCreateGroup}>
                      New group
-                  </Button>
+                  </Button>}
                   <Button size="xs" onClick={showCreateLabel} disabled={state !== 'ready'}>
                      New label
                   </Button>
@@ -268,8 +271,8 @@ export default function IssueLabelsSettings() {
             <div className="flex items-center px-2 py-1.5 text-xs text-muted-foreground border-b">
                <div className="flex-1 min-w-0">Name ↓</div>
                <div className="hidden md:block w-[260px]">Description</div>
-               <div className="w-[70px]">Issues</div>
-               <div className="hidden sm:block w-[110px]">Last applied</div>
+               <div className="w-[70px]">{isProject ? 'Projects' : 'Issues'}</div>
+               {!isProject && <div className="hidden sm:block w-[110px]">Last applied</div>}
                <div className="w-[80px]">Created</div>
             </div>
 
@@ -277,7 +280,7 @@ export default function IssueLabelsSettings() {
                <p className="text-sm text-muted-foreground py-6">Loading labels...</p>
             )}
             {state === 'error' && (
-               <p className="text-sm text-destructive py-6">Could not load issue labels.</p>
+               <p className="text-sm text-destructive py-6">Could not load {kind} labels.</p>
             )}
             {state === 'ready' &&
                rows.map((label) => (
@@ -298,11 +301,11 @@ export default function IssueLabelsSettings() {
                         {label.description}
                      </div>
                      <div className="w-[70px] text-xs text-muted-foreground">
-                        {label._count.issueLinks > 0 && formatCount(label._count.issueLinks)}
+                        {(label._count.issueLinks ?? label._count.projectLinks ?? 0) > 0 && formatCount(label._count.issueLinks ?? label._count.projectLinks ?? 0)}
                      </div>
-                     <div className="hidden sm:block w-[110px] text-xs text-muted-foreground">
-                        {formatDate(label.lastApplied)}
-                     </div>
+                     {!isProject && <div className="hidden sm:block w-[110px] text-xs text-muted-foreground">
+                        {formatDate(label.lastApplied ?? null)}
+                     </div>}
                      <div className="w-[80px] text-xs text-muted-foreground">
                         {formatDate(label.createdAt)}
                      </div>
@@ -311,12 +314,12 @@ export default function IssueLabelsSettings() {
             {state === 'ready' && rows.length === 0 && (
                <p className="text-sm text-muted-foreground py-6">
                   {labels.length === 0
-                     ? 'No labels yet. Create your first label.'
+                     ? `No ${kind} labels yet. Create your first label.`
                      : 'No labels match your filter.'}
                </p>
             )}
 
-            {groups.length > 0 && (
+            {!isProject && groups.length > 0 && (
                <div className="mt-10">
                   <h2 className="text-sm font-medium mb-2">Label groups</h2>
                   {groups.map((group) => (
@@ -341,7 +344,7 @@ export default function IssueLabelsSettings() {
                <DialogHeader>
                   <DialogTitle>{editingLabel ? 'Edit label' : 'New label'}</DialogTitle>
                   <DialogDescription>
-                     Create a reusable label for issues in this workspace.
+                     Create a reusable label for {isProject ? 'projects' : 'issues'} in this workspace.
                   </DialogDescription>
                </DialogHeader>
                <form onSubmit={saveLabel} className="grid gap-4">
@@ -379,7 +382,7 @@ export default function IssueLabelsSettings() {
                         />
                      </div>
                   </div>
-                  <div className="grid gap-2">
+                  {!isProject && <div className="grid gap-2">
                      <Label htmlFor="label-group">Group</Label>
                      <Select
                         value={labelDraft.groupId || 'none'}
@@ -402,7 +405,7 @@ export default function IssueLabelsSettings() {
                            ))}
                         </SelectContent>
                      </Select>
-                  </div>
+                  </div>}
                   <div className="grid gap-2">
                      <Label htmlFor="label-description">Description</Label>
                      <Textarea
@@ -437,7 +440,7 @@ export default function IssueLabelsSettings() {
             </DialogContent>
          </Dialog>
 
-         <Dialog open={groupOpen} onOpenChange={setGroupOpen}>
+         {!isProject && <Dialog open={groupOpen} onOpenChange={setGroupOpen}>
             <DialogContent>
                <DialogHeader>
                   <DialogTitle>{editingGroup ? 'Edit label group' : 'New label group'}</DialogTitle>
@@ -489,7 +492,7 @@ export default function IssueLabelsSettings() {
                   </DialogFooter>
                </form>
             </DialogContent>
-         </Dialog>
+         </Dialog>}
       </div>
    );
 }

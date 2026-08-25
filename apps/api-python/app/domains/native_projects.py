@@ -124,6 +124,19 @@ class UpdateProjectCustomFieldInput(BaseModel):
     position: int | None = Field(default=None, ge=0)
 
 
+class CreateProjectLabelInput(BaseModel):
+    workspaceId: str = Field(min_length=1)
+    name: str = Field(min_length=1, max_length=80)
+    color: str = Field(pattern=r'^#[0-9a-fA-F]{6}$')
+    description: str | None = Field(default=None, max_length=500)
+
+
+class UpdateProjectLabelInput(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=80)
+    color: str | None = Field(default=None, pattern=r'^#[0-9a-fA-F]{6}$')
+    description: str | None = Field(default=None, max_length=500)
+
+
 async def _workspace_access(db: AsyncSession, workspace_id: str, user_id: str) -> None:
     result = await db.execute(text("SELECT 1 FROM workspace_members WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'"), {'workspace_id': workspace_id, 'user_id': user_id})
     if result.scalar_one_or_none() is None:
@@ -229,6 +242,83 @@ async def delete_custom_field(field_id: str, workspaceId: str = Query(min_length
     await db.execute(text('DELETE FROM project_custom_fields WHERE id = :id'), {'id': field_id})
     await db.commit()
     return {'data': {'id': field_id, 'deleted': True}}
+
+
+def _project_label(row: Any) -> dict[str, Any]:
+    return {
+        'id': row['id'], 'workspaceId': row['workspace_id'], 'name': row['name'],
+        'color': row['color'], 'description': row['description'], 'createdAt': row['created_at'],
+        'updatedAt': row['updated_at'], '_count': {'projectLinks': row['project_count']},
+    }
+
+
+@router.get('/labels')
+@public_router.get('/labels')
+async def list_project_labels(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
+    await _workspace_access(db, workspaceId, user['id'])
+    rows = await db.execute(
+        text('''SELECT l.*, COUNT(pl.project_id)::integer AS project_count
+                FROM project_labels l LEFT JOIN project_label_links pl ON pl.label_id = l.id
+                WHERE l.workspace_id = :workspace_id
+                GROUP BY l.id ORDER BY l.name ASC'''),
+        {'workspace_id': workspaceId},
+    )
+    return {'data': [_project_label(row) for row in rows.mappings().all()]}
+
+
+@router.post('/labels')
+@public_router.post('/labels')
+async def create_project_label(payload: CreateProjectLabelInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    await _workspace_access(db, payload.workspaceId, user['id'])
+    label_id, now = _cuid(), _utcnow()
+    try:
+        await db.execute(
+            text('''INSERT INTO project_labels (id, workspace_id, name, color, description, created_at, updated_at)
+                    VALUES (:id, :workspace_id, :name, :color, :description, :now, :now)'''),
+            {'id': label_id, 'workspace_id': payload.workspaceId, 'name': payload.name.strip(), 'color': payload.color, 'description': payload.description.strip() if payload.description else None, 'now': now},
+        )
+        await db.commit()
+    except IntegrityError as error:
+        await db.rollback()
+        raise ApiError(409, 'A project label with this name already exists.', 'Conflict') from error
+    row = (await db.execute(text('''SELECT l.*, 0::integer AS project_count FROM project_labels l WHERE l.id = :id'''), {'id': label_id})).mappings().one()
+    return {'data': _project_label(row)}
+
+
+@router.patch('/labels/{label_id}')
+@public_router.patch('/labels/{label_id}')
+async def update_project_label(label_id: str, payload: UpdateProjectLabelInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    await _workspace_manager(db, workspaceId, user['id'])
+    current = (await db.execute(text('SELECT 1 FROM project_labels WHERE id = :id AND workspace_id = :workspace_id'), {'id': label_id, 'workspace_id': workspaceId})).scalar_one_or_none()
+    if current is None:
+        raise ApiError(404, 'Project label not found.', 'Not Found')
+    values = payload.model_dump(exclude_unset=True)
+    if values:
+        params, sets = {'id': label_id, 'now': _utcnow()}, ['updated_at = :now']
+        for field in ('name', 'color', 'description'):
+            if field in values:
+                params[field] = values[field].strip() if isinstance(values[field], str) and field in {'name', 'description'} else values[field]
+                sets.append(f'{"description" if field == "description" else field} = :{field}')
+        try:
+            await db.execute(text(f"UPDATE project_labels SET {', '.join(sets)} WHERE id = :id"), params)
+            await db.commit()
+        except IntegrityError as error:
+            await db.rollback()
+            raise ApiError(409, 'A project label with this name already exists.', 'Conflict') from error
+    row = (await db.execute(text('''SELECT l.*, COUNT(pl.project_id)::integer AS project_count FROM project_labels l LEFT JOIN project_label_links pl ON pl.label_id = l.id WHERE l.id = :id GROUP BY l.id'''), {'id': label_id})).mappings().one()
+    return {'data': _project_label(row)}
+
+
+@router.delete('/labels/{label_id}')
+@public_router.delete('/labels/{label_id}')
+async def delete_project_label(label_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    await _workspace_manager(db, workspaceId, user['id'])
+    exists = await db.execute(text('SELECT 1 FROM project_labels WHERE id = :id AND workspace_id = :workspace_id'), {'id': label_id, 'workspace_id': workspaceId})
+    if exists.scalar_one_or_none() is None:
+        raise ApiError(404, 'Project label not found.', 'Not Found')
+    await db.execute(text('DELETE FROM project_labels WHERE id = :id'), {'id': label_id})
+    await db.commit()
+    return {'data': {'id': label_id, 'deleted': True}}
 
 
 async def _ensure_circle_project_statuses(db: AsyncSession, workspace_id: str) -> None:
