@@ -153,6 +153,21 @@ class UpdateProjectStatusInput(BaseModel):
     position: int | None = Field(default=None, ge=0)
 
 
+class CreateProjectTemplateInput(BaseModel):
+    workspaceId: str = Field(min_length=1)
+    name: str = Field(min_length=2, max_length=120)
+    description: str | None = Field(default=None, max_length=2000)
+    type: ProjectType | None = None
+    config: dict[str, Any] | None = None
+
+
+class UpdateProjectTemplateInput(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    description: str | None = Field(default=None, max_length=2000)
+    type: ProjectType | None = None
+    config: dict[str, Any] | None = None
+
+
 async def _workspace_access(db: AsyncSession, workspace_id: str, user_id: str) -> None:
     result = await db.execute(text("SELECT 1 FROM workspace_members WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'"), {'workspace_id': workspace_id, 'user_id': user_id})
     if result.scalar_one_or_none() is None:
@@ -429,6 +444,80 @@ async def delete_project_status(status_id: str, workspaceId: str = Query(min_len
     await db.execute(text('DELETE FROM project_statuses WHERE id = :id'), {'id': status_id})
     await db.commit()
     return {'data': {'id': status_id, 'deleted': True}}
+
+
+def _project_template(row: Any) -> dict[str, Any]:
+    return {
+        'id': row['id'], 'workspaceId': row['workspace_id'], 'name': row['name'],
+        'description': row['description'], 'type': row['type'], 'config': row['config'],
+        'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
+    }
+
+
+@router.get('/templates')
+@public_router.get('/templates')
+async def list_project_templates(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
+    await _workspace_access(db, workspaceId, user['id'])
+    rows = await db.execute(text('SELECT * FROM project_templates WHERE workspace_id = :workspace_id ORDER BY name ASC'), {'workspace_id': workspaceId})
+    return {'data': [_project_template(row) for row in rows.mappings().all()]}
+
+
+@router.post('/templates')
+@public_router.post('/templates')
+async def create_project_template(payload: CreateProjectTemplateInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    await _workspace_manager(db, payload.workspaceId, user['id'])
+    template_id, now = _cuid(), _utcnow()
+    try:
+        await db.execute(
+            text('''INSERT INTO project_templates (id, workspace_id, name, description, type, config, created_at, updated_at)
+                    VALUES (:id, :workspace_id, :name, :description, CAST(:type AS "ProjectType"), CAST(:config AS jsonb), :now, :now)'''),
+            {'id': template_id, 'workspace_id': payload.workspaceId, 'name': payload.name.strip(), 'description': payload.description.strip() if payload.description else None, 'type': payload.type or 'GENERAL', 'config': json.dumps(payload.config or {}), 'now': now},
+        )
+        await db.commit()
+    except IntegrityError as error:
+        await db.rollback()
+        raise ApiError(409, 'A project template with this name already exists.', 'Conflict') from error
+    row = (await db.execute(text('SELECT * FROM project_templates WHERE id = :id'), {'id': template_id})).mappings().one()
+    return {'data': _project_template(row)}
+
+
+@router.patch('/templates/{template_id}')
+@public_router.patch('/templates/{template_id}')
+async def update_project_template(template_id: str, payload: UpdateProjectTemplateInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    await _workspace_manager(db, workspaceId, user['id'])
+    exists = await db.execute(text('SELECT 1 FROM project_templates WHERE id = :id AND workspace_id = :workspace_id'), {'id': template_id, 'workspace_id': workspaceId})
+    if exists.scalar_one_or_none() is None:
+        raise ApiError(404, 'Project template not found.', 'Not Found')
+    values = payload.model_dump(exclude_unset=True)
+    if values:
+        params, sets = {'id': template_id, 'now': _utcnow()}, ['updated_at = :now']
+        for field in ('name', 'description', 'type'):
+            if field in values:
+                params[field] = values[field].strip() if field in {'name', 'description'} and isinstance(values[field], str) else values[field]
+                sets.append(f'{field} = :{field}')
+        if 'config' in values:
+            params['config'] = json.dumps(values['config'])
+            sets.append('config = CAST(:config AS jsonb)')
+        try:
+            await db.execute(text(f"UPDATE project_templates SET {', '.join(sets)} WHERE id = :id"), params)
+            await db.commit()
+        except IntegrityError as error:
+            await db.rollback()
+            raise ApiError(409, 'A project template with this name already exists.', 'Conflict') from error
+    row = (await db.execute(text('SELECT * FROM project_templates WHERE id = :id'), {'id': template_id})).mappings().one()
+    return {'data': _project_template(row)}
+
+
+@router.delete('/templates/{template_id}')
+@public_router.delete('/templates/{template_id}')
+async def delete_project_template(template_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    await _workspace_manager(db, workspaceId, user['id'])
+    exists = await db.execute(text('SELECT 1 FROM project_templates WHERE id = :id AND workspace_id = :workspace_id'), {'id': template_id, 'workspace_id': workspaceId})
+    if exists.scalar_one_or_none() is None:
+        raise ApiError(404, 'Project template not found.', 'Not Found')
+    await db.execute(text('DELETE FROM project_templates WHERE id = :id'), {'id': template_id})
+    await db.commit()
+    return {'data': {'id': template_id, 'deleted': True}}
 
 
 async def _ensure_circle_project_statuses(db: AsyncSession, workspace_id: str) -> None:

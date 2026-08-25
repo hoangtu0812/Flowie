@@ -24,8 +24,7 @@ import {
 } from '@/components/ui/select';
 import { FileStack } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { DashedSmiley } from './settings-placeholder';
-import { loadCurrentWorkspace } from '@/lib/workspaces';
+import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 
 type Template = {
    id: string;
@@ -60,9 +59,7 @@ export default function ProjectTemplatesSettings() {
       const id = (await loadCurrentWorkspace()).id;
       setWorkspaceId(id);
 
-      const response = await fetch(`${api}/projects/templates?workspaceId=${id}`, {
-         credentials: 'include',
-      });
+      const response = await authenticatedFetch(`${api}/projects/templates?workspaceId=${id}`);
       if (!response.ok) throw new Error('Could not load project templates.');
       setTemplates(((await response.json()) as { data: Template[] }).data);
    }, []);
@@ -107,13 +104,12 @@ export default function ProjectTemplatesSettings() {
       setSaving(true);
       setMessage(undefined);
       try {
-         const response = await fetch(
+         const response = await authenticatedFetch(
             selected
                ? `${api}/projects/templates/${selected.id}?workspaceId=${workspaceId}`
                : `${api}/projects/templates`,
             {
                method: selected ? 'PATCH' : 'POST',
-               credentials: 'include',
                headers: { 'content-type': 'application/json' },
                body: JSON.stringify({
                   ...(selected ? {} : { workspaceId }),
@@ -142,9 +138,9 @@ export default function ProjectTemplatesSettings() {
       setSaving(true);
       setMessage(undefined);
       try {
-         const response = await fetch(
+         const response = await authenticatedFetch(
             `${api}/projects/templates/${selected.id}?workspaceId=${workspaceId}`,
-            { method: 'DELETE', credentials: 'include' }
+            { method: 'DELETE' }
          );
          if (!response.ok) throw new Error('Could not delete project template.');
          await load();
@@ -184,7 +180,7 @@ export default function ProjectTemplatesSettings() {
             )}
             {state === 'ready' && filtered.length === 0 && (
                <div className="flex flex-col items-center justify-center gap-5 py-32">
-                  <DashedSmiley />
+                  <FileStack className="size-8 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">
                      {templates.length
                         ? 'No project templates match your filter.'
