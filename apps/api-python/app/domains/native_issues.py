@@ -47,6 +47,7 @@ class UpdateIssueInput(BaseModel):
     priority: IssuePriority | None = None
     dueDate: str | None = None
     labelIds: list[str] | None = Field(default=None, max_length=100)
+    releaseIds: list[str] | None = Field(default=None, max_length=100)
     estimate: int | None = Field(default=None, ge=0)
 
 
@@ -217,6 +218,24 @@ async def _validate_references(
     return row['category']
 
 
+async def _validate_release_ids(
+    db: AsyncSession, workspace_id: str, release_ids: list[str] | None
+) -> list[str]:
+    unique_ids = list(dict.fromkeys(release_ids or []))
+    if not unique_ids:
+        return unique_ids
+    releases = await db.execute(
+        text(
+            '''SELECT id FROM releases WHERE workspace_id = :workspace_id
+               AND archived_at IS NULL AND id = ANY(:release_ids)'''
+        ),
+        {'workspace_id': workspace_id, 'release_ids': unique_ids},
+    )
+    if len(releases.mappings().all()) != len(unique_ids):
+        raise ApiError(404, 'One or more releases were not found.', 'Not Found')
+    return unique_ids
+
+
 async def _write_activity(
     db: AsyncSession, workspace_id: str, issue_id: str, user_id: str, action: str, data: dict[str, Any]
 ) -> None:
@@ -319,12 +338,21 @@ async def issue_options(
     ), await db.execute(
         text('''SELECT id, name, status, start_date, end_date FROM cycles WHERE workspace_id = :workspace_id ''' + ('AND team_id = :team_id ' if teamId else '') + 'ORDER BY start_date DESC NULLS LAST, created_at DESC'), params
     )
+    releases = await db.execute(
+        text(
+            '''SELECT id, name, version, status, target_date FROM releases
+               WHERE workspace_id = :workspace_id AND archived_at IS NULL
+               ORDER BY target_date DESC NULLS LAST, created_at DESC'''
+        ),
+        {'workspace_id': workspaceId},
+    )
     return {'data': {
         'statuses': [{'id': row['id'], 'name': row['name'], 'category': row['category'], 'color': row['color'], 'position': row['position']} for row in statuses.mappings().all()],
         'projects': [{'id': row['id'], 'name': row['name'], 'identifier': row['identifier'], 'status': row['status'], 'priority': row['priority'], 'health': row['health'], 'startDate': row['start_date'], 'targetDate': row['target_date'], 'leadId': row['lead_id'], 'teamId': row['team_id']} for row in projects.mappings().all()],
         'members': [{'id': row['id'], 'name': row['name'], 'email': row['email'], 'avatarUrl': row['avatar_url']} for row in members.mappings().all()],
         'labels': [dict(row) for row in labels.mappings().all()],
         'cycles': [{'id': row['id'], 'name': row['name'], 'status': row['status'], 'startDate': row['start_date'], 'endDate': row['end_date']} for row in cycles.mappings().all()],
+        'releases': [{'id': row['id'], 'name': row['name'], 'version': row['version'], 'status': row['status'], 'targetDate': row['target_date']} for row in releases.mappings().all()],
     }}
 
 
@@ -675,6 +703,8 @@ async def update_issue(
     if 'statusId' in values and values['statusId'] is None:
         raise ApiError(400, 'statusId cannot be empty.', 'Bad Request')
     category = await _validate_references(db, workspaceId, issue['teamId'], values, creating=False)
+    if 'releaseIds' in values:
+        values['releaseIds'] = await _validate_release_ids(db, workspaceId, values['releaseIds'])
     columns = {
         'title': 'title', 'description': 'description', 'statusId': 'status_id', 'projectId': 'project_id',
         'assigneeId': 'assignee_id', 'priority': 'priority', 'estimate': 'estimate', 'dueDate': 'due_date',
@@ -696,6 +726,13 @@ async def update_issue(
         await db.execute(text('DELETE FROM issue_labels WHERE issue_id = :issue_id'), {'issue_id': issue_id})
         for label_id in values['labelIds'] or []:
             await db.execute(text('INSERT INTO issue_labels (issue_id, label_id) VALUES (:issue_id, :label_id)'), {'issue_id': issue_id, 'label_id': label_id})
+    if 'releaseIds' in values:
+        await db.execute(text('DELETE FROM issue_releases WHERE issue_id = :issue_id'), {'issue_id': issue_id})
+        for release_id in values['releaseIds']:
+            await db.execute(
+                text('INSERT INTO issue_releases (issue_id, release_id) VALUES (:issue_id, :release_id)'),
+                {'issue_id': issue_id, 'release_id': release_id},
+            )
     if values.get('assigneeId'):
         await db.execute(text('INSERT INTO issue_subscriptions (issue_id, user_id) VALUES (:issue_id, :user_id) ON CONFLICT DO NOTHING'), {'issue_id': issue_id, 'user_id': values['assigneeId']})
     await _write_activity(db, workspaceId, issue_id, user['id'], 'issue.updated', {'fields': list(values)})
