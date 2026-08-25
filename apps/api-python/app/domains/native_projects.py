@@ -630,6 +630,11 @@ async def create_project(payload: CreateProjectInput, user: Any = Depends(curren
     return {'data': await _project(db, project_id, payload.workspaceId, user['id'], include_favorites=False)}
 
 
+@public_router.get('/updates')
+async def workspace_updates_public(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
+    return await _workspace_updates(workspaceId, user, db)
+
+
 @router.get('/{project_id}')
 async def get_project(project_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await _workspace_access(db, workspaceId, user['id'])
@@ -794,14 +799,40 @@ async def remove_milestone(project_id: str, milestone_id: str, workspaceId: str 
     return {'data': {'id': milestone_id, 'deleted': True}}
 
 
+def _project_update(row: Any, *, include_project: bool = False) -> dict[str, Any]:
+    value = {
+        'id': row['id'], 'workspaceId': row['workspace_id'], 'projectId': row['project_id'],
+        'authorId': row['author_id'], 'body': row['body'], 'kind': row['kind'], 'health': row['health'],
+        'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
+        'author': {'id': row['author_id_value'], 'name': row['author_name'], 'avatarUrl': row['author_avatar_url']},
+        'attachments': [],
+    }
+    if include_project:
+        value['project'] = {'id': row['project_id_value'], 'name': row['project_name'], 'identifier': row['project_identifier']}
+    return value
+
+
+async def _workspace_updates(workspaceId: str, user: Any, db: AsyncSession) -> dict[str, list[dict[str, Any]]]:
+    await _workspace_access(db, workspaceId, user['id'])
+    rows = await db.execute(text('''SELECT pu.*, p.id AS project_id_value, p.name AS project_name, p.identifier AS project_identifier,
+                                     u.id AS author_id_value, u.name AS author_name, u.avatar_url AS author_avatar_url
+                              FROM project_updates pu JOIN projects p ON p.id = pu.project_id
+                              JOIN users u ON u.id = pu.author_id
+                              WHERE pu.workspace_id = :workspace_id AND p.archived_at IS NULL
+                              ORDER BY pu.created_at DESC LIMIT 100'''), {'workspace_id': workspaceId})
+    return {'data': [_project_update(row, include_project=True) for row in rows.mappings().all()]}
+
+
 @router.get('/{project_id}/updates')
+@public_router.get('/{project_id}/updates')
 async def list_updates(project_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
     await _project(db, project_id, workspaceId, user['id'])
     result = await db.execute(text('''SELECT pu.*, u.id AS author_id_value, u.name AS author_name, u.avatar_url AS author_avatar_url FROM project_updates pu JOIN users u ON u.id = pu.author_id WHERE pu.project_id = :project_id AND pu.workspace_id = :workspace_id ORDER BY pu.created_at DESC LIMIT 25'''), {'project_id': project_id, 'workspace_id': workspaceId})
-    return {'data': [{**dict(row), 'author': {'id': row['author_id_value'], 'name': row['author_name'], 'avatarUrl': row['author_avatar_url']}, 'attachments': []} for row in result.mappings().all()]}
+    return {'data': [_project_update(row) for row in result.mappings().all()]}
 
 
 @router.post('/{project_id}/updates')
+@public_router.post('/{project_id}/updates')
 async def create_update(project_id: str, payload: ProjectUpdateInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     project = await _project(db, project_id, payload.workspaceId, user['id']); body = payload.body.strip()
     if not body: raise ApiError(400, 'Project update cannot be empty.', 'Bad Request')
