@@ -157,14 +157,15 @@ async def _unique_workspace_slug(db: AsyncSession, name: str) -> str:
         suffix += 1
 
 
-async def _create_registered_workspace(
+async def create_workspace_bootstrap(
     db: AsyncSession,
     *,
     user_id: str,
-    name: str,
+    organization_name: str,
+    workspace_name: str,
     now: datetime,
-) -> None:
-    slug = await _unique_workspace_slug(db, name)
+) -> dict[str, str]:
+    slug = await _unique_workspace_slug(db, workspace_name)
     organization_id = _cuid()
     workspace_id = _cuid()
     team_id = _cuid()
@@ -175,7 +176,7 @@ async def _create_registered_workspace(
             VALUES (:id, :name, :slug, :owner_id, :now, :now)
             '''
         ),
-        {'id': organization_id, 'name': f"{name}'s organization", 'slug': slug, 'owner_id': user_id, 'now': now},
+        {'id': organization_id, 'name': organization_name, 'slug': slug, 'owner_id': user_id, 'now': now},
     )
     await db.execute(
         text(
@@ -184,7 +185,7 @@ async def _create_registered_workspace(
             VALUES (:id, :organization_id, :name, :slug, 'UTC', :now, :now)
             '''
         ),
-        {'id': workspace_id, 'organization_id': organization_id, 'name': f"{name}'s workspace", 'slug': slug, 'now': now},
+        {'id': workspace_id, 'organization_id': organization_id, 'name': workspace_name, 'slug': slug, 'now': now},
     )
     await db.execute(
         text(
@@ -235,6 +236,7 @@ async def _create_registered_workspace(
                 'now': now,
             },
         )
+    return {'organization_id': organization_id, 'workspace_id': workspace_id, 'team_id': team_id, 'slug': slug}
 
 
 def _request_metadata(request: Request) -> dict[str, str | None]:
@@ -385,7 +387,13 @@ async def register(
                 ),
                 {'id': _cuid(), 'user_id': user['id'], 'provider_account_id': email, 'email': email, 'now': now},
             )
-            await _create_registered_workspace(db, user_id=user['id'], name=name, now=now)
+            await create_workspace_bootstrap(
+                db,
+                user_id=user['id'],
+                organization_name=f"{name}'s organization",
+                workspace_name=f"{name}'s workspace",
+                now=now,
+            )
             access_token, refresh_token, data = await _create_session(db, user, request, request.app.state.settings)
     except IntegrityError as error:
         # A concurrent request can pass the pre-check; retain the legacy API
