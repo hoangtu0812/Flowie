@@ -1,18 +1,17 @@
 'use client';
 
 import { InsightsPanel } from '@/components/common/issues/insights-panel';
-import { Issue } from '@/mock-data/issues';
-import { ProjectDetail } from '@/mock-data/project-details';
-import { Project } from '@/mock-data/projects';
 import { useRightPanelStore } from '@/store/right-panel-store';
+import type { ProjectDetail } from '@/types/project-details';
+import type { ProjectDetailUiIssue, ProjectDetailUiProject } from './project-detail-ui-adapter';
 import { ProjectPropertiesPanel } from './project-properties-panel';
 
 interface ProjectSidePanelProps {
-   project: Project;
+   project: ProjectDetailUiProject;
    detail: ProjectDetail;
-   issues: Issue[];
+   issues: ProjectDetailUiIssue[];
    /** Issues shown by the insights panel (e.g. after filters); defaults to `issues`. */
-   insightsIssues?: Issue[];
+   insightsIssues?: ProjectDetailUiIssue[];
 }
 
 /**

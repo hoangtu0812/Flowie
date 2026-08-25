@@ -3,25 +3,22 @@
 import { CapacityRing } from '@/components/common/cycles/capacity-ring';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Issue } from '@/mock-data/issues';
-import { getCycleById } from '@/mock-data/cycles';
-import { ProjectDetail } from '@/mock-data/project-details';
-import { Project } from '@/mock-data/projects';
-import { teams } from '@/mock-data/teams';
 import { PanelFilterTarget, usePanelFilter } from '@/components/common/issues/use-panel-filter';
 import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { ProjectProgressChart } from './project-progress-chart';
+import type { ProjectDetailUiIssue, ProjectDetailUiProject } from './project-detail-ui-adapter';
+import type { ProjectDetail } from '@/types/project-details';
 import { ArrowRight, Calendar, Check, Compass, Plus, Slack, Tag, UserPlus } from 'lucide-react';
 import { useMemo } from 'react';
 
 interface ProjectPropertiesPanelProps {
-   project: Project;
+   project: ProjectDetailUiProject;
    detail: ProjectDetail;
-   issues: Issue[];
+   issues: ProjectDetailUiIssue[];
 }
 
-const isCompleted = (issue: Issue) => issue.status.category === 'completed';
+const isCompleted = (issue: ProjectDetailUiIssue) => issue.status.category === 'completed';
 
 const formatDay = (iso?: string) => (iso ? format(parseISO(iso), 'MMM do') : '—');
 
@@ -36,11 +33,14 @@ interface BreakdownRow {
 }
 
 function buildRows<T>(
-   issues: Issue[],
-   keyOf: (issue: Issue) => T | undefined,
-   describe: (key: T, sample: Issue) => Omit<BreakdownRow, 'total' | 'completedPercent'>
+   issues: ProjectDetailUiIssue[],
+   keyOf: (issue: ProjectDetailUiIssue) => T | undefined,
+   describe: (
+      key: T,
+      sample: ProjectDetailUiIssue
+   ) => Omit<BreakdownRow, 'total' | 'completedPercent'>
 ): BreakdownRow[] {
-   const buckets = new Map<T, Issue[]>();
+   const buckets = new Map<T, ProjectDetailUiIssue[]>();
    for (const issue of issues) {
       const key = keyOf(issue);
       if (key === undefined) continue;
@@ -114,7 +114,7 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
    const panelFilter = usePanelFilter();
    const completed = issues.filter(isCompleted).length;
 
-   const team = teams.find((candidate) => candidate.id === project.teamId);
+   const team = project.team;
 
    const started = issues.filter((issue) => issue.status.category === 'started').length;
 
@@ -185,9 +185,9 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
          buildRows(
             issues,
             (issue) => (issue.cycleId === '' ? undefined : issue.cycleId),
-            (key) => ({
+            (key, sample) => ({
                key: String(key),
-               label: getCycleById(String(key))?.name ?? `Cycle ${key}`,
+               label: sample.cycleName ?? `Cycle ${key}`,
                leading: null,
                target: { columnId: 'cycle', value: String(key) },
             })

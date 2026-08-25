@@ -1,6 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import {
+   createContext,
+   createElement,
+   type ReactNode,
+   useCallback,
+   useContext,
+   useEffect,
+   useState,
+} from 'react';
 import { loadCurrentWorkspace } from '@/lib/workspaces';
 
 export type LiveProject = {
@@ -110,6 +118,9 @@ export type LiveProjectCustomField = {
 };
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+
+type LiveProjectData = ReturnType<typeof useLiveProject>;
+const LiveProjectContext = createContext<LiveProjectData | null>(null);
 
 /** Shared live data source for the three unchanged Project detail tabs. */
 export function useLiveProject(projectId: string) {
@@ -522,4 +533,21 @@ export function useLiveProject(projectId: string) {
       toggleFavorite,
       reload,
    };
+}
+
+export function LiveProjectProvider({
+   projectId,
+   children,
+}: {
+   projectId: string;
+   children: ReactNode;
+}) {
+   const value = useLiveProject(projectId);
+   return createElement(LiveProjectContext.Provider, { value }, children);
+}
+
+export function useLiveProjectData() {
+   const value = useContext(LiveProjectContext);
+   if (!value) throw new Error('useLiveProjectData must be used inside LiveProjectProvider.');
+   return value;
 }

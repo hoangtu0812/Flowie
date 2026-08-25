@@ -3,13 +3,11 @@
 import { GroupedIssuesView } from '@/components/common/issues/grouped-issues-view';
 import { applyIssueFilters } from '@/components/common/issues/issue-filter-columns';
 import { IssueFilterBar } from '@/components/common/issues/issue-filter-bar';
-import { getProjectDetail } from '@/mock-data/project-details';
-import { getProjectById } from '@/mock-data/projects';
-import { displayOrderedStatus } from '@/mock-data/status';
 import { useFilterStore } from '@/store/filter-store';
-import { useIssuesStore } from '@/store/issues-store';
 import { useMemo } from 'react';
+import { toIssueUi, toProjectDetailUi, toProjectUi } from './project-detail-ui-adapter';
 import { ProjectSidePanel } from './project-side-panel';
+import { useLiveProjectData } from './use-live-project';
 
 interface ProjectIssuesProps {
    projectId: string;
@@ -17,19 +15,50 @@ interface ProjectIssuesProps {
 
 /** Project "Issues" tab: the project's issues grouped by status. */
 export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
-   const project = getProjectById(projectId)!;
-   const detail = getProjectDetail(projectId);
-   const { issues: allIssues } = useIssuesStore();
+   void projectId;
+   const {
+      project: liveProject,
+      issues: liveIssues,
+      milestones,
+      updates,
+      activities,
+      loading,
+      error,
+   } = useLiveProjectData();
    const { filters } = useFilterStore();
-
+   const project = useMemo(
+      () => (liveProject ? toProjectUi(liveProject, liveIssues) : null),
+      [liveProject, liveIssues]
+   );
+   const detail = useMemo(
+      () => (liveProject ? toProjectDetailUi(liveProject, milestones, updates, activities) : null),
+      [activities, liveProject, milestones, updates]
+   );
    const issues = useMemo(
-      () => allIssues.filter((issue) => issue.project?.id === project.id),
-      [allIssues, project.id]
+      () => (project ? liveIssues.map((issue) => toIssueUi(issue, project)) : []),
+      [liveIssues, project]
    );
 
    // Filters (filter bar + click-to-filter from the insights panel) apply
    // on top of the project scope.
    const displayedIssues = useMemo(() => applyIssueFilters(issues, filters), [issues, filters]);
+   const statuses = useMemo(
+      () => Array.from(new Map(issues.map((issue) => [issue.status.id, issue.status])).values()),
+      [issues]
+   );
+
+   if (loading)
+      return (
+         <div className="h-full grid place-items-center text-sm text-muted-foreground">
+            Loading project…
+         </div>
+      );
+   if (error || !project || !detail)
+      return (
+         <div className="h-full grid place-items-center text-sm text-destructive">
+            {error ?? 'Project not found.'}
+         </div>
+      );
 
    return (
       <div className="w-full h-full flex flex-col overflow-hidden">
@@ -39,7 +68,7 @@ export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
                <GroupedIssuesView
                   issues={displayedIssues}
                   totalIssues={issues}
-                  statuses={displayOrderedStatus}
+                  statuses={statuses}
                   isViewTypeGrid={false}
                />
             </div>

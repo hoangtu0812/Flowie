@@ -11,19 +11,18 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import {
-   getProjectDetail,
    ProjectUpdate,
    ProjectUpdateHealth,
    projectUpdateHealthColor,
    projectUpdateHealthLabel,
-} from '@/mock-data/project-details';
-import { getProjectById } from '@/mock-data/projects';
-import { useIssuesStore } from '@/store/issues-store';
-import { useProjectUpdatesStore } from '@/store/project-updates-store';
+} from '@/types/project-details';
 import { format, parseISO } from 'date-fns';
 import { Paperclip, Sparkles } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { toIssueUi, toProjectDetailUi, toProjectUi } from './project-detail-ui-adapter';
 import { ProjectSidePanel } from './project-side-panel';
+import { useLiveProjectData } from './use-live-project';
 
 interface ProjectActivityProps {
    projectId: string;
@@ -66,31 +65,56 @@ function UpdateCard({ update }: { update: ProjectUpdate }) {
 
 /** Project "Activity" tab: update composer + monthly timeline. */
 export default function ProjectActivity({ projectId }: ProjectActivityProps) {
-   const project = getProjectById(projectId)!;
-   const detail = getProjectDetail(projectId);
-   const { issues: allIssues } = useIssuesStore();
-   const issues = useMemo(
-      () => allIssues.filter((issue) => issue.project?.id === project.id),
-      [allIssues, project.id]
-   );
-   const { postedUpdates, postUpdate } = useProjectUpdatesStore();
+   void projectId;
+   const {
+      project: liveProject,
+      issues: liveIssues,
+      milestones,
+      updates: liveUpdates,
+      activities,
+      createUpdate,
+      loading,
+      error,
+   } = useLiveProjectData();
    const [mode, setMode] = useState<'comment' | 'update'>('update');
    const [health, setHealth] = useState<ProjectUpdateHealth>('on-track');
    const [text, setText] = useState('');
-
-   const updates = useMemo<ProjectUpdate[]>(
-      () => [...(postedUpdates[project.id] ?? []), ...detail.updates],
-      [postedUpdates, project.id, detail.updates]
+   const [posting, setPosting] = useState(false);
+   const project = useMemo(
+      () => (liveProject ? toProjectUi(liveProject, liveIssues) : null),
+      [liveProject, liveIssues]
+   );
+   const detail = useMemo(
+      () =>
+         liveProject ? toProjectDetailUi(liveProject, milestones, liveUpdates, activities) : null,
+      [activities, liveProject, liveUpdates, milestones]
+   );
+   const issues = useMemo(
+      () => (project ? liveIssues.map((issue) => toIssueUi(issue, project)) : []),
+      [liveIssues, project]
    );
 
    const updatesByMonth = useMemo(() => {
       const groups = new Map<string, ProjectUpdate[]>();
-      for (const update of updates) {
+      for (const update of detail?.updates ?? []) {
          const month = format(parseISO(update.date), 'MMMM');
          groups.set(month, [...(groups.get(month) ?? []), update]);
       }
       return [...groups.entries()];
-   }, [updates]);
+   }, [detail]);
+
+   if (loading)
+      return (
+         <div className="h-full grid place-items-center text-sm text-muted-foreground">
+            Loading project…
+         </div>
+      );
+   if (error || !project || !detail)
+      return (
+         <div className="h-full grid place-items-center text-sm text-destructive">
+            {error ?? 'Project not found.'}
+         </div>
+      );
 
    const completedPercent =
       issues.length > 0
@@ -101,10 +125,17 @@ export default function ProjectActivity({ projectId }: ProjectActivityProps) {
            )
          : 0;
 
-   const handlePost = () => {
+   const handlePost = async () => {
       if (text.trim() === '') return;
-      postUpdate(project.id, health, text);
-      setText('');
+      setPosting(true);
+      try {
+         await createUpdate(text, health, mode);
+         setText('');
+      } catch (caught) {
+         toast.error(caught instanceof Error ? caught.message : 'Could not post project update.');
+      } finally {
+         setPosting(false);
+      }
    };
 
    return (
@@ -158,7 +189,9 @@ export default function ProjectActivity({ projectId }: ProjectActivityProps) {
                   <textarea
                      value={text}
                      onChange={(event) => setText(event.target.value)}
-                     placeholder={mode === 'update' ? 'Write a project update…' : 'Leave a comment…'}
+                     placeholder={
+                        mode === 'update' ? 'Write a project update…' : 'Leave a comment…'
+                     }
                      className="mt-3 w-full min-h-24 resize-y bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                   />
 
@@ -167,7 +200,8 @@ export default function ProjectActivity({ projectId }: ProjectActivityProps) {
                         <div className="flex gap-6">
                            <span className="w-20">Priority</span>
                            <span>
-                              No priority → <span className="text-foreground">{project.priority.name}</span>
+                              No priority →{' '}
+                              <span className="text-foreground">{project.priority.name}</span>
                            </span>
                         </div>
                         <div className="flex gap-6">
@@ -202,10 +236,18 @@ export default function ProjectActivity({ projectId }: ProjectActivityProps) {
                         Write with Agent
                      </Button>
                      <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="icon" className="size-7 text-muted-foreground">
+                        <Button
+                           variant="ghost"
+                           size="icon"
+                           className="size-7 text-muted-foreground"
+                        >
                            <Paperclip className="size-4" />
                         </Button>
-                        <Button size="xs" onClick={handlePost} disabled={text.trim() === ''}>
+                        <Button
+                           size="xs"
+                           onClick={() => void handlePost()}
+                           disabled={text.trim() === '' || posting}
+                        >
                            Post {mode === 'update' ? 'update' : 'comment'}
                         </Button>
                      </div>
