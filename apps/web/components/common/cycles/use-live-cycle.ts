@@ -1,6 +1,7 @@
 'use client';
 
 import { loadJoinedWorkspaceTeams, WorkspaceTeam } from '@/components/common/teams/team-types';
+import { authenticatedFetch } from '@/lib/workspaces';
 import { Cycle } from '@/types/cycles';
 import { useIssuesStore } from '@/store/issues-store';
 import { useParams } from 'next/navigation';
@@ -63,9 +64,8 @@ export function useLiveCycle(cycleView: LiveCycleView) {
             if (!currentTeam) throw new Error('Team not found.');
             await loadIssues(currentTeam.identifier);
             const status = cycleView === 'active' ? 'ACTIVE' : 'UPCOMING';
-            const response = await fetch(
-               `${api}/cycles?${new URLSearchParams({ workspaceId, teamId: currentTeam.id, status }).toString()}`,
-               { credentials: 'include' }
+            const response = await authenticatedFetch(
+               `${api}/cycles?${new URLSearchParams({ workspaceId, teamId: currentTeam.id, status }).toString()}`
             );
             if (!response.ok) throw new Error('Could not load cycle.');
             const payload = (await response.json()) as { data: ApiCycle[] };

@@ -16,6 +16,9 @@ from .native_projects import _date, _team_access, _workspace_access
 
 
 router = APIRouter(prefix='/api/v1/_native/cycles', tags=['native-cycles'])
+# The active/upcoming Circle views already consume this exact read shape. Keep
+# mutations staged privately until their UI adapters are audited one by one.
+public_router = APIRouter(prefix='/api/v1/cycles', tags=['cycles'])
 CycleStatus = Literal['UPCOMING', 'ACTIVE', 'COMPLETED', 'CANCELED']
 
 
@@ -137,6 +140,7 @@ def _validate_dates(start_date: datetime | None, end_date: datetime | None) -> N
 
 
 @router.get('')
+@public_router.get('')
 async def list_cycles(
     workspaceId: str = Query(min_length=1),
     teamId: str = Query(min_length=1),
