@@ -1,7 +1,7 @@
 'use client';
 
 import { Issue } from '@/mock-data/issues';
-import { getStatusesByCategory, StatusCategory, displayOrderedStatus } from '@/mock-data/status';
+import { Status, StatusCategory } from '@/mock-data/status';
 import { useFilterStore } from '@/store/filter-store';
 import { useIssuesStore } from '@/store/issues-store';
 import { applyIssueFilters } from './issue-filter-columns';
@@ -36,10 +36,14 @@ export default function AllIssues({ categories }: AllIssuesProps) {
       void loadIssues();
    }, [loadIssues]);
 
-   const statuses = useMemo(
-      () => (categories ? getStatusesByCategory(categories) : displayOrderedStatus),
-      [categories]
-   );
+   const statuses = useMemo<Status[]>(() => {
+      const liveStatuses = Array.from(
+         new Map(issues.map((issue) => [issue.status.id, issue.status])).values()
+      );
+      return categories
+         ? liveStatuses.filter((current) => categories.includes(current.category))
+         : liveStatuses;
+   }, [issues, categories]);
 
    const scopedIssues = useMemo<Issue[]>(
       () =>
