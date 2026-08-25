@@ -106,7 +106,7 @@ export default function IssueDetails() {
 
                <div className="border-t border-border/60 mt-8" />
 
-               <ActivityFeed activity={detail.activity} />
+               <ActivityFeed issueId={issue.id} />
             </div>
          </div>
 
