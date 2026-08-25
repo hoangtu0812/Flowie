@@ -1,14 +1,24 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
- * Temporary Circle UI preview mode.
+ * A page request only needs a durable session cookie. The API validates the
+ * JWT on protected operations and can rotate the short-lived access cookie
+ * from the 30-day refresh cookie. Checking both here prevents a browser
+ * refresh from sending a signed-in user back to login unnecessarily.
  *
- * Authentication is deliberately disabled while the original presentation is
- * verified. Re-enable the former session guard only after each domain is
- * connected through a non-visual feature adapter.
+ * This file deliberately does not alter any Circle presentation route.
  */
-export function middleware() {
-   return NextResponse.next();
+export function middleware(request: NextRequest) {
+   const { pathname, search } = request.nextUrl;
+   if (pathname.startsWith('/auth/')) return NextResponse.next();
+
+   const hasSession = request.cookies.has('flowie_access') || request.cookies.has('flowie_refresh');
+   if (hasSession) return NextResponse.next();
+
+   const login = request.nextUrl.clone();
+   login.pathname = '/auth/login';
+   login.searchParams.set('next', `${pathname}${search}`);
+   return NextResponse.redirect(login);
 }
 
 export const config = {

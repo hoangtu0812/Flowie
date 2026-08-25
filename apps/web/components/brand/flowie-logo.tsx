@@ -12,7 +12,7 @@ export function FlowieLogo({
    return (
       <span className={cn('inline-flex items-center gap-2.5', className)}>
          <svg
-            aria-label="Flowie"
+            aria-label={loading ? 'Flowie đang tải' : 'Flowie'}
             className={cn('flowie-logo size-8 shrink-0', loading && 'flowie-logo-loading')}
             fill="none"
             role="img"
@@ -22,6 +22,27 @@ export function FlowieLogo({
             <path d="M10 13.5h20L20 29.5 10 13.5Z" fill="white" opacity=".97" />
             <path d="M10 13.5h10L15 22 10 13.5Z" fill="white" opacity=".52" />
             <path d="M20 13.5h10L25 22l-5-8.5Z" fill="white" opacity=".76" />
+            {loading && (
+               <circle
+                  cx="20"
+                  cy="20"
+                  fill="none"
+                  r="16"
+                  stroke="white"
+                  strokeDasharray="20 84"
+                  strokeLinecap="round"
+                  strokeWidth="2"
+               >
+                  <animateTransform
+                     attributeName="transform"
+                     dur="900ms"
+                     from="0 20 20"
+                     repeatCount="indefinite"
+                     to="360 20 20"
+                     type="rotate"
+                  />
+               </circle>
+            )}
          </svg>
          {label && <span className="text-lg font-semibold tracking-[-0.04em]">Flowie</span>}
       </span>

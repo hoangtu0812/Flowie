@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { FormEvent, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import { AuthCard } from '@/components/auth/auth-card';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,7 @@ const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'
 
 export default function LoginPage() {
    const router = useRouter();
+   const searchParams = useSearchParams();
    const [error, setError] = useState<string | null>(null);
    const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -40,10 +41,13 @@ export default function LoginPage() {
          if (!response.ok) {
             throw new Error(Array.isArray(payload.message) ? payload.message[0] : payload.message);
          }
+         const next = searchParams.get('next');
+         const safeNext = next?.startsWith('/') && !next.startsWith('//') ? next : null;
          router.replace(
-            payload.data.user.isPlatformAdmin
-               ? '/admin'
-               : `/${payload.data.workspace?.slug ?? 'flowie'}/teams`
+            safeNext ??
+               (payload.data.user.isPlatformAdmin
+                  ? '/admin'
+                  : `/${payload.data.workspace?.slug ?? 'flowie'}/teams`)
          );
       } catch (caughtError) {
          setError(caughtError instanceof Error ? caughtError.message : 'Không thể đăng nhập.');
@@ -56,6 +60,7 @@ export default function LoginPage() {
       <AuthCard
          title="Chào mừng trở lại"
          description="Đăng nhập để tiếp tục với Flowie."
+         loading={isSubmitting}
          footer={
             <>
                Chưa có tài khoản?{' '}

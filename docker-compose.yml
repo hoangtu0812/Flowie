@@ -53,16 +53,16 @@ services:
          timeout: 5s
          retries: 5
 
-   api:
+   api-legacy:
       profiles: ['app']
       pull_policy: never
       build:
          context: .
          dockerfile: infrastructure/docker/api.Dockerfile
-      container_name: circle-api
+      container_name: circle-api-legacy
       environment:
          NODE_ENV: production
-         API_PORT: 4000
+         API_PORT: 4001
          API_CORS_ORIGIN: http://localhost:3000
          AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
          ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-}
@@ -75,6 +75,30 @@ services:
          S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
          S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin123}
          S3_BUCKET: ${S3_BUCKET:-flowie}
+      depends_on:
+         postgres:
+            condition: service_healthy
+         redis:
+            condition: service_healthy
+
+   api:
+      profiles: ['app']
+      pull_policy: never
+      build:
+         context: .
+         dockerfile: infrastructure/docker/python-api.Dockerfile
+      container_name: circle-api
+      environment:
+         API_PORT: 4000
+         API_CORS_ORIGIN: http://localhost:3000
+         LEGACY_API_URL: http://api-legacy:4001
+         LEGACY_API_TIMEOUT_SECONDS: ${LEGACY_API_TIMEOUT_SECONDS:-30}
+         POSTGRES_HOST: postgres
+         POSTGRES_PORT_INTERNAL: 5432
+         REDIS_HOST: redis
+         REDIS_PORT_INTERNAL: 6379
+         MINIO_HOST: minio
+         MINIO_PORT_INTERNAL: 9000
       ports:
          - '${API_PORT:-4000}:4000'
       depends_on:
@@ -82,6 +106,10 @@ services:
             condition: service_healthy
          redis:
             condition: service_healthy
+         minio:
+            condition: service_healthy
+         api-legacy:
+            condition: service_started
 
    web:
       profiles: ['app']

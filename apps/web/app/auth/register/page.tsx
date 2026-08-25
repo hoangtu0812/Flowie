@@ -64,6 +64,7 @@ export default function RegisterPage() {
       <AuthCard
          title="Tạo workspace mới"
          description="Bắt đầu quản lý công việc cùng đội ngũ của bạn."
+         loading={isSubmitting}
          footer={
             <>
                Đã có tài khoản?{' '}
