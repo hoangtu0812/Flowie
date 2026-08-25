@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Any, Literal
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
@@ -13,7 +13,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
 from ..db.session import get_session
-from ..legacy.proxy import proxy_legacy_request
 from .auth import _cuid, _utcnow, current_user
 from .teams import _team
 
@@ -26,7 +25,7 @@ router = APIRouter(prefix='/api/v1/_native/projects', tags=['native-projects'])
 # the facade, so the unchanged Circle UI never observes a partial migration.
 public_router = APIRouter(prefix='/api/v1/projects', tags=['projects'])
 ProjectType = Literal['GENERAL', 'PRODUCT', 'MARKETING', 'OPERATIONS', 'EVENT', 'CLIENT', 'RESEARCH', 'CUSTOM']
-PROXY_METHODS = ['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT']
+ProjectCustomFieldType = Literal['TEXT', 'NUMBER', 'DATE', 'SELECT', 'MULTI_SELECT', 'BOOLEAN', 'URL']
 
 # Keep the persisted Project workflow compatible with Circle's unchanged
 # selector. The original UI has this fixed catalog, so presentation does not
@@ -106,23 +105,130 @@ class ProjectResourceInput(BaseModel):
     url: str = Field(min_length=1, max_length=2000)
 
 
-def _public_project_id(suffix: str) -> str:
-    """Project ids are CUIDs. The literal `c` keeps static settings paths out
-    of the dynamic Project route while those settings remain on the facade."""
-    return f'c{suffix}'
+class CreateProjectCustomFieldInput(BaseModel):
+    workspaceId: str = Field(min_length=1)
+    name: str = Field(min_length=1, max_length=80)
+    type: ProjectCustomFieldType
+    description: str | None = Field(default=None, max_length=500)
+    options: list[str] | None = None
+    required: bool | None = None
+    position: int | None = Field(default=None, ge=0)
 
 
-@public_router.api_route('/custom-fields', methods=PROXY_METHODS)
-@public_router.api_route('/custom-fields/{path:path}', methods=PROXY_METHODS)
-async def legacy_custom_fields(request: Request, path: str = ''):
-    suffix = 'projects/custom-fields' + (f'/{path}' if path else '')
-    return await proxy_legacy_request(request, suffix)
+class UpdateProjectCustomFieldInput(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=80)
+    type: ProjectCustomFieldType | None = None
+    description: str | None = Field(default=None, max_length=500)
+    options: list[str] | None = None
+    required: bool | None = None
+    position: int | None = Field(default=None, ge=0)
 
 
 async def _workspace_access(db: AsyncSession, workspace_id: str, user_id: str) -> None:
     result = await db.execute(text("SELECT 1 FROM workspace_members WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'"), {'workspace_id': workspace_id, 'user_id': user_id})
     if result.scalar_one_or_none() is None:
         raise ApiError(403, 'You do not have access to this workspace.', 'Forbidden')
+
+
+async def _workspace_manager(db: AsyncSession, workspace_id: str, user_id: str) -> None:
+    result = await db.execute(
+        text("SELECT role FROM workspace_members WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'"),
+        {'workspace_id': workspace_id, 'user_id': user_id},
+    )
+    if result.scalar_one_or_none() not in {'OWNER', 'ADMIN'}:
+        raise ApiError(403, 'Workspace administrator access is required.', 'Forbidden')
+
+
+def _custom_field(row: Any) -> dict[str, Any]:
+    return {
+        'id': row['id'], 'workspaceId': row['workspace_id'], 'name': row['name'],
+        'type': row['type'], 'description': row['description'], 'options': row['options'],
+        'required': row['required'], 'position': row['position'], 'createdAt': row['created_at'],
+        'updatedAt': row['updated_at'],
+    }
+
+
+def _custom_field_options(field_type: ProjectCustomFieldType, options: list[str] | None) -> list[str] | None:
+    if field_type not in {'SELECT', 'MULTI_SELECT'}:
+        return None
+    normalized = list(dict.fromkeys(option.strip() for option in (options or []) if option.strip()))
+    if not normalized:
+        raise ApiError(400, 'Select fields require at least one option.', 'Bad Request')
+    return normalized
+
+
+@router.get('/custom-fields')
+@public_router.get('/custom-fields')
+async def list_custom_fields(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
+    await _workspace_access(db, workspaceId, user['id'])
+    rows = await db.execute(text('SELECT * FROM project_custom_fields WHERE workspace_id = :workspace_id ORDER BY position ASC, name ASC'), {'workspace_id': workspaceId})
+    return {'data': [_custom_field(row) for row in rows.mappings().all()]}
+
+
+@router.post('/custom-fields')
+@public_router.post('/custom-fields')
+async def create_custom_field(payload: CreateProjectCustomFieldInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    await _workspace_manager(db, payload.workspaceId, user['id'])
+    now = _utcnow()
+    field_id = _cuid()
+    try:
+        await db.execute(
+            text('''INSERT INTO project_custom_fields
+                    (id, workspace_id, name, type, description, options, required, position, created_at, updated_at)
+                    VALUES (:id, :workspace_id, :name, CAST(:type AS "ProjectCustomFieldType"), :description, CAST(:options AS jsonb), :required, :position, :now, :now)'''),
+            {
+                'id': field_id, 'workspace_id': payload.workspaceId, 'name': payload.name.strip(),
+                'type': payload.type, 'description': payload.description.strip() if payload.description else None,
+                'options': json.dumps(_custom_field_options(payload.type, payload.options)),
+                'required': payload.required or False, 'position': payload.position or 0, 'now': now,
+            },
+        )
+        await db.commit()
+    except IntegrityError as error:
+        await db.rollback()
+        raise ApiError(409, 'A project property with this name already exists.', 'Conflict') from error
+    row = (await db.execute(text('SELECT * FROM project_custom_fields WHERE id = :id'), {'id': field_id})).mappings().one()
+    return {'data': _custom_field(row)}
+
+
+@router.patch('/custom-fields/{field_id}')
+@public_router.patch('/custom-fields/{field_id}')
+async def update_custom_field(field_id: str, payload: UpdateProjectCustomFieldInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    await _workspace_manager(db, workspaceId, user['id'])
+    current = (await db.execute(text('SELECT * FROM project_custom_fields WHERE id = :id AND workspace_id = :workspace_id'), {'id': field_id, 'workspace_id': workspaceId})).mappings().first()
+    if not current:
+        raise ApiError(404, 'Project custom field not found.', 'Not Found')
+    values = payload.model_dump(exclude_unset=True)
+    field_type = values.get('type', current['type'])
+    options = _custom_field_options(field_type, values['options'] if 'options' in values else current['options'])
+    assignments, params = ['type = CAST(:type AS "ProjectCustomFieldType")', 'options = CAST(:options AS jsonb)', 'updated_at = :now'], {'id': field_id, 'type': field_type, 'options': json.dumps(options), 'now': _utcnow()}
+    for field, column in {'name': 'name', 'description': 'description', 'required': 'required', 'position': 'position'}.items():
+        if field in values:
+            value = values[field]
+            params[field] = value.strip() if field in {'name', 'description'} and isinstance(value, str) else value
+            assignments.append(f'{column} = :{field}')
+    try:
+        if field_type != current['type']:
+            await db.execute(text('DELETE FROM project_custom_field_values WHERE field_id = :id'), {'id': field_id})
+        await db.execute(text(f"UPDATE project_custom_fields SET {', '.join(assignments)} WHERE id = :id"), params)
+        await db.commit()
+    except IntegrityError as error:
+        await db.rollback()
+        raise ApiError(409, 'A project property with this name already exists.', 'Conflict') from error
+    row = (await db.execute(text('SELECT * FROM project_custom_fields WHERE id = :id'), {'id': field_id})).mappings().one()
+    return {'data': _custom_field(row)}
+
+
+@router.delete('/custom-fields/{field_id}')
+@public_router.delete('/custom-fields/{field_id}')
+async def delete_custom_field(field_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    await _workspace_manager(db, workspaceId, user['id'])
+    exists = await db.execute(text('SELECT 1 FROM project_custom_fields WHERE id = :id AND workspace_id = :workspace_id'), {'id': field_id, 'workspace_id': workspaceId})
+    if exists.scalar_one_or_none() is None:
+        raise ApiError(404, 'Project custom field not found.', 'Not Found')
+    await db.execute(text('DELETE FROM project_custom_fields WHERE id = :id'), {'id': field_id})
+    await db.commit()
+    return {'data': {'id': field_id, 'deleted': True}}
 
 
 async def _ensure_circle_project_statuses(db: AsyncSession, workspace_id: str) -> None:

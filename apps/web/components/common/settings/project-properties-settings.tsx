@@ -19,7 +19,7 @@ import {
    SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { loadCurrentWorkspace } from '@/lib/workspaces';
+import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import { ListPlus, Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { SettingsSection, SettingsShell } from './shared';
@@ -80,9 +80,7 @@ export default function ProjectPropertiesSettings() {
    const load = useCallback(async () => {
       const id = (await loadCurrentWorkspace()).id;
       setWorkspaceId(id);
-      const response = await fetch(`${api}/projects/custom-fields?workspaceId=${id}`, {
-         credentials: 'include',
-      });
+      const response = await authenticatedFetch(`${api}/projects/custom-fields?workspaceId=${id}`);
       if (!response.ok) throw new Error('Could not load project properties.');
       setFields(((await response.json()) as { data: CustomField[] }).data);
    }, []);
@@ -139,13 +137,12 @@ export default function ProjectPropertiesSettings() {
       setSaving(true);
       setMessage(undefined);
       try {
-         const response = await fetch(
+         const response = await authenticatedFetch(
             selected
                ? `${api}/projects/custom-fields/${selected.id}?workspaceId=${workspaceId}`
                : `${api}/projects/custom-fields`,
             {
                method: selected ? 'PATCH' : 'POST',
-               credentials: 'include',
                headers: { 'content-type': 'application/json' },
                body: JSON.stringify({
                   ...(selected ? {} : { workspaceId, position: fields.length }),
@@ -181,9 +178,9 @@ export default function ProjectPropertiesSettings() {
       setSaving(true);
       setMessage(undefined);
       try {
-         const response = await fetch(
+         const response = await authenticatedFetch(
             `${api}/projects/custom-fields/${selected.id}?workspaceId=${workspaceId}`,
-            { method: 'DELETE', credentials: 'include' }
+            { method: 'DELETE' }
          );
          if (!response.ok) {
             const payload = (await response.json().catch(() => null)) as {
