@@ -34,7 +34,12 @@ import { parseAsStringLiteral, useQueryState } from 'nuqs';
 import { useMemo, useState } from 'react';
 import { InitiativeProgressPanel } from './initiative-progress-panel';
 import { InitiativeStatusIcon } from './initiative-status-icon';
-import { LiveWorkspaceLabel, LiveWorkspaceProject, useLiveInitiatives } from './use-live-initiatives';
+import {
+   LiveWorkspaceLabel,
+   LiveWorkspaceMember,
+   LiveWorkspaceProject,
+   useLiveInitiatives,
+} from './use-live-initiatives';
 
 const TABS = ['overview', 'activity', 'projects'] as const;
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
@@ -181,6 +186,9 @@ type InitiativeDetailAction =
    | 'priority'
    | 'target-date'
    | 'label'
+   | 'owner'
+   | 'description'
+   | 'icon'
    | null;
 
 function Overview({
@@ -188,11 +196,13 @@ function Overview({
    workspaceId,
    projects,
    labels,
+   members,
 }: {
    initiative: Initiative;
    workspaceId?: string;
    projects: LiveWorkspaceProject[];
    labels: LiveWorkspaceLabel[];
+   members: LiveWorkspaceMember[];
 }) {
    const completed = countCompletedProjects(initiative);
    const total = getInitiativeProjects(initiative).length;
@@ -206,6 +216,9 @@ function Overview({
    const [priority, setPriority] = useState(initiative.priority.id);
    const [targetDate, setTargetDate] = useState(initiative.targetDate?.slice(0, 10) ?? '');
    const [labelId, setLabelId] = useState('');
+   const [ownerId, setOwnerId] = useState(initiative.owner?.id ?? '');
+   const [description, setDescription] = useState(initiative.description ?? '');
+   const [icon, setIcon] = useState(initiative.icon ?? '🎯');
    const [saving, setSaving] = useState(false);
    const [error, setError] = useState<string>();
    const availableProjects = projects.filter(
@@ -220,6 +233,9 @@ function Overview({
       if (nextAction === 'status') setStatus(initiative.status);
       if (nextAction === 'priority') setPriority(initiative.priority.id);
       if (nextAction === 'target-date') setTargetDate(initiative.targetDate?.slice(0, 10) ?? '');
+      if (nextAction === 'owner') setOwnerId(initiative.owner?.id ?? '');
+      if (nextAction === 'description') setDescription(initiative.description ?? '');
+      if (nextAction === 'icon') setIcon(initiative.icon ?? '🎯');
       setAction(nextAction);
    };
 
@@ -228,7 +244,7 @@ function Overview({
       setSaving(true);
       setError(undefined);
       try {
-         const isPropertyChange = ['status', 'priority', 'target-date'].includes(action);
+         const isPropertyChange = ['status', 'priority', 'target-date', 'owner', 'description', 'icon'].includes(action);
          const path = action === 'update' ? 'updates' : action === 'resource' ? 'resources' : action === 'project' ? 'projects' : 'labels';
          const body =
             action === 'update'
@@ -242,8 +258,14 @@ function Overview({
                      : action === 'status'
                        ? { status }
                        : action === 'priority'
-                         ? { priority }
-                         : { targetDate: targetDate || null };
+                       ? { priority }
+                         : action === 'target-date'
+                           ? { targetDate: targetDate || null }
+                           : action === 'owner'
+                             ? { ownerId: ownerId || null }
+                             : action === 'description'
+                               ? { description: description.trim() || null }
+                               : { icon: icon.trim() || null };
          const response = await authenticatedFetch(
             isPropertyChange
                ? `${api}/initiatives/${initiative.id}?workspaceId=${workspaceId}`
@@ -272,6 +294,27 @@ function Overview({
       }
    };
 
+   const unlink = async (kind: 'project' | 'label', id: string) => {
+      if (!workspaceId) return;
+      setSaving(true);
+      setError(undefined);
+      try {
+         const response = await authenticatedFetch(
+            `${api}/initiatives/${initiative.id}/${kind}s/${id}?workspaceId=${workspaceId}`,
+            { method: 'DELETE' }
+         );
+         if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+            throw new Error(payload?.message ?? `Could not unlink ${kind}.`);
+         }
+         window.dispatchEvent(new Event('flowie:initiatives-changed'));
+      } catch (caught) {
+         setError(caught instanceof Error ? caught.message : `Could not unlink ${kind}.`);
+      } finally {
+         setSaving(false);
+      }
+   };
+
    const canSubmit =
       Boolean(workspaceId) &&
       (action === 'update'
@@ -289,14 +332,23 @@ function Overview({
          <div className="w-full h-full flex overflow-hidden">
          <div className="flex-1 min-w-0 overflow-y-auto">
             <div className="max-w-3xl mx-auto px-8 py-10 flex flex-col gap-6">
-               <span className="inline-flex size-10 items-center justify-center rounded-md bg-muted/50 text-2xl">
+               <button
+                  type="button"
+                  aria-label="Change initiative icon"
+                  className="inline-flex size-10 items-center justify-center rounded-md bg-muted/50 text-2xl hover:bg-accent transition-colors"
+                  onClick={() => openAction('icon')}
+               >
                   {initiative.icon}
-               </span>
+               </button>
                <div className="flex flex-col gap-2">
                   <h1 className="text-2xl font-semibold">{initiative.name}</h1>
-                  <p className="text-sm text-muted-foreground">
+                  <button
+                     type="button"
+                     className="text-left text-sm text-muted-foreground hover:text-foreground transition-colors"
+                     onClick={() => openAction('description')}
+                  >
                      {initiative.description ?? 'Add a short summary…'}
-                  </p>
+                  </button>
                </div>
 
                <div className="flex items-center gap-3 flex-wrap text-sm">
@@ -369,9 +421,13 @@ function Overview({
 
                <div className="flex flex-col gap-2">
                   <h2 className="text-sm font-medium">Description</h2>
-                  <p className="text-sm text-muted-foreground">
+                  <button
+                     type="button"
+                     className="text-left text-sm text-muted-foreground hover:text-foreground transition-colors whitespace-pre-wrap"
+                     onClick={() => openAction('description')}
+                  >
                      {initiative.description ?? 'Add description…'}
-                  </p>
+                  </button>
                </div>
 
                <ProjectsSection initiative={initiative} onLinkProject={() => openAction('project')} />
@@ -402,8 +458,13 @@ function Overview({
                   </button>
                </PropertyRow>
                <PropertyRow label="Owner">
-                  {initiative.owner ? (
-                     <span className="inline-flex items-center gap-1.5">
+                  <button
+                     type="button"
+                     className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                     onClick={() => openAction('owner')}
+                  >
+                     {initiative.owner ? (
+                        <>
                         <Avatar className="size-4">
                            <AvatarImage
                               src={initiative.owner.avatarUrl ?? undefined}
@@ -414,12 +475,13 @@ function Overview({
                            </AvatarFallback>
                         </Avatar>
                         {initiative.owner.name}
-                     </span>
-                  ) : (
-                     <span className="text-muted-foreground inline-flex items-center gap-1.5">
+                        </>
+                     ) : (
+                        <>
                         <UserRound className="size-4" /> Add owner
-                     </span>
-                  )}
+                        </>
+                     )}
+                  </button>
                </PropertyRow>
                <PropertyRow label="Target date">
                   <button
@@ -488,6 +550,12 @@ function Overview({
                               ? 'Add label'
                               : action === 'target-date'
                                 ? 'Set target date'
+                                : action === 'owner'
+                                  ? 'Set owner'
+                                  : action === 'description'
+                                    ? 'Edit description'
+                                    : action === 'icon'
+                                      ? 'Change icon'
                                 : `Set ${action}`}
                   </DialogTitle>
                </DialogHeader>
@@ -543,6 +611,16 @@ function Overview({
                         </SelectContent>
                      </Select>
                      {availableProjects.length === 0 && <p className="text-sm text-muted-foreground">All workspace projects are already linked.</p>}
+                     {initiative.projectLinks.length > 0 && (
+                        <div className="pt-2 space-y-1 border-t">
+                           {initiative.projectLinks.map((link) => (
+                              <div key={link.project.id} className="flex items-center gap-2 text-sm">
+                                 <span className="flex-1 truncate">{link.project.name}</span>
+                                 <Button size="xs" variant="ghost" disabled={saving} onClick={() => void unlink('project', link.project.id)}>Remove</Button>
+                              </div>
+                           ))}
+                        </div>
+                     )}
                   </div>
                )}
                {action === 'label' && (
@@ -562,6 +640,17 @@ function Overview({
                         <p className="text-sm text-muted-foreground">
                            Create a workspace label in Settings → Issue labels first.
                         </p>
+                     )}
+                     {initiative.labelLinks.length > 0 && (
+                        <div className="pt-2 space-y-1 border-t">
+                           {initiative.labelLinks.map((link) => (
+                              <div key={link.label.id} className="flex items-center gap-2 text-sm">
+                                 <span className="size-2 rounded-full" style={{ backgroundColor: link.label.color }} />
+                                 <span className="flex-1 truncate">{link.label.name}</span>
+                                 <Button size="xs" variant="ghost" disabled={saving} onClick={() => void unlink('label', link.label.id)}>Remove</Button>
+                              </div>
+                           ))}
+                        </div>
                      )}
                   </div>
                )}
@@ -602,6 +691,44 @@ function Overview({
                         autoFocus
                      />
                      <p className="text-xs text-muted-foreground">Clear the field and save to remove the date.</p>
+                  </div>
+               )}
+               {action === 'owner' && (
+                  <div className="space-y-2">
+                     <label className="text-sm font-medium" htmlFor="initiative-owner">Owner</label>
+                     <Select value={ownerId} onValueChange={setOwnerId}>
+                        <SelectTrigger id="initiative-owner"><SelectValue placeholder="Select an owner" /></SelectTrigger>
+                        <SelectContent>
+                           {members.map((member) => (
+                              <SelectItem key={member.user.id} value={member.user.id}>{member.user.name}</SelectItem>
+                           ))}
+                        </SelectContent>
+                     </Select>
+                  </div>
+               )}
+               {action === 'description' && (
+                  <div className="space-y-2">
+                     <label className="text-sm font-medium" htmlFor="initiative-description">Description</label>
+                     <Textarea
+                        id="initiative-description"
+                        value={description}
+                        onChange={(event) => setDescription(event.target.value)}
+                        placeholder="Add a description…"
+                        autoFocus
+                     />
+                     <p className="text-xs text-muted-foreground">Clear the field and save to remove the description.</p>
+                  </div>
+               )}
+               {action === 'icon' && (
+                  <div className="space-y-2">
+                     <label className="text-sm font-medium" htmlFor="initiative-icon">Icon</label>
+                     <Input
+                        id="initiative-icon"
+                        value={icon}
+                        onChange={(event) => setIcon(event.target.value)}
+                        maxLength={16}
+                        autoFocus
+                     />
                   </div>
                )}
                {error && <p className="text-sm text-destructive">{error}</p>}
@@ -664,7 +791,7 @@ function Activity({ initiative }: { initiative: Initiative }) {
 /** Initiative detail page: Overview / Activity / Projects tabs. */
 export default function InitiativeDetails({ initiativeId }: { initiativeId: string }) {
    const [tab] = useQueryState('tab', parseAsStringLiteral(TABS).withDefault('overview'));
-   const { workspaceId, initiatives: liveInitiatives, projects, labels, loading, error } = useLiveInitiatives();
+   const { workspaceId, initiatives: liveInitiatives, projects, labels, members, loading, error } = useLiveInitiatives();
    const initiatives = useMemo(() => adaptInitiatives(liveInitiatives), [liveInitiatives]);
    const initiative = initiatives.find((item) => item.id === initiativeId);
 
@@ -701,5 +828,13 @@ export default function InitiativeDetails({ initiativeId }: { initiativeId: stri
 
    if (tab === 'activity') return <Activity initiative={initiative} />;
    if (tab === 'projects') return <ProjectsTimeline groups={timelineGroups} />;
-   return <Overview initiative={initiative} workspaceId={workspaceId} projects={projects} labels={labels} />;
+   return (
+      <Overview
+         initiative={initiative}
+         workspaceId={workspaceId}
+         projects={projects}
+         labels={labels}
+         members={members}
+      />
+   );
 }
