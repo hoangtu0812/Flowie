@@ -1,8 +1,29 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import {
+   AlertDialog,
+   AlertDialogAction,
+   AlertDialogCancel,
+   AlertDialogContent,
+   AlertDialogDescription,
+   AlertDialogFooter,
+   AlertDialogHeader,
+   AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+   Dialog,
+   DialogContent,
+   DialogDescription,
+   DialogFooter,
+   DialogHeader,
+   DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { KeyRound, Laptop, Smartphone } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { SettingsCard, SettingsRow, SettingsSection, SettingsShell } from './shared';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
@@ -25,6 +46,9 @@ type ApiKey = {
    lastUsedAt: string | null;
    createdAt: string;
 };
+
+type RevokeTarget =
+   { kind: 'others' } | { kind: 'session'; session: Session } | { kind: 'key'; key: ApiKey };
 
 const sessionName = (userAgent: string | null) => {
    if (!userAgent) return 'Unknown device';
@@ -57,6 +81,15 @@ export default function AccountSecurity() {
    const [keys, setKeys] = useState<ApiKey[]>([]);
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState<string>();
+   const [revokeTarget, setRevokeTarget] = useState<RevokeTarget>();
+   const [revoking, setRevoking] = useState(false);
+   const [revokeError, setRevokeError] = useState<string>();
+   const [createOpen, setCreateOpen] = useState(false);
+   const [keyName, setKeyName] = useState('');
+   const [keyExpiry, setKeyExpiry] = useState('');
+   const [creatingKey, setCreatingKey] = useState(false);
+   const [createError, setCreateError] = useState<string>();
+   const [createdToken, setCreatedToken] = useState<string>();
 
    const load = useCallback(async () => {
       setLoading(true);
@@ -80,56 +113,84 @@ export default function AccountSecurity() {
    useEffect(() => void load(), [load]);
 
    const revokeOthers = async () => {
-      if (!window.confirm('Revoke every other signed-in session?')) return;
       const response = await fetch(`${api}/auth/sessions`, {
          method: 'DELETE',
          credentials: 'include',
       });
-      if (!response.ok) return window.alert('Could not revoke sessions.');
+      if (!response.ok) throw new Error('Could not revoke sessions.');
       await load();
    };
 
    const revokeSession = async (session: Session) => {
-      if (!window.confirm(`Revoke ${sessionName(session.userAgent)}?`)) return;
       const response = await fetch(`${api}/auth/sessions/${session.id}`, {
          method: 'DELETE',
          credentials: 'include',
       });
-      if (!response.ok) return window.alert('Could not revoke this session.');
+      if (!response.ok) throw new Error('Could not revoke this session.');
       await load();
    };
 
-   const createKey = async () => {
-      const name = window.prompt('API key name:')?.trim();
-      if (!name) return;
-      const expiresAt = window
-         .prompt('Optional expiry date (YYYY-MM-DD). Leave empty for no expiry:', '')
-         ?.trim();
-      if (expiresAt === undefined) return;
+   const createKey = async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const name = keyName.trim();
+      if (!name || creatingKey) return;
+      setCreatingKey(true);
+      setCreateError(undefined);
       const response = await fetch(`${api}/auth/api-keys`, {
          method: 'POST',
          credentials: 'include',
          headers: { 'content-type': 'application/json' },
-         body: JSON.stringify({ name, ...(expiresAt ? { expiresAt } : {}) }),
+         body: JSON.stringify({ name, ...(keyExpiry ? { expiresAt: keyExpiry } : {}) }),
       });
       const payload = (await response.json().catch(() => null)) as {
          data?: ApiKey & { token: string };
-         message?: string;
+         message?: string | string[];
       } | null;
-      if (!response.ok || !payload?.data)
-         return window.alert(payload?.message ?? 'Could not create API key.');
-      window.alert(`Copy this API key now. It will not be shown again:\n\n${payload.data.token}`);
+      if (!response.ok || !payload?.data) {
+         setCreateError(
+            Array.isArray(payload?.message)
+               ? payload.message[0]
+               : (payload?.message ?? 'Could not create API key.')
+         );
+         setCreatingKey(false);
+         return;
+      }
+      setCreatedToken(payload.data.token);
+      setCreatingKey(false);
       await load();
    };
 
    const revokeKey = async (key: ApiKey) => {
-      if (!window.confirm(`Revoke API key “${key.name}”?`)) return;
       const response = await fetch(`${api}/auth/api-keys/${key.id}`, {
          method: 'DELETE',
          credentials: 'include',
       });
-      if (!response.ok) return window.alert('Could not revoke API key.');
+      if (!response.ok) throw new Error('Could not revoke API key.');
       await load();
+   };
+
+   const confirmRevoke = async () => {
+      if (!revokeTarget || revoking) return;
+      setRevoking(true);
+      setRevokeError(undefined);
+      try {
+         if (revokeTarget.kind === 'others') await revokeOthers();
+         if (revokeTarget.kind === 'session') await revokeSession(revokeTarget.session);
+         if (revokeTarget.kind === 'key') await revokeKey(revokeTarget.key);
+         setRevokeTarget(undefined);
+      } catch (caught) {
+         setRevokeError(caught instanceof Error ? caught.message : 'Could not revoke access.');
+      } finally {
+         setRevoking(false);
+      }
+   };
+
+   const closeCreate = () => {
+      setCreateOpen(false);
+      setKeyName('');
+      setKeyExpiry('');
+      setCreateError(undefined);
+      setCreatedToken(undefined);
    };
 
    const current = sessions.find((session) => session.current);
@@ -172,7 +233,7 @@ export default function AccountSecurity() {
                         size="xs"
                         variant="ghost"
                         disabled={others.length === 0}
-                        onClick={() => void revokeOthers()}
+                        onClick={() => setRevokeTarget({ kind: 'others' })}
                      >
                         Revoke all
                      </Button>
@@ -194,7 +255,7 @@ export default function AccountSecurity() {
                         <Button
                            size="xs"
                            variant="ghost"
-                           onClick={() => void revokeSession(session)}
+                           onClick={() => setRevokeTarget({ kind: 'session', session })}
                         >
                            Revoke
                         </Button>
@@ -226,7 +287,7 @@ export default function AccountSecurity() {
                <SettingsRow
                   title={`${keys.length} API ${keys.length === 1 ? 'key' : 'keys'}`}
                   trailing={
-                     <Button size="xs" variant="ghost" onClick={() => void createKey()}>
+                     <Button size="xs" variant="ghost" onClick={() => setCreateOpen(true)}>
                         New API key
                      </Button>
                   }
@@ -246,7 +307,11 @@ export default function AccountSecurity() {
                      }
                      description={`Created ${dateLabel(key.createdAt)} · ${key.lastUsedAt ? `last used ${dateLabel(key.lastUsedAt)}` : 'never used'}`}
                      trailing={
-                        <Button size="xs" variant="ghost" onClick={() => void revokeKey(key)}>
+                        <Button
+                           size="xs"
+                           variant="ghost"
+                           onClick={() => setRevokeTarget({ kind: 'key', key })}
+                        >
                            Revoke
                         </Button>
                      }
@@ -269,6 +334,111 @@ export default function AccountSecurity() {
                />
             </SettingsCard>
          </SettingsSection>
+         <Dialog
+            open={createOpen}
+            onOpenChange={(open) => {
+               if (!open && !creatingKey) closeCreate();
+            }}
+         >
+            <DialogContent>
+               <DialogHeader>
+                  <DialogTitle>{createdToken ? 'API key created' : 'New API key'}</DialogTitle>
+                  <DialogDescription>
+                     {createdToken
+                        ? 'Copy this token now. It will not be shown again.'
+                        : 'Create a personal token for API integrations.'}
+                  </DialogDescription>
+               </DialogHeader>
+               {createdToken ? (
+                  <div className="space-y-3">
+                     <Input value={createdToken} readOnly aria-label="Personal API key" />
+                     <DialogFooter>
+                        <Button
+                           variant="outline"
+                           onClick={() =>
+                              void navigator.clipboard
+                                 .writeText(createdToken)
+                                 .then(() => toast.success('API key copied.'))
+                                 .catch(() => toast.error('Could not copy the API key.'))
+                           }
+                        >
+                           Copy
+                        </Button>
+                        <Button onClick={closeCreate}>Done</Button>
+                     </DialogFooter>
+                  </div>
+               ) : (
+                  <form className="space-y-4" onSubmit={createKey}>
+                     <div className="space-y-2">
+                        <Label htmlFor="api-key-name">Name</Label>
+                        <Input
+                           id="api-key-name"
+                           value={keyName}
+                           onChange={(event) => setKeyName(event.target.value)}
+                           maxLength={80}
+                           autoFocus
+                        />
+                     </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="api-key-expiry">Expiry date (optional)</Label>
+                        <Input
+                           id="api-key-expiry"
+                           type="date"
+                           value={keyExpiry}
+                           onChange={(event) => setKeyExpiry(event.target.value)}
+                        />
+                     </div>
+                     {createError && <p className="text-sm text-destructive">{createError}</p>}
+                     <DialogFooter>
+                        <Button type="button" variant="outline" onClick={closeCreate}>
+                           Cancel
+                        </Button>
+                        <Button type="submit" disabled={creatingKey || !keyName.trim()}>
+                           {creatingKey ? 'Creating…' : 'Create key'}
+                        </Button>
+                     </DialogFooter>
+                  </form>
+               )}
+            </DialogContent>
+         </Dialog>
+         <AlertDialog
+            open={Boolean(revokeTarget)}
+            onOpenChange={(open) => {
+               if (!open && !revoking) {
+                  setRevokeTarget(undefined);
+                  setRevokeError(undefined);
+               }
+            }}
+         >
+            <AlertDialogContent>
+               <AlertDialogHeader>
+                  <AlertDialogTitle>
+                     {revokeTarget?.kind === 'others'
+                        ? 'Revoke all other sessions?'
+                        : revokeTarget?.kind === 'session'
+                          ? `Revoke ${sessionName(revokeTarget.session.userAgent)}?`
+                          : `Revoke API key “${revokeTarget?.key.name ?? ''}”?`}
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                     This access will stop working immediately and cannot be restored.
+                  </AlertDialogDescription>
+               </AlertDialogHeader>
+               {revokeError && <p className="text-sm text-destructive">{revokeError}</p>}
+               <AlertDialogFooter>
+                  <AlertDialogCancel disabled={revoking}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                     disabled={revoking}
+                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                     onClick={(event) => {
+                        event.preventDefault();
+                        void confirmRevoke();
+                     }}
+                  >
+                     {revoking ? 'Revoking…' : 'Revoke'}
+                  </AlertDialogAction>
+               </AlertDialogFooter>
+            </AlertDialogContent>
+         </AlertDialog>
       </SettingsShell>
    );
 }

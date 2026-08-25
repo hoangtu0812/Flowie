@@ -3,6 +3,16 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+   AlertDialog,
+   AlertDialogAction,
+   AlertDialogCancel,
+   AlertDialogContent,
+   AlertDialogDescription,
+   AlertDialogFooter,
+   AlertDialogHeader,
+   AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Pencil } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -35,6 +45,7 @@ export default function Profile() {
    const [error, setError] = useState<string>();
    const [saving, setSaving] = useState<EditableProfileField>();
    const [leaving, setLeaving] = useState(false);
+   const [leaveOpen, setLeaveOpen] = useState(false);
 
    useEffect(() => {
       void fetch(`${api}/users/me`, { credentials: 'include' })
@@ -91,7 +102,6 @@ export default function Profile() {
 
    const leaveWorkspace = async () => {
       if (!workspaceMembership || leaving || workspaceMembership.role === 'OWNER') return;
-      if (!window.confirm(`Leave ${workspaceMembership.workspace.name}?`)) return;
 
       setLeaving(true);
       setError(undefined);
@@ -111,6 +121,7 @@ export default function Profile() {
          const memberships = await loadWorkspaceMemberships();
          router.replace(memberships[0] ? `/${memberships[0].workspace.slug}/inbox` : '/');
          router.refresh();
+         setLeaveOpen(false);
       } catch (caught) {
          setError(caught instanceof Error ? caught.message : 'Could not leave workspace.');
          setLeaving(false);
@@ -219,7 +230,7 @@ export default function Profile() {
                               ? 'Transfer workspace ownership before leaving.'
                               : undefined
                         }
-                        onClick={() => void leaveWorkspace()}
+                        onClick={() => setLeaveOpen(true)}
                      >
                         {leaving ? 'Leaving…' : 'Leave workspace'}
                      </Button>
@@ -228,6 +239,31 @@ export default function Profile() {
             </SettingsCard>
          </SettingsSection>
          {error && <p className="text-sm text-destructive -mt-6">{error}</p>}
+         <AlertDialog open={leaveOpen} onOpenChange={(open) => !leaving && setLeaveOpen(open)}>
+            <AlertDialogContent>
+               <AlertDialogHeader>
+                  <AlertDialogTitle>
+                     Leave {workspaceMembership?.workspace.name ?? 'workspace'}?
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                     Your membership will be removed. You will need a new invitation to return.
+                  </AlertDialogDescription>
+               </AlertDialogHeader>
+               <AlertDialogFooter>
+                  <AlertDialogCancel disabled={leaving}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                     disabled={leaving}
+                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                     onClick={(event) => {
+                        event.preventDefault();
+                        void leaveWorkspace();
+                     }}
+                  >
+                     {leaving ? 'Leaving…' : 'Leave workspace'}
+                  </AlertDialogAction>
+               </AlertDialogFooter>
+            </AlertDialogContent>
+         </AlertDialog>
       </SettingsShell>
    );
 }
