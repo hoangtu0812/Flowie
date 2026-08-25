@@ -48,6 +48,9 @@ const priorityId: Record<NativeIssue['priority'], string> = {
 function asStatus(native: NativeIssueStatus): Status {
    const category = native.category.toLowerCase() as StatusCategory;
    const presentation =
+      statusPresentation.find(
+         (candidate) => normaliseStatusName(candidate.name) === normaliseStatusName(native.name)
+      ) ??
       statusPresentation.find((candidate) => candidate.category === category) ??
       statusPresentation.find((candidate) => candidate.id === 'to-do')!;
    return {
