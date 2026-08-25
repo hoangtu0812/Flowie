@@ -125,6 +125,11 @@ class UpdateProjectCustomFieldInput(BaseModel):
     position: int | None = Field(default=None, ge=0)
 
 
+class ProjectCustomFieldValueInput(BaseModel):
+    workspaceId: str = Field(min_length=1)
+    value: Any = None
+
+
 class CreateProjectLabelInput(BaseModel):
     workspaceId: str = Field(min_length=1)
     name: str = Field(min_length=1, max_length=80)
@@ -565,6 +570,49 @@ def _url(value: str) -> str:
     return normalized
 
 
+def _custom_field_value(field: Any, value: Any) -> Any:
+    if value is None:
+        return None
+    field_type = field['type']
+    if field_type in {'TEXT', 'URL'}:
+        if not isinstance(value, str):
+            raise ApiError(400, f'{field["name"]} must be text.', 'Bad Request')
+        return _url(value) if field_type == 'URL' and value.strip() else value.strip()
+    if field_type == 'NUMBER':
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ApiError(400, f'{field["name"]} must be a number.', 'Bad Request')
+        return value
+    if field_type == 'DATE':
+        if not isinstance(value, str):
+            raise ApiError(400, f'{field["name"]} must be a date.', 'Bad Request')
+        _date(value)
+        return value
+    if field_type == 'BOOLEAN':
+        if not isinstance(value, bool):
+            raise ApiError(400, f'{field["name"]} must be true or false.', 'Bad Request')
+        return value
+    options = field['options'] or []
+    if field_type == 'SELECT':
+        if not isinstance(value, str) or value not in options:
+            raise ApiError(400, f'{field["name"]} must use a configured option.', 'Bad Request')
+        return value
+    if field_type == 'MULTI_SELECT':
+        if not isinstance(value, list) or any(not isinstance(item, str) or item not in options for item in value):
+            raise ApiError(400, f'{field["name"]} must use configured options.', 'Bad Request')
+        return list(dict.fromkeys(value))
+    raise ApiError(400, 'Unsupported project custom field type.', 'Bad Request')
+
+
+async def _project_custom_fields(db: AsyncSession, project_id: str, workspace_id: str) -> list[dict[str, Any]]:
+    rows = await db.execute(
+        text('''SELECT f.*, v.value FROM project_custom_fields f
+                LEFT JOIN project_custom_field_values v ON v.field_id = f.id AND v.project_id = :project_id
+                WHERE f.workspace_id = :workspace_id ORDER BY f.position ASC, f.name ASC'''),
+        {'project_id': project_id, 'workspace_id': workspace_id},
+    )
+    return [{**_custom_field(row), 'value': row['value']} for row in rows.mappings().all()]
+
+
 async def _members(db: AsyncSession, project_id: str) -> list[dict[str, Any]]:
     members = await db.execute(text('''SELECT pm.project_id, pm.user_id, pm.created_at, u.id, u.name, u.avatar_url FROM project_members pm JOIN users u ON u.id = pm.user_id WHERE pm.project_id = :project_id ORDER BY pm.created_at'''), {'project_id': project_id})
     return [{'projectId': member['project_id'], 'userId': member['user_id'], 'createdAt': member['created_at'], 'user': {'id': member['id'], 'name': member['name'], 'avatarUrl': member['avatar_url']}} for member in members.mappings().all()]
@@ -617,12 +665,19 @@ async def list_projects(workspaceId: str = Query(min_length=1), teamId: str | No
 async def create_project(payload: CreateProjectInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await _workspace_access(db, payload.workspaceId, user['id'])
     if payload.teamId: await _team_access(db, payload.workspaceId, payload.teamId, user['id'])
+    template = None
     if payload.templateId:
-        template = await db.execute(text('SELECT 1 FROM project_templates WHERE id = :id AND workspace_id = :workspace_id'), {'id': payload.templateId, 'workspace_id': payload.workspaceId})
-        if template.scalar_one_or_none() is None: raise ApiError(404, 'Project template not found.', 'Not Found')
+        template = (await db.execute(text('SELECT * FROM project_templates WHERE id = :id AND workspace_id = :workspace_id'), {'id': payload.templateId, 'workspace_id': payload.workspaceId})).mappings().first()
+        if template is None: raise ApiError(404, 'Project template not found.', 'Not Found')
+    template_config = template['config'] if template and isinstance(template['config'], dict) else {}
+    description = payload.description if payload.description is not None else (template['description'] if template else None)
+    project_type = payload.type or (template['type'] if template else 'GENERAL')
+    status = template_config.get('status', 'in-progress')
+    priority = template_config.get('priority', 'none')
+    health = template_config.get('health', 'no-update')
     project_id, now = _cuid(), _utcnow()
     try:
-        await db.execute(text('''INSERT INTO projects (id, workspace_id, team_id, name, identifier, description, type, created_at, updated_at) VALUES (:id, :workspace_id, :team_id, :name, :identifier, :description, :type, :now, :now)'''), {'id': project_id, 'workspace_id': payload.workspaceId, 'team_id': payload.teamId, 'name': payload.name.strip(), 'identifier': payload.identifier.strip().upper(), 'description': payload.description, 'type': payload.type or 'GENERAL', 'now': now})
+        await db.execute(text('''INSERT INTO projects (id, workspace_id, team_id, name, identifier, description, type, status, priority, health, created_at, updated_at) VALUES (:id, :workspace_id, :team_id, :name, :identifier, :description, :type, :status, :priority, :health, :now, :now)'''), {'id': project_id, 'workspace_id': payload.workspaceId, 'team_id': payload.teamId, 'name': payload.name.strip(), 'identifier': payload.identifier.strip().upper(), 'description': description, 'type': project_type, 'status': status, 'priority': priority, 'health': health, 'now': now})
         await db.execute(text("INSERT INTO activities (id, workspace_id, project_id, actor_id, type, data, created_at) VALUES (:id, :workspace_id, :project_id, :actor_id, 'project.created', CAST(:data AS jsonb), :now)"), {'id': _cuid(), 'workspace_id': payload.workspaceId, 'project_id': project_id, 'actor_id': user['id'], 'data': '{"source":"python"}', 'now': now})
         await db.commit()
     except IntegrityError as error:
@@ -692,6 +747,32 @@ async def project_activity(project_id: str, workspaceId: str = Query(min_length=
 @router.get('/{project_id}/issues')
 async def project_issues(project_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
     return {'data': (await _project(db, project_id, workspaceId, user['id']))['issues']}
+
+
+@router.get('/{project_id}/custom-fields')
+async def project_custom_fields(project_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
+    await _project(db, project_id, workspaceId, user['id'])
+    return {'data': await _project_custom_fields(db, project_id, workspaceId)}
+
+
+@router.patch('/{project_id}/custom-fields/{field_id}')
+async def update_project_custom_field(project_id: str, field_id: str, payload: ProjectCustomFieldValueInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    await _project(db, project_id, payload.workspaceId, user['id'])
+    result = await db.execute(text('SELECT * FROM project_custom_fields WHERE id = :id AND workspace_id = :workspace_id'), {'id': field_id, 'workspace_id': payload.workspaceId})
+    field = result.mappings().first()
+    if not field:
+        raise ApiError(404, 'Project custom field not found.', 'Not Found')
+    value = _custom_field_value(field, payload.value)
+    now = _utcnow()
+    await db.execute(
+        text('''INSERT INTO project_custom_field_values (project_id, field_id, value, created_at, updated_at)
+                VALUES (:project_id, :field_id, CAST(:value AS jsonb), :now, :now)
+                ON CONFLICT (project_id, field_id) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at'''),
+        {'project_id': project_id, 'field_id': field_id, 'value': json.dumps(value), 'now': now},
+    )
+    await db.execute(text("INSERT INTO activities (id, workspace_id, project_id, actor_id, type, data, created_at) VALUES (:id, :workspace_id, :project_id, :actor_id, 'project.custom-field.updated', CAST(:data AS jsonb), :now)"), {'id': _cuid(), 'workspace_id': payload.workspaceId, 'project_id': project_id, 'actor_id': user['id'], 'data': json.dumps({'fieldId': field_id}), 'now': now})
+    await db.commit()
+    return {'data': {**_custom_field(field), 'value': value}}
 
 
 @router.patch('/{project_id}/members')
@@ -905,6 +986,16 @@ async def public_archive_project(project_suffix: str, workspaceId: str = Query(m
 @public_router.patch('/c{project_suffix}/members')
 async def public_update_members(project_suffix: str, payload: ProjectMembersInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
     return await update_members(_public_project_id(project_suffix), payload, user, db)
+
+
+@public_router.get('/c{project_suffix}/custom-fields')
+async def public_project_custom_fields(project_suffix: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
+    return await project_custom_fields(_public_project_id(project_suffix), workspaceId, user, db)
+
+
+@public_router.patch('/c{project_suffix}/custom-fields/{field_id}')
+async def public_update_project_custom_field(project_suffix: str, field_id: str, payload: ProjectCustomFieldValueInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    return await update_project_custom_field(_public_project_id(project_suffix), field_id, payload, user, db)
 
 
 @public_router.post('/c{project_suffix}/resources')

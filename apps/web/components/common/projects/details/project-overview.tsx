@@ -2,11 +2,15 @@
 
 import { ContentBlocks } from '@/components/common/issues/details/content-blocks';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { format, parseISO } from 'date-fns';
 import { ArrowRight, ChevronDown, FileText, PenLine, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { DocumentOutline, getOutlineItems } from './document-outline';
 import { toIssueUi, toProjectDetailUi, toProjectUi } from './project-detail-ui-adapter';
 import { ProjectSidePanel } from './project-side-panel';
@@ -27,11 +31,16 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
       milestones,
       updates,
       activities,
+      createResource,
       loading,
       error,
    } = useLiveProjectData();
    const { orgId } = useParams<{ orgId: string }>();
    const scrollRef = useRef<HTMLDivElement>(null);
+   const [resourceDialogOpen, setResourceDialogOpen] = useState(false);
+   const [resourceLabel, setResourceLabel] = useState('');
+   const [resourceUrl, setResourceUrl] = useState('');
+   const [savingResource, setSavingResource] = useState(false);
    if (loading)
       return (
          <div className="h-full grid place-items-center text-sm text-muted-foreground">
@@ -50,6 +59,22 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
    const issues = liveIssues.map((issue) => toIssueUi(issue, project));
    const outlineItems = getOutlineItems(detail.description);
    const team = project.team;
+
+   const submitResource = async () => {
+      if (!resourceLabel.trim() || !resourceUrl.trim()) return;
+      setSavingResource(true);
+      try {
+         await createResource(resourceLabel, resourceUrl);
+         setResourceLabel('');
+         setResourceUrl('');
+         setResourceDialogOpen(false);
+         toast.success('Resource added.');
+      } catch (caught) {
+         toast.error(caught instanceof Error ? caught.message : 'Could not add resource.');
+      } finally {
+         setSavingResource(false);
+      }
+   };
 
    return (
       <div className="w-full h-full flex overflow-hidden">
@@ -134,26 +159,31 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
                         </div>
                      </div>
 
-                     {detail.resources.length > 0 && (
-                        <div className="flex items-center gap-3">
-                           <span className="w-24 text-muted-foreground shrink-0">Resources</span>
-                           <div className="flex items-center gap-2 flex-wrap">
-                              {detail.resources.map((resource) => (
-                                 <a
-                                    key={resource.label}
-                                    href={resource.url}
-                                    className="inline-flex items-center gap-1.5 text-xs border rounded-md px-2 py-1 hover:bg-accent/50 transition-colors"
-                                 >
-                                    <FileText className="size-3.5 text-muted-foreground" />
-                                    {resource.label}
-                                 </a>
-                              ))}
-                              <button className="text-muted-foreground hover:text-foreground transition-colors">
-                                 <Plus className="size-3.5" />
-                              </button>
-                           </div>
+                     <div className="flex items-center gap-3">
+                        <span className="w-24 text-muted-foreground shrink-0">Resources</span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                           {detail.resources.map((resource) => (
+                              <a
+                                 key={`${resource.label}-${resource.url}`}
+                                 href={resource.url}
+                                 target="_blank"
+                                 rel="noreferrer"
+                                 className="inline-flex items-center gap-1.5 text-xs border rounded-md px-2 py-1 hover:bg-accent/50 transition-colors"
+                              >
+                                 <FileText className="size-3.5 text-muted-foreground" />
+                                 {resource.label}
+                              </a>
+                           ))}
+                           <button
+                              type="button"
+                              onClick={() => setResourceDialogOpen(true)}
+                              className="text-muted-foreground hover:text-foreground transition-colors"
+                              aria-label="Add resource"
+                           >
+                              <Plus className="size-3.5" />
+                           </button>
                         </div>
-                     )}
+                     </div>
                   </div>
 
                   {/* Update CTA */}
@@ -181,6 +211,16 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
 
          {/* Side panel */}
          <ProjectSidePanel project={project} detail={detail} issues={issues} />
+         <Dialog open={resourceDialogOpen} onOpenChange={(open) => !savingResource && setResourceDialogOpen(open)}>
+            <DialogContent>
+               <DialogHeader><DialogTitle>Add resource</DialogTitle></DialogHeader>
+               <div className="space-y-3">
+                  <div className="space-y-1.5"><label className="text-sm font-medium" htmlFor="project-resource-label">Name</label><Input id="project-resource-label" value={resourceLabel} onChange={(event) => setResourceLabel(event.target.value)} autoFocus /></div>
+                  <div className="space-y-1.5"><label className="text-sm font-medium" htmlFor="project-resource-url">URL</label><Input id="project-resource-url" type="url" value={resourceUrl} onChange={(event) => setResourceUrl(event.target.value)} placeholder="https://" /></div>
+               </div>
+               <DialogFooter><Button variant="outline" disabled={savingResource} onClick={() => setResourceDialogOpen(false)}>Cancel</Button><Button disabled={savingResource || !resourceLabel.trim() || !resourceUrl.trim()} onClick={() => void submitResource()}>{savingResource ? 'Adding…' : 'Add resource'}</Button></DialogFooter>
+            </DialogContent>
+         </Dialog>
       </div>
    );
 }

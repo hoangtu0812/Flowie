@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
+import { toast } from 'sonner';
 
 const PROJECT_TABS = [
    { label: 'Overview', segment: 'overview' },
@@ -79,7 +80,25 @@ function PanelToggles() {
 
 export default function Header({ projectId }: { projectId: string }) {
    const { orgId } = useParams<{ orgId: string }>();
-   const { project } = useLiveProjectData();
+   const { project, toggleFavorite } = useLiveProjectData();
+   const favorited = Boolean(project?.favorites.length);
+
+   const onToggleFavorite = async () => {
+      try {
+         await toggleFavorite(!favorited);
+      } catch (caught) {
+         toast.error(caught instanceof Error ? caught.message : 'Could not update project favorite.');
+      }
+   };
+
+   const copyProjectLink = async () => {
+      try {
+         await navigator.clipboard.writeText(window.location.href);
+         toast.success('Project link copied.');
+      } catch {
+         toast.error('Could not copy the project link.');
+      }
+   };
 
    return (
       <>
@@ -98,13 +117,25 @@ export default function Header({ projectId }: { projectId: string }) {
                      <Box className="size-3.5" />
                   </span>
                   <span className="font-medium truncate">{project?.name ?? 'Project'}</span>
-                  <Button variant="ghost" size="icon" className="size-6 text-muted-foreground">
-                     <Star className="size-3.5" />
+                  <Button
+                     variant="ghost"
+                     size="icon"
+                     className="size-6 text-muted-foreground"
+                     onClick={() => void onToggleFavorite()}
+                     aria-label={favorited ? 'Remove project from favorites' : 'Add project to favorites'}
+                  >
+                     <Star className={cn('size-3.5', favorited && 'fill-current text-foreground')} />
                   </Button>
                </div>
             </div>
             <div className="flex items-center gap-1">
-               <Button variant="ghost" size="icon" className="size-7 text-muted-foreground">
+               <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 text-muted-foreground"
+                  onClick={() => void copyProjectLink()}
+                  aria-label="Copy project link"
+               >
                   <Link2 className="size-4" />
                </Button>
                <Button variant="ghost" size="icon" className="size-7 text-muted-foreground">

@@ -17,7 +17,9 @@ import type { ProjectDetail } from '@/types/project-details';
 import { ArrowRight, Calendar, Check, Compass, Plus, Slack, Tag, UserPlus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { useLiveProjectData } from './use-live-project';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { type LiveProjectCustomField, useLiveProjectData } from './use-live-project';
 
 interface ProjectPropertiesPanelProps {
    project: ProjectDetailUiProject;
@@ -113,7 +115,26 @@ function PropertyRow({ label, children }: { label: string; children: React.React
    );
 }
 
-type Editor = 'status' | 'priority' | 'lead' | 'members' | 'dates' | 'team' | 'initiatives' | 'labels' | 'milestone' | null;
+type Editor =
+   | 'status'
+   | 'priority'
+   | 'lead'
+   | 'members'
+   | 'dates'
+   | 'team'
+   | 'initiatives'
+   | 'labels'
+   | 'custom-field'
+   | 'milestone'
+   | null;
+
+function customFieldText(field: LiveProjectCustomField) {
+   if (field.value === null || field.value === undefined || field.value === '') return 'Set value';
+   if (Array.isArray(field.value)) return field.value.join(', ') || 'Set value';
+   if (field.type === 'BOOLEAN') return field.value ? 'Yes' : 'No';
+   if (field.type === 'DATE' && typeof field.value === 'string') return formatDay(field.value);
+   return String(field.value);
+}
 
 /**
  * Right-side panel of the project pages: properties, milestones,
@@ -121,16 +142,19 @@ type Editor = 'status' | 'priority' | 'lead' | 'members' | 'dates' | 'team' | 'i
  */
 export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPropertiesPanelProps) {
    const panelFilter = usePanelFilter();
+   const { orgId } = useParams<{ orgId: string }>();
    const {
       availableLabels,
       availableInitiatives,
       availableStatuses,
+      customFields,
       availableMembers,
       availableTeams,
       updateProject,
       updateLabels,
       updateInitiatives,
       updateMembers,
+      updateCustomFields,
       createMilestone,
       toggleMilestone,
    } = useLiveProjectData();
@@ -149,6 +173,8 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
    const [labelIds, setLabelIds] = useState(project.labels.map((label) => label.id));
    const [milestoneTitle, setMilestoneTitle] = useState('');
    const [milestoneDate, setMilestoneDate] = useState('');
+   const [customFieldId, setCustomFieldId] = useState<string>();
+   const [customValue, setCustomValue] = useState<unknown>(null);
    const completed = issues.filter(isCompleted).length;
 
    const openEditor = (next: Exclude<Editor, null>) => {
@@ -176,6 +202,14 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
       setEditor(next);
    };
 
+   const openCustomField = (field: LiveProjectCustomField) => {
+      setCustomFieldId(field.id);
+      setCustomValue(field.value ?? (field.type === 'MULTI_SELECT' ? [] : ''));
+      setEditor('custom-field');
+   };
+
+   const selectedCustomField = customFields.find((field) => field.id === customFieldId);
+
    const toggleSelection = (value: string, current: string[], setCurrent: (next: string[]) => void) => {
       setCurrent(current.includes(value) ? current.filter((item) => item !== value) : [...current, value]);
    };
@@ -192,6 +226,21 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
          if (editor === 'team') await updateProject({ teamId: teamId === 'unassigned' ? null : teamId || null });
          if (editor === 'initiatives') await updateInitiatives(initiativeIds);
          if (editor === 'labels') await updateLabels(labelIds);
+         if (editor === 'custom-field') {
+            if (!selectedCustomField) throw new Error('Custom field is not available.');
+            let value = customValue;
+            if (selectedCustomField.type === 'NUMBER' && typeof value === 'string') {
+               value = value.trim() ? Number(value) : null;
+            }
+            if (
+               ['TEXT', 'URL', 'DATE'].includes(selectedCustomField.type) &&
+               typeof value === 'string' &&
+               !value.trim()
+            ) {
+               value = null;
+            }
+            await updateCustomFields({ [selectedCustomField.id]: value });
+         }
          if (editor === 'milestone') {
             if (!milestoneTitle.trim()) throw new Error('Milestone name is required.');
             await createMilestone(milestoneTitle, milestoneDate || undefined);
@@ -286,7 +335,7 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
    );
 
    return (
-      <>
+      <div className="contents">
       <div className="flex flex-col h-full w-full overflow-y-auto">
          {/* Properties */}
          <div className="px-5 pt-4 pb-4 border-b">
@@ -388,6 +437,17 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
                      <Plus className="size-3.5 text-muted-foreground" />
                   </button>
                </PropertyRow>
+               {customFields.map((field) => (
+                  <PropertyRow key={field.id} label={field.name}>
+                     <button
+                        type="button"
+                        onClick={() => openCustomField(field)}
+                        className="inline-flex max-w-44 truncate text-muted-foreground hover:text-foreground transition-colors"
+                     >
+                        {customFieldText(field)}
+                     </button>
+                  </PropertyRow>
+               ))}
             </div>
          </div>
 
@@ -505,9 +565,12 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
          <div className="px-5 py-4">
             <div className="flex items-center justify-between mb-2">
                <h3 className="text-sm font-medium">Activity</h3>
-               <button className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+               <Link
+                  href={`/${orgId}/project/${project.id}/activity`}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+               >
                   See all
-               </button>
+               </Link>
             </div>
             <div className="flex flex-col gap-3">
                {detail.activity.map((event) => (
@@ -529,7 +592,7 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
          <DialogContent>
             <DialogHeader>
                <DialogTitle>
-                  {editor === 'status' ? 'Set project status' : editor === 'priority' ? 'Set project priority' : editor === 'lead' ? 'Set project lead' : editor === 'members' ? 'Manage project members' : editor === 'dates' ? 'Set project dates' : editor === 'team' ? 'Set project team' : editor === 'initiatives' ? 'Link initiatives' : editor === 'labels' ? 'Manage project labels' : 'Create milestone'}
+                  {editor === 'status' ? 'Set project status' : editor === 'priority' ? 'Set project priority' : editor === 'lead' ? 'Set project lead' : editor === 'members' ? 'Manage project members' : editor === 'dates' ? 'Set project dates' : editor === 'team' ? 'Set project team' : editor === 'initiatives' ? 'Link initiatives' : editor === 'labels' ? 'Manage project labels' : editor === 'custom-field' ? selectedCustomField?.name : 'Create milestone'}
                </DialogTitle>
             </DialogHeader>
             {editor === 'status' && (
@@ -573,12 +636,67 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
             {editor === 'labels' && (
                <div className="max-h-72 overflow-y-auto space-y-1">{availableLabels.map((label) => { const selected = labelIds.includes(label.id); return <button key={label.id} type="button" onClick={() => toggleSelection(label.id, labelIds, setLabelIds)} className={cn('w-full flex items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-accent', selected && 'bg-accent')}><span className="size-2.5 rounded-full" style={{ backgroundColor: label.color }} /><span className="flex-1 text-sm">{label.name}</span>{selected && <Check className="size-4" />}</button>; })}{availableLabels.length === 0 && <p className="text-sm text-muted-foreground">Create a Project label in Settings first.</p>}</div>
             )}
+            {editor === 'custom-field' && selectedCustomField && (
+               <div className="space-y-2">
+                  {selectedCustomField.description && <p className="text-sm text-muted-foreground">{selectedCustomField.description}</p>}
+                  {['TEXT', 'URL', 'DATE', 'NUMBER'].includes(selectedCustomField.type) && (
+                     <Input
+                        type={selectedCustomField.type === 'DATE' ? 'date' : selectedCustomField.type === 'NUMBER' ? 'number' : selectedCustomField.type === 'URL' ? 'url' : 'text'}
+                        value={typeof customValue === 'string' || typeof customValue === 'number' ? String(customValue) : ''}
+                        onChange={(event) => setCustomValue(event.target.value)}
+                        autoFocus
+                     />
+                  )}
+                  {selectedCustomField.type === 'BOOLEAN' && (
+                     <Select value={customValue === true ? 'true' : customValue === false ? 'false' : 'unset'} onValueChange={(value) => setCustomValue(value === 'unset' ? null : value === 'true')}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="unset">Not set</SelectItem><SelectItem value="true">Yes</SelectItem><SelectItem value="false">No</SelectItem></SelectContent>
+                     </Select>
+                  )}
+                  {selectedCustomField.type === 'SELECT' && (
+                     <Select value={typeof customValue === 'string' && customValue ? customValue : 'unset'} onValueChange={(value) => setCustomValue(value === 'unset' ? null : value)}>
+                        <SelectTrigger><SelectValue placeholder="Select an option" /></SelectTrigger>
+                        <SelectContent><SelectItem value="unset">Not set</SelectItem>{(selectedCustomField.options ?? []).map((option) => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
+                     </Select>
+                  )}
+                  {selectedCustomField.type === 'MULTI_SELECT' && (
+                     <div className="max-h-64 overflow-y-auto space-y-1">
+                        {(selectedCustomField.options ?? []).map((option) => {
+                           const values = Array.isArray(customValue)
+                              ? customValue.map((item) => String(item))
+                              : [];
+                           const selected = values.includes(option);
+                           return (
+                              <button
+                                 key={option}
+                                 type="button"
+                                 onClick={() =>
+                                    setCustomValue(
+                                       selected
+                                          ? values.filter((item) => item !== option)
+                                          : [...values, option]
+                                    )
+                                 }
+                                 className={cn(
+                                    'w-full flex items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-accent',
+                                    selected && 'bg-accent'
+                                 )}
+                              >
+                                 <span className="flex-1 text-sm">{option}</span>
+                                 {selected && <Check className="size-4" />}
+                              </button>
+                           );
+                        })}
+                     </div>
+                  )}
+               </div>
+            )}
             {editor === 'milestone' && (
                <div className="space-y-3"><div className="space-y-1.5"><label className="text-sm font-medium" htmlFor="project-milestone-title">Name</label><Input id="project-milestone-title" value={milestoneTitle} onChange={(event) => setMilestoneTitle(event.target.value)} autoFocus /></div><div className="space-y-1.5"><label className="text-sm font-medium" htmlFor="project-milestone-date">Target date</label><Input id="project-milestone-date" type="date" value={milestoneDate} onChange={(event) => setMilestoneDate(event.target.value)} /></div></div>
             )}
             <DialogFooter><Button variant="outline" disabled={saving} onClick={() => setEditor(null)}>Cancel</Button><Button disabled={saving || (editor === 'milestone' && !milestoneTitle.trim())} onClick={() => void save()}>{saving ? 'Saving…' : editor === 'milestone' ? 'Create milestone' : 'Save'}</Button></DialogFooter>
          </DialogContent>
       </Dialog>
-      </>
+      </div>
    );
 }

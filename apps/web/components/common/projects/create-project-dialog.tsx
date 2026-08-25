@@ -29,10 +29,12 @@ export function CreateProjectDialog({
    open: boolean;
    onOpenChange: (open: boolean) => void;
 }) {
-   const { createProject, teamGroups, workspaceId, workspaceLoading } = useProjectsData();
+   const { createProject, projectTemplates, teamGroups, workspaceId, workspaceLoading } =
+      useProjectsData();
    const [name, setName] = useState('');
    const [identifier, setIdentifier] = useState('');
    const [teamId, setTeamId] = useState('');
+   const [templateId, setTemplateId] = useState('');
    const [description, setDescription] = useState('');
    const [submitting, setSubmitting] = useState(false);
 
@@ -41,10 +43,17 @@ export function CreateProjectDialog({
       if (!name.trim() || !identifier.trim()) return;
       setSubmitting(true);
       try {
-         await createProject({ name, identifier, teamId: teamId || undefined, description });
+         await createProject({
+            name,
+            identifier,
+            teamId: teamId || undefined,
+            templateId: templateId || undefined,
+            description,
+         });
          toast.success('Project created.');
          setName('');
          setIdentifier('');
+         setTemplateId('');
          setDescription('');
          onOpenChange(false);
       } catch (error) {
@@ -101,6 +110,33 @@ export function CreateProjectDialog({
                      ))}
                   </select>
                </label>
+               {projectTemplates.length > 0 && (
+                  <label className="grid gap-1.5 text-sm font-medium">
+                     Template
+                     <select
+                        className="border-input h-9 w-full rounded-md border bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+                        value={templateId}
+                        onChange={(event) => setTemplateId(event.target.value)}
+                     >
+                        <option value="">No template</option>
+                        {projectTemplates.map((template) => (
+                           <option key={template.id} value={template.id}>
+                              {template.name}
+                           </option>
+                        ))}
+                     </select>
+                     {templateId &&
+                        projectTemplates.find((template) => template.id === templateId)
+                           ?.description && (
+                           <span className="text-xs font-normal text-muted-foreground">
+                              {
+                                 projectTemplates.find((template) => template.id === templateId)
+                                    ?.description
+                              }
+                           </span>
+                        )}
+                  </label>
+               )}
                <label className="grid gap-1.5 text-sm font-medium">
                   Description <span className="font-normal text-muted-foreground">(optional)</span>
                   <textarea

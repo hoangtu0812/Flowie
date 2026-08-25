@@ -67,7 +67,15 @@ export type CreateProjectValues = {
    name: string;
    identifier: string;
    teamId?: string;
+   templateId?: string;
    description?: string;
+};
+
+export type ProjectTemplateOption = {
+   id: string;
+   name: string;
+   description: string | null;
+   type: string;
 };
 
 type ProjectData = {
@@ -76,6 +84,7 @@ type ProjectData = {
    resolvedTeamId?: string;
    allProjects: Array<Project & { issueCount: number }>;
    teamGroups: Array<{ id: string; name: string; icon?: string }>;
+   projectTemplates: ProjectTemplateOption[];
    workspaceMembers: ProjectListMember[];
    createProject: (values: CreateProjectValues) => Promise<void>;
    updateProject: (projectId: string, update: ProjectListUpdate) => Promise<void>;
@@ -167,18 +176,20 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
    const [workspaceLoading, setWorkspaceLoading] = useState(true);
    const [resolvedTeamId, setResolvedTeamId] = useState<string>();
    const [workspaceMembers, setWorkspaceMembers] = useState<ProjectListMember[]>([]);
+   const [projectTemplates, setProjectTemplates] = useState<ProjectTemplateOption[]>([]);
 
    useEffect(() => {
       let current = true;
       setWorkspaceLoading(true);
       void (async () => {
          const workspace = await loadCurrentWorkspace();
-         const [projectsResponse, membersResponse, teamsResponse] = await Promise.all([
+         const [projectsResponse, membersResponse, teamsResponse, templatesResponse] = await Promise.all([
             authenticatedFetch(`${api}/projects?workspaceId=${workspace.id}`),
             authenticatedFetch(`${api}/workspaces/${workspace.id}/members`),
             authenticatedFetch(`${api}/teams?workspaceId=${workspace.id}`),
+            authenticatedFetch(`${api}/projects/templates?workspaceId=${workspace.id}`),
          ]);
-         if (!projectsResponse.ok || !membersResponse.ok || !teamsResponse.ok) {
+         if (!projectsResponse.ok || !membersResponse.ok || !teamsResponse.ok || !templatesResponse.ok) {
             throw new Error('Could not load projects.');
          }
          const projectsPayload = (await projectsResponse.json()) as { data: ApiProject[] };
@@ -186,6 +197,7 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
             data: Array<{ status: string; user: ProjectListMember }>;
          };
          const teamsPayload = (await teamsResponse.json()) as { data: ApiWorkspaceTeam[] };
+         const templatesPayload = (await templatesResponse.json()) as { data: ProjectTemplateOption[] };
          if (!current) return;
          setWorkspaceId(workspace.id);
          setResolvedTeamId(
@@ -201,6 +213,7 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
                .map((member) => member.user)
          );
          setAllProjects(projectsPayload.data.map(mapProject));
+         setProjectTemplates(templatesPayload.data);
          setTeamGroups(
             teamsPayload.data.map((team) => ({
                id: team.id,
@@ -254,7 +267,7 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
    );
 
    const createProject = useCallback(
-      async ({ name, identifier, teamId, description }: CreateProjectValues) => {
+      async ({ name, identifier, teamId, templateId, description }: CreateProjectValues) => {
          if (!workspaceId) throw new Error('Workspace is not ready yet.');
          const response = await authenticatedFetch(`${api}/projects`, {
             method: 'POST',
@@ -265,6 +278,7 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
                name: name.trim(),
                identifier: identifier.trim(),
                ...(teamId ? { teamId } : {}),
+               ...(templateId ? { templateId } : {}),
                ...(description?.trim() ? { description: description.trim() } : {}),
             }),
          });
@@ -290,6 +304,7 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
       resolvedTeamId,
       allProjects,
       teamGroups,
+      projectTemplates,
       workspaceMembers,
       createProject,
       updateProject,
