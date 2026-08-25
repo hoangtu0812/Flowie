@@ -150,14 +150,16 @@ async def list_cycles(
 ) -> dict[str, list[dict[str, Any]]]:
     await _workspace_access(db, workspaceId, user['id'])
     await _team_access(db, workspaceId, teamId, user['id'])
-    result = await db.execute(
-        text(
-            '''SELECT id FROM cycles WHERE workspace_id = :workspace_id AND team_id = :team_id
-               AND (:status IS NULL OR status = :status)
-               ORDER BY start_date DESC NULLS LAST, created_at DESC'''
-        ),
-        {'workspace_id': workspaceId, 'team_id': teamId, 'status': status},
-    )
+    query = '''SELECT id FROM cycles WHERE workspace_id = :workspace_id AND team_id = :team_id'''
+    params: dict[str, Any] = {'workspace_id': workspaceId, 'team_id': teamId}
+    # PostgreSQL cannot infer the type of a nullable bind reused in an
+    # ``:status IS NULL OR ...`` predicate. Omit the predicate when no filter
+    # is requested; this is also the natural query for the Cycles timeline.
+    if status is not None:
+        query += ' AND status = :status'
+        params['status'] = status
+    query += ' ORDER BY start_date DESC NULLS LAST, created_at DESC'
+    result = await db.execute(text(query), params)
     return {'data': [await _cycle(db, row['id'], workspaceId, user['id']) for row in result.mappings().all()]}
 
 
