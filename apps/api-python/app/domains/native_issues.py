@@ -178,7 +178,10 @@ async def _issue_row(
                       c.id AS creator_id_value, c.name AS creator_name, c.avatar_url AS creator_avatar_url,
                       a.id AS assignee_id_value, a.name AS assignee_name, a.avatar_url AS assignee_avatar_url,
                       EXISTS(SELECT 1 FROM issue_subscriptions sub WHERE sub.issue_id = i.id AND sub.user_id = :user_id) AS is_subscribed,
-                      EXISTS(SELECT 1 FROM issue_favorites favorite WHERE favorite.issue_id = i.id AND favorite.user_id = :user_id) AS is_favorite
+                      EXISTS(SELECT 1 FROM issue_favorites favorite WHERE favorite.issue_id = i.id AND favorite.user_id = :user_id) AS is_favorite,
+                      (SELECT remind_at FROM issue_reminders reminder
+                       WHERE reminder.issue_id = i.id AND reminder.user_id = :user_id AND reminder.delivered_at IS NULL
+                       ORDER BY reminder.updated_at DESC LIMIT 1) AS reminder_at
                FROM issues i
                JOIN teams t ON t.id = i.team_id
                JOIN issue_statuses s ON s.id = i.status_id
@@ -242,6 +245,7 @@ async def _issue_row(
         'releaseLinks': [{'releaseId': link['release_id'], 'createdAt': link['created_at']} for link in releases.mappings().all()],
         'subscribers': [{'userId': user_id}] if row['is_subscribed'] else [],
         'favorites': [{'userId': user_id}] if row['is_favorite'] else [],
+        'reminderAt': row['reminder_at'],
     }
 
 

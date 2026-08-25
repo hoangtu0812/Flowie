@@ -17,6 +17,7 @@ declare module '@/mock-data/issues' {
       /** Personal state persisted for the current signed-in user. */
       isSubscribed?: boolean;
       isFavorite?: boolean;
+      reminderAt?: string;
    }
 }
 
@@ -36,6 +37,7 @@ type NativeIssue = {
    cycleLinks?: { cycleId: string }[];
    subscribers?: { userId: string }[];
    favorites?: { userId: string }[];
+   reminderAt?: string | null;
 };
 
 type NativeIssueStatus = {
@@ -132,6 +134,7 @@ function asIssue(native: NativeIssue): Issue {
       dueDate: native.dueDate ?? undefined,
       isSubscribed: (native.subscribers?.length ?? 0) > 0,
       isFavorite: (native.favorites?.length ?? 0) > 0,
+      reminderAt: native.reminderAt ?? undefined,
    };
 }
 
@@ -217,6 +220,7 @@ interface IssuesState {
    // Personal issue state
    updateIssueSubscription: (issueId: string, subscribed: boolean) => Promise<boolean>;
    updateIssueFavorite: (issueId: string, favorited: boolean) => Promise<boolean>;
+   setIssueReminder: (issueId: string, remindAt: string | undefined) => Promise<boolean>;
 
    // Utility functions
    getIssueById: (id: string) => Issue | undefined;
@@ -720,6 +724,39 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
          return true;
       } catch (error) {
          toast.error(error instanceof Error ? error.message : 'Could not update issue favorite.');
+         return false;
+      }
+   },
+
+   setIssueReminder: async (issueId: string, remindAt: string | undefined) => {
+      try {
+         const issue = get().getIssueById(issueId);
+         const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
+         if (!issue) return false;
+         const response = await authenticatedFetch(
+            `${api}/issues/${issue.id}/reminder?${new URLSearchParams({ workspaceId })}`,
+            remindAt
+               ? {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({ remindAt }),
+                 }
+               : { method: 'DELETE' }
+         );
+         if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as {
+               message?: string;
+            } | null;
+            throw new Error(payload?.message ?? 'Could not update issue reminder.');
+         }
+         set((state) => ({
+            issues: state.issues.map((candidate) =>
+               candidate.id === issueId ? { ...candidate, reminderAt: remindAt } : candidate
+            ),
+         }));
+         return true;
+      } catch (error) {
+         toast.error(error instanceof Error ? error.message : 'Could not update issue reminder.');
          return false;
       }
    },

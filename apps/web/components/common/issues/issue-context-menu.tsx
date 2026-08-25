@@ -1,4 +1,5 @@
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import {
    ContextMenuContent,
    ContextMenuGroup,
@@ -9,6 +10,15 @@ import {
    ContextMenuSubContent,
    ContextMenuSubTrigger,
 } from '@/components/ui/context-menu';
+import {
+   Dialog,
+   DialogContent,
+   DialogDescription,
+   DialogFooter,
+   DialogHeader,
+   DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import {
    CircleCheck,
    User,
@@ -37,6 +47,7 @@ import { useIssuesStore } from '@/store/issues-store';
 import { status } from '@/mock-data/status';
 import { priorities } from '@/mock-data/priorities';
 import { toast } from 'sonner';
+import { useState } from 'react';
 
 interface IssueContextMenuProps {
    issueId?: string;
@@ -57,10 +68,14 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       projects,
       updateIssueSubscription,
       updateIssueFavorite,
+      setIssueReminder,
    } = useIssuesStore();
    const issue = issueId ? getIssueById(issueId) : undefined;
    const isSubscribed = issue?.isSubscribed ?? false;
    const isFavorite = issue?.isFavorite ?? false;
+   const [reminderOpen, setReminderOpen] = useState(false);
+   const [reminderValue, setReminderValue] = useState('');
+   const [reminderSaving, setReminderSaving] = useState(false);
 
    const handleStatusChange = (statusId: string) => {
       if (!issueId) return;
@@ -169,10 +184,47 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
    };
 
    const handleRemindMe = () => {
-      toast.success('Reminder set');
+      const existingReminder = issue?.reminderAt ? new Date(issue.reminderAt) : null;
+      const date = existingReminder && !Number.isNaN(existingReminder.getTime()) ? existingReminder : new Date(Date.now() + 60 * 60 * 1000);
+      date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+      setReminderValue(date.toISOString().slice(0, 16));
+      setReminderOpen(true);
+   };
+
+   const saveReminder = async () => {
+      if (!issueId || !reminderValue) return;
+      const remindAt = new Date(reminderValue);
+      if (Number.isNaN(remindAt.getTime()) || remindAt.getTime() <= Date.now()) {
+         toast.error('Choose a time in the future');
+         return;
+      }
+
+      setReminderSaving(true);
+      try {
+         if (await setIssueReminder(issueId, remindAt.toISOString())) {
+            toast.success('Reminder saved');
+            setReminderOpen(false);
+         }
+      } finally {
+         setReminderSaving(false);
+      }
+   };
+
+   const clearReminder = async () => {
+      if (!issueId) return;
+      setReminderSaving(true);
+      try {
+         if (await setIssueReminder(issueId, undefined)) {
+            toast.success('Reminder cleared');
+            setReminderOpen(false);
+         }
+      } finally {
+         setReminderSaving(false);
+      }
    };
 
    return (
+      <>
       <ContextMenuContent className="w-64">
          <ContextMenuGroup>
             <ContextMenuSub>
@@ -361,5 +413,34 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
             <ContextMenuShortcut>⌘⌫</ContextMenuShortcut>
          </ContextMenuItem>
       </ContextMenuContent>
+      <Dialog open={reminderOpen} onOpenChange={(open) => !reminderSaving && setReminderOpen(open)}>
+         <DialogContent>
+            <DialogHeader>
+               <DialogTitle>Set reminder</DialogTitle>
+               <DialogDescription>Receive an in-app notification at the selected time.</DialogDescription>
+            </DialogHeader>
+            <Input
+               type="datetime-local"
+               value={reminderValue}
+               min={new Date(Date.now() + 60_000).toISOString().slice(0, 16)}
+               onChange={(event) => setReminderValue(event.target.value)}
+               disabled={reminderSaving}
+            />
+            <DialogFooter>
+               {issue?.reminderAt && (
+                  <Button variant="ghost" onClick={() => void clearReminder()} disabled={reminderSaving}>
+                     Clear reminder
+                  </Button>
+               )}
+               <Button variant="outline" onClick={() => setReminderOpen(false)} disabled={reminderSaving}>
+                  Cancel
+               </Button>
+               <Button onClick={() => void saveReminder()} disabled={reminderSaving}>
+                  {reminderSaving ? 'Saving…' : 'Set reminder'}
+               </Button>
+            </DialogFooter>
+         </DialogContent>
+      </Dialog>
+      </>
    );
 }
