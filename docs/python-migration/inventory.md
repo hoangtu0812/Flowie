@@ -125,4 +125,4 @@ name in production. P9 must include a cutover rehearsal on a database clone.
 - [x] API/domain, schema/model, worker and infrastructure inventory recorded.
 - [x] Source and running-database structure fingerprints captured without data export.
 - [x] Rollback and migration-ownership rule recorded.
-- [ ] Pushed implementation branch and P0 commit.
+- [x] Pushed implementation branch and P0 commit `5916b50`.
