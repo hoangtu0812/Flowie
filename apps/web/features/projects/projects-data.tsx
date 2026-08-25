@@ -78,6 +78,13 @@ export type ProjectListUpdate = {
    labelIds?: string[];
 };
 
+export type CreateProjectValues = {
+   name: string;
+   identifier: string;
+   teamId?: string;
+   description?: string;
+};
+
 type ProjectData = {
    workspaceId?: string;
    resolvedTeamId?: string;
@@ -85,6 +92,7 @@ type ProjectData = {
    teamGroups: Array<{ id: string; name: string; icon?: string }>;
    workspaceMembers: ProjectListMember[];
    projectStatuses: ProjectListStatus[];
+   createProject: (values: CreateProjectValues) => Promise<void>;
    updateProject: (projectId: string, update: ProjectListUpdate) => Promise<void>;
 };
 
@@ -322,6 +330,37 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
       [workspaceId]
    );
 
+   const createProject = useCallback(
+      async ({ name, identifier, teamId, description }: CreateProjectValues) => {
+         if (!workspaceId) throw new Error('Workspace is not ready yet.');
+         const response = await fetch(`${api}/projects`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+               workspaceId,
+               name: name.trim(),
+               identifier: identifier.trim(),
+               ...(teamId ? { teamId } : {}),
+               ...(description?.trim() ? { description: description.trim() } : {}),
+            }),
+         });
+         if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as {
+               message?: string | string[];
+            } | null;
+            throw new Error(
+               Array.isArray(payload?.message)
+                  ? payload.message.join(' ')
+                  : (payload?.message ?? 'Could not create project.')
+            );
+         }
+         const payload = (await response.json()) as { data: ApiProject };
+         setAllProjects((projects) => [mapProject(payload.data), ...projects]);
+      },
+      [workspaceId]
+   );
+
    return {
       workspaceId,
       resolvedTeamId,
@@ -329,6 +368,7 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
       teamGroups,
       workspaceMembers,
       projectStatuses,
+      createProject,
       updateProject,
    };
 }

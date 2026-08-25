@@ -1,9 +1,9 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { useProjectsData } from '@/features/projects/projects-data';
 import { cn } from '@/lib/utils';
-import { projects as allProjects, Project } from '@/mock-data/projects';
-import { teams } from '@/mock-data/teams';
+import { Project } from '@/types/projects';
 import { useProjectsFilterStore } from '@/store/projects-filter-store';
 import { useProjectsDisplayStore } from '@/store/projects-display-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
@@ -41,18 +41,20 @@ const CLOSED_CATEGORIES = new Set(['completed', 'canceled']);
  * options, views, insights) is scoped to that team's projects.
  */
 export default function Projects({ teamId }: { teamId?: string }) {
+   const { allProjects, resolvedTeamId, teamGroups } = useProjectsData();
    const { filters } = useProjectsFilterStore();
    const { viewTypes, grouping, ordering, closedProjects, showEmptyGroups } =
       useProjectsDisplayStore();
    const { openPanel, togglePanel } = useRightPanelStore();
    const [tab, setTab] = useQueryState('tab', parseAsStringLiteral(TABS).withDefault('all'));
    const viewType = viewTypes[tab];
+   const activeTeamId = resolvedTeamId ?? teamId;
 
    const displayed = useMemo(() => {
       let list = allProjects.slice();
 
-      if (teamId) {
-         list = list.filter((project) => project.teamId === teamId);
+      if (activeTeamId) {
+         list = list.filter((project) => project.teamId === activeTeamId);
       }
       if (tab === 'active') {
          list = list.filter((project) => ACTIVE_CATEGORIES.has(project.status.category));
@@ -81,13 +83,13 @@ export default function Projects({ teamId }: { teamId?: string }) {
          }
       };
       return list.sort(compare);
-   }, [tab, closedProjects, filters, ordering, teamId]);
+   }, [allProjects, tab, closedProjects, filters, ordering, activeTeamId]);
 
    const groups = useMemo<ProjectGroup[]>(() => {
       if (grouping === 'none') {
          return [{ id: 'all', name: 'All projects', projects: displayed }];
       }
-      return teams
+      return teamGroups
          .map((team) => ({
             id: team.id,
             name: team.name,
@@ -95,7 +97,7 @@ export default function Projects({ teamId }: { teamId?: string }) {
             projects: displayed.filter((project) => project.teamId === team.id),
          }))
          .filter((group) => showEmptyGroups || group.projects.length > 0);
-   }, [displayed, grouping, showEmptyGroups]);
+   }, [displayed, grouping, showEmptyGroups, teamGroups]);
 
    return (
       <div className="w-full h-full flex flex-col overflow-hidden">

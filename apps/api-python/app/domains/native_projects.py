@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Any, Literal
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
 from ..db.session import get_session
+from ..legacy.proxy import proxy_legacy_request
 from .auth import _cuid, _utcnow, current_user
 from .teams import _team
 
@@ -20,7 +21,12 @@ from .teams import _team
 # ported. It lets us exercise real Python/database behavior without switching
 # any Circle screen away from the stable legacy facade mid-migration.
 router = APIRouter(prefix='/api/v1/_native/projects', tags=['native-projects'])
+# The public router intentionally exposes only the Project paths that have
+# completed a Python contract audit. All other Project paths continue through
+# the facade, so the unchanged Circle UI never observes a partial migration.
+public_router = APIRouter(prefix='/api/v1/projects', tags=['projects'])
 ProjectType = Literal['GENERAL', 'PRODUCT', 'MARKETING', 'OPERATIONS', 'EVENT', 'CLIENT', 'RESEARCH', 'CUSTOM']
+PROXY_METHODS = ['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT']
 
 
 class CreateProjectInput(BaseModel):
@@ -79,6 +85,19 @@ class ProjectResourceInput(BaseModel):
     workspaceId: str = Field(min_length=1)
     label: str = Field(min_length=1, max_length=160)
     url: str = Field(min_length=1, max_length=2000)
+
+
+def _public_project_id(suffix: str) -> str:
+    """Project ids are CUIDs. The literal `c` keeps static settings paths out
+    of the dynamic Project route while those settings remain on the facade."""
+    return f'c{suffix}'
+
+
+@public_router.api_route('/custom-fields', methods=PROXY_METHODS)
+@public_router.api_route('/custom-fields/{path:path}', methods=PROXY_METHODS)
+async def legacy_custom_fields(request: Request, path: str = ''):
+    suffix = 'projects/custom-fields' + (f'/{path}' if path else '')
+    return await proxy_legacy_request(request, suffix)
 
 
 async def _workspace_access(db: AsyncSession, workspace_id: str, user_id: str) -> None:
@@ -366,3 +385,71 @@ async def create_resource(project_id: str, payload: ProjectResourceInput, user: 
     await db.execute(text("INSERT INTO activities (id, workspace_id, project_id, actor_id, type, data, created_at) VALUES (:id, :workspace_id, :project_id, :actor_id, 'project.resource.created', CAST(:data AS jsonb), :now)"), {'id': _cuid(), 'workspace_id': payload.workspaceId, 'project_id': project_id, 'actor_id': user['id'], 'data': json.dumps({'resourceId': resource_id, 'label': label, 'url': resource_url}), 'now': now})
     await db.commit()
     return {'data': {'id': resource_id, 'workspaceId': payload.workspaceId, 'projectId': project_id, 'createdById': user['id'], 'label': label, 'url': resource_url, 'createdAt': now, 'updatedAt': now, 'createdBy': {'id': user['id'], 'name': user['name'], 'avatarUrl': user['avatar_url']}}}
+
+
+# Public cutover: only endpoints consumed by the unchanged Project UI whose
+# response contracts are now audited. Issue detail, project settings and any
+# future route not listed here deliberately remain on the legacy facade.
+@public_router.get('')
+async def public_list_projects(workspaceId: str = Query(min_length=1), teamId: str | None = None, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
+    return await list_projects(workspaceId, teamId, user, db)
+
+
+@public_router.post('')
+async def public_create_project(payload: CreateProjectInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    return await create_project(payload, user, db)
+
+
+@public_router.get('/c{project_suffix}')
+async def public_get_project(project_suffix: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    return await get_project(_public_project_id(project_suffix), workspaceId, user, db)
+
+
+@public_router.patch('/c{project_suffix}')
+async def public_update_project(project_suffix: str, payload: UpdateProjectInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    return await update_project(_public_project_id(project_suffix), payload, workspaceId, user, db)
+
+
+@public_router.delete('/c{project_suffix}')
+async def public_archive_project(project_suffix: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    return await archive_project(_public_project_id(project_suffix), workspaceId, user, db)
+
+
+@public_router.patch('/c{project_suffix}/members')
+async def public_update_members(project_suffix: str, payload: ProjectMembersInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
+    return await update_members(_public_project_id(project_suffix), payload, user, db)
+
+
+@public_router.post('/c{project_suffix}/resources')
+async def public_create_resource(project_suffix: str, payload: ProjectResourceInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    return await create_resource(_public_project_id(project_suffix), payload, user, db)
+
+
+@public_router.get('/c{project_suffix}/milestones')
+async def public_list_milestones(project_suffix: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
+    return await list_milestones(_public_project_id(project_suffix), workspaceId, user, db)
+
+
+@public_router.post('/c{project_suffix}/milestones')
+async def public_create_milestone(project_suffix: str, payload: MilestoneInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    return await create_milestone(_public_project_id(project_suffix), payload, user, db)
+
+
+@public_router.patch('/c{project_suffix}/milestones/{milestone_id}')
+async def public_update_milestone(project_suffix: str, milestone_id: str, payload: UpdateMilestoneInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    return await update_milestone(_public_project_id(project_suffix), milestone_id, payload, workspaceId, user, db)
+
+
+@public_router.delete('/c{project_suffix}/milestones/{milestone_id}')
+async def public_remove_milestone(project_suffix: str, milestone_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    return await remove_milestone(_public_project_id(project_suffix), milestone_id, workspaceId, user, db)
+
+
+@public_router.post('/c{project_suffix}/favorite')
+async def public_favorite(project_suffix: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    return await favorite(_public_project_id(project_suffix), workspaceId, user, db)
+
+
+@public_router.delete('/c{project_suffix}/favorite')
+async def public_unfavorite(project_suffix: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    return await unfavorite(_public_project_id(project_suffix), workspaceId, user, db)

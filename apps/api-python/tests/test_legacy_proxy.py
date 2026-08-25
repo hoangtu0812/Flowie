@@ -55,14 +55,14 @@ class LegacyFacadeTests(unittest.TestCase):
 
     def test_proxies_unmigrated_relative_path_body_and_auth_cookie(self) -> None:
         response = self.client.post(
-            '/api/v1/projects?source=web',
+            '/api/v1/activities?source=web',
             content=b'{"email":"user@example.com"}',
             headers={'content-type': 'application/json', 'cookie': 'flowie_access=old-token'},
         )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {'data': {'source': 'legacy'}})
-        self.assertEqual(self.requests[0].url.path, '/api/v1/projects')
+        self.assertEqual(self.requests[0].url.path, '/api/v1/activities')
         self.assertEqual(self.requests[0].url.query, b'source=web')
         self.assertEqual(self.requests[0].content, b'{"email":"user@example.com"}')
         self.assertEqual(self.requests[0].headers['cookie'], 'flowie_access=old-token')

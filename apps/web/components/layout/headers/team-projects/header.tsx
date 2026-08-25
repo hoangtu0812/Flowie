@@ -1,14 +1,19 @@
 'use client';
 
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { teams } from '@/mock-data/teams';
+import { useProjectsData } from '@/features/projects/projects-data';
 import { ChevronRight, Star } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 
 export default function Header() {
    const { orgId, teamId } = useParams<{ orgId: string; teamId: string }>();
-   const team = teams.find((t) => t.id === teamId) ?? teams[0];
+   const { resolvedTeamId, teamGroups } = useProjectsData();
+   const team = teamGroups.find((item) => item.id === resolvedTeamId || item.id === teamId) ?? {
+      id: resolvedTeamId ?? teamId,
+      name: teamId,
+      icon: undefined,
+   };
 
    return (
       <div className="w-full flex justify-between items-center border-b py-1.5 px-6 h-10">
