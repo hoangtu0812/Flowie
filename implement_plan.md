@@ -272,7 +272,7 @@ Nghiệm thu:
 - API legacy không public ra ngoài Docker network trừ khi bật profile debug.
 - Commit: `feat: add fastapi facade with legacy routing`.
 
-### P3 — Auth, Profile và Workspace bằng Python — in progress
+### P3 — Auth, Profile và Workspace bằng Python — completed (2026-08-25)
 
 Phạm vi:
 
@@ -315,8 +315,12 @@ Tiến độ hiện tại (P3a — completed 2026-08-25):
   leave và remove member. Giữ response `organization.workspaces[0]` cho UI hiện có; kiểm tra owner/
   admin, workspace isolation và audit khi rời workspace. Docker regression hai tài khoản đạt toàn bộ
   lifecycle `200`; member remove bị chặn `403`, owner remove thành công `200`.
-- [ ] P3c: Personal API keys và workspace display-preference endpoints. Chúng vẫn proxy legacy cho
-  tới khi secrets/audit và JSON validation được port/test riêng.
+- [x] P3c: Native Python personal API keys và ba nhóm workspace display preferences. API key dùng
+  SHA-256, token chỉ trả một lần lúc tạo và bị loại khỏi list; preference validate JSON, member chỉ
+  đọc, owner/admin mới sửa và mọi write có audit log. Regression đạt create/list/revoke key và ba
+  preference `200`; member write bị chặn `403`.
+- [x] Toàn bộ route Auth/Workspace trong scope P3 đã native Python; facade giữ các domain kế tiếp
+  không thuộc scope (Teams, Projects, Issues và worker) cho tới phase riêng.
 
 ### P4 — Teams bằng Python
 
@@ -530,6 +534,7 @@ Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modu
 | 2026-08-25 | P3b1 native register/session management | `361d4cb` | Docker build, Python unit regression and isolated-account register/login/workspace/session revoke/logout regression passed | Workspace create/membership/invitations, API keys | P3b2 workspace mutations |
 | 2026-08-25 | P3b1 timezone compatibility | `9473085` | Native register with browser `Asia/Saigon` persisted canonical `Asia/Ho_Chi_Minh`; 4 Python tests passed | Workspace create/membership/invitations, API keys | P3b2 workspace mutations |
 | 2026-08-25 | P3b2 native workspace membership | `ae85f7d` | Docker smoke + two-account create/invite/pending/accept/role/leave/decline and owner/member RBAC regression passed | Personal API keys, workspace display preferences | P3c settings/security endpoints |
+| 2026-08-25 | P3c native API keys/preferences | `a576d07` | API token one-time exposure/revoke, preference persistence/audit and member-write `403`; Docker smoke + unit regression passed | Teams, Projects, Issues, worker | P4 Teams |
 
 ## 13. Definition of Done toàn dự án
 
