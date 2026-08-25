@@ -26,6 +26,7 @@ router = APIRouter(prefix='/api/v1/_native/projects', tags=['native-projects'])
 public_router = APIRouter(prefix='/api/v1/projects', tags=['projects'])
 ProjectType = Literal['GENERAL', 'PRODUCT', 'MARKETING', 'OPERATIONS', 'EVENT', 'CLIENT', 'RESEARCH', 'CUSTOM']
 ProjectCustomFieldType = Literal['TEXT', 'NUMBER', 'DATE', 'SELECT', 'MULTI_SELECT', 'BOOLEAN', 'URL']
+ProjectStatusCategory = Literal['backlog', 'planned', 'in-progress', 'completed', 'canceled']
 
 # Keep the persisted Project workflow compatible with Circle's unchanged
 # selector. The original UI has this fixed catalog, so presentation does not
@@ -135,6 +136,21 @@ class UpdateProjectLabelInput(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=80)
     color: str | None = Field(default=None, pattern=r'^#[0-9a-fA-F]{6}$')
     description: str | None = Field(default=None, max_length=500)
+
+
+class CreateProjectStatusInput(BaseModel):
+    workspaceId: str = Field(min_length=1)
+    name: str = Field(min_length=1, max_length=32)
+    category: ProjectStatusCategory
+    color: str = Field(pattern=r'^#[0-9a-fA-F]{6}$')
+    position: int | None = Field(default=None, ge=0)
+
+
+class UpdateProjectStatusInput(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=32)
+    category: ProjectStatusCategory | None = None
+    color: str | None = Field(default=None, pattern=r'^#[0-9a-fA-F]{6}$')
+    position: int | None = Field(default=None, ge=0)
 
 
 async def _workspace_access(db: AsyncSession, workspace_id: str, user_id: str) -> None:
@@ -319,6 +335,100 @@ async def delete_project_label(label_id: str, workspaceId: str = Query(min_lengt
     await db.execute(text('DELETE FROM project_labels WHERE id = :id'), {'id': label_id})
     await db.commit()
     return {'data': {'id': label_id, 'deleted': True}}
+
+
+def _project_status(row: Any) -> dict[str, Any]:
+    return {
+        'id': row['id'], 'workspaceId': row['workspace_id'], 'name': row['name'],
+        'category': row['category'], 'color': row['color'], 'position': row['position'],
+        'projectCount': row['project_count'], 'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
+    }
+
+
+def _status_name(value: str) -> str:
+    return '-'.join(value.strip().lower().split())
+
+
+async def _project_statuses(db: AsyncSession, workspace_id: str) -> list[dict[str, Any]]:
+    await _ensure_circle_project_statuses(db, workspace_id)
+    rows = await db.execute(
+        text('''SELECT s.*, COUNT(p.id)::integer AS project_count
+                FROM project_statuses s LEFT JOIN projects p ON p.workspace_id = s.workspace_id
+                   AND p.status = s.name AND p.archived_at IS NULL
+                WHERE s.workspace_id = :workspace_id
+                GROUP BY s.id ORDER BY s.category ASC, s.position ASC, s.name ASC'''),
+        {'workspace_id': workspace_id},
+    )
+    return [_project_status(row) for row in rows.mappings().all()]
+
+
+@router.get('/statuses')
+@public_router.get('/statuses')
+async def list_project_statuses(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
+    await _workspace_access(db, workspaceId, user['id'])
+    statuses = await _project_statuses(db, workspaceId)
+    await db.commit()
+    return {'data': statuses}
+
+
+@router.post('/statuses')
+@public_router.post('/statuses')
+async def create_project_status(payload: CreateProjectStatusInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    await _workspace_manager(db, payload.workspaceId, user['id'])
+    status_id, now = _cuid(), _utcnow()
+    try:
+        await db.execute(
+            text('''INSERT INTO project_statuses (id, workspace_id, name, category, color, position, created_at, updated_at)
+                    VALUES (:id, :workspace_id, :name, :category, :color, :position, :now, :now)'''),
+            {'id': status_id, 'workspace_id': payload.workspaceId, 'name': _status_name(payload.name), 'category': payload.category, 'color': payload.color, 'position': payload.position or 0, 'now': now},
+        )
+        await db.commit()
+    except IntegrityError as error:
+        await db.rollback()
+        raise ApiError(409, 'A project status with this name already exists.', 'Conflict') from error
+    row = (await db.execute(text('''SELECT s.*, 0::integer AS project_count FROM project_statuses s WHERE s.id = :id'''), {'id': status_id})).mappings().one()
+    return {'data': _project_status(row)}
+
+
+@router.patch('/statuses/{status_id}')
+@public_router.patch('/statuses/{status_id}')
+async def update_project_status(status_id: str, payload: UpdateProjectStatusInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    await _workspace_manager(db, workspaceId, user['id'])
+    current = (await db.execute(text('SELECT * FROM project_statuses WHERE id = :id AND workspace_id = :workspace_id'), {'id': status_id, 'workspace_id': workspaceId})).mappings().first()
+    if not current:
+        raise ApiError(404, 'Project status not found.', 'Not Found')
+    values = payload.model_dump(exclude_unset=True)
+    next_name = _status_name(values['name']) if 'name' in values else current['name']
+    params, sets = {'id': status_id, 'now': _utcnow(), 'name': next_name}, ['name = :name', 'updated_at = :now']
+    for field in ('category', 'color', 'position'):
+        if field in values:
+            params[field] = values[field]
+            sets.append(f'{field} = :{field}')
+    try:
+        if next_name != current['name']:
+            await db.execute(text('UPDATE projects SET status = :name, updated_at = :now WHERE workspace_id = :workspace_id AND status = :previous'), {**params, 'workspace_id': workspaceId, 'previous': current['name']})
+        await db.execute(text(f"UPDATE project_statuses SET {', '.join(sets)} WHERE id = :id"), params)
+        await db.commit()
+    except IntegrityError as error:
+        await db.rollback()
+        raise ApiError(409, 'A project status with this name already exists.', 'Conflict') from error
+    row = (await db.execute(text('''SELECT s.*, COUNT(p.id)::integer AS project_count FROM project_statuses s LEFT JOIN projects p ON p.workspace_id = s.workspace_id AND p.status = s.name AND p.archived_at IS NULL WHERE s.id = :id GROUP BY s.id'''), {'id': status_id})).mappings().one()
+    return {'data': _project_status(row)}
+
+
+@router.delete('/statuses/{status_id}')
+@public_router.delete('/statuses/{status_id}')
+async def delete_project_status(status_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    await _workspace_manager(db, workspaceId, user['id'])
+    status = (await db.execute(text('SELECT name FROM project_statuses WHERE id = :id AND workspace_id = :workspace_id'), {'id': status_id, 'workspace_id': workspaceId})).mappings().first()
+    if not status:
+        raise ApiError(404, 'Project status not found.', 'Not Found')
+    in_use = await db.execute(text('SELECT COUNT(*) FROM projects WHERE workspace_id = :workspace_id AND status = :status AND archived_at IS NULL'), {'workspace_id': workspaceId, 'status': status['name']})
+    if in_use.scalar_one() > 0:
+        raise ApiError(400, 'Move projects to another status before deleting it.', 'Bad Request')
+    await db.execute(text('DELETE FROM project_statuses WHERE id = :id'), {'id': status_id})
+    await db.commit()
+    return {'data': {'id': status_id, 'deleted': True}}
 
 
 async def _ensure_circle_project_statuses(db: AsyncSession, workspace_id: str) -> None:
