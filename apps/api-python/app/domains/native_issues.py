@@ -11,9 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
 from ..db.session import get_session
-from .auth import DEFAULT_CIRCLE_ISSUE_STATUSES, _cuid, _utcnow, current_user
+from .auth import _cuid, _utcnow, current_user
 from .native_projects import _date, _team_access, _workspace_access
 from .teams import _manager
+from .workflow_catalog import DEFAULT_CIRCLE_ISSUE_STATUSES
 
 
 # Issues stay under a private prefix until their public response contract and

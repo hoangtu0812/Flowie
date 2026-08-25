@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.config import Settings
 from ..core.errors import ApiError
 from ..db.session import get_session
+from .workflow_catalog import DEFAULT_CIRCLE_ISSUE_STATUSES
 
 router = APIRouter(prefix='/api/v1/auth', tags=['auth'])
 password_hasher = PasswordHasher()
@@ -33,24 +34,6 @@ USER_COLUMNS = '''
 # PostgreSQL stores the canonical name and Python's zoneinfo database may not
 # ship that alias, so normalize it at the API boundary.
 TIMEZONE_ALIASES = {'Asia/Saigon': 'Asia/Ho_Chi_Minh'}
-
-# This is Circle's workflow catalog, kept server-side so a new workspace gets
-# the same statuses, ordering, and colors the untouched UI presents.
-DEFAULT_CIRCLE_ISSUE_STATUSES = (
-    ('In Progress', 'STARTED', '#facc15'),
-    ('Technical Review', 'STARTED', '#22c55e'),
-    ('Done', 'COMPLETED', '#5e6ad2'),
-    ('Paused', 'STARTED', '#26b5ce'),
-    ('Todo', 'UNSTARTED', '#99a2b2'),
-    ('Backlog', 'BACKLOG', '#95a2b3'),
-    ('Triage', 'TRIAGE', '#f2790f'),
-    ('Idea', 'BACKLOG', '#5e6ad2'),
-    ('Product Feedback', 'STARTED', '#f2994a'),
-    ('Blocked', 'STARTED', '#eb5757'),
-    ('Shipped', 'COMPLETED', '#4cb782'),
-    ('Canceled', 'CANCELED', '#95a2b3'),
-    ('Duplicate', 'CANCELED', '#95a2b3'),
-)
 
 
 class LoginInput(BaseModel):
