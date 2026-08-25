@@ -282,6 +282,7 @@ model Workspace {
   documents               Document[]
   documentFolders         DocumentFolder[]
   labels                  Label[]
+  labelGroups             LabelGroup[]
   attachments             Attachment[]
   activities              Activity[]
   notifications           Notification[]
@@ -1182,6 +1183,7 @@ model ProjectLabelLink {
 model Label {
   id          String   @id @default(cuid())
   workspaceId String   @map("workspace_id")
+  groupId     String?  @map("group_id")
   name        String
   color       String
   description String?
@@ -1189,11 +1191,29 @@ model Label {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   workspace  Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  group      LabelGroup?  @relation(fields: [groupId], references: [id], onDelete: SetNull)
   issueLinks IssueLabel[]
 
   @@unique([workspaceId, name])
   @@index([workspaceId])
+  @@index([groupId])
   @@map("labels")
+}
+
+model LabelGroup {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  name        String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  labels    Label[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@map("label_groups")
 }
 
 model IssueLabel {

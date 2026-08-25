@@ -11,7 +11,9 @@ import {
    UseGuards,
 } from '@nestjs/common';
 import { AuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
+import { CreateLabelGroupDto } from './dto/create-label-group.dto';
 import { CreateLabelDto } from './dto/create-label.dto';
+import { UpdateLabelGroupDto } from './dto/update-label-group.dto';
 import { UpdateLabelDto } from './dto/update-label.dto';
 import { LabelsService } from './labels.service';
 
@@ -28,6 +30,40 @@ export class LabelsController {
    @Post()
    async create(@Body() dto: CreateLabelDto, @Req() request: AuthenticatedRequest) {
       return { data: await this.labels.create(dto, request.auth!.userId) };
+   }
+
+   @Get('groups')
+   async listGroups(
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.labels.listGroups(workspaceId, request.auth!.userId) };
+   }
+
+   @Post('groups')
+   async createGroup(@Body() dto: CreateLabelGroupDto, @Req() request: AuthenticatedRequest) {
+      return { data: await this.labels.createGroup(dto, request.auth!.userId) };
+   }
+
+   @Patch('groups/:groupId')
+   async updateGroup(
+      @Param('groupId') groupId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Body() dto: UpdateLabelGroupDto,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return {
+         data: await this.labels.updateGroup(groupId, workspaceId, dto, request.auth!.userId),
+      };
+   }
+
+   @Delete('groups/:groupId')
+   async removeGroup(
+      @Param('groupId') groupId: string,
+      @Query('workspaceId') workspaceId: string,
+      @Req() request: AuthenticatedRequest
+   ) {
+      return { data: await this.labels.removeGroup(groupId, workspaceId, request.auth!.userId) };
    }
 
    @Patch(':labelId')

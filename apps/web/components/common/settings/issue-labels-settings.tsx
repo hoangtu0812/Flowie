@@ -14,6 +14,13 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+   Select,
+   SelectContent,
+   SelectItem,
+   SelectTrigger,
+   SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { loadCurrentWorkspace } from '@/lib/workspaces';
@@ -25,11 +32,30 @@ type ApiLabel = {
    description: string | null;
    createdAt: string;
    updatedAt: string;
+   groupId: string | null;
+   group: ApiLabelGroup | null;
    _count: { issueLinks?: number; projectLinks?: number };
 };
 
-type LabelDraft = { name: string; color: string; description: string };
-const EMPTY_DRAFT: LabelDraft = { name: '', color: '#6366f1', description: '' };
+type ApiLabelGroup = {
+   id: string;
+   name: string;
+   description: string | null;
+   createdAt: string;
+   updatedAt: string;
+   _count: { labels: number };
+};
+
+type LabelDraft = { name: string; color: string; description: string; groupId: string };
+type GroupDraft = { name: string; description: string };
+const NO_GROUP = '__none__';
+const EMPTY_DRAFT: LabelDraft = {
+   name: '',
+   color: '#6366f1',
+   description: '',
+   groupId: NO_GROUP,
+};
+const EMPTY_GROUP_DRAFT: GroupDraft = { name: '', description: '' };
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 const formatDate = (value: string) =>
@@ -48,6 +74,7 @@ export function LabelsSettings({ scope }: { scope: LabelScope }) {
    const endpoint = isProject ? '/projects/labels' : '/labels';
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [labels, setLabels] = useState<ApiLabel[]>([]);
+   const [groups, setGroups] = useState<ApiLabelGroup[]>([]);
    const [query, setQuery] = useState('');
    const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
    const [dialog, setDialog] = useState<'create' | 'edit'>();
@@ -56,16 +83,29 @@ export function LabelsSettings({ scope }: { scope: LabelScope }) {
    const [saving, setSaving] = useState(false);
    const [message, setMessage] = useState<string>();
    const [deleteOpen, setDeleteOpen] = useState(false);
+   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
+   const [selectedGroup, setSelectedGroup] = useState<ApiLabelGroup>();
+   const [groupDraft, setGroupDraft] = useState<GroupDraft>(EMPTY_GROUP_DRAFT);
+   const [groupSaving, setGroupSaving] = useState(false);
+   const [groupMessage, setGroupMessage] = useState<string>();
+   const [groupDeleteOpen, setGroupDeleteOpen] = useState(false);
 
    const load = useCallback(async () => {
       const id = (await loadCurrentWorkspace()).id;
       setWorkspaceId(id);
-      const response = await fetch(`${api}${endpoint}?workspaceId=${id}`, {
-         credentials: 'include',
-      });
-      if (!response.ok) throw new Error(`Could not load ${resource}.`);
-      setLabels(((await response.json()) as { data: ApiLabel[] }).data);
-   }, [endpoint, resource]);
+      const [labelsResponse, groupsResponse] = await Promise.all([
+         fetch(`${api}${endpoint}?workspaceId=${id}`, { credentials: 'include' }),
+         isProject
+            ? Promise.resolve(undefined)
+            : fetch(`${api}/labels/groups?workspaceId=${id}`, { credentials: 'include' }),
+      ]);
+      if (!labelsResponse.ok || (groupsResponse && !groupsResponse.ok))
+         throw new Error(`Could not load ${resource}.`);
+      setLabels(((await labelsResponse.json()) as { data: ApiLabel[] }).data);
+      setGroups(
+         groupsResponse ? ((await groupsResponse.json()) as { data: ApiLabelGroup[] }).data : []
+      );
+   }, [endpoint, isProject, resource]);
 
    useEffect(() => {
       void load()
@@ -89,9 +129,23 @@ export function LabelsSettings({ scope }: { scope: LabelScope }) {
    };
    const openEdit = (label: ApiLabel) => {
       setSelected(label);
-      setDraft({ name: label.name, color: label.color, description: label.description ?? '' });
+      setDraft({
+         name: label.name,
+         color: label.color,
+         description: label.description ?? '',
+         groupId: label.groupId ?? NO_GROUP,
+      });
       setMessage(undefined);
       setDialog('edit');
+   };
+
+   const openGroupDialog = (group?: ApiLabelGroup) => {
+      setSelectedGroup(group);
+      setGroupDraft(
+         group ? { name: group.name, description: group.description ?? '' } : EMPTY_GROUP_DRAFT
+      );
+      setGroupMessage(undefined);
+      setGroupDialogOpen(true);
    };
 
    const save = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -113,7 +167,10 @@ export function LabelsSettings({ scope }: { scope: LabelScope }) {
                   ...(editing ? {} : { workspaceId }),
                   name: draft.name.trim(),
                   color: draft.color,
-                  description: draft.description.trim() || undefined,
+                  description: draft.description.trim() || (editing ? null : undefined),
+                  ...(!isProject
+                     ? { groupId: draft.groupId === NO_GROUP ? null : draft.groupId }
+                     : {}),
                }),
             }
          );
@@ -127,6 +184,67 @@ export function LabelsSettings({ scope }: { scope: LabelScope }) {
          setMessage(caught instanceof Error ? caught.message : 'Could not save label.');
       } finally {
          setSaving(false);
+      }
+   };
+
+   const saveGroup = async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!workspaceId || !groupDraft.name.trim()) return;
+      setGroupSaving(true);
+      setGroupMessage(undefined);
+      try {
+         const response = await fetch(
+            selectedGroup
+               ? `${api}/labels/groups/${selectedGroup.id}?workspaceId=${workspaceId}`
+               : `${api}/labels/groups`,
+            {
+               method: selectedGroup ? 'PATCH' : 'POST',
+               credentials: 'include',
+               headers: { 'content-type': 'application/json' },
+               body: JSON.stringify({
+                  ...(selectedGroup ? {} : { workspaceId }),
+                  name: groupDraft.name.trim(),
+                  description: groupDraft.description.trim() || (selectedGroup ? null : undefined),
+               }),
+            }
+         );
+         if (!response.ok)
+            throw new Error(
+               'Could not save label group. Workspace administrator access may be required.'
+            );
+         await load();
+         setSelectedGroup(undefined);
+         setGroupDraft(EMPTY_GROUP_DRAFT);
+      } catch (caught) {
+         setGroupMessage(caught instanceof Error ? caught.message : 'Could not save label group.');
+      } finally {
+         setGroupSaving(false);
+      }
+   };
+
+   const removeGroup = async () => {
+      if (!workspaceId || !selectedGroup) return;
+      setGroupSaving(true);
+      setGroupMessage(undefined);
+      try {
+         const response = await fetch(
+            `${api}/labels/groups/${selectedGroup.id}?workspaceId=${workspaceId}`,
+            { method: 'DELETE', credentials: 'include' }
+         );
+         if (!response.ok)
+            throw new Error(
+               'Could not delete label group. Workspace administrator access may be required.'
+            );
+         await load();
+         setSelectedGroup(undefined);
+         setGroupDraft(EMPTY_GROUP_DRAFT);
+         setGroupDeleteOpen(false);
+      } catch (caught) {
+         setGroupMessage(
+            caught instanceof Error ? caught.message : 'Could not delete label group.'
+         );
+      } finally {
+         setGroupSaving(false);
       }
    };
 
@@ -171,8 +289,9 @@ export function LabelsSettings({ scope }: { scope: LabelScope }) {
                   <Button
                      size="xs"
                      variant="secondary"
-                     disabled
-                     title="Label groups are not enabled yet"
+                     disabled={isProject}
+                     title={isProject ? 'Project label groups are not enabled yet' : undefined}
+                     onClick={() => !isProject && openGroupDialog()}
                   >
                      New group
                   </Button>
@@ -280,6 +399,29 @@ export function LabelsSettings({ scope }: { scope: LabelScope }) {
                         className="h-9 w-14 p-1"
                      />
                   </div>
+                  {!isProject && (
+                     <div className="space-y-2">
+                        <Label htmlFor="label-group">Group</Label>
+                        <Select
+                           value={draft.groupId}
+                           onValueChange={(value) =>
+                              setDraft((current) => ({ ...current, groupId: value }))
+                           }
+                        >
+                           <SelectTrigger id="label-group">
+                              <SelectValue />
+                           </SelectTrigger>
+                           <SelectContent>
+                              <SelectItem value={NO_GROUP}>No group</SelectItem>
+                              {groups.map((group) => (
+                                 <SelectItem key={group.id} value={group.id}>
+                                    {group.name}
+                                 </SelectItem>
+                              ))}
+                           </SelectContent>
+                        </Select>
+                     </div>
+                  )}
                   {message && <p className="text-sm text-destructive">{message}</p>}
                   <div className="flex items-center justify-between gap-2">
                      {dialog === 'edit' ? (
@@ -338,6 +480,129 @@ export function LabelsSettings({ scope }: { scope: LabelScope }) {
                      }}
                   >
                      {saving ? 'Deleting…' : 'Delete'}
+                  </AlertDialogAction>
+               </AlertDialogFooter>
+            </AlertDialogContent>
+         </AlertDialog>
+         <Dialog
+            open={groupDialogOpen}
+            onOpenChange={(open) => !groupSaving && setGroupDialogOpen(open)}
+         >
+            <DialogContent>
+               <DialogHeader>
+                  <DialogTitle>
+                     {selectedGroup ? 'Edit label group' : 'New label group'}
+                  </DialogTitle>
+               </DialogHeader>
+               <form className="space-y-4" onSubmit={saveGroup}>
+                  <div className="space-y-2">
+                     <Label htmlFor="label-group-name">Name</Label>
+                     <Input
+                        id="label-group-name"
+                        value={groupDraft.name}
+                        onChange={(event) =>
+                           setGroupDraft((current) => ({ ...current, name: event.target.value }))
+                        }
+                        maxLength={80}
+                        autoFocus
+                        required
+                     />
+                  </div>
+                  <div className="space-y-2">
+                     <Label htmlFor="label-group-description">Description</Label>
+                     <Textarea
+                        id="label-group-description"
+                        value={groupDraft.description}
+                        onChange={(event) =>
+                           setGroupDraft((current) => ({
+                              ...current,
+                              description: event.target.value,
+                           }))
+                        }
+                        maxLength={500}
+                        rows={3}
+                     />
+                  </div>
+                  {groupMessage && <p className="text-sm text-destructive">{groupMessage}</p>}
+                  <div className="flex items-center justify-between gap-2">
+                     {selectedGroup ? (
+                        <Button
+                           type="button"
+                           variant="ghost"
+                           className="text-destructive"
+                           disabled={groupSaving}
+                           onClick={() => setGroupDeleteOpen(true)}
+                        >
+                           Delete
+                        </Button>
+                     ) : (
+                        <span />
+                     )}
+                     <div className="flex gap-2">
+                        {selectedGroup && (
+                           <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => openGroupDialog()}
+                           >
+                              New group
+                           </Button>
+                        )}
+                        <Button type="submit" disabled={groupSaving || !groupDraft.name.trim()}>
+                           {groupSaving
+                              ? 'Saving…'
+                              : selectedGroup
+                                ? 'Save changes'
+                                : 'Create group'}
+                        </Button>
+                     </div>
+                  </div>
+               </form>
+               {groups.length > 0 && (
+                  <div className="border-t pt-4 space-y-1">
+                     <p className="text-xs font-medium text-muted-foreground mb-2">
+                        Existing groups
+                     </p>
+                     {groups.map((group) => (
+                        <button
+                           key={group.id}
+                           type="button"
+                           className="w-full flex items-center justify-between rounded-md px-2 py-2 text-sm hover:bg-muted text-left"
+                           onClick={() => openGroupDialog(group)}
+                        >
+                           <span className="truncate">{group.name}</span>
+                           <span className="text-xs text-muted-foreground">
+                              {group._count.labels} labels
+                           </span>
+                        </button>
+                     ))}
+                  </div>
+               )}
+            </DialogContent>
+         </Dialog>
+         <AlertDialog
+            open={groupDeleteOpen}
+            onOpenChange={(visible) => !groupSaving && setGroupDeleteOpen(visible)}
+         >
+            <AlertDialogContent>
+               <AlertDialogHeader>
+                  <AlertDialogTitle>Delete “{selectedGroup?.name}”?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                     Labels in this group will remain in the workspace without a group.
+                  </AlertDialogDescription>
+               </AlertDialogHeader>
+               {groupMessage && <p className="text-sm text-destructive">{groupMessage}</p>}
+               <AlertDialogFooter>
+                  <AlertDialogCancel disabled={groupSaving}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                     disabled={groupSaving}
+                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                     onClick={(event) => {
+                        event.preventDefault();
+                        void removeGroup();
+                     }}
+                  >
+                     {groupSaving ? 'Deleting…' : 'Delete'}
                   </AlertDialogAction>
                </AlertDialogFooter>
             </AlertDialogContent>
