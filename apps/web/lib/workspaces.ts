@@ -1,5 +1,23 @@
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
+/**
+ * Workspace is the first protected resource requested after a page reload.
+ * If only the durable refresh cookie remains, restore the short-lived access
+ * cookie once and retry so a valid session never renders an empty workspace.
+ */
+async function workspaceFetch(url: string, init: RequestInit = {}): Promise<Response> {
+   const request = { ...init, credentials: 'include' as const };
+   const response = await fetch(url, request);
+   if (response.status !== 401) return response;
+
+   const refreshed = await fetch(`${api}/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+   });
+   if (!refreshed.ok) return response;
+   return fetch(url, request);
+}
+
 export type WorkspaceSummary = {
    id: string;
    name: string;
@@ -14,15 +32,14 @@ export type WorkspaceMembership = {
 };
 
 export async function loadWorkspaceMemberships(): Promise<WorkspaceMembership[]> {
-   const response = await fetch(`${api}/workspaces/me`, { credentials: 'include' });
+   const response = await workspaceFetch(`${api}/workspaces/me`);
    if (!response.ok) throw new Error('Could not load workspaces.');
    return ((await response.json()) as { data: WorkspaceMembership[] }).data;
 }
 
 export async function createWorkspace(name: string): Promise<WorkspaceSummary> {
-   const response = await fetch(`${api}/workspaces`, {
+   const response = await workspaceFetch(`${api}/workspaces`, {
       method: 'POST',
-      credentials: 'include',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name: name.trim() }),
    });
