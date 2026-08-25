@@ -1,7 +1,7 @@
 'use client';
 
 import { loadJoinedWorkspaceTeams, WorkspaceTeam } from '@/components/common/teams/team-types';
-import { Cycle } from '@/mock-data/cycles';
+import { Cycle } from '@/types/cycles';
 import { useIssuesStore } from '@/store/issues-store';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';

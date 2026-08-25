@@ -5,10 +5,10 @@ import { createColumnConfigHelper } from '@/components/data-table-filter/core/fi
 import type { ColumnOption, FiltersState } from '@/components/data-table-filter/core/types';
 import { multiOptionFilterFn, optionFilterFn } from '@/components/data-table-filter/lib/filter-fns';
 import type { Issue } from '@/types/issues';
-import type { LabelInterface } from '@/mock-data/labels';
-import type { Project } from '@/mock-data/projects';
+import type { LabelInterface } from '@/types/labels';
+import type { Project } from '@/types/projects';
 import type { Status, StatusCategory } from '@/lib/status-presentations';
-import type { User } from '@/mock-data/users';
+import type { User } from '@/types/users';
 import type { IssueCycleOption } from '@/store/issues-store';
 import {
    BarChart3,

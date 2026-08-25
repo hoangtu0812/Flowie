@@ -1,8 +1,8 @@
-import type { LabelInterface } from '@/mock-data/labels';
+import type { LabelInterface } from '@/types/labels';
 import type { Priority } from '@/lib/priority-presentations';
-import type { Project } from '@/mock-data/projects';
+import type { Project } from '@/types/projects';
 import type { Status } from '@/lib/status-presentations';
-import type { User } from '@/mock-data/users';
+import type { User } from '@/types/users';
 
 /** UI shape mapped from the Issue API. It contains no fixture records. */
 export interface Issue {

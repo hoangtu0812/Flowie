@@ -1,7 +1,7 @@
 'use client';
 
 import { Badge } from '@/components/ui/badge';
-import { Project } from '@/mock-data/projects';
+import { Project } from '@/types/projects';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 

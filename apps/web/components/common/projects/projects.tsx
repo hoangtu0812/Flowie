@@ -2,7 +2,8 @@
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { health as healthOptions, Project } from '@/mock-data/projects';
+import { health as healthOptions } from '@/lib/project-presentations';
+import type { Project } from '@/types/projects';
 import { priorities } from '@/lib/priority-presentations';
 import type { Status, StatusCategory } from '@/lib/status-presentations';
 import { Circle, CircleCheck, CircleDashed, CirclePlay, CircleX, FolderKanban } from 'lucide-react';

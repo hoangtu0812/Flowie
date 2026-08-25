@@ -1,5 +1,5 @@
 import type { Issue } from '@/types/issues';
-import type { Project } from '@/mock-data/projects';
+import type { Project } from '@/types/projects';
 import type { LiveView } from './use-live-views';
 
 const values = (filters: Record<string, unknown>, key: string) =>

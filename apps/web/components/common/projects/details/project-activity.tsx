@@ -15,7 +15,7 @@ import {
    ProjectUpdateHealth,
    projectUpdateHealthColor,
    projectUpdateHealthLabel,
-} from '@/mock-data/project-details';
+} from '@/types/project-details';
 import { format, parseISO } from 'date-fns';
 import { Paperclip, X } from 'lucide-react';
 import { ChangeEvent, useMemo, useRef, useState } from 'react';

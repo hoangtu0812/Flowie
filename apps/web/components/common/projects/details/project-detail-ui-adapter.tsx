@@ -3,10 +3,11 @@
 import type { ContentBlock } from '@circle/contracts';
 import type { Issue } from '@/types/issues';
 import { priorities } from '@/lib/priority-presentations';
-import { health as projectHealth, type Project } from '@/mock-data/projects';
-import type { ProjectDetail, ProjectUpdateHealth } from '@/mock-data/project-details';
+import { health as projectHealth } from '@/lib/project-presentations';
+import type { Project } from '@/types/projects';
+import type { ProjectDetail, ProjectUpdateHealth } from '@/types/project-details';
 import type { Status, StatusCategory } from '@/lib/status-presentations';
-import type { User } from '@/mock-data/users';
+import type { User } from '@/types/users';
 import { Circle, CircleCheck, CircleDashed, CirclePlay, CircleX, FolderKanban } from 'lucide-react';
 import { createElement } from 'react';
 import type {

@@ -6,7 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Textarea } from '@/components/ui/textarea';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
-import { Project } from '@/mock-data/projects';
+import { Project } from '@/types/projects';
 import { AlertCircle, Bell, CircleCheck, CircleX, HelpCircle } from 'lucide-react';
 import { FormEvent, useEffect, useState } from 'react';
 

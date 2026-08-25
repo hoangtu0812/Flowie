@@ -20,7 +20,7 @@ import {
    SelectTrigger,
    SelectValue,
 } from '@/components/ui/select';
-import { ProjectDetail } from '@/mock-data/project-details';
+import { ProjectDetail } from '@/types/project-details';
 import { PanelFilterTarget, usePanelFilter } from '@/components/common/issues/use-panel-filter';
 import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';

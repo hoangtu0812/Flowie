@@ -11,7 +11,7 @@ import {
    DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Cycle } from '@/mock-data/cycles';
+import { Cycle } from '@/types/cycles';
 import { useIssuesStore } from '@/store/issues-store';
 import { format, parseISO } from 'date-fns';
 import { useParams } from 'next/navigation';

@@ -1,11 +1,11 @@
 import { createElement } from 'react';
 import { Circle, CircleCheck, CircleDashed, CircleX } from 'lucide-react';
 import { groupIssuesByStatus, Issue } from '@/types/issues';
-import { LabelInterface } from '@/mock-data/labels';
+import { LabelInterface } from '@/types/labels';
 import { priorities, Priority } from '@/lib/priority-presentations';
-import { Project } from '@/mock-data/projects';
+import { Project } from '@/types/projects';
 import { status as statusPresentations, Status, StatusCategory } from '@/lib/status-presentations';
-import { User } from '@/mock-data/users';
+import { User } from '@/types/users';
 import { create } from 'zustand';
 import { loadCurrentWorkspace } from '@/lib/workspaces';
 

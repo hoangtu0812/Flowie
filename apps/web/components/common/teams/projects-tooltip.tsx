@@ -1,7 +1,7 @@
 'use client';
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Project } from '@/mock-data/projects';
+import { Project } from '@/types/projects';
 import { Box } from 'lucide-react';
 
 interface ProjectsTooltipProps {

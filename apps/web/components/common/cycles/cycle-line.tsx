@@ -1,6 +1,6 @@
 'use client';
 
-import { Cycle, cycleStatusLabel } from '@/mock-data/cycles';
+import { Cycle, cycleStatusLabel } from '@/types/cycles';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';

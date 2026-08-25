@@ -1,6 +1,6 @@
 'use client';
 
-import { Project } from '@/mock-data/projects';
+import { Project } from '@/types/projects';
 import { useProjectsDisplayStore } from '@/store/projects-display-store';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';

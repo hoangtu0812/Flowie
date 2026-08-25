@@ -2,7 +2,7 @@
 
 import { CapacityRing } from '@/components/common/cycles/capacity-ring';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Project } from '@/mock-data/projects';
+import { Project } from '@/types/projects';
 import { useProjectsDisplayStore } from '@/store/projects-display-store';
 import { format, parseISO } from 'date-fns';
 import { Calendar } from 'lucide-react';
