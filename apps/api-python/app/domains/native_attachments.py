@@ -17,6 +17,9 @@ from .native_projects import _team_access, _workspace_access
 
 
 router = APIRouter(prefix='/api/v1/_native/attachments', tags=['native-attachments'])
+# Storage authorization is entity-aware and already native. Expose this
+# contract ahead of the attachment panel adapter without changing its UI.
+public_router = APIRouter(prefix='/api/v1/attachments', tags=['attachments'])
 EntityType = Literal['issue', 'comment', 'project', 'project-update', 'document']
 MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 
@@ -48,6 +51,7 @@ def _present(row: Any) -> dict[str, Any]:
 
 
 @router.get('')
+@public_router.get('')
 async def list_attachments(workspaceId: str = Query(min_length=1), entityType: EntityType = Query(), entityId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
     await _authorize_entity(db, workspaceId, entityType, entityId, user['id'])
     result = await db.execute(text('SELECT * FROM attachments WHERE workspace_id = :workspace_id AND entity_type = :entity_type AND entity_id = :entity_id ORDER BY created_at DESC'), {'workspace_id': workspaceId, 'entity_type': entityType, 'entity_id': entityId})
@@ -55,6 +59,7 @@ async def list_attachments(workspaceId: str = Query(min_length=1), entityType: E
 
 
 @router.post('')
+@public_router.post('')
 async def create_attachment(request: Request, workspaceId: str = Form(), entityType: EntityType = Form(), entityId: str = Form(), file: UploadFile = File(), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await _authorize_entity(db, workspaceId, entityType, entityId, user['id'])
     body = await file.read(MAX_ATTACHMENT_BYTES + 1)
@@ -74,6 +79,7 @@ async def create_attachment(request: Request, workspaceId: str = Form(), entityT
 
 
 @router.get('/{attachment_id}/download')
+@public_router.get('/{attachment_id}/download')
 async def download_attachment(attachment_id: str, request: Request, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)):
     result = await db.execute(text('SELECT * FROM attachments WHERE id = :attachment_id'), {'attachment_id': attachment_id})
     row = result.mappings().first()
