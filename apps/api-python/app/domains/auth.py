@@ -34,6 +34,24 @@ USER_COLUMNS = '''
 # ship that alias, so normalize it at the API boundary.
 TIMEZONE_ALIASES = {'Asia/Saigon': 'Asia/Ho_Chi_Minh'}
 
+# This is Circle's workflow catalog, kept server-side so a new workspace gets
+# the same statuses, ordering, and colors the untouched UI presents.
+DEFAULT_CIRCLE_ISSUE_STATUSES = (
+    ('In Progress', 'STARTED', '#facc15'),
+    ('Technical Review', 'STARTED', '#22c55e'),
+    ('Done', 'COMPLETED', '#5e6ad2'),
+    ('Paused', 'STARTED', '#26b5ce'),
+    ('Todo', 'UNSTARTED', '#99a2b2'),
+    ('Backlog', 'BACKLOG', '#95a2b3'),
+    ('Triage', 'TRIAGE', '#f2790f'),
+    ('Idea', 'BACKLOG', '#5e6ad2'),
+    ('Product Feedback', 'STARTED', '#f2994a'),
+    ('Blocked', 'STARTED', '#eb5757'),
+    ('Shipped', 'COMPLETED', '#4cb782'),
+    ('Canceled', 'CANCELED', '#95a2b3'),
+    ('Duplicate', 'CANCELED', '#95a2b3'),
+)
+
 
 class LoginInput(BaseModel):
     email: str = Field(max_length=320)
@@ -228,16 +246,7 @@ async def create_workspace_bootstrap(
         text("INSERT INTO team_members (team_id, user_id, role) VALUES (:team_id, :user_id, 'LEAD')"),
         {'team_id': team_id, 'user_id': user_id},
     )
-    for position, (status_name, category, color) in enumerate(
-        (
-            ('Triage', 'TRIAGE', '#94a3b8'),
-            ('Backlog', 'BACKLOG', '#64748b'),
-            ('Todo', 'UNSTARTED', '#94a3b8'),
-            ('In progress', 'STARTED', '#f59e0b'),
-            ('Done', 'COMPLETED', '#22c55e'),
-            ('Canceled', 'CANCELED', '#ef4444'),
-        )
-    ):
+    for position, (status_name, category, color) in enumerate(DEFAULT_CIRCLE_ISSUE_STATUSES):
         await db.execute(
             text(
                 '''

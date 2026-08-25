@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
 from ..db.session import get_session
-from .auth import _cuid, _utcnow, current_user
+from .auth import DEFAULT_CIRCLE_ISSUE_STATUSES, _cuid, _utcnow, current_user
 from .native_projects import _date, _team_access, _workspace_access
 from .teams import _manager
 
@@ -113,6 +113,56 @@ class UpdateIssueTemplateInput(BaseModel):
     projectId: str | None = None
     assigneeId: str | None = None
     labelIds: list[str] | None = Field(default=None, max_length=100)
+
+
+async def _ensure_circle_issue_statuses(db: AsyncSession, workspace_id: str) -> None:
+    """Bring pre-P6 workspaces onto the unchanged Circle workflow catalog."""
+    now = _utcnow()
+    for position, (name, category, color) in enumerate(DEFAULT_CIRCLE_ISSUE_STATUSES):
+        existing = await db.execute(
+            text(
+                '''SELECT id FROM issue_statuses
+                   WHERE workspace_id = :workspace_id AND team_id IS NULL
+                     AND lower(name) = lower(:name)
+                   ORDER BY created_at ASC LIMIT 1'''
+            ),
+            {'workspace_id': workspace_id, 'name': name},
+        )
+        status_id = existing.scalar_one_or_none()
+        if status_id:
+            await db.execute(
+                text(
+                    '''UPDATE issue_statuses
+                       SET name = :name, category = :category, color = :color,
+                           position = :position, updated_at = :now
+                       WHERE id = :id'''
+                ),
+                {
+                    'id': status_id,
+                    'name': name,
+                    'category': category,
+                    'color': color,
+                    'position': position,
+                    'now': now,
+                },
+            )
+            continue
+        await db.execute(
+            text(
+                '''INSERT INTO issue_statuses
+                   (id, workspace_id, name, category, color, position, created_at, updated_at)
+                   VALUES (:id, :workspace_id, :name, :category, :color, :position, :now, :now)'''
+            ),
+            {
+                'id': _cuid(),
+                'workspace_id': workspace_id,
+                'name': name,
+                'category': category,
+                'color': color,
+                'position': position,
+                'now': now,
+            },
+        )
 
 
 async def _issue_row(
@@ -411,6 +461,8 @@ async def issue_options(
     await _workspace_access(db, workspaceId, user['id'])
     if teamId:
         await _team_access(db, workspaceId, teamId, user['id'])
+    await _ensure_circle_issue_statuses(db, workspaceId)
+    await db.commit()
     team_filter = 'AND (team_id IS NULL OR team_id = :team_id)' if teamId else ''
     params = {'workspace_id': workspaceId, 'team_id': teamId}
     statuses, projects, members, labels, cycles = await db.execute(
