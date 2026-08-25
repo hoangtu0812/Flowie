@@ -85,6 +85,7 @@ export function CommandPalette() {
       addIssueLabel,
       removeIssueLabel,
       updateIssueProject,
+      updateIssueDueDate,
       updateIssue,
    } = useIssuesStore();
    const { openModal } = useCreateIssueStore();
@@ -657,9 +658,12 @@ export function CommandPalette() {
                            <CommandItem
                               key={label}
                               onSelect={() => {
-                                 updateIssue(issue.id, { dueDate: date });
-                                 toast.success(`Due date set to ${label.toLowerCase()}`);
-                                 close();
+                                 void updateIssueDueDate(issue.id, date).then((updated) => {
+                                    if (updated) {
+                                       toast.success(`Due date set to ${label.toLowerCase()}`);
+                                       close();
+                                    }
+                                 });
                               }}
                            >
                               <CalendarPlus className="text-muted-foreground" />
@@ -668,9 +672,12 @@ export function CommandPalette() {
                         ))}
                         <CommandItem
                            onSelect={() => {
-                              updateIssue(issue.id, { dueDate: undefined });
-                              toast.success('Due date cleared');
-                              close();
+                              void updateIssueDueDate(issue.id, undefined).then((updated) => {
+                                 if (updated) {
+                                    toast.success('Due date cleared');
+                                    close();
+                                 }
+                              });
                            }}
                         >
                            <CalendarPlus className="text-muted-foreground" />

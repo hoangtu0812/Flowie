@@ -54,7 +54,7 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       addIssueLabel,
       removeIssueLabel,
       updateIssueProject,
-      updateIssue,
+      updateIssueDueDate,
       getIssueById,
       members,
       labels,
@@ -113,12 +113,13 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       }
    };
 
-   const handleSetDueDate = () => {
+   const handleSetDueDate = async () => {
       if (!issueId) return;
       const dueDate = new Date();
       dueDate.setDate(dueDate.getDate() + 7);
-      updateIssue(issueId, { dueDate: dueDate.toISOString() });
-      toast.success('Due date set to 7 days from now');
+      if (await updateIssueDueDate(issueId, dueDate.toISOString())) {
+         toast.success('Due date set to 7 days from now');
+      }
    };
 
    const handleAddLink = () => {
@@ -262,7 +263,7 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                </ContextMenuSubContent>
             </ContextMenuSub>
 
-            <ContextMenuItem onClick={handleSetDueDate}>
+            <ContextMenuItem onClick={() => void handleSetDueDate()}>
                <CalendarClock className="size-4" /> Set due date...
                <ContextMenuShortcut>D</ContextMenuShortcut>
             </ContextMenuItem>

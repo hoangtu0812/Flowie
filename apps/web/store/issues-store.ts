@@ -189,6 +189,9 @@ interface IssuesState {
    // Project management
    updateIssueProject: (issueId: string, newProject: Project | undefined) => Promise<boolean>;
 
+   // Date management
+   updateIssueDueDate: (issueId: string, dueDate: string | undefined) => Promise<boolean>;
+
    // Utility functions
    getIssueById: (id: string) => Issue | undefined;
 }
@@ -594,6 +597,44 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
          return true;
       } catch (error) {
          toast.error(error instanceof Error ? error.message : 'Could not update issue project.');
+         return false;
+      }
+   },
+
+   // Date management
+   updateIssueDueDate: async (issueId: string, dueDate: string | undefined) => {
+      try {
+         const issue = get().getIssueById(issueId);
+         const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
+         if (!issue) {
+            toast.error('This issue is not ready yet.');
+            return false;
+         }
+         const response = await authenticatedFetch(
+            `${api}/issues/${issue.id}?${new URLSearchParams({ workspaceId })}`,
+            {
+               method: 'PATCH',
+               headers: { 'content-type': 'application/json' },
+               body: JSON.stringify({ dueDate: dueDate ?? null }),
+            }
+         );
+         if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as {
+               message?: string;
+            } | null;
+            throw new Error(payload?.message ?? 'Could not update issue due date.');
+         }
+         const payload = (await response.json()) as { data: NativeIssue };
+         const updatedIssue = asIssue(payload.data);
+         set((state) => {
+            const issues = state.issues.map((candidate) =>
+               candidate.id === issueId ? updatedIssue : candidate
+            );
+            return { issues, issuesByStatus: groupIssuesByStatus(issues) };
+         });
+         return true;
+      } catch (error) {
+         toast.error(error instanceof Error ? error.message : 'Could not update issue due date.');
          return false;
       }
    },

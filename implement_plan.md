@@ -449,6 +449,9 @@ Tiến độ thực hiện:
 - [x] P6w-label-management: chuyển Settings → Issue labels từ fixture sang Labels API Python;
   tạo/sửa/xóa label và label group có persistence, RBAC workspace administrator, issue count và
   last-applied thật. Layout bảng/toolbar Circle giữ nguyên; chỉ dialog được mở từ các nút sẵn có.
+- [x] P6x-due-date-mutation: các action Circle **Set due date** trong Issue context menu và Command
+  Palette gọi `PATCH /issues/{id}` Python; set/clear chỉ cập nhật UI sau response thành công và
+  survive refresh.
 
 Nghiệm thu:
 
@@ -647,6 +650,7 @@ Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modu
 | 2026-08-25 | P6u Circle Issue label mutation | current change-set | Issue option hydration now includes real labels; unchanged Circle context menu and command palette add/remove labels through Python `PATCH /issues/{id}` and refresh the returned Issue | Docker/browser acceptance of label add/remove + refresh | Rebuild web on 5G and test a real label |
 | 2026-08-25 | P6v Circle Issue project mutation | current change-set | Issue option hydration now includes real Projects; unchanged Circle context menu and command palette assign/remove Projects through Python `PATCH /issues/{id}` and refresh the returned Issue | Docker/browser acceptance of project change + refresh | Rebuild web on 5G and test a real Project |
 | 2026-08-25 | P6w Circle Issue label management | current change-set | Settings → Issue labels không còn `mock-data`; FastAPI Labels/Label groups CRUD giữ workspace RBAC, persisted count/last-applied. Nút Circle New label/New group nay mở dialog tạo record thật | Docker/browser acceptance create/edit/delete + Issue context menu hydration | Rebuild web, tạo label rồi mở Issue Labels để gán và refresh |
+| 2026-08-25 | P6x Circle Issue due date mutation | current change-set | Context menu và Command Palette giữ nguyên Circle controls, nhưng set/clear due date dùng Python `PATCH /issues/{id}` thay vì Zustand-only state | Docker/browser acceptance set, clear và refresh | Rebuild web, set due date rồi refresh và clear |
 | 2026-08-25 | P3d Circle Workspace UI cutover | `8a2ccd1` | Web build + FastAPI regression đạt; browser smoke ghi nhận `401 → /auth/refresh 200 → /workspaces/me 200`; switcher không còn hard-code workspace | Members presentation còn fixture; invite API native đã sẵn sàng | Tạo workspace đầu tiên rồi nối Members UI |
 | 2026-08-25 | P4d Circle Teams/Members UI cutover | current change-set | Web production build và Docker web build đạt; Team/Member list, tạo Team, invite, role và remove đều dùng Python API, không còn mock ở scope này | Cần một workspace có ít nhất hai tài khoản đã đăng ký để nghiệm thu UI thao tác thật | Người dùng tạo workspace, tạo Team và mời tài khoản Flowie thứ hai để test |
 | 2026-08-25 | P4e Join Team/Workspace | current change-set | Web production build đạt; Join Team và Workspace invitation đã có entry point trong UI gốc | Cần tài khoản thứ hai để xác nhận invitation/join thực tế | Rebuild Docker, sau đó nghiệm thu hai-account flow |
