@@ -170,8 +170,8 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
             if (team) query.set('teamId', team.id);
          }
          const [response, optionsResponse] = await Promise.all([
-            authenticatedFetch(`${api}/_native/issues?${query}`),
-            authenticatedFetch(`${api}/_native/issues/options?${query}`),
+            authenticatedFetch(`${api}/issues?${query}`),
+            authenticatedFetch(`${api}/issues/options?${query}`),
          ]);
          if (!response.ok || !optionsResponse.ok) throw new Error('Could not load issues.');
          const [payload, optionsPayload] = (await Promise.all([
