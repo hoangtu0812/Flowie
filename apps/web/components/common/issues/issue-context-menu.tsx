@@ -33,7 +33,6 @@ import {
    MessageSquare,
    Clipboard,
 } from 'lucide-react';
-import React, { useState } from 'react';
 import { useIssuesStore } from '@/store/issues-store';
 import { status } from '@/mock-data/status';
 import { priorities } from '@/mock-data/priorities';
@@ -44,9 +43,6 @@ interface IssueContextMenuProps {
 }
 
 export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
-   const [isSubscribed, setIsSubscribed] = useState(false);
-   const [isFavorite, setIsFavorite] = useState(false);
-
    const {
       updateIssueStatus,
       updateIssuePriority,
@@ -59,7 +55,12 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       members,
       labels,
       projects,
+      updateIssueSubscription,
+      updateIssueFavorite,
    } = useIssuesStore();
+   const issue = issueId ? getIssueById(issueId) : undefined;
+   const isSubscribed = issue?.isSubscribed ?? false;
+   const isFavorite = issue?.isFavorite ?? false;
 
    const handleStatusChange = (statusId: string) => {
       if (!issueId) return;
@@ -142,14 +143,20 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       toast.success('Issue moved');
    };
 
-   const handleSubscribe = () => {
-      setIsSubscribed(!isSubscribed);
-      toast.success(isSubscribed ? 'Unsubscribed from issue' : 'Subscribed to issue');
+   const handleSubscribe = async () => {
+      if (!issueId) return;
+      const subscribed = !isSubscribed;
+      if (await updateIssueSubscription(issueId, subscribed)) {
+         toast.success(subscribed ? 'Subscribed to issue' : 'Unsubscribed from issue');
+      }
    };
 
-   const handleFavorite = () => {
-      setIsFavorite(!isFavorite);
-      toast.success(isFavorite ? 'Removed from favorites' : 'Added to favorites');
+   const handleFavorite = async () => {
+      if (!issueId) return;
+      const favorited = !isFavorite;
+      if (await updateIssueFavorite(issueId, favorited)) {
+         toast.success(favorited ? 'Added to favorites' : 'Removed from favorites');
+      }
    };
 
    const handleCopy = () => {
@@ -328,12 +335,12 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
 
          <ContextMenuSeparator />
 
-         <ContextMenuItem onClick={handleSubscribe}>
+         <ContextMenuItem onClick={() => void handleSubscribe()}>
             <Bell className="size-4" /> {isSubscribed ? 'Unsubscribe' : 'Subscribe'}
             <ContextMenuShortcut>S</ContextMenuShortcut>
          </ContextMenuItem>
 
-         <ContextMenuItem onClick={handleFavorite}>
+         <ContextMenuItem onClick={() => void handleFavorite()}>
             <Star className="size-4" /> {isFavorite ? 'Unfavorite' : 'Favorite'}
             <ContextMenuShortcut>F</ContextMenuShortcut>
          </ContextMenuItem>

@@ -12,6 +12,14 @@ import { toast } from 'sonner';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
+declare module '@/mock-data/issues' {
+   interface Issue {
+      /** Personal state persisted for the current signed-in user. */
+      isSubscribed?: boolean;
+      isFavorite?: boolean;
+   }
+}
+
 type NativeIssue = {
    id: string;
    identifier: string;
@@ -26,6 +34,8 @@ type NativeIssue = {
    project?: { id: string; name: string } | null;
    labelLinks?: { label: LabelInterface }[];
    cycleLinks?: { cycleId: string }[];
+   subscribers?: { userId: string }[];
+   favorites?: { userId: string }[];
 };
 
 type NativeIssueStatus = {
@@ -120,6 +130,8 @@ function asIssue(native: NativeIssue): Issue {
       subissues: [],
       rank: native.updatedAt,
       dueDate: native.dueDate ?? undefined,
+      isSubscribed: (native.subscribers?.length ?? 0) > 0,
+      isFavorite: (native.favorites?.length ?? 0) > 0,
    };
 }
 
@@ -201,6 +213,10 @@ interface IssuesState {
 
    // Date management
    updateIssueDueDate: (issueId: string, dueDate: string | undefined) => Promise<boolean>;
+
+   // Personal issue state
+   updateIssueSubscription: (issueId: string, subscribed: boolean) => Promise<boolean>;
+   updateIssueFavorite: (issueId: string, favorited: boolean) => Promise<boolean>;
 
    // Utility functions
    getIssueById: (id: string) => Issue | undefined;
@@ -648,6 +664,62 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
          return true;
       } catch (error) {
          toast.error(error instanceof Error ? error.message : 'Could not update issue due date.');
+         return false;
+      }
+   },
+
+   updateIssueSubscription: async (issueId: string, subscribed: boolean) => {
+      try {
+         const issue = get().getIssueById(issueId);
+         const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
+         if (!issue) return false;
+         const response = await authenticatedFetch(
+            `${api}/issues/${issue.id}/subscribers/me?${new URLSearchParams({ workspaceId })}`,
+            { method: subscribed ? 'POST' : 'DELETE' }
+         );
+         if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as {
+               message?: string;
+            } | null;
+            throw new Error(payload?.message ?? 'Could not update issue subscription.');
+         }
+         set((state) => ({
+            issues: state.issues.map((candidate) =>
+               candidate.id === issueId ? { ...candidate, isSubscribed: subscribed } : candidate
+            ),
+         }));
+         return true;
+      } catch (error) {
+         toast.error(
+            error instanceof Error ? error.message : 'Could not update issue subscription.'
+         );
+         return false;
+      }
+   },
+
+   updateIssueFavorite: async (issueId: string, favorited: boolean) => {
+      try {
+         const issue = get().getIssueById(issueId);
+         const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
+         if (!issue) return false;
+         const response = await authenticatedFetch(
+            `${api}/issues/${issue.id}/favorite?${new URLSearchParams({ workspaceId })}`,
+            { method: favorited ? 'POST' : 'DELETE' }
+         );
+         if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as {
+               message?: string;
+            } | null;
+            throw new Error(payload?.message ?? 'Could not update issue favorite.');
+         }
+         set((state) => ({
+            issues: state.issues.map((candidate) =>
+               candidate.id === issueId ? { ...candidate, isFavorite: favorited } : candidate
+            ),
+         }));
+         return true;
+      } catch (error) {
+         toast.error(error instanceof Error ? error.message : 'Could not update issue favorite.');
          return false;
       }
    },
