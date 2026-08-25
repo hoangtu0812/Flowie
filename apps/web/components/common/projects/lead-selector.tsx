@@ -14,7 +14,7 @@ import type { User } from '@/types/users';
 import { CheckIcon } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useId, useState } from 'react';
-import type { ProjectListMember } from './projects';
+import type { ProjectListMember } from '@/features/projects/projects-data';
 
 interface LeadSelectorProps {
    lead: User;

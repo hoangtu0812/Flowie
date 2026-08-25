@@ -2,12 +2,12 @@
 
 import { useProjectsDisplayStore } from '@/store/projects-display-store';
 import ProjectLine from './project-line';
+import type { ProjectGroup } from './projects';
 import type {
-   ProjectGroup,
    ProjectListMember,
    ProjectListStatus,
    ProjectListUpdate,
-} from './projects';
+} from '@/features/projects/projects-data';
 
 /** Projects "List" view: grouped table (team sections by default). */
 export default function ProjectsList({

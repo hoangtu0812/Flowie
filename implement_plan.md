@@ -223,7 +223,12 @@ Tiến độ hiện tại:
 - [x] Kết quả baseline và thứ tự xử lý được lưu tại `docs/python-migration/ui-parity-baseline.md`.
 - [x] Project List không còn control gán label ngoài baseline; label vẫn được quản lý qua affordance
   Project Detail/Settings.
-- [ ] Khôi phục presentation theo baseline; bắt đầu bằng layout/header/sidebar và Project.
+- [x] Tách fetch, DTO mapper và mutation của Project List sang
+  `apps/web/features/projects/projects-data.tsx`; `projects.tsx` chỉ còn provider mỏng +
+  presentation Circle. Không còn error block riêng làm thay đổi bố cục; lỗi dùng toast toàn cục.
+- [x] Project List giữ nguyên cây bảng/nhóm/cột của Circle; các props cập nhật dữ liệu thật không
+  tạo DOM mới khi control đóng.
+- [ ] Khôi phục presentation theo baseline; tiếp tục layout/header/sidebar và Project Detail.
 - [ ] Chụp visual acceptance light/dark sau mỗi route hoàn thành.
 
 ### P2 — FastAPI foundation và legacy facade

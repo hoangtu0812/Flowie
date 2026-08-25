@@ -9,7 +9,11 @@ import { PrioritySelector } from './priority-selector';
 import { LeadSelector } from './lead-selector';
 import { StatusWithPercent } from './status-with-percent';
 import { DatePicker } from './date-picker';
-import type { ProjectListMember, ProjectListStatus, ProjectListUpdate } from './projects';
+import type {
+   ProjectListMember,
+   ProjectListStatus,
+   ProjectListUpdate,
+} from '@/features/projects/projects-data';
 
 interface ProjectLineProps {
    project: Project & { issueCount?: number };

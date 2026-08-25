@@ -1,20 +1,15 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { ProjectsDataProvider, useProjectsData } from '@/features/projects/projects-data';
 import { cn } from '@/lib/utils';
-import { health as healthOptions } from '@/lib/project-presentations';
 import type { Project } from '@/types/projects';
-import { priorities } from '@/lib/priority-presentations';
-import type { Status, StatusCategory } from '@/lib/status-presentations';
-import { Circle, CircleCheck, CircleDashed, CirclePlay, CircleX, FolderKanban } from 'lucide-react';
-import { createElement } from 'react';
 import { useProjectsFilterStore } from '@/store/projects-filter-store';
 import { useProjectsDisplayStore } from '@/store/projects-display-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { BarChart3 } from 'lucide-react';
 import { parseAsStringLiteral, useQueryState } from 'nuqs';
-import { useEffect, useMemo, useState } from 'react';
-import { loadCurrentWorkspace } from '@/lib/workspaces';
+import { useMemo } from 'react';
 import { Filter } from '@/components/layout/headers/projects/filter';
 import ProjectsBoard from './projects-board';
 import { ProjectsDisplayOptions } from './projects-display-options';
@@ -28,192 +23,6 @@ export interface ProjectGroup {
    icon?: string;
    projects: Project[];
 }
-
-type ApiProject = {
-   id: string;
-   name: string;
-   status: string;
-   priority: string;
-   health: string;
-   startDate: string | null;
-   targetDate: string | null;
-   createdAt: string;
-   teamId: string | null;
-   team: { id: string; name: string; icon: string | null } | null;
-   lead: { id: string; name: string; avatarUrl: string | null } | null;
-   labelLinks: Array<{ label: { id: string; name: string; color: string } }>;
-   issues: Array<{
-      id: string;
-      status: { category: string };
-      assignee: { id: string; name: string; avatarUrl: string | null } | null;
-   }>;
-   _count: { issues: number };
-   favorites?: Array<{ userId: string }>;
-};
-type ApiProjectStatus = {
-   id: string;
-   name: string;
-   category: 'backlog' | 'planned' | 'in-progress' | 'completed' | 'canceled';
-   color: string;
-};
-type ApiWorkspaceTeam = {
-   id: string;
-   identifier: string;
-   name: string;
-   icon: string | null;
-};
-
-export type ProjectListMember = {
-   id: string;
-   name: string;
-   avatarUrl: string | null;
-};
-
-export type ProjectListLabel = {
-   id: string;
-   name: string;
-   color: string;
-};
-
-export type ProjectListStatus = Status;
-
-export type ProjectListUpdate = {
-   leadId?: string | null;
-   priority?: string;
-   status?: string;
-   targetDate?: string | null;
-   labelIds?: string[];
-};
-
-const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
-
-const mapStatus = (value: string): ProjectListStatus => {
-   const normalized = value.trim().toLowerCase().replace(/_/g, '-');
-   const category =
-      normalized === 'completed' || normalized === 'done'
-         ? 'completed'
-         : normalized === 'canceled' || normalized === 'cancelled'
-           ? 'canceled'
-           : normalized === 'started' || normalized === 'in-progress' || normalized === 'active'
-             ? 'started'
-             : normalized === 'backlog'
-               ? 'backlog'
-               : 'unstarted';
-   const icon =
-      category === 'completed'
-         ? CircleCheck
-         : category === 'canceled'
-           ? CircleX
-           : category === 'started'
-             ? CirclePlay
-             : category === 'backlog'
-               ? CircleDashed
-               : Circle;
-   const color =
-      category === 'completed'
-         ? '#5e6ad2'
-         : category === 'canceled'
-           ? '#95a2b3'
-           : category === 'started'
-             ? '#facc15'
-             : category === 'backlog'
-               ? '#95a2b3'
-               : '#99a2b2';
-   return {
-      id: value,
-      name: value
-         .trim()
-         .replace(/[_-]+/g, ' ')
-         .replace(/\b\w/g, (character) => character.toUpperCase()),
-      color,
-      category: category as StatusCategory,
-      icon: () => createElement(icon, { className: 'size-4' }),
-   };
-};
-
-const uniqueProjectStatuses = (projects: ApiProject[]): ProjectListStatus[] =>
-   [
-      ...new Map(projects.map((project) => [project.status, mapStatus(project.status)])).values(),
-   ].sort((left, right) => left.name.localeCompare(right.name));
-
-const mapConfiguredStatus = (status: ApiProjectStatus): ProjectListStatus => {
-   const category: StatusCategory =
-      status.category === 'planned'
-         ? 'unstarted'
-         : status.category === 'in-progress'
-           ? 'started'
-           : status.category;
-   const Icon =
-      category === 'completed'
-         ? CircleCheck
-         : category === 'canceled'
-           ? CircleX
-           : category === 'started'
-             ? CirclePlay
-             : category === 'backlog'
-               ? CircleDashed
-               : Circle;
-   return {
-      id: status.name,
-      name: status.name
-         .replace(/[_-]+/g, ' ')
-         .replace(/\b\w/g, (character) => character.toUpperCase()),
-      color: status.color,
-      category,
-      icon: () => createElement(Icon, { className: 'size-4' }),
-   };
-};
-
-const mapProject = (project: ApiProject): Project & { issueCount: number } => {
-   const completed = project.issues.filter((issue) => issue.status.category === 'COMPLETED').length;
-   const lead = project.lead
-      ? {
-           id: project.lead.id,
-           name: project.lead.name,
-           avatarUrl: project.lead.avatarUrl ?? '',
-           email: '',
-           status: 'offline' as const,
-           role: 'Member' as const,
-           joinedDate: project.createdAt,
-           teamIds: [],
-           timezone: 'UTC',
-        }
-      : {
-           id: `unassigned-${project.id}`,
-           name: 'Unassigned',
-           avatarUrl: '',
-           email: '',
-           status: 'offline' as const,
-           role: 'Member' as const,
-           joinedDate: project.createdAt,
-           teamIds: [],
-           timezone: 'UTC',
-        };
-   const priority =
-      priorities.find(
-         (item) => item.id === (project.priority === 'none' ? 'no-priority' : project.priority)
-      ) ?? priorities[0];
-   const health = healthOptions.find((item) => item.id === project.health) ?? healthOptions[0];
-
-   return {
-      id: project.id,
-      name: project.name,
-      status: mapStatus(project.status),
-      icon: FolderKanban,
-      percentComplete: project.issues.length
-         ? Math.round((completed / project.issues.length) * 100)
-         : 0,
-      startDate: project.startDate ?? project.createdAt,
-      targetDate: project.targetDate ?? undefined,
-      lead,
-      priority,
-      health,
-      teamId: project.teamId ?? '',
-      labels: project.labelLinks.map((link) => link.label),
-      issueCount: project._count.issues,
-      isFavorite: Boolean(project.favorites?.length),
-   };
-};
 
 const TABS = ['all', 'active'] as const;
 
@@ -232,104 +41,29 @@ const CLOSED_CATEGORIES = new Set(['completed', 'canceled']);
  * options, views, insights) is scoped to that team's projects.
  */
 export default function Projects({ teamId }: { teamId?: string }) {
+   return (
+      <ProjectsDataProvider teamIdentifier={teamId}>
+         <ProjectsContent teamId={teamId} />
+      </ProjectsDataProvider>
+   );
+}
+
+function ProjectsContent({ teamId }: { teamId?: string }) {
    const { filters } = useProjectsFilterStore();
    const { viewTypes, grouping, ordering, closedProjects, showEmptyGroups } =
       useProjectsDisplayStore();
    const { openPanel, togglePanel } = useRightPanelStore();
    const [tab, setTab] = useQueryState('tab', parseAsStringLiteral(TABS).withDefault('all'));
-   const [allProjects, setAllProjects] = useState<Array<Project & { issueCount: number }>>([]);
-   const [teamGroups, setTeamGroups] = useState<Array<{ id: string; name: string; icon?: string }>>(
-      []
-   );
-   const [workspaceId, setWorkspaceId] = useState<string>();
-   const [resolvedTeamId, setResolvedTeamId] = useState<string>();
-   const [workspaceMembers, setWorkspaceMembers] = useState<ProjectListMember[]>([]);
-   const [projectStatuses, setProjectStatuses] = useState<ProjectListStatus[]>([]);
-   const [loadError, setLoadError] = useState<string>();
+   const {
+      allProjects,
+      teamGroups,
+      workspaceId,
+      resolvedTeamId,
+      workspaceMembers,
+      projectStatuses,
+      updateProject,
+   } = useProjectsData();
    const viewType = viewTypes[tab];
-
-   useEffect(() => {
-      void (async () => {
-         const workspaceId = (await loadCurrentWorkspace()).id;
-         const [response, membersResponse, statusesResponse, teamsResponse] = await Promise.all([
-            fetch(`${api}/projects?workspaceId=${workspaceId}`, { credentials: 'include' }),
-            fetch(`${api}/workspaces/${workspaceId}/members`, { credentials: 'include' }),
-            fetch(`${api}/projects/statuses?workspaceId=${workspaceId}`, {
-               credentials: 'include',
-            }),
-            fetch(`${api}/teams?workspaceId=${workspaceId}`, { credentials: 'include' }),
-         ]);
-         if (!response.ok || !membersResponse.ok || !statusesResponse.ok || !teamsResponse.ok)
-            throw new Error('Could not load projects.');
-         const payload = (await response.json()) as { data: ApiProject[] };
-         const membersPayload = (await membersResponse.json()) as {
-            data: Array<{
-               status: string;
-               user: { id: string; name: string; avatarUrl: string | null };
-            }>;
-         };
-         const statusesPayload = (await statusesResponse.json()) as { data: ApiProjectStatus[] };
-         const teamsPayload = (await teamsResponse.json()) as { data: ApiWorkspaceTeam[] };
-         setWorkspaceId(workspaceId);
-         setResolvedTeamId(
-            teamId
-               ? teamsPayload.data.find((team) => team.id === teamId || team.identifier === teamId)
-                    ?.id
-               : undefined
-         );
-         setWorkspaceMembers(
-            membersPayload.data
-               .filter((member) => member.status === 'ACTIVE')
-               .map((member) => member.user)
-         );
-         setAllProjects(payload.data.map(mapProject));
-         setProjectStatuses(
-            statusesPayload.data.length
-               ? statusesPayload.data.map(mapConfiguredStatus)
-               : uniqueProjectStatuses(payload.data)
-         );
-         setTeamGroups(
-            teamsPayload.data.map((team) => ({
-               id: team.id,
-               name: team.name,
-               icon: team.icon ?? undefined,
-            }))
-         );
-      })().catch((error: unknown) =>
-         setLoadError(error instanceof Error ? error.message : 'Could not load projects.')
-      );
-   }, [teamId]);
-
-   const updateProject = async (projectId: string, update: ProjectListUpdate) => {
-      if (!workspaceId) throw new Error('Workspace is not ready yet.');
-      setLoadError(undefined);
-      const response = await fetch(`${api}/projects/${projectId}?workspaceId=${workspaceId}`, {
-         method: 'PATCH',
-         headers: { 'Content-Type': 'application/json' },
-         credentials: 'include',
-         body: JSON.stringify(update),
-      });
-      if (!response.ok) {
-         const payload = (await response.json().catch(() => null)) as {
-            message?: string | string[];
-         } | null;
-         const message = Array.isArray(payload?.message)
-            ? payload.message.join(' ')
-            : (payload?.message ?? 'Could not update project.');
-         setLoadError(message);
-         throw new Error(message);
-      }
-      const payload = (await response.json()) as { data: ApiProject };
-      setProjectStatuses((statuses) => {
-         const updated = mapStatus(payload.data.status);
-         return statuses.some((status) => status.id === updated.id)
-            ? statuses
-            : [...statuses, updated].sort((left, right) => left.name.localeCompare(right.name));
-      });
-      setAllProjects((projects) =>
-         projects.map((project) => (project.id === projectId ? mapProject(payload.data) : project))
-      );
-   };
 
    const displayed = useMemo(() => {
       let list = allProjects.slice();
@@ -450,7 +184,6 @@ export default function Projects({ teamId }: { teamId?: string }) {
                </aside>
             )}
          </div>
-         {loadError && <p className="px-6 py-3 text-sm text-destructive">{loadError}</p>}
       </div>
    );
 }

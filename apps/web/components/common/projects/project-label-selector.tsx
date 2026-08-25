@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
-import type { ProjectListLabel } from './projects';
+import type { ProjectListLabel } from '@/features/projects/projects-data';
 
 interface ProjectLabelSelectorProps {
    labels: ProjectListLabel[];
