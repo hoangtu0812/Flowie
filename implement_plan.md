@@ -369,8 +369,13 @@ Tiến độ thực hiện:
   resource, members, milestones và favorite; các route chưa port tiếp tục facade. Màn hình Circle
   Projects và Team Projects đã đọc PostgreSQL thật; dialog Create project ghi record thật mà không
   thay layout/stylesheet baseline.
-- [ ] P5c: đối chiếu payload với adapter Circle, chuyển route public theo một lát cắt hoàn chỉnh,
-  sau đó mới yêu cầu người dùng kiểm tra UI light/dark.
+- [x] P5c-detail: nối nguyên cây Circle Project Overview, Activity và Issues với provider/adapter
+  dữ liệu thật; header, side panel, cycle breakdown, tiến độ và timeline không còn đọc `mock-data`
+  hay Zustand fixture. Activity post update ghi vào API/DB thật; các request chưa thuộc public
+  whitelist vẫn đi an toàn qua facade. Web production build và FastAPI regression đạt.
+- [ ] P5c-acceptance: người dùng tạo một Project trong workspace của mình, sau đó kiểm tra
+  Overview/Activity/Issues ở light và dark; ghi nhận bất kỳ lệch presentation nào trước khi P5 kết
+  thúc. Chỉ sau acceptance mới chuyển sang P6.
 
 Nghiệm thu:
 
@@ -559,6 +564,7 @@ Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modu
 | 2026-08-25 | P5b native Project collaboration data | `4211c89` | Docker regression: members, favorite/subscription, milestone CRUD, updates/resources/activity and Project detail hydration passed | Project settings/templates/custom fields, public payload parity, Issues/worker | P5c compare Circle adapter and public cutover |
 | 2026-08-25 | P5c pre-cutover Project contract | `1924448` | Docker parity audit: Legacy/Python Project create/get top-level và Team payload không có key thiếu/thừa | Route public, adapter Circle, settings/templates/custom fields, Issues/worker | Báo người dùng trước khi bắt đầu nối UI |
 | 2026-08-25 | P5c Circle Project list/create cutover | `ebf5bab` | Public API regression + browser: unchanged Circle layout, real empty workspace state, Create project dialog opens, no console errors; web build passed | Project detail page adapters, Issue/Activity read-side, settings routes | Nối Overview/Activity/Issues theo whitelist |
+| 2026-08-25 | P5c Circle Project detail cutover | `da19ae2` | Web production build, 4 FastAPI regression tests và Docker web rebuild/recreate đạt; Overview/Activity/Issues dùng provider + API adapter, không còn fixture data trong cây Project detail | Acceptance light/dark với workspace người dùng; endpoints P6/P7 chưa migrate vẫn facade | Người dùng tạo Project và kiểm tra ba tab |
 
 ## 13. Definition of Done toàn dự án
 
