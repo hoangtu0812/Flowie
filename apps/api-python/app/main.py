@@ -23,6 +23,7 @@ from .domains.native_issues import public_router as issues_router
 from .domains.native_issues import router as native_issues_router
 from .domains.native_projects import public_router as projects_router
 from .domains.native_projects import router as native_projects_router
+from .domains.labels import router as labels_router
 from .domains.teams import router as teams_router
 from .domains.users import router as users_router
 from .domains.workspaces import router as workspaces_router
@@ -78,6 +79,7 @@ def create_app(
     app.include_router(issues_router)
     app.include_router(native_projects_router)
     app.include_router(projects_router)
+    app.include_router(labels_router)
     app.include_router(teams_router)
     app.include_router(users_router)
     app.include_router(workspaces_router)
