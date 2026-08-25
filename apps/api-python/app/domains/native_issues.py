@@ -12,6 +12,7 @@ from ..core.errors import ApiError
 from ..db.session import get_session
 from .auth import _cuid, _utcnow, current_user
 from .native_projects import _date, _team_access, _workspace_access
+from .teams import _manager
 
 
 # Issues stay under a private prefix until their public response contract and
@@ -76,6 +77,31 @@ class ClassifyIssueInput(BaseModel):
     workspaceId: str = Field(min_length=1)
     resolution: Literal['DUPLICATE', 'WONT_FIX']
     duplicateOfIdentifier: str | None = Field(default=None, max_length=100)
+
+
+class CreateIssueTemplateInput(BaseModel):
+    workspaceId: str = Field(min_length=1)
+    name: str = Field(min_length=2, max_length=120)
+    description: str | None = Field(default=None, max_length=500)
+    title: str = Field(min_length=2, max_length=500)
+    issueDescription: str | None = Field(default=None, max_length=10_000)
+    statusId: str | None = None
+    priority: IssuePriority = 'NONE'
+    projectId: str | None = None
+    assigneeId: str | None = None
+    labelIds: list[str] | None = Field(default=None, max_length=100)
+
+
+class UpdateIssueTemplateInput(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    description: str | None = Field(default=None, max_length=500)
+    title: str | None = Field(default=None, min_length=2, max_length=500)
+    issueDescription: str | None = Field(default=None, max_length=10_000)
+    statusId: str | None = None
+    priority: IssuePriority | None = None
+    projectId: str | None = None
+    assigneeId: str | None = None
+    labelIds: list[str] | None = Field(default=None, max_length=100)
 
 
 async def _issue_row(
@@ -246,6 +272,43 @@ async def _validate_release_ids(
     if len(releases.mappings().all()) != len(unique_ids):
         raise ApiError(404, 'One or more releases were not found.', 'Not Found')
     return unique_ids
+
+
+async def _validate_template_references(
+    db: AsyncSession, workspace_id: str, values: dict[str, Any]
+) -> None:
+    if values.get('statusId'):
+        status = await db.execute(text('SELECT 1 FROM issue_statuses WHERE id = :id AND workspace_id = :workspace_id'), {'id': values['statusId'], 'workspace_id': workspace_id})
+        if status.scalar_one_or_none() is None:
+            raise ApiError(404, 'Issue status not found.', 'Not Found')
+    if values.get('projectId'):
+        project = await db.execute(text('SELECT 1 FROM projects WHERE id = :id AND workspace_id = :workspace_id AND archived_at IS NULL'), {'id': values['projectId'], 'workspace_id': workspace_id})
+        if project.scalar_one_or_none() is None:
+            raise ApiError(404, 'Project not found.', 'Not Found')
+    if values.get('assigneeId'):
+        member = await db.execute(text("SELECT 1 FROM workspace_members WHERE workspace_id = :workspace_id AND user_id = :id AND status = 'ACTIVE'"), {'id': values['assigneeId'], 'workspace_id': workspace_id})
+        if member.scalar_one_or_none() is None:
+            raise ApiError(404, 'Assignee is not a workspace member.', 'Not Found')
+    if 'labelIds' in values:
+        label_ids = list(dict.fromkeys(values['labelIds'] or []))
+        if label_ids:
+            labels = await db.execute(text('SELECT id FROM labels WHERE workspace_id = :workspace_id AND id = ANY(:ids)'), {'workspace_id': workspace_id, 'ids': label_ids})
+            if len(labels.mappings().all()) != len(label_ids):
+                raise ApiError(404, 'One or more labels were not found.', 'Not Found')
+        values['labelIds'] = label_ids
+
+
+def _template(row: Any) -> dict[str, Any]:
+    return {
+        'id': row['id'], 'workspaceId': row['workspace_id'], 'name': row['name'],
+        'description': row['description'], 'title': row['title'],
+        'issueDescription': row['issue_description'], 'statusId': row['status_id'],
+        'priority': row['priority'], 'projectId': row['project_id'],
+        'assigneeId': row['assignee_id'], 'labelIds': row['label_ids'] or [],
+        'createdById': row['created_by'], 'createdAt': row['created_at'],
+        'updatedAt': row['updated_at'],
+        'createdBy': {'id': row['creator_id'], 'name': row['creator_name'], 'avatarUrl': row['creator_avatar_url']},
+    }
 
 
 async def _write_activity(
@@ -432,6 +495,113 @@ async def create_issue(
         })
     await db.commit()
     return {'data': await _issue_row(db, issue_id, payload.workspaceId, user['id'])}
+
+
+async def _template_row(db: AsyncSession, template_id: str, workspace_id: str) -> Any | None:
+    result = await db.execute(
+        text(
+            '''SELECT template.*, creator.id AS creator_id, creator.name AS creator_name,
+                      creator.avatar_url AS creator_avatar_url
+               FROM issue_templates template
+               JOIN users creator ON creator.id = template.created_by
+               WHERE template.id = :template_id AND template.workspace_id = :workspace_id
+               LIMIT 1'''
+        ),
+        {'template_id': template_id, 'workspace_id': workspace_id},
+    )
+    return result.mappings().first()
+
+
+@router.get('/templates')
+async def list_issue_templates(
+    workspaceId: str = Query(min_length=1),
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, list[dict[str, Any]]]:
+    await _workspace_access(db, workspaceId, user['id'])
+    result = await db.execute(
+        text(
+            '''SELECT template.*, creator.id AS creator_id, creator.name AS creator_name,
+                      creator.avatar_url AS creator_avatar_url
+               FROM issue_templates template
+               JOIN users creator ON creator.id = template.created_by
+               WHERE template.workspace_id = :workspace_id
+               ORDER BY template.name'''
+        ),
+        {'workspace_id': workspaceId},
+    )
+    return {'data': [_template(row) for row in result.mappings().all()]}
+
+
+@router.post('/templates')
+async def create_issue_template(
+    payload: CreateIssueTemplateInput,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    await _manager(db, payload.workspaceId, user['id'])
+    values = payload.model_dump()
+    await _validate_template_references(db, payload.workspaceId, values)
+    template_id, now = _cuid(), _utcnow()
+    await db.execute(
+        text(
+            '''INSERT INTO issue_templates
+               (id, workspace_id, name, description, title, issue_description, status_id,
+                priority, project_id, assignee_id, label_ids, created_by, created_at, updated_at)
+               VALUES (:id, :workspace_id, :name, :description, :title, :issue_description, :status_id,
+                :priority, :project_id, :assignee_id, :label_ids, :created_by, :now, :now)'''
+        ),
+        {
+            'id': template_id, 'workspace_id': payload.workspaceId,
+            'name': payload.name.strip(), 'description': values.get('description'),
+            'title': payload.title.strip(), 'issue_description': values.get('issueDescription'),
+            'status_id': values.get('statusId'), 'priority': values['priority'],
+            'project_id': values.get('projectId'), 'assignee_id': values.get('assigneeId'),
+            'label_ids': values.get('labelIds') or [], 'created_by': user['id'], 'now': now,
+        },
+    )
+    await db.commit()
+    return {'data': _template(await _template_row(db, template_id, payload.workspaceId))}
+
+
+@router.patch('/templates/{template_id}')
+async def update_issue_template(
+    template_id: str,
+    payload: UpdateIssueTemplateInput,
+    workspaceId: str = Query(min_length=1),
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    await _manager(db, workspaceId, user['id'])
+    if not await _template_row(db, template_id, workspaceId):
+        raise ApiError(404, 'Issue template not found.', 'Not Found')
+    values = payload.model_dump(exclude_unset=True)
+    await _validate_template_references(db, workspaceId, values)
+    columns = {'name': 'name', 'description': 'description', 'title': 'title', 'issueDescription': 'issue_description', 'statusId': 'status_id', 'priority': 'priority', 'projectId': 'project_id', 'assigneeId': 'assignee_id', 'labelIds': 'label_ids'}
+    sets, params = [], {'template_id': template_id, 'workspace_id': workspaceId, 'now': _utcnow()}
+    for field, column in columns.items():
+        if field in values:
+            params[field] = values[field].strip() if field in {'name', 'title'} and values[field] else values[field]
+            sets.append(f'{column} = :{field}')
+    if sets:
+        await db.execute(text(f"UPDATE issue_templates SET {', '.join(sets)}, updated_at = :now WHERE id = :template_id AND workspace_id = :workspace_id"), params)
+        await db.commit()
+    return {'data': _template(await _template_row(db, template_id, workspaceId))}
+
+
+@router.delete('/templates/{template_id}')
+async def delete_issue_template(
+    template_id: str,
+    workspaceId: str = Query(min_length=1),
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    await _manager(db, workspaceId, user['id'])
+    result = await db.execute(text('DELETE FROM issue_templates WHERE id = :template_id AND workspace_id = :workspace_id RETURNING id'), {'template_id': template_id, 'workspace_id': workspaceId})
+    if result.scalar_one_or_none() is None:
+        raise ApiError(404, 'Issue template not found.', 'Not Found')
+    await db.commit()
+    return {'data': {'id': template_id, 'deleted': True}}
 
 
 @router.get('/{issue_id}/sub-issues')
