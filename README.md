@@ -1,5 +1,8 @@
 # Flowie
 
+> Agent tiếp quản phải đọc [`implement_plan.md`](implement_plan.md). Các handoff/audit cũ đã được
+> lưu tại `docs/history` và không còn là nguồn trạng thái hiện hành.
+
 Flowie evolves the Circle UI foundation into a full project-management application.
 The frontend stays in `apps/web`; the API, worker and shared packages are introduced
 as a pnpm workspace.
