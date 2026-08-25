@@ -757,11 +757,20 @@ async def unfavorite(project_id: str, workspaceId: str = Query(min_length=1), us
     return {'data': {'favorite': False, 'favoritedAt': None}}
 
 
+def _milestone(row: Any) -> dict[str, Any]:
+    return {
+        'id': row['id'], 'workspaceId': row['workspace_id'], 'projectId': row['project_id'],
+        'title': row['title'], 'description': row['description'], 'targetDate': row['target_date'],
+        'position': row['position'], 'completedAt': row['completed_at'],
+        'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
+    }
+
+
 @router.get('/{project_id}/milestones')
 async def list_milestones(project_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
     await _project(db, project_id, workspaceId, user['id'])
     result = await db.execute(text('SELECT * FROM project_milestones WHERE project_id = :project_id AND workspace_id = :workspace_id ORDER BY position, target_date'), {'project_id': project_id, 'workspace_id': workspaceId})
-    return {'data': [dict(row) for row in result.mappings().all()]}
+    return {'data': [_milestone(row) for row in result.mappings().all()]}
 
 
 @router.post('/{project_id}/milestones')
@@ -771,7 +780,7 @@ async def create_milestone(project_id: str, payload: MilestoneInput, user: Any =
     await db.execute(text('''INSERT INTO project_milestones (id, workspace_id, project_id, title, description, target_date, position, created_at, updated_at) VALUES (:id, :workspace_id, :project_id, :title, :description, :target_date, :position, :now, :now)'''), {'id': milestone_id, 'workspace_id': payload.workspaceId, 'project_id': project_id, 'title': payload.title.strip(), 'description': payload.description, 'target_date': _date(payload.targetDate), 'position': payload.position or 0, 'now': now})
     await db.commit()
     result = await db.execute(text('SELECT * FROM project_milestones WHERE id = :id'), {'id': milestone_id})
-    return {'data': dict(result.mappings().one())}
+    return {'data': _milestone(result.mappings().one())}
 
 
 @router.patch('/{project_id}/milestones/{milestone_id}')
@@ -787,7 +796,7 @@ async def update_milestone(project_id: str, milestone_id: str, payload: UpdateMi
     if 'completed' in values: params['completedAt'] = _utcnow() if values['completed'] else None; sets.append('completed_at = :completedAt')
     if sets: await db.execute(text(f"UPDATE project_milestones SET {', '.join(sets)}, updated_at = :now WHERE id = :id"), params); await db.commit()
     result = await db.execute(text('SELECT * FROM project_milestones WHERE id = :id'), {'id': milestone_id})
-    return {'data': dict(result.mappings().one())}
+    return {'data': _milestone(result.mappings().one())}
 
 
 @router.delete('/{project_id}/milestones/{milestone_id}')

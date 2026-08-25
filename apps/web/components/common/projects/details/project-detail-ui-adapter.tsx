@@ -6,7 +6,7 @@ import { priorities } from '@/lib/priority-presentations';
 import { health as projectHealth } from '@/lib/project-presentations';
 import type { Project } from '@/types/projects';
 import type { ProjectDetail, ProjectUpdateHealth } from '@/types/project-details';
-import type { Status, StatusCategory } from '@/lib/status-presentations';
+import { status as circleStatuses, type Status, type StatusCategory } from '@/lib/status-presentations';
 import type { User } from '@/types/users';
 import { Circle, CircleCheck, CircleDashed, CirclePlay, CircleX, FolderKanban } from 'lucide-react';
 import { createElement } from 'react';
@@ -44,6 +44,11 @@ const statusCategory = (value: string): StatusCategory => {
 };
 
 export const projectStatusPresentation = (name: string, category?: string): Status => {
+   const normalizedName = name.trim().toLowerCase().replace(/[ _]+/g, '-');
+   const circleStatus = circleStatuses.find(
+      (item) => item.id === normalizedName || item.name.toLowerCase() === name.trim().toLowerCase()
+   );
+   if (circleStatus) return { ...circleStatus, id: name };
    const mappedCategory = statusCategory(category ?? name);
    const Icon =
       mappedCategory === 'completed'
@@ -169,7 +174,7 @@ export function toProjectUi(
                priority.id === (project.priority === 'none' ? 'no-priority' : project.priority)
          ) ?? priorities[0],
       health: projectHealth.find((health) => health.id === project.health) ?? projectHealth[0],
-      teamId: project.team?.identifier ?? '',
+      teamId: project.team?.id ?? '',
       team: project.team,
       members: project.members,
       labels: project.labelLinks.map((link) => link.label),

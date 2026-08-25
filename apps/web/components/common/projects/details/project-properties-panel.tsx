@@ -2,15 +2,22 @@
 
 import { CapacityRing } from '@/components/common/cycles/capacity-ring';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PanelFilterTarget, usePanelFilter } from '@/components/common/issues/use-panel-filter';
+import { priorities } from '@/lib/priority-presentations';
 import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { ProjectProgressChart } from './project-progress-chart';
 import type { ProjectDetailUiIssue, ProjectDetailUiProject } from './project-detail-ui-adapter';
 import type { ProjectDetail } from '@/types/project-details';
 import { ArrowRight, Calendar, Check, Compass, Plus, Slack, Tag, UserPlus } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { useLiveProjectData } from './use-live-project';
 
 interface ProjectPropertiesPanelProps {
    project: ProjectDetailUiProject;
@@ -106,13 +113,96 @@ function PropertyRow({ label, children }: { label: string; children: React.React
    );
 }
 
+type Editor = 'status' | 'priority' | 'lead' | 'members' | 'dates' | 'team' | 'initiatives' | 'labels' | 'milestone' | null;
+
 /**
  * Right-side panel of the project pages: properties, milestones,
  * progress breakdowns and a compact activity feed.
  */
 export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPropertiesPanelProps) {
    const panelFilter = usePanelFilter();
+   const {
+      availableLabels,
+      availableInitiatives,
+      availableStatuses,
+      availableMembers,
+      availableTeams,
+      updateProject,
+      updateLabels,
+      updateInitiatives,
+      updateMembers,
+      createMilestone,
+      toggleMilestone,
+   } = useLiveProjectData();
+   const [editor, setEditor] = useState<Editor>(null);
+   const [saving, setSaving] = useState(false);
+   const [status, setStatus] = useState(project.status.id);
+   const [priority, setPriority] = useState(project.priority.id);
+   const [leadId, setLeadId] = useState(project.lead.id === 'unassigned' ? '' : project.lead.id);
+   const [memberIds, setMemberIds] = useState<string[]>(project.members.map((member) => member.user.id));
+   const [startDate, setStartDate] = useState(project.persistedStartDate?.slice(0, 10) ?? '');
+   const [targetDate, setTargetDate] = useState(project.targetDate?.slice(0, 10) ?? '');
+   const [teamId, setTeamId] = useState(project.team?.id ?? '');
+   const [initiativeIds, setInitiativeIds] = useState(
+      project.initiative ? availableInitiatives.filter((initiative) => initiative.name === project.initiative).map((initiative) => initiative.id) : []
+   );
+   const [labelIds, setLabelIds] = useState(project.labels.map((label) => label.id));
+   const [milestoneTitle, setMilestoneTitle] = useState('');
+   const [milestoneDate, setMilestoneDate] = useState('');
    const completed = issues.filter(isCompleted).length;
+
+   const openEditor = (next: Exclude<Editor, null>) => {
+      if (next === 'status') setStatus(project.status.id);
+      if (next === 'priority') setPriority(project.priority.id);
+      if (next === 'lead') setLeadId(project.lead.id === 'unassigned' ? '' : project.lead.id);
+      if (next === 'members') setMemberIds(project.members.map((member) => member.user.id));
+      if (next === 'dates') {
+         setStartDate(project.persistedStartDate?.slice(0, 10) ?? '');
+         setTargetDate(project.targetDate?.slice(0, 10) ?? '');
+      }
+      if (next === 'team') setTeamId(project.team?.id ?? '');
+      if (next === 'initiatives') {
+         setInitiativeIds(
+            availableInitiatives
+               .filter((initiative) => initiative.name === project.initiative)
+               .map((initiative) => initiative.id)
+         );
+      }
+      if (next === 'labels') setLabelIds(project.labels.map((label) => label.id));
+      if (next === 'milestone') {
+         setMilestoneTitle('');
+         setMilestoneDate('');
+      }
+      setEditor(next);
+   };
+
+   const toggleSelection = (value: string, current: string[], setCurrent: (next: string[]) => void) => {
+      setCurrent(current.includes(value) ? current.filter((item) => item !== value) : [...current, value]);
+   };
+
+   const save = async () => {
+      if (!editor) return;
+      setSaving(true);
+      try {
+         if (editor === 'status') await updateProject({ status });
+         if (editor === 'priority') await updateProject({ priority });
+         if (editor === 'lead') await updateProject({ leadId: leadId === 'unassigned' ? null : leadId || null });
+         if (editor === 'members') await updateMembers(memberIds);
+         if (editor === 'dates') await updateProject({ startDate: startDate || null, targetDate: targetDate || null });
+         if (editor === 'team') await updateProject({ teamId: teamId === 'unassigned' ? null : teamId || null });
+         if (editor === 'initiatives') await updateInitiatives(initiativeIds);
+         if (editor === 'labels') await updateLabels(labelIds);
+         if (editor === 'milestone') {
+            if (!milestoneTitle.trim()) throw new Error('Milestone name is required.');
+            await createMilestone(milestoneTitle, milestoneDate || undefined);
+         }
+         setEditor(null);
+      } catch (caught) {
+         toast.error(caught instanceof Error ? caught.message : 'Could not save project changes.');
+      } finally {
+         setSaving(false);
+      }
+   };
 
    const team = project.team;
 
@@ -196,29 +286,37 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
    );
 
    return (
+      <>
       <div className="flex flex-col h-full w-full overflow-y-auto">
          {/* Properties */}
          <div className="px-5 pt-4 pb-4 border-b">
             <h3 className="text-sm font-medium mb-2.5">Properties</h3>
             <div className="flex flex-col gap-1">
                <PropertyRow label="Status">
-                  <project.status.icon />
-                  <span>{project.status.name}</span>
+                  <button type="button" onClick={() => openEditor('status')} className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors">
+                     <project.status.icon />
+                     <span>{project.status.name}</span>
+                  </button>
                </PropertyRow>
                <PropertyRow label="Priority">
-                  <project.priority.icon className="size-3.5 text-muted-foreground" />
-                  <span>{project.priority.name}</span>
+                  <button type="button" onClick={() => openEditor('priority')} className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors">
+                     <project.priority.icon className="size-3.5 text-muted-foreground" />
+                     <span>{project.priority.name}</span>
+                  </button>
                </PropertyRow>
                <PropertyRow label="Lead">
-                  <Avatar className="size-5">
-                     <AvatarImage src={project.lead.avatarUrl} alt={project.lead.name} />
-                     <AvatarFallback>{project.lead.name[0]}</AvatarFallback>
-                  </Avatar>
-                  <span className="truncate max-w-36">{project.lead.name}</span>
+                  <button type="button" onClick={() => openEditor('lead')} className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors">
+                     <Avatar className="size-5">
+                        <AvatarImage src={project.lead.avatarUrl} alt={project.lead.name} />
+                        <AvatarFallback>{project.lead.name[0]}</AvatarFallback>
+                     </Avatar>
+                     <span className="truncate max-w-36">{project.lead.name}</span>
+                  </button>
                </PropertyRow>
                <PropertyRow label="Members">
-                  {members.length > 0 ? (
-                     <span className="inline-flex items-center gap-1.5">
+                  <button type="button" onClick={() => openEditor('members')} className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors">
+                     {members.length > 0 ? (
+                        <>
                         <span className="flex -space-x-1.5">
                            {members.slice(0, 3).map((member) => (
                               <Avatar key={member.id} className="size-5 border-2 border-container">
@@ -228,29 +326,26 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
                            ))}
                         </span>
                         {members.length} {members.length === 1 ? 'member' : 'members'}
-                     </span>
-                  ) : (
-                     <button className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors">
+                        </>
+                     ) : (
+                        <>
                         <UserPlus className="size-3.5" />
                         Add members
-                     </button>
-                  )}
+                        </>
+                     )}
+                  </button>
                </PropertyRow>
                <PropertyRow label="Dates">
-                  <span className="inline-flex items-center gap-1">
-                     <Calendar className="size-3.5 text-muted-foreground" />
-                     {formatDay(project.startDate)}
-                  </span>
-                  <ArrowRight className="size-3 text-muted-foreground" />
-                  <span className="inline-flex items-center gap-1">
-                     <Calendar className="size-3.5 text-muted-foreground" />
-                     {project.targetDate ? formatDay(project.targetDate) : 'Target'}
-                  </span>
+                  <button type="button" onClick={() => openEditor('dates')} className="inline-flex items-center gap-1 hover:text-foreground transition-colors">
+                     <span className="inline-flex items-center gap-1"><Calendar className="size-3.5 text-muted-foreground" />{formatDay(project.startDate)}</span>
+                     <ArrowRight className="size-3 text-muted-foreground" />
+                     <span className="inline-flex items-center gap-1"><Calendar className="size-3.5 text-muted-foreground" />{project.targetDate ? formatDay(project.targetDate) : 'Target'}</span>
+                  </button>
                </PropertyRow>
                <PropertyRow label="Teams">
-                  <span className="inline-flex items-center gap-1.5">
+                  <button type="button" onClick={() => openEditor('team')} className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors">
                      {team?.icon} {team?.name ?? project.teamId}
-                  </span>
+                  </button>
                </PropertyRow>
                <PropertyRow label="Slack">
                   <button className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors">
@@ -259,17 +354,19 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
                   </button>
                </PropertyRow>
                <PropertyRow label="Initiatives">
-                  {project.initiative ? (
-                     <span className="truncate max-w-44">{project.initiative}</span>
-                  ) : (
-                     <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                  <button type="button" onClick={() => openEditor('initiatives')} className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors">
+                     {project.initiative ? (
+                        <span className="truncate max-w-44">{project.initiative}</span>
+                     ) : (
+                        <>
                         <Compass className="size-3.5" />
                         No initiative
-                     </span>
-                  )}
+                        </>
+                     )}
+                  </button>
                </PropertyRow>
                <PropertyRow label="Labels">
-                  <div className="flex items-center gap-1.5">
+                  <button type="button" onClick={() => openEditor('labels')} className="flex items-center gap-1.5 hover:text-foreground transition-colors">
                      {project.labels.length === 0 && (
                         <span className="inline-flex items-center gap-1.5 text-muted-foreground">
                            <Tag className="size-3.5" />
@@ -288,10 +385,8 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
                            {label.name}
                         </span>
                      ))}
-                     <button className="text-muted-foreground hover:text-foreground transition-colors">
-                        <Plus className="size-3.5" />
-                     </button>
-                  </div>
+                     <Plus className="size-3.5 text-muted-foreground" />
+                  </button>
                </PropertyRow>
             </div>
          </div>
@@ -300,7 +395,7 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
          <div className="px-5 py-4 border-b">
             <div className="flex items-center justify-between mb-2">
                <h3 className="text-sm font-medium">Milestones</h3>
-               <button className="text-muted-foreground hover:text-foreground transition-colors">
+               <button type="button" onClick={() => openEditor('milestone')} className="text-muted-foreground hover:text-foreground transition-colors">
                   <Plus className="size-3.5" />
                </button>
             </div>
@@ -312,9 +407,11 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
             ) : (
                <div className="flex flex-col gap-1.5">
                   {detail.milestones.map((milestone) => (
-                     <div
+                     <button
+                        type="button"
+                        onClick={() => void toggleMilestone(milestone.id, !milestone.completed).catch((caught) => toast.error(caught instanceof Error ? caught.message : 'Could not update milestone.'))}
                         key={milestone.id}
-                        className="flex items-center justify-between gap-2 text-sm"
+                        className="flex items-center justify-between gap-2 text-sm text-left hover:text-foreground transition-colors"
                      >
                         <span className="flex items-center gap-2 min-w-0">
                            <span
@@ -339,7 +436,7 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
                         <span className="text-xs text-muted-foreground whitespace-nowrap">
                            {formatDay(milestone.targetDate)}
                         </span>
-                     </div>
+                     </button>
                   ))}
                </div>
             )}
@@ -428,5 +525,60 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
             </div>
          </div>
       </div>
+      <Dialog open={editor !== null} onOpenChange={(open) => !saving && !open && setEditor(null)}>
+         <DialogContent>
+            <DialogHeader>
+               <DialogTitle>
+                  {editor === 'status' ? 'Set project status' : editor === 'priority' ? 'Set project priority' : editor === 'lead' ? 'Set project lead' : editor === 'members' ? 'Manage project members' : editor === 'dates' ? 'Set project dates' : editor === 'team' ? 'Set project team' : editor === 'initiatives' ? 'Link initiatives' : editor === 'labels' ? 'Manage project labels' : 'Create milestone'}
+               </DialogTitle>
+            </DialogHeader>
+            {editor === 'status' && (
+               <Select value={status} onValueChange={setStatus}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{availableStatuses.map((option) => <SelectItem key={option.id} value={option.name}>{option.name}</SelectItem>)}</SelectContent>
+               </Select>
+            )}
+            {editor === 'priority' && (
+               <Select value={priority} onValueChange={setPriority}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{priorities.map((option) => <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>)}</SelectContent>
+               </Select>
+            )}
+            {editor === 'lead' && (
+               <Select value={leadId} onValueChange={setLeadId}>
+                  <SelectTrigger><SelectValue placeholder="No lead" /></SelectTrigger>
+                  <SelectContent><SelectItem value="unassigned">No lead</SelectItem>{availableMembers.map((member) => <SelectItem key={member.userId} value={member.userId}>{member.user.name}</SelectItem>)}</SelectContent>
+               </Select>
+            )}
+            {editor === 'members' && (
+               <div className="max-h-72 overflow-y-auto space-y-1">
+                  {availableMembers.map((member) => {
+                     const selected = memberIds.includes(member.userId);
+                     return <button key={member.userId} type="button" onClick={() => toggleSelection(member.userId, memberIds, setMemberIds)} className={cn('w-full flex items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-accent', selected && 'bg-accent')}><Avatar className="size-5"><AvatarImage src={member.user.avatarUrl ?? undefined} alt={member.user.name} /><AvatarFallback>{member.user.name[0]}</AvatarFallback></Avatar><span className="flex-1 text-sm">{member.user.name}</span>{selected && <Check className="size-4" />}</button>;
+                  })}
+               </div>
+            )}
+            {editor === 'dates' && (
+               <div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><label className="text-sm font-medium" htmlFor="project-start-date">Start date</label><Input id="project-start-date" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></div><div className="space-y-1.5"><label className="text-sm font-medium" htmlFor="project-target-date">Target date</label><Input id="project-target-date" type="date" value={targetDate} onChange={(event) => setTargetDate(event.target.value)} /></div></div>
+            )}
+            {editor === 'team' && (
+               <Select value={teamId} onValueChange={setTeamId}>
+                  <SelectTrigger><SelectValue placeholder="No team" /></SelectTrigger>
+                  <SelectContent><SelectItem value="unassigned">No team</SelectItem>{availableTeams.map((option) => <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>)}</SelectContent>
+               </Select>
+            )}
+            {editor === 'initiatives' && (
+               <div className="max-h-72 overflow-y-auto space-y-1">{availableInitiatives.map((initiative) => { const selected = initiativeIds.includes(initiative.id); return <button key={initiative.id} type="button" onClick={() => toggleSelection(initiative.id, initiativeIds, setInitiativeIds)} className={cn('w-full flex items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-accent', selected && 'bg-accent')}><span className="flex-1 text-sm">{initiative.name}</span>{selected && <Check className="size-4" />}</button>; })}</div>
+            )}
+            {editor === 'labels' && (
+               <div className="max-h-72 overflow-y-auto space-y-1">{availableLabels.map((label) => { const selected = labelIds.includes(label.id); return <button key={label.id} type="button" onClick={() => toggleSelection(label.id, labelIds, setLabelIds)} className={cn('w-full flex items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-accent', selected && 'bg-accent')}><span className="size-2.5 rounded-full" style={{ backgroundColor: label.color }} /><span className="flex-1 text-sm">{label.name}</span>{selected && <Check className="size-4" />}</button>; })}{availableLabels.length === 0 && <p className="text-sm text-muted-foreground">Create a Project label in Settings first.</p>}</div>
+            )}
+            {editor === 'milestone' && (
+               <div className="space-y-3"><div className="space-y-1.5"><label className="text-sm font-medium" htmlFor="project-milestone-title">Name</label><Input id="project-milestone-title" value={milestoneTitle} onChange={(event) => setMilestoneTitle(event.target.value)} autoFocus /></div><div className="space-y-1.5"><label className="text-sm font-medium" htmlFor="project-milestone-date">Target date</label><Input id="project-milestone-date" type="date" value={milestoneDate} onChange={(event) => setMilestoneDate(event.target.value)} /></div></div>
+            )}
+            <DialogFooter><Button variant="outline" disabled={saving} onClick={() => setEditor(null)}>Cancel</Button><Button disabled={saving || (editor === 'milestone' && !milestoneTitle.trim())} onClick={() => void save()}>{saving ? 'Saving…' : editor === 'milestone' ? 'Create milestone' : 'Save'}</Button></DialogFooter>
+         </DialogContent>
+      </Dialog>
+      </>
    );
 }
