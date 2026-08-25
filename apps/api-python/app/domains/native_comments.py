@@ -16,6 +16,10 @@ from .native_projects import _workspace_access
 
 
 router = APIRouter(prefix='/api/v1/_native/comments', tags=['native-comments'])
+# Comments have no Circle adapter switched yet. Expose the audited native
+# contract now so the later Issue-detail cutover does not depend on the
+# legacy facade, while keeping the current presentation untouched.
+public_router = APIRouter(prefix='/api/v1/comments', tags=['comments'])
 
 
 class CommentInput(BaseModel):
@@ -105,6 +109,7 @@ async def _reaction_summary(db: AsyncSession, comment_id: str, user_id: str) -> 
 
 
 @router.get('')
+@public_router.get('')
 async def list_comments(
     workspaceId: str = Query(min_length=1),
     issueId: str = Query(min_length=1),
@@ -121,6 +126,7 @@ async def list_comments(
 
 
 @router.post('')
+@public_router.post('')
 async def create_comment(
     payload: CreateCommentInput,
     user: Any = Depends(current_user),
@@ -143,6 +149,7 @@ async def create_comment(
 
 
 @router.patch('/{comment_id}')
+@public_router.patch('/{comment_id}')
 async def update_comment(
     comment_id: str,
     payload: CommentInput,
@@ -163,6 +170,7 @@ async def update_comment(
 
 
 @router.delete('/{comment_id}')
+@public_router.delete('/{comment_id}')
 async def remove_comment(
     comment_id: str,
     workspaceId: str = Query(min_length=1),
@@ -179,6 +187,7 @@ async def remove_comment(
 
 
 @router.get('/{comment_id}/reactions')
+@public_router.get('/{comment_id}/reactions')
 async def comment_reactions(
     comment_id: str,
     workspaceId: str = Query(min_length=1),
@@ -190,6 +199,7 @@ async def comment_reactions(
 
 
 @router.post('/{comment_id}/reactions/toggle')
+@public_router.post('/{comment_id}/reactions/toggle')
 async def toggle_comment_reaction(
     comment_id: str,
     payload: ToggleReactionInput,

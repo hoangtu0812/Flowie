@@ -18,6 +18,7 @@ from .domains.auth import router as auth_router
 from .domains.native_activities import router as native_activities_router
 from .domains.native_attachments import router as native_attachments_router
 from .domains.native_comments import router as native_comments_router
+from .domains.native_comments import public_router as comments_router
 from .domains.native_cycles import router as native_cycles_router
 from .domains.native_cycles import public_router as cycles_router
 from .domains.native_issues import public_router as issues_router
@@ -75,6 +76,7 @@ def create_app(
     app.include_router(native_activities_router)
     app.include_router(native_attachments_router)
     app.include_router(native_comments_router)
+    app.include_router(comments_router)
     app.include_router(native_cycles_router)
     app.include_router(cycles_router)
     app.include_router(native_issues_router)
