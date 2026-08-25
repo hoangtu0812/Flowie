@@ -1,6 +1,7 @@
 'use client';
 
 import { useIssuesStore } from '@/store/issues-store';
+import { authenticatedFetch } from '@/lib/workspaces';
 import { Ban } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { IssueRefRow } from './content-blocks';
@@ -21,9 +22,7 @@ export function IssueRelations({ issueId }: { issueId: string; orgId: string; co
    const load = useCallback(async () => {
       if (!workspaceId) return;
       const query = new URLSearchParams({ workspaceId });
-      const response = await fetch(`${api}/issues/${issueId}/relations?${query}`, {
-         credentials: 'include',
-      });
+      const response = await authenticatedFetch(`${api}/issues/${issueId}/relations?${query}`);
       if (!response.ok) throw new Error('Could not load related issues.');
       const payload = (await response.json()) as { data: RelatedIssue[] };
       setRelations(payload.data);

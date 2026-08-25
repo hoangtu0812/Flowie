@@ -20,6 +20,7 @@ declare module '@/mock-data/issues' {
       reminderAt?: string;
       /** API-only reference used by durable issue actions; never changes Circle presentation. */
       teamId?: string;
+      releaseIds?: string[];
    }
 }
 
@@ -38,6 +39,7 @@ type NativeIssue = {
    project?: { id: string; name: string } | null;
    labelLinks?: { label: LabelInterface }[];
    cycleLinks?: { cycleId: string }[];
+   releaseLinks?: { releaseId: string }[];
    subscribers?: { userId: string }[];
    favorites?: { userId: string }[];
    reminderAt?: string | null;
@@ -61,6 +63,13 @@ type NativeIssueOptions = {
       status: string;
       startDate?: string | null;
       endDate?: string | null;
+   }>;
+   releases: Array<{
+      id: string;
+      name: string;
+      version?: string | null;
+      status?: string | null;
+      targetDate?: string | null;
    }>;
 };
 
@@ -142,6 +151,7 @@ function asIssue(native: NativeIssue): Issue {
       labels: (native.labelLinks ?? []).map(({ label }) => label),
       createdAt: native.createdAt,
       cycleId: native.cycleLinks?.[0]?.cycleId ?? '',
+      releaseIds: native.releaseLinks?.map((link) => link.releaseId) ?? [],
       project: native.project
          ? ({ id: native.project.id, name: native.project.name, icon: Box } as Project)
          : undefined,
@@ -191,6 +201,7 @@ interface IssuesState {
    projects: Project[];
    labels: LabelInterface[];
    cycles: IssueCycle[];
+   releases: NativeIssueOptions['releases'];
    issuesByStatus: Record<string, Issue[]>;
    workspaceId?: string;
    loading: boolean;
@@ -250,6 +261,8 @@ interface IssuesState {
    updateIssueSubscription: (issueId: string, subscribed: boolean) => Promise<boolean>;
    updateIssueFavorite: (issueId: string, favorited: boolean) => Promise<boolean>;
    setIssueReminder: (issueId: string, remindAt: string | undefined) => Promise<boolean>;
+   setIssueCycle: (issueId: string, cycleId: string | undefined) => Promise<boolean>;
+   setIssueReleases: (issueId: string, releaseIds: string[]) => Promise<boolean>;
 
    // Utility functions
    getIssueById: (id: string) => Issue | undefined;
@@ -264,6 +277,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
    projects: [],
    labels: [],
    cycles: [],
+   releases: [],
    issuesByStatus: {},
    workspaceId: undefined,
    loading: false,
@@ -299,6 +313,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
             projects: optionsPayload.data.projects.map(asProjectOption),
             labels: optionsPayload.data.labels,
             cycles: optionsPayload.data.cycles ?? [],
+            releases: optionsPayload.data.releases ?? [],
             issuesByStatus: groupIssuesByStatus(issues),
             loading: false,
          });
@@ -311,6 +326,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
             projects: [],
             labels: [],
             cycles: [],
+            releases: [],
             issuesByStatus: {},
             loading: false,
          });
@@ -883,6 +899,62 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
          return true;
       } catch (error) {
          toast.error(error instanceof Error ? error.message : 'Could not update issue reminder.');
+         return false;
+      }
+   },
+
+   setIssueCycle: async (issueId, cycleId) => {
+      try {
+         const issue = get().getIssueById(issueId);
+         const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
+         if (!issue) return false;
+         const currentCycleId = issue.cycleId || undefined;
+         if (currentCycleId === cycleId) return true;
+         if (currentCycleId) {
+            const response = await authenticatedFetch(
+               `${api}/cycles/${currentCycleId}/issues/${issue.id}?${new URLSearchParams({ workspaceId })}`,
+               { method: 'DELETE' }
+            );
+            if (!response.ok) throw new Error('Could not remove issue from its current cycle.');
+         }
+         if (cycleId) {
+            const response = await authenticatedFetch(`${api}/cycles/${cycleId}/issues`, {
+               method: 'POST',
+               headers: { 'content-type': 'application/json' },
+               body: JSON.stringify({ workspaceId, issueId: issue.id }),
+            });
+            if (!response.ok) throw new Error('Could not add issue to this cycle.');
+         }
+         get().updateIssue(issue.id, { cycleId: cycleId ?? '' });
+         return true;
+      } catch (error) {
+         toast.error(error instanceof Error ? error.message : 'Could not update issue cycle.');
+         return false;
+      }
+   },
+
+   setIssueReleases: async (issueId, releaseIds) => {
+      try {
+         const issue = get().getIssueById(issueId);
+         const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
+         if (!issue) return false;
+         const response = await authenticatedFetch(
+            `${api}/issues/${issue.id}?${new URLSearchParams({ workspaceId })}`,
+            {
+               method: 'PATCH',
+               headers: { 'content-type': 'application/json' },
+               body: JSON.stringify({ releaseIds }),
+            }
+         );
+         if (!response.ok) {
+            const body = (await response.json().catch(() => null)) as { message?: string } | null;
+            throw new Error(body?.message ?? 'Could not update issue releases.');
+         }
+         const updated = asIssue(((await response.json()) as { data: NativeIssue }).data);
+         get().updateIssue(issue.id, updated);
+         return true;
+      } catch (error) {
+         toast.error(error instanceof Error ? error.message : 'Could not update issue releases.');
          return false;
       }
    },

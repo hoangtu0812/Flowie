@@ -12,6 +12,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useIssuesStore } from '@/store/issues-store';
+import { authenticatedFetch } from '@/lib/workspaces';
 import { Circle, CircleCheck, CircleDashed, CircleX, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
@@ -62,9 +63,7 @@ export function IssueSubIssues({
    const load = useCallback(async () => {
       if (!workspaceId) return;
       const query = new URLSearchParams({ workspaceId });
-      const response = await fetch(`${api}/issues/${issueId}/sub-issues?${query}`, {
-         credentials: 'include',
-      });
+      const response = await authenticatedFetch(`${api}/issues/${issueId}/sub-issues?${query}`);
       if (!response.ok) throw new Error('Could not load sub-issues.');
       const payload = (await response.json()) as { data: SubIssue[] };
       setSubIssues(payload.data);
@@ -83,7 +82,7 @@ export function IssueSubIssues({
       setSaving(true);
       setError(undefined);
       try {
-         const response = await fetch(`${api}/issues`, {
+         const response = await authenticatedFetch(`${api}/issues`, {
             method: 'POST',
             credentials: 'include',
             headers: { 'content-type': 'application/json' },

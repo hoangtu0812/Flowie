@@ -2,6 +2,7 @@
 
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useIssuesStore } from '@/store/issues-store';
+import { authenticatedFetch } from '@/lib/workspaces';
 import { SmilePlus } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -20,9 +21,7 @@ export function IssueReactions({ issueId }: { issueId: string }) {
    const load = useCallback(async () => {
       if (!workspaceId) return;
       const query = new URLSearchParams({ workspaceId });
-      const response = await fetch(`${api}/issues/${issueId}/reactions?${query}`, {
-         credentials: 'include',
-      });
+      const response = await authenticatedFetch(`${api}/issues/${issueId}/reactions?${query}`);
       if (!response.ok) throw new Error('Could not load reactions.');
       const payload = (await response.json()) as { data: IssueReaction[] };
       setReactions(payload.data);
@@ -39,7 +38,7 @@ export function IssueReactions({ issueId }: { issueId: string }) {
       setError(undefined);
       try {
          const query = new URLSearchParams({ workspaceId });
-         const response = await fetch(
+         const response = await authenticatedFetch(
             `${api}/issues/${issueId}/reactions/${encodeURIComponent(emoji)}?${query}`,
             current?.reacted
                ? { method: 'DELETE', credentials: 'include' }

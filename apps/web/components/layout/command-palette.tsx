@@ -9,11 +9,9 @@ import {
    CommandItem,
    CommandList,
 } from '@/components/ui/command';
-import { cycles, formatCycleDateRange } from '@/mock-data/cycles';
 import { Issue } from '@/mock-data/issues';
 import { priorities } from '@/mock-data/priorities';
 import { status as allStatus } from '@/mock-data/status';
-import { teams } from '@/mock-data/teams';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useCreateIssueStore } from '@/store/create-issue-store';
 import { useIssuesStore } from '@/store/issues-store';
@@ -46,7 +44,26 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 type PaletteRoute =
-   'root' | 'assign' | 'status' | 'priority' | 'labels' | 'project' | 'cycle' | 'team' | 'due-date';
+   | 'root'
+   | 'assign'
+   | 'status'
+   | 'priority'
+   | 'labels'
+   | 'project'
+   | 'cycle'
+   | 'release'
+   | 'team'
+   | 'due-date';
+
+const dateValue = (date: Date) =>
+   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+      date.getDate()
+   ).padStart(2, '0')}`;
+
+const formatCycleDateRange = (cycle: { startDate?: string | null; endDate?: string | null }) => {
+   if (!cycle.startDate && !cycle.endDate) return 'No dates';
+   return [cycle.startDate, cycle.endDate].filter(Boolean).join(' – ');
+};
 
 /** Small keyboard hint chips on the right of a command row. */
 function Keys({ keys }: { keys: string[] }) {
@@ -79,6 +96,9 @@ export function CommandPalette() {
       members,
       labels,
       projects,
+      cycles,
+      releases,
+      teams,
       updateIssueStatus,
       updateIssuePriority,
       updateIssueAssignee,
@@ -86,7 +106,9 @@ export function CommandPalette() {
       removeIssueLabel,
       updateIssueProject,
       updateIssueDueDate,
-      updateIssue,
+      setIssueCycle,
+      setIssueReleases,
+      moveIssue,
    } = useIssuesStore();
    const { openModal } = useCreateIssueStore();
 
@@ -149,6 +171,21 @@ export function CommandPalette() {
            .replace(/^-|-$/g, '')
            .slice(0, 40)}`
       : '';
+   const dueDateOptions = useMemo(() => {
+      const today = new Date();
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const endOfWeek = new Date(today);
+      endOfWeek.setDate(today.getDate() + ((7 - today.getDay()) % 7));
+      const nextWeek = new Date(today);
+      nextWeek.setDate(today.getDate() + 7);
+      return [
+         ['Today', dateValue(today)],
+         ['Tomorrow', dateValue(tomorrow)],
+         ['End of this week', dateValue(endOfWeek)],
+         ['In one week', dateValue(nextWeek)],
+      ] as const;
+   }, []);
 
    const go = (path: string) => {
       router.push(`/${orgId}${path}`);
@@ -303,8 +340,8 @@ export function CommandPalette() {
                            </CommandItem>
                            <CommandItem
                               onSelect={() => {
-                                 toast.success('Added to the next release');
-                                 close();
+                                 setRoute('release');
+                                 setQuery('');
                               }}
                            >
                               <PackagePlus className="text-muted-foreground" />
@@ -598,9 +635,12 @@ export function CommandPalette() {
                      <CommandGroup heading="Move to cycle…">
                         <CommandItem
                            onSelect={() => {
-                              updateIssue(issue.id, { cycleId: '' });
-                              toast.success('Removed from cycle');
-                              close();
+                              void setIssueCycle(issue.id, undefined).then((updated) => {
+                                 if (updated) {
+                                    toast.success('Removed from cycle');
+                                    close();
+                                 }
+                              });
                            }}
                         >
                            <CircleDot className="text-muted-foreground" />
@@ -610,9 +650,12 @@ export function CommandPalette() {
                            <CommandItem
                               key={cycle.id}
                               onSelect={() => {
-                                 updateIssue(issue.id, { cycleId: cycle.id });
-                                 toast.success(`Moved to ${cycle.name}`);
-                                 close();
+                                 void setIssueCycle(issue.id, cycle.id).then((updated) => {
+                                    if (updated) {
+                                       toast.success(`Moved to ${cycle.name}`);
+                                       close();
+                                    }
+                                 });
                               }}
                            >
                               <CircleDot className="text-muted-foreground" />
@@ -626,16 +669,72 @@ export function CommandPalette() {
                      </CommandGroup>
                   )}
 
+                  {route === 'release' && issue && (
+                     <CommandGroup heading="Add to release…">
+                        <CommandItem
+                           onSelect={() => {
+                              void setIssueReleases(issue.id, []).then((updated) => {
+                                 if (updated) {
+                                    toast.success('Removed from releases');
+                                    close();
+                                 }
+                              });
+                           }}
+                        >
+                           <PackagePlus className="text-muted-foreground" />
+                           No release
+                        </CommandItem>
+                        {releases.map((release) => {
+                           const active = issue.releaseIds?.includes(release.id) ?? false;
+                           return (
+                              <CommandItem
+                                 key={release.id}
+                                 onSelect={() => {
+                                    const next = active
+                                       ? (issue.releaseIds ?? []).filter((id) => id !== release.id)
+                                       : [...(issue.releaseIds ?? []), release.id];
+                                    void setIssueReleases(issue.id, next).then((updated) => {
+                                       if (updated) {
+                                          toast.success(
+                                             active
+                                                ? `Removed from ${release.name}`
+                                                : `Added to ${release.name}`
+                                          );
+                                          close();
+                                       }
+                                    });
+                                 }}
+                              >
+                                 <PackagePlus className="text-muted-foreground" />
+                                 {release.name}
+                                 {release.version ? ` ${release.version}` : ''}
+                                 {active && <Check className="ml-auto size-4" />}
+                              </CommandItem>
+                           );
+                        })}
+                     </CommandGroup>
+                  )}
+
                   {route === 'team' && issue && (
                      <CommandGroup heading="Move to a different team…">
                         {teams
-                           .filter((team) => team.joined)
+                           .filter((team) => team.id !== issue.teamId)
                            .map((team) => (
                               <CommandItem
                                  key={team.id}
                                  onSelect={() => {
-                                    toast.success(`Moved to ${team.name}`);
-                                    close();
+                                    void moveIssue(issue.id, team.id)
+                                       .then((moved) => {
+                                          toast.success(`Moved as ${moved.identifier}`);
+                                          close();
+                                       })
+                                       .catch((error) =>
+                                          toast.error(
+                                             error instanceof Error
+                                                ? error.message
+                                                : 'Could not move issue.'
+                                          )
+                                       );
                                  }}
                               >
                                  <span className="text-sm">{team.icon}</span>
@@ -647,14 +746,7 @@ export function CommandPalette() {
 
                   {route === 'due-date' && issue && (
                      <CommandGroup heading="Set due date…">
-                        {(
-                           [
-                              ['Today', '2026-08-04'],
-                              ['Tomorrow', '2026-08-05'],
-                              ['End of this week', '2026-08-09'],
-                              ['In one week', '2026-08-11'],
-                           ] as const
-                        ).map(([label, date]) => (
+                        {dueDateOptions.map(([label, date]) => (
                            <CommandItem
                               key={label}
                               onSelect={() => {
