@@ -23,6 +23,7 @@ import { ThemeToggle } from '../theme-toggle';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import {
+   authenticatedFetch,
    createWorkspace,
    loadWorkspaceMemberships,
    type WorkspaceMembership,
@@ -44,6 +45,7 @@ export function OrgSwitcher() {
    const pathname = usePathname();
    const router = useRouter();
    const [memberships, setMemberships] = React.useState<WorkspaceMembership[]>([]);
+   const [invitationCount, setInvitationCount] = React.useState(0);
    const [loading, setLoading] = React.useState(true);
    const [createOpen, setCreateOpen] = React.useState(false);
    const [workspaceName, setWorkspaceName] = React.useState('');
@@ -51,10 +53,19 @@ export function OrgSwitcher() {
 
    React.useEffect(() => {
       let current = true;
-      void loadWorkspaceMemberships()
-         .then((nextMemberships) => {
+      void Promise.all([
+         loadWorkspaceMemberships(),
+         authenticatedFetch(
+            `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'}/workspaces/invitations`
+         ),
+      ])
+         .then(async ([nextMemberships, invitationsResponse]) => {
             if (!current) return;
             setMemberships(nextMemberships);
+            if (invitationsResponse.ok) {
+               const invitations = (await invitationsResponse.json()) as { data: unknown[] };
+               if (current) setInvitationCount(invitations.data.length);
+            }
             const matched = nextMemberships.some(
                ({ workspace }) => workspace.slug === orgId || workspace.id === orgId
             );
@@ -202,8 +213,14 @@ export function OrgSwitcher() {
                                  </DropdownMenuItem>
                               )}
                               <DropdownMenuSeparator />
+                              <DropdownMenuItem asChild>
+                                 <Link href="/invitations">
+                                    Workspace invitations
+                                    {invitationCount > 0 && ` (${invitationCount})`}
+                                 </Link>
+                              </DropdownMenuItem>
                               <DropdownMenuItem onSelect={() => setCreateOpen(true)}>
-                                 Create or join workspace
+                                 Create workspace
                               </DropdownMenuItem>
                               <DropdownMenuItem disabled>Add an account</DropdownMenuItem>
                            </DropdownMenuSubContent>

@@ -1,13 +1,16 @@
 'use client';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import type { WorkspaceTeam } from './team-types';
 import { useTeamsDisplayStore } from '@/store/teams-display-store';
 import { Box, Check, Play } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import { useState } from 'react';
 
 interface TeamLineProps {
    team: WorkspaceTeam;
+   onJoin: (teamId: string) => Promise<void>;
 }
 
 const dateLabel = (value: string) => {
@@ -17,9 +20,19 @@ const dateLabel = (value: string) => {
       : format(date, 'MMM yyyy');
 };
 
-export default function TeamLine({ team }: TeamLineProps) {
+export default function TeamLine({ team, onJoin }: TeamLineProps) {
    const { displayProperties } = useTeamsDisplayStore();
    const owner = team.members.find((member) => member.role === 'LEAD') ?? team.members[0];
+   const [joining, setJoining] = useState(false);
+
+   const join = async () => {
+      setJoining(true);
+      try {
+         await onJoin(team.id);
+      } finally {
+         setJoining(false);
+      }
+   };
 
    return (
       <div className="w-full flex items-center py-2.5 px-6 border-b hover:bg-sidebar/50 border-muted-foreground/5 text-sm">
@@ -41,6 +54,16 @@ export default function TeamLine({ team }: TeamLineProps) {
                      <Check className="size-3" />
                      Joined
                   </span>
+               )}
+               {!team.joined && (
+                  <Button
+                     size="xs"
+                     variant="outline"
+                     onClick={() => void join()}
+                     disabled={joining}
+                  >
+                     {joining ? 'Joining…' : 'Join'}
+                  </Button>
                )}
             </div>
          )}

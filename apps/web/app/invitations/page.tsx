@@ -3,6 +3,7 @@
 import { FlowieLogo } from '@/components/brand/flowie-logo';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { authenticatedFetch } from '@/lib/workspaces';
 
 type Invitation = {
    id: string;
@@ -18,7 +19,7 @@ export default function InvitationsPage() {
    const [error, setError] = useState<string>();
 
    const load = useCallback(async () => {
-      const response = await fetch(`${api}/workspaces/invitations`, { credentials: 'include' });
+      const response = await authenticatedFetch(`${api}/workspaces/invitations`);
       if (!response.ok) throw new Error('Could not load invitations.');
       setInvitations(((await response.json()) as { data: Invitation[] }).data);
    }, [api]);
@@ -29,11 +30,10 @@ export default function InvitationsPage() {
 
    const respond = async (invitation: Invitation, action: 'accept' | 'decline') => {
       setError(undefined);
-      const response = await fetch(
+      const response = await authenticatedFetch(
          `${api}/workspaces/invitations/${invitation.id}${action === 'accept' ? '/accept' : ''}`,
          {
             method: action === 'accept' ? 'POST' : 'DELETE',
-            credentials: 'include',
          }
       );
       if (!response.ok) {

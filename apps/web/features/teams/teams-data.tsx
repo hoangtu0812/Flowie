@@ -2,6 +2,7 @@
 
 import {
    createWorkspaceTeam,
+   joinWorkspaceTeam,
    loadCurrentWorkspaceTeams,
    type WorkspaceTeam,
 } from '@/components/common/teams/team-types';
@@ -19,6 +20,7 @@ type TeamsData = {
    workspaceLoading: boolean;
    teams: WorkspaceTeam[];
    createTeam: (values: CreateTeamValues) => Promise<void>;
+   joinTeam: (teamId: string) => Promise<void>;
    refreshTeams: () => Promise<void>;
 };
 
@@ -69,7 +71,17 @@ function useTeamsDataSource(): TeamsData {
       [workspaceId]
    );
 
-   return { workspaceId, workspaceLoading, teams, createTeam, refreshTeams };
+   const joinTeam = useCallback(
+      async (teamId: string) => {
+         if (!workspaceId) throw new Error('Workspace is not ready yet.');
+         await joinWorkspaceTeam(workspaceId, teamId);
+         await refreshTeams();
+         window.dispatchEvent(new Event('flowie-teams-changed'));
+      },
+      [refreshTeams, workspaceId]
+   );
+
+   return { workspaceId, workspaceLoading, teams, createTeam, joinTeam, refreshTeams };
 }
 
 export function TeamsDataProvider({ children }: { children: ReactNode }) {

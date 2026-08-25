@@ -7,11 +7,21 @@ import { Filter } from '@/components/layout/headers/teams/filter';
 import TeamLine from './team-line';
 import { TeamsDisplayOptions } from './teams-display-options';
 import { useTeamsData } from '@/features/teams/teams-data';
+import { toast } from 'sonner';
 
 export default function Teams() {
    const { filters } = useTeamsFilterStore();
    const { ordering, displayProperties } = useTeamsDisplayStore();
-   const { teams: allTeams } = useTeamsData();
+   const { teams: allTeams, joinTeam } = useTeamsData();
+
+   const join = async (teamId: string) => {
+      try {
+         await joinTeam(teamId);
+         toast.success('Joined team.');
+      } catch (error) {
+         toast.error(error instanceof Error ? error.message : 'Could not join team.');
+      }
+   };
 
    const displayed = useMemo(() => {
       let list = allTeams.slice();
@@ -80,7 +90,7 @@ export default function Teams() {
 
          <div className="w-full">
             {displayed.map((team) => (
-               <TeamLine key={team.id} team={team} />
+               <TeamLine key={team.id} team={team} onJoin={join} />
             ))}
          </div>
       </div>

@@ -346,6 +346,9 @@ Nghiệm thu:
   hard-code workspace fixture.
 - [x] P4d: `/[orgId]/members` đọc Workspace membership thật; Invite tạo lời mời qua Python,
   Owner đổi role, Owner/Admin xoá member. Không còn fixture user để điền danh sách Members.
+- [x] P4e: Team chưa tham gia có action `Join`, gọi trực tiếp Python API và tuân theo `OPEN` /
+  `INVITE_ONLY`. Workspace invitation hiển thị trong `Switch Workspace` và được accept/decline
+  tại `/invitations`; không có cơ chế tự ý vào workspace không được mời.
 
 ### P5 — Projects bằng Python — mốc cho người dùng chạy thử
 
@@ -576,6 +579,7 @@ Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modu
 | 2026-08-25 | P5c Create Project readiness fix | `d7132ce` | Dialog không còn submit khi `workspaceId` chưa tải xong; Docker browser smoke xác nhận nút bị khóa trong trạng thái chưa sẵn sàng, web production build đạt | Acceptance tạo Project sau đăng nhập | Refresh, chờ workspace tải rồi tạo Project |
 | 2026-08-25 | P3d Circle Workspace UI cutover | `8a2ccd1` | Web build + FastAPI regression đạt; browser smoke ghi nhận `401 → /auth/refresh 200 → /workspaces/me 200`; switcher không còn hard-code workspace | Members presentation còn fixture; invite API native đã sẵn sàng | Tạo workspace đầu tiên rồi nối Members UI |
 | 2026-08-25 | P4d Circle Teams/Members UI cutover | current change-set | Web production build và Docker web build đạt; Team/Member list, tạo Team, invite, role và remove đều dùng Python API, không còn mock ở scope này | Cần một workspace có ít nhất hai tài khoản đã đăng ký để nghiệm thu UI thao tác thật | Người dùng tạo workspace, tạo Team và mời tài khoản Flowie thứ hai để test |
+| 2026-08-25 | P4e Join Team/Workspace | current change-set | Web production build đạt; Join Team và Workspace invitation đã có entry point trong UI gốc | Cần tài khoản thứ hai để xác nhận invitation/join thực tế | Rebuild Docker, sau đó nghiệm thu hai-account flow |
 
 ## 13. Definition of Done toàn dự án
 
