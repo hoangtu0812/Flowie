@@ -12,7 +12,9 @@ RUN pnpm install --frozen-lockfile
 
 FROM dependencies AS build
 ARG NEXT_PUBLIC_API_URL
+ARG UI_BUILD_REVISION=local
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+RUN printf '%s' "$UI_BUILD_REVISION" > /tmp/ui-build-revision
 COPY apps/web apps/web
 COPY packages/contracts packages/contracts
 RUN pnpm --filter @circle/web build

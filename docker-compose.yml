@@ -91,6 +91,7 @@ services:
          dockerfile: infrastructure/docker/web.Dockerfile
          args:
             NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api/v1}
+            UI_BUILD_REVISION: ${UI_BUILD_REVISION:-circle-ui-preview-20260825}
       container_name: circle-web
       environment:
          NODE_ENV: production

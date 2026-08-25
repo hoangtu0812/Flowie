@@ -234,6 +234,9 @@ Tiến độ hiện tại:
   gốc import ở preview mode.
 - [x] Bật Circle UI preview không đăng nhập bằng middleware pass-through tạm thời; root route quay
   về `lndev-ui/team/CORE/all` đúng baseline để nghiệm thu UI trước.
+- [x] Giữ 50 adapter Flowie EXTRA ngoài presentation (không xoá) và loại chúng khỏi type-check của
+  Circle preview; adapter không được Circle import và sẽ được tái kết nối qua feature boundary ở
+  các phase backend tiếp theo.
 - [x] Build production và lint thành công; chỉ còn 2 warning vốn có của Circle baseline.
 
 ### P2 — FastAPI foundation và legacy facade
