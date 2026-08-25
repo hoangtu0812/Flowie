@@ -612,6 +612,7 @@ async def _template_row(db: AsyncSession, template_id: str, workspace_id: str) -
 
 
 @router.get('/templates')
+@public_router.get('/templates')
 async def list_issue_templates(
     workspaceId: str = Query(min_length=1),
     user: Any = Depends(current_user),
@@ -633,6 +634,7 @@ async def list_issue_templates(
 
 
 @router.post('/templates')
+@public_router.post('/templates')
 async def create_issue_template(
     payload: CreateIssueTemplateInput,
     user: Any = Depends(current_user),
@@ -664,6 +666,7 @@ async def create_issue_template(
 
 
 @router.patch('/templates/{template_id}')
+@public_router.patch('/templates/{template_id}')
 async def update_issue_template(
     template_id: str,
     payload: UpdateIssueTemplateInput,
@@ -689,6 +692,7 @@ async def update_issue_template(
 
 
 @router.delete('/templates/{template_id}')
+@public_router.delete('/templates/{template_id}')
 async def delete_issue_template(
     template_id: str,
     workspaceId: str = Query(min_length=1),

@@ -473,6 +473,8 @@ Tiến độ thực hiện:
   convert Issue thành Comment sang FastAPI; sequence/status/reference validation và activity giữ native.
 - [x] P6ag-issue-reminder-public: whitelist set/cancel reminder sang FastAPI native; future-date
   validation, persisted `issue_reminders` và background delivery vẫn giữ Python worker.
+- [x] P6ah-issue-template-public: whitelist Issue templates CRUD sang FastAPI native; manager RBAC
+  và workspace status/project/assignee/label validation giữ nguyên trước adapter Settings.
 
 Nghiệm thu:
 
@@ -681,6 +683,7 @@ Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modu
 | 2026-08-25 | P6ae Issue relation public | current change-set | Public sub-issue/relation APIs chạy FastAPI với RBAC hai Issue, relation semantics và activity persistence; chưa đổi Circle relation UI | Contract regression và relation adapter | Port relation/sub-issue adapter nguyên UI Circle |
 | 2026-08-25 | P6af Issue workflow public | current change-set | Public Issue move/classification/conversion APIs chạy FastAPI với status/sequence/reference validation và activity persisted; chưa đổi Circle action UI | Contract regression và action adapter | Port action adapter nguyên UI Circle |
 | 2026-08-25 | P6ag Issue reminder public | current change-set | Public set/cancel reminder APIs chạy FastAPI với future-date validation và durable worker delivery; chưa đổi Circle reminder UI | Contract regression và reminder adapter | Port reminder adapter nguyên UI Circle |
+| 2026-08-25 | P6ah Issue template public | current change-set | Public Issue template CRUD chạy FastAPI với manager RBAC và workspace reference validation; chưa đổi Circle Settings template UI | Contract regression và template adapter | Port Issue template Settings adapter nguyên UI Circle |
 | 2026-08-25 | P3d Circle Workspace UI cutover | `8a2ccd1` | Web build + FastAPI regression đạt; browser smoke ghi nhận `401 → /auth/refresh 200 → /workspaces/me 200`; switcher không còn hard-code workspace | Members presentation còn fixture; invite API native đã sẵn sàng | Tạo workspace đầu tiên rồi nối Members UI |
 | 2026-08-25 | P4d Circle Teams/Members UI cutover | current change-set | Web production build và Docker web build đạt; Team/Member list, tạo Team, invite, role và remove đều dùng Python API, không còn mock ở scope này | Cần một workspace có ít nhất hai tài khoản đã đăng ký để nghiệm thu UI thao tác thật | Người dùng tạo workspace, tạo Team và mời tài khoản Flowie thứ hai để test |
 | 2026-08-25 | P4e Join Team/Workspace | current change-set | Web production build đạt; Join Team và Workspace invitation đã có entry point trong UI gốc | Cần tài khoản thứ hai để xác nhận invitation/join thực tế | Rebuild Docker, sau đó nghiệm thu hai-account flow |
