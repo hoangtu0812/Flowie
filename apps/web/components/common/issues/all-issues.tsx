@@ -9,7 +9,7 @@ import { IssueFilterBar } from './issue-filter-bar';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { useSearchStore } from '@/store/search-store';
 import { useViewStore } from '@/store/view-store';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { GroupedIssuesView } from './grouped-issues-view';
 import { InsightsPanel } from './insights-panel';
 import { SearchIssues } from './search-issues';
@@ -26,11 +26,15 @@ export default function AllIssues({ categories }: AllIssuesProps) {
    const { isSearchOpen, searchQuery } = useSearchStore();
    const { viewType } = useViewStore();
    const { filters } = useFilterStore();
-   const { issues } = useIssuesStore();
+   const { issues, loadIssues } = useIssuesStore();
    const { openPanel } = useRightPanelStore();
 
    const isSearching = isSearchOpen && searchQuery.trim() !== '';
    const isViewTypeGrid = viewType === 'grid';
+
+   useEffect(() => {
+      void loadIssues();
+   }, [loadIssues]);
 
    const statuses = useMemo(
       () => (categories ? getStatusesByCategory(categories) : displayOrderedStatus),
@@ -39,9 +43,7 @@ export default function AllIssues({ categories }: AllIssuesProps) {
 
    const scopedIssues = useMemo<Issue[]>(
       () =>
-         categories
-            ? issues.filter((issue) => categories.includes(issue.status.category))
-            : issues,
+         categories ? issues.filter((issue) => categories.includes(issue.status.category)) : issues,
       [issues, categories]
    );
 

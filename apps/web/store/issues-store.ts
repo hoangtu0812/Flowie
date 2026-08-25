@@ -1,10 +1,85 @@
-import { groupIssuesByStatus, Issue, issues as mockIssues } from '@/mock-data/issues';
+import { groupIssuesByStatus, Issue } from '@/mock-data/issues';
 import { LabelInterface } from '@/mock-data/labels';
-import { Priority } from '@/mock-data/priorities';
+import { priorities, Priority } from '@/mock-data/priorities';
 import { Project } from '@/mock-data/projects';
-import { Status } from '@/mock-data/status';
+import { status as statusPresentation, Status, StatusCategory } from '@/mock-data/status';
 import { User } from '@/mock-data/users';
+import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
+import { loadJoinedWorkspaceTeams } from '@/components/common/teams/team-types';
 import { create } from 'zustand';
+
+const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+
+type NativeIssue = {
+   id: string;
+   identifier: string;
+   title: string;
+   description?: string | null;
+   priority: 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+   dueDate?: string | null;
+   createdAt: string;
+   updatedAt: string;
+   status: { id: string; name: string; color: string; category: string };
+   assignee?: { id: string; name: string; avatarUrl?: string | null } | null;
+   project?: { id: string; name: string } | null;
+   labelLinks?: { label: LabelInterface }[];
+   cycleLinks?: { cycleId: string }[];
+};
+
+const priorityId: Record<NativeIssue['priority'], string> = {
+   NONE: 'no-priority',
+   LOW: 'low',
+   MEDIUM: 'medium',
+   HIGH: 'high',
+   URGENT: 'urgent',
+};
+
+function asIssue(native: NativeIssue): Issue {
+   const category = native.status.category.toLowerCase() as StatusCategory;
+   const presentation =
+      statusPresentation.find((candidate) => candidate.category === category) ??
+      statusPresentation.find((candidate) => candidate.id === 'to-do')!;
+   const liveStatus: Status = {
+      ...presentation,
+      id: native.status.id,
+      name: native.status.name,
+      color: native.status.color,
+      category,
+   };
+   const priority =
+      priorities.find((candidate) => candidate.id === priorityId[native.priority]) ?? priorities[0];
+   const assignee = native.assignee
+      ? {
+           id: native.assignee.id,
+           name: native.assignee.name,
+           avatarUrl: native.assignee.avatarUrl ?? '',
+           email: '',
+           status: 'offline' as const,
+           role: 'Member' as const,
+           joinedDate: '',
+           teamIds: [],
+           timezone: 'UTC',
+        }
+      : null;
+   return {
+      id: native.id,
+      identifier: native.identifier,
+      title: native.title,
+      description: native.description ?? '',
+      status: liveStatus,
+      assignee,
+      priority,
+      labels: (native.labelLinks ?? []).map(({ label }) => label),
+      createdAt: native.createdAt,
+      cycleId: native.cycleLinks?.[0]?.cycleId ?? '',
+      project: native.project
+         ? ({ id: native.project.id, name: native.project.name } as Project)
+         : undefined,
+      subissues: [],
+      rank: native.updatedAt,
+      dueDate: native.dueDate ?? undefined,
+   };
+}
 
 interface FilterOptions {
    status?: string[];
@@ -20,6 +95,9 @@ interface IssuesState {
    // Data
    issues: Issue[];
    issuesByStatus: Record<string, Issue[]>;
+   workspaceId?: string;
+   loading: boolean;
+   loadIssues: (teamIdentifier?: string) => Promise<void>;
 
    //
    getAllIssues: () => Issue[];
@@ -61,8 +139,37 @@ interface IssuesState {
 
 export const useIssuesStore = create<IssuesState>((set, get) => ({
    // Initial state
-   issues: mockIssues.sort((a, b) => b.rank.localeCompare(a.rank)),
-   issuesByStatus: groupIssuesByStatus(mockIssues),
+   issues: [],
+   issuesByStatus: {},
+   workspaceId: undefined,
+   loading: false,
+   loadIssues: async (teamIdentifier?: string) => {
+      set({ loading: true });
+      try {
+         const workspace = await loadCurrentWorkspace();
+         const query = new URLSearchParams({ workspaceId: workspace.id });
+         if (teamIdentifier) {
+            const { teams } = await loadJoinedWorkspaceTeams();
+            const team = teams.find(
+               (candidate) =>
+                  candidate.id === teamIdentifier || candidate.identifier === teamIdentifier
+            );
+            if (team) query.set('teamId', team.id);
+         }
+         const response = await authenticatedFetch(`${api}/_native/issues?${query}`);
+         if (!response.ok) throw new Error('Could not load issues.');
+         const payload = (await response.json()) as { data: NativeIssue[] };
+         const issues = payload.data.map(asIssue);
+         set({
+            workspaceId: workspace.id,
+            issues,
+            issuesByStatus: groupIssuesByStatus(issues),
+            loading: false,
+         });
+      } catch {
+         set({ issues: [], issuesByStatus: {}, loading: false });
+      }
+   },
 
    //
    getAllIssues: () => get().issues,
