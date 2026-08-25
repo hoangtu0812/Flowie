@@ -110,6 +110,23 @@
   toàn bộ team thật. Menu ba chấm chỉ còn Settings/Copy link/Leave và cả ba đã có action thật.
 - Project Detail properties: status, priority, lead, target date và description/summary dùng PATCH
   thật qua đúng property row/description region; các tab dùng chung live hook nên cập nhật nhất quán.
+- Project Detail dates/team: hai row Dates và Teams vốn có ở sidebar/peek đã nối PATCH thật;
+  start/target date có thể đặt hoặc xóa, team có thể chuyển/bỏ sau khi backend xác minh người thao
+  tác thuộc team đích.
+- Saved Views: description được lưu trong PostgreSQL, API trả avatar creator và row gốc hiển thị
+  đúng hai dữ liệu này; dialog tạo view hiện hữu đã lưu description, không thêm toolbar mới.
+- Member Profile: project list lấy trực tiếp từ `ProjectMember`, local time lấy timezone IANA của
+  User được ghi khi login/register; chấm/trạng thái presence giả đã bị bỏ vì chưa có realtime
+  presence backend.
+- Team Settings dialogs: các row General, Template, Workflows, Cycles và Hierarchy giữ nguyên vị
+  trí/composition nhưng dùng Dialog; Leave/Retire/Delete dùng AlertDialog, không còn prompt,
+  confirm hoặc alert native trong màn hình này.
+- Issue label parity/no-op cleanup: LabelBadge và nút Plus tròn có border đã trở lại đúng upstream
+  trong Issue Detail trong khi action label vẫn gọi API; Inbox bỏ Show snoozed chưa có backend và
+  Help bỏ search/keyboard shortcut giả.
+- Native dialog cleanup: Account Security/API key, Profile workspace leave, tám Issue Context
+  actions, Emoji/Label/Project Template/Saved View deletion đều dùng Dialog/AlertDialog qua đúng
+  affordance hiện hữu. Audit toàn `apps/web` không còn `window.prompt/confirm/alert`.
 - Docker Compose: Postgres, Redis, MinIO, API, worker, web; dependency layer đã cache nên
   `docker compose up` trong mạng nội bộ không tải lại khi lockfile/image base không đổi.
 
@@ -175,10 +192,19 @@
 - `65b1f11` — remove Project Agent/More no-ops and connect Copy link.
 - `2dd3f58` — package the contracts workspace in the API runtime image.
 - `db61402` — connect Project Detail status, priority, lead, target date and description.
+- `acc2d49` — connect Project Detail start/target dates and team assignment.
+- `0707979` — restore upstream Issue Labels affordance and remove small visible no-ops.
+- `5c9085f` — persist Saved View descriptions and creator avatars.
+- `4977e3c` — replace Team Settings native prompts with Dialog/AlertDialog.
+- `6e664e2` — load real ProjectMember data and timezone in Member Profile.
+- `14e9370` — persist each User's browser timezone through existing authentication flows.
+- `eb82f5a` — replace Account Security/Profile native dialogs.
+- `7f128fc` — route Issue Context actions through a global persisted-action dialog.
+- `33ce636` — replace the remaining Settings/View native confirmations.
 
 ### Kiểm tra gần nhất
 
-- API Jest: **52 suites, 159 tests passed**, gồm notification preferences, workspace isolation,
+- API Jest: **54 suites, 173 tests passed**, gồm notification preferences, workspace isolation,
   Issue actions, Project attachment, Team settings, Personal API Key và Bearer guard.
 - NestJS build: passed.
 - Next.js 15 production build: passed.
@@ -260,6 +286,10 @@
   team đã retire không còn đọc/ghi/upload được qua API trực tiếp; targeted Jest **4/4 passed**.
 - Docker API/Web đã rebuild với dependency install layer `CACHED`; migration Team Documents apply,
   `document_folders` tồn tại và API health/Web login đều trả HTTP 200.
+- Docker API/Web đã rebuild sau checkpoint `14e9370`; toàn bộ lớp `pnpm install` dùng cache. Hai
+  migration `20260825000000_saved_view_descriptions` và `20260825010000_user_timezones` đã apply,
+  cột `saved_views.description` nullable và `users.timezone` NOT NULL/default UTC được xác minh
+  trực tiếp; API health và Web login cùng trả HTTP 200.
 - Script `scripts/start-local.ps1` dùng `--no-build --pull never`, nên khởi động từ image hiện có
   chạy được trong mạng nội bộ. Rebuild web vẫn có thể cần internet vì baseline dùng
   `next/font/google`; lần build gần nhất retry TLS rồi thành công trên 5G, không phải cài package.
@@ -284,12 +314,12 @@
 | P1 | Project extras | Hoàn thành: favorite, Update attachment, resource, typed custom-property values/definitions, workspace Display defaults và affordance Initiative/Label trong Overview đều dùng dữ liệu thật mà giữ layout gốc. |
 | P1 | Issue display/insights | Workspace Display defaults đã hoàn thành. Footer `Set default for everyone` trong Insights vẫn là visible no-op; cần persistence cho cấu hình analytics trước khi bật. |
 | P1 | Team danger zone | Hoàn thành: Leave, Retire và Delete là ba action riêng; Delete có soft-delete + restore 30 ngày và chỉ OWNER/ADMIN được thao tác. Permanent purge job sau ngày 30 vẫn là hardening P2 vì cần xóa object MinIO an toàn. |
-| P1 | Project/member/detail parity | ProjectMember, rich comment/reaction, directional relation và Project Detail status/priority/lead/target/description đã hoàn thành. Start date/team vẫn read-only vì UpdateProject DTO chưa hỗ trợ; initiative đã chỉnh được từ hàng Initiative gốc ở Overview. |
+| P1 | Project/member/detail parity | Hoàn thành: ProjectMember, rich comment/reaction, directional relation và Project Detail status/priority/lead/start/target/team/description đều dùng backend thật qua UI gốc. |
 | P1 | Team documents | Hoàn thành: folder/icon/pin/position, CRUD, sort và Overview pinned dùng backend thật trong component tree upstream. |
-| P1 | Saved Views parity | Cần thêm `description` vào SavedView và avatar creator vào API mapping; hiện row dùng mô tả generic vì backend thiếu dữ liệu. |
-| P1 | Member Profile parity | Cần timezone/presence thật và lấy project membership từ `ProjectMember`; hiện local time/presence là placeholder và project suy ra từ assigned issue. |
-| P1 | Native browser dialogs | Một số action Team Settings/Issue context/Security còn dùng `prompt/confirm/alert`; thay dần bằng Dialog/AlertDialog gắn sau affordance upstream, không đổi default tree. |
-| P1 | Visible no-op còn lại | Inbox snoozed, label groups, Team access/recurring issue, một số Preferences/Passkeys/Help/Sub-grouping vẫn disabled hoặc unavailable; chỉ bật khi schema/service thật tồn tại, nếu ngoài phạm vi thì ẩn. |
+| P1 | Saved Views parity | Hoàn thành: description/avatar creator được persist/mapping và hiển thị trong row gốc. |
+| P1 | Member Profile parity | Project membership và timezone cá nhân đã dùng backend thật; presence giả bị bỏ. Realtime presence chỉ triển khai khi có transport/heartbeat thật. |
+| P1 | Native browser dialogs | Hoàn thành: audit `apps/web` không còn `window.prompt`, `window.confirm` hoặc `window.alert`; mutation vẫn đi qua API/backend hiện hữu. |
+| P1 | Visible no-op còn lại | Inbox snoozed và Help giả đã bỏ. Label groups, Team access/recurring issue, một số Preferences/Passkeys/Sub-grouping vẫn disabled hoặc unavailable; chỉ bật khi schema/service thật tồn tại, nếu ngoài phạm vi thì ẩn. |
 | P2 | Automation/webhook | Worker/Redis foundation có, nhưng rule builder, persisted automation và generic webhook chưa hoàn chỉnh. |
 | P2 | OAuth/enterprise identity | Google, Microsoft Entra, OIDC/SAML chưa triển khai; local email/password đang hoạt động. |
 | Excluded | AI Agent, Code Reviews | Cố ý unavailable theo phạm vi sản phẩm hiện tại; fixture/canned-response cũ đã được xóa khỏi source. |
@@ -298,7 +328,8 @@
 
 1. Quyết định semantics/persistence cho footer `Set default for everyone` trong Insights; hiện các
    selector analytics chỉ có một lựa chọn nên lưu cấu hình chưa mang thêm giá trị.
-2. Audit các control disabled còn lại: tách rõ điều kiện hợp lệ, tính năng cố ý excluded và no-op.
+2. Audit các control disabled/native dialog còn lại: tách rõ điều kiện hợp lệ, tính năng cố ý
+   excluded và no-op.
 3. Đăng nhập sẵn một phiên workspace-member trong in-app browser rồi chụp đối chiếu từng route
    chính với `upstream/master`; browser sạch hiện xác nhận route guard/login và console không lỗi.
 
