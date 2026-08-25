@@ -1,11 +1,31 @@
 [CmdletBinding()]
 param(
    [string]$SchemaPath = 'packages/database/prisma/schema.prisma',
-   [string]$MigrationsPath = 'packages/database/prisma/migrations'
+   [string]$MigrationsPath = 'packages/database/prisma/migrations',
+   [switch]$Detailed
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+function Get-RelativePathCompat {
+   param(
+      [Parameter(Mandatory)] [string]$Root,
+      [Parameter(Mandatory)] [string]$Path
+   )
+
+   $normalizedRoot = (Resolve-Path -LiteralPath $Root).Path.TrimEnd('\', '/')
+   $fullPath = (Resolve-Path -LiteralPath $Path).Path
+   if (-not $fullPath.StartsWith($normalizedRoot, [StringComparison]::OrdinalIgnoreCase)) {
+      throw "Path '$fullPath' is outside root '$normalizedRoot'."
+   }
+   return ($fullPath.Substring($normalizedRoot.Length) -replace '^[\\/]+', '')
+}
+
+function ConvertTo-HexStringCompat {
+   param([Parameter(Mandatory)] [byte[]]$Bytes)
+   return ([BitConverter]::ToString($Bytes)).Replace('-', '')
+}
 
 if (-not (Test-Path -LiteralPath $SchemaPath -PathType Leaf)) {
    throw "Prisma schema was not found: $SchemaPath"
@@ -18,7 +38,7 @@ $migrationFiles = Get-ChildItem -LiteralPath $MigrationsPath -Recurse -File -Fil
    Sort-Object FullName
 
 $migrationEntries = foreach ($migration in $migrationFiles) {
-   $relativePath = [IO.Path]::GetRelativePath((Resolve-Path -LiteralPath $MigrationsPath), $migration.FullName)
+   $relativePath = Get-RelativePathCompat -Root $MigrationsPath -Path $migration.FullName
    [ordered]@{
       path = $relativePath.Replace('\', '/')
       sha256 = (Get-FileHash -LiteralPath $migration.FullName -Algorithm SHA256).Hash
@@ -28,16 +48,25 @@ $migrationEntries = foreach ($migration in $migrationFiles) {
 $migrationManifest = $migrationEntries |
    ForEach-Object { "$($_.path) $($_.sha256)" }
 $migrationBytes = [Text.Encoding]::UTF8.GetBytes(($migrationManifest -join "`n"))
-$migrationHash = [Security.Cryptography.SHA256]::HashData($migrationBytes)
+$sha256 = [Security.Cryptography.SHA256]::Create()
+try {
+   $migrationHash = $sha256.ComputeHash($migrationBytes)
+} finally {
+   $sha256.Dispose()
+}
+
+$migrationSummary = [ordered]@{
+   count = @($migrationEntries).Count
+   manifestSha256 = ConvertTo-HexStringCompat $migrationHash
+}
+if ($Detailed) {
+   $migrationSummary.entries = @($migrationEntries)
+}
 
 [ordered]@{
    schema = [ordered]@{
       path = $SchemaPath.Replace('\', '/')
       sha256 = (Get-FileHash -LiteralPath $SchemaPath -Algorithm SHA256).Hash
    }
-   migrations = [ordered]@{
-      count = @($migrationEntries).Count
-      manifestSha256 = [Convert]::ToHexString($migrationHash)
-      entries = @($migrationEntries)
-   }
+   migrations = $migrationSummary
 } | ConvertTo-Json -Depth 4

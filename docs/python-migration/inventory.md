@@ -34,6 +34,8 @@ Recalculate the source fingerprints without network access:
 .\scripts\get-python-migration-fingerprint.ps1
 ```
 
+Use `-Detailed` only when the individual migration hashes are needed.
+
 The database structure fingerprint may be reproduced while PostgreSQL is running:
 
 ```powershell

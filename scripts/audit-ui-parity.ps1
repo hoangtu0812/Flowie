@@ -45,13 +45,17 @@ function Test-AllowedPath([string]$RelativePath) {
 
 function Get-RelativeFileMap([string]$Root) {
    $map = @{}
+   $normalizedRoot = $Root.TrimEnd('\', '/')
    foreach ($area in $areas) {
       $areaPath = Join-Path $Root $area
       if (-not (Test-Path -LiteralPath $areaPath -PathType Container)) {
          continue
       }
       Get-ChildItem -LiteralPath $areaPath -Recurse -File | ForEach-Object {
-         $relative = Convert-ToForwardSlash ([IO.Path]::GetRelativePath($Root, $_.FullName))
+         if (-not $_.FullName.StartsWith($normalizedRoot, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "File '$($_.FullName)' is outside root '$normalizedRoot'."
+         }
+         $relative = Convert-ToForwardSlash ($_.FullName.Substring($normalizedRoot.Length) -replace '^[\\/]+', '')
          $map[$relative] = $_.FullName
       }
    }
