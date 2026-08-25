@@ -39,6 +39,11 @@ class LegacyFacadeTests(unittest.TestCase):
             redis_port=6379,
             minio_host='minio',
             minio_port=9000,
+            database_url='postgresql+asyncpg://circle:circle@postgres:5432/circle',
+            auth_jwt_secret='test-secret',
+            auth_access_token_ttl_seconds=900,
+            auth_refresh_token_ttl_days=30,
+            auth_cookie_secure=False,
         )
         self.client = TestClient(
             create_app(settings, legacy_transport=httpx.MockTransport(legacy_handler))
@@ -48,16 +53,16 @@ class LegacyFacadeTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.client.__exit__(None, None, None)
 
-    def test_proxies_relative_path_body_and_auth_cookie(self) -> None:
+    def test_proxies_unmigrated_relative_path_body_and_auth_cookie(self) -> None:
         response = self.client.post(
-            '/api/v1/auth/login?source=web',
+            '/api/v1/projects?source=web',
             content=b'{"email":"user@example.com"}',
             headers={'content-type': 'application/json', 'cookie': 'flowie_access=old-token'},
         )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {'data': {'source': 'legacy'}})
-        self.assertEqual(self.requests[0].url.path, '/api/v1/auth/login')
+        self.assertEqual(self.requests[0].url.path, '/api/v1/projects')
         self.assertEqual(self.requests[0].url.query, b'source=web')
         self.assertEqual(self.requests[0].content, b'{"email":"user@example.com"}')
         self.assertEqual(self.requests[0].headers['cookie'], 'flowie_access=old-token')

@@ -5,11 +5,17 @@ from typing import Final
 
 import httpx
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .core.config import Settings
+from .core.errors import ApiError, api_error_handler, validation_error_handler
 from .core.readiness import dependency_status
+from .db.session import create_session_factory
+from .domains.auth import router as auth_router
+from .domains.users import router as users_router
+from .domains.workspaces import router as workspaces_router
 from .legacy.proxy import proxy_legacy_request
 
 API_METHODS: Final = ['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT']
@@ -24,13 +30,18 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        session_factory, engine = create_session_factory(runtime)
+        app.state.session_factory = session_factory
         async with httpx.AsyncClient(
             base_url=runtime.legacy_api_url,
             timeout=runtime.legacy_timeout_seconds,
             transport=legacy_transport,
         ) as client:
             app.state.legacy_client = client
-            yield
+            try:
+                yield
+            finally:
+                await engine.dispose()
 
     app = FastAPI(title='Flowie Python API', version='0.1.0', lifespan=lifespan)
     app.state.settings = runtime
@@ -41,6 +52,11 @@ def create_app(
         allow_methods=['*'],
         allow_headers=['*'],
     )
+    app.add_exception_handler(ApiError, api_error_handler)
+    app.add_exception_handler(RequestValidationError, validation_error_handler)
+    app.include_router(auth_router)
+    app.include_router(users_router)
+    app.include_router(workspaces_router)
 
     @app.get('/readyz')
     async def readyz(request: Request) -> JSONResponse:

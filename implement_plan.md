@@ -272,7 +272,7 @@ Nghiệm thu:
 - API legacy không public ra ngoài Docker network trừ khi bật profile debug.
 - Commit: `feat: add fastapi facade with legacy routing`.
 
-### P3 — Auth, Profile và Workspace bằng Python
+### P3 — Auth, Profile và Workspace bằng Python — in progress
 
 Phạm vi:
 
@@ -294,6 +294,19 @@ Nghiệm thu:
 - 401/403/404 không làm lộ workspace khác.
 - Password/session secret không log và không hard-code.
 - Commit: `feat: migrate auth profile and workspace to python`.
+
+Tiến độ hiện tại (P3a — completed 2026-08-25):
+
+- [x] Native Python: `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`,
+  `GET/PATCH /users/me` và `GET /workspaces/me`; các route không liệt kê vẫn qua facade.
+- [x] Session cookie `HttpOnly`/`SameSite=Lax`, JWT HS256 và bảng `sessions` dùng chung với
+  NestJS; token Python được legacy guard chấp nhận trong authenticated regression.
+- [x] Tương thích password hash Argon2 Node cũ: chuẩn hóa riêng thứ tự metadata `m,p,t` trước
+  verify, không đổi hash hoặc buộc người dùng reset mật khẩu.
+- [x] Docker persistence regression passed: native login/profile/profile update/workspace/refresh/
+  logout, `401` sau logout, readiness, legacy proxy và offline-start.
+- [ ] P3b: native register, session list/revoke và workspace create/membership/invitation. Các
+  endpoint này đang proxy legacy nên không làm gián đoạn UI hay session hiện có.
 
 ### P4 — Teams bằng Python
 
@@ -503,6 +516,7 @@ Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modu
 | 2026-08-25 | P1 Project List | `refactor: remove non-baseline project label control` | Removed row-level label mutation UI | Toàn bộ NestJS/worker | Restore Project presentation |
 | 2026-08-25 | P2 facade (local verification) | `bc05139` | Python proxy test + Web production build passed; Docker image smoke pending 5G | Toàn bộ NestJS/worker qua FastAPI facade | Build FastAPI image và smoke Docker |
 | 2026-08-25 | P2 Docker acceptance | `cb3af6c` | Python image built on 5G; `/readyz`, legacy health, login, authenticated profile and offline start passed | Toàn bộ NestJS/worker qua FastAPI facade | P3 Auth/Profile/Workspace native Python |
+| 2026-08-25 | P3a native session/profile/workspace | pending commit | Native session/profile/current-workspace + Node Argon2 compatibility and cross-token regression passed | Register, session management, workspace mutation/invitations | P3b auth/workspace mutations |
 
 ## 13. Definition of Done toàn dự án
 
