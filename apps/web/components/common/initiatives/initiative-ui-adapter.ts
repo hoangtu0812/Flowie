@@ -12,10 +12,10 @@ export const INITIATIVE_STATUS_META: Record<InitiativeStatus, { label: string; c
 };
 
 export const initiativeHealth = [
-   { id: 'no-update', name: 'No Update', color: '#8f9299' },
-   { id: 'off-track', name: 'Off Track', color: '#eb5757' },
-   { id: 'on-track', name: 'On Track', color: '#4cb782' },
-   { id: 'at-risk', name: 'At Risk', color: '#f2c94c' },
+   { id: 'no-update', name: 'No Update', color: '#8f9299', description: 'No project update yet.' },
+   { id: 'off-track', name: 'Off Track', color: '#eb5757', description: 'Project is off track.' },
+   { id: 'on-track', name: 'On Track', color: '#4cb782', description: 'Project is on track.' },
+   { id: 'at-risk', name: 'At Risk', color: '#f2c94c', description: 'Project may be delayed.' },
 ] as const;
 
 type UiPriority = (typeof priorities)[number];

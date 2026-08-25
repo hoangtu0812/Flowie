@@ -4,13 +4,13 @@ import ProjectsTimeline from '@/components/common/projects/projects-timeline';
 import { ProjectGroup } from '@/components/common/projects/projects';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
+   adaptInitiatives,
    countCompletedProjects,
-   getInitiativeById,
    getInitiativeProjects,
    Initiative,
    INITIATIVE_STATUS_META,
-} from '@/mock-data/initiatives';
-import { Project } from '@/mock-data/projects';
+} from './initiative-ui-adapter';
+import type { Project } from '@/types/projects';
 import {
    CalendarRange,
    ChevronDown,
@@ -26,6 +26,7 @@ import { parseAsStringLiteral, useQueryState } from 'nuqs';
 import { useMemo } from 'react';
 import { InitiativeProgressPanel } from './initiative-progress-panel';
 import { InitiativeStatusIcon } from './initiative-status-icon';
+import { useLiveInitiatives } from './use-live-initiatives';
 
 const TABS = ['overview', 'activity', 'projects'] as const;
 
@@ -50,7 +51,7 @@ const formatTarget = (iso: string): string => {
 
 /* ------------------------------ projects table ---------------------------- */
 
-const GROUP_ORDER: { key: string; label: string; match: (project: Project) => boolean }[] = [
+const GROUP_ORDER: { key: string; label: string; match: (project: ReturnType<typeof getInitiativeProjects>[number]) => boolean }[] = [
    { key: 'in-progress', label: 'In Progress', match: (p) => p.status.category === 'started' },
    { key: 'planned', label: 'Planned', match: (p) => p.status.category === 'unstarted' },
    {
@@ -149,7 +150,7 @@ function PropertyRow({ label, children }: { label: string; children: React.React
 
 function Overview({ initiative }: { initiative: Initiative }) {
    const completed = countCompletedProjects(initiative);
-   const total = initiative.projectIds.length;
+   const total = getInitiativeProjects(initiative).length;
 
    return (
       <div className="w-full h-full flex overflow-hidden">
@@ -179,7 +180,7 @@ function Overview({ initiative }: { initiative: Initiative }) {
                      <span className="inline-flex items-center gap-1.5">
                         <Avatar className="size-4">
                            <AvatarImage
-                              src={initiative.owner.avatarUrl}
+                              src={initiative.owner.avatarUrl ?? undefined}
                               alt={initiative.owner.name}
                            />
                            <AvatarFallback className="text-[8px]">
@@ -245,7 +246,7 @@ function Overview({ initiative }: { initiative: Initiative }) {
                      <span className="inline-flex items-center gap-1.5">
                         <Avatar className="size-4">
                            <AvatarImage
-                              src={initiative.owner.avatarUrl}
+                              src={initiative.owner.avatarUrl ?? undefined}
                               alt={initiative.owner.name}
                            />
                            <AvatarFallback className="text-[8px]">
@@ -288,16 +289,13 @@ function Overview({ initiative }: { initiative: Initiative }) {
                   </button>
                </div>
                <div className="flex flex-col gap-2 text-xs text-muted-foreground">
-                  <span className="flex items-start gap-2">
-                     <FilePenLine className="size-3.5 mt-px shrink-0" />
-                     {initiative.owner?.name ?? 'someone'} renamed the initiative ·{' '}
-                     {formatTarget(initiative.createdAt)}
-                  </span>
-                  <span className="flex items-start gap-2">
-                     <FileText className="size-3.5 mt-px shrink-0" />
-                     {initiative.owner?.name ?? 'someone'} created the initiative ·{' '}
-                     {formatTarget(initiative.createdAt)}
-                  </span>
+                  {initiative.updates.slice(0, 2).map((update) => (
+                     <span key={update.id} className="flex items-start gap-2">
+                        <FilePenLine className="size-3.5 mt-px shrink-0" />
+                        {update.author.name} posted an update · {formatTarget(update.createdAt)}
+                     </span>
+                  ))}
+                  {initiative.updates.length === 0 && <span>No activity yet</span>}
                </div>
             </div>
          </aside>
@@ -308,27 +306,18 @@ function Overview({ initiative }: { initiative: Initiative }) {
 /* ------------------------------- activity tab ----------------------------- */
 
 function Activity({ initiative }: { initiative: Initiative }) {
-   const events = [
-      {
-         label: `${initiative.owner?.name ?? 'someone'} created the initiative`,
-         date: formatTarget(initiative.createdAt),
-      },
-      {
-         label: `${initiative.owner?.name ?? 'someone'} changed the status to ${INITIATIVE_STATUS_META[initiative.status].label}`,
-         date: formatTarget(initiative.createdAt),
-      },
-      {
-         label: `${initiative.projectIds.length} projects added to the initiative`,
-         date: formatTarget(initiative.createdAt),
-      },
-   ];
+   const events = initiative.updates.map((update) => ({
+      id: update.id,
+      label: `${update.author.name} posted an update`,
+      date: formatTarget(update.createdAt),
+   }));
    return (
       <div className="max-w-2xl mx-auto px-8 py-10 flex flex-col gap-4 w-full">
          <h2 className="text-lg font-medium">Activity</h2>
          <div className="flex flex-col">
-            {events.map((event, index) => (
+            {events.map((event) => (
                <div
-                  key={index}
+                  key={event.id}
                   className="flex items-center gap-3 py-3 border-b border-border/50 text-sm"
                >
                   <FileText className="size-4 text-muted-foreground shrink-0" />
@@ -336,6 +325,7 @@ function Activity({ initiative }: { initiative: Initiative }) {
                   <span className="text-xs text-muted-foreground">{event.date}</span>
                </div>
             ))}
+            {events.length === 0 && <p className="py-8 text-sm text-muted-foreground">No activity yet.</p>}
          </div>
       </div>
    );
@@ -346,7 +336,9 @@ function Activity({ initiative }: { initiative: Initiative }) {
 /** Initiative detail page: Overview / Activity / Projects tabs. */
 export default function InitiativeDetails({ initiativeId }: { initiativeId: string }) {
    const [tab] = useQueryState('tab', parseAsStringLiteral(TABS).withDefault('overview'));
-   const initiative = getInitiativeById(initiativeId);
+   const { initiatives: liveInitiatives, loading, error } = useLiveInitiatives();
+   const initiatives = useMemo(() => adaptInitiatives(liveInitiatives), [liveInitiatives]);
+   const initiative = initiatives.find((item) => item.id === initiativeId);
 
    const timelineGroups = useMemo<ProjectGroup[]>(() => {
       if (!initiative) return [];
@@ -354,13 +346,24 @@ export default function InitiativeDetails({ initiativeId }: { initiativeId: stri
          {
             id: initiative.id,
             name: initiative.name,
-            icon: initiative.icon,
-            projects: getInitiativeProjects(initiative),
+            icon: initiative.icon ?? undefined,
+            // Timeline only consumes the presentation subset exposed by the
+            // Initiative project adapter; the API deliberately does not
+            // manufacture unrelated mock User fields.
+            projects: getInitiativeProjects(initiative) as unknown as Project[],
          },
       ];
    }, [initiative]);
 
-   if (!initiative) {
+   if (loading) {
+      return (
+         <div className="w-full h-full flex items-center justify-center text-sm text-muted-foreground">
+            Loading initiative…
+         </div>
+      );
+   }
+
+   if (!initiative || error) {
       return (
          <div className="w-full h-full flex items-center justify-center text-sm text-muted-foreground">
             Initiative not found
