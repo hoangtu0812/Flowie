@@ -1,10 +1,25 @@
 'use client';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+   AlertDialog,
+   AlertDialogAction,
+   AlertDialogCancel,
+   AlertDialogContent,
+   AlertDialogDescription,
+   AlertDialogFooter,
+   AlertDialogHeader,
+   AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { authenticatedFetch } from '@/lib/workspaces';
+import {
+   authenticatedFetch,
+   loadCurrentWorkspace,
+   loadWorkspaceMemberships,
+} from '@/lib/workspaces';
 import { Pencil } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { ChangeEvent, KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { SettingsCard, SettingsRow, SettingsSection, SettingsShell } from './shared';
@@ -42,8 +57,11 @@ function responseMessage(payload: unknown, fallback: string) {
 
 /** Personal "Profile" settings backed by the native Python user profile API. */
 export default function Profile() {
+   const router = useRouter();
    const [profile, setProfile] = useState<ProfileData | null>(null);
    const [saving, setSaving] = useState(false);
+   const [leaveOpen, setLeaveOpen] = useState(false);
+   const [leaving, setLeaving] = useState(false);
    const avatarInput = useRef<HTMLInputElement>(null);
 
    useEffect(() => {
@@ -117,130 +135,184 @@ export default function Profile() {
       }
    };
 
+   const leaveWorkspace = async () => {
+      setLeaving(true);
+      try {
+         const workspace = await loadCurrentWorkspace();
+         const response = await authenticatedFetch(`${api}/workspaces/${workspace.id}/leave`, {
+            method: 'DELETE',
+         });
+         const payload = (await response.json().catch(() => null)) as {
+            message?: string | string[];
+         } | null;
+         if (!response.ok) throw new Error(responseMessage(payload, 'Could not leave workspace.'));
+         const memberships = await loadWorkspaceMemberships();
+         const nextWorkspace = memberships[0]?.workspace;
+         toast.success('You left the workspace.');
+         router.replace(nextWorkspace ? `/${nextWorkspace.slug}/teams` : '/invitations');
+      } catch (error) {
+         toast.error(error instanceof Error ? error.message : 'Could not leave workspace.');
+      } finally {
+         setLeaving(false);
+         setLeaveOpen(false);
+      }
+   };
+
    const name = profile?.name ?? '';
    const avatar = avatarSource(profile?.avatarUrl);
 
    return (
-      <SettingsShell title="Profile">
-         <SettingsSection>
-            <SettingsCard>
-               <SettingsRow
-                  title="Profile picture"
-                  trailing={
-                     <>
+      <>
+         <SettingsShell title="Profile">
+            <SettingsSection>
+               <SettingsCard>
+                  <SettingsRow
+                     title="Profile picture"
+                     trailing={
+                        <>
+                           <Input
+                              ref={avatarInput}
+                              type="file"
+                              accept="image/jpeg,image/png,image/gif,image/webp"
+                              className="hidden"
+                              onChange={uploadAvatar}
+                           />
+                           <button
+                              type="button"
+                              onClick={() => avatarInput.current?.click()}
+                              className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              aria-label="Upload profile picture"
+                              title="Upload profile picture"
+                           >
+                              <Avatar className="size-9">
+                                 <AvatarImage src={avatar} alt={name} />
+                                 <AvatarFallback
+                                    className="text-sm font-medium text-white"
+                                    style={{ backgroundColor: avatarColor(name) }}
+                                 >
+                                    {name.trim().charAt(0).toUpperCase() || '?'}
+                                 </AvatarFallback>
+                              </Avatar>
+                           </button>
+                        </>
+                     }
+                  />
+                  <SettingsRow
+                     title="Email"
+                     trailing={
+                        <span className="inline-flex items-center gap-2 text-foreground">
+                           {profile?.email ?? ''}
+                           <Button
+                              size="icon"
+                              variant="ghost"
+                              className="size-6"
+                              disabled
+                              aria-label="Email address"
+                           >
+                              <Pencil className="size-3" />
+                           </Button>
+                        </span>
+                     }
+                  />
+                  <SettingsRow
+                     title="Full name"
+                     trailing={
                         <Input
-                           ref={avatarInput}
-                           type="file"
-                           accept="image/jpeg,image/png,image/gif,image/webp"
-                           className="hidden"
-                           onChange={uploadAvatar}
+                           value={name}
+                           disabled={!profile || saving}
+                           onChange={(event) =>
+                              setProfile((current) =>
+                                 current ? { ...current, name: event.target.value } : current
+                              )
+                           }
+                           onBlur={() => save('name')}
+                           onKeyDown={submitOnEnter}
+                           className="h-8 w-44"
                         />
-                        <button
-                           type="button"
-                           onClick={() => avatarInput.current?.click()}
-                           className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                           aria-label="Upload profile picture"
-                           title="Upload profile picture"
-                        >
-                           <Avatar className="size-9">
-                              <AvatarImage src={avatar} alt={name} />
-                              <AvatarFallback
-                                 className="text-sm font-medium text-white"
-                                 style={{ backgroundColor: avatarColor(name) }}
-                              >
-                                 {name.trim().charAt(0).toUpperCase() || '?'}
-                              </AvatarFallback>
-                           </Avatar>
-                        </button>
-                     </>
-                  }
-               />
-               <SettingsRow
-                  title="Email"
-                  trailing={
-                     <span className="inline-flex items-center gap-2 text-foreground">
-                        {profile?.email ?? ''}
-                        <Button
-                           size="icon"
-                           variant="ghost"
-                           className="size-6"
-                           disabled
-                           aria-label="Email address"
-                        >
-                           <Pencil className="size-3" />
-                        </Button>
-                     </span>
-                  }
-               />
-               <SettingsRow
-                  title="Full name"
-                  trailing={
-                     <Input
-                        value={name}
-                        disabled={!profile || saving}
-                        onChange={(event) =>
-                           setProfile((current) =>
-                              current ? { ...current, name: event.target.value } : current
-                           )
-                        }
-                        onBlur={() => save('name')}
-                        onKeyDown={submitOnEnter}
-                        className="h-8 w-44"
-                     />
-                  }
-               />
-               <SettingsRow
-                  title="Title"
-                  description="Your job title or role"
-                  trailing={
-                     <Input
-                        value={profile?.title ?? ''}
-                        disabled={!profile || saving}
-                        placeholder="Software engineer"
-                        onChange={(event) =>
-                           setProfile((current) =>
-                              current ? { ...current, title: event.target.value } : current
-                           )
-                        }
-                        onBlur={() => save('title')}
-                        onKeyDown={submitOnEnter}
-                        className="h-8 w-44"
-                     />
-                  }
-               />
-               <SettingsRow
-                  title="Username"
-                  description="One word, like a nickname or first name"
-                  trailing={
-                     <Input
-                        value={profile?.username ?? ''}
-                        disabled={!profile || saving}
-                        onChange={(event) =>
-                           setProfile((current) =>
-                              current ? { ...current, username: event.target.value } : current
-                           )
-                        }
-                        onBlur={() => save('username')}
-                        onKeyDown={submitOnEnter}
-                        className="h-8 w-44"
-                     />
-                  }
-               />
-            </SettingsCard>
-         </SettingsSection>
+                     }
+                  />
+                  <SettingsRow
+                     title="Title"
+                     description="Your job title or role"
+                     trailing={
+                        <Input
+                           value={profile?.title ?? ''}
+                           disabled={!profile || saving}
+                           placeholder="Software engineer"
+                           onChange={(event) =>
+                              setProfile((current) =>
+                                 current ? { ...current, title: event.target.value } : current
+                              )
+                           }
+                           onBlur={() => save('title')}
+                           onKeyDown={submitOnEnter}
+                           className="h-8 w-44"
+                        />
+                     }
+                  />
+                  <SettingsRow
+                     title="Username"
+                     description="One word, like a nickname or first name"
+                     trailing={
+                        <Input
+                           value={profile?.username ?? ''}
+                           disabled={!profile || saving}
+                           onChange={(event) =>
+                              setProfile((current) =>
+                                 current ? { ...current, username: event.target.value } : current
+                              )
+                           }
+                           onBlur={() => save('username')}
+                           onKeyDown={submitOnEnter}
+                           className="h-8 w-44"
+                        />
+                     }
+                  />
+               </SettingsCard>
+            </SettingsSection>
 
-         <SettingsSection title="Workspace access">
-            <SettingsCard>
-               <SettingsRow
-                  title="Remove yourself from workspace"
-                  trailing={
-                     <Button size="xs" variant="ghost" className="text-red-500 hover:text-red-500">
-                        Leave workspace
-                     </Button>
-                  }
-               />
-            </SettingsCard>
-         </SettingsSection>
-      </SettingsShell>
+            <SettingsSection title="Workspace access">
+               <SettingsCard>
+                  <SettingsRow
+                     title="Remove yourself from workspace"
+                     trailing={
+                        <Button
+                           size="xs"
+                           variant="ghost"
+                           className="text-red-500 hover:text-red-500"
+                           onClick={() => setLeaveOpen(true)}
+                        >
+                           Leave workspace
+                        </Button>
+                     }
+                  />
+               </SettingsCard>
+            </SettingsSection>
+         </SettingsShell>
+         <AlertDialog open={leaveOpen} onOpenChange={(open) => !leaving && setLeaveOpen(open)}>
+            <AlertDialogContent>
+               <AlertDialogHeader>
+                  <AlertDialogTitle>Leave workspace?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                     You will lose access to its teams, projects, and issues. A workspace owner must
+                     transfer ownership before leaving.
+                  </AlertDialogDescription>
+               </AlertDialogHeader>
+               <AlertDialogFooter>
+                  <AlertDialogCancel disabled={leaving}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                     disabled={leaving}
+                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                     onClick={(event) => {
+                        event.preventDefault();
+                        void leaveWorkspace();
+                     }}
+                  >
+                     {leaving ? 'Leaving…' : 'Leave workspace'}
+                  </AlertDialogAction>
+               </AlertDialogFooter>
+            </AlertDialogContent>
+         </AlertDialog>
+      </>
    );
 }
