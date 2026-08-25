@@ -1,17 +1,36 @@
 from __future__ import annotations
 
+from mimetypes import guess_type
+from secrets import token_urlsafe
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, Request, UploadFile
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
 from ..db.session import get_session
+from ..storage.minio import MinioStorage
 from .auth import current_user
 
 router = APIRouter(prefix='/api/v1/users', tags=['users'])
+MAX_AVATAR_BYTES = 5 * 1024 * 1024
+AVATAR_PREFIX = 'avatars/'
+
+
+def _avatar_content_type(body: bytes) -> tuple[str, str] | None:
+    """Recognize raster image bytes instead of trusting the browser MIME type."""
+    if body.startswith(b'\xff\xd8\xff'):
+        return ('image/jpeg', 'jpg')
+    if body.startswith(b'\x89PNG\r\n\x1a\n'):
+        return ('image/png', 'png')
+    if body.startswith((b'GIF87a', b'GIF89a')):
+        return ('image/gif', 'gif')
+    if len(body) >= 12 and body[:4] == b'RIFF' and body[8:12] == b'WEBP':
+        return ('image/webp', 'webp')
+    return None
 
 
 class ProfileUpdate(BaseModel):
@@ -23,6 +42,7 @@ class ProfileUpdate(BaseModel):
 
 
 def _profile(row: object) -> dict[str, object]:
+    stored_avatar_url = row['avatar_url']
     return {
         'id': row['id'],
         'name': row['name'],
@@ -30,7 +50,7 @@ def _profile(row: object) -> dict[str, object]:
         'username': row['username'],
         'title': row['title'],
         'timezone': row['timezone'],
-        'avatarUrl': row['avatar_url'],
+        'avatarUrl': f'/users/{row["id"]}/avatar' if stored_avatar_url and stored_avatar_url.startswith(AVATAR_PREFIX) else stored_avatar_url,
         'createdAt': row['created_at'],
     }
 
@@ -84,3 +104,55 @@ async def update_me(
         await db.rollback()
         raise ApiError(409, 'The profile could not be updated.', 'Conflict') from error
     return {'data': _profile(result.mappings().one())}
+
+
+@router.post('/me/avatar')
+async def upload_avatar(
+    request: Request,
+    file: UploadFile = File(),
+    user: object = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, object]:
+    body = await file.read(MAX_AVATAR_BYTES + 1)
+    if not body:
+        raise ApiError(400, 'An image is required.', 'Bad Request')
+    if len(body) > MAX_AVATAR_BYTES:
+        raise ApiError(400, 'Profile pictures may not exceed 5 MB.', 'Bad Request')
+    image = _avatar_content_type(body)
+    if not image:
+        raise ApiError(400, 'Profile pictures must be a JPEG, PNG, GIF, or WebP image.', 'Bad Request')
+
+    content_type, extension = image
+    object_key = f'{AVATAR_PREFIX}{user["id"]}/{token_urlsafe(18)}.{extension}'
+    await MinioStorage(request.app.state.settings).put(object_key, body, content_type)
+    await db.execute(
+        text(
+            '''UPDATE users
+               SET avatar_url = :object_key, updated_at = CURRENT_TIMESTAMP
+               WHERE id = :id'''
+        ),
+        {'id': user['id'], 'object_key': object_key},
+    )
+    await db.commit()
+    stored = await db.execute(
+        text('SELECT id, name, email, username, title, timezone, avatar_url, created_at FROM users WHERE id = :id'),
+        {'id': user['id']},
+    )
+    # The storage key remains internal. The public route below always resolves
+    # the most recent avatar for this user.
+    profile = _profile(stored.mappings().one())
+    profile['avatarUrl'] = f'/users/{user["id"]}/avatar'
+    return {'data': profile}
+
+
+@router.get('/{user_id}/avatar')
+async def get_avatar(user_id: str, request: Request, db: AsyncSession = Depends(get_session)) -> Response:
+    """Serve an uploaded avatar without exposing the internal MinIO object key."""
+    result = await db.execute(text('SELECT avatar_url FROM users WHERE id = :id'), {'id': user_id})
+    row = result.mappings().first()
+    object_key = row['avatar_url'] if row else None
+    if not object_key or not object_key.startswith(AVATAR_PREFIX):
+        raise ApiError(404, 'Profile picture not found.', 'Not Found')
+    body = await MinioStorage(request.app.state.settings).get(object_key)
+    content_type = guess_type(object_key)[0] or 'application/octet-stream'
+    return Response(body, media_type=content_type, headers={'cache-control': 'public, max-age=3600'})
