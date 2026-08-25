@@ -195,7 +195,7 @@ Trạng thái hoàn thành:
   người dùng trong inventory.
 - Script read-only `scripts/get-python-migration-fingerprint.ps1` tái lập fingerprint source offline.
 
-### P1 — Khôi phục UI Circle và dựng parity guard
+### P1 — Khôi phục UI Circle và dựng parity guard — in progress
 
 Mục tiêu: giải quyết dứt điểm việc UI lệch trước khi viết thêm màn hình.
 
@@ -214,6 +214,14 @@ Nghiệm thu:
 - Project list/detail và sidebar đạt parity light/dark, trừ ngoại lệ được duyệt.
 - Chưa yêu cầu Python hoàn tất; UI có thể dùng NestJS qua facade/legacy để chạy thử sớm.
 - Commit: `refactor: restore circle ui baseline`.
+
+Tiến độ hiện tại:
+
+- [x] `scripts/audit-ui-parity.ps1` so sánh read-only `app`, `components`, `hooks`, `lib`, `store`
+  và `public` với Circle baseline.
+- [x] Kết quả baseline và thứ tự xử lý được lưu tại `docs/python-migration/ui-parity-baseline.md`.
+- [ ] Khôi phục presentation theo baseline; bắt đầu bằng layout/header/sidebar và Project.
+- [ ] Chụp visual acceptance light/dark sau mỗi route hoàn thành.
 
 ### P2 — FastAPI foundation và legacy facade
 
@@ -460,6 +468,7 @@ Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modu
 | --- | --- | --- | --- | --- | --- |
 | 2026-08-25 | Quyết định kiến trúc | `1736872` | Chốt UI Circle + FastAPI strangler migration | Toàn bộ NestJS/worker | P0 inventory |
 | 2026-08-25 | P0 inventory | `5916b50` | API/schema/job inventory + structure fingerprints | Toàn bộ NestJS/worker | P1 UI parity guard |
+| 2026-08-25 | P1 parity guard | `chore: add Circle UI parity audit` | 110 identical / 184 changed / 18 missing / 50 extra | Toàn bộ NestJS/worker | Restore Circle presentation |
 
 ## 13. Definition of Done toàn dự án
 
