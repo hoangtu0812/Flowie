@@ -12,7 +12,6 @@ import {
 import { cycles, formatCycleDateRange } from '@/mock-data/cycles';
 import { Issue } from '@/mock-data/issues';
 import { priorities } from '@/mock-data/priorities';
-import { projects as allProjects } from '@/mock-data/projects';
 import { status as allStatus } from '@/mock-data/status';
 import { teams } from '@/mock-data/teams';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -79,6 +78,7 @@ export function CommandPalette() {
       issues,
       members,
       labels,
+      projects,
       updateIssueStatus,
       updateIssuePriority,
       updateIssueAssignee,
@@ -560,21 +560,27 @@ export function CommandPalette() {
                      <CommandGroup heading="Move to project…">
                         <CommandItem
                            onSelect={() => {
-                              updateIssueProject(issue.id, undefined);
-                              toast.success('Removed from project');
-                              close();
+                              void updateIssueProject(issue.id, undefined).then((updated) => {
+                                 if (updated) {
+                                    toast.success('Removed from project');
+                                    close();
+                                 }
+                              });
                            }}
                         >
                            <Box className="text-muted-foreground" />
                            No project
                         </CommandItem>
-                        {allProjects.map((project) => (
+                        {projects.map((project) => (
                            <CommandItem
                               key={project.id}
                               onSelect={() => {
-                                 updateIssueProject(issue.id, project);
-                                 toast.success(`Moved to ${project.name}`);
-                                 close();
+                                 void updateIssueProject(issue.id, project).then((updated) => {
+                                    if (updated) {
+                                       toast.success(`Moved to ${project.name}`);
+                                       close();
+                                    }
+                                 });
                               }}
                            >
                               <project.icon className="text-muted-foreground" />

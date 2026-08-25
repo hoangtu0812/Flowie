@@ -37,7 +37,6 @@ import React, { useState } from 'react';
 import { useIssuesStore } from '@/store/issues-store';
 import { status } from '@/mock-data/status';
 import { priorities } from '@/mock-data/priorities';
-import { projects } from '@/mock-data/projects';
 import { toast } from 'sonner';
 
 interface IssueContextMenuProps {
@@ -59,6 +58,7 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       getIssueById,
       members,
       labels,
+      projects,
    } = useIssuesStore();
 
    const handleStatusChange = (statusId: string) => {
@@ -105,11 +105,12 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       }
    };
 
-   const handleProjectChange = (projectId: string | null) => {
+   const handleProjectChange = async (projectId: string | null) => {
       if (!issueId) return;
       const newProject = projectId ? projects.find((p) => p.id === projectId) : undefined;
-      updateIssueProject(issueId, newProject);
-      toast.success(newProject ? `Project set to ${newProject.name}` : 'Project removed');
+      if (await updateIssueProject(issueId, newProject)) {
+         toast.success(newProject ? `Project set to ${newProject.name}` : 'Project removed');
+      }
    };
 
    const handleSetDueDate = () => {
@@ -247,13 +248,13 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                   <Folder className="mr-2 size-4" /> Project
                </ContextMenuSubTrigger>
                <ContextMenuSubContent className="w-64">
-                  <ContextMenuItem onClick={() => handleProjectChange(null)}>
+                  <ContextMenuItem onClick={() => void handleProjectChange(null)}>
                      <Folder className="size-4" /> No Project
                   </ContextMenuItem>
                   {projects.slice(0, 5).map((project) => (
                      <ContextMenuItem
                         key={project.id}
-                        onClick={() => handleProjectChange(project.id)}
+                        onClick={() => void handleProjectChange(project.id)}
                      >
                         <project.icon className="size-4" /> {project.name}
                      </ContextMenuItem>
