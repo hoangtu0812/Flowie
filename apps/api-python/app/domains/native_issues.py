@@ -966,6 +966,7 @@ async def remove_issue_relation(
 
 
 @router.post('/{issue_id}/move')
+@public_router.post('/{issue_id}/move')
 async def move_issue(
     issue_id: str,
     payload: MoveIssueInput,
@@ -1046,6 +1047,7 @@ async def move_issue(
 
 
 @router.post('/{issue_id}/classification')
+@public_router.post('/{issue_id}/classification')
 async def classify_issue(
     issue_id: str,
     payload: ClassifyIssueInput,
@@ -1112,6 +1114,7 @@ async def classify_issue(
 
 
 @router.post('/{issue_id}/convert-to-comment')
+@public_router.post('/{issue_id}/convert-to-comment')
 async def convert_issue_to_comment(
     issue_id: str,
     payload: ConvertIssueToCommentInput,
