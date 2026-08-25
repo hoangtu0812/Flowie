@@ -171,7 +171,7 @@ Khác biệt có chủ đích phải ghi trong `docs/python-migration/contract-d
 
 ## 7. Backlog thực thi bắt buộc
 
-### P0 — Safety checkpoint và inventory
+### P0 — Safety checkpoint và inventory — completed 2026-08-25
 
 Việc làm:
 
@@ -186,6 +186,14 @@ Nghiệm thu:
 - Có rollback rõ về `013c447`.
 - Không file production nào bị xóa trong P0.
 - Commit: `docs: baseline python migration inventory`.
+
+Trạng thái hoàn thành:
+
+- Branch triển khai `codex/python-rebuild` được tạo từ checkpoint sạch `38cca0b`.
+- Inventory tại `docs/python-migration/inventory.md` ghi domain/API/schema/job/hạ tầng.
+- Fingerprint của source schema, 61 migration và PostgreSQL schema-only đã được chụp; không có dữ liệu
+  người dùng trong inventory.
+- Script read-only `scripts/get-python-migration-fingerprint.ps1` tái lập fingerprint source offline.
 
 ### P1 — Khôi phục UI Circle và dựng parity guard
 
@@ -451,6 +459,7 @@ Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modu
 | Ngày | Phase | Commit | Evidence | Legacy còn lại | Việc tiếp theo |
 | --- | --- | --- | --- | --- | --- |
 | 2026-08-25 | Quyết định kiến trúc | `1736872` | Chốt UI Circle + FastAPI strangler migration | Toàn bộ NestJS/worker | P0 inventory |
+| 2026-08-25 | P0 inventory | `docs: baseline python migration inventory` | API/schema/job inventory + structure fingerprints | Toàn bộ NestJS/worker | P1 UI parity guard |
 
 ## 13. Definition of Done toàn dự án
 
