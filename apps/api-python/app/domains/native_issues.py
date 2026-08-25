@@ -67,6 +67,11 @@ class UpdateIssueRelationInput(BaseModel):
     type: Literal['RELATED', 'BLOCKS']
 
 
+class MoveIssueInput(BaseModel):
+    workspaceId: str = Field(min_length=1)
+    teamId: str = Field(min_length=1)
+
+
 async def _issue_row(
     db: AsyncSession, issue_id: str, workspace_id: str, user_id: str
 ) -> dict[str, Any]:
@@ -677,6 +682,86 @@ async def remove_issue_relation(
     })
     await db.commit()
     return {'data': {'issueId': issue['id'], 'relatedIssueId': related['id'], 'removed': True}}
+
+
+@router.post('/{issue_id}/move')
+async def move_issue(
+    issue_id: str,
+    payload: MoveIssueInput,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    issue = await _issue_row(db, issue_id, payload.workspaceId, user['id'])
+    if issue['teamId'] == payload.teamId:
+        return {'data': issue}
+    await _team_access(db, payload.workspaceId, payload.teamId, user['id'])
+    destination = await db.execute(
+        text(
+            '''UPDATE teams SET issue_sequence = issue_sequence + 1, updated_at = :now
+               WHERE id = :team_id AND workspace_id = :workspace_id AND archived_at IS NULL
+               RETURNING id, name, identifier, issue_sequence'''
+        ),
+        {'team_id': payload.teamId, 'workspace_id': payload.workspaceId, 'now': _utcnow()},
+    )
+    team = destination.mappings().first()
+    if not team:
+        raise ApiError(404, 'Destination team not found.', 'Not Found')
+    status = await db.execute(
+        text(
+            '''SELECT id FROM issue_statuses
+               WHERE workspace_id = :workspace_id AND category = :category
+                 AND (team_id = :team_id OR team_id IS NULL)
+               ORDER BY CASE WHEN team_id = :team_id THEN 0 ELSE 1 END, position ASC
+               LIMIT 1'''
+        ),
+        {
+            'workspace_id': payload.workspaceId,
+            'category': issue['status']['category'],
+            'team_id': payload.teamId,
+        },
+    )
+    destination_status = status.mappings().first()
+    if not destination_status:
+        raise ApiError(404, 'The destination team has no compatible issue status.', 'Not Found')
+    project_team_id = None
+    if issue['projectId']:
+        project_team = await db.execute(
+            text('SELECT team_id FROM projects WHERE id = :project_id'), {'project_id': issue['projectId']}
+        )
+        project_team_id = project_team.scalar_one_or_none()
+    now = _utcnow()
+    await db.execute(text('DELETE FROM issue_cycles WHERE issue_id = :issue_id'), {'issue_id': issue_id})
+    await db.execute(
+        text('UPDATE issues SET parent_issue_id = NULL, updated_at = :now WHERE parent_issue_id = :issue_id'),
+        {'issue_id': issue_id, 'now': now},
+    )
+    await db.execute(
+        text(
+            '''UPDATE issues
+               SET team_id = :team_id, status_id = :status_id, identifier = :identifier,
+                   number = :number, parent_issue_id = NULL,
+                   project_id = CASE WHEN :clear_project THEN NULL ELSE project_id END,
+                   updated_at = :now
+               WHERE id = :issue_id AND workspace_id = :workspace_id'''
+        ),
+        {
+            'team_id': team['id'],
+            'status_id': destination_status['id'],
+            'identifier': f"{team['identifier']}-{team['issue_sequence']}",
+            'number': team['issue_sequence'],
+            'clear_project': bool(project_team_id and project_team_id != team['id']),
+            'now': now,
+            'issue_id': issue_id,
+            'workspace_id': payload.workspaceId,
+        },
+    )
+    await _write_activity(db, payload.workspaceId, issue_id, user['id'], 'issue.moved', {
+        'fromTeamId': issue['teamId'],
+        'toTeamId': team['id'],
+        'identifier': f"{team['identifier']}-{team['issue_sequence']}",
+    })
+    await db.commit()
+    return {'data': await _issue_row(db, issue_id, payload.workspaceId, user['id'])}
 
 
 @router.get('/{issue_id}')
