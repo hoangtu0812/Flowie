@@ -13,6 +13,8 @@ import {
    Settings,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
@@ -33,18 +35,61 @@ import {
    SidebarMenuSubButton,
    SidebarMenuSubItem,
 } from '@/components/ui/sidebar';
-import { teams } from '@/mock-data/teams';
+import {
+   leaveWorkspaceTeam,
+   loadJoinedWorkspaceTeams,
+   type WorkspaceTeam,
+} from '@/components/common/teams/team-types';
 import { RiDonutChartFill } from '@remixicon/react';
+import { toast } from 'sonner';
 
 export function NavTeams() {
-   const joinedTeams = teams.filter((t) => t.joined);
+   const { orgId } = useParams<{ orgId: string }>();
+   const [workspaceId, setWorkspaceId] = useState<string>();
+   const [joinedTeams, setJoinedTeams] = useState<WorkspaceTeam[]>([]);
+
+   useEffect(() => {
+      let active = true;
+      const load = () => {
+         void loadJoinedWorkspaceTeams()
+            .then((result) => {
+               if (!active) return;
+               setWorkspaceId(result.workspaceId);
+               setJoinedTeams(result.teams);
+            })
+            .catch(() => {
+               if (active) {
+                  setWorkspaceId(undefined);
+                  setJoinedTeams([]);
+               }
+            });
+      };
+      load();
+      window.addEventListener('flowie-teams-changed', load);
+      return () => {
+         active = false;
+         window.removeEventListener('flowie-teams-changed', load);
+      };
+   }, [orgId]);
+
+   const leave = async (team: WorkspaceTeam) => {
+      if (!workspaceId) return;
+      try {
+         await leaveWorkspaceTeam(workspaceId, team.id);
+         setJoinedTeams((teams) => teams.filter((item) => item.id !== team.id));
+         toast.success(`Left ${team.name}.`);
+      } catch (error) {
+         toast.error(error instanceof Error ? error.message : 'Could not leave team.');
+      }
+   };
+
    return (
       <SidebarGroup>
          <SidebarGroupLabel>Your teams</SidebarGroupLabel>
          <SidebarMenu>
             {joinedTeams.map((item, index) => (
                <Collapsible
-                  key={item.name}
+                  key={item.id}
                   asChild
                   defaultOpen={index === 0}
                   className="group/collapsible"
@@ -73,25 +118,34 @@ export function NavTeams() {
                                  side="right"
                                  align="start"
                               >
-                                 <DropdownMenuItem>
+                                 <DropdownMenuItem disabled>
                                     <Settings className="size-4" />
                                     <span>Team settings</span>
                                  </DropdownMenuItem>
-                                 <DropdownMenuItem>
+                                 <DropdownMenuItem
+                                    onSelect={() => {
+                                       void navigator.clipboard
+                                          .writeText(
+                                             `${window.location.origin}/${orgId}/team/${item.identifier}/overview`
+                                          )
+                                          .then(() => toast.success('Team link copied.'))
+                                          .catch(() => toast.error('Could not copy team link.'));
+                                    }}
+                                 >
                                     <LinkIcon className="size-4" />
                                     <span>Copy link</span>
                                  </DropdownMenuItem>
-                                 <DropdownMenuItem>
+                                 <DropdownMenuItem disabled>
                                     <Archive className="size-4" />
                                     <span>Open archive</span>
                                  </DropdownMenuItem>
                                  <DropdownMenuSeparator />
-                                 <DropdownMenuItem>
+                                 <DropdownMenuItem disabled>
                                     <Bell className="size-4" />
                                     <span>Subscribe</span>
                                  </DropdownMenuItem>
                                  <DropdownMenuSeparator />
-                                 <DropdownMenuItem>
+                                 <DropdownMenuItem onSelect={() => void leave(item)}>
                                     <span>Leave team...</span>
                                  </DropdownMenuItem>
                               </DropdownMenuContent>
@@ -102,7 +156,7 @@ export function NavTeams() {
                         <SidebarMenuSub>
                            <SidebarMenuSubItem>
                               <SidebarMenuSubButton asChild>
-                                 <Link href={`/lndev-ui/team/${item.id}/overview`}>
+                                 <Link href={`/${orgId}/team/${item.identifier}/overview`}>
                                     <Home size={14} />
                                     <span>Home</span>
                                  </Link>
@@ -110,7 +164,7 @@ export function NavTeams() {
                            </SidebarMenuSubItem>
                            <SidebarMenuSubItem>
                               <SidebarMenuSubButton asChild>
-                                 <Link href={`/lndev-ui/team/${item.id}/all`}>
+                                 <Link href={`/${orgId}/team/${item.identifier}/all`}>
                                     <CopyMinus size={14} />
                                     <span>Issues</span>
                                  </Link>
@@ -118,7 +172,7 @@ export function NavTeams() {
                            </SidebarMenuSubItem>
                            <SidebarMenuSubItem>
                               <SidebarMenuSubButton asChild>
-                                 <Link href={`/lndev-ui/team/${item.id}/cycles`}>
+                                 <Link href={`/${orgId}/team/${item.identifier}/cycles`}>
                                     <RiDonutChartFill size={14} />
                                     <span>Cycles</span>
                                  </Link>
@@ -126,14 +180,18 @@ export function NavTeams() {
                               <SidebarMenuSub className="mr-0 pr-0">
                                  <SidebarMenuSubItem>
                                     <SidebarMenuSubButton asChild>
-                                       <Link href={`/lndev-ui/team/${item.id}/cycle/active`}>
+                                       <Link
+                                          href={`/${orgId}/team/${item.identifier}/cycle/active`}
+                                       >
                                           <span>Current</span>
                                        </Link>
                                     </SidebarMenuSubButton>
                                  </SidebarMenuSubItem>
                                  <SidebarMenuSubItem>
                                     <SidebarMenuSubButton asChild>
-                                       <Link href={`/lndev-ui/team/${item.id}/cycle/upcoming`}>
+                                       <Link
+                                          href={`/${orgId}/team/${item.identifier}/cycle/upcoming`}
+                                       >
                                           <span>Upcoming</span>
                                        </Link>
                                     </SidebarMenuSubButton>
@@ -142,7 +200,7 @@ export function NavTeams() {
                            </SidebarMenuSubItem>
                            <SidebarMenuSubItem>
                               <SidebarMenuSubButton asChild>
-                                 <Link href={`/lndev-ui/team/${item.id}/projects`}>
+                                 <Link href={`/${orgId}/team/${item.identifier}/projects`}>
                                     <Box size={14} />
                                     <span>Projects</span>
                                  </Link>
@@ -150,7 +208,7 @@ export function NavTeams() {
                            </SidebarMenuSubItem>
                            <SidebarMenuSubItem>
                               <SidebarMenuSubButton asChild>
-                                 <Link href={`/lndev-ui/team/${item.id}/views`}>
+                                 <Link href={`/${orgId}/team/${item.identifier}/views`}>
                                     <Layers size={14} />
                                     <span>Views</span>
                                  </Link>

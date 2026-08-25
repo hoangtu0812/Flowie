@@ -341,6 +341,11 @@ Nghiệm thu:
   deleted list/restore/archive đều đạt; duplicate identifier và workspace scope được database/RBAC bảo vệ.
 - [x] UI Teams/sidebar không thay presentation Circle; chỉ nguồn API đã chuyển Python.
 - [x] Commit: `18b3f9f feat: migrate teams to python`.
+- [x] P4d: `/[orgId]/teams` đọc Team API thật, lọc/sắp xếp theo dữ liệu thật, tạo Team qua
+  control Circle sẵn có và sidebar chỉ hiển thị membership thật. Các đường dẫn Team không còn
+  hard-code workspace fixture.
+- [x] P4d: `/[orgId]/members` đọc Workspace membership thật; Invite tạo lời mời qua Python,
+  Owner đổi role, Owner/Admin xoá member. Không còn fixture user để điền danh sách Members.
 
 ### P5 — Projects bằng Python — mốc cho người dùng chạy thử
 
@@ -570,6 +575,7 @@ Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modu
 | 2026-08-25 | P5c Circle Project detail cutover | `da19ae2` | Web production build, 4 FastAPI regression tests và Docker web rebuild/recreate đạt; Overview/Activity/Issues dùng provider + API adapter, không còn fixture data trong cây Project detail | Acceptance light/dark với workspace người dùng; endpoints P6/P7 chưa migrate vẫn facade | Người dùng tạo Project và kiểm tra ba tab |
 | 2026-08-25 | P5c Create Project readiness fix | `d7132ce` | Dialog không còn submit khi `workspaceId` chưa tải xong; Docker browser smoke xác nhận nút bị khóa trong trạng thái chưa sẵn sàng, web production build đạt | Acceptance tạo Project sau đăng nhập | Refresh, chờ workspace tải rồi tạo Project |
 | 2026-08-25 | P3d Circle Workspace UI cutover | `8a2ccd1` | Web build + FastAPI regression đạt; browser smoke ghi nhận `401 → /auth/refresh 200 → /workspaces/me 200`; switcher không còn hard-code workspace | Members presentation còn fixture; invite API native đã sẵn sàng | Tạo workspace đầu tiên rồi nối Members UI |
+| 2026-08-25 | P4d Circle Teams/Members UI cutover | current change-set | Web production build và Docker web build đạt; Team/Member list, tạo Team, invite, role và remove đều dùng Python API, không còn mock ở scope này | Cần một workspace có ít nhất hai tài khoản đã đăng ký để nghiệm thu UI thao tác thật | Người dùng tạo workspace, tạo Team và mời tài khoản Flowie thứ hai để test |
 
 ## 13. Definition of Done toàn dự án
 

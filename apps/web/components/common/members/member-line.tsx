@@ -1,12 +1,22 @@
 'use client';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+   DropdownMenu,
+   DropdownMenuContent,
+   DropdownMenuItem,
+   DropdownMenuSeparator,
+   DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
+import { useMembersData } from '@/features/members/members-data';
 import { cn } from '@/lib/utils';
-import { User } from '@/mock-data/users';
+import type { User } from '@/types/users';
 import { format, parseISO } from 'date-fns';
-import { SquareUser } from 'lucide-react';
+import { MoreHorizontal, SquareUser } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { toast } from 'sonner';
 
 interface MemberLineProps {
    user: User;
@@ -25,36 +35,51 @@ const joinedLabel = (iso: string) => {
    return date.getFullYear() === 2026 ? format(date, 'MMM d') : format(date, 'MMM yyyy');
 };
 
-const hashString = (value: string): number => {
-   let hash = 0;
-   for (let i = 0; i < value.length; i++) hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
-   return hash;
-};
-
 export default function MemberLine({ user }: MemberLineProps) {
    const { orgId } = useParams<{ orgId: string }>();
+   const { canChangeRole, canRemove, changeMemberRole, removeMember } = useMembersData();
    const isApplication = user.role === 'Application';
-   // Like Linear, some accounts show their e-mail as the primary line.
-   const showEmailAsName = !isApplication && hashString(user.id) % 4 === 0;
+   const membershipStatus =
+      user.membershipStatus === 'INVITED'
+         ? 'Invited'
+         : user.workspaceRole === 'OWNER'
+           ? 'Owner'
+           : user.role;
+
+   const updateRole = async (role: 'MEMBER' | 'ADMIN') => {
+      try {
+         await changeMemberRole(user, role);
+         toast.success('Member role updated.');
+      } catch (error) {
+         toast.error(error instanceof Error ? error.message : 'Could not update member role.');
+      }
+   };
+
+   const remove = async () => {
+      try {
+         await removeMember(user);
+         toast.success('Member removed.');
+      } catch (error) {
+         toast.error(error instanceof Error ? error.message : 'Could not remove this member.');
+      }
+   };
 
    return (
-      <Link
-         href={`/${orgId}/profiles/${user.id}`}
-         className="w-full flex items-center py-2.5 px-6 border-b hover:bg-sidebar/50 border-muted-foreground/5 text-sm last:border-b-0"
-      >
+      <div className="w-full flex items-center py-2.5 px-6 border-b hover:bg-sidebar/50 border-muted-foreground/5 text-sm last:border-b-0">
          {/* Name */}
-         <div className="flex-1 min-w-0 flex items-center gap-2.5">
+         <Link
+            href={`/${orgId}/profiles/${user.id}`}
+            className="flex-1 min-w-0 flex items-center gap-2.5"
+         >
             <Avatar className="size-8 shrink-0">
                <AvatarImage src={user.avatarUrl} alt={user.name} />
                <AvatarFallback>{user.name[0]}</AvatarFallback>
             </Avatar>
             <div className="flex flex-col items-start overflow-hidden">
-               <span className="font-medium truncate w-full">
-                  {showEmailAsName ? user.email : displayNameOf(user)}
-               </span>
+               <span className="font-medium truncate w-full">{displayNameOf(user)}</span>
                <span className="text-xs text-muted-foreground truncate w-full">{user.name}</span>
             </div>
-         </div>
+         </Link>
 
          {/* Status (role) */}
          <div className="w-[110px] shrink-0">
@@ -69,7 +94,7 @@ export default function MemberLine({ user }: MemberLineProps) {
                         : 'text-muted-foreground'
                   )}
                >
-                  {user.role}
+                  {membershipStatus}
                </span>
             )}
          </div>
@@ -101,6 +126,47 @@ export default function MemberLine({ user }: MemberLineProps) {
                </>
             )}
          </div>
-      </Link>
+         <div className="w-8 shrink-0 flex justify-end">
+            {(canChangeRole || canRemove) && user.workspaceRole !== 'OWNER' && (
+               <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                     <Button
+                        size="icon"
+                        variant="ghost"
+                        className="size-7"
+                        aria-label={`Manage ${user.name}`}
+                        onClick={(event) => event.stopPropagation()}
+                     >
+                        <MoreHorizontal className="size-4" />
+                     </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                     {canChangeRole && (
+                        <>
+                           <DropdownMenuItem
+                              disabled={user.role === 'Member'}
+                              onSelect={() => void updateRole('MEMBER')}
+                           >
+                              Make member
+                           </DropdownMenuItem>
+                           <DropdownMenuItem
+                              disabled={user.role === 'Admin'}
+                              onSelect={() => void updateRole('ADMIN')}
+                           >
+                              Make admin
+                           </DropdownMenuItem>
+                        </>
+                     )}
+                     {canChangeRole && canRemove && <DropdownMenuSeparator />}
+                     {canRemove && (
+                        <DropdownMenuItem variant="destructive" onSelect={() => void remove()}>
+                           Remove member
+                        </DropdownMenuItem>
+                     )}
+                  </DropdownMenuContent>
+               </DropdownMenu>
+            )}
+         </div>
+      </div>
    );
 }

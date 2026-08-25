@@ -1,6 +1,6 @@
 'use client';
 
-import { loadCurrentWorkspace } from '@/lib/workspaces';
+import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 
 export type TeamMember = {
    id: string;
@@ -42,26 +42,26 @@ type ApiTeam = Omit<WorkspaceTeam, 'members' | 'projectCount' | 'cycleCount'> & 
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
+export const mapWorkspaceTeam = (team: ApiTeam): WorkspaceTeam => ({
+   ...team,
+   members: team.members.map((member) => ({ ...member.user, role: member.role })),
+   projectCount: team._count.projects,
+   cycleCount: team._count.cycles,
+});
+
 export async function loadCurrentWorkspaceTeams(): Promise<{
    workspaceId: string;
    teams: WorkspaceTeam[];
 }> {
    const workspaceId = (await loadCurrentWorkspace()).id;
 
-   const teamsResponse = await fetch(`${api}/teams?workspaceId=${workspaceId}`, {
-      credentials: 'include',
-   });
+   const teamsResponse = await authenticatedFetch(`${api}/teams?workspaceId=${workspaceId}`);
    if (!teamsResponse.ok) throw new Error('Could not load teams.');
 
    const payload = (await teamsResponse.json()) as { data: ApiTeam[] };
    return {
       workspaceId,
-      teams: payload.data.map((team) => ({
-         ...team,
-         members: team.members.map((member) => ({ ...member.user, role: member.role })),
-         projectCount: team._count.projects,
-         cycleCount: team._count.cycles,
-      })),
+      teams: payload.data.map(mapWorkspaceTeam),
    };
 }
 
@@ -77,8 +77,9 @@ export async function createWorkspaceTeam(input: {
    workspaceId: string;
    name: string;
    identifier: string;
-}) {
-   const response = await fetch(`${api}/teams`, {
+   description?: string;
+}): Promise<WorkspaceTeam> {
+   const response = await authenticatedFetch(`${api}/teams`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'content-type': 'application/json' },
@@ -88,12 +89,13 @@ export async function createWorkspaceTeam(input: {
       const payload = (await response.json().catch(() => null)) as { message?: string } | null;
       throw new Error(payload?.message ?? 'Could not create team.');
    }
-   return response.json();
+   const payload = (await response.json()) as { data: ApiTeam };
+   return mapWorkspaceTeam(payload.data);
 }
 
 export async function joinWorkspaceTeam(workspaceId: string, teamId: string) {
    const query = new URLSearchParams({ workspaceId });
-   const response = await fetch(`${api}/teams/${teamId}/join?${query}`, {
+   const response = await authenticatedFetch(`${api}/teams/${teamId}/join?${query}`, {
       method: 'POST',
       credentials: 'include',
    });
@@ -106,7 +108,7 @@ export async function joinWorkspaceTeam(workspaceId: string, teamId: string) {
 
 export async function leaveWorkspaceTeam(workspaceId: string, teamId: string) {
    const query = new URLSearchParams({ workspaceId });
-   const response = await fetch(`${api}/teams/${teamId}/leave?${query}`, {
+   const response = await authenticatedFetch(`${api}/teams/${teamId}/leave?${query}`, {
       method: 'POST',
       credentials: 'include',
    });
@@ -121,14 +123,14 @@ export async function loadDeletedWorkspaceTeams(
    workspaceId: string
 ): Promise<DeletedWorkspaceTeam[]> {
    const query = new URLSearchParams({ workspaceId });
-   const response = await fetch(`${api}/teams/deleted?${query}`, { credentials: 'include' });
+   const response = await authenticatedFetch(`${api}/teams/deleted?${query}`);
    if (!response.ok) throw new Error('Could not load recently deleted teams.');
    return ((await response.json()) as { data: DeletedWorkspaceTeam[] }).data;
 }
 
 export async function restoreWorkspaceTeam(workspaceId: string, teamId: string) {
    const query = new URLSearchParams({ workspaceId });
-   const response = await fetch(`${api}/teams/${teamId}/restore?${query}`, {
+   const response = await authenticatedFetch(`${api}/teams/${teamId}/restore?${query}`, {
       method: 'POST',
       credentials: 'include',
    });

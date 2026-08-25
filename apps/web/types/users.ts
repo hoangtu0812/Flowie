@@ -8,4 +8,7 @@ export interface User {
    joinedDate: string;
    teamIds: string[];
    timezone: string;
+   workspaceMemberId?: string;
+   workspaceRole?: 'OWNER' | 'ADMIN' | 'MEMBER';
+   membershipStatus?: 'ACTIVE' | 'INVITED';
 }
