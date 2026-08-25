@@ -7,6 +7,7 @@ import { User } from '@/mock-data/users';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import { loadJoinedWorkspaceTeams } from '@/components/common/teams/team-types';
 import { create } from 'zustand';
+import { Box } from 'lucide-react';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -84,7 +85,7 @@ function asIssue(native: NativeIssue): Issue {
       createdAt: native.createdAt,
       cycleId: native.cycleLinks?.[0]?.cycleId ?? '',
       project: native.project
-         ? ({ id: native.project.id, name: native.project.name } as Project)
+         ? ({ id: native.project.id, name: native.project.name, icon: Box } as Project)
          : undefined,
       subissues: [],
       rank: native.updatedAt,
