@@ -421,6 +421,9 @@ Tiến độ thực hiện:
   thêm/xóa Issue khỏi Cycle và xem Cycle Issues. Ngày bắt đầu/kết thúc được validate, membership
   được kiểm tra trước mỗi action và burn-up được tính từ Issue/Cycle records thật. Document links,
   comments, attachments và public cutover vẫn chưa mở.
+- [x] P6c-comment-core: dựng router riêng tư `/_native/comments` cho list/create/update/delete và
+  toggle reaction. Comment kiểm tra quyền qua Issue/team, ghi activity, giữ body JSON thật và đọc
+  attachment records hiện có. MinIO upload/download và public cutover vẫn chưa mở.
 
 Nghiệm thu:
 
@@ -597,6 +600,7 @@ Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modu
 | 2026-08-25 | P5c Project user acceptance | user screenshots | List/Overview/Activity/Issues xác nhận dữ liệu thật trong dark mode; user cho phép mở P6 | Full regression light mode trước final cutover | P6a native Issues core |
 | 2026-08-25 | P6a native Issues core | current change-set | Private FastAPI list/options/CRUD, RBAC, reference validation, sequence và activity persistence; `py_compile` passed | Docker/API contract regression, comments, attachments, cycles và Circle adapter | Chạy native regression rồi mở public whitelist |
 | 2026-08-25 | P6b native Cycles core | current change-set | Private FastAPI CRUD Cycle, issue-cycle mapping và persisted burn-up; `py_compile` passed | Docker/API contract regression, Cycle documents, comments/attachments và Circle adapter | Port comments/attachments trước public whitelist |
+| 2026-08-25 | P6c native Comments core | current change-set | Private FastAPI comment CRUD/reactions/activity và attachment metadata read; `py_compile` passed | Docker/API contract regression, upload/download MinIO và Circle adapter | Port attachment authorization/streaming |
 | 2026-08-25 | P3d Circle Workspace UI cutover | `8a2ccd1` | Web build + FastAPI regression đạt; browser smoke ghi nhận `401 → /auth/refresh 200 → /workspaces/me 200`; switcher không còn hard-code workspace | Members presentation còn fixture; invite API native đã sẵn sàng | Tạo workspace đầu tiên rồi nối Members UI |
 | 2026-08-25 | P4d Circle Teams/Members UI cutover | current change-set | Web production build và Docker web build đạt; Team/Member list, tạo Team, invite, role và remove đều dùng Python API, không còn mock ở scope này | Cần một workspace có ít nhất hai tài khoản đã đăng ký để nghiệm thu UI thao tác thật | Người dùng tạo workspace, tạo Team và mời tài khoản Flowie thứ hai để test |
 | 2026-08-25 | P4e Join Team/Workspace | current change-set | Web production build đạt; Join Team và Workspace invitation đã có entry point trong UI gốc | Cần tài khoản thứ hai để xác nhận invitation/join thực tế | Rebuild Docker, sau đó nghiệm thu hai-account flow |
