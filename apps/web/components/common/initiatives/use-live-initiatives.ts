@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { loadCurrentWorkspace } from '@/lib/workspaces';
+import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 
 export type LiveInitiativeProject = {
    id: string;
@@ -44,6 +44,7 @@ export type LiveInitiative = {
       createdAt: string;
       createdBy: { id: string; name: string; avatarUrl: string | null };
    }>;
+   labelLinks: Array<{ label: LiveWorkspaceLabel }>;
    projectLinks: Array<{ project: LiveInitiativeProject }>;
    _count: { projectLinks: number };
 };
@@ -53,6 +54,11 @@ export type LiveWorkspaceMember = {
    userId: string;
    status: string;
    user: { id: string; name: string; avatarUrl: string | null };
+};
+export type LiveWorkspaceLabel = {
+   id: string;
+   name: string;
+   color: string;
 };
 export type LiveInitiativeActivity = {
    id: string;
@@ -68,6 +74,7 @@ export function useLiveInitiatives() {
    const [initiatives, setInitiatives] = useState<LiveInitiative[]>([]);
    const [projects, setProjects] = useState<LiveWorkspaceProject[]>([]);
    const [members, setMembers] = useState<LiveWorkspaceMember[]>([]);
+   const [labels, setLabels] = useState<LiveWorkspaceLabel[]>([]);
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState<string>();
    const [refreshKey, setRefreshKey] = useState(0);
@@ -79,18 +86,13 @@ export function useLiveInitiatives() {
          setError(undefined);
          try {
             const currentWorkspaceId = (await loadCurrentWorkspace()).id;
-            const [initiativeResponse, projectResponse, membersResponse] = await Promise.all([
-               fetch(`${api}/initiatives?workspaceId=${currentWorkspaceId}`, {
-                  credentials: 'include',
-               }),
-               fetch(`${api}/projects?workspaceId=${currentWorkspaceId}`, {
-                  credentials: 'include',
-               }),
-               fetch(`${api}/workspaces/${currentWorkspaceId}/members`, {
-                  credentials: 'include',
-               }),
+            const [initiativeResponse, projectResponse, membersResponse, labelsResponse] = await Promise.all([
+               authenticatedFetch(`${api}/initiatives?workspaceId=${currentWorkspaceId}`),
+               authenticatedFetch(`${api}/projects?workspaceId=${currentWorkspaceId}`),
+               authenticatedFetch(`${api}/workspaces/${currentWorkspaceId}/members`),
+               authenticatedFetch(`${api}/labels?workspaceId=${currentWorkspaceId}`),
             ]);
-            if (!initiativeResponse.ok || !projectResponse.ok || !membersResponse.ok)
+            if (!initiativeResponse.ok || !projectResponse.ok || !membersResponse.ok || !labelsResponse.ok)
                throw new Error('Could not load initiatives.');
             if (current) {
                setWorkspaceId(currentWorkspaceId);
@@ -105,6 +107,7 @@ export function useLiveInitiatives() {
                      (member) => member.status === 'ACTIVE'
                   )
                );
+               setLabels(((await labelsResponse.json()) as { data: LiveWorkspaceLabel[] }).data);
             }
          } catch (caught) {
             if (current)
@@ -122,7 +125,7 @@ export function useLiveInitiatives() {
       window.addEventListener('flowie:initiatives-changed', onChanged);
       return () => window.removeEventListener('flowie:initiatives-changed', onChanged);
    }, [reload]);
-   return { workspaceId, initiatives, projects, members, loading, error, reload };
+   return { workspaceId, initiatives, projects, members, labels, loading, error, reload };
 }
 
 export function useInitiativeActivity(initiativeId?: string, workspaceId?: string) {

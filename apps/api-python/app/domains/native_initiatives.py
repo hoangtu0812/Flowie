@@ -49,6 +49,11 @@ class ProjectLinkInput(BaseModel):
     projectId: str = Field(min_length=1)
 
 
+class InitiativeLabelLinkInput(BaseModel):
+    workspaceId: str = Field(min_length=1)
+    labelId: str = Field(min_length=1)
+
+
 class InitiativeUpdateInput(BaseModel):
     workspaceId: str = Field(min_length=1)
     body: str = Field(min_length=1, max_length=5000)
@@ -140,6 +145,17 @@ async def _initiative(db: AsyncSession, initiative_id: str, workspace_id: str, u
         project = await _project(db, link['project_id'])
         if project:
             project_links.append({'initiativeId': initiative_id, 'projectId': link['project_id'], 'createdAt': link['created_at'], 'project': project})
+    labels = await db.execute(
+        text(
+            '''SELECT label.id, label.workspace_id, label.name, label.color, label.description, label.created_at, label.updated_at,
+                      initiative_label.created_at AS linked_at
+               FROM initiative_label_links initiative_label
+               JOIN labels label ON label.id = initiative_label.label_id
+               WHERE initiative_label.initiative_id = :initiative_id AND label.workspace_id = :workspace_id
+               ORDER BY label.name ASC'''
+        ),
+        {'initiative_id': initiative_id, 'workspace_id': workspace_id},
+    )
     updates = await db.execute(
         text(
             """SELECT initiative_update.*, author.id AS author_id_value, author.name AS author_name, author.avatar_url AS author_avatar_url
@@ -163,6 +179,19 @@ async def _initiative(db: AsyncSession, initiative_id: str, workspace_id: str, u
         'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
         'owner': {'id': row['owner_id_value'], 'name': row['owner_name'], 'avatarUrl': row['owner_avatar_url']} if row['owner_id_value'] else None,
         'projectLinks': project_links,
+        'labelLinks': [
+            {
+                'initiativeId': initiative_id,
+                'labelId': label['id'],
+                'createdAt': label['linked_at'],
+                'label': {
+                    'id': label['id'], 'workspaceId': label['workspace_id'], 'name': label['name'],
+                    'color': label['color'], 'description': label['description'],
+                    'createdAt': label['created_at'], 'updatedAt': label['updated_at'],
+                },
+            }
+            for label in labels.mappings().all()
+        ],
         'updates': [
             {'id': update['id'], 'workspaceId': update['workspace_id'], 'initiativeId': update['initiative_id'], 'body': update['body'], 'health': update['health'], 'createdAt': update['created_at'], 'updatedAt': update['updated_at'], 'author': {'id': update['author_id_value'], 'name': update['author_name'], 'avatarUrl': update['author_avatar_url']}}
             for update in updates.mappings().all()
@@ -265,6 +294,41 @@ async def unlink_project(initiative_id: str, project_id: str, workspaceId: str =
     await _audit(db, workspaceId, user['id'], 'initiative.project.unlinked', initiative_id, {'projectId': project_id})
     await db.commit()
     return {'data': {'initiativeId': initiative_id, 'projectId': project_id, 'removed': True}}
+
+
+@router.post('/{initiative_id}/labels')
+@public_router.post('/{initiative_id}/labels')
+async def link_label(initiative_id: str, payload: InitiativeLabelLinkInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    await _manager(db, payload.workspaceId, user['id'])
+    await _initiative(db, initiative_id, payload.workspaceId, user['id'])
+    result = await db.execute(
+        text('SELECT id, name FROM labels WHERE id = :label_id AND workspace_id = :workspace_id'),
+        {'label_id': payload.labelId, 'workspace_id': payload.workspaceId},
+    )
+    label = result.mappings().first()
+    if not label:
+        raise ApiError(404, 'Label not found.', 'Not Found')
+    await db.execute(
+        text('INSERT INTO initiative_label_links (initiative_id, label_id) VALUES (:initiative_id, :label_id) ON CONFLICT DO NOTHING'),
+        {'initiative_id': initiative_id, 'label_id': payload.labelId},
+    )
+    await _audit(db, payload.workspaceId, user['id'], 'initiative.label.linked', initiative_id, {'labelId': payload.labelId, 'labelName': label['name']})
+    await db.commit()
+    return {'data': {'initiativeId': initiative_id, 'labelId': payload.labelId}}
+
+
+@router.delete('/{initiative_id}/labels/{label_id}')
+@public_router.delete('/{initiative_id}/labels/{label_id}')
+async def unlink_label(initiative_id: str, label_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    await _manager(db, workspaceId, user['id'])
+    await _initiative(db, initiative_id, workspaceId, user['id'])
+    await db.execute(
+        text('DELETE FROM initiative_label_links WHERE initiative_id = :initiative_id AND label_id = :label_id'),
+        {'initiative_id': initiative_id, 'label_id': label_id},
+    )
+    await _audit(db, workspaceId, user['id'], 'initiative.label.unlinked', initiative_id, {'labelId': label_id})
+    await db.commit()
+    return {'data': {'initiativeId': initiative_id, 'labelId': label_id, 'removed': True}}
 
 
 @router.get('/{initiative_id}/activity')

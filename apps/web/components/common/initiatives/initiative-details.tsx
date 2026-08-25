@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { authenticatedFetch } from '@/lib/workspaces';
+import { priorities } from '@/lib/priority-presentations';
 import {
    adaptInitiatives,
    countCompletedProjects,
@@ -33,13 +34,16 @@ import { parseAsStringLiteral, useQueryState } from 'nuqs';
 import { useMemo, useState } from 'react';
 import { InitiativeProgressPanel } from './initiative-progress-panel';
 import { InitiativeStatusIcon } from './initiative-status-icon';
-import { LiveWorkspaceProject, useLiveInitiatives } from './use-live-initiatives';
+import { LiveWorkspaceLabel, LiveWorkspaceProject, useLiveInitiatives } from './use-live-initiatives';
 
 const TABS = ['overview', 'activity', 'projects'] as const;
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 const formatTarget = (iso: string): string => {
-   const [, month, day] = iso.split('-').map(Number);
+   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+   if (!match) return '—';
+   const month = Number(match[2]);
+   const day = Number(match[3]);
    const months = [
       'Jan',
       'Feb',
@@ -54,7 +58,7 @@ const formatTarget = (iso: string): string => {
       'Nov',
       'Dec',
    ];
-   return `${months[(month ?? 1) - 1]} ${day}`;
+   return Number.isFinite(month) && Number.isFinite(day) ? `${months[month - 1]} ${day}` : '—';
 };
 
 /* ------------------------------ projects table ---------------------------- */
@@ -169,16 +173,26 @@ function PropertyRow({ label, children }: { label: string; children: React.React
    );
 }
 
-type InitiativeDetailAction = 'update' | 'resource' | 'project' | null;
+type InitiativeDetailAction =
+   | 'update'
+   | 'resource'
+   | 'project'
+   | 'status'
+   | 'priority'
+   | 'target-date'
+   | 'label'
+   | null;
 
 function Overview({
    initiative,
    workspaceId,
    projects,
+   labels,
 }: {
    initiative: Initiative;
    workspaceId?: string;
    projects: LiveWorkspaceProject[];
+   labels: LiveWorkspaceLabel[];
 }) {
    const completed = countCompletedProjects(initiative);
    const total = getInitiativeProjects(initiative).length;
@@ -188,14 +202,24 @@ function Overview({
    const [resourceLabel, setResourceLabel] = useState('');
    const [resourceUrl, setResourceUrl] = useState('');
    const [projectId, setProjectId] = useState('');
+   const [status, setStatus] = useState(initiative.status);
+   const [priority, setPriority] = useState(initiative.priority.id);
+   const [targetDate, setTargetDate] = useState(initiative.targetDate?.slice(0, 10) ?? '');
+   const [labelId, setLabelId] = useState('');
    const [saving, setSaving] = useState(false);
    const [error, setError] = useState<string>();
    const availableProjects = projects.filter(
       (project) => !initiative.projectLinks.some((link) => link.project.id === project.id)
    );
+   const availableLabels = labels.filter(
+      (label) => !initiative.labelLinks.some((link) => link.label.id === label.id)
+   );
 
    const openAction = (nextAction: Exclude<InitiativeDetailAction, null>) => {
       setError(undefined);
+      if (nextAction === 'status') setStatus(initiative.status);
+      if (nextAction === 'priority') setPriority(initiative.priority.id);
+      if (nextAction === 'target-date') setTargetDate(initiative.targetDate?.slice(0, 10) ?? '');
       setAction(nextAction);
    };
 
@@ -204,23 +228,32 @@ function Overview({
       setSaving(true);
       setError(undefined);
       try {
-         const path =
-            action === 'update'
-               ? 'updates'
-               : action === 'resource'
-                 ? 'resources'
-                 : 'projects';
+         const isPropertyChange = ['status', 'priority', 'target-date'].includes(action);
+         const path = action === 'update' ? 'updates' : action === 'resource' ? 'resources' : action === 'project' ? 'projects' : 'labels';
          const body =
             action === 'update'
                ? { workspaceId, body: updateBody.trim(), health: updateHealth }
                : action === 'resource'
                  ? { workspaceId, label: resourceLabel.trim(), url: resourceUrl.trim() }
-                 : { workspaceId, projectId };
-         const response = await authenticatedFetch(`${api}/initiatives/${initiative.id}/${path}`, {
-            method: 'POST',
+                 : action === 'project'
+                   ? { workspaceId, projectId }
+                   : action === 'label'
+                     ? { workspaceId, labelId }
+                     : action === 'status'
+                       ? { status }
+                       : action === 'priority'
+                         ? { priority }
+                         : { targetDate: targetDate || null };
+         const response = await authenticatedFetch(
+            isPropertyChange
+               ? `${api}/initiatives/${initiative.id}?workspaceId=${workspaceId}`
+               : `${api}/initiatives/${initiative.id}/${path}`,
+            {
+            method: isPropertyChange ? 'PATCH' : 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify(body),
-         });
+            }
+         );
          if (!response.ok) {
             const payload = (await response.json().catch(() => null)) as { message?: string } | null;
             throw new Error(payload?.message ?? 'Could not save initiative changes.');
@@ -230,6 +263,7 @@ function Overview({
          setResourceLabel('');
          setResourceUrl('');
          setProjectId('');
+         setLabelId('');
          window.dispatchEvent(new Event('flowie:initiatives-changed'));
       } catch (caught) {
          setError(caught instanceof Error ? caught.message : 'Could not save initiative changes.');
@@ -244,7 +278,11 @@ function Overview({
          ? updateBody.trim().length > 0
          : action === 'resource'
            ? resourceLabel.trim().length > 0 && resourceUrl.trim().length > 0
-           : projectId.length > 0);
+           : action === 'project'
+             ? projectId.length > 0
+             : action === 'label'
+               ? labelId.length > 0
+               : true);
 
    return (
       <>
@@ -326,7 +364,7 @@ function Overview({
                   onClick={() => openAction('update')}
                >
                   <FilePenLine className="size-4" />
-                  Write first initiative update
+                  {initiative.updates.length > 0 ? 'Write initiative update' : 'Write first initiative update'}
                </button>
 
                <div className="flex flex-col gap-2">
@@ -344,16 +382,24 @@ function Overview({
             <div className="flex flex-col gap-3">
                <span className="text-sm font-medium">Properties</span>
                <PropertyRow label="Status">
-                  <span className="inline-flex items-center gap-1.5">
+                  <button
+                     type="button"
+                     className="inline-flex items-center gap-1.5 hover:text-foreground text-muted-foreground transition-colors"
+                     onClick={() => openAction('status')}
+                  >
                      <InitiativeStatusIcon status={initiative.status} />
                      {INITIATIVE_STATUS_META[initiative.status].label}
-                  </span>
+                  </button>
                </PropertyRow>
                <PropertyRow label="Priority">
-                  <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                  <button
+                     type="button"
+                     className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                     onClick={() => openAction('priority')}
+                  >
                      <initiative.priority.icon className="size-4" />
                      {initiative.priority.name}
-                  </span>
+                  </button>
                </PropertyRow>
                <PropertyRow label="Owner">
                   {initiative.owner ? (
@@ -376,15 +422,26 @@ function Overview({
                   )}
                </PropertyRow>
                <PropertyRow label="Target date">
-                  <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                  <button
+                     type="button"
+                     className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                     onClick={() => openAction('target-date')}
+                  >
                      <CalendarRange className="size-4" />
                      {initiative.target ?? 'Add target date'}
-                  </span>
+                  </button>
                </PropertyRow>
                <PropertyRow label="Labels">
-                  <span className="text-muted-foreground inline-flex items-center gap-1.5">
-                     <Tag className="size-4" /> Add label
-                  </span>
+                  <button
+                     type="button"
+                     className="text-muted-foreground inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
+                     onClick={() => openAction('label')}
+                  >
+                     <Tag className="size-4" />
+                     {initiative.labelLinks.length > 0
+                        ? initiative.labelLinks.map((link) => link.label.name).join(', ')
+                        : 'Add label'}
+                  </button>
                </PropertyRow>
                <PropertyRow label="Projects">
                   <span className="text-muted-foreground text-xs">
@@ -406,7 +463,10 @@ function Overview({
                   {initiative.updates.slice(0, 2).map((update) => (
                      <span key={update.id} className="flex items-start gap-2">
                         <FilePenLine className="size-3.5 mt-px shrink-0" />
-                        {update.author.name} posted an update · {formatTarget(update.createdAt)}
+                        <span className="flex flex-col gap-0.5">
+                           <span>{update.author.name} posted an update · {formatTarget(update.createdAt)}</span>
+                           <span className="text-foreground line-clamp-2">{update.body}</span>
+                        </span>
                      </span>
                   ))}
                   {initiative.updates.length === 0 && <span>No activity yet</span>}
@@ -422,7 +482,13 @@ function Overview({
                         ? 'Write initiative update'
                         : action === 'resource'
                           ? 'Add document or link'
-                          : 'Link project'}
+                          : action === 'project'
+                            ? 'Link project'
+                            : action === 'label'
+                              ? 'Add label'
+                              : action === 'target-date'
+                                ? 'Set target date'
+                                : `Set ${action}`}
                   </DialogTitle>
                </DialogHeader>
                {action === 'update' && (
@@ -479,11 +545,80 @@ function Overview({
                      {availableProjects.length === 0 && <p className="text-sm text-muted-foreground">All workspace projects are already linked.</p>}
                   </div>
                )}
+               {action === 'label' && (
+                  <div className="space-y-2">
+                     <label className="text-sm font-medium" htmlFor="initiative-label">Label</label>
+                     <Select value={labelId} onValueChange={setLabelId}>
+                        <SelectTrigger id="initiative-label"><SelectValue placeholder="Select a label" /></SelectTrigger>
+                        <SelectContent>
+                           {availableLabels.map((label) => (
+                              <SelectItem key={label.id} value={label.id}>
+                                 {label.name}
+                              </SelectItem>
+                           ))}
+                        </SelectContent>
+                     </Select>
+                     {availableLabels.length === 0 && (
+                        <p className="text-sm text-muted-foreground">
+                           Create a workspace label in Settings → Issue labels first.
+                        </p>
+                     )}
+                  </div>
+               )}
+               {action === 'status' && (
+                  <div className="space-y-2">
+                     <label className="text-sm font-medium" htmlFor="initiative-status">Status</label>
+                     <Select value={status} onValueChange={(value) => setStatus(value as typeof status)}>
+                        <SelectTrigger id="initiative-status"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                           {(Object.keys(INITIATIVE_STATUS_META) as Array<keyof typeof INITIATIVE_STATUS_META>).map((value) => (
+                              <SelectItem key={value} value={value}>{INITIATIVE_STATUS_META[value].label}</SelectItem>
+                           ))}
+                        </SelectContent>
+                     </Select>
+                  </div>
+               )}
+               {action === 'priority' && (
+                  <div className="space-y-2">
+                     <label className="text-sm font-medium" htmlFor="initiative-priority">Priority</label>
+                     <Select value={priority} onValueChange={setPriority}>
+                        <SelectTrigger id="initiative-priority"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                           {priorities.map((option) => (
+                              <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>
+                           ))}
+                        </SelectContent>
+                     </Select>
+                  </div>
+               )}
+               {action === 'target-date' && (
+                  <div className="space-y-2">
+                     <label className="text-sm font-medium" htmlFor="initiative-target-date">Target date</label>
+                     <Input
+                        id="initiative-target-date"
+                        type="date"
+                        value={targetDate}
+                        onChange={(event) => setTargetDate(event.target.value)}
+                        autoFocus
+                     />
+                     <p className="text-xs text-muted-foreground">Clear the field and save to remove the date.</p>
+                  </div>
+               )}
                {error && <p className="text-sm text-destructive">{error}</p>}
                <DialogFooter>
                   <Button variant="outline" onClick={() => setAction(null)} disabled={saving}>Cancel</Button>
                   <Button onClick={() => void submit()} disabled={saving || !canSubmit}>
-                     {saving ? 'Saving…' : action === 'project' ? 'Link project' : action === 'resource' ? 'Add resource' : 'Post update'}
+                     {saving
+                        ? 'Saving…'
+                        : action === 'project'
+                          ? 'Link project'
+                          : action === 'resource'
+                            ? 'Add resource'
+                            : action === 'label'
+                              ? 'Add label'
+                              : action === 'update'
+                                ? 'Post update'
+                                : 'Save'}
                   </Button>
                </DialogFooter>
             </DialogContent>
@@ -498,6 +633,7 @@ function Activity({ initiative }: { initiative: Initiative }) {
    const events = initiative.updates.map((update) => ({
       id: update.id,
       label: `${update.author.name} posted an update`,
+      body: update.body,
       date: formatTarget(update.createdAt),
    }));
    return (
@@ -507,10 +643,13 @@ function Activity({ initiative }: { initiative: Initiative }) {
             {events.map((event) => (
                <div
                   key={event.id}
-                  className="flex items-center gap-3 py-3 border-b border-border/50 text-sm"
+                  className="flex items-start gap-3 py-3 border-b border-border/50 text-sm"
                >
-                  <FileText className="size-4 text-muted-foreground shrink-0" />
-                  <span className="flex-1">{event.label}</span>
+                  <FileText className="size-4 text-muted-foreground shrink-0 mt-0.5" />
+                  <span className="flex-1 flex flex-col gap-1">
+                     <span>{event.label}</span>
+                     <span className="text-muted-foreground whitespace-pre-wrap">{event.body}</span>
+                  </span>
                   <span className="text-xs text-muted-foreground">{event.date}</span>
                </div>
             ))}
@@ -525,7 +664,7 @@ function Activity({ initiative }: { initiative: Initiative }) {
 /** Initiative detail page: Overview / Activity / Projects tabs. */
 export default function InitiativeDetails({ initiativeId }: { initiativeId: string }) {
    const [tab] = useQueryState('tab', parseAsStringLiteral(TABS).withDefault('overview'));
-   const { workspaceId, initiatives: liveInitiatives, projects, loading, error } = useLiveInitiatives();
+   const { workspaceId, initiatives: liveInitiatives, projects, labels, loading, error } = useLiveInitiatives();
    const initiatives = useMemo(() => adaptInitiatives(liveInitiatives), [liveInitiatives]);
    const initiative = initiatives.find((item) => item.id === initiativeId);
 
@@ -562,5 +701,5 @@ export default function InitiativeDetails({ initiativeId }: { initiativeId: stri
 
    if (tab === 'activity') return <Activity initiative={initiative} />;
    if (tab === 'projects') return <ProjectsTimeline groups={timelineGroups} />;
-   return <Overview initiative={initiative} workspaceId={workspaceId} projects={projects} />;
+   return <Overview initiative={initiative} workspaceId={workspaceId} projects={projects} labels={labels} />;
 }

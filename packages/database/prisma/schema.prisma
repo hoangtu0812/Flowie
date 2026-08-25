@@ -624,6 +624,7 @@ model Initiative {
   workspace    Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   owner        User?                @relation("InitiativeOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   projectLinks InitiativeProject[]
+  labelLinks   InitiativeLabelLink[]
   updates      InitiativeUpdate[]
   resources    InitiativeResource[]
 
@@ -1193,6 +1194,7 @@ model Label {
   workspace  Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   group      LabelGroup?  @relation(fields: [groupId], references: [id], onDelete: SetNull)
   issueLinks IssueLabel[]
+  initiativeLinks InitiativeLabelLink[]
 
   @@unique([workspaceId, name])
   @@index([workspaceId])
@@ -1227,6 +1229,19 @@ model IssueLabel {
   @@id([issueId, labelId])
   @@index([labelId])
   @@map("issue_labels")
+}
+
+model InitiativeLabelLink {
+  initiativeId String   @map("initiative_id")
+  labelId      String   @map("label_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  initiative Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  label      Label      @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([initiativeId, labelId])
+  @@index([labelId])
+  @@map("initiative_label_links")
 }
 
 model Notification {
