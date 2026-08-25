@@ -29,6 +29,11 @@ USER_COLUMNS = '''
     is_platform_admin, email_verified_at, status, created_at
 '''
 
+# Chromium on Windows can report the historical IANA alias `Asia/Saigon`.
+# PostgreSQL stores the canonical name and Python's zoneinfo database may not
+# ship that alias, so normalize it at the API boundary.
+TIMEZONE_ALIASES = {'Asia/Saigon': 'Asia/Ho_Chi_Minh'}
+
 
 class LoginInput(BaseModel):
     email: str = Field(max_length=320)
@@ -83,11 +88,12 @@ def _normalized_email(value: str) -> str:
 def _valid_timezone(value: str | None) -> str | None:
     if not value:
         return None
+    timezone_name = TIMEZONE_ALIASES.get(value.strip(), value.strip())
     try:
-        ZoneInfo(value)
+        ZoneInfo(timezone_name)
     except ZoneInfoNotFoundError as error:
         raise ApiError(400, 'Timezone is invalid.', 'Bad Request') from error
-    return value
+    return timezone_name
 
 
 def _normalized_name(value: str) -> str:
