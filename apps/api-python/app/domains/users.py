@@ -155,4 +155,4 @@ async def get_avatar(user_id: str, request: Request, db: AsyncSession = Depends(
         raise ApiError(404, 'Profile picture not found.', 'Not Found')
     body = await MinioStorage(request.app.state.settings).get(object_key)
     content_type = guess_type(object_key)[0] or 'application/octet-stream'
-    return Response(body, media_type=content_type, headers={'cache-control': 'public, max-age=3600'})
+    return Response(body, media_type=content_type, headers={'cache-control': 'private, no-store'})
