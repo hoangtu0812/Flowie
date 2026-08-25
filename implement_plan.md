@@ -465,6 +465,8 @@ Tiến độ thực hiện:
   native; entity/team RBAC, giới hạn kích thước và signed MinIO storage giữ nguyên private contract.
 - [x] P6ac-issue-personal-state-public: whitelist subscribe/unsubscribe, favorite/unfavorite và
   reaction list/toggle của Issue sang FastAPI; mỗi action vẫn kiểm Issue/team scope và persist user state.
+- [x] P6ad-cycle-issue-mapping-public: whitelist xem/thêm/xóa Issue trong Cycle sang FastAPI;
+  mapping kiểm Cycle/Issue cùng team, persist `issue_cycles` và không thay đổi selector Circle hiện tại.
 
 Nghiệm thu:
 
@@ -669,6 +671,7 @@ Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modu
 | 2026-08-25 | P6aa Activity public read | current change-set | Public `/activities` chuyển sang FastAPI với Issue/Project scope RBAC và actor data persisted; chưa đổi Circle timeline UI | Contract regression và timeline adapter | Port activity timeline adapter nguyên UI Circle |
 | 2026-08-25 | P6ab Attachment public contract | current change-set | Public `/attachments` cung cấp list/upload/download bằng native FastAPI + MinIO, entity/team RBAC và 10 MB guard; chưa đổi Circle attachment UI | Contract upload/download regression và adapter | Port attachment panel adapter nguyên UI Circle |
 | 2026-08-25 | P6ac Issue personal state public | current change-set | Public Issue subscribe/favorite/reaction routes chạy FastAPI và persist theo user; chưa đổi Circle context/detail UI | Contract regression và personal-state adapter | Port favorite/subscribe/reaction adapter nguyên UI Circle |
+| 2026-08-25 | P6ad Cycle issue mapping public | current change-set | Public Cycle issue list/add/remove routes chạy FastAPI, giữ team scope RBAC và persisted `issue_cycles`; chưa đổi Circle Cycle selector UI | Contract regression và Cycle adapter | Port Cycle selection/list adapter nguyên UI Circle |
 | 2026-08-25 | P3d Circle Workspace UI cutover | `8a2ccd1` | Web build + FastAPI regression đạt; browser smoke ghi nhận `401 → /auth/refresh 200 → /workspaces/me 200`; switcher không còn hard-code workspace | Members presentation còn fixture; invite API native đã sẵn sàng | Tạo workspace đầu tiên rồi nối Members UI |
 | 2026-08-25 | P4d Circle Teams/Members UI cutover | current change-set | Web production build và Docker web build đạt; Team/Member list, tạo Team, invite, role và remove đều dùng Python API, không còn mock ở scope này | Cần một workspace có ít nhất hai tài khoản đã đăng ký để nghiệm thu UI thao tác thật | Người dùng tạo workspace, tạo Team và mời tài khoản Flowie thứ hai để test |
 | 2026-08-25 | P4e Join Team/Workspace | current change-set | Web production build đạt; Join Team và Workspace invitation đã có entry point trong UI gốc | Cần tài khoản thứ hai để xác nhận invitation/join thực tế | Rebuild Docker, sau đó nghiệm thu hai-account flow |

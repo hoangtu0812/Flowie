@@ -215,6 +215,7 @@ async def update_cycle(
 
 
 @router.post('/{cycle_id}/issues')
+@public_router.post('/{cycle_id}/issues')
 async def add_issue(
     cycle_id: str,
     payload: CycleIssueInput,
@@ -235,6 +236,7 @@ async def add_issue(
 
 
 @router.get('/{cycle_id}/issues')
+@public_router.get('/{cycle_id}/issues')
 async def cycle_issues(
     cycle_id: str,
     workspaceId: str = Query(min_length=1),
@@ -250,6 +252,7 @@ async def cycle_issues(
 
 
 @router.delete('/{cycle_id}/issues/{issue_id}')
+@public_router.delete('/{cycle_id}/issues/{issue_id}')
 async def remove_issue(
     cycle_id: str,
     issue_id: str,
