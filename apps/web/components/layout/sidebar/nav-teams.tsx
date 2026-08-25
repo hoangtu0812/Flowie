@@ -118,9 +118,11 @@ export function NavTeams() {
                                  side="right"
                                  align="start"
                               >
-                                 <DropdownMenuItem disabled>
-                                    <Settings className="size-4" />
-                                    <span>Team settings</span>
+                                 <DropdownMenuItem asChild>
+                                    <Link href={`/${orgId}/settings/teams/${item.id}`}>
+                                       <Settings className="size-4" />
+                                       <span>Team settings</span>
+                                    </Link>
                                  </DropdownMenuItem>
                                  <DropdownMenuItem
                                     onSelect={() => {
