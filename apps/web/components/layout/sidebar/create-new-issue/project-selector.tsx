@@ -15,12 +15,19 @@ import { Project, projects } from '@/mock-data/projects';
 import { Box, CheckIcon, FolderIcon } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
 
+export type ProjectOption = Pick<Project, 'id' | 'name' | 'icon'>;
+
 interface ProjectSelectorProps {
-   project: Project | undefined;
-   onChange: (project: Project | undefined) => void;
+   project: ProjectOption | undefined;
+   onChange: (project: ProjectOption | undefined) => void;
+   projects?: ProjectOption[];
 }
 
-export function ProjectSelector({ project, onChange }: ProjectSelectorProps) {
+export function ProjectSelector({
+   project,
+   onChange,
+   projects: availableProjects = projects,
+}: ProjectSelectorProps) {
    const id = useId();
    const [open, setOpen] = useState<boolean>(false);
    const [value, setValue] = useState<string | undefined>(project?.id);
@@ -37,7 +44,7 @@ export function ProjectSelector({ project, onChange }: ProjectSelectorProps) {
          onChange(undefined);
       } else {
          setValue(projectId);
-         const newProject = projects.find((p) => p.id === projectId);
+         const newProject = availableProjects.find((p) => p.id === projectId);
          if (newProject) {
             onChange(newProject);
          }
@@ -59,7 +66,7 @@ export function ProjectSelector({ project, onChange }: ProjectSelectorProps) {
                >
                   {value ? (
                      (() => {
-                        const selectedProject = projects.find((p) => p.id === value);
+                        const selectedProject = availableProjects.find((p) => p.id === value);
                         if (selectedProject) {
                            const Icon = selectedProject.icon;
                            return <Icon className="size-4" />;
@@ -69,7 +76,9 @@ export function ProjectSelector({ project, onChange }: ProjectSelectorProps) {
                   ) : (
                      <Box className="size-4" />
                   )}
-                  <span>{value ? projects.find((p) => p.id === value)?.name : 'No project'}</span>
+                  <span>
+                     {value ? availableProjects.find((p) => p.id === value)?.name : 'No project'}
+                  </span>
                </Button>
             </PopoverTrigger>
             <PopoverContent
@@ -92,7 +101,7 @@ export function ProjectSelector({ project, onChange }: ProjectSelectorProps) {
                            </div>
                            {value === undefined && <CheckIcon size={16} className="ml-auto" />}
                         </CommandItem>
-                        {projects.map((project) => (
+                        {availableProjects.map((project) => (
                            <CommandItem
                               key={project.id}
                               value={project.id}

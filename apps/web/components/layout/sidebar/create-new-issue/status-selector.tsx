@@ -18,9 +18,10 @@ import { useEffect, useId, useState } from 'react';
 interface StatusSelectorProps {
    status: Status;
    onChange: (status: Status) => void;
+   counts?: Record<string, number>;
 }
 
-export function StatusSelector({ status, onChange }: StatusSelectorProps) {
+export function StatusSelector({ status, onChange, counts }: StatusSelectorProps) {
    const id = useId();
    const [open, setOpen] = useState<boolean>(false);
    const [value, setValue] = useState<string>(status.id);
@@ -86,7 +87,7 @@ export function StatusSelector({ status, onChange }: StatusSelectorProps) {
                               </div>
                               {value === item.id && <CheckIcon size={16} className="ml-auto" />}
                               <span className="text-muted-foreground text-xs">
-                                 {filterByStatus(item.id).length}
+                                 {counts?.[item.id] ?? filterByStatus(item.id).length}
                               </span>
                            </CommandItem>
                         ))}

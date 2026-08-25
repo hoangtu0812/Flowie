@@ -19,9 +19,14 @@ import { cn } from '@/lib/utils';
 interface LabelSelectorProps {
    selectedLabels: LabelInterface[];
    onChange: (labels: LabelInterface[]) => void;
+   labels?: LabelInterface[];
 }
 
-export function LabelSelector({ selectedLabels, onChange }: LabelSelectorProps) {
+export function LabelSelector({
+   selectedLabels,
+   onChange,
+   labels: availableLabels = labels,
+}: LabelSelectorProps) {
    const id = useId();
    const [open, setOpen] = useState<boolean>(false);
 
@@ -78,7 +83,7 @@ export function LabelSelector({ selectedLabels, onChange }: LabelSelectorProps) 
                   <CommandList>
                      <CommandEmpty>No labels found.</CommandEmpty>
                      <CommandGroup>
-                        {labels.map((label) => {
+                        {availableLabels.map((label) => {
                            const isSelected = selectedLabels.some((l) => l.id === label.id);
                            return (
                               <CommandItem

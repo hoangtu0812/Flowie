@@ -6,76 +6,197 @@ import { Heart } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { RiEditLine } from '@remixicon/react';
-import { useState, useEffect, useCallback } from 'react';
-import { Issue } from '@/mock-data/issues';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { priorities } from '@/mock-data/priorities';
-import { status } from '@/mock-data/status';
+import { status, Status } from '@/mock-data/status';
 import { useIssuesStore } from '@/store/issues-store';
 import { useCreateIssueStore } from '@/store/create-issue-store';
 import { toast } from 'sonner';
-import { v4 as uuidv4 } from 'uuid';
 import { StatusSelector } from './status-selector';
 import { PrioritySelector } from './priority-selector';
 import { AssigneeSelector } from './assignee-selector';
-import { ProjectSelector } from './project-selector';
+import { ProjectOption, ProjectSelector } from './project-selector';
 import { LabelSelector } from './label-selector';
-import { ranks } from '@/mock-data/issues';
 import { DialogTitle } from '@radix-ui/react-dialog';
+import { useParams } from 'next/navigation';
+import { Box } from 'lucide-react';
+import { LabelInterface } from '@/mock-data/labels';
+import { Priority } from '@/mock-data/priorities';
+import { User } from '@/mock-data/users';
+import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
+import { loadJoinedWorkspaceTeams, WorkspaceTeam } from '@/components/common/teams/team-types';
+
+const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+
+type NativeIssueOptions = {
+   statuses: Array<{ id: string; name: string }>;
+   projects: Array<{ id: string; name: string }>;
+   members: Array<{ id: string; name: string; email: string; avatarUrl?: string | null }>;
+   labels: LabelInterface[];
+};
+
+type CreateIssueForm = {
+   title: string;
+   description: string;
+   status: Status;
+   assignee: User | null;
+   priority: Priority;
+   labels: LabelInterface[];
+   project: ProjectOption | undefined;
+};
+
+type IssueContext = {
+   workspaceId: string;
+   team: WorkspaceTeam;
+   options: NativeIssueOptions;
+};
+
+const priorityForApi: Record<string, 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'> = {
+   'no-priority': 'NONE',
+   'low': 'LOW',
+   'medium': 'MEDIUM',
+   'high': 'HIGH',
+   'urgent': 'URGENT',
+};
+
+const normalise = (value: string) => value.trim().toLowerCase();
 
 export function CreateNewIssue() {
    const [createMore, setCreateMore] = useState<boolean>(false);
    const { isOpen, defaultStatus, openModal, closeModal } = useCreateIssueStore();
-   const { addIssue, getAllIssues } = useIssuesStore();
-
-   const generateUniqueIdentifier = useCallback(() => {
-      const identifiers = getAllIssues().map((issue) => issue.identifier);
-      let identifier = Math.floor(Math.random() * 999)
-         .toString()
-         .padStart(3, '0');
-      while (identifiers.includes(`LNUI-${identifier}`)) {
-         identifier = Math.floor(Math.random() * 999)
-            .toString()
-            .padStart(3, '0');
-      }
-      return identifier;
-   }, [getAllIssues]);
+   const { issues, loadIssues } = useIssuesStore();
+   const params = useParams<{ teamId?: string | string[] }>();
+   const teamIdentifier = Array.isArray(params.teamId) ? params.teamId[0] : params.teamId;
+   const [context, setContext] = useState<IssueContext>();
+   const [creating, setCreating] = useState(false);
 
    const createDefaultData = useCallback(() => {
-      const identifier = generateUniqueIdentifier();
       return {
-         id: uuidv4(),
-         identifier: `LNUI-${identifier}`,
          title: '',
          description: '',
          status: defaultStatus || status.find((s) => s.id === 'to-do')!,
          assignee: null,
          priority: priorities.find((p) => p.id === 'no-priority')!,
          labels: [],
-         createdAt: new Date().toISOString(),
-         cycleId: '',
          project: undefined,
-         subissues: [],
-         rank: ranks[ranks.length - 1],
       };
-   }, [defaultStatus, generateUniqueIdentifier]);
+   }, [defaultStatus]);
 
-   const [addIssueForm, setAddIssueForm] = useState<Issue>(createDefaultData());
+   const [addIssueForm, setAddIssueForm] = useState<CreateIssueForm>(createDefaultData());
 
    useEffect(() => {
       setAddIssueForm(createDefaultData());
    }, [createDefaultData]);
 
-   const createIssue = () => {
+   const loadContext = useCallback(async () => {
+      if (!isOpen) return;
+      try {
+         const [workspace, joinedTeams] = await Promise.all([
+            loadCurrentWorkspace(),
+            loadJoinedWorkspaceTeams(),
+         ]);
+         const team =
+            joinedTeams.teams.find(
+               (candidate) =>
+                  candidate.id === teamIdentifier || candidate.identifier === teamIdentifier
+            ) ?? joinedTeams.teams[0];
+         if (!team) throw new Error('Join a team before creating an issue.');
+         const query = new URLSearchParams({ workspaceId: workspace.id, teamId: team.id });
+         const response = await authenticatedFetch(`${api}/issues/options?${query}`);
+         if (!response.ok) throw new Error('Could not load issue options.');
+         const payload = (await response.json()) as { data: NativeIssueOptions };
+         setContext({ workspaceId: workspace.id, team, options: payload.data });
+      } catch (error) {
+         setContext(undefined);
+         toast.error(error instanceof Error ? error.message : 'Workspace is not ready yet.');
+      }
+   }, [isOpen, teamIdentifier]);
+
+   useEffect(() => {
+      void loadContext();
+   }, [loadContext]);
+
+   const liveUsers = useMemo<User[]>(
+      () =>
+         (context?.options.members ?? []).map((member) => ({
+            id: member.id,
+            name: member.name,
+            avatarUrl: member.avatarUrl ?? '',
+            email: member.email,
+            status: 'offline',
+            role: 'Member',
+            joinedDate: '',
+            teamIds: context ? [context.team.identifier] : [],
+            timezone: 'UTC',
+         })),
+      [context]
+   );
+   const liveProjects = useMemo<ProjectOption[]>(
+      () => (context?.options.projects ?? []).map((project) => ({ ...project, icon: Box })),
+      [context]
+   );
+   const statusCounts = useMemo(
+      () =>
+         Object.fromEntries(
+            status.map((presentation) => [
+               presentation.id,
+               issues.filter(
+                  (issue) => normalise(issue.status.name) === normalise(presentation.name)
+               ).length,
+            ])
+         ),
+      [issues]
+   );
+
+   const createIssue = async () => {
       if (!addIssueForm.title) {
          toast.error('Title is required');
          return;
       }
-      toast.success('Issue created');
-      addIssue(addIssueForm);
-      if (!createMore) {
-         closeModal();
+      if (!context) {
+         toast.error('Workspace is not ready yet.');
+         return;
       }
-      setAddIssueForm(createDefaultData());
+      if (creating) return;
+      const statusId = context.options.statuses.find(
+         (candidate) => normalise(candidate.name) === normalise(addIssueForm.status.name)
+      )?.id;
+      if (!statusId) {
+         toast.error('A valid status is required.');
+         return;
+      }
+      setCreating(true);
+      try {
+         const response = await authenticatedFetch(`${api}/issues`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+               workspaceId: context.workspaceId,
+               teamId: context.team.id,
+               title: addIssueForm.title.trim(),
+               description: addIssueForm.description.trim() || undefined,
+               statusId,
+               priority: priorityForApi[addIssueForm.priority.id],
+               assigneeId: addIssueForm.assignee?.id,
+               projectId: addIssueForm.project?.id,
+               labelIds: addIssueForm.labels.map((label) => label.id),
+            }),
+         });
+         if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as {
+               message?: string;
+            } | null;
+            throw new Error(payload?.message ?? 'Could not create issue.');
+         }
+         await loadIssues(context.team.identifier);
+         toast.success('Issue created');
+         if (!createMore) closeModal();
+         setAddIssueForm(createDefaultData());
+      } catch (error) {
+         toast.error(error instanceof Error ? error.message : 'Could not create issue.');
+      } finally {
+         setCreating(false);
+      }
    };
 
    return (
@@ -117,6 +238,7 @@ export function CreateNewIssue() {
                <div className="w-full flex items-center justify-start gap-1.5 flex-wrap">
                   <StatusSelector
                      status={addIssueForm.status}
+                     counts={statusCounts}
                      onChange={(newStatus) =>
                         setAddIssueForm({ ...addIssueForm, status: newStatus })
                      }
@@ -129,18 +251,22 @@ export function CreateNewIssue() {
                   />
                   <AssigneeSelector
                      assignee={addIssueForm.assignee}
+                     users={liveUsers}
+                     teamIdentifier={context?.team.identifier}
                      onChange={(newAssignee) =>
                         setAddIssueForm({ ...addIssueForm, assignee: newAssignee })
                      }
                   />
                   <ProjectSelector
                      project={addIssueForm.project}
+                     projects={liveProjects}
                      onChange={(newProject) =>
                         setAddIssueForm({ ...addIssueForm, project: newProject })
                      }
                   />
                   <LabelSelector
                      selectedLabels={addIssueForm.labels}
+                     labels={context?.options.labels ?? []}
                      onChange={(newLabels) =>
                         setAddIssueForm({ ...addIssueForm, labels: newLabels })
                      }
@@ -161,7 +287,7 @@ export function CreateNewIssue() {
                <Button
                   size="sm"
                   onClick={() => {
-                     createIssue();
+                     void createIssue();
                   }}
                >
                   Create issue

@@ -19,9 +19,16 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 interface AssigneeSelectorProps {
    assignee: User | null;
    onChange: (assignee: User | null) => void;
+   users?: User[];
+   teamIdentifier?: string;
 }
 
-export function AssigneeSelector({ assignee, onChange }: AssigneeSelectorProps) {
+export function AssigneeSelector({
+   assignee,
+   onChange,
+   users: availableUsers = users,
+   teamIdentifier = 'CORE',
+}: AssigneeSelectorProps) {
    const id = useId();
    const [open, setOpen] = useState<boolean>(false);
    const [value, setValue] = useState<string | null>(assignee?.id || null);
@@ -38,7 +45,7 @@ export function AssigneeSelector({ assignee, onChange }: AssigneeSelectorProps) 
          onChange(null);
       } else {
          setValue(userId);
-         const newAssignee = users.find((u) => u.id === userId);
+         const newAssignee = availableUsers.find((u) => u.id === userId);
          if (newAssignee) {
             onChange(newAssignee);
          }
@@ -60,7 +67,7 @@ export function AssigneeSelector({ assignee, onChange }: AssigneeSelectorProps) 
                >
                   {value ? (
                      (() => {
-                        const selectedUser = users.find((user) => user.id === value);
+                        const selectedUser = availableUsers.find((user) => user.id === value);
                         if (selectedUser) {
                            return (
                               <Avatar className="size-5">
@@ -78,7 +85,7 @@ export function AssigneeSelector({ assignee, onChange }: AssigneeSelectorProps) 
                      <UserCircle className="size-5" />
                   )}
                   <span>
-                     {value ? users.find((user) => user.id === value)?.name : 'Unassigned'}
+                     {value ? availableUsers.find((user) => user.id === value)?.name : 'Unassigned'}
                   </span>
                </Button>
             </PopoverTrigger>
@@ -105,8 +112,8 @@ export function AssigneeSelector({ assignee, onChange }: AssigneeSelectorProps) 
                               {filterByAssignee(null).length}
                            </span>
                         </CommandItem>
-                        {users
-                           .filter((user) => user.teamIds.includes('CORE'))
+                        {availableUsers
+                           .filter((user) => user.teamIds.includes(teamIdentifier))
                            .map((user) => (
                               <CommandItem
                                  key={user.id}
