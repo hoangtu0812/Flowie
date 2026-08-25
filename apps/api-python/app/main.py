@@ -14,6 +14,7 @@ from .core.errors import ApiError, api_error_handler, validation_error_handler
 from .core.readiness import dependency_status
 from .db.session import create_session_factory
 from .domains.auth import router as auth_router
+from .domains.teams import router as teams_router
 from .domains.users import router as users_router
 from .domains.workspaces import router as workspaces_router
 from .legacy.proxy import proxy_legacy_request
@@ -55,6 +56,7 @@ def create_app(
     app.add_exception_handler(ApiError, api_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.include_router(auth_router)
+    app.include_router(teams_router)
     app.include_router(users_router)
     app.include_router(workspaces_router)
 
