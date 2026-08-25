@@ -565,6 +565,7 @@ Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modu
 | 2026-08-25 | P5c pre-cutover Project contract | `1924448` | Docker parity audit: Legacy/Python Project create/get top-level và Team payload không có key thiếu/thừa | Route public, adapter Circle, settings/templates/custom fields, Issues/worker | Báo người dùng trước khi bắt đầu nối UI |
 | 2026-08-25 | P5c Circle Project list/create cutover | `ebf5bab` | Public API regression + browser: unchanged Circle layout, real empty workspace state, Create project dialog opens, no console errors; web build passed | Project detail page adapters, Issue/Activity read-side, settings routes | Nối Overview/Activity/Issues theo whitelist |
 | 2026-08-25 | P5c Circle Project detail cutover | `da19ae2` | Web production build, 4 FastAPI regression tests và Docker web rebuild/recreate đạt; Overview/Activity/Issues dùng provider + API adapter, không còn fixture data trong cây Project detail | Acceptance light/dark với workspace người dùng; endpoints P6/P7 chưa migrate vẫn facade | Người dùng tạo Project và kiểm tra ba tab |
+| 2026-08-25 | P5c Create Project readiness fix | `d7132ce` | Dialog không còn submit khi `workspaceId` chưa tải xong; Docker browser smoke xác nhận nút bị khóa trong trạng thái chưa sẵn sàng, web production build đạt | Acceptance tạo Project sau đăng nhập | Refresh, chờ workspace tải rồi tạo Project |
 
 ## 13. Definition of Done toàn dự án
 
