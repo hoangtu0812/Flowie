@@ -53,6 +53,7 @@ export function TeamSettingsDialog({
 }) {
    const [name, setName] = useState(team.name);
    const [description, setDescription] = useState(team.description ?? '');
+   const [icon, setIcon] = useState(team.icon ?? '👥');
    const [joinPolicy, setJoinPolicy] = useState(team.joinPolicy);
    const [templateId, setTemplateId] = useState(team.defaultIssueTemplateId ?? 'none');
    const [autoCloseDays, setAutoCloseDays] = useState(team.autoCloseDays?.toString() ?? '');
@@ -68,6 +69,7 @@ export function TeamSettingsDialog({
       if (!kind) return;
       setName(team.name);
       setDescription(team.description ?? '');
+      setIcon(team.icon ?? '👥');
       setJoinPolicy(team.joinPolicy);
       setTemplateId(team.defaultIssueTemplateId ?? 'none');
       setAutoCloseDays(team.autoCloseDays?.toString() ?? '');
@@ -93,7 +95,11 @@ export function TeamSettingsDialog({
       setError(undefined);
       try {
          const data: Record<TeamSettingsEditKind, Record<string, unknown>> = {
-            general: { name: name.trim(), description: description.trim() },
+            general: {
+               name: name.trim(),
+               description: description.trim(),
+               icon: icon.trim() || '👥',
+            },
             access: { joinPolicy },
             template: { defaultIssueTemplateId: templateId === 'none' ? null : templateId },
             automation: {
@@ -142,6 +148,19 @@ export function TeamSettingsDialog({
                            onChange={(event) => setDescription(event.target.value)}
                            rows={5}
                         />
+                     </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="team-icon">Icon</Label>
+                        <Input
+                           id="team-icon"
+                           value={icon}
+                           onChange={(event) => setIcon(event.target.value)}
+                           maxLength={32}
+                           placeholder="👥"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                           Use an emoji or a short symbol displayed throughout this team.
+                        </p>
                      </div>
                   </>
                )}

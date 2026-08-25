@@ -1,8 +1,7 @@
 'use client';
 
 import { CycleDetailsPanel } from '@/components/common/cycles/cycle-details-panel';
-import { getCurrentCycle, getUpcomingCycle } from '@/mock-data/cycles';
-import { displayOrderedStatus } from '@/mock-data/status';
+import { useLiveCycle } from '@/components/common/cycles/use-live-cycle';
 import { useFilterStore } from '@/store/filter-store';
 import { useIssuesStore } from '@/store/issues-store';
 import { applyIssueFilters } from './issue-filter-columns';
@@ -30,17 +29,16 @@ export default function CycleIssues({ cycleView }: CycleIssuesProps) {
    const { isSearchOpen, searchQuery } = useSearchStore();
    const { viewType } = useViewStore();
    const { filters } = useFilterStore();
-   const { issues } = useIssuesStore();
+   const { issues, statuses } = useIssuesStore();
    const { openPanel } = useRightPanelStore();
-
-   const cycle = cycleView === 'active' ? getCurrentCycle() : getUpcomingCycle();
+   const { cycle, loading } = useLiveCycle(cycleView);
 
    const isSearching = isSearchOpen && searchQuery.trim() !== '';
    const isViewTypeGrid = viewType === 'grid';
 
    const cycleIssues = useMemo(
-      () => issues.filter((issue) => issue.cycleId === cycle.id),
-      [issues, cycle.id]
+      () => issues.filter((issue) => cycle && issue.cycleId === cycle.id),
+      [issues, cycle]
    );
 
    const displayedIssues = useMemo(
@@ -58,6 +56,14 @@ export default function CycleIssues({ cycleView }: CycleIssuesProps) {
       );
    }
 
+   if (loading) {
+      return (
+         <div className="w-full h-full px-6 py-10 text-sm text-muted-foreground">
+            Loading cycle…
+         </div>
+      );
+   }
+
    return (
       <div className="w-full h-full flex flex-col overflow-hidden">
          <IssueFilterBar />
@@ -66,7 +72,7 @@ export default function CycleIssues({ cycleView }: CycleIssuesProps) {
                <GroupedIssuesView
                   issues={displayedIssues}
                   totalIssues={cycleIssues}
-                  statuses={displayOrderedStatus}
+                  statuses={statuses}
                   isViewTypeGrid={isViewTypeGrid}
                />
             </div>
@@ -76,7 +82,7 @@ export default function CycleIssues({ cycleView }: CycleIssuesProps) {
                   <InsightsPanel issues={displayedIssues} />
                </aside>
             )}
-            {openPanel === 'cycle-details' && (
+            {openPanel === 'cycle-details' && cycle && (
                <aside className="hidden lg:flex w-[420px] shrink-0 border-l h-full overflow-hidden bg-container">
                   <CycleDetailsPanel cycle={cycle} issues={cycleIssues} />
                </aside>
