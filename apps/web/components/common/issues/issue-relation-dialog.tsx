@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { useIssueRelationDialogStore } from '@/store/issue-relation-dialog-store';
 import { useIssuesStore } from '@/store/issues-store';
+import { authenticatedFetch } from '@/lib/workspaces';
 import { Link2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -44,7 +45,7 @@ export function IssueRelationDialog() {
       setSaving(true);
       setError(undefined);
       try {
-         const response = await fetch(`${api}/issues/${issueId}/relations`, {
+         const response = await authenticatedFetch(`${api}/issues/${issueId}/relations`, {
             method: 'POST',
             credentials: 'include',
             headers: { 'content-type': 'application/json' },

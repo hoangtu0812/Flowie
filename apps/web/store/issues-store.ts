@@ -5,7 +5,7 @@ import { Project } from '@/mock-data/projects';
 import { status as statusPresentation, Status, StatusCategory } from '@/mock-data/status';
 import { User } from '@/mock-data/users';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
-import { loadJoinedWorkspaceTeams } from '@/components/common/teams/team-types';
+import { loadJoinedWorkspaceTeams, type WorkspaceTeam } from '@/components/common/teams/team-types';
 import { create } from 'zustand';
 import { Box } from 'lucide-react';
 import { toast } from 'sonner';
@@ -18,11 +18,14 @@ declare module '@/mock-data/issues' {
       isSubscribed?: boolean;
       isFavorite?: boolean;
       reminderAt?: string;
+      /** API-only reference used by durable issue actions; never changes Circle presentation. */
+      teamId?: string;
    }
 }
 
 type NativeIssue = {
    id: string;
+   teamId: string;
    identifier: string;
    title: string;
    description?: string | null;
@@ -59,6 +62,18 @@ type NativeIssueOptions = {
       startDate?: string | null;
       endDate?: string | null;
    }>;
+};
+
+type CreateIssuePayload = {
+   teamId: string;
+   title: string;
+   description?: string;
+   statusId?: string;
+   projectId?: string;
+   assigneeId?: string;
+   priority?: NativeIssue['priority'];
+   dueDate?: string;
+   labelIds?: string[];
 };
 
 export type IssueCycle = NativeIssueOptions['cycles'][number];
@@ -117,6 +132,7 @@ function asIssue(native: NativeIssue): Issue {
       : null;
    return {
       id: native.id,
+      teamId: native.teamId,
       identifier: native.identifier,
       title: native.title,
       description: native.description ?? '',
@@ -171,6 +187,7 @@ interface IssuesState {
    issues: Issue[];
    statuses: Status[];
    members: User[];
+   teams: WorkspaceTeam[];
    projects: Project[];
    labels: LabelInterface[];
    cycles: IssueCycle[];
@@ -217,6 +234,18 @@ interface IssuesState {
    // Date management
    updateIssueDueDate: (issueId: string, dueDate: string | undefined) => Promise<boolean>;
 
+   // Advanced issue actions
+   createIssue: (payload: CreateIssuePayload) => Promise<Issue>;
+   updateIssueTitle: (issueId: string, title: string) => Promise<Issue>;
+   moveIssue: (issueId: string, teamId: string) => Promise<Issue>;
+   classifyIssue: (
+      issueId: string,
+      resolution: 'DUPLICATE' | 'WONT_FIX',
+      duplicateOfIdentifier?: string
+   ) => Promise<Issue>;
+   convertIssueToComment: (issueId: string, targetIdentifier: string) => Promise<void>;
+   archiveIssue: (issueId: string) => Promise<void>;
+
    // Personal issue state
    updateIssueSubscription: (issueId: string, subscribed: boolean) => Promise<boolean>;
    updateIssueFavorite: (issueId: string, favorited: boolean) => Promise<boolean>;
@@ -231,6 +260,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
    issues: [],
    statuses: [],
    members: [],
+   teams: [],
    projects: [],
    labels: [],
    cycles: [],
@@ -242,9 +272,9 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
       try {
          const workspace = await loadCurrentWorkspace();
          const query = new URLSearchParams({ workspaceId: workspace.id });
+         const joinedWorkspaceTeams = await loadJoinedWorkspaceTeams();
          if (teamIdentifier) {
-            const { teams } = await loadJoinedWorkspaceTeams();
-            const team = teams.find(
+            const team = joinedWorkspaceTeams.teams.find(
                (candidate) =>
                   candidate.id === teamIdentifier || candidate.identifier === teamIdentifier
             );
@@ -265,6 +295,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
             issues,
             statuses: optionsPayload.data.statuses.map(asStatus),
             members: optionsPayload.data.members.map(asMember),
+            teams: joinedWorkspaceTeams.teams,
             projects: optionsPayload.data.projects.map(asProjectOption),
             labels: optionsPayload.data.labels,
             cycles: optionsPayload.data.cycles ?? [],
@@ -276,6 +307,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
             issues: [],
             statuses: [],
             members: [],
+            teams: [],
             projects: [],
             labels: [],
             cycles: [],
@@ -670,6 +702,100 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
          toast.error(error instanceof Error ? error.message : 'Could not update issue due date.');
          return false;
       }
+   },
+
+   createIssue: async (payload) => {
+      const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
+      const response = await authenticatedFetch(`${api}/issues`, {
+         method: 'POST',
+         headers: { 'content-type': 'application/json' },
+         body: JSON.stringify({ workspaceId, ...payload }),
+      });
+      if (!response.ok) {
+         const body = (await response.json().catch(() => null)) as { message?: string } | null;
+         throw new Error(body?.message ?? 'Could not create issue.');
+      }
+      const issue = asIssue(((await response.json()) as { data: NativeIssue }).data);
+      get().addIssue(issue);
+      return issue;
+   },
+
+   updateIssueTitle: async (issueId, title) => {
+      const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
+      const response = await authenticatedFetch(
+         `${api}/issues/${issueId}?${new URLSearchParams({ workspaceId })}`,
+         {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ title }),
+         }
+      );
+      if (!response.ok) {
+         const body = (await response.json().catch(() => null)) as { message?: string } | null;
+         throw new Error(body?.message ?? 'Could not rename issue.');
+      }
+      const issue = asIssue(((await response.json()) as { data: NativeIssue }).data);
+      get().updateIssue(issueId, issue);
+      return issue;
+   },
+
+   moveIssue: async (issueId, teamId) => {
+      const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
+      const response = await authenticatedFetch(`${api}/issues/${issueId}/move`, {
+         method: 'POST',
+         headers: { 'content-type': 'application/json' },
+         body: JSON.stringify({ workspaceId, teamId }),
+      });
+      if (!response.ok) {
+         const body = (await response.json().catch(() => null)) as { message?: string } | null;
+         throw new Error(body?.message ?? 'Could not move issue.');
+      }
+      const issue = asIssue(((await response.json()) as { data: NativeIssue }).data);
+      get().updateIssue(issueId, issue);
+      return issue;
+   },
+
+   classifyIssue: async (issueId, resolution, duplicateOfIdentifier) => {
+      const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
+      const response = await authenticatedFetch(`${api}/issues/${issueId}/classification`, {
+         method: 'POST',
+         headers: { 'content-type': 'application/json' },
+         body: JSON.stringify({ workspaceId, resolution, duplicateOfIdentifier }),
+      });
+      if (!response.ok) {
+         const body = (await response.json().catch(() => null)) as { message?: string } | null;
+         throw new Error(body?.message ?? 'Could not classify issue.');
+      }
+      const issue = asIssue(((await response.json()) as { data: NativeIssue }).data);
+      get().updateIssue(issueId, issue);
+      return issue;
+   },
+
+   convertIssueToComment: async (issueId, targetIdentifier) => {
+      const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
+      const response = await authenticatedFetch(`${api}/issues/${issueId}/convert-to-comment`, {
+         method: 'POST',
+         headers: { 'content-type': 'application/json' },
+         body: JSON.stringify({ workspaceId, targetIdentifier }),
+      });
+      if (!response.ok) {
+         const body = (await response.json().catch(() => null)) as { message?: string } | null;
+         throw new Error(body?.message ?? 'Could not convert issue into a comment.');
+      }
+      get().deleteIssue(issueId);
+   },
+
+   archiveIssue: async (issueId) => {
+      const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
+      const response = await authenticatedFetch(
+         `${api}/issues/${issueId}?${new URLSearchParams({ workspaceId })}`,
+         { method: 'DELETE' }
+      );
+      if (!response.ok) {
+         const body = (await response.json().catch(() => null)) as { message?: string } | null;
+         throw new Error(body?.message ?? 'Could not archive issue.');
+      }
+      get().deleteIssue(issueId);
    },
 
    updateIssueSubscription: async (issueId: string, subscribed: boolean) => {

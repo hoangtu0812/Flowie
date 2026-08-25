@@ -2,6 +2,8 @@ import React from 'react';
 import { AppSidebar } from '@/components/layout/sidebar/app-sidebar';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { CreateIssueModalProvider } from '@/components/common/issues/create-issue-modal-provider';
+import { IssueActionDialog } from '@/components/common/issues/issue-action-dialog';
+import { IssueRelationDialog } from '@/components/common/issues/issue-relation-dialog';
 import { CommandPalette } from '@/components/layout/command-palette';
 import { cn } from '@/lib/utils';
 
@@ -35,6 +37,8 @@ export default function MainLayout({ children, header, headersNumber = 2 }: Main
    return (
       <SidebarProvider>
          <CreateIssueModalProvider />
+         <IssueActionDialog />
+         <IssueRelationDialog />
          <CommandPalette />
          <AppSidebar />
          <div className="h-svh overflow-hidden lg:p-2 w-full">

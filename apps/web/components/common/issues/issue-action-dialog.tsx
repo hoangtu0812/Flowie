@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/select';
 import { type IssueActionKind, useIssueActionDialogStore } from '@/store/issue-action-dialog-store';
 import { useIssuesStore } from '@/store/issues-store';
+import { authenticatedFetch } from '@/lib/workspaces';
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -81,8 +82,8 @@ export function IssueActionDialog() {
       [issueId, issues]
    );
    const destinations = useMemo(
-      () => teams.filter((team) => team.id !== issue?.team?.id),
-      [issue?.team?.id, teams]
+      () => teams.filter((team) => team.id !== issue?.teamId),
+      [issue?.teamId, teams]
    );
 
    useEffect(() => {
@@ -134,10 +135,10 @@ export function IssueActionDialog() {
             await updateIssueTitle(issue.id, value.trim());
          }
          if (kind === 'create-related') {
-            if (!workspaceId || !issue.team) throw new Error('Workspace or team is unavailable.');
+            if (!workspaceId || !issue.teamId) throw new Error('Workspace or team is unavailable.');
             if (value.trim().length < 2) throw new Error('Issue title is too short.');
-            const related = await createIssue({ teamId: issue.team.id, title: value.trim() });
-            const response = await fetch(`${api}/issues/${issue.id}/relations`, {
+            const related = await createIssue({ teamId: issue.teamId, title: value.trim() });
+            const response = await authenticatedFetch(`${api}/issues/${issue.id}/relations`, {
                method: 'POST',
                credentials: 'include',
                headers: { 'content-type': 'application/json' },

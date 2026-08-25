@@ -44,6 +44,8 @@ import {
    Clipboard,
 } from 'lucide-react';
 import { useIssuesStore } from '@/store/issues-store';
+import { useIssueActionDialogStore } from '@/store/issue-action-dialog-store';
+import { useIssueRelationDialogStore } from '@/store/issue-relation-dialog-store';
 import { status } from '@/mock-data/status';
 import { priorities } from '@/mock-data/priorities';
 import { toast } from 'sonner';
@@ -69,7 +71,11 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       updateIssueSubscription,
       updateIssueFavorite,
       setIssueReminder,
+      createIssue,
+      classifyIssue,
    } = useIssuesStore();
+   const openIssueAction = useIssueActionDialogStore((state) => state.openForIssue);
+   const openIssueRelation = useIssueRelationDialogStore((state) => state.openForIssue);
    const issue = issueId ? getIssueById(issueId) : undefined;
    const isSubscribed = issue?.isSubscribed ?? false;
    const isFavorite = issue?.isFavorite ?? false;
@@ -139,23 +145,65 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
    };
 
    const handleAddLink = () => {
-      toast.success('Link added');
+      if (issueId) openIssueRelation(issueId);
    };
 
-   const handleMakeCopy = () => {
-      toast.success('Issue copied');
+   const handleMakeCopy = async () => {
+      if (!issue?.teamId) return;
+      try {
+         const copy = await createIssue({
+            teamId: issue.teamId,
+            title: `${issue.title} (copy)`,
+            description: issue.description,
+            statusId: issue.status.id,
+            projectId: issue.project?.id,
+            assigneeId: issue.assignee?.id,
+            priority:
+               issue.priority.id === 'urgent'
+                  ? 'URGENT'
+                  : issue.priority.id === 'high'
+                    ? 'HIGH'
+                    : issue.priority.id === 'medium'
+                      ? 'MEDIUM'
+                      : issue.priority.id === 'low'
+                        ? 'LOW'
+                        : 'NONE',
+            dueDate: issue.dueDate,
+            labelIds: issue.labels.map((label) => label.id),
+         });
+         toast.success(`Created copy ${copy.identifier}`);
+      } catch (error) {
+         toast.error(error instanceof Error ? error.message : 'Could not make a copy.');
+      }
    };
 
    const handleCreateRelated = () => {
-      toast.success('Related issue created');
+      if (issueId) openIssueAction(issueId, 'create-related');
    };
 
-   const handleMarkAs = (type: string) => {
-      toast.success(`Marked as ${type}`);
+   const handleMarkAs = async (type: 'Completed' | 'Duplicate' | "Won't Fix") => {
+      if (!issueId) return;
+      if (type === 'Duplicate') {
+         openIssueAction(issueId, 'duplicate');
+         return;
+      }
+      if (type === "Won't Fix") {
+         try {
+            await classifyIssue(issueId, 'WONT_FIX');
+            toast.success("Marked as won't fix");
+         } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Could not classify issue.');
+         }
+         return;
+      }
+      const completed = status.find((candidate) => candidate.category === 'completed');
+      if (completed && (await updateIssueStatus(issueId, completed))) {
+         toast.success('Marked as completed');
+      }
    };
 
    const handleMove = () => {
-      toast.success('Issue moved');
+      if (issueId) openIssueAction(issueId, 'move');
    };
 
    const handleSubscribe = async () => {
@@ -327,7 +375,7 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                <ContextMenuShortcut>D</ContextMenuShortcut>
             </ContextMenuItem>
 
-            <ContextMenuItem>
+            <ContextMenuItem onClick={() => issueId && openIssueAction(issueId, 'rename')}>
                <Pencil className="size-4" /> Rename...
                <ContextMenuShortcut>R</ContextMenuShortcut>
             </ContextMenuItem>
@@ -347,13 +395,13 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                   <ContextMenuItem>
                      <FileText className="size-4" /> Document
                   </ContextMenuItem>
-                  <ContextMenuItem>
+                  <ContextMenuItem onClick={() => issueId && openIssueAction(issueId, 'convert-comment')}>
                      <MessageSquare className="size-4" /> Comment
                   </ContextMenuItem>
                </ContextMenuSubContent>
             </ContextMenuSub>
 
-            <ContextMenuItem onClick={handleMakeCopy}>
+            <ContextMenuItem onClick={() => void handleMakeCopy()}>
                <CopyIcon className="size-4" /> Make a copy...
             </ContextMenuItem>
          </ContextMenuGroup>
@@ -369,13 +417,13 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                <Flag className="mr-2 size-4" /> Mark as
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-48">
-               <ContextMenuItem onClick={() => handleMarkAs('Completed')}>
+               <ContextMenuItem onClick={() => void handleMarkAs('Completed')}>
                   <CheckCircle2 className="size-4" /> Completed
                </ContextMenuItem>
-               <ContextMenuItem onClick={() => handleMarkAs('Duplicate')}>
+               <ContextMenuItem onClick={() => void handleMarkAs('Duplicate')}>
                   <CopyIcon className="size-4" /> Duplicate
                </ContextMenuItem>
-               <ContextMenuItem onClick={() => handleMarkAs("Won't Fix")}>
+               <ContextMenuItem onClick={() => void handleMarkAs("Won't Fix")}>
                   <Clock className="size-4" /> Won&apos;t Fix
                </ContextMenuItem>
             </ContextMenuSubContent>
@@ -408,7 +456,10 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
 
          <ContextMenuSeparator />
 
-         <ContextMenuItem variant="destructive">
+         <ContextMenuItem
+            variant="destructive"
+            onClick={() => issueId && openIssueAction(issueId, 'archive')}
+         >
             <Trash2 className="size-4" /> Delete...
             <ContextMenuShortcut>⌘⌫</ContextMenuShortcut>
          </ContextMenuItem>
