@@ -79,6 +79,11 @@ class ClassifyIssueInput(BaseModel):
     duplicateOfIdentifier: str | None = Field(default=None, max_length=100)
 
 
+class ConvertIssueToCommentInput(BaseModel):
+    workspaceId: str = Field(min_length=1)
+    targetIdentifier: str = Field(min_length=3, max_length=100, pattern=r'^[A-Za-z0-9][A-Za-z0-9_-]*-\d+$')
+
+
 class CreateIssueTemplateInput(BaseModel):
     workspaceId: str = Field(min_length=1)
     name: str = Field(min_length=2, max_length=120)
@@ -1005,6 +1010,49 @@ async def classify_issue(
     })
     await db.commit()
     return {'data': await _issue_row(db, issue_id, payload.workspaceId, user['id'])}
+
+
+@router.post('/{issue_id}/convert-to-comment')
+async def convert_issue_to_comment(
+    issue_id: str,
+    payload: ConvertIssueToCommentInput,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    source = await _issue_row(db, issue_id, payload.workspaceId, user['id'])
+    target_id = await db.execute(
+        text('''SELECT id FROM issues WHERE workspace_id = :workspace_id AND identifier = :identifier
+                AND archived_at IS NULL LIMIT 1'''),
+        {'workspace_id': payload.workspaceId, 'identifier': payload.targetIdentifier.strip().upper()},
+    )
+    target_issue_id = target_id.scalar_one_or_none()
+    if not target_issue_id:
+        raise ApiError(404, 'Target issue not found.', 'Not Found')
+    if target_issue_id == source['id']:
+        raise ApiError(400, 'An issue cannot be converted into its own comment.', 'Bad Request')
+    target = await _issue_row(db, target_issue_id, payload.workspaceId, user['id'])
+    actor = await db.execute(text('SELECT id, name, avatar_url FROM users WHERE id = :user_id'), {'user_id': user['id']})
+    actor_row = actor.mappings().one()
+    content = '\n\n'.join(filter(None, [f"**{source['identifier']}: {source['title']}**", (source['description'] or '').strip()]))
+    body = {'type': 'doc', 'content': [{'type': 'paragraph', 'content': [{'type': 'text', 'text': content}]}]}
+    comment_id, now = _cuid(), _utcnow()
+    await db.execute(
+        text('''INSERT INTO comments (id, issue_id, author_id, content, body, created_at, updated_at)
+                VALUES (:id, :issue_id, :author_id, :content, CAST(:body AS jsonb), :now, :now)'''),
+        {'id': comment_id, 'issue_id': target['id'], 'author_id': user['id'], 'content': content, 'body': json.dumps(body), 'now': now},
+    )
+    await _write_activity(db, payload.workspaceId, target['id'], user['id'], 'comment.created', {
+        'commentId': comment_id, 'convertedFromIssueId': source['id'], 'convertedFromIdentifier': source['identifier'],
+    })
+    await _write_activity(db, payload.workspaceId, source['id'], user['id'], 'issue.converted_to_comment', {
+        'commentId': comment_id, 'targetIssueId': target['id'], 'targetIdentifier': target['identifier'],
+    })
+    await db.execute(text('UPDATE issues SET archived_at = :now, updated_at = :now WHERE id = :issue_id'), {'issue_id': source['id'], 'now': now})
+    await db.commit()
+    return {'data': {
+        'comment': {'id': comment_id, 'issueId': target['id'], 'authorId': user['id'], 'content': content, 'body': body, 'createdAt': now, 'updatedAt': now, 'deletedAt': None, 'author': {'id': actor_row['id'], 'name': actor_row['name'], 'avatarUrl': actor_row['avatar_url']}},
+        'sourceIssueId': source['id'], 'targetIssueId': target['id'], 'targetIdentifier': target['identifier'],
+    }}
 
 
 @router.get('/{issue_id}')
