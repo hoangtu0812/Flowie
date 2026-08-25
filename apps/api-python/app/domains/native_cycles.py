@@ -162,6 +162,7 @@ async def list_cycles(
 
 
 @router.post('')
+@public_router.post('')
 async def create_cycle(
     payload: CreateCycleInput,
     user: Any = Depends(current_user),
