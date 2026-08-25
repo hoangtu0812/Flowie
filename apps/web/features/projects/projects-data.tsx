@@ -87,6 +87,7 @@ export type CreateProjectValues = {
 
 type ProjectData = {
    workspaceId?: string;
+   workspaceLoading: boolean;
    resolvedTeamId?: string;
    allProjects: Array<Project & { issueCount: number }>;
    teamGroups: Array<{ id: string; name: string; icon?: string }>;
@@ -227,11 +228,14 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
       []
    );
    const [workspaceId, setWorkspaceId] = useState<string>();
+   const [workspaceLoading, setWorkspaceLoading] = useState(true);
    const [resolvedTeamId, setResolvedTeamId] = useState<string>();
    const [workspaceMembers, setWorkspaceMembers] = useState<ProjectListMember[]>([]);
    const [projectStatuses, setProjectStatuses] = useState<ProjectListStatus[]>([]);
 
    useEffect(() => {
+      let current = true;
+      setWorkspaceLoading(true);
       void (async () => {
          const workspace = await loadCurrentWorkspace();
          const [projectsResponse, membersResponse, statusesResponse, teamsResponse] =
@@ -257,6 +261,7 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
          };
          const statusesPayload = (await statusesResponse.json()) as { data: ApiProjectStatus[] };
          const teamsPayload = (await teamsResponse.json()) as { data: ApiWorkspaceTeam[] };
+         if (!current) return;
          setWorkspaceId(workspace.id);
          setResolvedTeamId(
             teamIdentifier
@@ -290,9 +295,17 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
                icon: team.icon ?? undefined,
             }))
          );
-      })().catch((error: unknown) => {
-         toast.error(error instanceof Error ? error.message : 'Could not load projects.');
-      });
+      })()
+         .catch((error: unknown) => {
+            if (current)
+               toast.error(error instanceof Error ? error.message : 'Could not load projects.');
+         })
+         .finally(() => {
+            if (current) setWorkspaceLoading(false);
+         });
+      return () => {
+         current = false;
+      };
    }, [teamIdentifier]);
 
    const updateProject = useCallback(
@@ -363,6 +376,7 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
 
    return {
       workspaceId,
+      workspaceLoading,
       resolvedTeamId,
       allProjects,
       teamGroups,

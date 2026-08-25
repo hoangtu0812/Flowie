@@ -29,7 +29,7 @@ export function CreateProjectDialog({
    open: boolean;
    onOpenChange: (open: boolean) => void;
 }) {
-   const { createProject, teamGroups } = useProjectsData();
+   const { createProject, teamGroups, workspaceId, workspaceLoading } = useProjectsData();
    const [name, setName] = useState('');
    const [identifier, setIdentifier] = useState('');
    const [teamId, setTeamId] = useState('');
@@ -119,8 +119,21 @@ export function CreateProjectDialog({
                   >
                      Cancel
                   </Button>
-                  <Button type="submit" disabled={submitting || !name.trim() || !identifier.trim()}>
-                     {submitting ? 'Creating…' : 'Create project'}
+                  <Button
+                     type="submit"
+                     disabled={
+                        submitting ||
+                        workspaceLoading ||
+                        !workspaceId ||
+                        !name.trim() ||
+                        !identifier.trim()
+                     }
+                  >
+                     {submitting
+                        ? 'Creating…'
+                        : workspaceLoading
+                          ? 'Loading workspace…'
+                          : 'Create project'}
                   </Button>
                </DialogFooter>
             </form>
