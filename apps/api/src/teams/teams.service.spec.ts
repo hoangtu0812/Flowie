@@ -71,8 +71,14 @@ describe('TeamsService membership', () => {
    it('lets an active workspace member join an active team idempotently', async () => {
       const membership = { teamId: 'team-1', userId: 'user-1', role: 'MEMBER' };
       const prisma = {
-         workspaceMember: { findFirst: jest.fn().mockResolvedValue({ id: 'workspace-member-1' }) },
-         team: { findFirst: jest.fn().mockResolvedValue({ id: 'team-1' }) },
+         workspaceMember: {
+            findFirst: jest.fn().mockResolvedValue({ id: 'workspace-member-1', role: 'MEMBER' }),
+         },
+         team: {
+            findFirst: jest
+               .fn()
+               .mockResolvedValue({ id: 'team-1', joinPolicy: 'OPEN', members: [] }),
+         },
          teamMember: { upsert: jest.fn().mockResolvedValue(membership) },
       };
       const service = new TeamsService(prisma as never);
@@ -90,6 +96,46 @@ describe('TeamsService membership', () => {
       expect(prisma.teamMember.upsert).toHaveBeenCalledTimes(2);
    });
 
+   it('does not let an ordinary workspace member self-join an invite-only team', async () => {
+      const prisma = {
+         workspaceMember: {
+            findFirst: jest.fn().mockResolvedValue({ id: 'workspace-member-1', role: 'MEMBER' }),
+         },
+         team: {
+            findFirst: jest
+               .fn()
+               .mockResolvedValue({ id: 'team-1', joinPolicy: 'INVITE_ONLY', members: [] }),
+         },
+         teamMember: { upsert: jest.fn() },
+      };
+      const service = new TeamsService(prisma as never);
+
+      await expect(service.join('team-1', 'workspace-1', 'user-1')).rejects.toBeInstanceOf(
+         ForbiddenException
+      );
+      expect(prisma.teamMember.upsert).not.toHaveBeenCalled();
+   });
+
+   it('keeps invite-only joins idempotent for an existing team member', async () => {
+      const membership = { teamId: 'team-1', userId: 'user-1', role: 'MEMBER' };
+      const prisma = {
+         workspaceMember: {
+            findFirst: jest.fn().mockResolvedValue({ id: 'workspace-member-1', role: 'MEMBER' }),
+         },
+         team: {
+            findFirst: jest.fn().mockResolvedValue({
+               id: 'team-1',
+               joinPolicy: 'INVITE_ONLY',
+               members: [{ userId: 'user-1' }],
+            }),
+         },
+         teamMember: { upsert: jest.fn().mockResolvedValue(membership) },
+      };
+      const service = new TeamsService(prisma as never);
+
+      await expect(service.join('team-1', 'workspace-1', 'user-1')).resolves.toEqual(membership);
+   });
+
    it('does not allow joining an archived, missing, or cross-workspace team', async () => {
       const prisma = {
          workspaceMember: { findFirst: jest.fn().mockResolvedValue({ id: 'workspace-member-1' }) },
@@ -103,7 +149,11 @@ describe('TeamsService membership', () => {
       );
       expect(prisma.team.findFirst).toHaveBeenCalledWith({
          where: { id: 'team-1', workspaceId: 'workspace-1', archivedAt: null },
-         select: { id: true },
+         select: {
+            id: true,
+            joinPolicy: true,
+            members: { where: { userId: 'user-1' }, select: { userId: true } },
+         },
       });
       expect(prisma.teamMember.upsert).not.toHaveBeenCalled();
    });
@@ -163,9 +213,9 @@ describe('TeamsService membership', () => {
       };
       const service = new TeamsService(prisma as never);
 
-      await expect(
-         service.scheduleDeletion('team-1', 'workspace-1', 'user-1')
-      ).resolves.toEqual({ id: 'team-1' });
+      await expect(service.scheduleDeletion('team-1', 'workspace-1', 'user-1')).resolves.toEqual({
+         id: 'team-1',
+      });
       expect(tx.team.update).toHaveBeenCalledWith({
          where: { id: 'team-1' },
          data: { archivedAt: expect.any(Date), deletedAt: expect.any(Date) },

@@ -22,12 +22,14 @@ import { Textarea } from '@/components/ui/textarea';
 import type { WorkspaceTeam } from '@/components/common/teams/team-types';
 import { type FormEvent, useEffect, useState } from 'react';
 
-export type TeamSettingsEditKind = 'general' | 'template' | 'automation' | 'cycles' | 'hierarchy';
+export type TeamSettingsEditKind =
+   'general' | 'access' | 'template' | 'automation' | 'cycles' | 'hierarchy';
 
 type Template = { id: string; name: string };
 
 const titles: Record<TeamSettingsEditKind, string> = {
    general: 'General settings',
+   access: 'Access and permissions',
    template: 'Default issue template',
    automation: 'Workflows & automations',
    cycles: 'Cycle cadence',
@@ -51,6 +53,7 @@ export function TeamSettingsDialog({
 }) {
    const [name, setName] = useState(team.name);
    const [description, setDescription] = useState(team.description ?? '');
+   const [joinPolicy, setJoinPolicy] = useState(team.joinPolicy);
    const [templateId, setTemplateId] = useState(team.defaultIssueTemplateId ?? 'none');
    const [autoCloseDays, setAutoCloseDays] = useState(team.autoCloseDays?.toString() ?? '');
    const [autoArchiveDays, setAutoArchiveDays] = useState(team.autoArchiveDays?.toString() ?? '');
@@ -65,6 +68,7 @@ export function TeamSettingsDialog({
       if (!kind) return;
       setName(team.name);
       setDescription(team.description ?? '');
+      setJoinPolicy(team.joinPolicy);
       setTemplateId(team.defaultIssueTemplateId ?? 'none');
       setAutoCloseDays(team.autoCloseDays?.toString() ?? '');
       setAutoArchiveDays(team.autoArchiveDays?.toString() ?? '');
@@ -90,6 +94,7 @@ export function TeamSettingsDialog({
       try {
          const data: Record<TeamSettingsEditKind, Record<string, unknown>> = {
             general: { name: name.trim(), description: description.trim() },
+            access: { joinPolicy },
             template: { defaultIssueTemplateId: templateId === 'none' ? null : templateId },
             automation: {
                autoCloseDays: optionalNumber(autoCloseDays, 3650),
@@ -139,6 +144,28 @@ export function TeamSettingsDialog({
                         />
                      </div>
                   </>
+               )}
+               {kind === 'access' && (
+                  <div className="space-y-2">
+                     <Label>Who can join this team?</Label>
+                     <Select
+                        value={joinPolicy}
+                        onValueChange={(value: 'OPEN' | 'INVITE_ONLY') => setJoinPolicy(value)}
+                     >
+                        <SelectTrigger>
+                           <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                           <SelectItem value="OPEN">Open</SelectItem>
+                           <SelectItem value="INVITE_ONLY">Invite only</SelectItem>
+                        </SelectContent>
+                     </Select>
+                     <p className="text-sm text-muted-foreground">
+                        {joinPolicy === 'OPEN'
+                           ? 'Any active workspace member can join this team.'
+                           : 'Only workspace administrators can add new team members.'}
+                     </p>
+                  </div>
                )}
                {kind === 'template' && (
                   <div className="space-y-2">

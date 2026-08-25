@@ -210,8 +210,13 @@ export default function TeamSettings({ teamId }: TeamSettingsProps) {
                            icon={<Lock className="size-4" />}
                            title="Access and permissions"
                            description="Manage team access and who in the team can take certain actions"
-                           trailing={unavailable}
-                           muted
+                           trailing={
+                              <span>
+                                 {team.joinPolicy === 'INVITE_ONLY' ? 'Invite only' : 'Open'}
+                              </span>
+                           }
+                           chevron
+                           onClick={() => setEditKind('access')}
                         />
                         <SettingsRow
                            icon={<Users className="size-4" />}

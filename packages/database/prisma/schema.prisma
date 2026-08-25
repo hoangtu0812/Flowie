@@ -39,6 +39,11 @@ enum TeamMemberRole {
   MEMBER
 }
 
+enum TeamJoinPolicy {
+  OPEN
+  INVITE_ONLY
+}
+
 enum IssueStatusCategory {
   TRIAGE
   BACKLOG
@@ -333,23 +338,24 @@ model AuditLog {
 }
 
 model Team {
-  id                     String    @id @default(cuid())
-  workspaceId            String    @map("workspace_id")
+  id                     String         @id @default(cuid())
+  workspaceId            String         @map("workspace_id")
   name                   String
   identifier             String
   description            String?
-  icon                   String?   @default("👥")
-  color                  String?   @default("#6366f1")
-  triageEnabled          Boolean   @default(true) @map("triage_enabled")
-  cycleCadenceWeeks      Int?      @map("cycle_cadence_weeks")
-  autoCloseDays          Int?      @map("auto_close_days")
-  autoArchiveDays        Int?      @map("auto_archive_days")
-  parentTeamId           String?   @map("parent_team_id")
-  defaultIssueTemplateId String?   @map("default_issue_template_id")
-  archivedAt             DateTime? @map("archived_at")
-  deletedAt              DateTime? @map("deleted_at")
-  createdAt              DateTime  @default(now()) @map("created_at")
-  updatedAt              DateTime  @updatedAt @map("updated_at")
+  icon                   String?        @default("👥")
+  color                  String?        @default("#6366f1")
+  joinPolicy             TeamJoinPolicy @default(OPEN) @map("join_policy")
+  triageEnabled          Boolean        @default(true) @map("triage_enabled")
+  cycleCadenceWeeks      Int?           @map("cycle_cadence_weeks")
+  autoCloseDays          Int?           @map("auto_close_days")
+  autoArchiveDays        Int?           @map("auto_archive_days")
+  parentTeamId           String?        @map("parent_team_id")
+  defaultIssueTemplateId String?        @map("default_issue_template_id")
+  archivedAt             DateTime?      @map("archived_at")
+  deletedAt              DateTime?      @map("deleted_at")
+  createdAt              DateTime       @default(now()) @map("created_at")
+  updatedAt              DateTime       @updatedAt @map("updated_at")
 
   workspace            Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   members              TeamMember[]

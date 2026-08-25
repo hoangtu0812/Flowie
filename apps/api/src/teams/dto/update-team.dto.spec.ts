@@ -6,6 +6,7 @@ describe('UpdateTeamDto', () => {
    it('accepts persisted team workflow settings', async () => {
       const dto = plainToInstance(UpdateTeamDto, {
          triageEnabled: false,
+         joinPolicy: 'INVITE_ONLY',
          cycleCadenceWeeks: 2,
          autoCloseDays: 30,
          autoArchiveDays: 90,
@@ -18,6 +19,12 @@ describe('UpdateTeamDto', () => {
 
    it('rejects an unsupported cycle cadence', async () => {
       const dto = plainToInstance(UpdateTeamDto, { cycleCadenceWeeks: 13 });
+
+      await expect(validate(dto)).resolves.not.toHaveLength(0);
+   });
+
+   it('rejects an unsupported team join policy', async () => {
+      const dto = plainToInstance(UpdateTeamDto, { joinPolicy: 'PRIVATE' });
 
       await expect(validate(dto)).resolves.not.toHaveLength(0);
    });

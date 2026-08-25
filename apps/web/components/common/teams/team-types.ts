@@ -23,6 +23,7 @@ export type WorkspaceTeam = {
    updatedAt: string;
    description?: string | null;
    triageEnabled: boolean;
+   joinPolicy: 'OPEN' | 'INVITE_ONLY';
    cycleCadenceWeeks: number | null;
    autoCloseDays: number | null;
    autoArchiveDays: number | null;

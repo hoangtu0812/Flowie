@@ -60,9 +60,7 @@ export class TeamsService {
    }
    async listDeleted(workspaceId: string, userId: string) {
       await this.authorizeManager(workspaceId, userId);
-      const restorableSince = new Date(
-         Date.now() - TEAM_RESTORE_WINDOW_DAYS * 24 * 60 * 60 * 1000
-      );
+      const restorableSince = new Date(Date.now() - TEAM_RESTORE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
       return this.prisma.team.findMany({
          where: { workspaceId, deletedAt: { gte: restorableSince } },
          select: {
@@ -226,12 +224,23 @@ export class TeamsService {
       });
    }
    async join(teamId: string, workspaceId: string, userId: string) {
-      await this.authorize(workspaceId, userId);
+      const workspaceMembership = await this.authorize(workspaceId, userId);
       const team = await this.prisma.team.findFirst({
          where: { id: teamId, workspaceId, archivedAt: null },
-         select: { id: true },
+         select: {
+            id: true,
+            joinPolicy: true,
+            members: { where: { userId }, select: { userId: true } },
+         },
       });
       if (!team) throw new NotFoundException('Team not found.');
+      const isExistingMember = team.members.length > 0;
+      const isWorkspaceManager = ['OWNER', 'ADMIN'].includes(workspaceMembership.role);
+      if (team.joinPolicy === 'INVITE_ONLY' && !isExistingMember && !isWorkspaceManager) {
+         throw new ForbiddenException(
+            'This team is invite-only. Ask a workspace administrator to add you.'
+         );
+      }
       return this.prisma.teamMember.upsert({
          where: { teamId_userId: { teamId, userId } },
          create: { teamId, userId, role: 'MEMBER' },
@@ -296,6 +305,7 @@ export class TeamsService {
          where: { workspaceId, userId, status: 'ACTIVE' },
       });
       if (!membership) throw new ForbiddenException('You do not have access to this workspace.');
+      return membership;
    }
    private async authorizeManager(workspaceId: string, userId: string) {
       const membership = await this.prisma.workspaceMember.findFirst({
