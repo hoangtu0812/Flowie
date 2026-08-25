@@ -360,8 +360,9 @@ Tiến độ thực hiện:
 - [x] P5a: dựng router Python riêng tư `/_native/projects` cho list/create/detail/update/archive
   với workspace/team RBAC, status/lead/label validation, activity và transaction PostgreSQL.
   Router này chưa public nên Circle UI vẫn đi qua facade NestJS; không có chuyển đổi UI nửa chừng.
-- [ ] P5b: port đầy đủ contract read-side (activity, issues, Peek, members, milestones, favorite,
-  subscription, resources, updates) vào router riêng tư.
+- [x] P5b: port Project read-side và mutation collaboration vào router riêng tư: activity, issues,
+  members, milestones, favorite, subscription, resources và updates. Regression Docker tạo/sửa/xóa
+  milestone, update, resource, member, favorite và subscription đã đạt.
 - [ ] P5c: đối chiếu payload với adapter Circle, chuyển route public theo một lát cắt hoàn chỉnh,
   sau đó mới yêu cầu người dùng kiểm tra UI light/dark.
 
@@ -549,6 +550,7 @@ Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modu
 | 2026-08-25 | P3c native API keys/preferences | `a576d07` | API token one-time exposure/revoke, preference persistence/audit and member-write `403`; Docker smoke + unit regression passed | Teams, Projects, Issues, worker | P4 Teams |
 | 2026-08-25 | P4 native Teams | `18b3f9f` | Docker smoke/unit + two-account team CRUD, membership, invite-only RBAC and deletion/restore regression passed | Projects, Issues, worker | P5 Projects |
 | 2026-08-25 | P5a native Project core (private staging) | `f1ef4e9` | Docker regression: register/workspace/team, create/list/update/detail/archive Project passed | Public Projects contract, Issues, worker | P5b Project read-side and related mutations |
+| 2026-08-25 | P5b native Project collaboration data | `4211c89` | Docker regression: members, favorite/subscription, milestone CRUD, updates/resources/activity and Project detail hydration passed | Project settings/templates/custom fields, public payload parity, Issues/worker | P5c compare Circle adapter and public cutover |
 
 ## 13. Definition of Done toàn dự án
 
