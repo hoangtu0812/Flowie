@@ -1,5 +1,5 @@
 import { FolderKanban, LucideIcon } from 'lucide-react';
-import { priorities } from '@/mock-data/priorities';
+import { priorities } from '@/lib/priority-presentations';
 import { LiveInitiative, LiveInitiativeProject } from './use-live-initiatives';
 
 export type InitiativeStatus = 'active' | 'planned' | 'completed' | 'canceled';

@@ -7,7 +7,7 @@ import { multiOptionFilterFn, optionFilterFn } from '@/components/data-table-fil
 import type { Issue } from '@/types/issues';
 import type { LabelInterface } from '@/mock-data/labels';
 import type { Project } from '@/mock-data/projects';
-import type { Status, StatusCategory } from '@/mock-data/status';
+import type { Status, StatusCategory } from '@/lib/status-presentations';
 import type { User } from '@/mock-data/users';
 import type { IssueCycleOption } from '@/store/issues-store';
 import {

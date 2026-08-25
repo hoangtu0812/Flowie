@@ -10,8 +10,8 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { Issue } from '@/types/issues';
-import { priorities } from '@/mock-data/priorities';
-import type { Status } from '@/mock-data/status';
+import { priorities } from '@/lib/priority-presentations';
+import type { Status } from '@/lib/status-presentations';
 import { useIssuesStore } from '@/store/issues-store';
 import { useIssueInsightsStore } from '@/store/issue-insights-store';
 import { useRightPanelStore } from '@/store/right-panel-store';

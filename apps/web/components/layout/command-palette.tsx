@@ -10,7 +10,7 @@ import {
    CommandList,
 } from '@/components/ui/command';
 import type { Issue } from '@/types/issues';
-import { priorities } from '@/mock-data/priorities';
+import { priorities } from '@/lib/priority-presentations';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useCreateIssueStore } from '@/store/create-issue-store';
 import { useIssuesStore } from '@/store/issues-store';

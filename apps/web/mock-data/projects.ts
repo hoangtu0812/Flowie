@@ -1,4 +1,4 @@
-import { Status, status } from './status';
+import { Status, status } from '@/lib/status-presentations';
 import {
    Accessibility,
    Bell,
@@ -25,7 +25,7 @@ import {
 import { RemixiconComponentType } from '@remixicon/react';
 import { User, users } from './users';
 import { LabelInterface, labels } from './labels';
-import { Priority, priorities } from './priorities';
+import { Priority, priorities } from '@/lib/priority-presentations';
 export interface Project {
    id: string;
    name: string;

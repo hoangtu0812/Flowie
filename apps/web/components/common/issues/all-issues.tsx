@@ -1,7 +1,7 @@
 'use client';
 
 import { Issue } from '@/types/issues';
-import { StatusCategory } from '@/mock-data/status';
+import { StatusCategory } from '@/lib/status-presentations';
 import { useFilterStore } from '@/store/filter-store';
 import { useIssuesStore } from '@/store/issues-store';
 import { applyIssueFilters } from './issue-filter-columns';

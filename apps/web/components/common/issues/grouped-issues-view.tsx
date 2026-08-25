@@ -3,8 +3,8 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { Issue, sortIssuesByPriority } from '@/types/issues';
-import { priorities } from '@/mock-data/priorities';
-import { Status } from '@/mock-data/status';
+import { priorities } from '@/lib/priority-presentations';
+import { Status } from '@/lib/status-presentations';
 import { useDisplaySettingsStore } from '@/store/display-settings-store';
 import { useFilterStore } from '@/store/filter-store';
 import { Box, ChevronDown, User, X } from 'lucide-react';

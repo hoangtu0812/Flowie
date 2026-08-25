@@ -8,7 +8,7 @@ import { SearchIssues } from '@/components/common/issues/search-issues';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Issue } from '@/types/issues';
-import { priorities } from '@/mock-data/priorities';
+import { priorities } from '@/lib/priority-presentations';
 import { useFilterStore } from '@/store/filter-store';
 import { useIssuesStore } from '@/store/issues-store';
 import { useRightPanelStore } from '@/store/right-panel-store';

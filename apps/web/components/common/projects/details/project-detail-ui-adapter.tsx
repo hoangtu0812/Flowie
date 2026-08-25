@@ -2,10 +2,10 @@
 
 import type { ContentBlock } from '@circle/contracts';
 import type { Issue } from '@/types/issues';
-import { priorities } from '@/mock-data/priorities';
+import { priorities } from '@/lib/priority-presentations';
 import { health as projectHealth, type Project } from '@/mock-data/projects';
 import type { ProjectDetail, ProjectUpdateHealth } from '@/mock-data/project-details';
-import type { Status, StatusCategory } from '@/mock-data/status';
+import type { Status, StatusCategory } from '@/lib/status-presentations';
 import type { User } from '@/mock-data/users';
 import { Circle, CircleCheck, CircleDashed, CirclePlay, CircleX, FolderKanban } from 'lucide-react';
 import { createElement } from 'react';

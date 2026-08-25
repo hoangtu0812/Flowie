@@ -10,7 +10,7 @@ import {
    CommandList,
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import type { Status } from '@/mock-data/status';
+import type { Status } from '@/lib/status-presentations';
 import { CheckIcon } from 'lucide-react';
 import { useId, useState } from 'react';
 

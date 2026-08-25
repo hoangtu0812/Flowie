@@ -29,7 +29,7 @@ import {
    SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { priorities } from '@/mock-data/priorities';
+import { priorities } from '@/lib/priority-presentations';
 import { InitiativesFilterType, useInitiativesFilterStore } from '@/store/initiatives-filter-store';
 import {
    InitiativesDisplayProperties,

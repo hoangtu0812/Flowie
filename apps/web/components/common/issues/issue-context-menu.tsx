@@ -37,7 +37,7 @@ import React from 'react';
 import { useIssuesStore } from '@/store/issues-store';
 import { useIssueRelationDialogStore } from '@/store/issue-relation-dialog-store';
 import { useIssueActionDialogStore } from '@/store/issue-action-dialog-store';
-import { priorities } from '@/mock-data/priorities';
+import { priorities } from '@/lib/priority-presentations';
 import { toast } from 'sonner';
 
 interface IssueContextMenuProps {

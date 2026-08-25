@@ -3,8 +3,8 @@
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { health as healthOptions, Project } from '@/mock-data/projects';
-import { priorities } from '@/mock-data/priorities';
-import type { Status, StatusCategory } from '@/mock-data/status';
+import { priorities } from '@/lib/priority-presentations';
+import type { Status, StatusCategory } from '@/lib/status-presentations';
 import { Circle, CircleCheck, CircleDashed, CirclePlay, CircleX, FolderKanban } from 'lucide-react';
 import { createElement } from 'react';
 import { useProjectsFilterStore } from '@/store/projects-filter-store';
