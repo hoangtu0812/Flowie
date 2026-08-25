@@ -305,8 +305,12 @@ Tiến độ hiện tại (P3a — completed 2026-08-25):
   verify, không đổi hash hoặc buộc người dùng reset mật khẩu.
 - [x] Docker persistence regression passed: native login/profile/profile update/workspace/refresh/
   logout, `401` sau logout, readiness, legacy proxy và offline-start.
-- [ ] P3b: native register, session list/revoke và workspace create/membership/invitation. Các
-  endpoint này đang proxy legacy nên không làm gián đoạn UI hay session hiện có.
+- [x] P3b1: Native Python `POST /auth/register`, `GET /auth/sessions`, `DELETE /auth/sessions`
+  và `DELETE /auth/sessions/:sessionId`. Register tạo atomically user/LOCAL identity/organization/
+  workspace/owner membership/General team và sáu status mặc định, đúng contract NestJS; regression
+  local đạt register `201`, login `200`, workspace `200`, 2 session, revoke `200`, logout `204`.
+- [ ] P3b2: workspace create, membership và invitation. Các endpoint này tiếp tục proxy legacy cho
+  đến khi RBAC và transaction được port/test riêng, nên không làm gián đoạn UI hay session hiện có.
 
 ### P4 — Teams bằng Python
 
@@ -517,6 +521,7 @@ Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modu
 | 2026-08-25 | P2 facade (local verification) | `bc05139` | Python proxy test + Web production build passed; Docker image smoke pending 5G | Toàn bộ NestJS/worker qua FastAPI facade | Build FastAPI image và smoke Docker |
 | 2026-08-25 | P2 Docker acceptance | `cb3af6c` | Python image built on 5G; `/readyz`, legacy health, login, authenticated profile and offline start passed | Toàn bộ NestJS/worker qua FastAPI facade | P3 Auth/Profile/Workspace native Python |
 | 2026-08-25 | P3a native session/profile/workspace | `3c45779` | Native session/profile/current-workspace + Node Argon2 compatibility and cross-token regression passed | Register, session management, workspace mutation/invitations | P3b auth/workspace mutations |
+| 2026-08-25 | P3b1 native register/session management | `361d4cb` | Docker build, Python unit regression and isolated-account register/login/workspace/session revoke/logout regression passed | Workspace create/membership/invitations, API keys | P3b2 workspace mutations |
 
 ## 13. Definition of Done toàn dự án
 
