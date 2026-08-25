@@ -60,6 +60,7 @@ export const viewport: Viewport = {
 
 import { ThemeProvider } from '@/components/layout/theme-provider';
 import { IssueRelationDialog } from '@/components/common/issues/issue-relation-dialog';
+import { IssueActionDialog } from '@/components/common/issues/issue-action-dialog';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 
 export default function RootLayout({
@@ -77,6 +78,7 @@ export default function RootLayout({
                <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
                   {children}
                   <IssueRelationDialog />
+                  <IssueActionDialog />
                   <Toaster />
                </ThemeProvider>
             </NuqsAdapter>

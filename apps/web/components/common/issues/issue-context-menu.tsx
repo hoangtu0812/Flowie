@@ -36,6 +36,7 @@ import {
 import React from 'react';
 import { useIssuesStore } from '@/store/issues-store';
 import { useIssueRelationDialogStore } from '@/store/issue-relation-dialog-store';
+import { useIssueActionDialogStore } from '@/store/issue-action-dialog-store';
 import { priorities } from '@/mock-data/priorities';
 import { toast } from 'sonner';
 
@@ -45,6 +46,7 @@ interface IssueContextMenuProps {
 
 export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
    const { openForIssue } = useIssueRelationDialogStore();
+   const { openForIssue: openAction } = useIssueActionDialogStore();
    const {
       updateIssueStatus,
       updateIssuePriority,
@@ -52,23 +54,16 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       addIssueLabel,
       removeIssueLabel,
       updateIssueProject,
-      updateIssueDueDate,
-      updateIssueTitle,
       createIssue,
       getIssueById,
       setIssueSubscription,
       setIssueFavorite,
-      setIssueReminder,
-      moveIssue,
       classifyIssue,
-      convertIssueToComment,
-      archiveIssue,
       statuses,
       members,
       projects,
       labels: workspaceLabels,
       workspaceId,
-      teams,
    } = useIssuesStore();
 
    const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
@@ -169,122 +164,12 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
 
    const handleClassification = async (resolution: 'DUPLICATE' | 'WONT_FIX') => {
       if (!issueId) return;
-      const issue = getIssueById(issueId);
-      const exampleIdentifier = `${issue?.team?.identifier ?? 'TEAM'}-123`;
-      const duplicateOfIdentifier =
-         resolution === 'DUPLICATE'
-            ? window
-                 .prompt(`Identifier of the original issue (for example, ${exampleIdentifier}):`)
-                 ?.trim()
-            : undefined;
-      if (resolution === 'DUPLICATE' && !duplicateOfIdentifier) return;
+      if (resolution === 'DUPLICATE') return openAction(issueId, 'duplicate');
       try {
-         await classifyIssue(issueId, resolution, duplicateOfIdentifier);
-         toast.success(resolution === 'DUPLICATE' ? 'Marked as duplicate' : "Marked as won't fix");
+         await classifyIssue(issueId, resolution);
+         toast.success("Marked as won't fix");
       } catch {
          toast.error('Could not classify issue');
-      }
-   };
-
-   const handleReminder = async () => {
-      if (!issueId) return;
-      const issue = getIssueById(issueId);
-      if (!issue) return;
-      const reminderDate = issue.reminderAt ? new Date(issue.reminderAt) : undefined;
-      const pad = (value: number) => value.toString().padStart(2, '0');
-      const current = reminderDate
-         ? `${reminderDate.getFullYear()}-${pad(reminderDate.getMonth() + 1)}-${pad(reminderDate.getDate())} ${pad(reminderDate.getHours())}:${pad(reminderDate.getMinutes())}`
-         : '';
-      const value = window.prompt(
-         'Reminder time (YYYY-MM-DD HH:mm). Leave empty to cancel the current reminder.',
-         current
-      );
-      if (value === null) return;
-      try {
-         if (!value.trim()) {
-            if (!issue.reminderAt) return;
-            await setIssueReminder(issueId, undefined);
-            toast.success('Reminder canceled');
-            return;
-         }
-         if (!/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}$/.test(value.trim())) {
-            toast.error('Use the YYYY-MM-DD HH:mm date format');
-            return;
-         }
-         const remindAt = new Date(value.trim().replace(' ', 'T'));
-         if (Number.isNaN(remindAt.getTime()) || remindAt.getTime() <= Date.now()) {
-            toast.error('Choose a valid future time');
-            return;
-         }
-         await setIssueReminder(issueId, remindAt.toISOString());
-         toast.success('Reminder set');
-      } catch {
-         toast.error('Could not update reminder');
-      }
-   };
-
-   const handleMove = async () => {
-      if (!issueId) return;
-      const issue = getIssueById(issueId);
-      if (!issue?.team) return;
-      const destinations = teams.filter((team) => team.id !== issue.team?.id);
-      if (!destinations.length) {
-         toast.error('No other accessible team is available');
-         return;
-      }
-      const value = window.prompt(
-         `Move to team (${destinations.map((team) => team.identifier).join(', ')})`
-      );
-      if (!value?.trim()) return;
-      const normalized = value.trim().toLowerCase();
-      const destination = destinations.find(
-         (team) =>
-            team.identifier.toLowerCase() === normalized || team.name.toLowerCase() === normalized
-      );
-      if (!destination) {
-         toast.error('Enter one of the available team identifiers');
-         return;
-      }
-      try {
-         const moved = await moveIssue(issueId, destination.id);
-         toast.success(`Moved to ${destination.name} as ${moved.identifier}`);
-      } catch {
-         toast.error('Could not move issue');
-      }
-   };
-
-   const handleDueDate = async () => {
-      if (!issueId) return;
-      const issue = getIssueById(issueId);
-      if (!issue) return;
-      const value = window.prompt(
-         'Due date (YYYY-MM-DD). Leave empty to clear.',
-         issue.dueDate?.slice(0, 10) ?? ''
-      );
-      if (value === null) return;
-      if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-         toast.error('Use the YYYY-MM-DD date format');
-         return;
-      }
-      try {
-         await updateIssueDueDate(issueId, value || undefined);
-         toast.success(value ? 'Due date updated' : 'Due date cleared');
-      } catch {
-         toast.error('Could not update due date');
-      }
-   };
-
-   const handleRename = async () => {
-      if (!issueId) return;
-      const issue = getIssueById(issueId);
-      if (!issue) return;
-      const title = window.prompt('Issue title', issue.title)?.trim();
-      if (!title || title === issue.title) return;
-      try {
-         await updateIssueTitle(issueId, title);
-         toast.success('Issue renamed');
-      } catch {
-         toast.error('Could not rename issue');
       }
    };
 
@@ -306,32 +191,6 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
          toast.success(`Created ${copied.identifier}`);
       } catch {
          toast.error('Could not copy issue');
-      }
-   };
-
-   const handleCreateRelated = async () => {
-      if (!issueId || !workspaceId) return;
-      const issue = getIssueById(issueId);
-      if (!issue?.team) return;
-      const title = window.prompt('Related issue title')?.trim();
-      if (!title) return;
-      try {
-         const related = await createIssue({ teamId: issue.team.id, title });
-         const response = await fetch(`${api}/issues/${issueId}/relations`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ workspaceId, relatedIssueId: related.id }),
-         });
-         if (!response.ok) throw new Error('Could not link issue.');
-         window.dispatchEvent(
-            new CustomEvent('flowie:issue-relations-changed', {
-               detail: { issueIds: [issueId, related.id] },
-            })
-         );
-         toast.success(`Created and linked ${related.identifier}`);
-      } catch {
-         toast.error('Could not create related issue');
       }
    };
 
@@ -358,27 +217,6 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       }
    };
 
-   const handleConvertToComment = async () => {
-      if (!issueId) return;
-      const issue = getIssueById(issueId);
-      if (!issue) return;
-      const exampleIdentifier = `${issue.team?.identifier ?? 'TEAM'}-123`;
-      const targetIdentifier = window
-         .prompt(`Target issue identifier (for example, ${exampleIdentifier}):`)
-         ?.trim();
-      if (!targetIdentifier) return;
-      if (targetIdentifier.toLowerCase() === issue.identifier.toLowerCase()) {
-         toast.error('Choose a different target issue');
-         return;
-      }
-      try {
-         const target = await convertIssueToComment(issueId, targetIdentifier);
-         toast.success(`Converted into a comment on ${target}`);
-      } catch {
-         toast.error('Could not convert issue to comment');
-      }
-   };
-
    const handleMarkCompleted = async () => {
       if (!issueId) return;
       const completed = statuses.find((status) => status.category === 'completed');
@@ -395,18 +233,6 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       if (issue) {
          navigator.clipboard.writeText(issue.title);
          toast.success('Copied to clipboard');
-      }
-   };
-
-   const handleArchive = async () => {
-      if (!issueId) return;
-      const issue = getIssueById(issueId);
-      if (!issue || !window.confirm(`Archive ${issue.identifier}?`)) return;
-      try {
-         await archiveIssue(issueId);
-         toast.success('Issue archived');
-      } catch {
-         toast.error('Could not archive issue');
       }
    };
 
@@ -508,12 +334,12 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                </ContextMenuSubContent>
             </ContextMenuSub>
 
-            <ContextMenuItem onClick={() => void handleDueDate()}>
+            <ContextMenuItem onClick={() => issueId && openAction(issueId, 'due-date')}>
                <CalendarClock className="size-4" /> Set due date...
                <ContextMenuShortcut>D</ContextMenuShortcut>
             </ContextMenuItem>
 
-            <ContextMenuItem onClick={() => void handleRename()}>
+            <ContextMenuItem onClick={() => issueId && openAction(issueId, 'rename')}>
                <Pencil className="size-4" /> Rename...
                <ContextMenuShortcut>R</ContextMenuShortcut>
             </ContextMenuItem>
@@ -533,7 +359,9 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                   <ContextMenuItem onClick={() => void handleConvertToDocument()}>
                      <FileText className="size-4" /> Document
                   </ContextMenuItem>
-                  <ContextMenuItem onClick={() => void handleConvertToComment()}>
+                  <ContextMenuItem
+                     onClick={() => issueId && openAction(issueId, 'convert-comment')}
+                  >
                      <MessageSquare className="size-4" /> Comment
                   </ContextMenuItem>
                </ContextMenuSubContent>
@@ -546,7 +374,7 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
 
          <ContextMenuSeparator />
 
-         <ContextMenuItem onClick={() => void handleCreateRelated()}>
+         <ContextMenuItem onClick={() => issueId && openAction(issueId, 'create-related')}>
             <PlusSquare className="size-4" /> Create related
          </ContextMenuItem>
 
@@ -567,7 +395,7 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
             </ContextMenuSubContent>
          </ContextMenuSub>
 
-         <ContextMenuItem onClick={() => void handleMove()}>
+         <ContextMenuItem onClick={() => issueId && openAction(issueId, 'move')}>
             <ArrowRightLeft className="size-4" /> Move
          </ContextMenuItem>
 
@@ -589,7 +417,7 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
             <Clipboard className="size-4" /> Copy
          </ContextMenuItem>
 
-         <ContextMenuItem onClick={() => void handleReminder()}>
+         <ContextMenuItem onClick={() => issueId && openAction(issueId, 'reminder')}>
             <AlarmClock className="size-4" />
             {getIssueById(issueId ?? '')?.reminderAt ? 'Change reminder' : 'Remind me'}
             <ContextMenuShortcut>H</ContextMenuShortcut>
@@ -597,7 +425,10 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
 
          <ContextMenuSeparator />
 
-         <ContextMenuItem variant="destructive" onClick={() => void handleArchive()}>
+         <ContextMenuItem
+            variant="destructive"
+            onClick={() => issueId && openAction(issueId, 'archive')}
+         >
             <Trash2 className="size-4" /> Archive
             <ContextMenuShortcut>⌘⌫</ContextMenuShortcut>
          </ContextMenuItem>
