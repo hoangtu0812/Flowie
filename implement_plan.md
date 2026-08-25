@@ -321,6 +321,9 @@ Tiến độ hiện tại (P3a — completed 2026-08-25):
   preference `200`; member write bị chặn `403`.
 - [x] Toàn bộ route Auth/Workspace trong scope P3 đã native Python; facade giữ các domain kế tiếp
   không thuộc scope (Teams, Projects, Issues và worker) cho tới phase riêng.
+- [x] P3d: Circle Workspace switcher đã đọc membership thật, đổi URL theo workspace slug, tạo
+  workspace qua API, logout và tự refresh access session trước request Workspace đầu tiên. Tài
+  khoản platform admin không có workspace hiển thị rõ trạng thái trống để tạo workspace đầu tiên.
 
 ### P4 — Teams bằng Python — completed (2026-08-25)
 
@@ -566,6 +569,7 @@ Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modu
 | 2026-08-25 | P5c Circle Project list/create cutover | `ebf5bab` | Public API regression + browser: unchanged Circle layout, real empty workspace state, Create project dialog opens, no console errors; web build passed | Project detail page adapters, Issue/Activity read-side, settings routes | Nối Overview/Activity/Issues theo whitelist |
 | 2026-08-25 | P5c Circle Project detail cutover | `da19ae2` | Web production build, 4 FastAPI regression tests và Docker web rebuild/recreate đạt; Overview/Activity/Issues dùng provider + API adapter, không còn fixture data trong cây Project detail | Acceptance light/dark với workspace người dùng; endpoints P6/P7 chưa migrate vẫn facade | Người dùng tạo Project và kiểm tra ba tab |
 | 2026-08-25 | P5c Create Project readiness fix | `d7132ce` | Dialog không còn submit khi `workspaceId` chưa tải xong; Docker browser smoke xác nhận nút bị khóa trong trạng thái chưa sẵn sàng, web production build đạt | Acceptance tạo Project sau đăng nhập | Refresh, chờ workspace tải rồi tạo Project |
+| 2026-08-25 | P3d Circle Workspace UI cutover | `8a2ccd1` | Web build + FastAPI regression đạt; browser smoke ghi nhận `401 → /auth/refresh 200 → /workspaces/me 200`; switcher không còn hard-code workspace | Members presentation còn fixture; invite API native đã sẵn sàng | Tạo workspace đầu tiên rồi nối Members UI |
 
 ## 13. Definition of Done toàn dự án
 
