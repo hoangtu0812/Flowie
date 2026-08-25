@@ -11,8 +11,8 @@
 2. Không thiết kế lại màn hình. Giữ nguyên component tree, khoảng cách, bảng, panel, popover và
    dark/light theme của UI gốc; chỉ thay record mock và action giả bằng API/backend.
 3. Chỉ thêm loading/error/empty state hoặc control thật cho tính năng UI gốc chưa có action.
-4. `mock-data` chỉ được giữ làm type/presentation catalog (icon, màu, priority/status metadata),
-   không được dùng làm record nghiệp vụ runtime.
+4. `apps/web/mock-data` đã bị xóa. Domain shape nằm trong `types`, còn icon/màu/priority/status
+   metadata nằm trong `lib/*-presentations`; không được tái tạo fixture record cho production.
 5. Agent và Code Reviews đang cố ý unavailable; không dùng canned response/review fixture.
 6. Không có Slack, email và desktop app. Discord là kênh notification/integration đang hỗ trợ.
 7. Hoàn thành một lát chức năng phải build/test, rebuild Docker từ cache, commit và push lên
@@ -130,9 +130,10 @@
 - Team access: row `Access and permissions` gốc lưu join policy OPEN/INVITE_ONLY; API chặn
   workspace member thường tự join team invite-only nhưng vẫn giữ join idempotent cho thành viên
   hiện hữu và quyền quản trị member cho OWNER/ADMIN.
-- Fixture cleanup: Issue domain shape/helper đã tách sang `types/issues.ts`; bảy dataset seed giả
-  Issue/Inbox/View/Issue Detail/Document/Initiative/Team không còn consumer đã bị xóa. Component
-  tree, className và presentation metadata của UI gốc không thay đổi.
+- Fixture cleanup: toàn bộ Issue/Inbox/View/Issue Detail/Document/Initiative/Team/Project/Cycle/User
+  seed đã xóa cùng thư mục `apps/web/mock-data`. Domain shape nằm trong `types`; catalog UI nằm
+  trong `lib/*-presentations`, sidebar static nằm trong `config`. Component tree/className và SVG,
+  màu, thứ tự presentation của UI gốc không thay đổi.
 - Docker Compose: Postgres, Redis, MinIO, API, worker, web; dependency layer đã cache nên
   `docker compose up` trong mạng nội bộ không tải lại khi lockfile/image base không đổi.
 
@@ -210,6 +211,9 @@
 - `dd521de` — persist Team open/invite-only join permissions through the original Settings row.
 - `a76ee16` — remove Issue/Inbox/View/Issue Detail fixture datasets and keep API-mapped types only.
 - `3741752` — remove unused Document/Initiative/Team fixture datasets.
+- `df008e0` — move Priority/Status presentation catalogs out of `mock-data`.
+- `1452774` — update every workflow presentation import after the catalog move.
+- `6497b86` — remove remaining Project/Cycle/User fixtures and the `mock-data` directory.
 
 ### Kiểm tra gần nhất
 
@@ -304,6 +308,9 @@
   login cùng HTTP 200. Targeted Team test 15/15, toàn bộ API test 54 suite/176 test passed.
 - Production build sau khi xóa Issue fixture passed; bảy dataset seed giả không còn consumer đã
   xóa tổng cộng hơn 5.000 dòng mà không đổi component markup/className.
+- Production build và Docker Web rebuild sau khi xóa fixture còn lại passed; install layer
+  `CACHED`, Web login HTTP 200. `rg` xác nhận không còn chuỗi `mock-data` trong TypeScript/TSX và
+  thư mục `apps/web/mock-data` không còn tồn tại.
 - Script `scripts/start-local.ps1` dùng `--no-build --pull never`, nên khởi động từ image hiện có
   chạy được trong mạng nội bộ. Rebuild web vẫn có thể cần internet vì baseline dùng
   `next/font/google`; lần build gần nhất retry TLS rồi thành công trên 5G, không phải cài package.
@@ -333,7 +340,7 @@
 | P1 | Saved Views parity | Hoàn thành: description/avatar creator được persist/mapping và hiển thị trong row gốc. |
 | P1 | Member Profile parity | Project membership và timezone cá nhân đã dùng backend thật; presence giả bị bỏ. Realtime presence chỉ triển khai khi có transport/heartbeat thật. |
 | P1 | Native browser dialogs | Hoàn thành: audit `apps/web` không còn `window.prompt`, `window.confirm` hoặc `window.alert`; mutation vẫn đi qua API/backend hiện hữu. |
-| P1 | Fixture cleanup | Đã xóa dataset giả Issue/Inbox/View/Issue Detail/Document/Initiative/Team. Còn tách Project/Cycle/User type và priority/status/health icon catalog khỏi `mock-data`, rồi xóa seed tương ứng. |
+| P1 | Fixture cleanup | Hoàn thành: toàn bộ fixture dataset và thư mục `apps/web/mock-data` đã xóa; domain type/presentation/config được tách đúng trách nhiệm, production build + Docker Web passed. |
 | P1 | Visible no-op còn lại | Inbox snoozed, Help giả và Team access no-op đã xử lý. Label groups/recurring issue, một số Preferences/Passkeys/Sub-grouping vẫn disabled hoặc unavailable; chỉ bật khi schema/service thật tồn tại, nếu ngoài phạm vi thì ẩn. |
 | P2 | Automation/webhook | Worker/Redis foundation có, nhưng rule builder, persisted automation và generic webhook chưa hoàn chỉnh. |
 | P2 | OAuth/enterprise identity | Google, Microsoft Entra, OIDC/SAML chưa triển khai; local email/password đang hoạt động. |
@@ -341,13 +348,11 @@
 
 ## Thứ tự tiếp tục đề xuất
 
-1. Tách Project/Cycle/User domain types và priority/status/health presentation catalog khỏi
-   `mock-data`, sau đó xóa các seed còn lại mà không đổi component markup.
-2. Quyết định semantics/persistence cho footer `Set default for everyone` trong Insights; hiện các
+1. Quyết định semantics/persistence cho footer `Set default for everyone` trong Insights; hiện các
    selector analytics chỉ có một lựa chọn nên lưu cấu hình chưa mang thêm giá trị.
-3. Audit các control disabled còn lại: tách rõ điều kiện hợp lệ, tính năng cố ý
+2. Audit các control disabled còn lại: tách rõ điều kiện hợp lệ, tính năng cố ý
    excluded và no-op.
-4. Đăng nhập sẵn một phiên workspace-member trong in-app browser rồi chụp đối chiếu từng route
+3. Đăng nhập sẵn một phiên workspace-member trong in-app browser rồi chụp đối chiếu từng route
    chính với `upstream/master`; browser sạch hiện xác nhận route guard/login và console không lỗi.
 
 ## 1. Mục tiêu
