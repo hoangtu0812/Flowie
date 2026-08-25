@@ -182,8 +182,9 @@ interface IssuesState {
    updateIssueAssignee: (issueId: string, newAssignee: User | null) => Promise<boolean>;
 
    // Labels management
-   addIssueLabel: (issueId: string, label: LabelInterface) => void;
-   removeIssueLabel: (issueId: string, labelId: string) => void;
+   addIssueLabel: (issueId: string, label: LabelInterface) => Promise<boolean>;
+   removeIssueLabel: (issueId: string, labelId: string) => Promise<boolean>;
+   replaceIssueLabels: (issueId: string, labels: LabelInterface[]) => Promise<boolean>;
 
    // Project management
    updateIssueProject: (issueId: string, newProject: Project | undefined) => void;
@@ -507,20 +508,56 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
    },
 
    // Labels management
-   addIssueLabel: (issueId: string, label: LabelInterface) => {
-      const issue = get().getIssueById(issueId);
-      if (issue) {
-         const updatedLabels = [...issue.labels, label];
-         get().updateIssue(issueId, { labels: updatedLabels });
+   replaceIssueLabels: async (issueId: string, labels: LabelInterface[]) => {
+      try {
+         const issue = get().getIssueById(issueId);
+         const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
+         if (!issue) {
+            toast.error('This issue is not ready yet.');
+            return false;
+         }
+         const response = await authenticatedFetch(
+            `${api}/issues/${issue.id}?${new URLSearchParams({ workspaceId })}`,
+            {
+               method: 'PATCH',
+               headers: { 'content-type': 'application/json' },
+               body: JSON.stringify({ labelIds: labels.map((label) => label.id) }),
+            }
+         );
+         if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as {
+               message?: string;
+            } | null;
+            throw new Error(payload?.message ?? 'Could not update issue labels.');
+         }
+         const payload = (await response.json()) as { data: NativeIssue };
+         const updatedIssue = asIssue(payload.data);
+         set((state) => {
+            const issues = state.issues.map((candidate) =>
+               candidate.id === issueId ? updatedIssue : candidate
+            );
+            return { issues, issuesByStatus: groupIssuesByStatus(issues) };
+         });
+         return true;
+      } catch (error) {
+         toast.error(error instanceof Error ? error.message : 'Could not update issue labels.');
+         return false;
       }
    },
 
-   removeIssueLabel: (issueId: string, labelId: string) => {
+   addIssueLabel: async (issueId: string, label: LabelInterface) => {
       const issue = get().getIssueById(issueId);
-      if (issue) {
-         const updatedLabels = issue.labels.filter((label) => label.id !== labelId);
-         get().updateIssue(issueId, { labels: updatedLabels });
-      }
+      if (!issue || issue.labels.some((candidate) => candidate.id === label.id)) return true;
+      return get().replaceIssueLabels(issueId, [...issue.labels, label]);
+   },
+
+   removeIssueLabel: async (issueId: string, labelId: string) => {
+      const issue = get().getIssueById(issueId);
+      if (!issue) return false;
+      return get().replaceIssueLabels(
+         issueId,
+         issue.labels.filter((label) => label.id !== labelId)
+      );
    },
 
    // Project management

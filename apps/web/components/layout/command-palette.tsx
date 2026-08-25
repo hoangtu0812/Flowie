@@ -11,7 +11,6 @@ import {
 } from '@/components/ui/command';
 import { cycles, formatCycleDateRange } from '@/mock-data/cycles';
 import { Issue } from '@/mock-data/issues';
-import { labels as allLabels } from '@/mock-data/labels';
 import { priorities } from '@/mock-data/priorities';
 import { projects as allProjects } from '@/mock-data/projects';
 import { status as allStatus } from '@/mock-data/status';
@@ -79,6 +78,7 @@ export function CommandPalette() {
    const {
       issues,
       members,
+      labels,
       updateIssueStatus,
       updateIssuePriority,
       updateIssueAssignee,
@@ -521,7 +521,7 @@ export function CommandPalette() {
 
                   {route === 'labels' && issue && (
                      <CommandGroup heading="Change or add labels…">
-                        {allLabels.map((label) => {
+                        {labels.map((label) => {
                            const active = issue.labels.some(
                               (candidate) => candidate.id === label.id
                            );
@@ -529,13 +529,19 @@ export function CommandPalette() {
                               <CommandItem
                                  key={label.id}
                                  onSelect={() => {
-                                    if (active) removeIssueLabel(issue.id, label.id);
-                                    else addIssueLabel(issue.id, label);
-                                    toast.success(
+                                    void (
                                        active
-                                          ? `Label ${label.name} removed`
-                                          : `Label ${label.name} added`
-                                    );
+                                          ? removeIssueLabel(issue.id, label.id)
+                                          : addIssueLabel(issue.id, label)
+                                    ).then((updated) => {
+                                       if (updated) {
+                                          toast.success(
+                                             active
+                                                ? `Label ${label.name} removed`
+                                                : `Label ${label.name} added`
+                                          );
+                                       }
+                                    });
                                  }}
                               >
                                  <span

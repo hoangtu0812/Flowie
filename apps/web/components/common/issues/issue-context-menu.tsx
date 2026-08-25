@@ -37,7 +37,6 @@ import React, { useState } from 'react';
 import { useIssuesStore } from '@/store/issues-store';
 import { status } from '@/mock-data/status';
 import { priorities } from '@/mock-data/priorities';
-import { labels } from '@/mock-data/labels';
 import { projects } from '@/mock-data/projects';
 import { toast } from 'sonner';
 
@@ -59,6 +58,7 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       updateIssue,
       getIssueById,
       members,
+      labels,
    } = useIssuesStore();
 
    const handleStatusChange = (statusId: string) => {
@@ -87,7 +87,7 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       }
    };
 
-   const handleLabelToggle = (labelId: string) => {
+   const handleLabelToggle = async (labelId: string) => {
       if (!issueId) return;
       const issue = getIssueById(issueId);
       const label = labels.find((l) => l.id === labelId);
@@ -97,10 +97,10 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       const hasLabel = issue.labels.some((l) => l.id === labelId);
 
       if (hasLabel) {
-         removeIssueLabel(issueId, labelId);
-         toast.success(`Removed label: ${label.name}`);
-      } else {
-         addIssueLabel(issueId, label);
+         if (await removeIssueLabel(issueId, labelId)) {
+            toast.success(`Removed label: ${label.name}`);
+         }
+      } else if (await addIssueLabel(issueId, label)) {
          toast.success(`Added label: ${label.name}`);
       }
    };
@@ -227,7 +227,10 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                </ContextMenuSubTrigger>
                <ContextMenuSubContent className="w-48">
                   {labels.map((label) => (
-                     <ContextMenuItem key={label.id} onClick={() => handleLabelToggle(label.id)}>
+                     <ContextMenuItem
+                        key={label.id}
+                        onClick={() => void handleLabelToggle(label.id)}
+                     >
                         <span
                            className="inline-block size-3 rounded-full"
                            style={{ backgroundColor: label.color }}
