@@ -363,6 +363,8 @@ Tiến độ thực hiện:
 - [x] P5b: port Project read-side và mutation collaboration vào router riêng tư: activity, issues,
   members, milestones, favorite, subscription, resources và updates. Regression Docker tạo/sửa/xóa
   milestone, update, resource, member, favorite và subscription đã đạt.
+- [x] P5c-precutover: đối chiếu response Project create/get của Python với facade Legacy trên cùng
+  database; top-level và object Team không còn trường thiếu/thừa.
 - [ ] P5c: đối chiếu payload với adapter Circle, chuyển route public theo một lát cắt hoàn chỉnh,
   sau đó mới yêu cầu người dùng kiểm tra UI light/dark.
 
@@ -551,6 +553,7 @@ Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modu
 | 2026-08-25 | P4 native Teams | `18b3f9f` | Docker smoke/unit + two-account team CRUD, membership, invite-only RBAC and deletion/restore regression passed | Projects, Issues, worker | P5 Projects |
 | 2026-08-25 | P5a native Project core (private staging) | `f1ef4e9` | Docker regression: register/workspace/team, create/list/update/detail/archive Project passed | Public Projects contract, Issues, worker | P5b Project read-side and related mutations |
 | 2026-08-25 | P5b native Project collaboration data | `4211c89` | Docker regression: members, favorite/subscription, milestone CRUD, updates/resources/activity and Project detail hydration passed | Project settings/templates/custom fields, public payload parity, Issues/worker | P5c compare Circle adapter and public cutover |
+| 2026-08-25 | P5c pre-cutover Project contract | `1924448` | Docker parity audit: Legacy/Python Project create/get top-level và Team payload không có key thiếu/thừa | Route public, adapter Circle, settings/templates/custom fields, Issues/worker | Báo người dùng trước khi bắt đầu nối UI |
 
 ## 13. Definition of Done toàn dự án
 
