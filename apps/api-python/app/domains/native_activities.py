@@ -14,9 +14,11 @@ from .native_projects import _project, _workspace_access
 
 
 router = APIRouter(prefix='/api/v1/_native/activities', tags=['native-activities'])
+public_router = APIRouter(prefix='/api/v1/activities', tags=['activities'])
 
 
 @router.get('')
+@public_router.get('')
 async def list_activities(
     workspaceId: str = Query(min_length=1),
     issueId: str | None = None,
