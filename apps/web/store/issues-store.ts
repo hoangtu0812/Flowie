@@ -40,7 +40,16 @@ type NativeIssueOptions = {
    projects: Array<{ id: string; name: string }>;
    members: Array<{ id: string; name: string; email: string; avatarUrl?: string | null }>;
    labels: LabelInterface[];
+   cycles: Array<{
+      id: string;
+      name: string;
+      status: string;
+      startDate?: string | null;
+      endDate?: string | null;
+   }>;
 };
+
+export type IssueCycle = NativeIssueOptions['cycles'][number];
 
 const normaliseStatusName = (value: string) => value.trim().toLowerCase();
 
@@ -149,6 +158,7 @@ interface IssuesState {
    members: User[];
    projects: Project[];
    labels: LabelInterface[];
+   cycles: IssueCycle[];
    issuesByStatus: Record<string, Issue[]>;
    workspaceId?: string;
    loading: boolean;
@@ -203,6 +213,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
    members: [],
    projects: [],
    labels: [],
+   cycles: [],
    issuesByStatus: {},
    workspaceId: undefined,
    loading: false,
@@ -236,6 +247,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
             members: optionsPayload.data.members.map(asMember),
             projects: optionsPayload.data.projects.map(asProjectOption),
             labels: optionsPayload.data.labels,
+            cycles: optionsPayload.data.cycles ?? [],
             issuesByStatus: groupIssuesByStatus(issues),
             loading: false,
          });
@@ -246,6 +258,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
             members: [],
             projects: [],
             labels: [],
+            cycles: [],
             issuesByStatus: {},
             loading: false,
          });
