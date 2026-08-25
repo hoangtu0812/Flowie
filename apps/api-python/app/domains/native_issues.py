@@ -50,6 +50,11 @@ class UpdateIssueInput(BaseModel):
     estimate: int | None = Field(default=None, ge=0)
 
 
+class IssueReactionInput(BaseModel):
+    workspaceId: str = Field(min_length=1)
+    emoji: str = Field(min_length=1, max_length=32)
+
+
 async def _issue_row(
     db: AsyncSession, issue_id: str, workspace_id: str, user_id: str
 ) -> dict[str, Any]:
@@ -418,3 +423,113 @@ async def archive_issue(
     await _write_activity(db, workspaceId, issue_id, user['id'], 'issue.archived', {})
     await db.commit()
     return {'data': {'id': issue_id, 'archivedAt': now}}
+
+
+@router.post('/{issue_id}/subscribers/me')
+async def subscribe_issue(
+    issue_id: str,
+    workspaceId: str = Query(min_length=1),
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    await _issue_row(db, issue_id, workspaceId, user['id'])
+    await db.execute(
+        text('''INSERT INTO issue_subscriptions (issue_id, user_id) VALUES (:issue_id, :user_id)
+                ON CONFLICT DO NOTHING'''),
+        {'issue_id': issue_id, 'user_id': user['id']},
+    )
+    await db.commit()
+    return {'data': {'issueId': issue_id, 'userId': user['id'], 'subscribed': True}}
+
+
+@router.delete('/{issue_id}/subscribers/me')
+async def unsubscribe_issue(
+    issue_id: str,
+    workspaceId: str = Query(min_length=1),
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    await _issue_row(db, issue_id, workspaceId, user['id'])
+    await db.execute(
+        text('DELETE FROM issue_subscriptions WHERE issue_id = :issue_id AND user_id = :user_id'),
+        {'issue_id': issue_id, 'user_id': user['id']},
+    )
+    await db.commit()
+    return {'data': {'ok': True}}
+
+
+@router.post('/{issue_id}/favorite')
+async def favorite_issue(
+    issue_id: str,
+    workspaceId: str = Query(min_length=1),
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    await _issue_row(db, issue_id, workspaceId, user['id'])
+    await db.execute(
+        text('''INSERT INTO issue_favorites (issue_id, user_id) VALUES (:issue_id, :user_id)
+                ON CONFLICT DO NOTHING'''),
+        {'issue_id': issue_id, 'user_id': user['id']},
+    )
+    await db.commit()
+    return {'data': {'issueId': issue_id, 'userId': user['id'], 'favorited': True}}
+
+
+@router.delete('/{issue_id}/favorite')
+async def unfavorite_issue(
+    issue_id: str,
+    workspaceId: str = Query(min_length=1),
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    await _issue_row(db, issue_id, workspaceId, user['id'])
+    await db.execute(
+        text('DELETE FROM issue_favorites WHERE issue_id = :issue_id AND user_id = :user_id'),
+        {'issue_id': issue_id, 'user_id': user['id']},
+    )
+    await db.commit()
+    return {'data': {'ok': True}}
+
+
+async def _issue_reactions(db: AsyncSession, issue_id: str, user_id: str) -> list[dict[str, Any]]:
+    result = await db.execute(
+        text('''SELECT emoji, COUNT(*)::int AS count, BOOL_OR(user_id = :user_id) AS reacted
+                FROM issue_reactions WHERE issue_id = :issue_id GROUP BY emoji ORDER BY MIN(created_at)'''),
+        {'issue_id': issue_id, 'user_id': user_id},
+    )
+    return [{'emoji': row['emoji'], 'count': row['count'], 'reacted': row['reacted']} for row in result.mappings().all()]
+
+
+@router.get('/{issue_id}/reactions')
+async def issue_reactions(
+    issue_id: str,
+    workspaceId: str = Query(min_length=1),
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, list[dict[str, Any]]]:
+    await _issue_row(db, issue_id, workspaceId, user['id'])
+    return {'data': await _issue_reactions(db, issue_id, user['id'])}
+
+
+@router.post('/{issue_id}/reactions/toggle')
+async def toggle_issue_reaction(
+    issue_id: str,
+    payload: IssueReactionInput,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, list[dict[str, Any]]]:
+    await _issue_row(db, issue_id, payload.workspaceId, user['id'])
+    emoji = payload.emoji.strip()
+    deleted = await db.execute(
+        text('''DELETE FROM issue_reactions WHERE issue_id = :issue_id AND user_id = :user_id
+                AND emoji = :emoji RETURNING emoji'''),
+        {'issue_id': issue_id, 'user_id': user['id'], 'emoji': emoji},
+    )
+    if deleted.scalar_one_or_none() is None:
+        await db.execute(
+            text('''INSERT INTO issue_reactions (issue_id, user_id, emoji)
+                    VALUES (:issue_id, :user_id, :emoji)'''),
+            {'issue_id': issue_id, 'user_id': user['id'], 'emoji': emoji},
+        )
+    await db.commit()
+    return {'data': await _issue_reactions(db, issue_id, user['id'])}
