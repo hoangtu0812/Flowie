@@ -72,6 +72,12 @@ class MoveIssueInput(BaseModel):
     teamId: str = Field(min_length=1)
 
 
+class ClassifyIssueInput(BaseModel):
+    workspaceId: str = Field(min_length=1)
+    resolution: Literal['DUPLICATE', 'WONT_FIX']
+    duplicateOfIdentifier: str | None = Field(default=None, max_length=100)
+
+
 async def _issue_row(
     db: AsyncSession, issue_id: str, workspace_id: str, user_id: str
 ) -> dict[str, Any]:
@@ -130,6 +136,7 @@ async def _issue_row(
         'title': row['title'],
         'description': row['description'],
         'priority': row['priority'],
+        'resolution': row['resolution'],
         'estimate': row['estimate'],
         'dueDate': row['due_date'],
         'completedAt': row['completed_at'],
@@ -759,6 +766,72 @@ async def move_issue(
         'fromTeamId': issue['teamId'],
         'toTeamId': team['id'],
         'identifier': f"{team['identifier']}-{team['issue_sequence']}",
+    })
+    await db.commit()
+    return {'data': await _issue_row(db, issue_id, payload.workspaceId, user['id'])}
+
+
+@router.post('/{issue_id}/classification')
+async def classify_issue(
+    issue_id: str,
+    payload: ClassifyIssueInput,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    issue = await _issue_row(db, issue_id, payload.workspaceId, user['id'])
+    duplicate_of_id: str | None = None
+    duplicate_identifier: str | None = None
+    if payload.resolution == 'DUPLICATE':
+        identifier = (payload.duplicateOfIdentifier or '').strip().upper()
+        if not identifier:
+            raise ApiError(400, 'A duplicate issue identifier is required.', 'Bad Request')
+        target = await db.execute(
+            text(
+                '''SELECT id FROM issues WHERE workspace_id = :workspace_id
+                   AND identifier = :identifier AND archived_at IS NULL LIMIT 1'''
+            ),
+            {'workspace_id': payload.workspaceId, 'identifier': identifier},
+        )
+        duplicate_of_id = target.scalar_one_or_none()
+        if not duplicate_of_id:
+            raise ApiError(404, 'Duplicate target issue not found.', 'Not Found')
+        if duplicate_of_id == issue['id']:
+            raise ApiError(400, 'An issue cannot be a duplicate of itself.', 'Bad Request')
+        duplicate = await _issue_row(db, duplicate_of_id, payload.workspaceId, user['id'])
+        duplicate_identifier = duplicate['identifier']
+    canceled_status = await db.execute(
+        text(
+            '''SELECT id FROM issue_statuses
+               WHERE workspace_id = :workspace_id AND category = 'CANCELED'
+                 AND (team_id = :team_id OR team_id IS NULL)
+               ORDER BY CASE WHEN team_id = :team_id THEN 0 ELSE 1 END, position ASC
+               LIMIT 1'''
+        ),
+        {'workspace_id': payload.workspaceId, 'team_id': issue['teamId']},
+    )
+    status_id = canceled_status.scalar_one_or_none()
+    if not status_id:
+        raise ApiError(404, 'No canceled status is configured for this team.', 'Not Found')
+    now = _utcnow()
+    await db.execute(
+        text(
+            '''UPDATE issues SET resolution = :resolution, duplicate_of_id = :duplicate_of_id,
+               status_id = :status_id, completed_at = NULL, canceled_at = :now, updated_at = :now
+               WHERE id = :issue_id AND workspace_id = :workspace_id'''
+        ),
+        {
+            'resolution': payload.resolution,
+            'duplicate_of_id': duplicate_of_id,
+            'status_id': status_id,
+            'now': now,
+            'issue_id': issue['id'],
+            'workspace_id': payload.workspaceId,
+        },
+    )
+    await _write_activity(db, payload.workspaceId, issue['id'], user['id'], 'issue.classified', {
+        'resolution': payload.resolution,
+        'duplicateOfId': duplicate_of_id,
+        'duplicateIdentifier': duplicate_identifier,
     })
     await db.commit()
     return {'data': await _issue_row(db, issue_id, payload.workspaceId, user['id'])}
