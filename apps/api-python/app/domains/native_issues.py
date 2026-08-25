@@ -1293,6 +1293,7 @@ async def public_archive_issue(
 
 
 @router.post('/{issue_id}/subscribers/me')
+@public_router.post('/{issue_id}/subscribers/me')
 async def subscribe_issue(
     issue_id: str,
     workspaceId: str = Query(min_length=1),
@@ -1310,6 +1311,7 @@ async def subscribe_issue(
 
 
 @router.delete('/{issue_id}/subscribers/me')
+@public_router.delete('/{issue_id}/subscribers/me')
 async def unsubscribe_issue(
     issue_id: str,
     workspaceId: str = Query(min_length=1),
@@ -1326,6 +1328,7 @@ async def unsubscribe_issue(
 
 
 @router.post('/{issue_id}/favorite')
+@public_router.post('/{issue_id}/favorite')
 async def favorite_issue(
     issue_id: str,
     workspaceId: str = Query(min_length=1),
@@ -1343,6 +1346,7 @@ async def favorite_issue(
 
 
 @router.delete('/{issue_id}/favorite')
+@public_router.delete('/{issue_id}/favorite')
 async def unfavorite_issue(
     issue_id: str,
     workspaceId: str = Query(min_length=1),
@@ -1368,6 +1372,7 @@ async def _issue_reactions(db: AsyncSession, issue_id: str, user_id: str) -> lis
 
 
 @router.get('/{issue_id}/reactions')
+@public_router.get('/{issue_id}/reactions')
 async def issue_reactions(
     issue_id: str,
     workspaceId: str = Query(min_length=1),
@@ -1379,6 +1384,7 @@ async def issue_reactions(
 
 
 @router.post('/{issue_id}/reactions/toggle')
+@public_router.post('/{issue_id}/reactions/toggle')
 async def toggle_issue_reaction(
     issue_id: str,
     payload: IssueReactionInput,
