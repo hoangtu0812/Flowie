@@ -9,6 +9,7 @@ import { IssueFilterBar } from './issue-filter-bar';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { useSearchStore } from '@/store/search-store';
 import { useViewStore } from '@/store/view-store';
+import { useParams } from 'next/navigation';
 import { useEffect, useMemo } from 'react';
 import { GroupedIssuesView } from './grouped-issues-view';
 import { InsightsPanel } from './insights-panel';
@@ -26,24 +27,26 @@ export default function AllIssues({ categories }: AllIssuesProps) {
    const { isSearchOpen, searchQuery } = useSearchStore();
    const { viewType } = useViewStore();
    const { filters } = useFilterStore();
-   const { issues, loadIssues } = useIssuesStore();
+   const { issues, statuses: workflowStatuses, loadIssues } = useIssuesStore();
    const { openPanel } = useRightPanelStore();
+   const params = useParams<{ teamId?: string | string[] }>();
+   const teamIdentifier = Array.isArray(params.teamId) ? params.teamId[0] : params.teamId;
 
    const isSearching = isSearchOpen && searchQuery.trim() !== '';
    const isViewTypeGrid = viewType === 'grid';
 
    useEffect(() => {
-      void loadIssues();
-   }, [loadIssues]);
+      void loadIssues(teamIdentifier);
+   }, [loadIssues, teamIdentifier]);
 
    const statuses = useMemo<Status[]>(() => {
-      const liveStatuses = Array.from(
-         new Map(issues.map((issue) => [issue.status.id, issue.status])).values()
-      );
+      const liveStatuses = workflowStatuses.length
+         ? workflowStatuses
+         : Array.from(new Map(issues.map((issue) => [issue.status.id, issue.status])).values());
       return categories
          ? liveStatuses.filter((current) => categories.includes(current.category))
          : liveStatuses;
-   }, [issues, categories]);
+   }, [issues, workflowStatuses, categories]);
 
    const scopedIssues = useMemo<Issue[]>(
       () =>

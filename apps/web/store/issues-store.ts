@@ -26,6 +26,13 @@ type NativeIssue = {
    cycleLinks?: { cycleId: string }[];
 };
 
+type NativeIssueStatus = {
+   id: string;
+   name: string;
+   color: string;
+   category: string;
+};
+
 const priorityId: Record<NativeIssue['priority'], string> = {
    NONE: 'no-priority',
    LOW: 'low',
@@ -34,18 +41,22 @@ const priorityId: Record<NativeIssue['priority'], string> = {
    URGENT: 'urgent',
 };
 
-function asIssue(native: NativeIssue): Issue {
-   const category = native.status.category.toLowerCase() as StatusCategory;
+function asStatus(native: NativeIssueStatus): Status {
+   const category = native.category.toLowerCase() as StatusCategory;
    const presentation =
       statusPresentation.find((candidate) => candidate.category === category) ??
       statusPresentation.find((candidate) => candidate.id === 'to-do')!;
-   const liveStatus: Status = {
+   return {
       ...presentation,
-      id: native.status.id,
-      name: native.status.name,
-      color: native.status.color,
+      id: native.id,
+      name: native.name,
+      color: native.color,
       category,
    };
+}
+
+function asIssue(native: NativeIssue): Issue {
+   const liveStatus = asStatus(native.status);
    const priority =
       priorities.find((candidate) => candidate.id === priorityId[native.priority]) ?? priorities[0];
    const assignee = native.assignee
@@ -94,6 +105,7 @@ interface FilterOptions {
 interface IssuesState {
    // Data
    issues: Issue[];
+   statuses: Status[];
    issuesByStatus: Record<string, Issue[]>;
    workspaceId?: string;
    loading: boolean;
@@ -140,6 +152,7 @@ interface IssuesState {
 export const useIssuesStore = create<IssuesState>((set, get) => ({
    // Initial state
    issues: [],
+   statuses: [],
    issuesByStatus: {},
    workspaceId: undefined,
    loading: false,
@@ -156,18 +169,25 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
             );
             if (team) query.set('teamId', team.id);
          }
-         const response = await authenticatedFetch(`${api}/_native/issues?${query}`);
-         if (!response.ok) throw new Error('Could not load issues.');
-         const payload = (await response.json()) as { data: NativeIssue[] };
+         const [response, optionsResponse] = await Promise.all([
+            authenticatedFetch(`${api}/_native/issues?${query}`),
+            authenticatedFetch(`${api}/_native/issues/options?${query}`),
+         ]);
+         if (!response.ok || !optionsResponse.ok) throw new Error('Could not load issues.');
+         const [payload, optionsPayload] = (await Promise.all([
+            response.json(),
+            optionsResponse.json(),
+         ])) as [{ data: NativeIssue[] }, { data: { statuses: NativeIssueStatus[] } }];
          const issues = payload.data.map(asIssue);
          set({
             workspaceId: workspace.id,
             issues,
+            statuses: optionsPayload.data.statuses.map(asStatus),
             issuesByStatus: groupIssuesByStatus(issues),
             loading: false,
          });
       } catch {
-         set({ issues: [], issuesByStatus: {}, loading: false });
+         set({ issues: [], statuses: [], issuesByStatus: {}, loading: false });
       }
    },
 
