@@ -71,6 +71,7 @@ export function useLiveInitiatives() {
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState<string>();
    const [refreshKey, setRefreshKey] = useState(0);
+   const reload = useCallback(() => setRefreshKey((value) => value + 1), []);
    useEffect(() => {
       let current = true;
       void (async () => {
@@ -116,7 +117,11 @@ export function useLiveInitiatives() {
          current = false;
       };
    }, [refreshKey]);
-   const reload = useCallback(() => setRefreshKey((value) => value + 1), []);
+   useEffect(() => {
+      const onChanged = () => reload();
+      window.addEventListener('flowie:initiatives-changed', onChanged);
+      return () => window.removeEventListener('flowie:initiatives-changed', onChanged);
+   }, [reload]);
    return { workspaceId, initiatives, projects, members, loading, error, reload };
 }
 

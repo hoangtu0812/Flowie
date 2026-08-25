@@ -20,16 +20,15 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import {
+   adaptInitiatives,
    countCompletedProjects,
    getInitiativeProjects,
+   initiativeHealth,
    Initiative,
    INITIATIVE_STATUS_META,
-   initiatives as allInitiatives,
    InitiativeStatus,
-} from '@/mock-data/initiatives';
-import { priorities } from '@/mock-data/priorities';
-import { health as allHealth } from '@/mock-data/projects';
-import { users } from '@/mock-data/users';
+} from './initiative-ui-adapter';
+import { priorities } from '@/lib/priority-presentations';
 import {
    InitiativesFilterType,
    useInitiativesFilterStore,
@@ -54,6 +53,7 @@ import { parseAsStringLiteral, useQueryState } from 'nuqs';
 import { useMemo, useState } from 'react';
 import { InitiativeStatusIcon } from './initiative-status-icon';
 import { InitiativesSidePanel } from './initiatives-side-panel';
+import { type LiveWorkspaceMember, useLiveInitiatives } from './use-live-initiatives';
 
 const TABS = ['active', 'planned', 'all'] as const;
 
@@ -65,7 +65,7 @@ const TAB_ITEMS: { label: string; value: (typeof TABS)[number] }[] = [
 
 /* --------------------------------- filter --------------------------------- */
 
-function InitiativesFilter() {
+function InitiativesFilter({ members }: { members: LiveWorkspaceMember[] }) {
    const [open, setOpen] = useState(false);
    const [active, setActive] = useState<InitiativesFilterType | null>(null);
    const { filters, toggleFilter, clearFilters, getActiveFiltersCount } =
@@ -159,13 +159,15 @@ function InitiativesFilter() {
                   )}
                   {active === 'owner' && (
                      <CommandGroup>
-                        {users.slice(0, 10).map((user) => (
+                        {members.slice(0, 10).map((member) => {
+                           const user = member.user;
+                           return (
                            <CommandItem
                               key={user.id}
                               onSelect={() => toggleFilter('owner', user.id)}
                            >
                               <Avatar className="size-4">
-                                 <AvatarImage src={user.avatarUrl} alt={user.name} />
+                                 <AvatarImage src={user.avatarUrl ?? undefined} alt={user.name} />
                                  <AvatarFallback className="text-[8px]">
                                     {user.name[0]}
                                  </AvatarFallback>
@@ -175,12 +177,13 @@ function InitiativesFilter() {
                                  <CheckIcon className="ml-auto size-3.5" />
                               )}
                            </CommandItem>
-                        ))}
+                           );
+                        })}
                      </CommandGroup>
                   )}
                   {active === 'health' && (
                      <CommandGroup>
-                        {allHealth.map((entry) => (
+                        {initiativeHealth.map((entry) => (
                            <CommandItem
                               key={entry.id}
                               onSelect={() => toggleFilter('health', entry.id)}
@@ -360,7 +363,7 @@ function InitiativeRow({
             <span className="hidden sm:flex w-14 shrink-0">
                {initiative.owner ? (
                   <Avatar className="size-5">
-                     <AvatarImage src={initiative.owner.avatarUrl} alt={initiative.owner.name} />
+                     <AvatarImage src={initiative.owner.avatarUrl ?? undefined} alt={initiative.owner.name} />
                      <AvatarFallback className="text-[9px]">
                         {initiative.owner.name[0]}
                      </AvatarFallback>
@@ -414,6 +417,8 @@ export default function Initiatives() {
    const { filters } = useInitiativesFilterStore();
    const { grouping, ordering, displayProperties } = useInitiativesDisplayStore();
    const [showPanel, setShowPanel] = useState(true);
+   const { initiatives: liveInitiatives, members, loading, error } = useLiveInitiatives();
+   const allInitiatives = useMemo(() => adaptInitiatives(liveInitiatives), [liveInitiatives]);
 
    const displayed = useMemo(() => {
       let list = allInitiatives.slice();
@@ -436,7 +441,7 @@ export default function Initiatives() {
       else if (ordering === 'target')
          list.sort((a, b) => (a.target ?? '').localeCompare(b.target ?? ''));
       return list;
-   }, [tab, filters, ordering]);
+   }, [allInitiatives, tab, filters, ordering]);
 
    const groups = useMemo(() => {
       if (grouping !== 'status') return null;
@@ -471,7 +476,7 @@ export default function Initiatives() {
                   ))}
                </div>
                <div className="flex items-center gap-1">
-                  <InitiativesFilter />
+                  <InitiativesFilter members={members} />
                   <InitiativesDisplayOptions />
                   <Button
                      size="xs"
@@ -508,7 +513,9 @@ export default function Initiatives() {
                )}
             </div>
 
-            {groups
+            {loading && <p className="px-6 py-10 text-sm text-muted-foreground">Loading initiatives…</p>}
+            {error && <p className="px-6 py-10 text-sm text-destructive">Could not load initiatives.</p>}
+            {!loading && !error && groups
                ? groups.map((group) => (
                     <div key={group.statusId}>
                        <div className="flex items-center gap-2 px-6 h-9 text-sm font-medium bg-[color-mix(in_oklab,var(--accent)_30%,var(--container))] border-b border-border/40">
@@ -528,7 +535,7 @@ export default function Initiatives() {
                        ))}
                     </div>
                  ))
-               : displayed.map((initiative) => (
+               : !loading && !error && displayed.map((initiative) => (
                     <InitiativeRow
                        key={initiative.id}
                        initiative={initiative}

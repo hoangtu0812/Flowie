@@ -2,9 +2,7 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { getInitiativeProjects, Initiative } from '@/mock-data/initiatives';
-import { health as allHealth } from '@/mock-data/projects';
-import { teams } from '@/mock-data/teams';
+import { getInitiativeProjects, initiativeHealth, Initiative } from './initiative-ui-adapter';
 import { UserRound } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
@@ -34,7 +32,7 @@ export function InitiativesSidePanel({ initiatives }: { initiatives: Initiative[
                byOwner.set(key, {
                   key,
                   label: initiative.owner?.name ?? 'No owner',
-                  avatarUrl: initiative.owner?.avatarUrl,
+                  avatarUrl: initiative.owner?.avatarUrl ?? undefined,
                   count: 1,
                });
          }
@@ -47,16 +45,26 @@ export function InitiativesSidePanel({ initiatives }: { initiatives: Initiative[
                getInitiativeProjects(initiative).map((project) => project.teamId)
             );
             for (const teamId of teamIds) {
-               const team = teams.find((entry) => entry.id === teamId);
-               if (!team) continue;
                const existing = byTeam.get(teamId);
                if (existing) existing.count += 1;
-               else byTeam.set(teamId, { key: teamId, label: team.name, icon: team.icon, count: 1 });
+               else {
+                  const project = getInitiativeProjects(initiative).find(
+                     (entry) => entry.teamId === teamId
+                  );
+                  if (project?.team) {
+                     byTeam.set(teamId, {
+                        key: teamId,
+                        label: project.team.name,
+                        icon: project.team.icon ?? undefined,
+                        count: 1,
+                     });
+                  }
+               }
             }
          }
          return [...byTeam.values()].sort((a, b) => b.count - a.count);
       }
-      return allHealth
+      return initiativeHealth
          .map((entry) => ({
             key: entry.id,
             label: entry.name,

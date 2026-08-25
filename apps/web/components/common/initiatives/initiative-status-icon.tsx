@@ -1,6 +1,6 @@
 'use client';
 
-import { InitiativeStatus } from '@/mock-data/initiatives';
+import { InitiativeStatus } from './initiative-ui-adapter';
 
 /** Linear-style initiative status icon: dashed planned ring, partial active pie, check when completed. */
 export function InitiativeStatusIcon({
