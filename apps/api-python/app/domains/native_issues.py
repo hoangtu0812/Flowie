@@ -586,6 +586,16 @@ async def create_issue(
     return {'data': await _issue_row(db, issue_id, payload.workspaceId, user['id'])}
 
 
+@public_router.post('')
+async def public_create_issue(
+    payload: CreateIssueInput,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    """Audited create contract for the untouched Circle Create Issue dialog."""
+    return await create_issue(payload, user, db)
+
+
 async def _template_row(db: AsyncSession, template_id: str, workspace_id: str) -> Any | None:
     result = await db.execute(
         text(
