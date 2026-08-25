@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
+import json
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
@@ -35,6 +36,108 @@ class InviteMemberInput(BaseModel):
 
 class UpdateMemberInput(BaseModel):
     role: str = Field(max_length=16)
+
+
+class ProjectViewTypes(BaseModel):
+    all: Literal['list', 'board', 'timeline']
+    active: Literal['list', 'board', 'timeline']
+
+
+class ProjectDisplayProperties(BaseModel):
+    milestones: bool
+    priority: bool
+    status: bool
+    health: bool
+    lead: bool
+    members: bool
+    targetDate: bool
+    issues: bool
+    labels: bool
+
+
+class ProjectDisplayDefaultsInput(BaseModel):
+    viewTypes: ProjectViewTypes
+    grouping: Literal['team', 'none']
+    ordering: Literal['start-date', 'target-date', 'title']
+    closedProjects: Literal['all', 'hide']
+    showEmptyGroups: bool
+    showProjectList: bool
+    showWeekNumbers: bool
+    displayProperties: ProjectDisplayProperties
+
+
+class IssueDisplayProperties(BaseModel):
+    id: bool
+    status: bool
+    priority: bool
+    assignee: bool
+    labels: bool
+    project: bool
+    dueDate: bool
+    created: bool
+    cycle: bool
+
+
+class IssueDisplayDefaultsInput(BaseModel):
+    viewType: Literal['list', 'grid']
+    grouping: Literal['status', 'assignee', 'priority', 'project', 'none']
+    ordering: Literal['priority', 'created', 'title']
+    orderCompletedByRecency: bool
+    completedIssues: Literal['all', 'none']
+    showSubIssues: bool
+    showEmptyGroups: bool
+    displayProperties: IssueDisplayProperties
+
+
+class IssueInsightDefaultsInput(BaseModel):
+    measure: Literal['issue-count']
+    slice: Literal['status']
+    segment: Literal['priority']
+
+
+DEFAULT_PROJECT_DISPLAY_SETTINGS = {
+    'viewTypes': {'all': 'list', 'active': 'timeline'},
+    'grouping': 'team',
+    'ordering': 'start-date',
+    'closedProjects': 'all',
+    'showEmptyGroups': False,
+    'showProjectList': True,
+    'showWeekNumbers': False,
+    'displayProperties': {
+        'milestones': False,
+        'priority': True,
+        'status': True,
+        'health': True,
+        'lead': True,
+        'members': False,
+        'targetDate': True,
+        'issues': True,
+        'labels': False,
+    },
+}
+
+DEFAULT_ISSUE_DISPLAY_SETTINGS = {
+    'viewType': 'list',
+    'grouping': 'status',
+    'ordering': 'priority',
+    'orderCompletedByRecency': False,
+    'completedIssues': 'all',
+    'showSubIssues': True,
+    'showEmptyGroups': False,
+    'displayProperties': {
+        'id': True,
+        'status': True,
+        'priority': True,
+        'assignee': True,
+        'labels': True,
+        'project': True,
+        'dueDate': False,
+        'created': True,
+        'cycle': False,
+    },
+}
+
+DEFAULT_ISSUE_INSIGHT_SETTINGS = {'measure': 'issue-count', 'slice': 'status', 'segment': 'priority'}
 
 
 def _name(value: str) -> str:
@@ -190,6 +293,74 @@ async def _created_organization(db: AsyncSession, workspace_id: str) -> dict[str
     return {**organization, 'workspaces': [workspace_record]}
 
 
+async def _read_display_preferences(
+    db: AsyncSession,
+    *,
+    workspace_id: str,
+    user_id: str,
+    column: str,
+    default: dict[str, Any],
+) -> dict[str, Any]:
+    await _authorize_member(db, workspace_id, user_id)
+    result = await db.execute(
+        text(f'SELECT {column} AS settings, updated_at FROM workspaces WHERE id = :workspace_id'),
+        {'workspace_id': workspace_id},
+    )
+    row = result.mappings().first()
+    if not row:
+        raise ApiError(404, 'Workspace not found.', 'Not Found')
+    return {'settings': row['settings'] or default, 'updatedAt': row['updated_at']}
+
+
+async def _write_display_preferences(
+    db: AsyncSession,
+    *,
+    workspace_id: str,
+    user_id: str,
+    column: str,
+    settings: dict[str, Any],
+    audit_action: str,
+) -> dict[str, Any]:
+    await _authorize_manager(db, workspace_id, user_id)
+    now = _utcnow()
+    result = await db.execute(
+        text(
+            f'''
+            UPDATE workspaces
+            SET {column} = CAST(:settings AS jsonb), updated_at = :now
+            WHERE id = :workspace_id
+            RETURNING {column} AS settings, updated_at
+            '''
+        ),
+        {'workspace_id': workspace_id, 'settings': json.dumps(settings), 'now': now},
+    )
+    row = result.mappings().first()
+    if not row:
+        raise ApiError(404, 'Workspace not found.', 'Not Found')
+    await db.execute(
+        text(
+            '''
+            INSERT INTO audit_logs (
+                id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at
+            ) VALUES (
+                :id, :workspace_id, :actor_id, :action, 'workspace', :entity_id,
+                CAST('{}' AS jsonb), :now
+            )
+            '''
+        ),
+        {
+            'id': _cuid(),
+            'workspace_id': workspace_id,
+            'actor_id': user_id,
+            'action': audit_action,
+            'entity_id': workspace_id,
+            'now': now,
+        },
+    )
+    await db.commit()
+    return {'settings': row['settings'], 'updatedAt': row['updated_at']}
+
+
 @router.get('/me')
 async def mine(
     user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)
@@ -293,6 +464,114 @@ async def create_workspace(
         await db.rollback()
         raise ApiError(409, 'A workspace with this name already exists.', 'Conflict') from error
     return {'data': await _created_organization(db, bootstrap['workspace_id'])}
+
+
+@router.get('/{workspace_id}/project-display-defaults')
+async def project_display_defaults(
+    workspace_id: str,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    return {
+        'data': await _read_display_preferences(
+            db,
+            workspace_id=workspace_id,
+            user_id=user['id'],
+            column='project_display_defaults',
+            default=DEFAULT_PROJECT_DISPLAY_SETTINGS,
+        )
+    }
+
+
+@router.patch('/{workspace_id}/project-display-defaults')
+async def update_project_display_defaults(
+    workspace_id: str,
+    payload: ProjectDisplayDefaultsInput,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    return {
+        'data': await _write_display_preferences(
+            db,
+            workspace_id=workspace_id,
+            user_id=user['id'],
+            column='project_display_defaults',
+            settings=payload.model_dump(),
+            audit_action='workspace.project-display-defaults.updated',
+        )
+    }
+
+
+@router.get('/{workspace_id}/issue-display-defaults')
+async def issue_display_defaults(
+    workspace_id: str,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    return {
+        'data': await _read_display_preferences(
+            db,
+            workspace_id=workspace_id,
+            user_id=user['id'],
+            column='issue_display_defaults',
+            default=DEFAULT_ISSUE_DISPLAY_SETTINGS,
+        )
+    }
+
+
+@router.patch('/{workspace_id}/issue-display-defaults')
+async def update_issue_display_defaults(
+    workspace_id: str,
+    payload: IssueDisplayDefaultsInput,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    return {
+        'data': await _write_display_preferences(
+            db,
+            workspace_id=workspace_id,
+            user_id=user['id'],
+            column='issue_display_defaults',
+            settings=payload.model_dump(),
+            audit_action='workspace.issue-display-defaults.updated',
+        )
+    }
+
+
+@router.get('/{workspace_id}/issue-insight-defaults')
+async def issue_insight_defaults(
+    workspace_id: str,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    return {
+        'data': await _read_display_preferences(
+            db,
+            workspace_id=workspace_id,
+            user_id=user['id'],
+            column='issue_insight_defaults',
+            default=DEFAULT_ISSUE_INSIGHT_SETTINGS,
+        )
+    }
+
+
+@router.patch('/{workspace_id}/issue-insight-defaults')
+async def update_issue_insight_defaults(
+    workspace_id: str,
+    payload: IssueInsightDefaultsInput,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    return {
+        'data': await _write_display_preferences(
+            db,
+            workspace_id=workspace_id,
+            user_id=user['id'],
+            column='issue_insight_defaults',
+            settings=payload.model_dump(),
+            audit_action='workspace.issue-insight-defaults.updated',
+        )
+    }
 
 
 @router.get('/{workspace_id}/members')

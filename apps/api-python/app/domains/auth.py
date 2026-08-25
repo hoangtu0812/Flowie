@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import re
 from secrets import token_urlsafe
@@ -52,6 +52,11 @@ class RegisterInput(BaseModel):
     timezone: str | None = Field(default=None, max_length=100)
 
 
+class CreateApiKeyInput(BaseModel):
+    name: str = Field(min_length=2, max_length=80)
+    expiresAt: str | None = Field(default=None, max_length=64)
+
+
 def _utcnow() -> datetime:
     # Prisma maps these columns to PostgreSQL `timestamp without time zone`.
     # Keep Python values UTC-naive so asyncpg does not mix offset-aware values
@@ -94,6 +99,20 @@ def _valid_timezone(value: str | None) -> str | None:
     except ZoneInfoNotFoundError as error:
         raise ApiError(400, 'Timezone is invalid.', 'Bad Request') from error
     return timezone_name
+
+
+def _api_key_expiry(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace('Z', '+00:00'))
+    except ValueError as error:
+        raise ApiError(400, 'expiresAt must be a valid ISO 8601 datetime', 'Bad Request') from error
+    if parsed.tzinfo:
+        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    if parsed <= _utcnow():
+        raise ApiError(400, 'API key expiry must be in the future.', 'Bad Request')
+    return parsed
 
 
 def _normalized_name(value: str) -> str:
@@ -570,3 +589,94 @@ async def revoke_session(
     await db.execute(text('UPDATE sessions SET revoked_at = :now WHERE id = :id'), {'id': session_id, 'now': _utcnow()})
     await db.commit()
     return {'data': {'id': session_id, 'revoked': True}}
+
+
+def _api_key(row: Any) -> dict[str, Any]:
+    return {
+        'id': row['id'],
+        'name': row['name'],
+        'prefix': row['prefix'],
+        'expiresAt': row['expires_at'],
+        'lastUsedAt': row['last_used_at'],
+        'createdAt': row['created_at'],
+    }
+
+
+@router.get('/api-keys')
+async def list_api_keys(
+    user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)
+) -> dict[str, list[dict[str, Any]]]:
+    result = await db.execute(
+        text(
+            '''
+            SELECT id, name, prefix, expires_at, last_used_at, created_at
+            FROM personal_api_keys
+            WHERE user_id = :user_id
+              AND revoked_at IS NULL
+              AND (expires_at IS NULL OR expires_at > :now)
+            ORDER BY created_at DESC
+            '''
+        ),
+        {'user_id': user['id'], 'now': _utcnow()},
+    )
+    return {'data': [_api_key(row) for row in result.mappings().all()]}
+
+
+@router.post('/api-keys')
+async def create_api_key(
+    payload: CreateApiKeyInput,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    name = payload.name.strip()
+    if len(name) < 2:
+        raise ApiError(400, 'API key name is too short.', 'Bad Request')
+    expires_at = _api_key_expiry(payload.expiresAt)
+    token = f'flowie_pat_{token_urlsafe(32)}'
+    now = _utcnow()
+    result = await db.execute(
+        text(
+            '''
+            INSERT INTO personal_api_keys (
+                id, user_id, name, prefix, token_hash, expires_at, created_at
+            ) VALUES (
+                :id, :user_id, :name, :prefix, :token_hash, :expires_at, :created_at
+            )
+            RETURNING id, name, prefix, expires_at, last_used_at, created_at
+            '''
+        ),
+        {
+            'id': _cuid(),
+            'user_id': user['id'],
+            'name': name,
+            'prefix': token[:18],
+            'token_hash': _hash_token(token),
+            'expires_at': expires_at,
+            'created_at': now,
+        },
+    )
+    await db.commit()
+    return {'data': {**_api_key(result.mappings().one()), 'token': token}}
+
+
+@router.delete('/api-keys/{key_id}')
+async def revoke_api_key(
+    key_id: str,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    result = await db.execute(
+        text(
+            '''
+            UPDATE personal_api_keys
+            SET revoked_at = :now
+            WHERE id = :id AND user_id = :user_id AND revoked_at IS NULL
+            RETURNING id
+            '''
+        ),
+        {'id': key_id, 'user_id': user['id'], 'now': _utcnow()},
+    )
+    if not result.scalar_one_or_none():
+        raise ApiError(404, 'API key not found.', 'Not Found')
+    await db.commit()
+    return {'data': {'id': key_id, 'revoked': True}}
