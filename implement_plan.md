@@ -548,7 +548,7 @@ Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modu
 | 2026-08-25 | P3b2 native workspace membership | `ae85f7d` | Docker smoke + two-account create/invite/pending/accept/role/leave/decline and owner/member RBAC regression passed | Personal API keys, workspace display preferences | P3c settings/security endpoints |
 | 2026-08-25 | P3c native API keys/preferences | `a576d07` | API token one-time exposure/revoke, preference persistence/audit and member-write `403`; Docker smoke + unit regression passed | Teams, Projects, Issues, worker | P4 Teams |
 | 2026-08-25 | P4 native Teams | `18b3f9f` | Docker smoke/unit + two-account team CRUD, membership, invite-only RBAC and deletion/restore regression passed | Projects, Issues, worker | P5 Projects |
-| 2026-08-25 | P5a native Project core (private staging) | `9313d5e` | Docker regression: register/workspace/team, create/list/update/detail/archive Project passed | Public Projects contract, Issues, worker | P5b Project read-side and related mutations |
+| 2026-08-25 | P5a native Project core (private staging) | `f1ef4e9` | Docker regression: register/workspace/team, create/list/update/detail/archive Project passed | Public Projects contract, Issues, worker | P5b Project read-side and related mutations |
 
 ## 13. Definition of Done toàn dự án
 
