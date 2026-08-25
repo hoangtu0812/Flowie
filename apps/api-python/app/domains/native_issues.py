@@ -55,6 +55,17 @@ class IssueReactionInput(BaseModel):
     emoji: str = Field(min_length=1, max_length=32)
 
 
+class IssueRelationInput(BaseModel):
+    workspaceId: str = Field(min_length=1)
+    relatedIssueId: str = Field(min_length=1)
+    type: Literal['RELATED', 'BLOCKS'] = 'RELATED'
+
+
+class UpdateIssueRelationInput(BaseModel):
+    workspaceId: str = Field(min_length=1)
+    type: Literal['RELATED', 'BLOCKS']
+
+
 async def _issue_row(
     db: AsyncSession, issue_id: str, workspace_id: str, user_id: str
 ) -> dict[str, Any]:
@@ -226,6 +237,25 @@ async def _write_activity(
     )
 
 
+def _relation_kind(relation_type: str, source_issue_id: str, perspective_issue_id: str) -> str:
+    if relation_type == 'RELATED':
+        return 'RELATED'
+    return 'BLOCKS' if source_issue_id == perspective_issue_id else 'BLOCKED_BY'
+
+
+async def _relation_summary(
+    db: AsyncSession, issue_id: str, workspace_id: str, user_id: str
+) -> dict[str, Any]:
+    issue = await _issue_row(db, issue_id, workspace_id, user_id)
+    return {
+        'id': issue['id'],
+        'identifier': issue['identifier'],
+        'title': issue['title'],
+        'status': issue['status'],
+        'team': issue['team'],
+    }
+
+
 @router.get('')
 async def list_issues(
     workspaceId: str = Query(min_length=1),
@@ -356,6 +386,214 @@ async def create_issue(
     await _write_activity(db, payload.workspaceId, issue_id, user['id'], 'issue.created', {'title': payload.title.strip(), 'identifier': f"{sequence['identifier']}-{sequence['issue_sequence']}"})
     await db.commit()
     return {'data': await _issue_row(db, issue_id, payload.workspaceId, user['id'])}
+
+
+@router.get('/{issue_id}/relations')
+async def list_issue_relations(
+    issue_id: str,
+    workspaceId: str = Query(min_length=1),
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, list[dict[str, Any]]]:
+    await _issue_row(db, issue_id, workspaceId, user['id'])
+    result = await db.execute(
+        text(
+            '''SELECT relation.issue_id, relation.related_issue_id, relation.type
+               FROM issue_relations relation
+               JOIN issues other ON other.id = CASE
+                   WHEN relation.issue_id = :issue_id THEN relation.related_issue_id
+                   ELSE relation.issue_id
+               END
+               WHERE relation.workspace_id = :workspace_id
+                 AND (relation.issue_id = :issue_id OR relation.related_issue_id = :issue_id)
+                 AND other.archived_at IS NULL
+               ORDER BY relation.created_at DESC'''
+        ),
+        {'issue_id': issue_id, 'workspace_id': workspaceId},
+    )
+    data: list[dict[str, Any]] = []
+    for relation in result.mappings().all():
+        other_id = relation['related_issue_id'] if relation['issue_id'] == issue_id else relation['issue_id']
+        try:
+            related = await _relation_summary(db, other_id, workspaceId, user['id'])
+        except ApiError as error:
+            if error.status_code == 404:
+                continue
+            raise
+        data.append({
+            **related,
+            'relationKind': _relation_kind(relation['type'], relation['issue_id'], issue_id),
+        })
+    return {'data': data}
+
+
+async def _add_issue_relation(
+    db: AsyncSession,
+    issue_id: str,
+    workspace_id: str,
+    related_issue_id: str,
+    relation_type: str,
+    user_id: str,
+) -> dict[str, Any]:
+    issue = await _issue_row(db, issue_id, workspace_id, user_id)
+    related = await _issue_row(db, related_issue_id, workspace_id, user_id)
+    if issue['id'] == related['id']:
+        raise ApiError(400, 'An issue cannot be related to itself.', 'Bad Request')
+
+    source_issue_id, target_issue_id = (
+        sorted((issue['id'], related['id']))
+        if relation_type == 'RELATED'
+        else (related['id'], issue['id'])
+    )
+    existing = await db.execute(
+        text(
+            '''SELECT issue_id, related_issue_id, type FROM issue_relations
+               WHERE workspace_id = :workspace_id
+                 AND ((issue_id = :issue_id AND related_issue_id = :related_issue_id)
+                   OR (issue_id = :related_issue_id AND related_issue_id = :issue_id))
+               LIMIT 1'''
+        ),
+        {
+            'workspace_id': workspace_id,
+            'issue_id': issue['id'],
+            'related_issue_id': related['id'],
+        },
+    )
+    previous = existing.mappings().first()
+    if previous and (
+        previous['type'] == relation_type
+        and previous['issue_id'] == source_issue_id
+        and previous['related_issue_id'] == target_issue_id
+    ):
+        return {
+            'workspaceId': workspace_id,
+            'issueId': previous['issue_id'],
+            'relatedIssueId': previous['related_issue_id'],
+            'type': previous['type'],
+        }
+
+    if previous:
+        await db.execute(
+            text(
+                '''UPDATE issue_relations
+                   SET issue_id = :source_issue_id, related_issue_id = :target_issue_id,
+                       type = :relation_type, created_by = :user_id, created_at = :now
+                   WHERE issue_id = :previous_issue_id AND related_issue_id = :previous_related_issue_id'''
+            ),
+            {
+                'source_issue_id': source_issue_id,
+                'target_issue_id': target_issue_id,
+                'relation_type': relation_type,
+                'user_id': user_id,
+                'now': _utcnow(),
+                'previous_issue_id': previous['issue_id'],
+                'previous_related_issue_id': previous['related_issue_id'],
+            },
+        )
+    else:
+        await db.execute(
+            text(
+                '''INSERT INTO issue_relations
+                   (workspace_id, issue_id, related_issue_id, type, created_at, created_by)
+                   VALUES (:workspace_id, :issue_id, :related_issue_id, :relation_type, :now, :user_id)'''
+            ),
+            {
+                'workspace_id': workspace_id,
+                'issue_id': source_issue_id,
+                'related_issue_id': target_issue_id,
+                'relation_type': relation_type,
+                'now': _utcnow(),
+                'user_id': user_id,
+            },
+        )
+
+    await _write_activity(db, workspace_id, issue['id'], user_id, 'issue.related', {
+        'relatedIssueId': related['id'],
+        'relatedIdentifier': related['identifier'],
+        'relationType': relation_type,
+        'relationKind': _relation_kind(relation_type, source_issue_id, issue['id']),
+    })
+    await _write_activity(db, workspace_id, related['id'], user_id, 'issue.related', {
+        'relatedIssueId': issue['id'],
+        'relatedIdentifier': issue['identifier'],
+        'relationType': relation_type,
+        'relationKind': _relation_kind(relation_type, source_issue_id, related['id']),
+    })
+    await db.commit()
+    return {
+        'workspaceId': workspace_id,
+        'issueId': source_issue_id,
+        'relatedIssueId': target_issue_id,
+        'type': relation_type,
+    }
+
+
+@router.post('/{issue_id}/relations')
+async def add_issue_relation(
+    issue_id: str,
+    payload: IssueRelationInput,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    return {'data': await _add_issue_relation(
+        db, issue_id, payload.workspaceId, payload.relatedIssueId, payload.type, user['id']
+    )}
+
+
+@router.patch('/{issue_id}/relations/{related_issue_id}')
+async def update_issue_relation(
+    issue_id: str,
+    related_issue_id: str,
+    payload: UpdateIssueRelationInput,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    return {'data': await _add_issue_relation(
+        db, issue_id, payload.workspaceId, related_issue_id, payload.type, user['id']
+    )}
+
+
+@router.delete('/{issue_id}/relations/{related_issue_id}')
+async def remove_issue_relation(
+    issue_id: str,
+    related_issue_id: str,
+    workspaceId: str = Query(min_length=1),
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    issue = await _issue_row(db, issue_id, workspaceId, user['id'])
+    related = await _issue_row(db, related_issue_id, workspaceId, user['id'])
+    result = await db.execute(
+        text(
+            '''DELETE FROM issue_relations
+               WHERE workspace_id = :workspace_id
+                 AND ((issue_id = :issue_id AND related_issue_id = :related_issue_id)
+                   OR (issue_id = :related_issue_id AND related_issue_id = :issue_id))
+               RETURNING issue_id, related_issue_id, type'''
+        ),
+        {
+            'workspace_id': workspaceId,
+            'issue_id': issue['id'],
+            'related_issue_id': related['id'],
+        },
+    )
+    relation = result.mappings().first()
+    if not relation:
+        raise ApiError(404, 'Issues are not linked.', 'Not Found')
+    await _write_activity(db, workspaceId, issue['id'], user['id'], 'issue.unrelated', {
+        'relatedIssueId': related['id'],
+        'relatedIdentifier': related['identifier'],
+        'relationType': relation['type'],
+        'relationKind': _relation_kind(relation['type'], relation['issue_id'], issue['id']),
+    })
+    await _write_activity(db, workspaceId, related['id'], user['id'], 'issue.unrelated', {
+        'relatedIssueId': issue['id'],
+        'relatedIdentifier': issue['identifier'],
+        'relationType': relation['type'],
+        'relationKind': _relation_kind(relation['type'], relation['issue_id'], related['id']),
+    })
+    await db.commit()
+    return {'data': {'issueId': issue['id'], 'relatedIssueId': related['id'], 'removed': True}}
 
 
 @router.get('/{issue_id}')
