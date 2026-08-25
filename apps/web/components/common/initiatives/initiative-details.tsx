@@ -3,11 +3,18 @@
 import ProjectsTimeline from '@/components/common/projects/projects-timeline';
 import { ProjectGroup } from '@/components/common/projects/projects';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { authenticatedFetch } from '@/lib/workspaces';
 import {
    adaptInitiatives,
    countCompletedProjects,
    getInitiativeProjects,
    Initiative,
+   initiativeHealth,
    INITIATIVE_STATUS_META,
 } from './initiative-ui-adapter';
 import type { Project } from '@/types/projects';
@@ -23,12 +30,13 @@ import {
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { parseAsStringLiteral, useQueryState } from 'nuqs';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { InitiativeProgressPanel } from './initiative-progress-panel';
 import { InitiativeStatusIcon } from './initiative-status-icon';
-import { useLiveInitiatives } from './use-live-initiatives';
+import { LiveWorkspaceProject, useLiveInitiatives } from './use-live-initiatives';
 
 const TABS = ['overview', 'activity', 'projects'] as const;
+const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 const formatTarget = (iso: string): string => {
    const [, month, day] = iso.split('-').map(Number);
@@ -62,7 +70,13 @@ const GROUP_ORDER: { key: string; label: string; match: (project: ReturnType<typ
    { key: 'completed', label: 'Completed', match: (p) => p.status.category === 'completed' },
 ];
 
-function ProjectsSection({ initiative }: { initiative: Initiative }) {
+function ProjectsSection({
+   initiative,
+   onLinkProject,
+}: {
+   initiative: Initiative;
+   onLinkProject: () => void;
+}) {
    const { orgId } = useParams<{ orgId: string }>();
    const projects = getInitiativeProjects(initiative);
    const groups = GROUP_ORDER.map((group) => ({
@@ -74,7 +88,14 @@ function ProjectsSection({ initiative }: { initiative: Initiative }) {
       <section className="flex flex-col gap-2">
          <div className="flex items-center justify-between">
             <h2 className="text-lg font-medium">Projects</h2>
-            <Plus className="size-4 text-muted-foreground" />
+            <button
+               type="button"
+               aria-label="Link a project"
+               className="text-muted-foreground hover:text-foreground transition-colors"
+               onClick={onLinkProject}
+            >
+               <Plus className="size-4" />
+            </button>
          </div>
          <div className="flex items-center gap-2 py-1.5 text-xs text-muted-foreground border-b">
             <span className="flex-1">Name</span>
@@ -148,12 +169,86 @@ function PropertyRow({ label, children }: { label: string; children: React.React
    );
 }
 
-function Overview({ initiative }: { initiative: Initiative }) {
+type InitiativeDetailAction = 'update' | 'resource' | 'project' | null;
+
+function Overview({
+   initiative,
+   workspaceId,
+   projects,
+}: {
+   initiative: Initiative;
+   workspaceId?: string;
+   projects: LiveWorkspaceProject[];
+}) {
    const completed = countCompletedProjects(initiative);
    const total = getInitiativeProjects(initiative).length;
+   const [action, setAction] = useState<InitiativeDetailAction>(null);
+   const [updateBody, setUpdateBody] = useState('');
+   const [updateHealth, setUpdateHealth] = useState(initiative.health.id);
+   const [resourceLabel, setResourceLabel] = useState('');
+   const [resourceUrl, setResourceUrl] = useState('');
+   const [projectId, setProjectId] = useState('');
+   const [saving, setSaving] = useState(false);
+   const [error, setError] = useState<string>();
+   const availableProjects = projects.filter(
+      (project) => !initiative.projectLinks.some((link) => link.project.id === project.id)
+   );
+
+   const openAction = (nextAction: Exclude<InitiativeDetailAction, null>) => {
+      setError(undefined);
+      setAction(nextAction);
+   };
+
+   const submit = async () => {
+      if (!action || !workspaceId) return;
+      setSaving(true);
+      setError(undefined);
+      try {
+         const path =
+            action === 'update'
+               ? 'updates'
+               : action === 'resource'
+                 ? 'resources'
+                 : 'projects';
+         const body =
+            action === 'update'
+               ? { workspaceId, body: updateBody.trim(), health: updateHealth }
+               : action === 'resource'
+                 ? { workspaceId, label: resourceLabel.trim(), url: resourceUrl.trim() }
+                 : { workspaceId, projectId };
+         const response = await authenticatedFetch(`${api}/initiatives/${initiative.id}/${path}`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(body),
+         });
+         if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+            throw new Error(payload?.message ?? 'Could not save initiative changes.');
+         }
+         setAction(null);
+         setUpdateBody('');
+         setResourceLabel('');
+         setResourceUrl('');
+         setProjectId('');
+         window.dispatchEvent(new Event('flowie:initiatives-changed'));
+      } catch (caught) {
+         setError(caught instanceof Error ? caught.message : 'Could not save initiative changes.');
+      } finally {
+         setSaving(false);
+      }
+   };
+
+   const canSubmit =
+      Boolean(workspaceId) &&
+      (action === 'update'
+         ? updateBody.trim().length > 0
+         : action === 'resource'
+           ? resourceLabel.trim().length > 0 && resourceUrl.trim().length > 0
+           : projectId.length > 0);
 
    return (
-      <div className="w-full h-full flex overflow-hidden">
+      <>
+         <div className="w-full h-full flex overflow-hidden">
          <div className="flex-1 min-w-0 overflow-y-auto">
             <div className="max-w-3xl mx-auto px-8 py-10 flex flex-col gap-6">
                <span className="inline-flex size-10 items-center justify-center rounded-md bg-muted/50 text-2xl">
@@ -204,13 +299,32 @@ function Overview({ initiative }: { initiative: Initiative }) {
 
                <div className="flex items-center gap-3 text-sm">
                   <span className="text-muted-foreground text-xs w-24">Resources</span>
-                  <button className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors">
+                  <button
+                     type="button"
+                     className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                     onClick={() => openAction('resource')}
+                  >
                      <Plus className="size-4" />
                      Add document or link…
                   </button>
+                  {initiative.resources.map((resource) => (
+                     <a
+                        key={resource.id}
+                        href={resource.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors truncate max-w-40"
+                     >
+                        {resource.label}
+                     </a>
+                  ))}
                </div>
 
-               <button className="flex items-center justify-center gap-2 rounded-lg border py-4 text-sm text-muted-foreground hover:bg-accent/40 transition-colors">
+               <button
+                  type="button"
+                  className="flex items-center justify-center gap-2 rounded-lg border py-4 text-sm text-muted-foreground hover:bg-accent/40 transition-colors"
+                  onClick={() => openAction('update')}
+               >
                   <FilePenLine className="size-4" />
                   Write first initiative update
                </button>
@@ -222,7 +336,7 @@ function Overview({ initiative }: { initiative: Initiative }) {
                   </p>
                </div>
 
-               <ProjectsSection initiative={initiative} />
+               <ProjectsSection initiative={initiative} onLinkProject={() => openAction('project')} />
             </div>
          </div>
 
@@ -299,7 +413,82 @@ function Overview({ initiative }: { initiative: Initiative }) {
                </div>
             </div>
          </aside>
-      </div>
+         </div>
+         <Dialog open={action !== null} onOpenChange={(open) => !saving && !open && setAction(null)}>
+            <DialogContent>
+               <DialogHeader>
+                  <DialogTitle>
+                     {action === 'update'
+                        ? 'Write initiative update'
+                        : action === 'resource'
+                          ? 'Add document or link'
+                          : 'Link project'}
+                  </DialogTitle>
+               </DialogHeader>
+               {action === 'update' && (
+                  <div className="space-y-3">
+                     <Textarea
+                        value={updateBody}
+                        onChange={(event) => setUpdateBody(event.target.value)}
+                        placeholder="Share an update…"
+                        autoFocus
+                     />
+                     <div className="space-y-1.5">
+                        <label className="text-sm font-medium" htmlFor="initiative-update-health">Health</label>
+                        <Select
+                           value={updateHealth}
+                           onValueChange={(value) =>
+                              setUpdateHealth(value as typeof updateHealth)
+                           }
+                        >
+                           <SelectTrigger id="initiative-update-health"><SelectValue /></SelectTrigger>
+                           <SelectContent>
+                              {initiativeHealth.map((health) => (
+                                 <SelectItem key={health.id} value={health.id}>{health.name}</SelectItem>
+                              ))}
+                           </SelectContent>
+                        </Select>
+                     </div>
+                  </div>
+               )}
+               {action === 'resource' && (
+                  <div className="space-y-3">
+                     <div className="space-y-1.5">
+                        <label className="text-sm font-medium" htmlFor="initiative-resource-label">Name</label>
+                        <Input id="initiative-resource-label" value={resourceLabel} onChange={(event) => setResourceLabel(event.target.value)} autoFocus />
+                     </div>
+                     <div className="space-y-1.5">
+                        <label className="text-sm font-medium" htmlFor="initiative-resource-url">URL</label>
+                        <Input id="initiative-resource-url" type="url" value={resourceUrl} onChange={(event) => setResourceUrl(event.target.value)} placeholder="https://…" />
+                     </div>
+                  </div>
+               )}
+               {action === 'project' && (
+                  <div className="space-y-2">
+                     <label className="text-sm font-medium" htmlFor="initiative-project">Project</label>
+                     <Select value={projectId} onValueChange={setProjectId}>
+                        <SelectTrigger id="initiative-project"><SelectValue placeholder="Select a project" /></SelectTrigger>
+                        <SelectContent>
+                           {availableProjects.map((project) => (
+                              <SelectItem key={project.id} value={project.id}>
+                                 {project.name}{project.identifier ? ` · ${project.identifier}` : ''}
+                              </SelectItem>
+                           ))}
+                        </SelectContent>
+                     </Select>
+                     {availableProjects.length === 0 && <p className="text-sm text-muted-foreground">All workspace projects are already linked.</p>}
+                  </div>
+               )}
+               {error && <p className="text-sm text-destructive">{error}</p>}
+               <DialogFooter>
+                  <Button variant="outline" onClick={() => setAction(null)} disabled={saving}>Cancel</Button>
+                  <Button onClick={() => void submit()} disabled={saving || !canSubmit}>
+                     {saving ? 'Saving…' : action === 'project' ? 'Link project' : action === 'resource' ? 'Add resource' : 'Post update'}
+                  </Button>
+               </DialogFooter>
+            </DialogContent>
+         </Dialog>
+      </>
    );
 }
 
@@ -336,7 +525,7 @@ function Activity({ initiative }: { initiative: Initiative }) {
 /** Initiative detail page: Overview / Activity / Projects tabs. */
 export default function InitiativeDetails({ initiativeId }: { initiativeId: string }) {
    const [tab] = useQueryState('tab', parseAsStringLiteral(TABS).withDefault('overview'));
-   const { initiatives: liveInitiatives, loading, error } = useLiveInitiatives();
+   const { workspaceId, initiatives: liveInitiatives, projects, loading, error } = useLiveInitiatives();
    const initiatives = useMemo(() => adaptInitiatives(liveInitiatives), [liveInitiatives]);
    const initiative = initiatives.find((item) => item.id === initiativeId);
 
@@ -373,5 +562,5 @@ export default function InitiativeDetails({ initiativeId }: { initiativeId: stri
 
    if (tab === 'activity') return <Activity initiative={initiative} />;
    if (tab === 'projects') return <ProjectsTimeline groups={timelineGroups} />;
-   return <Overview initiative={initiative} />;
+   return <Overview initiative={initiative} workspaceId={workspaceId} projects={projects} />;
 }
