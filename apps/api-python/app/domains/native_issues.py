@@ -1271,6 +1271,27 @@ async def archive_issue(
     return {'data': {'id': issue_id, 'archivedAt': now}}
 
 
+@public_router.patch('/c{issue_suffix}')
+async def public_update_issue(
+    issue_suffix: str,
+    payload: UpdateIssueInput,
+    workspaceId: str = Query(min_length=1),
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    return await update_issue(f'c{issue_suffix}', payload, workspaceId, user, db)
+
+
+@public_router.delete('/c{issue_suffix}')
+async def public_archive_issue(
+    issue_suffix: str,
+    workspaceId: str = Query(min_length=1),
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    return await archive_issue(f'c{issue_suffix}', workspaceId, user, db)
+
+
 @router.post('/{issue_id}/subscribers/me')
 async def subscribe_issue(
     issue_id: str,
