@@ -4,7 +4,6 @@ import { useProjectsDisplayStore } from '@/store/projects-display-store';
 import ProjectLine from './project-line';
 import type {
    ProjectGroup,
-   ProjectListLabel,
    ProjectListMember,
    ProjectListStatus,
    ProjectListUpdate,
@@ -15,14 +14,12 @@ export default function ProjectsList({
    groups,
    workspaceId,
    workspaceMembers = [],
-   projectLabels = [],
    projectStatuses = [],
    onUpdateProject,
 }: {
    groups: ProjectGroup[];
    workspaceId?: string;
    workspaceMembers?: ProjectListMember[];
-   projectLabels?: ProjectListLabel[];
    projectStatuses?: ProjectListStatus[];
    onUpdateProject?: (projectId: string, update: ProjectListUpdate) => Promise<void>;
 }) {
@@ -65,7 +62,6 @@ export default function ProjectsList({
                      project={project}
                      workspaceId={workspaceId}
                      workspaceMembers={workspaceMembers}
-                     projectLabels={projectLabels}
                      projectStatuses={projectStatuses}
                      onUpdateProject={onUpdateProject}
                   />

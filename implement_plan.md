@@ -221,6 +221,8 @@ Tiến độ hiện tại:
 - [x] `scripts/audit-ui-parity.ps1` so sánh read-only `app`, `components`, `hooks`, `lib`, `store`
   và `public` với Circle baseline; tương thích Windows PowerShell 5.1/PowerShell 7.
 - [x] Kết quả baseline và thứ tự xử lý được lưu tại `docs/python-migration/ui-parity-baseline.md`.
+- [x] Project List không còn control gán label ngoài baseline; label vẫn được quản lý qua affordance
+  Project Detail/Settings.
 - [ ] Khôi phục presentation theo baseline; bắt đầu bằng layout/header/sidebar và Project.
 - [ ] Chụp visual acceptance light/dark sau mỗi route hoàn thành.
 
@@ -471,6 +473,7 @@ Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modu
 | 2026-08-25 | P0 inventory | `5916b50` | API/schema/job inventory + structure fingerprints | Toàn bộ NestJS/worker | P1 UI parity guard |
 | 2026-08-25 | P1 parity guard | `chore: add Circle UI parity audit` | 110 identical / 184 changed / 18 missing / 50 extra | Toàn bộ NestJS/worker | Restore Circle presentation |
 | 2026-08-25 | Tool compatibility | `fix: support Windows PowerShell parity scripts` | Verified under Windows PowerShell 5.1 | Toàn bộ NestJS/worker | Restore Circle presentation |
+| 2026-08-25 | P1 Project List | `refactor: remove non-baseline project label control` | Removed row-level label mutation UI | Toàn bộ NestJS/worker | Restore Project presentation |
 
 ## 13. Definition of Done toàn dự án
 

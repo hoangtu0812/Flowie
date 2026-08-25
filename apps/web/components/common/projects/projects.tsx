@@ -244,7 +244,6 @@ export default function Projects({ teamId }: { teamId?: string }) {
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [resolvedTeamId, setResolvedTeamId] = useState<string>();
    const [workspaceMembers, setWorkspaceMembers] = useState<ProjectListMember[]>([]);
-   const [projectLabels, setProjectLabels] = useState<ProjectListLabel[]>([]);
    const [projectStatuses, setProjectStatuses] = useState<ProjectListStatus[]>([]);
    const [loadError, setLoadError] = useState<string>();
    const viewType = viewTypes[tab];
@@ -252,25 +251,15 @@ export default function Projects({ teamId }: { teamId?: string }) {
    useEffect(() => {
       void (async () => {
          const workspaceId = (await loadCurrentWorkspace()).id;
-         const [response, membersResponse, labelsResponse, statusesResponse, teamsResponse] =
-            await Promise.all([
-               fetch(`${api}/projects?workspaceId=${workspaceId}`, { credentials: 'include' }),
-               fetch(`${api}/workspaces/${workspaceId}/members`, { credentials: 'include' }),
-               fetch(`${api}/projects/labels?workspaceId=${workspaceId}`, {
-                  credentials: 'include',
-               }),
-               fetch(`${api}/projects/statuses?workspaceId=${workspaceId}`, {
-                  credentials: 'include',
-               }),
-               fetch(`${api}/teams?workspaceId=${workspaceId}`, { credentials: 'include' }),
-            ]);
-         if (
-            !response.ok ||
-            !membersResponse.ok ||
-            !labelsResponse.ok ||
-            !statusesResponse.ok ||
-            !teamsResponse.ok
-         )
+         const [response, membersResponse, statusesResponse, teamsResponse] = await Promise.all([
+            fetch(`${api}/projects?workspaceId=${workspaceId}`, { credentials: 'include' }),
+            fetch(`${api}/workspaces/${workspaceId}/members`, { credentials: 'include' }),
+            fetch(`${api}/projects/statuses?workspaceId=${workspaceId}`, {
+               credentials: 'include',
+            }),
+            fetch(`${api}/teams?workspaceId=${workspaceId}`, { credentials: 'include' }),
+         ]);
+         if (!response.ok || !membersResponse.ok || !statusesResponse.ok || !teamsResponse.ok)
             throw new Error('Could not load projects.');
          const payload = (await response.json()) as { data: ApiProject[] };
          const membersPayload = (await membersResponse.json()) as {
@@ -279,7 +268,6 @@ export default function Projects({ teamId }: { teamId?: string }) {
                user: { id: string; name: string; avatarUrl: string | null };
             }>;
          };
-         const labelsPayload = (await labelsResponse.json()) as { data: ProjectListLabel[] };
          const statusesPayload = (await statusesResponse.json()) as { data: ApiProjectStatus[] };
          const teamsPayload = (await teamsResponse.json()) as { data: ApiWorkspaceTeam[] };
          setWorkspaceId(workspaceId);
@@ -294,7 +282,6 @@ export default function Projects({ teamId }: { teamId?: string }) {
                .filter((member) => member.status === 'ACTIVE')
                .map((member) => member.user)
          );
-         setProjectLabels(labelsPayload.data);
          setAllProjects(payload.data.map(mapProject));
          setProjectStatuses(
             statusesPayload.data.length
@@ -451,7 +438,6 @@ export default function Projects({ teamId }: { teamId?: string }) {
                      groups={groups}
                      workspaceId={workspaceId}
                      workspaceMembers={workspaceMembers}
-                     projectLabels={projectLabels}
                      projectStatuses={projectStatuses}
                      onUpdateProject={updateProject}
                   />
