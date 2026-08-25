@@ -322,7 +322,7 @@ Tiến độ hiện tại (P3a — completed 2026-08-25):
 - [x] Toàn bộ route Auth/Workspace trong scope P3 đã native Python; facade giữ các domain kế tiếp
   không thuộc scope (Teams, Projects, Issues và worker) cho tới phase riêng.
 
-### P4 — Teams bằng Python
+### P4 — Teams bằng Python — completed (2026-08-25)
 
 Phạm vi:
 
@@ -332,10 +332,12 @@ Phạm vi:
 
 Nghiệm thu:
 
-- UI Teams và sidebar giữ presentation Circle gốc.
-- CRUD và membership survive refresh/restart.
-- RBAC/duplicate identifier/workspace isolation có test.
-- Commit: `feat: migrate teams to python`.
+- [x] Native list/detail/create/update/archive/schedule deletion/restore, membership và role.
+- [x] Team creation tạo Team documents folder; archive/delete/restore và leave có audit.
+- [x] Docker two-account regression: create/list/detail/add/update/leave, invite-only `403`,
+  deleted list/restore/archive đều đạt; duplicate identifier và workspace scope được database/RBAC bảo vệ.
+- [x] UI Teams/sidebar không thay presentation Circle; chỉ nguồn API đã chuyển Python.
+- [x] Commit: `18b3f9f feat: migrate teams to python`.
 
 ### P5 — Projects bằng Python — mốc cho người dùng chạy thử
 
@@ -535,6 +537,7 @@ Không commit `.env`, secret, database dump có dữ liệu, `.next`, `node_modu
 | 2026-08-25 | P3b1 timezone compatibility | `9473085` | Native register with browser `Asia/Saigon` persisted canonical `Asia/Ho_Chi_Minh`; 4 Python tests passed | Workspace create/membership/invitations, API keys | P3b2 workspace mutations |
 | 2026-08-25 | P3b2 native workspace membership | `ae85f7d` | Docker smoke + two-account create/invite/pending/accept/role/leave/decline and owner/member RBAC regression passed | Personal API keys, workspace display preferences | P3c settings/security endpoints |
 | 2026-08-25 | P3c native API keys/preferences | `a576d07` | API token one-time exposure/revoke, preference persistence/audit and member-write `403`; Docker smoke + unit regression passed | Teams, Projects, Issues, worker | P4 Teams |
+| 2026-08-25 | P4 native Teams | `18b3f9f` | Docker smoke/unit + two-account team CRUD, membership, invite-only RBAC and deletion/restore regression passed | Projects, Issues, worker | P5 Projects |
 
 ## 13. Definition of Done toàn dự án
 
