@@ -17,10 +17,10 @@ from .teams import _manager
 from .workflow_catalog import DEFAULT_CIRCLE_ISSUE_STATUSES
 
 
-# Issues stay under a private prefix until their public response contract and
-# Circle adapters have been verified. The legacy facade continues to serve the
-# production UI during this phase.
+# Mutations remain staged under the private prefix. Read endpoints are exposed
+# through the audited public router below once their Circle adapter is ready.
 router = APIRouter(prefix='/api/v1/_native/issues', tags=['native-issues'])
+public_router = APIRouter(prefix='/api/v1/issues', tags=['issues'])
 
 IssuePriority = Literal['NONE', 'LOW', 'MEDIUM', 'HIGH', 'URGENT']
 IssueCategory = Literal['TRIAGE', 'BACKLOG', 'UNSTARTED', 'STARTED', 'COMPLETED', 'CANCELED']
@@ -493,6 +493,31 @@ async def issue_options(
         'cycles': [{'id': row['id'], 'name': row['name'], 'status': row['status'], 'startDate': row['start_date'], 'endDate': row['end_date']} for row in cycles.mappings().all()],
         'releases': [{'id': row['id'], 'name': row['name'], 'version': row['version'], 'status': row['status'], 'targetDate': row['target_date']} for row in releases.mappings().all()],
     }}
+
+
+# Public read contract: this is intentionally limited to the data already
+# consumed by the Circle list adapter. Every other Issue route stays on the
+# legacy facade or under /_native until it has comparable contract coverage.
+@public_router.get('')
+async def public_list_issues(
+    workspaceId: str = Query(min_length=1),
+    teamId: str | None = None,
+    categories: str | None = None,
+    scope: Literal['assigned', 'created', 'subscribed', 'activity'] | None = None,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, list[dict[str, Any]]]:
+    return await list_issues(workspaceId, teamId, categories, scope, user, db)
+
+
+@public_router.get('/options')
+async def public_issue_options(
+    workspaceId: str = Query(min_length=1),
+    teamId: str | None = None,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, list[dict[str, Any]]]]:
+    return await issue_options(workspaceId, teamId, user, db)
 
 
 @router.post('')
