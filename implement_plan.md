@@ -127,6 +127,12 @@
 - Native dialog cleanup: Account Security/API key, Profile workspace leave, tám Issue Context
   actions, Emoji/Label/Project Template/Saved View deletion đều dùng Dialog/AlertDialog qua đúng
   affordance hiện hữu. Audit toàn `apps/web` không còn `window.prompt/confirm/alert`.
+- Team access: row `Access and permissions` gốc lưu join policy OPEN/INVITE_ONLY; API chặn
+  workspace member thường tự join team invite-only nhưng vẫn giữ join idempotent cho thành viên
+  hiện hữu và quyền quản trị member cho OWNER/ADMIN.
+- Fixture cleanup: Issue domain shape/helper đã tách sang `types/issues.ts`; bảy dataset seed giả
+  Issue/Inbox/View/Issue Detail/Document/Initiative/Team không còn consumer đã bị xóa. Component
+  tree, className và presentation metadata của UI gốc không thay đổi.
 - Docker Compose: Postgres, Redis, MinIO, API, worker, web; dependency layer đã cache nên
   `docker compose up` trong mạng nội bộ không tải lại khi lockfile/image base không đổi.
 
@@ -201,10 +207,13 @@
 - `eb82f5a` — replace Account Security/Profile native dialogs.
 - `7f128fc` — route Issue Context actions through a global persisted-action dialog.
 - `33ce636` — replace the remaining Settings/View native confirmations.
+- `dd521de` — persist Team open/invite-only join permissions through the original Settings row.
+- `a76ee16` — remove Issue/Inbox/View/Issue Detail fixture datasets and keep API-mapped types only.
+- `3741752` — remove unused Document/Initiative/Team fixture datasets.
 
 ### Kiểm tra gần nhất
 
-- API Jest: **54 suites, 173 tests passed**, gồm notification preferences, workspace isolation,
+- API Jest: **54 suites, 176 tests passed**, gồm notification preferences, workspace isolation,
   Issue actions, Project attachment, Team settings, Personal API Key và Bearer guard.
 - NestJS build: passed.
 - Next.js 15 production build: passed.
@@ -290,6 +299,11 @@
   migration `20260825000000_saved_view_descriptions` và `20260825010000_user_timezones` đã apply,
   cột `saved_views.description` nullable và `users.timezone` NOT NULL/default UTC được xác minh
   trực tiếp; API health và Web login cùng trả HTTP 200.
+- Migration `20260825020000_team_join_policy` đã apply; enum/cột NOT NULL/default OPEN và bản ghi
+  migration được xác minh trực tiếp. Docker API/Web rebuild với install layer `CACHED`; health và
+  login cùng HTTP 200. Targeted Team test 15/15, toàn bộ API test 54 suite/176 test passed.
+- Production build sau khi xóa Issue fixture passed; bảy dataset seed giả không còn consumer đã
+  xóa tổng cộng hơn 5.000 dòng mà không đổi component markup/className.
 - Script `scripts/start-local.ps1` dùng `--no-build --pull never`, nên khởi động từ image hiện có
   chạy được trong mạng nội bộ. Rebuild web vẫn có thể cần internet vì baseline dùng
   `next/font/google`; lần build gần nhất retry TLS rồi thành công trên 5G, không phải cài package.
@@ -306,7 +320,7 @@
 | P0 | Visual parity toàn route | Source parity đã khôi phục Initiative Detail, Project Overview/Peek, Views và Project Timeline; notification popover giữ layout gốc. Visual acceptance từng route vẫn cần phiên workspace-member trong in-app browser; phiên sạch hiện chỉ xác nhận guard/login. |
 | P0 | Notifications đa workspace | Hoàn thành: notification có workspace FK, API/store scope đúng workspace và preview xử lý cả issue/project thật. |
 | P0 | Settings Notifications/Integrations | Hoàn thành: shell/card/search gốc được giữ lại; Discord dùng row/dialog thật, không quảng cáo Slack/email/desktop. |
-| P0 | Team membership | Hoàn thành: API trả all team + membership thật, self-join idempotent và mọi consumer được phân loại đúng giữa all/joined mà không đổi bảng/nút gốc. |
+| P0 | Team membership | Hoàn thành: API trả all team + membership thật, self-join idempotent; join policy OPEN/INVITE_ONLY được persist và chặn self-join trái quyền mà không đổi bảng/nút gốc. |
 | P0 | Visible issue command no-op | Hoàn thành trong phạm vi project-management: Move Team, Release picker, labels/project/cycle/due date và Agent default đều đã dùng dữ liệu thật hoặc bị loại khỏi default. Code Reviews vẫn unavailable theo phạm vi. |
 | P1 | Issue actions còn thiếu | Hoàn thành: Convert-to-comment, Duplicate/Won't Fix, move team, favorite và reminder đều có backend. Taxonomy issue type không có control tương ứng trong UI gốc hiện tại. |
 | P1 | Team settings nâng cao | Hoàn thành: cadence, triage, auto-close/archive, hierarchy và template default đều persistence/UI; Worker tự sinh cycle và thực thi retention policy. |
@@ -319,18 +333,21 @@
 | P1 | Saved Views parity | Hoàn thành: description/avatar creator được persist/mapping và hiển thị trong row gốc. |
 | P1 | Member Profile parity | Project membership và timezone cá nhân đã dùng backend thật; presence giả bị bỏ. Realtime presence chỉ triển khai khi có transport/heartbeat thật. |
 | P1 | Native browser dialogs | Hoàn thành: audit `apps/web` không còn `window.prompt`, `window.confirm` hoặc `window.alert`; mutation vẫn đi qua API/backend hiện hữu. |
-| P1 | Visible no-op còn lại | Inbox snoozed và Help giả đã bỏ. Label groups, Team access/recurring issue, một số Preferences/Passkeys/Sub-grouping vẫn disabled hoặc unavailable; chỉ bật khi schema/service thật tồn tại, nếu ngoài phạm vi thì ẩn. |
+| P1 | Fixture cleanup | Đã xóa dataset giả Issue/Inbox/View/Issue Detail/Document/Initiative/Team. Còn tách Project/Cycle/User type và priority/status/health icon catalog khỏi `mock-data`, rồi xóa seed tương ứng. |
+| P1 | Visible no-op còn lại | Inbox snoozed, Help giả và Team access no-op đã xử lý. Label groups/recurring issue, một số Preferences/Passkeys/Sub-grouping vẫn disabled hoặc unavailable; chỉ bật khi schema/service thật tồn tại, nếu ngoài phạm vi thì ẩn. |
 | P2 | Automation/webhook | Worker/Redis foundation có, nhưng rule builder, persisted automation và generic webhook chưa hoàn chỉnh. |
 | P2 | OAuth/enterprise identity | Google, Microsoft Entra, OIDC/SAML chưa triển khai; local email/password đang hoạt động. |
 | Excluded | AI Agent, Code Reviews | Cố ý unavailable theo phạm vi sản phẩm hiện tại; fixture/canned-response cũ đã được xóa khỏi source. |
 
 ## Thứ tự tiếp tục đề xuất
 
-1. Quyết định semantics/persistence cho footer `Set default for everyone` trong Insights; hiện các
+1. Tách Project/Cycle/User domain types và priority/status/health presentation catalog khỏi
+   `mock-data`, sau đó xóa các seed còn lại mà không đổi component markup.
+2. Quyết định semantics/persistence cho footer `Set default for everyone` trong Insights; hiện các
    selector analytics chỉ có một lựa chọn nên lưu cấu hình chưa mang thêm giá trị.
-2. Audit các control disabled/native dialog còn lại: tách rõ điều kiện hợp lệ, tính năng cố ý
+3. Audit các control disabled còn lại: tách rõ điều kiện hợp lệ, tính năng cố ý
    excluded và no-op.
-3. Đăng nhập sẵn một phiên workspace-member trong in-app browser rồi chụp đối chiếu từng route
+4. Đăng nhập sẵn một phiên workspace-member trong in-app browser rồi chụp đối chiếu từng route
    chính với `upstream/master`; browser sạch hiện xác nhận route guard/login và console không lỗi.
 
 ## 1. Mục tiêu
