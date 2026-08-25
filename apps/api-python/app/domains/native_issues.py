@@ -384,8 +384,63 @@ async def create_issue(
     for subscriber_id in {user['id'], values.get('assigneeId')} - {None}:
         await db.execute(text('INSERT INTO issue_subscriptions (issue_id, user_id) VALUES (:issue_id, :user_id) ON CONFLICT DO NOTHING'), {'issue_id': issue_id, 'user_id': subscriber_id})
     await _write_activity(db, payload.workspaceId, issue_id, user['id'], 'issue.created', {'title': payload.title.strip(), 'identifier': f"{sequence['identifier']}-{sequence['issue_sequence']}"})
+    if values.get('parentIssueId'):
+        await _write_activity(db, payload.workspaceId, values['parentIssueId'], user['id'], 'issue.subissue_created', {
+            'issueId': issue_id,
+            'identifier': f"{sequence['identifier']}-{sequence['issue_sequence']}",
+            'title': payload.title.strip(),
+        })
     await db.commit()
     return {'data': await _issue_row(db, issue_id, payload.workspaceId, user['id'])}
+
+
+@router.get('/{issue_id}/sub-issues')
+async def list_sub_issues(
+    issue_id: str,
+    workspaceId: str = Query(min_length=1),
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, list[dict[str, Any]]]:
+    parent = await _issue_row(db, issue_id, workspaceId, user['id'])
+    result = await db.execute(
+        text(
+            '''SELECT child.id, child.identifier, child.title,
+                      status.id AS status_id, status.name AS status_name,
+                      status.color AS status_color, status.category AS status_category,
+                      assignee.id AS assignee_id, assignee.name AS assignee_name,
+                      assignee.avatar_url AS assignee_avatar_url
+               FROM issues child
+               JOIN issue_statuses status ON status.id = child.status_id
+               LEFT JOIN users assignee ON assignee.id = child.assignee_id
+               WHERE child.workspace_id = :workspace_id AND child.team_id = :team_id
+                 AND child.parent_issue_id = :parent_issue_id AND child.archived_at IS NULL
+               ORDER BY child.updated_at DESC, child.created_at DESC'''
+        ),
+        {
+            'workspace_id': workspaceId,
+            'team_id': parent['teamId'],
+            'parent_issue_id': parent['id'],
+        },
+    )
+    return {'data': [
+        {
+            'id': row['id'],
+            'identifier': row['identifier'],
+            'title': row['title'],
+            'status': {
+                'id': row['status_id'],
+                'name': row['status_name'],
+                'color': row['status_color'],
+                'category': row['status_category'],
+            },
+            'assignee': {
+                'id': row['assignee_id'],
+                'name': row['assignee_name'],
+                'avatarUrl': row['assignee_avatar_url'],
+            } if row['assignee_id'] else None,
+        }
+        for row in result.mappings().all()
+    ]}
 
 
 @router.get('/{issue_id}/relations')
