@@ -9,17 +9,14 @@ import {
    SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { Issue } from '@/types/issues';
-import { priorities } from '@/lib/priority-presentations';
-import type { Status } from '@/lib/status-presentations';
-import { useIssuesStore } from '@/store/issues-store';
-import { useIssueInsightsStore } from '@/store/issue-insights-store';
+import { Issue } from '@/mock-data/issues';
+import { priorities } from '@/mock-data/priorities';
+import { Status, workflowOrderedStatus } from '@/mock-data/status';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { X } from 'lucide-react';
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { usePanelFilter } from './use-panel-filter';
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { toast } from 'sonner';
 
 const PRIORITY_COLORS: Record<string, string> = {
    'no-priority': '#64748b',
@@ -39,28 +36,10 @@ interface InsightsPanelProps {
    issues: Issue[];
 }
 
-const STATUS_CATEGORY_ORDER: Record<Status['category'], number> = {
-   triage: 0,
-   backlog: 1,
-   unstarted: 2,
-   started: 3,
-   completed: 4,
-   canceled: 5,
-};
-
 /** Custom X axis tick rendering the status icon under each bar. */
-function StatusTick({
-   x = 0,
-   y = 0,
-   payload,
-   statuses,
-}: {
-   x?: number;
-   y?: number;
-   payload?: { value: string };
-   statuses: Status[];
-}) {
-   const currentStatus = statuses.find((status) => status.id === payload?.value);
+function StatusTick(props: { x?: number; y?: number; payload?: { value: string } }) {
+   const { x = 0, y = 0, payload } = props;
+   const currentStatus = workflowOrderedStatus.find((s) => s.id === payload?.value);
    if (!currentStatus) return <g />;
 
    const Icon = currentStatus.icon;
@@ -77,27 +56,10 @@ function StatusTick({
  */
 export function InsightsPanel({ issues }: InsightsPanelProps) {
    const { closePanel } = useRightPanelStore();
-   const { statuses } = useIssuesStore();
-   const { settings, loadDefaults, saveDefaults } = useIssueInsightsStore();
    const { isActive, toggle } = usePanelFilter();
 
-   useEffect(() => {
-      void loadDefaults().catch(() => undefined);
-   }, [loadDefaults]);
-
-   const workflowStatuses = useMemo<Status[]>(() => {
-      const source = statuses.length
-         ? statuses
-         : [...new Map(issues.map((issue) => [issue.status.id, issue.status])).values()];
-      return [...source].sort(
-         (left, right) =>
-            STATUS_CATEGORY_ORDER[left.category] - STATUS_CATEGORY_ORDER[right.category] ||
-            left.name.localeCompare(right.name)
-      );
-   }, [issues, statuses]);
-
    const rows = useMemo<InsightsRow[]>(() => {
-      return workflowStatuses
+      return workflowOrderedStatus
          .map((s) => {
             const statusIssues = issues.filter((issue) => issue.status.id === s.id);
             const byPriority: Record<string, number> = {};
@@ -109,7 +71,7 @@ export function InsightsPanel({ issues }: InsightsPanelProps) {
             return { status: s, total: statusIssues.length, byPriority };
          })
          .filter((row) => row.total > 0);
-   }, [issues, workflowStatuses]);
+   }, [issues]);
 
    const chartData = useMemo(
       () =>
@@ -138,7 +100,7 @@ export function InsightsPanel({ issues }: InsightsPanelProps) {
          <div className="grid grid-cols-3 gap-2 px-4 pb-4 shrink-0">
             <div className="flex flex-col gap-1">
                <span className="text-xs text-muted-foreground">Measure</span>
-               <Select value={settings.measure}>
+               <Select defaultValue="issue-count">
                   <SelectTrigger className="h-8 text-xs w-full">
                      <SelectValue />
                   </SelectTrigger>
@@ -149,7 +111,7 @@ export function InsightsPanel({ issues }: InsightsPanelProps) {
             </div>
             <div className="flex flex-col gap-1">
                <span className="text-xs text-muted-foreground">Slice</span>
-               <Select value={settings.slice}>
+               <Select defaultValue="status">
                   <SelectTrigger className="h-8 text-xs w-full">
                      <SelectValue />
                   </SelectTrigger>
@@ -160,7 +122,7 @@ export function InsightsPanel({ issues }: InsightsPanelProps) {
             </div>
             <div className="flex flex-col gap-1">
                <span className="text-xs text-muted-foreground">Segment</span>
-               <Select value={settings.segment}>
+               <Select defaultValue="priority">
                   <SelectTrigger className="h-8 text-xs w-full">
                      <SelectValue />
                   </SelectTrigger>
@@ -177,7 +139,7 @@ export function InsightsPanel({ issues }: InsightsPanelProps) {
                <BarChart data={chartData} margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
                   <XAxis
                      dataKey="id"
-                     tick={<StatusTick statuses={workflowStatuses} />}
+                     tick={<StatusTick />}
                      axisLine={false}
                      tickLine={false}
                      interval={0}
@@ -274,21 +236,7 @@ export function InsightsPanel({ issues }: InsightsPanelProps) {
          </div>
 
          <div className="shrink-0 border-t px-4 py-3">
-            <button
-               type="button"
-               className="text-xs text-indigo-500 dark:text-indigo-400 hover:underline"
-               onClick={() =>
-                  void saveDefaults()
-                     .then(() => toast.success('Workspace insight default saved.'))
-                     .catch((error: unknown) =>
-                        toast.error(
-                           error instanceof Error
-                              ? error.message
-                              : 'Could not save workspace insight default.'
-                        )
-                     )
-               }
-            >
+            <button className="text-xs text-indigo-500 dark:text-indigo-400 hover:underline">
                Set default for everyone
             </button>
          </div>

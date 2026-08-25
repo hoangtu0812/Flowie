@@ -2,7 +2,7 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { User } from '@/types/users';
+import { User } from '@/mock-data/users';
 
 interface MembersTooltipProps {
    members: User[];

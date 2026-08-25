@@ -1,9 +1,9 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { ProjectsDataProvider, useProjectsData } from '@/features/projects/projects-data';
 import { cn } from '@/lib/utils';
-import type { Project } from '@/types/projects';
+import { projects as allProjects, Project } from '@/mock-data/projects';
+import { teams } from '@/mock-data/teams';
 import { useProjectsFilterStore } from '@/store/projects-filter-store';
 import { useProjectsDisplayStore } from '@/store/projects-display-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
@@ -41,36 +41,18 @@ const CLOSED_CATEGORIES = new Set(['completed', 'canceled']);
  * options, views, insights) is scoped to that team's projects.
  */
 export default function Projects({ teamId }: { teamId?: string }) {
-   return (
-      <ProjectsDataProvider teamIdentifier={teamId}>
-         <ProjectsContent teamId={teamId} />
-      </ProjectsDataProvider>
-   );
-}
-
-function ProjectsContent({ teamId }: { teamId?: string }) {
    const { filters } = useProjectsFilterStore();
    const { viewTypes, grouping, ordering, closedProjects, showEmptyGroups } =
       useProjectsDisplayStore();
    const { openPanel, togglePanel } = useRightPanelStore();
    const [tab, setTab] = useQueryState('tab', parseAsStringLiteral(TABS).withDefault('all'));
-   const {
-      allProjects,
-      teamGroups,
-      workspaceId,
-      resolvedTeamId,
-      workspaceMembers,
-      projectStatuses,
-      updateProject,
-   } = useProjectsData();
    const viewType = viewTypes[tab];
 
    const displayed = useMemo(() => {
       let list = allProjects.slice();
 
       if (teamId) {
-         if (!resolvedTeamId) return [];
-         list = list.filter((project) => project.teamId === resolvedTeamId);
+         list = list.filter((project) => project.teamId === teamId);
       }
       if (tab === 'active') {
          list = list.filter((project) => ACTIVE_CATEGORIES.has(project.status.category));
@@ -99,13 +81,13 @@ function ProjectsContent({ teamId }: { teamId?: string }) {
          }
       };
       return list.sort(compare);
-   }, [allProjects, tab, closedProjects, filters, ordering, resolvedTeamId, teamId]);
+   }, [tab, closedProjects, filters, ordering, teamId]);
 
    const groups = useMemo<ProjectGroup[]>(() => {
       if (grouping === 'none') {
          return [{ id: 'all', name: 'All projects', projects: displayed }];
       }
-      const grouped = teamGroups
+      return teams
          .map((team) => ({
             id: team.id,
             name: team.name,
@@ -113,17 +95,7 @@ function ProjectsContent({ teamId }: { teamId?: string }) {
             projects: displayed.filter((project) => project.teamId === team.id),
          }))
          .filter((group) => showEmptyGroups || group.projects.length > 0);
-      const unassigned = displayed.filter((project) => !project.teamId);
-      if (unassigned.length > 0 || showEmptyGroups) {
-         grouped.push({
-            id: 'unassigned',
-            name: 'Unassigned',
-            icon: undefined,
-            projects: unassigned,
-         });
-      }
-      return grouped;
-   }, [displayed, grouping, showEmptyGroups, teamGroups]);
+   }, [displayed, grouping, showEmptyGroups]);
 
    return (
       <div className="w-full h-full flex flex-col overflow-hidden">
@@ -167,20 +139,12 @@ function ProjectsContent({ teamId }: { teamId?: string }) {
             <div className="flex-1 min-w-0 h-full overflow-hidden">
                {viewType === 'timeline' && <ProjectsTimeline groups={groups} />}
                {viewType === 'board' && <ProjectsBoard groups={groups} />}
-               {viewType === 'list' && (
-                  <ProjectsList
-                     groups={groups}
-                     workspaceId={workspaceId}
-                     workspaceMembers={workspaceMembers}
-                     projectStatuses={projectStatuses}
-                     onUpdateProject={updateProject}
-                  />
-               )}
+               {viewType === 'list' && <ProjectsList groups={groups} />}
             </div>
 
             {openPanel === 'insights' && (
                <aside className="hidden lg:flex w-[360px] shrink-0 border-l h-full overflow-hidden bg-container">
-                  <ProjectsInsightsPanel projects={displayed} groups={groups} />
+                  <ProjectsInsightsPanel projects={displayed} />
                </aside>
             )}
          </div>

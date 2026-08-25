@@ -9,7 +9,7 @@ import {
    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { Project } from '@/types/projects';
+import { Project } from '@/mock-data/projects';
 import { useProjectsDisplayStore } from '@/store/projects-display-store';
 import { format, parseISO } from 'date-fns';
 import { ArrowLeft, ArrowRight, Check, ChevronDown, Plus } from 'lucide-react';
@@ -448,21 +448,7 @@ export default function ProjectsTimeline({ groups }: ProjectsTimelineProps) {
                            <span className="text-xs text-muted-foreground">
                               {group.projects.length}
                            </span>
-                           <button
-                              className="ml-auto text-muted-foreground hover:text-foreground transition-colors"
-                              onClick={() =>
-                                 window.dispatchEvent(
-                                    new CustomEvent('flowie:create-project', {
-                                       detail: {
-                                          teamId:
-                                             group.id === 'all' || group.id === 'unassigned'
-                                                ? undefined
-                                                : group.id,
-                                       },
-                                    })
-                                 )
-                              }
-                           >
+                           <button className="ml-auto text-muted-foreground hover:text-foreground transition-colors">
                               <Plus className="size-3.5" />
                            </button>
                         </div>

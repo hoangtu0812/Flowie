@@ -4,12 +4,13 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { createColumnConfigHelper } from '@/components/data-table-filter/core/filters';
 import type { ColumnOption, FiltersState } from '@/components/data-table-filter/core/types';
 import { multiOptionFilterFn, optionFilterFn } from '@/components/data-table-filter/lib/filter-fns';
-import type { Issue } from '@/types/issues';
-import type { LabelInterface } from '@/types/labels';
-import type { Project } from '@/types/projects';
-import type { Status, StatusCategory } from '@/lib/status-presentations';
-import type { User } from '@/types/users';
-import type { IssueCycleOption } from '@/store/issues-store';
+import { cycles, cycleStatusLabel } from '@/mock-data/cycles';
+import { Issue } from '@/mock-data/issues';
+import { labels } from '@/mock-data/labels';
+import { priorities } from '@/mock-data/priorities';
+import { status, StatusCategory } from '@/mock-data/status';
+import { projects } from '@/mock-data/projects';
+import { users } from '@/mock-data/users';
 import {
    BarChart3,
    CircleCheck,
@@ -20,6 +21,16 @@ import {
    Tag,
 } from 'lucide-react';
 
+/* -------------------------------------------------------------------------- */
+/*                                Option lists                                */
+/* -------------------------------------------------------------------------- */
+
+const statusOptions: ColumnOption[] = status.map((item) => ({
+   value: item.id,
+   label: item.name,
+   icon: <item.icon />,
+}));
+
 const STATUS_TYPES: { id: StatusCategory; name: string }[] = [
    { id: 'triage', name: 'Triage' },
    { id: 'backlog', name: 'Backlog' },
@@ -29,173 +40,155 @@ const STATUS_TYPES: { id: StatusCategory; name: string }[] = [
    { id: 'canceled', name: 'Canceled' },
 ];
 
-const PRIORITIES: Array<{ id: string; name: string }> = [
-   { id: 'no-priority', name: 'No priority' },
-   { id: 'urgent', name: 'Urgent' },
-   { id: 'high', name: 'High' },
-   { id: 'medium', name: 'Medium' },
-   { id: 'low', name: 'Low' },
+const statusTypeOptions: ColumnOption[] = STATUS_TYPES.map((item) => ({
+   value: item.id,
+   label: item.name,
+   icon: <CircleDashed className="size-4 text-muted-foreground" />,
+}));
+
+const assigneeOptions: ColumnOption[] = [
+   {
+      value: 'unassigned',
+      label: 'Unassigned',
+      icon: <CircleUserRound className="size-4 text-muted-foreground" />,
+   },
+   ...users.map((user) => ({
+      value: user.id,
+      label: user.name,
+      icon: (
+         <Avatar className="size-4">
+            <AvatarImage src={user.avatarUrl} alt={user.name} />
+            <AvatarFallback>{user.name[0]}</AvatarFallback>
+         </Avatar>
+      ),
+   })),
 ];
 
-type IssueFilterSources = {
-   statuses: Status[];
-   members: User[];
-   labels: LabelInterface[];
-   projects: Project[];
-   cycles: IssueCycleOption[];
-};
+const priorityOptions: ColumnOption[] = priorities.map((priority) => ({
+   value: priority.id,
+   label: priority.name,
+   icon: <priority.icon className="size-4 text-muted-foreground" />,
+}));
+
+const labelOptions: ColumnOption[] = labels.map((label) => ({
+   value: label.id,
+   label: label.name,
+   icon: <span className="size-2.5 rounded-full" style={{ backgroundColor: label.color }} />,
+}));
+
+const projectOptions: ColumnOption[] = projects.map((project) => ({
+   value: project.id,
+   label: project.name,
+   icon: <project.icon className="size-4 text-muted-foreground" />,
+}));
+
+const cycleOptions: ColumnOption[] = [
+   {
+      value: 'no-cycle',
+      label: 'No cycle',
+      icon: <RefreshCcw className="size-4 text-muted-foreground" />,
+   },
+   ...cycles.map((cycle) => ({
+      value: cycle.id,
+      label: `${cycle.name} (${cycleStatusLabel[cycle.status]})`,
+      icon: <RefreshCcw className="size-4 text-muted-foreground" />,
+   })),
+];
+
+/* -------------------------------------------------------------------------- */
+/*                              Column definitions                            */
+/* -------------------------------------------------------------------------- */
 
 const dtf = createColumnConfigHelper<Issue>();
 
-export function createIssueFilterColumns({
-   statuses,
-   members,
-   labels,
-   projects,
-   cycles,
-}: IssueFilterSources) {
-   const statusOptions: ColumnOption[] = statuses.map((item) => ({
-      value: item.id,
-      label: item.name,
-      icon: <item.icon />,
-   }));
-   const assigneeOptions: ColumnOption[] = [
-      {
-         value: 'unassigned',
-         label: 'Unassigned',
-         icon: <CircleUserRound className="size-4 text-muted-foreground" />,
-      },
-      ...members.map((user) => ({
-         value: user.id,
-         label: user.name,
-         icon: (
-            <Avatar className="size-4">
-               <AvatarImage src={user.avatarUrl || undefined} alt={user.name} />
-               <AvatarFallback>{user.name[0]}</AvatarFallback>
-            </Avatar>
-         ),
-      })),
-   ];
-   const labelOptions: ColumnOption[] = labels.map((label) => ({
-      value: label.id,
-      label: label.name,
-      icon: <span className="size-2.5 rounded-full" style={{ backgroundColor: label.color }} />,
-   }));
-   const projectOptions: ColumnOption[] = projects.map((project) => ({
-      value: project.id,
-      label: project.name,
-      icon: <project.icon className="size-4 text-muted-foreground" />,
-   }));
-   const cycleOptions: ColumnOption[] = [
-      {
-         value: 'no-cycle',
-         label: 'No cycle',
-         icon: <RefreshCcw className="size-4 text-muted-foreground" />,
-      },
-      ...cycles.map((cycle) => ({
-         value: cycle.id,
-         label: `${cycle.name} (${cycle.status.toLowerCase()})`,
-         icon: <RefreshCcw className="size-4 text-muted-foreground" />,
-      })),
-   ];
+/**
+ * Filterable issue columns for the bazza/ui data-table-filter component.
+ * Accessors return the raw values the filter functions compare against.
+ */
+export const issueFilterColumns = [
+   dtf
+      .option()
+      .id('status')
+      .accessor((issue: Issue) => issue.status.id)
+      .displayName('Status')
+      .icon(CircleCheck)
+      .options(statusOptions)
+      .build(),
+   dtf
+      .option()
+      .id('statusType')
+      .accessor((issue: Issue) => issue.status.category)
+      .displayName('Status type')
+      .icon(CircleDashed)
+      .options(statusTypeOptions)
+      .build(),
+   dtf
+      .option()
+      .id('assignee')
+      .accessor((issue: Issue) => issue.assignee?.id ?? 'unassigned')
+      .displayName('Assignee')
+      .icon(CircleUserRound)
+      .options(assigneeOptions)
+      .build(),
+   dtf
+      .option()
+      .id('priority')
+      .accessor((issue: Issue) => issue.priority.id)
+      .displayName('Priority')
+      .icon(BarChart3)
+      .options(priorityOptions)
+      .build(),
+   dtf
+      .multiOption()
+      .id('labels')
+      .accessor((issue: Issue) => issue.labels.map((label) => label.id))
+      .displayName('Labels')
+      .icon(Tag)
+      .options(labelOptions)
+      .build(),
+   dtf
+      .option()
+      .id('project')
+      .accessor((issue: Issue) => issue.project?.id ?? '')
+      .displayName('Project')
+      .icon(Folder)
+      .options(projectOptions)
+      .build(),
+   dtf
+      .option()
+      .id('cycle')
+      .accessor((issue: Issue) => (issue.cycleId === '' ? 'no-cycle' : issue.cycleId))
+      .displayName('Cycle')
+      .icon(RefreshCcw)
+      .options(cycleOptions)
+      .build(),
+] as const;
 
-   return [
-      dtf
-         .option()
-         .id('status')
-         .accessor((issue) => issue.status.id)
-         .displayName('Status')
-         .icon(CircleCheck)
-         .options(statusOptions)
-         .build(),
-      dtf
-         .option()
-         .id('statusType')
-         .accessor((issue) => issue.status.category)
-         .displayName('Status type')
-         .icon(CircleDashed)
-         .options(
-            STATUS_TYPES.map((item) => ({
-               value: item.id,
-               label: item.name,
-               icon: <CircleDashed className="size-4 text-muted-foreground" />,
-            }))
-         )
-         .build(),
-      dtf
-         .option()
-         .id('assignee')
-         .accessor((issue) => issue.assignee?.id ?? 'unassigned')
-         .displayName('Assignee')
-         .icon(CircleUserRound)
-         .options(assigneeOptions)
-         .build(),
-      dtf
-         .option()
-         .id('priority')
-         .accessor((issue) => issue.priority.id)
-         .displayName('Priority')
-         .icon(BarChart3)
-         .options(
-            PRIORITIES.map((priority) => ({
-               value: priority.id,
-               label: priority.name,
-               icon: <BarChart3 className="size-4 text-muted-foreground" />,
-            }))
-         )
-         .build(),
-      dtf
-         .multiOption()
-         .id('labels')
-         .accessor((issue) => issue.labels.map((label) => label.id))
-         .displayName('Labels')
-         .icon(Tag)
-         .options(labelOptions)
-         .build(),
-      dtf
-         .option()
-         .id('project')
-         .accessor((issue) => issue.project?.id ?? '')
-         .displayName('Project')
-         .icon(Folder)
-         .options(projectOptions)
-         .build(),
-      dtf
-         .option()
-         .id('cycle')
-         .accessor((issue) => issue.cycleId || 'no-cycle')
-         .displayName('Cycle')
-         .icon(RefreshCcw)
-         .options(cycleOptions)
-         .build(),
-   ] as const;
-}
+const columnById = new Map<string, (typeof issueFilterColumns)[number]>(
+   issueFilterColumns.map((column) => [column.id, column])
+);
 
+/**
+ * Applies a bazza/ui FiltersState to a list of issues, honoring the
+ * operator of each filter (is / is not / include / exclude / …).
+ */
 export function applyIssueFilters(issues: Issue[], filters: FiltersState): Issue[] {
    if (filters.length === 0) return issues;
 
    return issues.filter((issue) =>
       filters.every((filter) => {
-         const value =
-            filter.columnId === 'status'
-               ? issue.status.id
-               : filter.columnId === 'statusType'
-                 ? issue.status.category
-                 : filter.columnId === 'assignee'
-                   ? (issue.assignee?.id ?? 'unassigned')
-                   : filter.columnId === 'priority'
-                     ? issue.priority.id
-                     : filter.columnId === 'labels'
-                       ? issue.labels.map((label) => label.id)
-                       : filter.columnId === 'project'
-                         ? (issue.project?.id ?? '')
-                         : filter.columnId === 'cycle'
-                           ? issue.cycleId || 'no-cycle'
-                           : undefined;
-         if (value === undefined) return true;
-         return Array.isArray(value)
-            ? (multiOptionFilterFn(value, filter) ?? true)
-            : (optionFilterFn(String(value), filter) ?? true);
+         const column = columnById.get(filter.columnId);
+         if (!column) return true;
+
+         const value = column.accessor(issue);
+         switch (filter.type) {
+            case 'option':
+               return optionFilterFn(String(value ?? ''), filter) ?? true;
+            case 'multiOption':
+               return multiOptionFilterFn((value as string[]) ?? [], filter) ?? true;
+            default:
+               return true;
+         }
       })
    );
 }

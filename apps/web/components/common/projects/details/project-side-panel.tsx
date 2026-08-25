@@ -1,32 +1,18 @@
 'use client';
 
 import { InsightsPanel } from '@/components/common/issues/insights-panel';
-import { ProjectDetail } from '@/types/project-details';
+import { Issue } from '@/mock-data/issues';
+import { ProjectDetail } from '@/mock-data/project-details';
+import { Project } from '@/mock-data/projects';
 import { useRightPanelStore } from '@/store/right-panel-store';
-import type { ProjectDetailUiIssue, ProjectDetailUiProject } from './project-detail-ui-adapter';
 import { ProjectPropertiesPanel } from './project-properties-panel';
-import type {
-   LiveProjectLabel,
-   LiveProjectStatus,
-   LiveWorkspaceMember,
-   LiveWorkspaceTeam,
-} from './use-live-project';
 
 interface ProjectSidePanelProps {
-   project: ProjectDetailUiProject;
+   project: Project;
    detail: ProjectDetail;
-   issues: ProjectDetailUiIssue[];
+   issues: Issue[];
    /** Issues shown by the insights panel (e.g. after filters); defaults to `issues`. */
-   insightsIssues?: ProjectDetailUiIssue[];
-   availableLabels?: LiveProjectLabel[];
-   availableMembers: LiveWorkspaceMember[];
-   availableTeams: LiveWorkspaceTeam[];
-   availableStatuses: LiveProjectStatus[];
-   onProjectChange: (data: Record<string, unknown>) => Promise<unknown>;
-   onLabelsChange?: (labelIds: string[]) => Promise<void>;
-   onMembersChange: (userIds: string[]) => Promise<void>;
-   onCreateMilestone?: (title: string, targetDate?: string) => Promise<unknown>;
-   onToggleMilestone?: (milestoneId: string, completed: boolean) => Promise<void>;
+   insightsIssues?: Issue[];
 }
 
 /**
@@ -39,15 +25,6 @@ export function ProjectSidePanel({
    detail,
    issues,
    insightsIssues,
-   availableLabels = [],
-   availableMembers,
-   availableTeams,
-   availableStatuses,
-   onProjectChange,
-   onLabelsChange,
-   onMembersChange,
-   onCreateMilestone,
-   onToggleMilestone,
 }: ProjectSidePanelProps) {
    const { openPanel } = useRightPanelStore();
 
@@ -58,20 +35,7 @@ export function ProjectSidePanel({
          {openPanel === 'insights' ? (
             <InsightsPanel issues={insightsIssues ?? issues} />
          ) : (
-            <ProjectPropertiesPanel
-               project={project}
-               detail={detail}
-               issues={issues}
-               availableLabels={availableLabels}
-               availableMembers={availableMembers}
-               availableTeams={availableTeams}
-               availableStatuses={availableStatuses}
-               onProjectChange={onProjectChange}
-               onLabelsChange={onLabelsChange}
-               onMembersChange={onMembersChange}
-               onCreateMilestone={onCreateMilestone}
-               onToggleMilestone={onToggleMilestone}
-            />
+            <ProjectPropertiesPanel project={project} detail={detail} issues={issues} />
          )}
       </aside>
    );

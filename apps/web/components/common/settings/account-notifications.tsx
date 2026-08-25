@@ -1,80 +1,61 @@
 'use client';
 
 import { Switch } from '@/components/ui/switch';
-import { Mail, MessageCircle, Smartphone } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import {
-   DiscordIntegrationDialog,
-   type DiscordStatus,
-   loadDiscordStatus,
-} from '@/components/settings/discord-integration';
+import { Mail, Monitor, Slack, Smartphone } from 'lucide-react';
 import { EnabledDot, SettingsCard, SettingsRow, SettingsSection, SettingsShell } from './shared';
 
-/** Original notification settings composition, with only deployed channels shown as active. */
+const CHANNELS = [
+   {
+      icon: <Monitor className="size-4" />,
+      title: 'Desktop',
+      status: 'Enabled for assignments, status changes, 13 others',
+   },
+   {
+      icon: <Smartphone className="size-4" />,
+      title: 'Mobile',
+      status: 'Enabled for assignments, status changes, 13 others',
+   },
+   { icon: <Mail className="size-4" />, title: 'Email', status: 'Enabled for all notifications' },
+   { icon: <Slack className="size-4" />, title: 'Slack', status: 'Enabled for all notifications' },
+];
+
+/** Personal notification settings (push channels + product updates). */
 export default function AccountNotifications() {
-   const [discordOpen, setDiscordOpen] = useState(false);
-   const [discord, setDiscord] = useState<DiscordStatus>();
-
-   useEffect(() => {
-      void loadDiscordStatus()
-         .then(setDiscord)
-         .catch(() => setDiscord(undefined));
-   }, []);
-
-   const discordDescription = discord?.enabled ? (
-      <EnabledDot>Enabled for supported workspace events</EnabledDot>
-   ) : discord ? (
-      'Configured, but delivery is disabled'
-   ) : (
-      'Configure a Discord webhook'
-   );
-
    return (
       <SettingsShell title="Notifications">
          <SettingsSection
             title="Push notifications"
-            description="All notifications appear in your Flowie inbox. External delivery is only available for configured channels."
+            description="Choose which notifications are pushed to your devices. All notifications will still appear in your inbox."
          >
             <SettingsCard>
-               <SettingsRow
-                  icon={<Smartphone className="size-4" />}
-                  title="Mobile"
-                  description="Mobile delivery is being considered and is not enabled"
-                  muted
-               />
-               <SettingsRow
-                  icon={<Mail className="size-4" />}
-                  title="Email"
-                  description="Email delivery is temporarily disabled"
-                  muted
-               />
-               <SettingsRow
-                  icon={<MessageCircle className="size-4" />}
-                  title="Discord"
-                  description={discordDescription}
-                  chevron
-                  onClick={() => setDiscordOpen(true)}
-               />
+               {CHANNELS.map((channel) => (
+                  <SettingsRow
+                     key={channel.title}
+                     icon={channel.icon}
+                     title={channel.title}
+                     description={<EnabledDot>{channel.status}</EnabledDot>}
+                     chevron
+                     onClick={() => {}}
+                  />
+               ))}
             </SettingsCard>
          </SettingsSection>
 
          <SettingsSection
-            title="Updates from Flowie"
-            description="Product announcement delivery preferences are not configured yet."
+            title="Updates from LNDev UI"
+            description="Subscribe to product announcements and important changes from the LNDev UI team"
          >
             <h3 className="text-sm font-medium mt-2">Changelog</h3>
             <SettingsCard>
                <SettingsRow
                   title="Show updates in sidebar"
-                  description="Product update delivery is not available"
-                  trailing={<Switch disabled />}
-                  muted
+                  description="Highlight new features and improvements in the app sidebar"
+                  trailing={<Switch defaultChecked />}
                />
                <SettingsRow
                   title="Changelog newsletter"
-                  description="Email delivery is temporarily disabled"
-                  trailing={<Switch disabled />}
-                  muted
+                  description="Receive an email twice a month highlighting new features and improvements"
+                  trailing={<Switch />}
                />
             </SettingsCard>
 
@@ -82,9 +63,8 @@ export default function AccountNotifications() {
             <SettingsCard>
                <SettingsRow
                   title="Marketing and onboarding"
-                  description="Marketing delivery is not enabled"
-                  trailing={<Switch disabled />}
-                  muted
+                  description="Occasional updates to help you get the most out of LNDev UI"
+                  trailing={<Switch />}
                />
             </SettingsCard>
 
@@ -92,24 +72,16 @@ export default function AccountNotifications() {
             <SettingsCard>
                <SettingsRow
                   title="Invite accepted"
-                  description="This event remains available in the Flowie inbox"
-                  trailing={<Switch disabled />}
-                  muted
+                  description="Receive an email when an invite you sent is accepted"
+                  trailing={<Switch defaultChecked />}
                />
                <SettingsRow
                   title="Privacy and legal updates"
-                  description="No external delivery channel is enabled"
-                  trailing={<Switch disabled />}
-                  muted
+                  description="Important updates about terms of service or privacy policy changes"
+                  trailing={<Switch defaultChecked />}
                />
             </SettingsCard>
          </SettingsSection>
-
-         <DiscordIntegrationDialog
-            open={discordOpen}
-            onOpenChange={setDiscordOpen}
-            onSaved={(status) => setDiscord(status)}
-         />
       </SettingsShell>
    );
 }

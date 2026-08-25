@@ -1,44 +1,35 @@
 'use client';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
-import {
-   Dialog,
-   DialogContent,
-   DialogDescription,
-   DialogFooter,
-   DialogHeader,
-   DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
-import {
-   Select,
-   SelectContent,
-   SelectItem,
-   SelectTrigger,
-   SelectValue,
-} from '@/components/ui/select';
+import { getProjectDetail } from '@/mock-data/project-details';
+import { getProjectById } from '@/mock-data/projects';
+import { teams } from '@/mock-data/teams';
+import { useIssuesStore } from '@/store/issues-store';
 import { format, parseISO } from 'date-fns';
-import { ArrowRight, ChevronRight, Plus, Star, X } from 'lucide-react';
+import {
+   ArrowRight,
+   Calendar,
+   CalendarPlus,
+   ChevronRight,
+   Compass,
+   Plus,
+   Slack,
+   Star,
+   Tag,
+   UserPlus,
+   X,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { ProjectProgressChart } from './details/project-progress-chart';
-import { toProjectUi } from './details/project-detail-ui-adapter';
-import { useLiveProject } from './details/use-live-project';
-import type { LiveProjectCustomField } from './details/use-live-project';
-import { ProjectLabelSelector } from './project-label-selector';
-import { ProjectMemberSelector } from './project-member-selector';
-import { ProjectDateDialog } from './details/project-date-dialog';
 
 interface ProjectPeekPanelProps {
    projectId: string;
    onClose: () => void;
 }
 
-const formatDay = (iso?: string | null) => (iso ? format(parseISO(iso), 'MMM do') : '—');
+const formatDay = (iso?: string) => (iso ? format(parseISO(iso), 'MMM do') : '—');
 
 function PropertyRow({ label, children }: { label: string; children: React.ReactNode }) {
    return (
@@ -57,45 +48,21 @@ function Card({ children, className }: { children: React.ReactNode; className?: 
    );
 }
 
-function customFieldDisplayValue(field: LiveProjectCustomField) {
-   if (field.value === null || field.value === undefined || field.value === '') return '—';
-   if (field.type === 'BOOLEAN') return field.value ? 'Yes' : 'No';
-   if (Array.isArray(field.value)) return field.value.join(', ') || '—';
-   return String(field.value);
-}
-
-/** Floating timeline peek backed solely by persisted Project, Issue, and Milestone data. */
+/**
+ * Floating panel opened in place when a project bar is clicked on the
+ * timeline (Linear-style "peek"): header, properties, milestones and
+ * progress cards stacked over the right side of the timeline.
+ */
 export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) {
    const { orgId } = useParams<{ orgId: string }>();
-   const {
-      project,
-      issues,
-      milestones,
-      availableLabels,
-      availableMembers,
-      availableTeams,
-      customFields,
-      loading,
-      error,
-      updateLabels,
-      updateMembers,
-      updateProject,
-      updateCustomFields,
-      createMilestone,
-      toggleFavorite,
-   } = useLiveProject(projectId);
-   const [milestoneDialogOpen, setMilestoneDialogOpen] = useState(false);
-   const [milestoneTitle, setMilestoneTitle] = useState('');
-   const [milestoneTargetDate, setMilestoneTargetDate] = useState('');
-   const [milestoneSaving, setMilestoneSaving] = useState(false);
-   const [milestoneError, setMilestoneError] = useState<string>();
-   const [customFieldsDialogOpen, setCustomFieldsDialogOpen] = useState(false);
-   const [customFieldDrafts, setCustomFieldDrafts] = useState<Record<string, unknown>>({});
-   const [customFieldsSaving, setCustomFieldsSaving] = useState(false);
-   const [customFieldsError, setCustomFieldsError] = useState<string>();
-   const uiProject = useMemo(
-      () => (project ? toProjectUi(project, issues) : undefined),
-      [issues, project]
+   const { issues: allIssues } = useIssuesStore();
+
+   const project = getProjectById(projectId);
+   const detail = getProjectDetail(projectId);
+
+   const issues = useMemo(
+      () => allIssues.filter((issue) => issue.project?.id === projectId),
+      [allIssues, projectId]
    );
 
    useEffect(() => {
@@ -106,77 +73,29 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
       return () => window.removeEventListener('keydown', onKeyDown);
    }, [onClose]);
 
-   if (loading) {
-      return (
-         <aside className="absolute top-10 right-2 bottom-2 w-[400px] max-w-[calc(100%-1rem)] z-40">
-            <Card>Loading project…</Card>
-         </aside>
-      );
-   }
-   if (error || !project || !uiProject) {
-      return (
-         <aside className="absolute top-10 right-2 bottom-2 w-[400px] max-w-[calc(100%-1rem)] z-40">
-            <Card className="text-destructive">{error ?? 'Project not found.'}</Card>
-         </aside>
-      );
-   }
+   const members = useMemo(() => {
+      const seen = new Set<string>();
+      return issues
+         .map((issue) => issue.assignee)
+         .filter((assignee): assignee is NonNullable<typeof assignee> => {
+            if (!assignee || seen.has(assignee.id)) return false;
+            seen.add(assignee.id);
+            return true;
+         });
+   }, [issues]);
 
-   const started = issues.filter(
-      (issue) => issue.status.category.toLowerCase() === 'started'
-   ).length;
-   const completed = issues.filter(
-      (issue) => issue.status.category.toLowerCase() === 'completed'
-   ).length;
-   const chartStartDate = project.startDate ?? project.createdAt;
-   const initiativeNames = project.initiativeLinks.map((link) => link.initiative.name);
-   const labels = project.labelLinks.map((link) => link.label);
+   if (!project) return null;
 
-   const submitMilestone = async () => {
-      if (milestoneTitle.trim().length < 2) return;
-      setMilestoneSaving(true);
-      setMilestoneError(undefined);
-      try {
-         await createMilestone(milestoneTitle, milestoneTargetDate || undefined);
-         setMilestoneDialogOpen(false);
-         setMilestoneTitle('');
-         setMilestoneTargetDate('');
-      } catch (caught) {
-         setMilestoneError(
-            caught instanceof Error ? caught.message : 'Could not create milestone.'
-         );
-      } finally {
-         setMilestoneSaving(false);
-      }
-   };
-
-   const openCustomFields = () => {
-      setCustomFieldDrafts(
-         Object.fromEntries(customFields.map((field) => [field.id, field.value]))
-      );
-      setCustomFieldsError(undefined);
-      setCustomFieldsDialogOpen(true);
-   };
-
-   const submitCustomFields = async () => {
-      setCustomFieldsSaving(true);
-      setCustomFieldsError(undefined);
-      try {
-         await updateCustomFields(customFieldDrafts);
-         setCustomFieldsDialogOpen(false);
-      } catch (caught) {
-         setCustomFieldsError(
-            caught instanceof Error ? caught.message : 'Could not update custom properties.'
-         );
-      } finally {
-         setCustomFieldsSaving(false);
-      }
-   };
+   const team = teams.find((candidate) => candidate.id === project.teamId);
+   const started = issues.filter((issue) => issue.status.category === 'started').length;
+   const completed = issues.filter((issue) => issue.status.category === 'completed').length;
 
    return (
       <aside className="absolute top-10 right-2 bottom-2 w-[400px] max-w-[calc(100%-1rem)] z-40 flex flex-col gap-2 overflow-y-auto">
+         {/* Header */}
          <Card className="flex items-center gap-2 py-3">
             <span className="inline-flex size-6 bg-muted/50 items-center justify-center rounded shrink-0">
-               <uiProject.icon className="size-3.5" />
+               <project.icon className="size-3.5" />
             </span>
             <Link
                href={`/${orgId}/project/${project.id}/overview`}
@@ -188,13 +107,8 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
                </span>
                <ChevronRight className="size-4 shrink-0 text-muted-foreground group-hover:text-foreground transition-colors" />
             </Link>
-            <button
-               title={project.favorites.length ? 'Unfavorite project' : 'Favorite project'}
-               className="text-muted-foreground hover:text-foreground shrink-0"
-               aria-label={project.favorites.length ? 'Unfavorite project' : 'Favorite project'}
-               onClick={() => void toggleFavorite(!project.favorites.length)}
-            >
-               <Star className={`size-4 ${project.favorites.length ? 'fill-current' : ''}`} />
+            <button className="text-muted-foreground hover:text-foreground transition-colors shrink-0">
+               <Star className="size-4" />
             </button>
             <button
                onClick={onClose}
@@ -205,96 +119,95 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
             </button>
          </Card>
 
+         {/* Properties */}
          <Card>
             <div className="flex items-center justify-between mb-1.5">
                <h3 className="text-sm font-medium">Properties</h3>
-               <button
-                  type="button"
-                  title="Edit custom properties"
-                  className="text-muted-foreground hover:text-foreground transition-colors"
-                  aria-label="Edit custom properties"
-                  onClick={openCustomFields}
-               >
+               <button className="text-muted-foreground hover:text-foreground transition-colors">
                   <Plus className="size-3.5" />
                </button>
             </div>
             <div className="flex flex-col">
                <PropertyRow label="Status">
-                  <uiProject.status.icon />
-                  <span>{uiProject.status.name}</span>
+                  <project.status.icon />
+                  <span>{project.status.name}</span>
                </PropertyRow>
                <PropertyRow label="Priority">
-                  <uiProject.priority.icon className="size-3.5 text-muted-foreground" />
-                  <span>{uiProject.priority.name}</span>
+                  <project.priority.icon className="size-3.5 text-muted-foreground" />
+                  <span>{project.priority.name}</span>
                </PropertyRow>
                <PropertyRow label="Lead">
-                  {project.lead ? (
-                     <>
-                        <Avatar className="size-5">
-                           <AvatarImage
-                              src={project.lead.avatarUrl ?? undefined}
-                              alt={project.lead.name}
-                           />
-                           <AvatarFallback>{project.lead.name[0]}</AvatarFallback>
-                        </Avatar>
-                        <span className="truncate max-w-40">{project.lead.name}</span>
-                     </>
-                  ) : (
-                     <span className="text-muted-foreground">Unassigned</span>
-                  )}
+                  <Avatar className="size-5">
+                     <AvatarImage src={project.lead.avatarUrl} alt={project.lead.name} />
+                     <AvatarFallback>{project.lead.name[0]}</AvatarFallback>
+                  </Avatar>
+                  <span className="truncate max-w-40">{project.lead.name}</span>
                </PropertyRow>
                <PropertyRow label="Members">
-                  <ProjectMemberSelector
-                     members={project.members}
-                     availableMembers={availableMembers}
-                     onMembersChange={updateMembers}
-                  />
+                  {members.length > 0 ? (
+                     <span className="inline-flex items-center gap-1.5">
+                        <span className="flex -space-x-1.5">
+                           {members.slice(0, 3).map((member) => (
+                              <Avatar key={member.id} className="size-5 border-2 border-container">
+                                 <AvatarImage src={member.avatarUrl} alt={member.name} />
+                                 <AvatarFallback>{member.name[0]}</AvatarFallback>
+                              </Avatar>
+                           ))}
+                        </span>
+                        {members.length} {members.length === 1 ? 'member' : 'members'}
+                     </span>
+                  ) : (
+                     <button className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors">
+                        <UserPlus className="size-3.5" />
+                        Add members
+                     </button>
+                  )}
                </PropertyRow>
                <PropertyRow label="Dates">
-                  <ProjectDateDialog
-                     value={project.startDate}
-                     title="Project start date"
-                     fallback="Start"
-                     onSave={(startDate) => updateProject({ startDate })}
-                  />
+                  <span className="inline-flex items-center gap-1">
+                     <Calendar className="size-3.5 text-muted-foreground" />
+                     {formatDay(project.startDate)}
+                  </span>
                   <ArrowRight className="size-3 text-muted-foreground" />
-                  <ProjectDateDialog
-                     value={project.targetDate}
-                     title="Project target date"
-                     fallback="Target"
-                     onSave={(targetDate) => updateProject({ targetDate })}
-                  />
+                  <span className="inline-flex items-center gap-1 text-muted-foreground">
+                     <CalendarPlus className="size-3.5" />
+                     {project.targetDate ? (
+                        <span className="text-foreground">{formatDay(project.targetDate)}</span>
+                     ) : (
+                        'Target'
+                     )}
+                  </span>
                </PropertyRow>
                <PropertyRow label="Teams">
-                  <Select
-                     value={project.team?.id ?? 'no-team'}
-                     onValueChange={(teamId) =>
-                        void updateProject({ teamId: teamId === 'no-team' ? null : teamId })
-                     }
-                  >
-                     <SelectTrigger className="h-auto w-40 border-0 bg-transparent p-0 shadow-none">
-                        <SelectValue />
-                     </SelectTrigger>
-                     <SelectContent>
-                        <SelectItem value="no-team">No team</SelectItem>
-                        {availableTeams.map((team) => (
-                           <SelectItem key={team.id} value={team.id}>
-                              {team.icon ?? '👥'} {team.name}
-                           </SelectItem>
-                        ))}
-                     </SelectContent>
-                  </Select>
+                  <span className="inline-flex items-center gap-1.5">
+                     {team?.icon} {team?.name ?? project.teamId}
+                  </span>
+               </PropertyRow>
+               <PropertyRow label="Slack">
+                  <button className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors">
+                     <Slack className="size-3.5" />
+                     Connect channel
+                  </button>
                </PropertyRow>
                <PropertyRow label="Initiatives">
-                  {initiativeNames.length ? (
-                     <span className="truncate max-w-44">{initiativeNames.join(', ')}</span>
+                  {project.initiative ? (
+                     <span className="truncate max-w-44">{project.initiative}</span>
                   ) : (
-                     <span className="text-muted-foreground">No initiative</span>
+                     <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                        <Compass className="size-3.5" />
+                        No initiative
+                     </span>
                   )}
                </PropertyRow>
                <PropertyRow label="Labels">
                   <div className="flex items-center gap-1.5">
-                     {labels.map((label) => (
+                     {project.labels.length === 0 && (
+                        <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                           <Tag className="size-3.5" />
+                           Add label
+                        </span>
+                     )}
+                     {project.labels.map((label) => (
                         <span
                            key={label.id}
                            className="inline-flex items-center gap-1 text-xs border rounded-full px-2 py-0.5"
@@ -306,54 +219,39 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
                            {label.name}
                         </span>
                      ))}
-                     <ProjectLabelSelector
-                        labels={labels}
-                        availableLabels={availableLabels}
-                        onLabelsChange={updateLabels}
-                     />
                   </div>
                </PropertyRow>
-               {customFields.map((field) => (
-                  <PropertyRow key={field.id} label={field.name}>
-                     <span className="truncate max-w-52">{customFieldDisplayValue(field)}</span>
-                  </PropertyRow>
-               ))}
             </div>
          </Card>
 
+         {/* Milestones */}
          <Card>
             <div className="flex items-center justify-between mb-2">
                <h3 className="text-sm font-medium">Milestones</h3>
-               <button
-                  type="button"
-                  title="Create milestone"
-                  className="text-muted-foreground hover:text-foreground transition-colors"
-                  aria-label="Create milestone"
-                  onClick={() => setMilestoneDialogOpen(true)}
-               >
+               <button className="text-muted-foreground hover:text-foreground transition-colors">
                   <Plus className="size-3.5" />
                </button>
             </div>
-            {milestones.length === 0 ? (
+            {detail.milestones.length === 0 ? (
                <p className="text-xs text-muted-foreground">
                   Add milestones to organize work within your project and break it into more
                   granular stages. <span className="text-foreground/70 underline">Learn more</span>
                </p>
             ) : (
                <div className="flex flex-col gap-1.5">
-                  {milestones.map((milestone) => (
+                  {detail.milestones.map((milestone) => (
                      <div
                         key={milestone.id}
                         className="flex items-center justify-between gap-2 text-sm"
                      >
                         <span
                            className={
-                              milestone.completedAt
+                              milestone.completed
                                  ? 'line-through text-muted-foreground truncate'
                                  : 'truncate'
                            }
                         >
-                           {milestone.title}
+                           {milestone.name}
                         </span>
                         <span className="text-xs text-muted-foreground whitespace-nowrap">
                            {formatDay(milestone.targetDate)}
@@ -364,214 +262,40 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
             )}
          </Card>
 
+         {/* Progress */}
          <Card>
             <h3 className="text-sm font-medium mb-3">Progress</h3>
             <div className="grid grid-cols-3 gap-2 mb-2">
                <div className="flex flex-col gap-0.5">
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                     <span className="size-2 rounded-[2px] bg-[#8f9299]" /> Scope
+                     <span className="size-2 rounded-[2px] bg-[#8f9299]" />
+                     Scope
                   </div>
                   <span className="text-sm font-medium">{issues.length}</span>
                </div>
                <div className="flex flex-col gap-0.5">
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                     <span className="size-2 rounded-[2px] bg-[#facc15]" /> Started
+                     <span className="size-2 rounded-[2px] bg-[#facc15]" />
+                     Started
                   </div>
                   <span className="text-sm font-medium">{started}</span>
                </div>
                <div className="flex flex-col gap-0.5">
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                     <span className="size-2 rounded-[2px] bg-[#6771c5]" /> Completed
+                     <span className="size-2 rounded-[2px] bg-[#6771c5]" />
+                     Completed
                   </div>
                   <span className="text-sm font-medium">{completed}</span>
                </div>
             </div>
             <ProjectProgressChart
-               startDate={chartStartDate}
-               endDate={project.targetDate ?? chartStartDate}
+               startDate={project.startDate}
+               endDate={project.targetDate ?? project.startDate}
                scope={issues.length}
                started={started}
                completed={completed}
             />
          </Card>
-
-         <Dialog open={milestoneDialogOpen} onOpenChange={setMilestoneDialogOpen}>
-            <DialogContent className="sm:max-w-[440px]">
-               <DialogHeader>
-                  <DialogTitle>New milestone</DialogTitle>
-                  <DialogDescription>Add a milestone to {project.name}.</DialogDescription>
-               </DialogHeader>
-               <div className="space-y-3">
-                  <Input
-                     value={milestoneTitle}
-                     onChange={(event) => setMilestoneTitle(event.target.value)}
-                     placeholder="Milestone name"
-                     autoFocus
-                  />
-                  <Input
-                     type="date"
-                     value={milestoneTargetDate}
-                     onChange={(event) => setMilestoneTargetDate(event.target.value)}
-                  />
-                  {milestoneError && <p className="text-sm text-destructive">{milestoneError}</p>}
-               </div>
-               <DialogFooter>
-                  <Button variant="outline" onClick={() => setMilestoneDialogOpen(false)}>
-                     Cancel
-                  </Button>
-                  <Button
-                     disabled={milestoneSaving || milestoneTitle.trim().length < 2}
-                     onClick={() => void submitMilestone()}
-                  >
-                     {milestoneSaving ? 'Creating…' : 'Create milestone'}
-                  </Button>
-               </DialogFooter>
-            </DialogContent>
-         </Dialog>
-
-         <Dialog open={customFieldsDialogOpen} onOpenChange={setCustomFieldsDialogOpen}>
-            <DialogContent className="sm:max-w-[480px] max-h-[80vh] overflow-y-auto">
-               <DialogHeader>
-                  <DialogTitle>Custom properties</DialogTitle>
-                  <DialogDescription>
-                     Update workspace properties for {project.name}.
-                  </DialogDescription>
-               </DialogHeader>
-               {customFields.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                     No project custom properties have been configured for this workspace.
-                  </p>
-               ) : (
-                  <div className="space-y-4">
-                     {customFields.map((field) => {
-                        const value = customFieldDrafts[field.id];
-                        const setValue = (next: unknown) =>
-                           setCustomFieldDrafts((current) => ({
-                              ...current,
-                              [field.id]: next,
-                           }));
-                        return (
-                           <div key={field.id} className="space-y-1.5">
-                              <Label htmlFor={`custom-field-${field.id}`}>
-                                 {field.name}
-                                 {field.required ? ' *' : ''}
-                              </Label>
-                              {field.type === 'BOOLEAN' ? (
-                                 <div className="flex items-center gap-2 min-h-9">
-                                    <Checkbox
-                                       id={`custom-field-${field.id}`}
-                                       checked={value === true}
-                                       onCheckedChange={(checked) => setValue(checked === true)}
-                                    />
-                                    <span className="text-sm text-muted-foreground">Enabled</span>
-                                 </div>
-                              ) : field.type === 'SELECT' ? (
-                                 <Select
-                                    value={typeof value === 'string' ? value : '__unset__'}
-                                    onValueChange={(next) =>
-                                       setValue(next === '__unset__' ? null : next)
-                                    }
-                                 >
-                                    <SelectTrigger id={`custom-field-${field.id}`}>
-                                       <SelectValue placeholder="Select an option" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                       {!field.required && (
-                                          <SelectItem value="__unset__">No value</SelectItem>
-                                       )}
-                                       {(field.options ?? []).map((option) => (
-                                          <SelectItem key={option} value={option}>
-                                             {option}
-                                          </SelectItem>
-                                       ))}
-                                    </SelectContent>
-                                 </Select>
-                              ) : field.type === 'MULTI_SELECT' ? (
-                                 <div className="rounded-md border p-3 space-y-2">
-                                    {(field.options ?? []).map((option) => {
-                                       const selected = Array.isArray(value)
-                                          ? value.includes(option)
-                                          : false;
-                                       return (
-                                          <label
-                                             key={option}
-                                             className="flex items-center gap-2 text-sm"
-                                          >
-                                             <Checkbox
-                                                checked={selected}
-                                                onCheckedChange={(checked) => {
-                                                   const current = Array.isArray(value)
-                                                      ? value.filter(
-                                                           (item): item is string =>
-                                                              typeof item === 'string'
-                                                        )
-                                                      : [];
-                                                   setValue(
-                                                      checked
-                                                         ? [...new Set([...current, option])]
-                                                         : current.filter((item) => item !== option)
-                                                   );
-                                                }}
-                                             />
-                                             {option}
-                                          </label>
-                                       );
-                                    })}
-                                 </div>
-                              ) : (
-                                 <Input
-                                    id={`custom-field-${field.id}`}
-                                    type={
-                                       field.type === 'NUMBER'
-                                          ? 'number'
-                                          : field.type === 'DATE'
-                                            ? 'date'
-                                            : field.type === 'URL'
-                                              ? 'url'
-                                              : 'text'
-                                    }
-                                    value={
-                                       typeof value === 'string' || typeof value === 'number'
-                                          ? value
-                                          : ''
-                                    }
-                                    onChange={(event) =>
-                                       setValue(
-                                          field.type === 'NUMBER'
-                                             ? event.target.value === ''
-                                                ? null
-                                                : Number(event.target.value)
-                                             : event.target.value
-                                       )
-                                    }
-                                 />
-                              )}
-                              {field.description && (
-                                 <p className="text-xs text-muted-foreground">
-                                    {field.description}
-                                 </p>
-                              )}
-                           </div>
-                        );
-                     })}
-                     {customFieldsError && (
-                        <p className="text-sm text-destructive">{customFieldsError}</p>
-                     )}
-                  </div>
-               )}
-               <DialogFooter>
-                  <Button variant="outline" onClick={() => setCustomFieldsDialogOpen(false)}>
-                     Cancel
-                  </Button>
-                  <Button
-                     disabled={customFieldsSaving || customFields.length === 0}
-                     onClick={() => void submitCustomFields()}
-                  >
-                     {customFieldsSaving ? 'Saving…' : 'Save properties'}
-                  </Button>
-               </DialogFooter>
-            </DialogContent>
-         </Dialog>
       </aside>
    );
 }

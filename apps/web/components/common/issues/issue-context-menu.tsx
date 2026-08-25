@@ -33,11 +33,13 @@ import {
    MessageSquare,
    Clipboard,
 } from 'lucide-react';
-import React from 'react';
+import React, { useState } from 'react';
 import { useIssuesStore } from '@/store/issues-store';
-import { useIssueRelationDialogStore } from '@/store/issue-relation-dialog-store';
-import { useIssueActionDialogStore } from '@/store/issue-action-dialog-store';
-import { priorities } from '@/lib/priority-presentations';
+import { status } from '@/mock-data/status';
+import { priorities } from '@/mock-data/priorities';
+import { users } from '@/mock-data/users';
+import { labels } from '@/mock-data/labels';
+import { projects } from '@/mock-data/projects';
 import { toast } from 'sonner';
 
 interface IssueContextMenuProps {
@@ -45,8 +47,9 @@ interface IssueContextMenuProps {
 }
 
 export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
-   const { openForIssue } = useIssueRelationDialogStore();
-   const { openForIssue: openAction } = useIssueActionDialogStore();
+   const [isSubscribed, setIsSubscribed] = useState(false);
+   const [isFavorite, setIsFavorite] = useState(false);
+
    const {
       updateIssueStatus,
       updateIssuePriority,
@@ -54,177 +57,96 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       addIssueLabel,
       removeIssueLabel,
       updateIssueProject,
-      createIssue,
+      updateIssue,
       getIssueById,
-      setIssueSubscription,
-      setIssueFavorite,
-      classifyIssue,
-      statuses,
-      members,
-      projects,
-      labels: workspaceLabels,
-      workspaceId,
    } = useIssuesStore();
 
-   const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
-
-   const handleStatusChange = async (statusId: string) => {
+   const handleStatusChange = (statusId: string) => {
       if (!issueId) return;
-      const newStatus = statuses.find((s) => s.id === statusId);
+      const newStatus = status.find((s) => s.id === statusId);
       if (newStatus) {
-         try {
-            await updateIssueStatus(issueId, newStatus);
-            toast.success(`Status updated to ${newStatus.name}`);
-         } catch {
-            toast.error('Could not update status');
-         }
+         updateIssueStatus(issueId, newStatus);
+         toast.success(`Status updated to ${newStatus.name}`);
       }
    };
 
-   const handlePriorityChange = async (priorityId: string) => {
+   const handlePriorityChange = (priorityId: string) => {
       if (!issueId) return;
       const newPriority = priorities.find((p) => p.id === priorityId);
       if (newPriority) {
-         try {
-            await updateIssuePriority(issueId, newPriority);
-            toast.success(`Priority updated to ${newPriority.name}`);
-         } catch {
-            toast.error('Could not update priority');
-         }
+         updateIssuePriority(issueId, newPriority);
+         toast.success(`Priority updated to ${newPriority.name}`);
       }
    };
 
-   const handleAssigneeChange = async (userId: string | null) => {
+   const handleAssigneeChange = (userId: string | null) => {
       if (!issueId) return;
-      const newAssignee = userId ? members.find((u) => u.id === userId) || null : null;
-      try {
-         await updateIssueAssignee(issueId, newAssignee);
-         toast.success(newAssignee ? `Assigned to ${newAssignee.name}` : 'Unassigned');
-      } catch {
-         toast.error('Could not update assignee');
-      }
+      const newAssignee = userId ? users.find((u) => u.id === userId) || null : null;
+      updateIssueAssignee(issueId, newAssignee);
+      toast.success(newAssignee ? `Assigned to ${newAssignee.name}` : 'Unassigned');
    };
 
-   const handleLabelToggle = async (labelId: string) => {
+   const handleLabelToggle = (labelId: string) => {
       if (!issueId) return;
       const issue = getIssueById(issueId);
-      const label = workspaceLabels.find((l) => l.id === labelId);
+      const label = labels.find((l) => l.id === labelId);
 
       if (!issue || !label) return;
 
       const hasLabel = issue.labels.some((l) => l.id === labelId);
 
-      try {
-         if (hasLabel) {
-            await removeIssueLabel(issueId, labelId);
-            toast.success(`Removed label: ${label.name}`);
-         } else {
-            await addIssueLabel(issueId, label);
-            toast.success(`Added label: ${label.name}`);
-         }
-      } catch {
-         toast.error('Could not update labels');
+      if (hasLabel) {
+         removeIssueLabel(issueId, labelId);
+         toast.success(`Removed label: ${label.name}`);
+      } else {
+         addIssueLabel(issueId, label);
+         toast.success(`Added label: ${label.name}`);
       }
    };
 
-   const handleProjectChange = async (projectId: string | null) => {
+   const handleProjectChange = (projectId: string | null) => {
       if (!issueId) return;
       const newProject = projectId ? projects.find((p) => p.id === projectId) : undefined;
-      try {
-         await updateIssueProject(issueId, newProject);
-         toast.success(newProject ? `Project set to ${newProject.name}` : 'Project removed');
-      } catch {
-         toast.error('Could not update project');
-      }
+      updateIssueProject(issueId, newProject);
+      toast.success(newProject ? `Project set to ${newProject.name}` : 'Project removed');
    };
 
-   const handleSubscribe = async () => {
+   const handleSetDueDate = () => {
       if (!issueId) return;
-      const issue = getIssueById(issueId);
-      if (!issue) return;
-      try {
-         await setIssueSubscription(issueId, !issue.isSubscribed);
-         toast.success(issue.isSubscribed ? 'Unsubscribed from issue' : 'Subscribed to issue');
-      } catch {
-         toast.error('Could not update subscription');
-      }
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 7);
+      updateIssue(issueId, { dueDate: dueDate.toISOString() });
+      toast.success('Due date set to 7 days from now');
    };
 
-   const handleFavorite = async () => {
-      if (!issueId) return;
-      const issue = getIssueById(issueId);
-      if (!issue) return;
-      try {
-         await setIssueFavorite(issueId, !issue.isFavorite);
-         toast.success(issue.isFavorite ? 'Removed from favorites' : 'Added to favorites');
-      } catch {
-         toast.error('Could not update favorite');
-      }
+   const handleAddLink = () => {
+      toast.success('Link added');
    };
 
-   const handleClassification = async (resolution: 'DUPLICATE' | 'WONT_FIX') => {
-      if (!issueId) return;
-      if (resolution === 'DUPLICATE') return openAction(issueId, 'duplicate');
-      try {
-         await classifyIssue(issueId, resolution);
-         toast.success("Marked as won't fix");
-      } catch {
-         toast.error('Could not classify issue');
-      }
+   const handleMakeCopy = () => {
+      toast.success('Issue copied');
    };
 
-   const handleMakeCopy = async () => {
-      if (!issueId) return;
-      const issue = getIssueById(issueId);
-      if (!issue?.team) return;
-      try {
-         const copied = await createIssue({
-            teamId: issue.team.id,
-            title: `${issue.title} (copy)`,
-            description: issue.description,
-            statusId: issue.status.id,
-            priority: issue.priority.id,
-            assigneeId: issue.assignee?.id,
-            projectId: issue.project?.id,
-            labelIds: issue.labels.map((label) => label.id),
-         });
-         toast.success(`Created ${copied.identifier}`);
-      } catch {
-         toast.error('Could not copy issue');
-      }
+   const handleCreateRelated = () => {
+      toast.success('Related issue created');
    };
 
-   const handleConvertToDocument = async () => {
-      if (!issueId || !workspaceId) return;
-      const issue = getIssueById(issueId);
-      if (!issue?.team) return;
-      try {
-         const response = await fetch(`${api}/documents`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-               workspaceId,
-               teamId: issue.team.id,
-               title: issue.title,
-               content: issue.description,
-            }),
-         });
-         if (!response.ok) throw new Error('Could not create document.');
-         toast.success('Document created from issue');
-      } catch {
-         toast.error('Could not convert issue to document');
-      }
+   const handleMarkAs = (type: string) => {
+      toast.success(`Marked as ${type}`);
    };
 
-   const handleMarkCompleted = async () => {
-      if (!issueId) return;
-      const completed = statuses.find((status) => status.category === 'completed');
-      if (!completed) {
-         toast.error('No completed status is configured');
-         return;
-      }
-      await handleStatusChange(completed.id);
+   const handleMove = () => {
+      toast.success('Issue moved');
+   };
+
+   const handleSubscribe = () => {
+      setIsSubscribed(!isSubscribed);
+      toast.success(isSubscribed ? 'Unsubscribed from issue' : 'Subscribed to issue');
+   };
+
+   const handleFavorite = () => {
+      setIsFavorite(!isFavorite);
+      toast.success(isFavorite ? 'Removed from favorites' : 'Added to favorites');
    };
 
    const handleCopy = () => {
@@ -236,6 +158,10 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       }
    };
 
+   const handleRemindMe = () => {
+      toast.success('Reminder set');
+   };
+
    return (
       <ContextMenuContent className="w-64">
          <ContextMenuGroup>
@@ -244,10 +170,10 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                   <CircleCheck className="mr-2 size-4" /> Status
                </ContextMenuSubTrigger>
                <ContextMenuSubContent className="w-48">
-                  {statuses.map((s) => {
+                  {status.map((s) => {
                      const Icon = s.icon;
                      return (
-                        <ContextMenuItem key={s.id} onClick={() => void handleStatusChange(s.id)}>
+                        <ContextMenuItem key={s.id} onClick={() => handleStatusChange(s.id)}>
                            <Icon /> {s.name}
                         </ContextMenuItem>
                      );
@@ -260,21 +186,23 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                   <User className="mr-2 size-4" /> Assignee
                </ContextMenuSubTrigger>
                <ContextMenuSubContent className="w-48">
-                  <ContextMenuItem onClick={() => void handleAssigneeChange(null)}>
+                  <ContextMenuItem onClick={() => handleAssigneeChange(null)}>
                      <User className="size-4" /> Unassigned
                   </ContextMenuItem>
-                  {members.map((user) => (
-                     <ContextMenuItem
-                        key={user.id}
-                        onClick={() => void handleAssigneeChange(user.id)}
-                     >
-                        <Avatar className="size-4">
-                           <AvatarImage src={user.avatarUrl} alt={user.name} />
-                           <AvatarFallback>{user.name[0]}</AvatarFallback>
-                        </Avatar>
-                        {user.name}
-                     </ContextMenuItem>
-                  ))}
+                  {users
+                     .filter((user) => user.teamIds.includes('CORE'))
+                     .map((user) => (
+                        <ContextMenuItem
+                           key={user.id}
+                           onClick={() => handleAssigneeChange(user.id)}
+                        >
+                           <Avatar className="size-4">
+                              <AvatarImage src={user.avatarUrl} alt={user.name} />
+                              <AvatarFallback>{user.name[0]}</AvatarFallback>
+                           </Avatar>
+                           {user.name}
+                        </ContextMenuItem>
+                     ))}
                </ContextMenuSubContent>
             </ContextMenuSub>
 
@@ -286,7 +214,7 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                   {priorities.map((priority) => (
                      <ContextMenuItem
                         key={priority.id}
-                        onClick={() => void handlePriorityChange(priority.id)}
+                        onClick={() => handlePriorityChange(priority.id)}
                      >
                         <priority.icon className="size-4" /> {priority.name}
                      </ContextMenuItem>
@@ -299,11 +227,8 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                   <Tag className="mr-2 size-4" /> Labels
                </ContextMenuSubTrigger>
                <ContextMenuSubContent className="w-48">
-                  {workspaceLabels.map((label) => (
-                     <ContextMenuItem
-                        key={label.id}
-                        onClick={() => void handleLabelToggle(label.id)}
-                     >
+                  {labels.map((label) => (
+                     <ContextMenuItem key={label.id} onClick={() => handleLabelToggle(label.id)}>
                         <span
                            className="inline-block size-3 rounded-full"
                            style={{ backgroundColor: label.color }}
@@ -320,13 +245,13 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                   <Folder className="mr-2 size-4" /> Project
                </ContextMenuSubTrigger>
                <ContextMenuSubContent className="w-64">
-                  <ContextMenuItem onClick={() => void handleProjectChange(null)}>
+                  <ContextMenuItem onClick={() => handleProjectChange(null)}>
                      <Folder className="size-4" /> No Project
                   </ContextMenuItem>
                   {projects.slice(0, 5).map((project) => (
                      <ContextMenuItem
                         key={project.id}
-                        onClick={() => void handleProjectChange(project.id)}
+                        onClick={() => handleProjectChange(project.id)}
                      >
                         <project.icon className="size-4" /> {project.name}
                      </ContextMenuItem>
@@ -334,19 +259,19 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                </ContextMenuSubContent>
             </ContextMenuSub>
 
-            <ContextMenuItem onClick={() => issueId && openAction(issueId, 'due-date')}>
+            <ContextMenuItem onClick={handleSetDueDate}>
                <CalendarClock className="size-4" /> Set due date...
                <ContextMenuShortcut>D</ContextMenuShortcut>
             </ContextMenuItem>
 
-            <ContextMenuItem onClick={() => issueId && openAction(issueId, 'rename')}>
+            <ContextMenuItem>
                <Pencil className="size-4" /> Rename...
                <ContextMenuShortcut>R</ContextMenuShortcut>
             </ContextMenuItem>
 
             <ContextMenuSeparator />
 
-            <ContextMenuItem onClick={() => issueId && openForIssue(issueId)}>
+            <ContextMenuItem onClick={handleAddLink}>
                <LinkIcon className="size-4" /> Add link...
                <ContextMenuShortcut>Ctrl L</ContextMenuShortcut>
             </ContextMenuItem>
@@ -356,25 +281,23 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                   <Repeat2 className="mr-2 size-4" /> Convert into
                </ContextMenuSubTrigger>
                <ContextMenuSubContent className="w-48">
-                  <ContextMenuItem onClick={() => void handleConvertToDocument()}>
+                  <ContextMenuItem>
                      <FileText className="size-4" /> Document
                   </ContextMenuItem>
-                  <ContextMenuItem
-                     onClick={() => issueId && openAction(issueId, 'convert-comment')}
-                  >
+                  <ContextMenuItem>
                      <MessageSquare className="size-4" /> Comment
                   </ContextMenuItem>
                </ContextMenuSubContent>
             </ContextMenuSub>
 
-            <ContextMenuItem onClick={() => void handleMakeCopy()}>
+            <ContextMenuItem onClick={handleMakeCopy}>
                <CopyIcon className="size-4" /> Make a copy...
             </ContextMenuItem>
          </ContextMenuGroup>
 
          <ContextMenuSeparator />
 
-         <ContextMenuItem onClick={() => issueId && openAction(issueId, 'create-related')}>
+         <ContextMenuItem onClick={handleCreateRelated}>
             <PlusSquare className="size-4" /> Create related
          </ContextMenuItem>
 
@@ -383,33 +306,31 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
                <Flag className="mr-2 size-4" /> Mark as
             </ContextMenuSubTrigger>
             <ContextMenuSubContent className="w-48">
-               <ContextMenuItem onClick={() => void handleMarkCompleted()}>
+               <ContextMenuItem onClick={() => handleMarkAs('Completed')}>
                   <CheckCircle2 className="size-4" /> Completed
                </ContextMenuItem>
-               <ContextMenuItem onClick={() => void handleClassification('DUPLICATE')}>
+               <ContextMenuItem onClick={() => handleMarkAs('Duplicate')}>
                   <CopyIcon className="size-4" /> Duplicate
                </ContextMenuItem>
-               <ContextMenuItem onClick={() => void handleClassification('WONT_FIX')}>
+               <ContextMenuItem onClick={() => handleMarkAs("Won't Fix")}>
                   <Clock className="size-4" /> Won&apos;t Fix
                </ContextMenuItem>
             </ContextMenuSubContent>
          </ContextMenuSub>
 
-         <ContextMenuItem onClick={() => issueId && openAction(issueId, 'move')}>
+         <ContextMenuItem onClick={handleMove}>
             <ArrowRightLeft className="size-4" /> Move
          </ContextMenuItem>
 
          <ContextMenuSeparator />
 
          <ContextMenuItem onClick={handleSubscribe}>
-            <Bell className="size-4" />
-            {getIssueById(issueId ?? '')?.isSubscribed ? 'Unsubscribe' : 'Subscribe'}
+            <Bell className="size-4" /> {isSubscribed ? 'Unsubscribe' : 'Subscribe'}
             <ContextMenuShortcut>S</ContextMenuShortcut>
          </ContextMenuItem>
 
-         <ContextMenuItem onClick={() => void handleFavorite()}>
-            <Star className="size-4" />
-            {getIssueById(issueId ?? '')?.isFavorite ? 'Unfavorite' : 'Favorite'}
+         <ContextMenuItem onClick={handleFavorite}>
+            <Star className="size-4" /> {isFavorite ? 'Unfavorite' : 'Favorite'}
             <ContextMenuShortcut>F</ContextMenuShortcut>
          </ContextMenuItem>
 
@@ -417,19 +338,15 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
             <Clipboard className="size-4" /> Copy
          </ContextMenuItem>
 
-         <ContextMenuItem onClick={() => issueId && openAction(issueId, 'reminder')}>
-            <AlarmClock className="size-4" />
-            {getIssueById(issueId ?? '')?.reminderAt ? 'Change reminder' : 'Remind me'}
+         <ContextMenuItem onClick={handleRemindMe}>
+            <AlarmClock className="size-4" /> Remind me
             <ContextMenuShortcut>H</ContextMenuShortcut>
          </ContextMenuItem>
 
          <ContextMenuSeparator />
 
-         <ContextMenuItem
-            variant="destructive"
-            onClick={() => issueId && openAction(issueId, 'archive')}
-         >
-            <Trash2 className="size-4" /> Archive
+         <ContextMenuItem variant="destructive">
+            <Trash2 className="size-4" /> Delete...
             <ContextMenuShortcut>⌘⌫</ContextMenuShortcut>
          </ContextMenuItem>
       </ContextMenuContent>

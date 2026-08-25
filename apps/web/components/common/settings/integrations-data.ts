@@ -320,8 +320,7 @@ const list: Integration[] = [
    {
       id: 'attio',
       name: 'Attio',
-      description:
-         'Add customer requests and issues, plus sync customer details, directly from Attio',
+      description: 'Add customer requests and issues, plus sync customer details, directly from Attio',
       color: '#3b82f6',
    },
    {
@@ -333,8 +332,7 @@ const list: Integration[] = [
    {
       id: 'productlane',
       name: 'Productlane',
-      description:
-         'Helpdesk, customer requests portal, public roadmap, and changelog built on Circle',
+      description: 'Helpdesk, customer requests portal, public roadmap, and changelog built on Circle',
       color: '#2dd4bf',
    },
    {
@@ -359,8 +357,7 @@ const list: Integration[] = [
    {
       id: 'range',
       name: 'Range',
-      description:
-         'Pull issues into async check-ins to keep your software development team in sync',
+      description: 'Pull issues into async check-ins to keep your software development team in sync',
       color: '#f43f5e',
    },
    // Media & design
@@ -449,8 +446,7 @@ const list: Integration[] = [
    {
       id: 'everhour',
       name: 'Everhour',
-      description:
-         'Track time, estimate tasks, set up a fixed-fee or recurring budget for projects',
+      description: 'Track time, estimate tasks, set up a fixed-fee or recurring budget for projects',
       color: '#22c55e',
    },
    {

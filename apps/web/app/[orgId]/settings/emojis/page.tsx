@@ -1,11 +1,12 @@
-import EmojisSettings from '@/components/common/settings/emojis-settings';
+import SettingsPlaceholder from '@/components/common/settings/settings-placeholder';
+import { PLACEHOLDER_SECTIONS } from '@/components/common/settings/placeholder-sections';
 import MainLayout from '@/components/layout/main-layout';
 import Header from '@/components/layout/headers/settings/header';
 
 export default function EmojisSettingsPage() {
    return (
       <MainLayout header={<Header />} headersNumber={1}>
-         <EmojisSettings />
+         <SettingsPlaceholder config={PLACEHOLDER_SECTIONS['emojis']} />
       </MainLayout>
    );
 }

@@ -7,18 +7,27 @@ import { IssueFilterBar } from '@/components/common/issues/issue-filter-bar';
 import { SearchIssues } from '@/components/common/issues/search-issues';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Issue } from '@/types/issues';
-import { priorities } from '@/lib/priority-presentations';
+import { Issue, issueCreatorIndex } from '@/mock-data/issues';
+import { labels } from '@/mock-data/labels';
+import { priorities } from '@/mock-data/priorities';
+import { projects } from '@/mock-data/projects';
+import { teams } from '@/mock-data/teams';
+import { statusUserColors, User, users } from '@/mock-data/users';
+import { displayOrderedStatus } from '@/mock-data/status';
 import { useFilterStore } from '@/store/filter-store';
 import { useIssuesStore } from '@/store/issues-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { useSearchStore } from '@/store/search-store';
 import { useViewStore } from '@/store/view-store';
 import { formatDistanceToNowStrict } from 'date-fns';
-import { FolderKanban } from 'lucide-react';
 import { parseAsString, useQueryState } from 'nuqs';
 import { useEffect, useMemo, useState } from 'react';
-import { useLiveMember } from './use-live-members';
+
+const presenceLabel: Record<User['status'], string> = {
+   online: 'Online now',
+   away: 'Away as of 11 minutes ago',
+   offline: 'Offline',
+};
 
 interface BreakdownRow {
    key: string;
@@ -57,25 +66,19 @@ function BreakdownList({ rows }: { rows: BreakdownRow[] }) {
 }
 
 /** Client-only relative/local time values (avoid SSR hydration mismatches). */
-function useClientTimes(joinedAt?: string, timezone?: string) {
-   const [joinedAgo, setJoinedAgo] = useState<string | null>(null);
+function useClientTimes(member: User) {
    const [localTime, setLocalTime] = useState<string | null>(null);
+   const [joinedAgo, setJoinedAgo] = useState<string | null>(null);
 
    useEffect(() => {
-      if (joinedAt)
-         setJoinedAgo(formatDistanceToNowStrict(new Date(joinedAt), { addSuffix: true }));
-   }, [joinedAt]);
-
-   useEffect(() => {
-      if (!timezone) return;
       const update = () => {
          try {
             setLocalTime(
-               new Intl.DateTimeFormat(undefined, {
+               new Intl.DateTimeFormat('en-US', {
                   hour: '2-digit',
                   minute: '2-digit',
-                  timeZone: timezone,
-                  timeZoneName: 'short',
+                  hour12: false,
+                  timeZone: member.timezone,
                }).format(new Date())
             );
          } catch {
@@ -83,9 +86,10 @@ function useClientTimes(joinedAt?: string, timezone?: string) {
          }
       };
       update();
-      const interval = window.setInterval(update, 60_000);
-      return () => window.clearInterval(interval);
-   }, [timezone]);
+      const interval = setInterval(update, 30_000);
+      setJoinedAgo(formatDistanceToNowStrict(new Date(member.joinedDate), { addSuffix: true }));
+      return () => clearInterval(interval);
+   }, [member]);
 
    return { localTime, joinedAgo };
 }
@@ -95,17 +99,10 @@ function useClientTimes(joinedAt?: string, timezone?: string) {
  * status, with a right panel showing identity, teams, projects and
  * per-label / priority / project / team breakdowns.
  */
-export default function MemberProfile({ memberId }: { memberId: string }) {
-   const { member, loading, error } = useLiveMember(memberId);
-   const {
-      issues,
-      statuses,
-      loadIssues,
-      isLoading: issuesLoading,
-      error: issuesError,
-   } = useIssuesStore();
+export default function MemberProfile({ member }: { member: User }) {
+   const { issues } = useIssuesStore();
    const [activeTab] = useQueryState('tab', parseAsString.withDefault('assigned'));
-   const { localTime, joinedAgo } = useClientTimes(member?.joinedAt, member?.timezone);
+   const { localTime, joinedAgo } = useClientTimes(member);
    const { isSearchOpen, searchQuery } = useSearchStore();
    const { viewType } = useViewStore();
    const { filters } = useFilterStore();
@@ -114,32 +111,46 @@ export default function MemberProfile({ memberId }: { memberId: string }) {
    const isSearching = isSearchOpen && searchQuery.trim() !== '';
    const isViewTypeGrid = viewType === 'grid';
 
-   useEffect(() => {
-      void loadIssues();
-   }, [loadIssues]);
+   const memberIndex = Math.max(
+      0,
+      users.findIndex((candidate) => candidate.id === member.id)
+   );
 
    const scopedIssues = useMemo(() => {
       if (activeTab === 'created') {
-         return issues.filter((issue) => issue.creator?.id === memberId);
+         return issues.filter((issue) => issueCreatorIndex(issue, users.length) === memberIndex);
       }
-      return issues.filter((issue) => issue.assignee?.id === memberId);
-   }, [activeTab, issues, memberId]);
+      return issues.filter((issue) => issue.assignee?.id === member.id);
+   }, [issues, activeTab, member.id, memberIndex]);
 
    const displayedIssues = useMemo(
       () => applyIssueFilters(scopedIssues, filters),
       [scopedIssues, filters]
    );
 
-   const memberTeams = useMemo(() => member?.teams ?? [], [member?.teams]);
+   const memberTeams = useMemo(
+      () => teams.filter((team) => member.teamIds.includes(team.id)),
+      [member.teamIds]
+   );
 
-   const memberProjects = useMemo(() => member?.projects ?? [], [member?.projects]);
+   const memberProjects = useMemo(() => {
+      const led = projects.filter((project) => project.lead.id === member.id);
+      const fromIssues = displayedIssues
+         .map((issue) => issue.project)
+         .filter((project): project is NonNullable<typeof project> => Boolean(project));
+      const seen = new Set<string>();
+      const merged = [...led, ...fromIssues].filter((project) => {
+         if (seen.has(project.id)) return false;
+         seen.add(project.id);
+         return true;
+      });
+      return merged;
+   }, [displayedIssues, member.id]);
 
    const labelRows = useMemo<BreakdownRow[]>(() => {
       const counts = countBy(displayedIssues, (issue) => issue.labels.map((label) => label.id));
-      const available = new Map(
-         displayedIssues.flatMap((issue) => issue.labels).map((label) => [label.id, label])
-      );
-      return [...available.values()]
+      return labels
+         .filter((label) => counts.has(label.id))
          .map((label) => ({
             key: label.id,
             label: label.name,
@@ -168,13 +179,11 @@ export default function MemberProfile({ memberId }: { memberId: string }) {
    }, [displayedIssues]);
 
    const projectRows = useMemo<BreakdownRow[]>(() => {
-      const counts = countBy(displayedIssues, (issue) => (issue.project ? [issue.project.id] : []));
-      const available = new Map(
-         displayedIssues
-            .flatMap((issue) => (issue.project ? [issue.project] : []))
-            .map((project) => [project.id, project])
+      const counts = countBy(displayedIssues, (issue) =>
+         issue.project ? [issue.project.id] : []
       );
-      return [...available.values()]
+      return projects
+         .filter((project) => counts.has(project.id))
          .map((project) => ({
             key: project.id,
             label: project.name,
@@ -184,27 +193,16 @@ export default function MemberProfile({ memberId }: { memberId: string }) {
          .sort((a, b) => b.count - a.count);
    }, [displayedIssues]);
 
-   const teamRows = useMemo<BreakdownRow[]>(() => {
-      const counts = countBy(displayedIssues, (issue) => (issue.team ? [issue.team.id] : []));
-      return memberTeams
-         .map((team) => ({
+   const teamRows = useMemo<BreakdownRow[]>(
+      () =>
+         memberTeams.map((team) => ({
             key: team.id,
             label: team.name,
-            leading: <span className="text-sm shrink-0">{team.icon ?? '👥'}</span>,
-            count: counts.get(team.id) ?? 0,
-         }))
-         .filter((row) => row.count > 0)
-         .sort((a, b) => b.count - a.count);
-   }, [displayedIssues, memberTeams]);
-
-   if (loading || issuesLoading)
-      return <div className="px-8 py-10 text-sm text-muted-foreground">Loading profile…</div>;
-   if (error || issuesError || !member)
-      return (
-         <div className="px-8 py-10 text-sm text-destructive">
-            {error ?? issuesError ?? 'Member not found.'}
-         </div>
-      );
+            leading: <span className="text-sm shrink-0">{team.icon}</span>,
+            count: displayedIssues.length,
+         })),
+      [memberTeams, displayedIssues.length]
+   );
 
    if (isSearching) {
       return (
@@ -220,125 +218,126 @@ export default function MemberProfile({ memberId }: { memberId: string }) {
       <div className="w-full h-full flex flex-col overflow-hidden">
          <IssueFilterBar />
          <div className="flex-1 min-h-0 w-full flex overflow-hidden">
-            {/* Issues */}
-            <div className="flex-1 min-w-0 h-full overflow-hidden">
-               <GroupedIssuesView
-                  issues={displayedIssues}
-                  totalIssues={scopedIssues}
-                  statuses={statuses}
-                  isViewTypeGrid={isViewTypeGrid}
-               />
+         {/* Issues */}
+         <div className="flex-1 min-w-0 h-full overflow-hidden">
+            <GroupedIssuesView
+               issues={displayedIssues}
+               totalIssues={scopedIssues}
+               statuses={displayOrderedStatus}
+               isViewTypeGrid={isViewTypeGrid}
+            />
+         </div>
+
+         {openPanel === 'insights' && (
+            <aside className="hidden lg:flex w-[420px] shrink-0 border-l h-full overflow-hidden bg-container">
+               <InsightsPanel issues={displayedIssues} />
+            </aside>
+         )}
+
+         {/* Profile panel */}
+         {openPanel !== 'hidden' && openPanel !== 'insights' && (
+         <aside className="hidden lg:flex flex-col w-[340px] shrink-0 border-l h-full overflow-y-auto bg-container">
+            <div className="px-5 pt-5 pb-4 border-b">
+               <div className="flex items-center gap-3">
+                  <div className="relative">
+                     <Avatar className="size-11">
+                        <AvatarImage src={member.avatarUrl} alt={member.name} />
+                        <AvatarFallback>{member.name[0]}</AvatarFallback>
+                     </Avatar>
+                     <span
+                        className="border-background absolute -end-0.5 -bottom-0.5 size-3 rounded-full border-2"
+                        style={{ backgroundColor: statusUserColors[member.status] }}
+                     />
+                  </div>
+                  <div className="min-w-0">
+                     <h2 className="text-base font-semibold truncate">{member.name}</h2>
+                     <p className="text-xs text-muted-foreground truncate">
+                        {member.name} · {presenceLabel[member.status]}
+                     </p>
+                  </div>
+               </div>
             </div>
 
-            {openPanel === 'insights' && (
-               <aside className="hidden lg:flex w-[420px] shrink-0 border-l h-full overflow-hidden bg-container">
-                  <InsightsPanel issues={displayedIssues} />
-               </aside>
-            )}
-
-            {/* Profile panel */}
-            {openPanel !== 'hidden' && openPanel !== 'insights' && (
-               <aside className="hidden lg:flex flex-col w-[340px] shrink-0 border-l h-full overflow-y-auto bg-container">
-                  <div className="px-5 pt-5 pb-4 border-b">
-                     <div className="flex items-center gap-3">
-                        <div>
-                           <Avatar className="size-11">
-                              <AvatarImage src={member.avatarUrl ?? undefined} alt={member.name} />
-                              <AvatarFallback>{member.name[0]}</AvatarFallback>
-                           </Avatar>
-                        </div>
-                        <div className="min-w-0">
-                           <h2 className="text-base font-semibold truncate">{member.name}</h2>
-                           <p className="text-xs text-muted-foreground truncate">
-                              {member.title || member.username || member.email}
-                           </p>
-                        </div>
-                     </div>
+            <div className="px-5 py-4 border-b flex flex-col gap-2.5 text-sm">
+               <div className="flex items-start justify-between gap-4">
+                  <span className="text-muted-foreground shrink-0">Email</span>
+                  <span className="truncate">{member.email}</span>
+               </div>
+               <div className="flex items-start justify-between gap-4">
+                  <span className="text-muted-foreground shrink-0">Local time</span>
+                  <span>{localTime ?? '—'}</span>
+               </div>
+               <div className="flex items-start justify-between gap-4">
+                  <span className="text-muted-foreground shrink-0">Joined</span>
+                  <span>{joinedAgo ?? '—'}</span>
+               </div>
+               <div className="flex items-start justify-between gap-4">
+                  <span className="text-muted-foreground shrink-0">Role</span>
+                  <span>{member.role}</span>
+               </div>
+               <div className="flex items-start justify-between gap-4">
+                  <span className="text-muted-foreground shrink-0 pt-0.5">Teams</span>
+                  <div className="flex flex-wrap justify-end gap-1.5">
+                     {memberTeams.map((team) => (
+                        <span
+                           key={team.id}
+                           className="inline-flex items-center gap-1 text-xs bg-accent rounded-md px-1.5 py-0.5"
+                        >
+                           {team.icon} {team.name}
+                        </span>
+                     ))}
                   </div>
-
-                  <div className="px-5 py-4 border-b flex flex-col gap-2.5 text-sm">
-                     <div className="flex items-start justify-between gap-4">
-                        <span className="text-muted-foreground shrink-0">Email</span>
-                        <span className="truncate">{member.email}</span>
-                     </div>
-                     <div className="flex items-start justify-between gap-4">
-                        <span className="text-muted-foreground shrink-0">Local time</span>
-                        <span>{localTime ?? '—'}</span>
-                     </div>
-                     <div className="flex items-start justify-between gap-4">
-                        <span className="text-muted-foreground shrink-0">Joined</span>
-                        <span>{joinedAgo ?? '—'}</span>
-                     </div>
-                     <div className="flex items-start justify-between gap-4">
-                        <span className="text-muted-foreground shrink-0">Role</span>
-                        <span>{member.workspaceRole === 'MEMBER' ? 'Member' : 'Admin'}</span>
-                     </div>
-                     <div className="flex items-start justify-between gap-4">
-                        <span className="text-muted-foreground shrink-0 pt-0.5">Teams</span>
-                        <div className="flex flex-wrap justify-end gap-1.5">
-                           {memberTeams.map((team) => (
-                              <span
-                                 key={team.id}
-                                 className="inline-flex items-center gap-1 text-xs bg-accent rounded-md px-1.5 py-0.5"
-                              >
-                                 {team.icon ?? '👥'} {team.name}
-                              </span>
-                           ))}
-                        </div>
-                     </div>
-                     <div className="flex items-start justify-between gap-4">
-                        <span className="text-muted-foreground shrink-0 pt-0.5">Projects</span>
-                        <div className="flex flex-col items-end gap-1 min-w-0">
-                           {memberProjects.slice(0, 4).map((project) => (
-                              <span
-                                 key={project.id}
-                                 className="inline-flex items-center gap-1.5 text-xs min-w-0"
-                              >
-                                 <FolderKanban className="size-3.5 text-muted-foreground shrink-0" />
-                                 <span className="truncate max-w-44">{project.name}</span>
-                              </span>
-                           ))}
-                           {memberProjects.length > 4 && (
-                              <span className="text-xs text-muted-foreground">
-                                 +{memberProjects.length - 4} more
-                              </span>
-                           )}
-                        </div>
-                     </div>
+               </div>
+               <div className="flex items-start justify-between gap-4">
+                  <span className="text-muted-foreground shrink-0 pt-0.5">Projects</span>
+                  <div className="flex flex-col items-end gap-1 min-w-0">
+                     {memberProjects.slice(0, 4).map((project) => (
+                        <span key={project.id} className="inline-flex items-center gap-1.5 text-xs min-w-0">
+                           <project.icon className="size-3.5 text-muted-foreground shrink-0" />
+                           <span className="truncate max-w-44">{project.name}</span>
+                        </span>
+                     ))}
+                     {memberProjects.length > 4 && (
+                        <span className="text-xs text-muted-foreground">
+                           +{memberProjects.length - 4} more
+                        </span>
+                     )}
                   </div>
+               </div>
+            </div>
 
-                  <div className="px-5 py-4">
-                     <Tabs defaultValue="labels">
-                        <TabsList className="h-8 bg-transparent gap-1 p-0">
-                           <TabsTrigger value="labels" className="text-xs px-2.5 rounded-full">
-                              Labels
-                           </TabsTrigger>
-                           <TabsTrigger value="priority" className="text-xs px-2.5 rounded-full">
-                              Priority
-                           </TabsTrigger>
-                           <TabsTrigger value="projects" className="text-xs px-2.5 rounded-full">
-                              Projects
-                           </TabsTrigger>
-                           <TabsTrigger value="teams" className="text-xs px-2.5 rounded-full">
-                              Teams
-                           </TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="labels">
-                           <BreakdownList rows={labelRows} />
-                        </TabsContent>
-                        <TabsContent value="priority">
-                           <BreakdownList rows={priorityRows} />
-                        </TabsContent>
-                        <TabsContent value="projects">
-                           <BreakdownList rows={projectRows} />
-                        </TabsContent>
-                        <TabsContent value="teams">
-                           <BreakdownList rows={teamRows} />
-                        </TabsContent>
-                     </Tabs>
-                  </div>
-               </aside>
-            )}
+            <div className="px-5 py-4">
+               <Tabs defaultValue="labels">
+                  <TabsList className="h-8 bg-transparent gap-1 p-0">
+                     <TabsTrigger value="labels" className="text-xs px-2.5 rounded-full">
+                        Labels
+                     </TabsTrigger>
+                     <TabsTrigger value="priority" className="text-xs px-2.5 rounded-full">
+                        Priority
+                     </TabsTrigger>
+                     <TabsTrigger value="projects" className="text-xs px-2.5 rounded-full">
+                        Projects
+                     </TabsTrigger>
+                     <TabsTrigger value="teams" className="text-xs px-2.5 rounded-full">
+                        Teams
+                     </TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="labels">
+                     <BreakdownList rows={labelRows} />
+                  </TabsContent>
+                  <TabsContent value="priority">
+                     <BreakdownList rows={priorityRows} />
+                  </TabsContent>
+                  <TabsContent value="projects">
+                     <BreakdownList rows={projectRows} />
+                  </TabsContent>
+                  <TabsContent value="teams">
+                     <BreakdownList rows={teamRows} />
+                  </TabsContent>
+               </Tabs>
+            </div>
+         </aside>
+         )}
          </div>
       </div>
    );

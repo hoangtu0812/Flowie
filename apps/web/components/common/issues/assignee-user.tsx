@@ -1,5 +1,4 @@
 'use client';
-
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
    DropdownMenu,
@@ -9,81 +8,99 @@ import {
    DropdownMenuSeparator,
    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useIssuesStore } from '@/store/issues-store';
-import { CheckIcon, CircleUserRound, UserIcon } from 'lucide-react';
-import { toast } from 'sonner';
-
-type Person = { id: string; name: string; avatarUrl?: string | null };
+import { statusUserColors, User, users } from '@/mock-data/users';
+import { CheckIcon, CircleUserRound, Send, UserIcon } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 interface AssigneeUserProps {
-   user: Person | null;
-   /** Enables a persisted assignment mutation when the current issue id is available. */
-   issueId?: string;
+   user: User | null;
 }
 
-function AssigneeAvatar({ user }: { user: Person | null }) {
-   if (!user) {
-      return (
-         <div className="size-6 flex items-center justify-center">
-            <CircleUserRound className="size-5 text-zinc-600" />
-         </div>
-      );
-   }
-   return (
-      <Avatar className="size-6 shrink-0">
-         <AvatarImage src={user.avatarUrl ?? undefined} alt={user.name} />
-         <AvatarFallback>{user.name[0]}</AvatarFallback>
-      </Avatar>
-   );
-}
+export function AssigneeUser({ user }: AssigneeUserProps) {
+   const [open, setOpen] = useState(false);
+   const [currentAssignee, setCurrentAssignee] = useState<User | null>(user);
 
-/** Renders a live workspace assignee and, on detail pages, persists reassignment through Issues API. */
-export function AssigneeUser({ user, issueId }: AssigneeUserProps) {
-   const { members, updateIssueAssignee } = useIssuesStore();
+   useEffect(() => {
+      setCurrentAssignee(user);
+   }, [user]);
 
-   if (!issueId) return <AssigneeAvatar user={user} />;
-
-   const assign = async (assignee: (typeof members)[number] | null) => {
-      try {
-         await updateIssueAssignee(issueId, assignee);
-      } catch {
-         toast.error('Could not update assignee');
+   const renderAvatar = () => {
+      if (currentAssignee) {
+         return (
+            <Avatar className="size-6 shrink-0">
+               <AvatarImage src={currentAssignee.avatarUrl} alt={currentAssignee.name} />
+               <AvatarFallback>{currentAssignee.name[0]}</AvatarFallback>
+            </Avatar>
+         );
+      } else {
+         return (
+            <div className="size-6 flex items-center justify-center">
+               <CircleUserRound className="size-5 text-zinc-600" />
+            </div>
+         );
       }
    };
 
    return (
-      <DropdownMenu>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
          <DropdownMenuTrigger asChild>
-            <button
-               className="relative w-fit focus:outline-none"
-               type="button"
-               aria-label="Assign issue"
-            >
-               <AssigneeAvatar user={user} />
+            <button className="relative w-fit focus:outline-none">
+               {renderAvatar()}
+               {currentAssignee && (
+                  <span
+                     className="border-background absolute -end-0.5 -bottom-0.5 size-2.5 rounded-full border-2"
+                     style={{ backgroundColor: statusUserColors[currentAssignee.status] }}
+                  >
+                     <span className="sr-only">{currentAssignee.status}</span>
+                  </span>
+               )}
             </button>
          </DropdownMenuTrigger>
          <DropdownMenuContent align="start" className="w-[206px]">
             <DropdownMenuLabel>Assign to...</DropdownMenuLabel>
-            <DropdownMenuItem onClick={() => void assign(null)}>
+            <DropdownMenuItem
+               onClick={(e) => {
+                  e.stopPropagation();
+                  setCurrentAssignee(null);
+                  setOpen(false);
+               }}
+            >
                <div className="flex items-center gap-2">
                   <UserIcon className="h-5 w-5" />
                   <span>No assignee</span>
                </div>
-               {!user && <CheckIcon className="ml-auto h-4 w-4" />}
+               {!currentAssignee && <CheckIcon className="ml-auto h-4 w-4" />}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            {members.map((member) => (
-               <DropdownMenuItem key={member.id} onClick={() => void assign(member)}>
-                  <div className="flex items-center gap-2">
-                     <Avatar className="h-5 w-5">
-                        <AvatarImage src={member.avatarUrl || undefined} alt={member.name} />
-                        <AvatarFallback>{member.name[0]}</AvatarFallback>
-                     </Avatar>
-                     <span>{member.name}</span>
-                  </div>
-                  {user?.id === member.id && <CheckIcon className="ml-auto h-4 w-4" />}
-               </DropdownMenuItem>
-            ))}
+            {users
+               .filter((user) => user.teamIds.includes('CORE'))
+               .map((user) => (
+                  <DropdownMenuItem
+                     key={user.id}
+                     onClick={(e) => {
+                        e.stopPropagation();
+                        setCurrentAssignee(user);
+                        setOpen(false);
+                     }}
+                  >
+                     <div className="flex items-center gap-2">
+                        <Avatar className="h-5 w-5">
+                           <AvatarImage src={user.avatarUrl} alt={user.name} />
+                           <AvatarFallback>{user.name[0]}</AvatarFallback>
+                        </Avatar>
+                        <span>{user.name}</span>
+                     </div>
+                     {currentAssignee?.id === user.id && <CheckIcon className="ml-auto h-4 w-4" />}
+                  </DropdownMenuItem>
+               ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>New user</DropdownMenuLabel>
+            <DropdownMenuItem>
+               <div className="flex items-center gap-2">
+                  <Send className="h-4 w-4" />
+                  <span>Invite and assign...</span>
+               </div>
+            </DropdownMenuItem>
          </DropdownMenuContent>
       </DropdownMenu>
    );

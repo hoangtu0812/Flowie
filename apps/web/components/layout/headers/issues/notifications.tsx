@@ -4,28 +4,22 @@ import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useEffect } from 'react';
-import { useNotificationPreferencesStore } from '@/store/notification-preferences-store';
-import { toast } from 'sonner';
+import { useState } from 'react';
+import { RiSlackLine } from '@remixicon/react';
 
 export default function Notifications() {
-   const {
-      preferences: notifications,
-      loadPreferences,
-      updatePreference,
-   } = useNotificationPreferencesStore();
+   const [notifications, setNotifications] = useState({
+      teamIssueAdded: false,
+      issueCompleted: false,
+      issueAddedToTriage: false,
+   });
 
    const handleCheckboxChange = (key: keyof typeof notifications) => {
-      void updatePreference(key, !notifications[key]).catch(() => {
-         toast.error('Could not save notification preferences.');
-      });
+      setNotifications((prev) => ({
+         ...prev,
+         [key]: !prev[key],
+      }));
    };
-
-   useEffect(() => {
-      void loadPreferences().catch(() => {
-         toast.error('Could not load notification preferences.');
-      });
-   }, [loadPreferences]);
 
    return (
       <Popover>
@@ -86,6 +80,16 @@ export default function Notifications() {
                      />
                   </div>
                </div>
+            </div>
+
+            <div className="border-t py-2 px-4 flex items-center justify-between">
+               <div className="flex items-center gap-2">
+                  <RiSlackLine className="size-4" />
+                  <span className="text-xs font-medium">Slack notifications</span>
+               </div>
+               <Button size="xs" variant="outline">
+                  Configure
+               </Button>
             </div>
          </PopoverContent>
       </Popover>

@@ -1,4 +1,4 @@
-import type { Metadata, Viewport } from 'next';
+import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { Toaster } from '@/components/ui/sonner';
 import './globals.css';
@@ -13,54 +13,47 @@ const geistMono = Geist_Mono({
    subsets: ['latin'],
 });
 
-const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+const siteUrl = 'https://circle.lndev.me';
 
 export const metadata: Metadata = {
    title: {
-      template: '%s | Flowie',
-      default: 'Flowie',
+      template: '%s | Circle by lndev-ui',
+      default: 'Circle by lndev-ui',
    },
    description:
-      'Flowie is a collaborative project management platform for teams, projects, and issues.',
+      'Project management interface inspired by Linear. Built with Next.js and shadcn/ui, this application allows tracking of issues, projects and teams with a modern, responsive UI.',
    openGraph: {
       type: 'website',
       locale: 'en_US',
       url: siteUrl,
-      siteName: 'Flowie',
+      siteName: 'Circle',
       images: [
          {
             url: `${siteUrl}/banner.png`,
             width: 2560,
             height: 1440,
-            alt: 'Flowie',
+            alt: 'lndev/ui',
          },
       ],
    },
    twitter: {
       card: 'summary_large_image',
+      site: '@ln_dev7',
+      creator: '@ln_dev7',
       images: [
          {
             url: `${siteUrl}/banner.png`,
             width: 2560,
             height: 1440,
-            alt: 'Flowie',
+            alt: 'Circle',
          },
       ],
    },
-   keywords: ['project management', 'issues', 'teams', 'workspaces'],
-   manifest: '/manifest.webmanifest',
-   appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Flowie' },
-};
-
-export const viewport: Viewport = {
-   themeColor: '#09090b',
-   width: 'device-width',
-   initialScale: 1,
+   authors: [{ name: 'Leonel NGOYA', url: 'https://lndev.me/' }],
+   keywords: ['ui', 'lndev', 'components', 'template'],
 };
 
 import { ThemeProvider } from '@/components/layout/theme-provider';
-import { IssueRelationDialog } from '@/components/common/issues/issue-relation-dialog';
-import { IssueActionDialog } from '@/components/common/issues/issue-action-dialog';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 
 export default function RootLayout({
@@ -70,6 +63,9 @@ export default function RootLayout({
 }>) {
    return (
       <html lang="en" suppressHydrationWarning>
+         <head>
+            <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+         </head>
          <body
             className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background`}
             suppressHydrationWarning
@@ -77,8 +73,6 @@ export default function RootLayout({
             <NuqsAdapter>
                <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
                   {children}
-                  <IssueRelationDialog />
-                  <IssueActionDialog />
                   <Toaster />
                </ThemeProvider>
             </NuqsAdapter>

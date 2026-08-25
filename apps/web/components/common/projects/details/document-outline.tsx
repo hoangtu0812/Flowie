@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import type { ContentBlock } from '@circle/contracts';
+import { ContentBlock } from '@/mock-data/issue-details';
 import { AlignLeft } from 'lucide-react';
 import { RefObject, useEffect, useMemo, useState } from 'react';
 
@@ -82,7 +82,9 @@ export function DocumentOutline({
                   className={cn(
                      'w-full text-left px-2 py-1 rounded-md text-sm truncate transition-colors hover:bg-accent/50',
                      item.level > 1 && 'pl-6',
-                     activeId === item.id ? 'text-foreground font-medium' : 'text-muted-foreground'
+                     activeId === item.id
+                        ? 'text-foreground font-medium'
+                        : 'text-muted-foreground'
                   )}
                >
                   {item.text}

@@ -4,17 +4,16 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
-import { health as healthList } from '@/lib/project-presentations';
-import type { Project } from '@/types/projects';
+import { health as healthList, Project } from '@/mock-data/projects';
+import { teams } from '@/mock-data/teams';
+import { users } from '@/mock-data/users';
 import { useProjectsFilterStore } from '@/store/projects-filter-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { X } from 'lucide-react';
 import { useMemo } from 'react';
-import { ProjectGroup } from './projects';
 
 interface ProjectsInsightsPanelProps {
    projects: Project[];
-   groups: ProjectGroup[];
 }
 
 interface CountRow {
@@ -64,7 +63,7 @@ function CountList({ rows }: { rows: CountRow[] }) {
 }
 
 /** Right panel of the Projects page: counters by health / team / lead. */
-export default function ProjectsInsightsPanel({ projects, groups }: ProjectsInsightsPanelProps) {
+export default function ProjectsInsightsPanel({ projects }: ProjectsInsightsPanelProps) {
    const { closePanel } = useRightPanelStore();
    const { filters, toggleFilter } = useProjectsFilterStore();
 
@@ -74,10 +73,7 @@ export default function ProjectsInsightsPanel({ projects, groups }: ProjectsInsi
             key: entry.id,
             label: entry.id === 'no-update' ? 'No update expected' : entry.name,
             leading: (
-               <span
-                  className="size-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: entry.color }}
-               />
+               <span className="size-2.5 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
             ),
             count: projects.filter((project) => project.health.id === entry.id).length,
             onClick: () => toggleFilter('health', entry.id),
@@ -88,27 +84,27 @@ export default function ProjectsInsightsPanel({ projects, groups }: ProjectsInsi
 
    const teamRows = useMemo<CountRow[]>(
       () =>
-         groups
-            .map((group) => ({
-               key: group.id,
-               label: group.name,
-               leading: <span className="text-sm shrink-0">{group.icon}</span>,
-               count: projects.filter((project) => project.teamId === group.id).length,
+         teams
+            .map((team) => ({
+               key: team.id,
+               label: team.name,
+               leading: <span className="text-sm shrink-0">{team.icon}</span>,
+               count: projects.filter((project) => project.teamId === team.id).length,
             }))
             .filter((row) => row.count > 0)
             .sort((a, b) => b.count - a.count),
-      [groups, projects]
+      [projects]
    );
 
    const leadRows = useMemo<CountRow[]>(
       () =>
-         Array.from(new Map(projects.map((project) => [project.lead.id, project.lead])).values())
+         users
             .map((user) => ({
                key: user.id,
                label: user.name,
                leading: (
                   <Avatar className="size-5 shrink-0">
-                     <AvatarImage src={user.avatarUrl || undefined} alt={user.name} />
+                     <AvatarImage src={user.avatarUrl} alt={user.name} />
                      <AvatarFallback>{user.name[0]}</AvatarFallback>
                   </Avatar>
                ),

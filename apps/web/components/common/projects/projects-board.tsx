@@ -2,7 +2,7 @@
 
 import { CapacityRing } from '@/components/common/cycles/capacity-ring';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Project } from '@/types/projects';
+import { Project } from '@/mock-data/projects';
 import { useProjectsDisplayStore } from '@/store/projects-display-store';
 import { format, parseISO } from 'date-fns';
 import { Calendar } from 'lucide-react';
@@ -65,7 +65,9 @@ function ProjectCard({ project }: { project: Project }) {
                   {project.percentComplete}%
                </span>
             )}
-            {displayProperties.priority && <project.priority.icon className="size-3.5 shrink-0" />}
+            {displayProperties.priority && (
+               <project.priority.icon className="size-3.5 shrink-0" />
+            )}
             {displayProperties.targetDate && project.targetDate && (
                <span className="inline-flex items-center gap-1">
                   <Calendar className="size-3" />

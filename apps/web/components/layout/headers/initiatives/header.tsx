@@ -11,11 +11,7 @@ export default function Header() {
             <SidebarTrigger />
             <span className="text-sm font-medium">Initiatives</span>
          </div>
-         <Button
-            size="xs"
-            variant="ghost"
-            onClick={() => window.dispatchEvent(new Event('flowie:create-initiative'))}
-         >
+         <Button size="xs" variant="ghost">
             <Plus className="size-4" />
          </Button>
       </div>

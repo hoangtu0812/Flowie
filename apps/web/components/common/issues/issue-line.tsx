@@ -1,8 +1,8 @@
 'use client';
 
-import { Issue } from '@/types/issues';
+import { Issue } from '@/mock-data/issues';
+import { getCycleById } from '@/mock-data/cycles';
 import { useDisplaySettingsStore } from '@/store/display-settings-store';
-import { useIssuesStore } from '@/store/issues-store';
 import { format } from 'date-fns';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -19,11 +19,7 @@ import { IssueContextMenu } from './issue-context-menu';
 export function IssueLine({ issue, layoutId = false }: { issue: Issue; layoutId?: boolean }) {
    const { orgId } = useParams<{ orgId: string }>();
    const { displayProperties } = useDisplaySettingsStore();
-   const cycles = useIssuesStore((state) => state.cycles);
-   const cycle =
-      displayProperties.cycle && issue.cycleId
-         ? cycles.find((candidate) => candidate.id === issue.cycleId)
-         : undefined;
+   const cycle = displayProperties.cycle && issue.cycleId ? getCycleById(issue.cycleId) : undefined;
 
    return (
       <ContextMenu>
@@ -46,7 +42,7 @@ export function IssueLine({ issue, layoutId = false }: { issue: Issue; layoutId?
                   )}
                </div>
                <Link
-                  href={`/${orgId}/issue/${issue.identifier}`}
+                  href={`/${orgId ?? 'lndev-ui'}/issue/${issue.identifier}`}
                   className="min-w-0 flex items-center justify-start mr-1 ml-0.5"
                >
                   <span className="text-xs sm:text-sm font-medium sm:font-semibold truncate">

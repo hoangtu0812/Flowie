@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useIssuesStore } from '@/store/issues-store';
-import { priorities, Priority } from '@/lib/priority-presentations';
+import { priorities, Priority } from '@/mock-data/priorities';
 import { CheckIcon } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
 
@@ -31,16 +31,15 @@ export function PrioritySelector({ priority, issueId }: PrioritySelectorProps) {
       setValue(priority.id);
    }, [priority.id]);
 
-   const handlePriorityChange = async (priorityId: string) => {
-      if (!issueId) return;
-      const newPriority = priorities.find((priority) => priority.id === priorityId);
-      if (!newPriority) return;
-      try {
-         await updateIssuePriority(issueId, newPriority);
-         setValue(priorityId);
-         setOpen(false);
-      } catch {
-         // The Issue store retains its server-backed value on a failed mutation.
+   const handlePriorityChange = (priorityId: string) => {
+      setValue(priorityId);
+      setOpen(false);
+
+      if (issueId) {
+         const newPriority = priorities.find((p) => p.id === priorityId);
+         if (newPriority) {
+            updateIssuePriority(issueId, newPriority);
+         }
       }
    };
 

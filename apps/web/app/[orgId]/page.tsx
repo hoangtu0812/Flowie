@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
 
-export default async function OrgIdPage({ params }: { params: Promise<{ orgId: string }> }) {
-   const { orgId } = await params;
-   redirect(`/${orgId}/my-issues`);
+export default function OrgIdPage() {
+   redirect('lndev-ui/team/CORE/all');
 }

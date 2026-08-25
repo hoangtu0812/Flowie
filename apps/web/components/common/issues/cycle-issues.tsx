@@ -1,7 +1,8 @@
 'use client';
 
 import { CycleDetailsPanel } from '@/components/common/cycles/cycle-details-panel';
-import { useLiveCycle } from '@/components/common/cycles/use-live-cycle';
+import { getCurrentCycle, getUpcomingCycle } from '@/mock-data/cycles';
+import { displayOrderedStatus } from '@/mock-data/status';
 import { useFilterStore } from '@/store/filter-store';
 import { useIssuesStore } from '@/store/issues-store';
 import { applyIssueFilters } from './issue-filter-columns';
@@ -29,16 +30,17 @@ export default function CycleIssues({ cycleView }: CycleIssuesProps) {
    const { isSearchOpen, searchQuery } = useSearchStore();
    const { viewType } = useViewStore();
    const { filters } = useFilterStore();
-   const { issues, statuses } = useIssuesStore();
+   const { issues } = useIssuesStore();
    const { openPanel } = useRightPanelStore();
-   const { cycle, loading } = useLiveCycle(cycleView);
+
+   const cycle = cycleView === 'active' ? getCurrentCycle() : getUpcomingCycle();
 
    const isSearching = isSearchOpen && searchQuery.trim() !== '';
    const isViewTypeGrid = viewType === 'grid';
 
    const cycleIssues = useMemo(
-      () => issues.filter((issue) => issue.cycleId === cycle?.id),
-      [issues, cycle?.id]
+      () => issues.filter((issue) => issue.cycleId === cycle.id),
+      [issues, cycle.id]
    );
 
    const displayedIssues = useMemo(
@@ -56,16 +58,6 @@ export default function CycleIssues({ cycleView }: CycleIssuesProps) {
       );
    }
 
-   if (loading) {
-      return <div className="px-6 py-4 text-sm text-muted-foreground">Loading cycle…</div>;
-   }
-
-   if (!cycle) {
-      return (
-         <div className="px-6 py-4 text-sm text-muted-foreground">No {cycleView} cycle yet.</div>
-      );
-   }
-
    return (
       <div className="w-full h-full flex flex-col overflow-hidden">
          <IssueFilterBar />
@@ -74,7 +66,7 @@ export default function CycleIssues({ cycleView }: CycleIssuesProps) {
                <GroupedIssuesView
                   issues={displayedIssues}
                   totalIssues={cycleIssues}
-                  statuses={statuses}
+                  statuses={displayOrderedStatus}
                   isViewTypeGrid={isViewTypeGrid}
                />
             </div>

@@ -11,9 +11,10 @@ import {
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useIssuesStore } from '@/store/issues-store';
-import { Status } from '@/lib/status-presentations';
+import { status as allStatus, Status } from '@/mock-data/status';
 import { CheckIcon } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
+import { renderStatusIcon } from '@/lib/status-utils';
 
 interface StatusSelectorProps {
    status: Status;
@@ -25,21 +26,21 @@ export function StatusSelector({ status, issueId }: StatusSelectorProps) {
    const [open, setOpen] = useState<boolean>(false);
    const [value, setValue] = useState<string>(status.id);
 
-   const { updateIssueStatus, filterByStatus, statuses } = useIssuesStore();
+   const { updateIssueStatus, filterByStatus } = useIssuesStore();
 
    useEffect(() => {
       setValue(status.id);
    }, [status.id]);
 
-   const handleStatusChange = async (statusId: string) => {
-      const newStatus = statuses.find((status) => status.id === statusId);
-      if (!newStatus) return;
-      try {
-         await updateIssueStatus(issueId, newStatus);
-         setValue(statusId);
-         setOpen(false);
-      } catch {
-         // The Issue store retains its server-backed value on a failed mutation.
+   const handleStatusChange = (statusId: string) => {
+      setValue(statusId);
+      setOpen(false);
+
+      if (issueId) {
+         const newStatus = allStatus.find((s) => s.id === statusId);
+         if (newStatus) {
+            updateIssueStatus(issueId, newStatus);
+         }
       }
    };
 
@@ -55,11 +56,7 @@ export function StatusSelector({ status, issueId }: StatusSelectorProps) {
                   role="combobox"
                   aria-expanded={open}
                >
-                  {(() => {
-                     const selected = statuses.find((item) => item.id === value) ?? status;
-                     const Icon = selected.icon;
-                     return <Icon />;
-                  })()}
+                  {renderStatusIcon(value)}
                </Button>
             </PopoverTrigger>
             <PopoverContent
@@ -71,7 +68,7 @@ export function StatusSelector({ status, issueId }: StatusSelectorProps) {
                   <CommandList>
                      <CommandEmpty>No status found.</CommandEmpty>
                      <CommandGroup>
-                        {statuses.map((item) => (
+                        {allStatus.map((item) => (
                            <CommandItem
                               key={item.id}
                               value={item.id}

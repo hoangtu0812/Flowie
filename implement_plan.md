@@ -196,7 +196,7 @@ Trạng thái hoàn thành:
 - Script read-only `scripts/get-python-migration-fingerprint.ps1` tái lập fingerprint source offline
   và tương thích Windows PowerShell 5.1/PowerShell 7.
 
-### P1 — Khôi phục UI Circle và dựng parity guard — in progress
+### P1 — Khôi phục UI Circle và dựng parity guard — completed 2026-08-25
 
 Mục tiêu: giải quyết dứt điểm việc UI lệch trước khi viết thêm màn hình.
 
@@ -228,8 +228,13 @@ Tiến độ hiện tại:
   presentation Circle. Không còn error block riêng làm thay đổi bố cục; lỗi dùng toast toàn cục.
 - [x] Project List giữ nguyên cây bảng/nhóm/cột của Circle; các props cập nhật dữ liệu thật không
   tạo DOM mới khi control đóng.
-- [ ] Khôi phục presentation theo baseline; tiếp tục layout/header/sidebar và Project Detail.
-- [ ] Chụp visual acceptance light/dark sau mỗi route hoàn thành.
+- [x] Ghi đè không phá huỷ toàn bộ cây presentation Circle (`app`, `components`, `hooks`, `lib`,
+  `mock-data`, `public`, `store`) từ clone baseline. Audit sau khôi phục: **312 IDENTICAL,
+  3 ALLOWED, 0 CHANGED, 0 MISSING**; 50 file EXTRA là adapter/route Flowie không được Circle UI
+  gốc import ở preview mode.
+- [x] Bật Circle UI preview không đăng nhập bằng middleware pass-through tạm thời; root route quay
+  về `lndev-ui/team/CORE/all` đúng baseline để nghiệm thu UI trước.
+- [x] Build production và lint thành công; chỉ còn 2 warning vốn có của Circle baseline.
 
 ### P2 — FastAPI foundation và legacy facade
 

@@ -1,38 +1,30 @@
 'use client';
 
-import { Project } from '@/types/projects';
+import { Issue } from '@/mock-data/issues';
+import { Project } from '@/mock-data/projects';
+import { useIssuesStore } from '@/store/issues-store';
 import { useProjectsDisplayStore } from '@/store/projects-display-store';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useMemo } from 'react';
 import { HealthPopover } from './health-popover';
 import { PrioritySelector } from './priority-selector';
 import { LeadSelector } from './lead-selector';
 import { StatusWithPercent } from './status-with-percent';
 import { DatePicker } from './date-picker';
-import type {
-   ProjectListMember,
-   ProjectListStatus,
-   ProjectListUpdate,
-} from '@/features/projects/projects-data';
 
 interface ProjectLineProps {
-   project: Project & { issueCount?: number };
-   workspaceId?: string;
-   workspaceMembers: ProjectListMember[];
-   projectStatuses: ProjectListStatus[];
-   onUpdateProject?: (projectId: string, update: ProjectListUpdate) => Promise<void>;
+   project: Project;
 }
 
-export default function ProjectLine({
-   project,
-   workspaceId,
-   workspaceMembers,
-   projectStatuses,
-   onUpdateProject,
-}: ProjectLineProps) {
+const countIssues = (issues: Issue[], projectId: string) =>
+   issues.filter((issue) => issue.project?.id === projectId).length;
+
+export default function ProjectLine({ project }: ProjectLineProps) {
    const { orgId } = useParams<{ orgId: string }>();
+   const { issues } = useIssuesStore();
    const { displayProperties } = useProjectsDisplayStore();
-   const issueCount = project.issueCount ?? 0;
+   const issueCount = useMemo(() => countIssues(issues, project.id), [issues, project.id]);
 
    return (
       <div className="w-full flex items-center py-3 px-6 border-b hover:bg-sidebar/50 border-muted-foreground/5 text-sm">
@@ -67,50 +59,22 @@ export default function ProjectLine({
 
          {displayProperties.health && (
             <div className="hidden sm:block w-[120px] shrink-0">
-               <HealthPopover project={project} workspaceId={workspaceId} />
+               <HealthPopover project={project} />
             </div>
          )}
          {displayProperties.priority && (
             <div className="hidden md:block w-[70px] shrink-0">
-               <PrioritySelector
-                  priority={project.priority}
-                  disabled={!onUpdateProject}
-                  onPriorityChange={
-                     onUpdateProject
-                        ? (priority) => onUpdateProject(project.id, { priority })
-                        : undefined
-                  }
-               />
+               <PrioritySelector priority={project.priority} />
             </div>
          )}
          {displayProperties.lead && (
             <div className="hidden xl:block w-[130px] shrink-0">
-               <LeadSelector
-                  lead={project.lead}
-                  members={workspaceMembers}
-                  disabled={!onUpdateProject}
-                  onLeadChange={
-                     onUpdateProject
-                        ? (leadId) => onUpdateProject(project.id, { leadId })
-                        : undefined
-                  }
-               />
+               <LeadSelector lead={project.lead} />
             </div>
          )}
          {displayProperties.targetDate && (
             <div className="hidden xl:block w-[110px] shrink-0">
-               <DatePicker
-                  date={project.targetDate ? new Date(project.targetDate) : undefined}
-                  disabled={!onUpdateProject}
-                  onDateChange={
-                     onUpdateProject
-                        ? (targetDate) =>
-                             onUpdateProject(project.id, {
-                                targetDate: targetDate ? targetDate.toISOString() : null,
-                             })
-                        : undefined
-                  }
-               />
+               <DatePicker date={project.targetDate ? new Date(project.targetDate) : undefined} />
             </div>
          )}
          {displayProperties.issues && (
@@ -122,14 +86,7 @@ export default function ProjectLine({
             <div className="w-[90px] shrink-0">
                <StatusWithPercent
                   status={project.status}
-                  statuses={projectStatuses}
                   percentComplete={project.percentComplete}
-                  disabled={!onUpdateProject}
-                  onStatusChange={
-                     onUpdateProject
-                        ? (status) => onUpdateProject(project.id, { status })
-                        : undefined
-                  }
                />
             </div>
          )}

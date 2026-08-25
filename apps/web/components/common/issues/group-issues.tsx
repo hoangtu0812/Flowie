@@ -1,7 +1,7 @@
 'use client';
 
-import { Issue } from '@/types/issues';
-import { Status } from '@/lib/status-presentations';
+import { Issue } from '@/mock-data/issues';
+import { Status } from '@/mock-data/status';
 import { useIssuesStore } from '@/store/issues-store';
 import { useViewStore } from '@/store/view-store';
 import { useCreateIssueStore } from '@/store/create-issue-store';
@@ -106,7 +106,7 @@ const IssueGridList: FC<{ issues: Issue[]; status?: Status }> = ({ issues, statu
       canDrop: () => status !== undefined,
       drop(item: Issue, monitor) {
          if (status && monitor.didDrop() && item.status.id !== status.id) {
-            void updateIssueStatus(item.id, status).catch(() => undefined);
+            updateIssueStatus(item.id, status);
          }
       },
       collect: (monitor) => ({

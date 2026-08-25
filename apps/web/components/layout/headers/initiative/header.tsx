@@ -1,8 +1,8 @@
 'use client';
 
-import { useLiveInitiatives } from '@/components/common/initiatives/use-live-initiatives';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
+import { getInitiativeById } from '@/mock-data/initiatives';
 import { ChevronRight, MoreHorizontal, Star } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -12,9 +12,14 @@ const TABS = ['overview', 'activity', 'projects'] as const;
 
 export default function Header() {
    const { orgId, initiativeId } = useParams<{ orgId: string; initiativeId: string }>();
-   const { initiatives } = useLiveInitiatives();
-   const initiative = initiatives.find((item) => item.id === initiativeId);
-   const [tab, setTab] = useQueryState('tab', parseAsStringLiteral(TABS).withDefault('overview'));
+   const initiative = getInitiativeById(initiativeId);
+   const [tab, setTab] = useQueryState(
+      'tab',
+      parseAsStringLiteral(TABS).withDefault('overview')
+   );
+
+   if (!initiative) return null;
+
    return (
       <div className="w-full flex flex-col">
          <div className="w-full flex justify-between items-center border-b py-1.5 px-6 h-10">
@@ -28,11 +33,9 @@ export default function Header() {
                </Link>
                <ChevronRight className="size-3.5 text-muted-foreground shrink-0" />
                <span className="inline-flex size-5 items-center justify-center rounded bg-muted/50 text-xs shrink-0">
-                  {initiative?.icon ?? '🎯'}
+                  {initiative.icon}
                </span>
-               <span className="text-sm font-medium truncate">
-                  {initiative?.name ?? 'Initiative'}
-               </span>
+               <span className="text-sm font-medium truncate">{initiative.name}</span>
                <Star className="size-3.5 text-muted-foreground shrink-0 ml-1" />
                <MoreHorizontal className="size-3.5 text-muted-foreground shrink-0" />
             </div>

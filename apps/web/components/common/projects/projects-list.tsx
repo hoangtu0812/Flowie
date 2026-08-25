@@ -2,27 +2,10 @@
 
 import { useProjectsDisplayStore } from '@/store/projects-display-store';
 import ProjectLine from './project-line';
-import type { ProjectGroup } from './projects';
-import type {
-   ProjectListMember,
-   ProjectListStatus,
-   ProjectListUpdate,
-} from '@/features/projects/projects-data';
+import { ProjectGroup } from './projects';
 
 /** Projects "List" view: grouped table (team sections by default). */
-export default function ProjectsList({
-   groups,
-   workspaceId,
-   workspaceMembers = [],
-   projectStatuses = [],
-   onUpdateProject,
-}: {
-   groups: ProjectGroup[];
-   workspaceId?: string;
-   workspaceMembers?: ProjectListMember[];
-   projectStatuses?: ProjectListStatus[];
-   onUpdateProject?: (projectId: string, update: ProjectListUpdate) => Promise<void>;
-}) {
+export default function ProjectsList({ groups }: { groups: ProjectGroup[] }) {
    const { grouping, displayProperties } = useProjectsDisplayStore();
 
    return (
@@ -57,14 +40,7 @@ export default function ProjectsList({
                   </div>
                )}
                {group.projects.map((project) => (
-                  <ProjectLine
-                     key={project.id}
-                     project={project}
-                     workspaceId={workspaceId}
-                     workspaceMembers={workspaceMembers}
-                     projectStatuses={projectStatuses}
-                     onUpdateProject={onUpdateProject}
-                  />
+                  <ProjectLine key={project.id} project={project} />
                ))}
                {group.projects.length === 0 && (
                   <div className="px-6 py-3 text-xs text-muted-foreground border-b border-border/40">

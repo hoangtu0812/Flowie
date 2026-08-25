@@ -1,7 +1,7 @@
 'use client';
 
-import { Issue } from '@/types/issues';
-import { StatusCategory } from '@/lib/status-presentations';
+import { Issue } from '@/mock-data/issues';
+import { getStatusesByCategory, StatusCategory, displayOrderedStatus } from '@/mock-data/status';
 import { useFilterStore } from '@/store/filter-store';
 import { useIssuesStore } from '@/store/issues-store';
 import { applyIssueFilters } from './issue-filter-columns';
@@ -9,8 +9,7 @@ import { IssueFilterBar } from './issue-filter-bar';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { useSearchStore } from '@/store/search-store';
 import { useViewStore } from '@/store/view-store';
-import { useEffect, useMemo } from 'react';
-import { useParams } from 'next/navigation';
+import { useMemo } from 'react';
 import { GroupedIssuesView } from './grouped-issues-view';
 import { InsightsPanel } from './insights-panel';
 import { SearchIssues } from './search-issues';
@@ -24,28 +23,25 @@ interface AllIssuesProps {
 }
 
 export default function AllIssues({ categories }: AllIssuesProps) {
-   const { teamId } = useParams<{ teamId?: string }>();
    const { isSearchOpen, searchQuery } = useSearchStore();
    const { viewType } = useViewStore();
    const { filters } = useFilterStore();
-   const { issues, statuses, loadIssues, isLoading, error } = useIssuesStore();
+   const { issues } = useIssuesStore();
    const { openPanel } = useRightPanelStore();
-
-   useEffect(() => {
-      void loadIssues(teamId);
-   }, [loadIssues, teamId]);
 
    const isSearching = isSearchOpen && searchQuery.trim() !== '';
    const isViewTypeGrid = viewType === 'grid';
 
-   const displayStatuses = useMemo(
-      () => (categories ? statuses.filter((item) => categories.includes(item.category)) : statuses),
-      [categories, statuses]
+   const statuses = useMemo(
+      () => (categories ? getStatusesByCategory(categories) : displayOrderedStatus),
+      [categories]
    );
 
    const scopedIssues = useMemo<Issue[]>(
       () =>
-         categories ? issues.filter((issue) => categories.includes(issue.status.category)) : issues,
+         categories
+            ? issues.filter((issue) => categories.includes(issue.status.category))
+            : issues,
       [issues, categories]
    );
 
@@ -64,14 +60,6 @@ export default function AllIssues({ categories }: AllIssuesProps) {
       );
    }
 
-   if (isLoading) {
-      return <div className="px-6 py-4 text-sm text-muted-foreground">Loading issues…</div>;
-   }
-
-   if (error) {
-      return <div className="px-6 py-4 text-sm text-destructive">{error}</div>;
-   }
-
    return (
       <div className="w-full h-full flex flex-col overflow-hidden">
          <IssueFilterBar />
@@ -80,7 +68,7 @@ export default function AllIssues({ categories }: AllIssuesProps) {
                <GroupedIssuesView
                   issues={displayedIssues}
                   totalIssues={scopedIssues}
-                  statuses={displayStatuses}
+                  statuses={statuses}
                   isViewTypeGrid={isViewTypeGrid}
                />
             </div>

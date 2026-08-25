@@ -2,27 +2,20 @@
 
 import { CyclePlayIcon } from '@/components/common/cycles/cycle-line';
 import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useIssuesStore } from '@/store/issues-store';
-import { Check, Plus } from 'lucide-react';
-import type { ComponentProps, ComponentType } from 'react';
-import { useState } from 'react';
-import { toast } from 'sonner';
+import { getCycleById } from '@/mock-data/cycles';
+import { IssueDetail } from '@/mock-data/issue-details';
+import { Issue } from '@/mock-data/issues';
+import { Ban, GitPullRequestArrow, Plus } from 'lucide-react';
 import { AssigneeUser } from '../assignee-user';
 import { LabelBadge } from '../label-badge';
 import { PrioritySelector } from '../priority-selector';
 import { StatusSelector } from '../status-selector';
-import { IssueRelations } from './issue-relations';
+import { IssueRefRow } from './content-blocks';
 
-type IssueProperties = {
-   id: string;
-   status: ComponentProps<typeof StatusSelector>['status'];
-   priority: ComponentProps<typeof PrioritySelector>['priority'];
-   assignee: { id: string; name: string; avatarUrl?: string | null } | null;
-   labels: ComponentProps<typeof LabelBadge>['label'];
-   cycleId: string;
-   project?: { name: string; icon: ComponentType<{ className?: string }> };
-};
+interface IssuePropertiesPanelProps {
+   issue: Issue;
+   detail: IssueDetail;
+}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
    return (
@@ -33,32 +26,12 @@ function Section({ title, children }: { title: string; children: React.ReactNode
    );
 }
 
-/** Original right-side issue properties panel using only fields returned by the Issue API. */
-export function IssuePropertiesPanel({ issue, orgId }: { issue: IssueProperties; orgId: string }) {
-   const cycles = useIssuesStore((state) => state.cycles);
-   const workspaceLabels = useIssuesStore((state) => state.labels);
-   const { addIssueLabel, removeIssueLabel } = useIssuesStore();
-   const [savingLabelId, setSavingLabelId] = useState<string>();
-   const cycle = issue.cycleId
-      ? cycles.find((candidate) => candidate.id === issue.cycleId)
-      : undefined;
-
-   const toggleLabel = async (labelId: string) => {
-      const label = workspaceLabels.find((candidate) => candidate.id === labelId);
-      if (!label) return;
-      setSavingLabelId(labelId);
-      try {
-         if (issue.labels.some((candidate) => candidate.id === label.id)) {
-            await removeIssueLabel(issue.id, label.id);
-         } else {
-            await addIssueLabel(issue.id, label);
-         }
-      } catch {
-         toast.error('Could not update labels');
-      } finally {
-         setSavingLabelId(undefined);
-      }
-   };
+/**
+ * Right sidebar of the issue page: editable properties (status, priority,
+ * assignee), cycle, labels, project + milestone, relations and linked PRs.
+ */
+export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProps) {
+   const cycle = issue.cycleId ? getCycleById(issue.cycleId) : undefined;
 
    return (
       <div className="flex flex-col gap-7">
@@ -73,7 +46,7 @@ export function IssuePropertiesPanel({ issue, orgId }: { issue: IssueProperties;
                   <span className="text-sm">{issue.priority.name}</span>
                </div>
                <div className="flex items-center gap-2 mt-0.5">
-                  <AssigneeUser user={issue.assignee} issueId={issue.id} />
+                  <AssigneeUser user={issue.assignee} />
                   <span className="text-sm">{issue.assignee ? issue.assignee.name : 'Assign'}</span>
                </div>
                {cycle && (
@@ -86,52 +59,11 @@ export function IssuePropertiesPanel({ issue, orgId }: { issue: IssueProperties;
          </Section>
 
          <Section title="Labels">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center flex-wrap gap-1.5">
                <LabelBadge label={issue.labels} />
-               <Popover>
-                  <PopoverTrigger asChild>
-                     <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-6 rounded-full border"
-                        aria-label="Edit issue labels"
-                     >
-                        <Plus className="size-3.5" />
-                     </Button>
-                  </PopoverTrigger>
-                  <PopoverContent align="start" className="w-56 p-1.5">
-                     <p className="px-2 py-1 text-xs font-medium text-muted-foreground">Labels</p>
-                     {workspaceLabels.length === 0 ? (
-                        <p className="px-2 py-2 text-sm text-muted-foreground">
-                           No labels available.
-                        </p>
-                     ) : (
-                        <div className="max-h-56 overflow-y-auto">
-                           {workspaceLabels.map((label) => {
-                              const selected = issue.labels.some(
-                                 (candidate) => candidate.id === label.id
-                              );
-                              return (
-                                 <button
-                                    key={label.id}
-                                    type="button"
-                                    disabled={savingLabelId === label.id}
-                                    onClick={() => void toggleLabel(label.id)}
-                                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent disabled:opacity-50"
-                                 >
-                                    <span
-                                       className="size-2.5 rounded-full"
-                                       style={{ backgroundColor: label.color }}
-                                    />
-                                    <span className="min-w-0 flex-1 truncate">{label.name}</span>
-                                    {selected && <Check className="size-3.5" />}
-                                 </button>
-                              );
-                           })}
-                        </div>
-                     )}
-                  </PopoverContent>
-               </Popover>
+               <Button variant="ghost" size="icon" className="size-6 rounded-full border">
+                  <Plus className="size-3.5" />
+               </Button>
             </div>
          </Section>
 
@@ -141,10 +73,59 @@ export function IssuePropertiesPanel({ issue, orgId }: { issue: IssueProperties;
                   <issue.project.icon className="size-4 text-muted-foreground shrink-0" />
                   <span className="truncate">{issue.project.name}</span>
                </div>
+               {detail.milestone && (
+                  <div className="flex items-center gap-2 text-sm mt-1.5 pl-6 text-muted-foreground">
+                     <span className="size-2 rotate-45 border border-amber-400 shrink-0" />
+                     <span className="truncate">{detail.milestone}</span>
+                  </div>
+               )}
             </Section>
          )}
 
-         <IssueRelations issueId={issue.id} orgId={orgId} compact />
+         {detail.blockedByIds && detail.blockedByIds.length > 0 && (
+            <Section title="Blocked by">
+               <div className="flex flex-col">
+                  {detail.blockedByIds.map((identifier) => (
+                     <div key={identifier} className="flex items-center gap-1.5 min-w-0">
+                        <Ban className="size-3.5 text-red-500 shrink-0" />
+                        <IssueRefRow identifier={identifier} />
+                     </div>
+                  ))}
+               </div>
+            </Section>
+         )}
+
+         {detail.relatedIds && detail.relatedIds.length > 0 && (
+            <Section title="Related">
+               <div className="flex flex-col">
+                  {detail.relatedIds.map((identifier) => (
+                     <IssueRefRow key={identifier} identifier={identifier} />
+                  ))}
+               </div>
+            </Section>
+         )}
+
+         {detail.prLinks && detail.prLinks.length > 0 && (
+            <Section title="Diffs">
+               <div className="flex flex-col gap-1">
+                  {detail.prLinks.map((pr) => (
+                     <div key={pr.id} className="flex items-center gap-2 text-sm min-w-0">
+                        <GitPullRequestArrow
+                           className={
+                              'size-3.5 shrink-0 ' +
+                              (pr.status === 'merged' ? 'text-purple-400' : 'text-green-500')
+                           }
+                        />
+                        <span className="text-muted-foreground shrink-0">{pr.id}</span>
+                        <span className="truncate">{pr.title}</span>
+                        <span className="ml-auto shrink-0 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-accent text-muted-foreground">
+                           {pr.status}
+                        </span>
+                     </div>
+                  ))}
+               </div>
+            </Section>
+         )}
       </div>
    );
 }

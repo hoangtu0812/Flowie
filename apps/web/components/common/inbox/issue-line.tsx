@@ -1,13 +1,14 @@
 'use client';
 
+import { InboxItem } from '@/mock-data/inbox';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { motion } from 'motion/react';
+import { renderStatusIcon } from '@/lib/status-utils';
 import { getNotificationIcon } from '@/lib/notification-utils';
-import type { InboxNotification } from '@/store/notifications-store';
 
 interface IssueLineProps {
-   notification: InboxNotification;
+   notification: InboxItem;
    layoutId?: boolean;
    isSelected?: boolean;
    onClick?: () => void;
@@ -37,10 +38,7 @@ export default function IssueLine({
          >
             <div className="relative flex-shrink-0">
                <Avatar className="size-8">
-                  <AvatarImage
-                     src={notification.user.avatarUrl ?? undefined}
-                     alt={notification.user.name}
-                  />
+                  <AvatarImage src={notification.user.avatarUrl} alt={notification.user.name} />
                   <AvatarFallback className="text-xs">
                      {notification.user.name
                         .split(' ')
@@ -80,9 +78,7 @@ export default function IssueLine({
                   </h4>
 
                   {showStatusIcon && (
-                     <div className="shrink-0">
-                        {getNotificationIcon(notification.type, 'size-3.5')}
-                     </div>
+                     <div className="shrink-0">{renderStatusIcon(notification.status.id)}</div>
                   )}
                </div>
 

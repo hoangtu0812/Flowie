@@ -7,6 +7,8 @@ import {
    SidebarMenuButton,
    SidebarMenuItem,
 } from '@/components/ui/sidebar';
+import { forYouReviews } from '@/mock-data/reviews';
+import { inboxItems } from '@/mock-data/side-bar-nav';
 import { useNotificationsStore } from '@/store/notifications-store';
 import {
    isSidebarItemVisible,
@@ -15,35 +17,31 @@ import {
    useSidebarPrefsStore,
 } from '@/store/sidebar-prefs-store';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { FolderKanban, Inbox } from 'lucide-react';
-
-const inboxItems = [
-   { name: 'Inbox', url: '/inbox', icon: Inbox, available: true },
-   { name: 'My issues', url: '/my-issues', icon: FolderKanban, available: true },
-] as const;
 
 const ITEM_KEYS: Record<string, SidebarItemKey> = {
    'Inbox': 'inbox',
+   'Reviews': 'reviews',
    'My issues': 'my-issues',
+   'Agent': 'agent',
 };
 
 export function NavInbox() {
-   const { orgId } = useParams<{ orgId: string }>();
    const { visibility, badgeStyle, order } = useSidebarPrefsStore();
-   const { getUnreadCount, loadNotifications } = useNotificationsStore();
+   const { getUnreadCount } = useNotificationsStore();
    const [mounted, setMounted] = useState(false);
-   useEffect(() => {
-      setMounted(true);
-      void loadNotifications();
-   }, [loadNotifications]);
+   useEffect(() => setMounted(true), []);
 
    const unread = mounted ? getUnreadCount() : 0;
 
    const orderedItems = mounted
-      ? resolveOrder(order.personal, inboxItems.map((item) => ITEM_KEYS[item.name]).filter(Boolean))
-           .map((key) => inboxItems.find((item) => ITEM_KEYS[item.name] === key))
+      ? resolveOrder(
+           order.personal,
+           inboxItems.map((item) => ITEM_KEYS[item.name]).filter(Boolean)
+        )
+           .map((key) =>
+              inboxItems.find((item) => ITEM_KEYS[item.name] === key)
+           )
            .filter((item): item is (typeof inboxItems)[number] => Boolean(item))
       : inboxItems;
 
@@ -51,7 +49,7 @@ export function NavInbox() {
       if (!mounted) return true;
       const key = ITEM_KEYS[item.name];
       if (!key) return true;
-      const badge = key === 'inbox' ? unread : 0;
+      const badge = key === 'inbox' ? unread : key === 'reviews' ? forYouReviews.length : 0;
       return isSidebarItemVisible(visibility[key], badge);
    });
 
@@ -61,7 +59,7 @@ export function NavInbox() {
             {items.map((item) => (
                <SidebarMenuItem key={item.name}>
                   <SidebarMenuButton asChild>
-                     <Link href={`/${orgId}${item.url}`}>
+                     <Link href={item.url}>
                         <item.icon />
                         <span>{item.name}</span>
                      </Link>

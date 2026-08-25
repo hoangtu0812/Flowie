@@ -2,7 +2,9 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { getInitiativeProjects, Initiative, initiativeHealth } from './initiative-ui-adapter';
+import { getInitiativeProjects, Initiative } from '@/mock-data/initiatives';
+import { health as allHealth } from '@/mock-data/projects';
+import { teams } from '@/mock-data/teams';
 import { UserRound } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
@@ -32,7 +34,7 @@ export function InitiativesSidePanel({ initiatives }: { initiatives: Initiative[
                byOwner.set(key, {
                   key,
                   label: initiative.owner?.name ?? 'No owner',
-                  avatarUrl: initiative.owner?.avatarUrl ?? undefined,
+                  avatarUrl: initiative.owner?.avatarUrl,
                   count: 1,
                });
          }
@@ -41,26 +43,20 @@ export function InitiativesSidePanel({ initiatives }: { initiatives: Initiative[
       if (tab === 'team') {
          const byTeam = new Map<string, BreakdownRow>();
          for (const initiative of initiatives) {
-            const projectTeams = new Map(
-               getInitiativeProjects(initiative)
-                  .filter((project) => project.team)
-                  .map((project) => [project.team!.id, project.team!])
+            const teamIds = new Set(
+               getInitiativeProjects(initiative).map((project) => project.teamId)
             );
-            for (const team of projectTeams.values()) {
-               const existing = byTeam.get(team.id);
+            for (const teamId of teamIds) {
+               const team = teams.find((entry) => entry.id === teamId);
+               if (!team) continue;
+               const existing = byTeam.get(teamId);
                if (existing) existing.count += 1;
-               else
-                  byTeam.set(team.id, {
-                     key: team.id,
-                     label: team.name,
-                     icon: team.icon ?? '👥',
-                     count: 1,
-                  });
+               else byTeam.set(teamId, { key: teamId, label: team.name, icon: team.icon, count: 1 });
             }
          }
          return [...byTeam.values()].sort((a, b) => b.count - a.count);
       }
-      return initiativeHealth
+      return allHealth
          .map((entry) => ({
             key: entry.id,
             label: entry.name,

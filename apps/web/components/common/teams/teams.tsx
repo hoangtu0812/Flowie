@@ -1,26 +1,16 @@
 'use client';
 
+import { teams as allTeams } from '@/mock-data/teams';
 import { useTeamsFilterStore } from '@/store/team-filter-store';
 import { useTeamsDisplayStore } from '@/store/teams-display-store';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Filter } from '@/components/layout/headers/teams/filter';
 import TeamLine from './team-line';
 import { TeamsDisplayOptions } from './teams-display-options';
-import { loadCurrentWorkspaceTeams, WorkspaceTeam } from './team-types';
 
 export default function Teams() {
    const { filters } = useTeamsFilterStore();
    const { ordering, displayProperties } = useTeamsDisplayStore();
-   const [allTeams, setAllTeams] = useState<WorkspaceTeam[]>([]);
-   const [loadError, setLoadError] = useState<string>();
-
-   useEffect(() => {
-      void loadCurrentWorkspaceTeams()
-         .then(({ teams }) => setAllTeams(teams))
-         .catch((error: unknown) =>
-            setLoadError(error instanceof Error ? error.message : 'Could not load teams.')
-         );
-   }, []);
 
    const displayed = useMemo(() => {
       let list = allTeams.slice();
@@ -33,7 +23,7 @@ export default function Teams() {
       }
       if (filters.identifier.length > 0) {
          const selectedIdentifiers = new Set(filters.identifier);
-         list = list.filter((team) => selectedIdentifiers.has(team.identifier));
+         list = list.filter((team) => selectedIdentifiers.has(team.id));
       }
 
       const compare = (a: (typeof list)[number], b: (typeof list)[number]) => {
@@ -41,14 +31,14 @@ export default function Teams() {
             case 'members':
                return b.members.length - a.members.length;
             case 'projects':
-               return b.projectCount - a.projectCount;
+               return b.projects.length - a.projects.length;
             case 'name':
             default:
                return a.name.localeCompare(b.name);
          }
       };
       return list.sort(compare);
-   }, [allTeams, filters, ordering]);
+   }, [filters, ordering]);
 
    return (
       <div className="w-full">
@@ -58,7 +48,7 @@ export default function Teams() {
                {displayed.length} {displayed.length === 1 ? 'team' : 'teams'}
             </span>
             <div className="flex items-center gap-1">
-               <Filter identifiers={allTeams.map((team) => team.identifier)} />
+               <Filter />
                <TeamsDisplayOptions />
             </div>
          </div>
@@ -91,7 +81,6 @@ export default function Teams() {
             {displayed.map((team) => (
                <TeamLine key={team.id} team={team} />
             ))}
-            {loadError && <p className="px-6 py-4 text-sm text-destructive">{loadError}</p>}
          </div>
       </div>
    );

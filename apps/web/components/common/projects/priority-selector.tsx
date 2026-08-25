@@ -10,33 +10,26 @@ import {
    CommandList,
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { priorities, Priority } from '@/lib/priority-presentations';
+import { priorities, Priority } from '@/mock-data/priorities';
 import { CheckIcon } from 'lucide-react';
 import { useId, useState } from 'react';
 
 interface PrioritySelectorProps {
    priority: Priority;
-   onPriorityChange?: (priorityId: string) => void | Promise<void>;
-   disabled?: boolean;
+   onPriorityChange?: (priorityId: string) => void;
 }
 
-export function PrioritySelector({
-   priority,
-   onPriorityChange,
-   disabled = false,
-}: PrioritySelectorProps) {
+export function PrioritySelector({ priority, onPriorityChange }: PrioritySelectorProps) {
    const id = useId();
    const [open, setOpen] = useState<boolean>(false);
    const [value, setValue] = useState<string>(priority.id);
 
-   const handlePriorityChange = async (priorityId: string) => {
-      if (!onPriorityChange) return;
-      try {
-         await onPriorityChange(priorityId);
-         setValue(priorityId);
-         setOpen(false);
-      } catch {
-         // The parent keeps the persisted value and renders the API error.
+   const handlePriorityChange = (priorityId: string) => {
+      setValue(priorityId);
+      setOpen(false);
+
+      if (onPriorityChange) {
+         onPriorityChange(priorityId);
       }
    };
 
@@ -51,7 +44,6 @@ export function PrioritySelector({
                   variant="ghost"
                   role="combobox"
                   aria-expanded={open}
-                  disabled={disabled}
                >
                   {(() => {
                      const selectedItem = priorities.find((item) => item.id === value);

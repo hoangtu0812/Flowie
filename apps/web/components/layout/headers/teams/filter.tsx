@@ -9,17 +9,22 @@ import {
    CommandSeparator,
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ArrowUpDown, CheckIcon, ChevronRight, ListFilter, Shield } from 'lucide-react';
+import { Team, teams } from '@/mock-data/teams';
 import { useTeamsFilterStore } from '@/store/team-filter-store';
 
 type FilterType = 'membership' | 'sort' | 'identifiers';
 
 const Membership: Array<'Joined' | 'Not-Joined'> = ['Joined', 'Not-Joined'];
 
-export function Filter({ identifiers = [] }: { identifiers?: string[] }) {
+export function Filter() {
    const [open, setOpen] = useState(false);
    const [active, setActive] = useState<FilterType | null>(null);
+
+   const Identifiers: Team['id'][] = useMemo(() => {
+      return teams.map((team) => team.id);
+   }, [teams]);
 
    const { filters, sort, toggleFilter, clearFilters, getActiveFiltersCount, setSort } =
       useTeamsFilterStore();
@@ -146,7 +151,7 @@ export function Filter({ identifiers = [] }: { identifiers?: string[] }) {
                   </div>
                   <CommandList>
                      <CommandGroup>
-                        {identifiers.map((id) => (
+                        {Identifiers.map((id) => (
                            <CommandItem
                               key={id}
                               value={id}

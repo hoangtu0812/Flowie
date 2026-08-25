@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useIssuesStore } from '@/store/issues-store';
-import { Status } from '@/lib/status-presentations';
+import { status as allStatus, Status } from '@/mock-data/status';
 import { CheckIcon } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
 
@@ -25,7 +25,7 @@ export function StatusSelector({ status, onChange }: StatusSelectorProps) {
    const [open, setOpen] = useState<boolean>(false);
    const [value, setValue] = useState<string>(status.id);
 
-   const { filterByStatus, statuses } = useIssuesStore();
+   const { filterByStatus } = useIssuesStore();
 
    useEffect(() => {
       setValue(status.id);
@@ -35,7 +35,7 @@ export function StatusSelector({ status, onChange }: StatusSelectorProps) {
       setValue(statusId);
       setOpen(false);
 
-      const newStatus = statuses.find((s) => s.id === statusId);
+      const newStatus = allStatus.find((s) => s.id === statusId);
       if (newStatus) {
          onChange(newStatus);
       }
@@ -54,16 +54,14 @@ export function StatusSelector({ status, onChange }: StatusSelectorProps) {
                   aria-expanded={open}
                >
                   {(() => {
-                     const selectedItem = statuses.find((item) => item.id === value);
+                     const selectedItem = allStatus.find((item) => item.id === value);
                      if (selectedItem) {
                         const Icon = selectedItem.icon;
                         return <Icon />;
                      }
                      return null;
                   })()}
-                  <span>
-                     {value ? statuses.find((s) => s.id === value)?.name : 'Select status'}
-                  </span>
+                  <span>{value ? allStatus.find((s) => s.id === value)?.name : 'To do'}</span>
                </Button>
             </PopoverTrigger>
             <PopoverContent
@@ -75,7 +73,7 @@ export function StatusSelector({ status, onChange }: StatusSelectorProps) {
                   <CommandList>
                      <CommandEmpty>No status found.</CommandEmpty>
                      <CommandGroup>
-                        {statuses.map((item) => (
+                        {allStatus.map((item) => (
                            <CommandItem
                               key={item.id}
                               value={item.id}

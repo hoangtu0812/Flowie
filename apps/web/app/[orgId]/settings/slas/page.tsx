@@ -1,11 +1,12 @@
-import SlasSettings from '@/components/common/settings/slas-settings';
+import SettingsPlaceholder from '@/components/common/settings/settings-placeholder';
+import { PLACEHOLDER_SECTIONS } from '@/components/common/settings/placeholder-sections';
 import MainLayout from '@/components/layout/main-layout';
 import Header from '@/components/layout/headers/settings/header';
 
 export default function SlasSettingsPage() {
    return (
       <MainLayout header={<Header />} headersNumber={1}>
-         <SlasSettings />
+         <SettingsPlaceholder config={PLACEHOLDER_SECTIONS['slas']} />
       </MainLayout>
    );
 }

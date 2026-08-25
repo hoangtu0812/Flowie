@@ -3,7 +3,12 @@
 import { parseAsArrayOf, parseAsString, parseAsStringLiteral, useQueryStates } from 'nuqs';
 
 export type ProjectsSort =
-   'title-asc' | 'title-desc' | 'date-asc' | 'date-desc' | 'status-asc' | 'status-desc';
+   | 'title-asc'
+   | 'title-desc'
+   | 'date-asc'
+   | 'date-desc'
+   | 'status-asc'
+   | 'status-desc';
 
 const SORTS: ProjectsSort[] = [
    'title-asc',

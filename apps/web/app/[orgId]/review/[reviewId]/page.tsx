@@ -1,13 +1,15 @@
-import { FeatureUnavailable } from '@/components/common/feature-unavailable';
+import Reviews from '@/components/common/reviews/reviews';
 import MainLayout from '@/components/layout/main-layout';
 
-export default function ReviewOverviewPage() {
+export default async function ReviewOverviewPage({
+   params,
+}: {
+   params: Promise<{ reviewId: string }>;
+}) {
+   const { reviewId } = await params;
    return (
       <MainLayout>
-         <FeatureUnavailable
-            title="Code reviews unavailable"
-            description="This deployment does not connect repositories or provide code-review workflows."
-         />
+         <Reviews selectedReviewId={reviewId} section="overview" />
       </MainLayout>
    );
 }

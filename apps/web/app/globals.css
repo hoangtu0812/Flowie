@@ -150,33 +150,6 @@ input[type='search'] {
    font-size: 16px !important;
 }
 
-html[data-pointer-cursors='true'] button:not(:disabled),
-html[data-pointer-cursors='true'] a,
-html[data-pointer-cursors='true'] [role='button']:not([aria-disabled='true']) {
-   cursor: pointer;
-}
-
-html[data-underline-links='true'] a {
-   text-decoration-line: underline;
-   text-underline-offset: 2px;
-}
-
-@keyframes flowie-logo-pulse {
-   0%,
-   100% {
-      transform: scale(1) rotate(0deg);
-      opacity: 1;
-   }
-   50% {
-      transform: scale(0.88) rotate(12deg);
-      opacity: 0.72;
-   }
-}
-
-.flowie-logo-loading {
-   animation: flowie-logo-pulse 1.05s ease-in-out infinite;
-}
-
 /* ------------------------------------------------------------------ */
 /* Theme variants (Preferences → Interface and theme)                  */
 /* Applied via data-app-theme on <html> by components/layout/theme-applier.tsx */

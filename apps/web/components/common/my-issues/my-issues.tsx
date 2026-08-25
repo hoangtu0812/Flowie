@@ -6,12 +6,13 @@ import { GroupedIssuesView } from '@/components/common/issues/grouped-issues-vie
 import { InsightsPanel } from '@/components/common/issues/insights-panel';
 import { SearchIssues } from '@/components/common/issues/search-issues';
 import { BreakdownPanel } from './breakdown-panel';
+import { displayOrderedStatus } from '@/mock-data/status';
 import { useFilterStore } from '@/store/filter-store';
 import { useIssuesStore } from '@/store/issues-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { useSearchStore } from '@/store/search-store';
 import { useViewStore } from '@/store/view-store';
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { scopeMyIssues, useMyIssuesTab } from './use-my-issues';
 
 /**
@@ -24,20 +25,13 @@ export default function MyIssues() {
    const { isSearchOpen, searchQuery } = useSearchStore();
    const { viewType } = useViewStore();
    const { filters } = useFilterStore();
-   const { issues, statuses, currentUserId, loadIssues } = useIssuesStore();
+   const { issues } = useIssuesStore();
    const { openPanel } = useRightPanelStore();
 
    const isSearching = isSearchOpen && searchQuery.trim() !== '';
    const isViewTypeGrid = viewType === 'grid';
 
-   useEffect(() => {
-      void loadIssues();
-   }, [loadIssues]);
-
-   const scopedIssues = useMemo(
-      () => scopeMyIssues(issues, tab, currentUserId),
-      [issues, tab, currentUserId]
-   );
+   const scopedIssues = useMemo(() => scopeMyIssues(issues, tab), [issues, tab]);
 
    const displayedIssues = useMemo(
       () => applyIssueFilters(scopedIssues, filters),
@@ -62,7 +56,7 @@ export default function MyIssues() {
                <GroupedIssuesView
                   issues={displayedIssues}
                   totalIssues={scopedIssues}
-                  statuses={statuses}
+                  statuses={displayOrderedStatus}
                   isViewTypeGrid={isViewTypeGrid}
                />
             </div>

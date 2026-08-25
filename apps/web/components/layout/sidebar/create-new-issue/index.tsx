@@ -7,145 +7,75 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { RiEditLine } from '@remixicon/react';
 import { useState, useEffect, useCallback } from 'react';
-import { priorities } from '@/lib/priority-presentations';
-import { Status } from '@/lib/status-presentations';
-import { User } from '@/types/users';
-import { Project } from '@/types/projects';
-import { LabelInterface } from '@/types/labels';
+import { Issue } from '@/mock-data/issues';
+import { priorities } from '@/mock-data/priorities';
+import { status } from '@/mock-data/status';
 import { useIssuesStore } from '@/store/issues-store';
-import { loadJoinedWorkspaceTeams } from '@/components/common/teams/team-types';
 import { useCreateIssueStore } from '@/store/create-issue-store';
 import { toast } from 'sonner';
+import { v4 as uuidv4 } from 'uuid';
 import { StatusSelector } from './status-selector';
 import { PrioritySelector } from './priority-selector';
 import { AssigneeSelector } from './assignee-selector';
 import { ProjectSelector } from './project-selector';
 import { LabelSelector } from './label-selector';
+import { ranks } from '@/mock-data/issues';
 import { DialogTitle } from '@radix-ui/react-dialog';
-import {
-   Select,
-   SelectContent,
-   SelectItem,
-   SelectTrigger,
-   SelectValue,
-} from '@/components/ui/select';
-import { useParams } from 'next/navigation';
-
-interface IssueDraft {
-   title: string;
-   description: string;
-   status: Status | null;
-   priority: (typeof priorities)[number];
-   assignee: User | null;
-   project: Project | undefined;
-   labels: LabelInterface[];
-}
 
 export function CreateNewIssue() {
-   const { teamId: routeTeamId } = useParams<{ teamId?: string }>();
    const [createMore, setCreateMore] = useState<boolean>(false);
    const { isOpen, defaultStatus, openModal, closeModal } = useCreateIssueStore();
-   const {
-      createIssue: createIssueRecord,
-      statuses,
-      templates,
-      members,
-      projects,
-      labels,
-      teams,
-      teamId,
-      loadIssues,
-   } = useIssuesStore();
+   const { addIssue, getAllIssues } = useIssuesStore();
 
-   useEffect(() => {
-      if (!isOpen) return;
-      void loadJoinedWorkspaceTeams()
-         .then(async ({ teams: availableTeams }) => {
-            const selected =
-               availableTeams.find(
-                  (team) => team.id === teamId || team.identifier === routeTeamId
-               ) ?? availableTeams[0];
-            if (!selected) throw new Error('No team is available in this workspace.');
-            if (selected.id !== teamId || statuses.length === 0) {
-               await loadIssues(selected.identifier);
-            }
-         })
-         .catch((error: unknown) =>
-            toast.error(error instanceof Error ? error.message : 'Could not load issue options.')
-         );
-   }, [isOpen, loadIssues, routeTeamId, statuses.length, teamId]);
+   const generateUniqueIdentifier = useCallback(() => {
+      const identifiers = getAllIssues().map((issue) => issue.identifier);
+      let identifier = Math.floor(Math.random() * 999)
+         .toString()
+         .padStart(3, '0');
+      while (identifiers.includes(`LNUI-${identifier}`)) {
+         identifier = Math.floor(Math.random() * 999)
+            .toString()
+            .padStart(3, '0');
+      }
+      return identifier;
+   }, [getAllIssues]);
 
    const createDefaultData = useCallback(() => {
+      const identifier = generateUniqueIdentifier();
       return {
+         id: uuidv4(),
+         identifier: `LNUI-${identifier}`,
          title: '',
          description: '',
-         status:
-            defaultStatus ||
-            statuses.find((item) => item.category === 'unstarted') ||
-            statuses[0] ||
-            null,
+         status: defaultStatus || status.find((s) => s.id === 'to-do')!,
          assignee: null,
          priority: priorities.find((p) => p.id === 'no-priority')!,
          labels: [],
+         createdAt: new Date().toISOString(),
+         cycleId: '',
          project: undefined,
+         subissues: [],
+         rank: ranks[ranks.length - 1],
       };
-   }, [defaultStatus, statuses]);
+   }, [defaultStatus, generateUniqueIdentifier]);
 
-   const [addIssueForm, setAddIssueForm] = useState<IssueDraft>(createDefaultData());
-
-   const applyTemplate = (templateId: string) => {
-      const template = templates.find((candidate) => candidate.id === templateId);
-      if (!template) return;
-      setAddIssueForm({
-         title: template.title,
-         description: template.issueDescription ?? '',
-         status:
-            statuses.find((candidate) => candidate.id === template.statusId) ??
-            createDefaultData().status,
-         priority:
-            priorities.find(
-               (candidate) =>
-                  candidate.id ===
-                  (template.priority === 'NONE' ? 'no-priority' : template.priority.toLowerCase())
-            ) ?? priorities[0],
-         assignee: members.find((candidate) => candidate.id === template.assigneeId) ?? null,
-         project: projects.find((candidate) => candidate.id === template.projectId),
-         labels: labels.filter((candidate) => template.labelIds.includes(candidate.id)),
-      });
-   };
+   const [addIssueForm, setAddIssueForm] = useState<Issue>(createDefaultData());
 
    useEffect(() => {
       setAddIssueForm(createDefaultData());
    }, [createDefaultData]);
 
-   const createIssue = async () => {
+   const createIssue = () => {
       if (!addIssueForm.title) {
          toast.error('Title is required');
          return;
       }
-      if (!addIssueForm.status) {
-         toast.error('A status is required');
-         return;
+      toast.success('Issue created');
+      addIssue(addIssueForm);
+      if (!createMore) {
+         closeModal();
       }
-      try {
-         await createIssueRecord({
-            teamId,
-            title: addIssueForm.title,
-            description: addIssueForm.description || undefined,
-            statusId: addIssueForm.status.id,
-            priority: addIssueForm.priority.id,
-            assigneeId: addIssueForm.assignee?.id,
-            projectId: addIssueForm.project?.id,
-            labelIds: addIssueForm.labels.map((label) => label.id),
-         });
-         toast.success('Issue created');
-         if (!createMore) {
-            closeModal();
-         }
-         setAddIssueForm(createDefaultData());
-      } catch (error) {
-         toast.error(error instanceof Error ? error.message : 'Could not create issue');
-      }
+      setAddIssueForm(createDefaultData());
    };
 
    return (
@@ -159,39 +89,10 @@ export function CreateNewIssue() {
             <DialogHeader>
                <DialogTitle>
                   <div className="flex items-center px-4 pt-4 gap-2">
-                     <Select
-                        value={teamId}
-                        onValueChange={(value) => {
-                           const selected = teams.find((team) => team.id === value);
-                           if (selected) void loadIssues(selected.identifier);
-                        }}
-                     >
-                        <SelectTrigger className="h-9 w-auto gap-1.5">
-                           <Heart className="size-4 text-orange-500 fill-orange-500" />
-                           <SelectValue placeholder="Select team" />
-                        </SelectTrigger>
-                        <SelectContent>
-                           {teams.map((team) => (
-                              <SelectItem key={team.id} value={team.id}>
-                                 {team.identifier}
-                              </SelectItem>
-                           ))}
-                        </SelectContent>
-                     </Select>
-                     {templates.length > 0 && (
-                        <Select onValueChange={applyTemplate}>
-                           <SelectTrigger className="h-9 w-48">
-                              <SelectValue placeholder="Use template…" />
-                           </SelectTrigger>
-                           <SelectContent>
-                              {templates.map((template) => (
-                                 <SelectItem key={template.id} value={template.id}>
-                                    {template.name}
-                                 </SelectItem>
-                              ))}
-                           </SelectContent>
-                        </Select>
-                     )}
+                     <Button size="sm" variant="outline" className="gap-1.5">
+                        <Heart className="size-4 text-orange-500 fill-orange-500" />
+                        <span className="font-medium">CORE</span>
+                     </Button>
                   </div>
                </DialogTitle>
             </DialogHeader>
@@ -214,14 +115,12 @@ export function CreateNewIssue() {
                />
 
                <div className="w-full flex items-center justify-start gap-1.5 flex-wrap">
-                  {addIssueForm.status && (
-                     <StatusSelector
-                        status={addIssueForm.status}
-                        onChange={(newStatus) =>
-                           setAddIssueForm({ ...addIssueForm, status: newStatus })
-                        }
-                     />
-                  )}
+                  <StatusSelector
+                     status={addIssueForm.status}
+                     onChange={(newStatus) =>
+                        setAddIssueForm({ ...addIssueForm, status: newStatus })
+                     }
+                  />
                   <PrioritySelector
                      priority={addIssueForm.priority}
                      onChange={(newPriority) =>
@@ -261,8 +160,9 @@ export function CreateNewIssue() {
                </div>
                <Button
                   size="sm"
-                  disabled={!teamId || !addIssueForm.status}
-                  onClick={() => void createIssue()}
+                  onClick={() => {
+                     createIssue();
+                  }}
                >
                   Create issue
                </Button>

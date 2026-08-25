@@ -1,5 +1,5 @@
 import React from 'react';
-import { status as allStatus } from '@/lib/status-presentations';
+import { status as allStatus } from '@/mock-data/status';
 
 export function renderStatusIcon(statusId: string): React.ReactElement | null {
    const selectedItem = allStatus.find((item) => item.id === statusId);

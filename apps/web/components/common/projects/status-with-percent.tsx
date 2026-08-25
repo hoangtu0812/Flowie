@@ -10,37 +10,31 @@ import {
    CommandList,
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import type { Status } from '@/lib/status-presentations';
+import { status as allStatus, Status } from '@/mock-data/status';
 import { CheckIcon } from 'lucide-react';
 import { useId, useState } from 'react';
 
 interface StatusWithPercentProps {
    status: Status;
-   statuses: Status[];
    percentComplete: number;
-   onStatusChange?: (statusId: string) => void | Promise<void>;
-   disabled?: boolean;
+   onStatusChange?: (statusId: string) => void;
 }
 
 export function StatusWithPercent({
    status,
-   statuses,
    percentComplete,
    onStatusChange,
-   disabled = false,
 }: StatusWithPercentProps) {
    const id = useId();
    const [open, setOpen] = useState<boolean>(false);
    const [value, setValue] = useState<string>(status.id);
 
-   const handleStatusChange = async (statusId: string) => {
-      if (!onStatusChange) return;
-      try {
-         await onStatusChange(statusId);
-         setValue(statusId);
-         setOpen(false);
-      } catch {
-         // The parent keeps the persisted value and renders the API error.
+   const handleStatusChange = (statusId: string) => {
+      setValue(statusId);
+      setOpen(false);
+
+      if (onStatusChange) {
+         onStatusChange(statusId);
       }
    };
 
@@ -54,10 +48,9 @@ export function StatusWithPercent({
                variant="ghost"
                role="combobox"
                aria-expanded={open}
-               disabled={disabled}
             >
                {(() => {
-                  const selectedItem = statuses.find((item) => item.id === value) ?? status;
+                  const selectedItem = allStatus.find((item) => item.id === value);
                   if (selectedItem) {
                      const Icon = selectedItem.icon;
                      return <Icon />;
@@ -73,7 +66,7 @@ export function StatusWithPercent({
                <CommandList>
                   <CommandEmpty>No status found.</CommandEmpty>
                   <CommandGroup>
-                     {statuses.map((item) => {
+                     {allStatus.map((item) => {
                         const Icon = item.icon;
                         return (
                            <CommandItem

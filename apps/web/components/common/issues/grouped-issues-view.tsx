@@ -2,9 +2,9 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { Issue, sortIssuesByPriority } from '@/types/issues';
-import { priorities } from '@/lib/priority-presentations';
-import { Status } from '@/lib/status-presentations';
+import { Issue, sortIssuesByPriority } from '@/mock-data/issues';
+import { priorities } from '@/mock-data/priorities';
+import { Status } from '@/mock-data/status';
 import { useDisplaySettingsStore } from '@/store/display-settings-store';
 import { useFilterStore } from '@/store/filter-store';
 import { Box, ChevronDown, User, X } from 'lucide-react';
@@ -253,9 +253,7 @@ export const GroupedIssuesView: FC<GroupedIssuesViewProps> = ({
       const boardGroups = hasActiveFilters
          ? groups.filter((entry) => entry.issues.length > 0)
          : groups.filter((entry) => showEmptyGroups || entry.issues.length > 0);
-      const hiddenGroups = hasActiveFilters
-         ? groups.filter((entry) => entry.issues.length === 0)
-         : [];
+      const hiddenGroups = hasActiveFilters ? groups.filter((entry) => entry.issues.length === 0) : [];
 
       return (
          <DndProvider backend={HTML5Backend}>

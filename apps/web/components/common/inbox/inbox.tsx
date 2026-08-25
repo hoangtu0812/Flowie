@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { useNotificationsStore } from '@/store/notifications-store';
 import { Button } from '@/components/ui/button';
@@ -36,30 +36,22 @@ export default function Inbox() {
       setSelectedNotification,
       markAsRead,
       markAllAsRead,
-      deleteAll,
-      deleteRead,
-      deleteCompletedIssues,
       getUnreadNotifications,
-      loadNotifications,
-      isLoading,
-      error,
    } = useNotificationsStore();
 
    const isMobile = useIsMobile();
    const [showRead, setShowRead] = useState(true);
+   const [showSnoozed, setShowSnoozed] = useState(false);
    const [showUnreadFirst, setShowUnreadFirst] = useState(false);
    const [ordering, setOrdering] = useState('newest');
    const [showId, setShowId] = useState(true);
    const [showStatusIcon, setShowStatusIcon] = useState(true);
 
-   useEffect(() => {
-      void loadNotifications();
-   }, [loadNotifications]);
-
    // Filter and sort notifications based on settings
    const filteredNotifications = notifications
       .filter((notification) => {
          if (!showRead && notification.read) return false;
+         // Add snoozed filter logic here when implemented
          return true;
       })
       .sort((a, b) => {
@@ -67,22 +59,22 @@ export default function Inbox() {
             if (!a.read && b.read) return -1;
             if (a.read && !b.read) return 1;
          }
-         // Sort by the server timestamp. `timestamp` is the localized relative label.
+         // Sort by timestamp (newest first by default)
          return ordering === 'newest'
-            ? new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-            : new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+            ? new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+            : new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
       });
 
    const handleDeleteAllNotifications = () => {
-      void deleteAll();
+      console.log('Delete all notifications');
    };
 
    const handleDeleteReadNotifications = () => {
-      void deleteRead();
+      console.log('Delete read notifications');
    };
 
    const handleDeleteCompletedIssues = () => {
-      void deleteCompletedIssues();
+      console.log('Delete notifications for completed issues');
    };
 
    const listPane = (
@@ -151,6 +143,16 @@ export default function Inbox() {
 
                      <div className="p-2 space-y-3">
                         <div className="flex items-center justify-between">
+                           <Label htmlFor="show-snoozed" className="text-sm">
+                              Show snoozed
+                           </Label>
+                           <Switch
+                              id="show-snoozed"
+                              checked={showSnoozed}
+                              onCheckedChange={setShowSnoozed}
+                           />
+                        </div>
+                        <div className="flex items-center justify-between">
                            <Label htmlFor="show-read" className="text-sm">
                               Show read
                            </Label>
@@ -198,17 +200,6 @@ export default function Inbox() {
             </div>
          </div>
          <div className="w-full flex flex-col items-center justify-start overflow-y-scroll h-[calc(100%-40px)] pb-0.25">
-            {isLoading && (
-               <p className="w-full px-4 py-3 text-sm text-muted-foreground">
-                  Loading notifications…
-               </p>
-            )}
-            {error && <p className="w-full px-4 py-3 text-sm text-destructive">{error}</p>}
-            {!isLoading && !error && filteredNotifications.length === 0 && (
-               <p className="w-full px-4 py-8 text-center text-sm text-muted-foreground">
-                  No notifications here.
-               </p>
-            )}
             {filteredNotifications.map((notification) => (
                <IssueLine
                   key={notification.id}

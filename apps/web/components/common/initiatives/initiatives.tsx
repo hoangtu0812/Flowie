@@ -3,16 +3,6 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
-   Dialog,
-   DialogContent,
-   DialogDescription,
-   DialogFooter,
-   DialogHeader,
-   DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import {
    Command,
    CommandEmpty,
    CommandGroup,
@@ -29,8 +19,21 @@ import {
    SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { priorities } from '@/lib/priority-presentations';
-import { InitiativesFilterType, useInitiativesFilterStore } from '@/store/initiatives-filter-store';
+import {
+   countCompletedProjects,
+   getInitiativeProjects,
+   Initiative,
+   INITIATIVE_STATUS_META,
+   initiatives as allInitiatives,
+   InitiativeStatus,
+} from '@/mock-data/initiatives';
+import { priorities } from '@/mock-data/priorities';
+import { health as allHealth } from '@/mock-data/projects';
+import { users } from '@/mock-data/users';
+import {
+   InitiativesFilterType,
+   useInitiativesFilterStore,
+} from '@/store/initiatives-filter-store';
 import {
    InitiativesDisplayProperties,
    useInitiativesDisplayStore,
@@ -48,22 +51,11 @@ import {
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { parseAsStringLiteral, useQueryState } from 'nuqs';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { InitiativeStatusIcon } from './initiative-status-icon';
 import { InitiativesSidePanel } from './initiatives-side-panel';
-import {
-   adaptInitiatives,
-   countCompletedProjects,
-   getInitiativeProjects,
-   Initiative,
-   initiativeHealth,
-   INITIATIVE_STATUS_META,
-   InitiativeStatus,
-} from './initiative-ui-adapter';
-import { useLiveInitiatives } from './use-live-initiatives';
 
 const TABS = ['active', 'planned', 'all'] as const;
-const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 const TAB_ITEMS: { label: string; value: (typeof TABS)[number] }[] = [
    { label: 'Active', value: 'active' },
@@ -71,108 +63,9 @@ const TAB_ITEMS: { label: string; value: (typeof TABS)[number] }[] = [
    { label: 'All initiatives', value: 'all' },
 ];
 
-function CreateInitiativeDialog({
-   workspaceId,
-   reload,
-}: {
-   workspaceId?: string;
-   reload: () => void;
-}) {
-   const [open, setOpen] = useState(false);
-   const [name, setName] = useState('');
-   const [description, setDescription] = useState('');
-   const [targetDate, setTargetDate] = useState('');
-   const [submitting, setSubmitting] = useState(false);
-   const [error, setError] = useState<string>();
-   useEffect(() => {
-      const openCreateDialog = () => setOpen(true);
-      window.addEventListener('flowie:create-initiative', openCreateDialog);
-      return () => window.removeEventListener('flowie:create-initiative', openCreateDialog);
-   }, []);
-   const create = async () => {
-      if (!workspaceId || name.trim().length < 2) {
-         setError('Initiative name must contain at least 2 characters.');
-         return;
-      }
-      setSubmitting(true);
-      setError(undefined);
-      try {
-         const response = await fetch(`${api}/initiatives`, {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-               workspaceId,
-               name: name.trim(),
-               description: description.trim() || undefined,
-               targetDate: targetDate || undefined,
-            }),
-         });
-         if (!response.ok) {
-            const payload = (await response.json().catch(() => null)) as {
-               message?: string | string[];
-            } | null;
-            throw new Error(
-               Array.isArray(payload?.message)
-                  ? payload.message[0]
-                  : (payload?.message ?? 'Could not create initiative.')
-            );
-         }
-         setOpen(false);
-         setName('');
-         setDescription('');
-         setTargetDate('');
-         reload();
-      } catch (caught) {
-         setError(caught instanceof Error ? caught.message : 'Could not create initiative.');
-      } finally {
-         setSubmitting(false);
-      }
-   };
-   return (
-      <Dialog open={open} onOpenChange={setOpen}>
-         <DialogContent>
-            <DialogHeader>
-               <DialogTitle>New initiative</DialogTitle>
-               <DialogDescription>
-                  Create a strategic initiative for your workspace.
-               </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-3">
-               <Input
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="Initiative name"
-                  autoFocus
-               />
-               <Textarea
-                  value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-                  placeholder="Description"
-               />
-               <Input
-                  type="date"
-                  value={targetDate}
-                  onChange={(event) => setTargetDate(event.target.value)}
-               />
-               {error && <p className="text-sm text-destructive">{error}</p>}
-            </div>
-            <DialogFooter>
-               <Button variant="outline" onClick={() => setOpen(false)}>
-                  Cancel
-               </Button>
-               <Button onClick={() => void create()} disabled={submitting}>
-                  {submitting ? 'Creating…' : 'Create initiative'}
-               </Button>
-            </DialogFooter>
-         </DialogContent>
-      </Dialog>
-   );
-}
-
 /* --------------------------------- filter --------------------------------- */
 
-function InitiativesFilter({ initiatives }: { initiatives: Initiative[] }) {
+function InitiativesFilter() {
    const [open, setOpen] = useState(false);
    const [active, setActive] = useState<InitiativesFilterType | null>(null);
    const { filters, toggleFilter, clearFilters, getActiveFiltersCount } =
@@ -266,40 +159,28 @@ function InitiativesFilter({ initiatives }: { initiatives: Initiative[] }) {
                   )}
                   {active === 'owner' && (
                      <CommandGroup>
-                        {initiatives
-                           .map((initiative) => initiative.owner)
-                           .filter(
-                              (owner, index, owners): owner is NonNullable<typeof owner> =>
-                                 Boolean(owner) &&
-                                 owners.findIndex((candidate) => candidate?.id === owner?.id) ===
-                                    index
-                           )
-                           .slice(0, 10)
-                           .map((user) => (
-                              <CommandItem
-                                 key={user.id}
-                                 onSelect={() => toggleFilter('owner', user.id)}
-                              >
-                                 <Avatar className="size-4">
-                                    <AvatarImage
-                                       src={user.avatarUrl ?? undefined}
-                                       alt={user.name}
-                                    />
-                                    <AvatarFallback className="text-[8px]">
-                                       {user.name[0]}
-                                    </AvatarFallback>
-                                 </Avatar>
-                                 {user.name}
-                                 {filters.owner.includes(user.id) && (
-                                    <CheckIcon className="ml-auto size-3.5" />
-                                 )}
-                              </CommandItem>
-                           ))}
+                        {users.slice(0, 10).map((user) => (
+                           <CommandItem
+                              key={user.id}
+                              onSelect={() => toggleFilter('owner', user.id)}
+                           >
+                              <Avatar className="size-4">
+                                 <AvatarImage src={user.avatarUrl} alt={user.name} />
+                                 <AvatarFallback className="text-[8px]">
+                                    {user.name[0]}
+                                 </AvatarFallback>
+                              </Avatar>
+                              {user.name}
+                              {filters.owner.includes(user.id) && (
+                                 <CheckIcon className="ml-auto size-3.5" />
+                              )}
+                           </CommandItem>
+                        ))}
                      </CommandGroup>
                   )}
                   {active === 'health' && (
                      <CommandGroup>
-                        {initiativeHealth.map((entry) => (
+                        {allHealth.map((entry) => (
                            <CommandItem
                               key={entry.id}
                               onSelect={() => toggleFilter('health', entry.id)}
@@ -479,10 +360,7 @@ function InitiativeRow({
             <span className="hidden sm:flex w-14 shrink-0">
                {initiative.owner ? (
                   <Avatar className="size-5">
-                     <AvatarImage
-                        src={initiative.owner.avatarUrl ?? undefined}
-                        alt={initiative.owner.name}
-                     />
+                     <AvatarImage src={initiative.owner.avatarUrl} alt={initiative.owner.name} />
                      <AvatarFallback className="text-[9px]">
                         {initiative.owner.name[0]}
                      </AvatarFallback>
@@ -536,14 +414,6 @@ export default function Initiatives() {
    const { filters } = useInitiativesFilterStore();
    const { grouping, ordering, displayProperties } = useInitiativesDisplayStore();
    const [showPanel, setShowPanel] = useState(true);
-   const {
-      workspaceId,
-      initiatives: liveInitiatives,
-      loading,
-      error,
-      reload,
-   } = useLiveInitiatives();
-   const allInitiatives = useMemo(() => adaptInitiatives(liveInitiatives), [liveInitiatives]);
 
    const displayed = useMemo(() => {
       let list = allInitiatives.slice();
@@ -566,7 +436,7 @@ export default function Initiatives() {
       else if (ordering === 'target')
          list.sort((a, b) => (a.target ?? '').localeCompare(b.target ?? ''));
       return list;
-   }, [allInitiatives, tab, filters, ordering]);
+   }, [tab, filters, ordering]);
 
    const groups = useMemo(() => {
       if (grouping !== 'status') return null;
@@ -601,8 +471,7 @@ export default function Initiatives() {
                   ))}
                </div>
                <div className="flex items-center gap-1">
-                  <CreateInitiativeDialog workspaceId={workspaceId} reload={reload} />
-                  <InitiativesFilter initiatives={allInitiatives} />
+                  <InitiativesFilter />
                   <InitiativesDisplayOptions />
                   <Button
                      size="xs"
@@ -639,46 +508,34 @@ export default function Initiatives() {
                )}
             </div>
 
-            {loading && (
-               <div className="px-6 py-10 text-sm text-muted-foreground">Loading initiatives…</div>
-            )}
-            {error && <div className="px-6 py-10 text-sm text-destructive">{error}</div>}
-
-            {!loading &&
-               !error &&
-               (groups
-                  ? groups.map((group) => (
-                       <div key={group.statusId}>
-                          <div className="flex items-center gap-2 px-6 h-9 text-sm font-medium bg-[color-mix(in_oklab,var(--accent)_30%,var(--container))] border-b border-border/40">
-                             <InitiativeStatusIcon status={group.statusId} />
-                             {INITIATIVE_STATUS_META[group.statusId].label}
-                             <span className="text-xs text-muted-foreground">
-                                {group.items.length}
-                             </span>
-                          </div>
-                          {group.items.map((initiative) => (
-                             <InitiativeRow
-                                key={initiative.id}
-                                initiative={initiative}
-                                orgId={orgId}
-                                showStatus={showStatus}
-                             />
-                          ))}
+            {groups
+               ? groups.map((group) => (
+                    <div key={group.statusId}>
+                       <div className="flex items-center gap-2 px-6 h-9 text-sm font-medium bg-[color-mix(in_oklab,var(--accent)_30%,var(--container))] border-b border-border/40">
+                          <InitiativeStatusIcon status={group.statusId} />
+                          {INITIATIVE_STATUS_META[group.statusId].label}
+                          <span className="text-xs text-muted-foreground">
+                             {group.items.length}
+                          </span>
                        </div>
-                    ))
-                  : displayed.map((initiative) => (
-                       <InitiativeRow
-                          key={initiative.id}
-                          initiative={initiative}
-                          orgId={orgId}
-                          showStatus={showStatus}
-                       />
-                    )))}
-            {!loading && !error && displayed.length === 0 && (
-               <div className="px-6 py-16 text-center text-sm text-muted-foreground">
-                  No initiatives yet.
-               </div>
-            )}
+                       {group.items.map((initiative) => (
+                          <InitiativeRow
+                             key={initiative.id}
+                             initiative={initiative}
+                             orgId={orgId}
+                             showStatus={showStatus}
+                          />
+                       ))}
+                    </div>
+                 ))
+               : displayed.map((initiative) => (
+                    <InitiativeRow
+                       key={initiative.id}
+                       initiative={initiative}
+                       orgId={orgId}
+                       showStatus={showStatus}
+                    />
+                 ))}
          </div>
          {showPanel && <InitiativesSidePanel initiatives={displayed} />}
       </div>
