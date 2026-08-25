@@ -1,5 +1,10 @@
 # Kế hoạch triển khai Circle thành Project Management Platform hoàn chỉnh
 
+> **Chiến lược frontend mới:** đọc [ui_rebase_plan.md](./ui_rebase_plan.md) trước. Baseline trực
+> tiếp là clone local `C:\Users\Hoang Tu\Desktop\BSR\1. Source Code\circle` tại commit
+> `7785985`. Từ checkpoint `3329f5b`, không tiếp tục vá parity từng điểm; chuyển từng route về
+> component gốc và đặt API/mapper trong lớp adapter riêng.
+
 > **Trạng thái bàn giao cập nhật: 2026-08-25**
 > Đây là phần phải đọc đầu tiên khi agent khác tiếp tục công việc. Các checkbox trong kế hoạch
 > lịch sử phía dưới chưa được dùng làm nguồn trạng thái; bảng kiểm ở phần này mới là trạng thái
