@@ -7,13 +7,14 @@ import httpx
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from .core.config import Settings
 from .core.errors import ApiError, api_error_handler, validation_error_handler
 from .core.readiness import dependency_status
 from .db.session import create_session_factory
 from .domains.auth import router as auth_router
+from .domains.native_attachments import router as native_attachments_router
 from .domains.native_comments import router as native_comments_router
 from .domains.native_cycles import router as native_cycles_router
 from .domains.native_issues import router as native_issues_router
@@ -61,6 +62,7 @@ def create_app(
     app.add_exception_handler(ApiError, api_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.include_router(auth_router)
+    app.include_router(native_attachments_router)
     app.include_router(native_comments_router)
     app.include_router(native_cycles_router)
     app.include_router(native_issues_router)

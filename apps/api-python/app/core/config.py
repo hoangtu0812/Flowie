@@ -36,6 +36,11 @@ class Settings:
     redis_port: int
     minio_host: str
     minio_port: int
+    s3_endpoint: str
+    s3_access_key: str
+    s3_secret_key: str
+    s3_bucket: str
+    s3_region: str
     database_url: str
     auth_jwt_secret: str
     auth_access_token_ttl_seconds: int
@@ -55,6 +60,11 @@ class Settings:
             redis_port=int(getenv('REDIS_PORT_INTERNAL', '6379')),
             minio_host=getenv('MINIO_HOST', 'minio'),
             minio_port=int(getenv('MINIO_PORT_INTERNAL', '9000')),
+            s3_endpoint=getenv('S3_ENDPOINT', 'http://minio:9000'),
+            s3_access_key=getenv('S3_ACCESS_KEY', 'minioadmin'),
+            s3_secret_key=getenv('S3_SECRET_KEY', 'minioadmin123'),
+            s3_bucket=getenv('S3_BUCKET', 'flowie'),
+            s3_region=getenv('S3_REGION', 'us-east-1'),
             database_url=_async_database_url(getenv('DATABASE_URL', 'postgresql://circle:circle@postgres:5432/circle')),
             auth_jwt_secret=getenv('AUTH_JWT_SECRET', 'development-only-change-me'),
             auth_access_token_ttl_seconds=int(getenv('AUTH_ACCESS_TOKEN_TTL_SECONDS', '900')),
