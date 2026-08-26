@@ -131,6 +131,18 @@ services:
          postgres:
             condition: service_healthy
 
+networks:
+   default:
+      driver: bridge
+      driver_opts:
+         # The uplink's path MTU is smaller than 1500 (PPPoE gives 1492). A
+         # bridge that still claims 1500 stalls large transfers whenever the
+         # "fragmentation needed" reply is filtered on the way back, which is
+         # what made package downloads crawl and TLS reads time out. The
+         # daemon-wide setting does not reach a Compose network, so it is
+         # declared here as well.
+         com.docker.network.driver.mtu: ${DOCKER_NETWORK_MTU:-1400}
+
 volumes:
    postgres_data:
    redis_data:

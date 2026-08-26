@@ -32,9 +32,29 @@ jobs:
           set -euo pipefail
 
           cd /opt/flowie
-          git fetch origin main
+
+          # One network operation, retried. `git pull` used to contact GitHub a
+          # second time for a ref the fetch had already brought down, and this
+          # host's link to GitHub is slow enough that the extra round trip is
+          # what failed the release. The low-speed guard makes a stalled
+          # transfer give up in a minute instead of hanging for five.
+          fetched=0
+          for attempt in 1 2 3; do
+            if git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=60 fetch --prune origin main; then
+              fetched=1
+              break
+            fi
+            echo "Fetch attempt ${attempt} failed; retrying in 15s."
+            sleep 15
+          done
+          if [ "${fetched}" -ne 1 ]; then
+            echo 'Could not reach GitHub; leaving the running deployment untouched.'
+            exit 1
+          fi
+
           git checkout main
-          git pull --ff-only origin main
+          # Local only: the commit is already in the object store.
+          git merge --ff-only FETCH_HEAD
 
           # A registry read that times out is not a broken release. Retry the
           # build before failing the deploy, since every attempt resumes from
@@ -71,3 +91,24 @@ jobs:
           docker compose --env-file .env.production --profile app ps
           docker compose --env-file .env.production --profile app logs --tail=150 api web
           exit 1
+
+      - name: Reclaim disk
+        # Only after the deploy is verified: a failed release must keep every
+        # layer it might need for the next attempt.
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Images left dangling by this build. Tagged images still in use and
+          # every volume are untouched — the database and object store live in
+          # volumes, so they are never part of a cleanup.
+          docker image prune --force
+
+          # Build cache is the part that grows without bound. Cap it and let
+          # BuildKit evict least-recently-used records, which keeps the Python
+          # wheel cache that makes a rebuild fast. Older Docker versions do not
+          # know --keep-storage, so fall back to pruning by age.
+          docker builder prune --force --keep-storage 10GB || docker builder prune --force --filter until=168h
+
+          docker system df

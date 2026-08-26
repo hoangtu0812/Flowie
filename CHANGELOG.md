@@ -10,8 +10,26 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+## [0.3.1] — 2026-08-26 23:41 +07
+
+### Added
+
+- The deploy reclaims disk once the release is verified: dangling images go,
+  and the build cache is capped so it cannot grow without bound while keeping
+  the Python wheel cache that makes a rebuild fast. Volumes are never touched.
+
 ### Fixed
 
+- Container networks declare an MTU (default 1400) instead of assuming 1500.
+  The uplink's path MTU is 1492, so full-size packets were dropped and large
+  transfers stalled — package downloads crawling at a few kB/s and TLS reads
+  timing out. A daemon-wide setting does not reach a Compose network, so it is
+  declared in the compose file too.
+- The deploy no longer contacts GitHub twice for the same commit: `git pull`
+  followed a `git fetch` that had already brought the ref down, and on this
+  host's slow link the second round trip is what failed the release with an SSL
+  timeout. The fetch is retried, gives up on a stalled transfer in a minute
+  rather than five, and the checkout is now a local fast-forward.
 - "Add sub-issues" on the issue page does something: the button had no handler
   and the list beneath it was built from the interface template's mock data.
   The component that creates and lists sub-issues against the API already
