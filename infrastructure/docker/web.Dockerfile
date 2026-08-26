@@ -25,7 +25,9 @@ ENV NODE_ENV=production
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/apps/web/.next ./apps/web/.next
 COPY --from=build /app/apps/web/node_modules ./apps/web/node_modules
-COPY --from=build /app/apps/web/public ./apps/web/public
+# `next start apps/web` is launched from /app. Keep public assets at that runtime
+# root so manifest icons and other static files are served as files, not the app HTML fallback.
+COPY --from=build /app/apps/web/public ./public
 COPY --from=build /app/apps/web/package.json ./apps/web/package.json
 EXPOSE 3000
 CMD ["node", "apps/web/node_modules/next/dist/bin/next", "start", "apps/web"]
