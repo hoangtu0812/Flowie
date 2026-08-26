@@ -1,6 +1,7 @@
 'use client';
 
 import { loadCurrentWorkspaceTeams } from '@/components/common/teams/team-types';
+import { authenticatedFetch } from '@/lib/workspaces';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -96,9 +97,9 @@ export default function CustomerRequestsSettings() {
          const { workspaceId: id } = await loadCurrentWorkspaceTeams();
          const query = new URLSearchParams({ workspaceId: id });
          const [requestResponse, projectResponse, issueResponse] = await Promise.all([
-            fetch(`${api}/customer-requests?${query}`, { credentials: 'include' }),
-            fetch(`${api}/projects?${query}`, { credentials: 'include' }),
-            fetch(`${api}/issues?${query}`, { credentials: 'include' }),
+            authenticatedFetch(`${api}/customer-requests?${query}`),
+            authenticatedFetch(`${api}/projects?${query}`),
+            authenticatedFetch(`${api}/issues?${query}`),
          ]);
          if (!requestResponse.ok || !projectResponse.ok || !issueResponse.ok) {
             throw new Error('Could not load customer requests.');
@@ -171,7 +172,7 @@ export default function CustomerRequestsSettings() {
       setFormError(undefined);
       try {
          const query = new URLSearchParams({ workspaceId });
-         const response = await fetch(
+         const response = await authenticatedFetch(
             editingId
                ? `${api}/customer-requests/${editingId}?${query}`
                : `${api}/customer-requests`,
@@ -217,7 +218,7 @@ export default function CustomerRequestsSettings() {
       setSaving(true);
       setFormError(undefined);
       try {
-         const response = await fetch(
+         const response = await authenticatedFetch(
             `${api}/customer-requests/${editingId}?${new URLSearchParams({ workspaceId })}`,
             { method: 'DELETE', credentials: 'include' }
          );
