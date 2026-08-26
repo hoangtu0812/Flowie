@@ -17,6 +17,7 @@ import { Circle, CircleCheck, CircleDashed, CircleX, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { AssigneeUser } from '../assignee-user';
+import type { User } from '@/mock-data/users';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -27,6 +28,21 @@ type SubIssue = {
    status: { id: string; name: string; color: string; category: string };
    assignee: { id: string; name: string; avatarUrl: string | null } | null;
 };
+
+const asUser = (assignee: SubIssue['assignee']): User | null =>
+   assignee
+      ? {
+           id: assignee.id,
+           name: assignee.name,
+           avatarUrl: assignee.avatarUrl ?? '',
+           email: '',
+           status: 'offline',
+           role: 'Member',
+           joinedDate: '',
+           teamIds: [],
+           timezone: 'UTC',
+        }
+      : null;
 
 const StatusIcon = ({ status }: { status: SubIssue['status'] }) => {
    const category = status.category.toLowerCase();
@@ -159,7 +175,7 @@ export function IssueSubIssues({
                         </span>
                         <span className="truncate font-medium">{subIssue.title}</span>
                         <span className="ml-auto shrink-0">
-                           <AssigneeUser user={subIssue.assignee} />
+                           <AssigneeUser user={asUser(subIssue.assignee)} />
                         </span>
                      </Link>
                   ))}

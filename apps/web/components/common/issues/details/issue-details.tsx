@@ -3,13 +3,13 @@
 import { LoadingState } from '@/components/common/loading-state';
 import { getIssueDetail } from '@/mock-data/issue-details';
 import { useIssuesStore } from '@/store/issues-store';
-import { Paperclip, Plus, SmilePlus } from 'lucide-react';
+import { Paperclip, SmilePlus } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef } from 'react';
-import { AssigneeUser } from '../assignee-user';
 import { ActivityFeed } from './activity-feed';
 import { IssueDescription } from './issue-description';
+import { IssueSubIssues } from './issue-sub-issues';
 import { IssuePropertiesPanel } from './issue-properties-panel';
 
 /**
@@ -68,10 +68,6 @@ export default function IssueDetails() {
       );
    }
 
-   const subIssues = (detail.subIssueIds ?? [])
-      .map((identifier) => issues.find((candidate) => candidate.identifier === identifier))
-      .filter((candidate) => candidate !== undefined);
-
    return (
       <div className="w-full h-full flex overflow-hidden">
          {/* Main column */}
@@ -91,47 +87,12 @@ export default function IssueDetails() {
                   </button>
                </div>
 
-               {/* Sub-issues */}
-               <div className="mt-8">
-                  {subIssues.length > 0 ? (
-                     <>
-                        <h2 className="text-sm font-medium mb-1">
-                           Sub-issues{' '}
-                           <span className="text-muted-foreground">
-                              {
-                                 subIssues.filter(
-                                    (subIssue) => subIssue.status.category === 'completed'
-                                 ).length
-                              }
-                              /{subIssues.length}
-                           </span>
-                        </h2>
-                        <div className="flex flex-col border-t border-border/50">
-                           {subIssues.map((subIssue) => (
-                              <Link
-                                 key={subIssue.id}
-                                 href={`/${orgId ?? 'lndev-ui'}/issue/${subIssue.identifier}`}
-                                 className="flex items-center gap-2.5 h-10 px-1 border-b border-border/50 hover:bg-sidebar/50 text-sm min-w-0"
-                              >
-                                 <subIssue.status.icon />
-                                 <span className="text-muted-foreground shrink-0 text-xs font-medium">
-                                    {subIssue.identifier}
-                                 </span>
-                                 <span className="truncate font-medium">{subIssue.title}</span>
-                                 <span className="ml-auto shrink-0">
-                                    <AssigneeUser user={subIssue.assignee} />
-                                 </span>
-                              </Link>
-                           ))}
-                        </div>
-                     </>
-                  ) : (
-                     <button className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-                        <Plus className="size-4" />
-                        Add sub-issues
-                     </button>
-                  )}
-               </div>
+               {/* A sub-issue is created in its parent's team, so it needs one. */}
+               {issue.teamId && (
+                  <div className="mt-2">
+                     <IssueSubIssues issueId={issue.id} teamId={issue.teamId} orgId={orgId ?? ''} />
+                  </div>
+               )}
 
                <div className="border-t border-border/60 mt-8" />
 

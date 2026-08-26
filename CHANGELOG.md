@@ -10,6 +10,13 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+### Fixed
+
+- "Add sub-issues" on the issue page does something: the button had no handler
+  and the list beneath it was built from the interface template's mock data.
+  The component that creates and lists sub-issues against the API already
+  existed — it was never mounted.
+
 ### Changed
 
 - The workspace mark in the sidebar no longer paints a fixed orange square: a
