@@ -21,6 +21,9 @@ All notable changes to Flowie are documented here.
 ### Changed
 
 - Discord integration configuration is now served by the Python/FastAPI API.
+- The issue page header carries a working actions menu (rename, due date, move,
+  subscribe, copy link, delete) and a favourite toggle; deleting an issue was
+  previously only reachable by right-clicking a list row.
 - The issues list view has a column header, and each row lays its properties
   out in fixed columns: Created and Due date are now separate labelled columns
   instead of one unlabelled date.
@@ -33,6 +36,10 @@ All notable changes to Flowie are documented here.
   options with their icons.
 
 ### Fixed
+
+- Opening an issue URL directly — a refresh, an Inbox entry, a Discord link —
+  loads the issue instead of reporting it as not found, and shows a loading
+  state while it arrives.
 
 - The legacy API container now receives the shared `AUTH_JWT_SECRET`, so the
   paths the Python API still proxies (such as the project issue list) accept the

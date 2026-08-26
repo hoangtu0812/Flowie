@@ -4,8 +4,8 @@ import { getIssueDetail } from '@/mock-data/issue-details';
 import { useIssuesStore } from '@/store/issues-store';
 import { Paperclip, Plus, SmilePlus } from 'lucide-react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { useMemo } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useMemo, useRef } from 'react';
 import { AssigneeUser } from '../assignee-user';
 import { ActivityFeed } from './activity-feed';
 import { IssueDescription } from './issue-description';
@@ -17,7 +17,15 @@ import { IssuePropertiesPanel } from './issue-properties-panel';
  */
 export default function IssueDetails() {
    const { orgId, issueId } = useParams<{ orgId: string; issueId: string }>();
-   const { issues } = useIssuesStore();
+   const router = useRouter();
+   const { issues, teams, loading, loadIssues } = useIssuesStore();
+
+   // An issue URL can be opened without passing through a list first — a
+   // refresh, an Inbox entry, a Discord link — so this screen has to fill the
+   // store itself instead of assuming someone else already did.
+   useEffect(() => {
+      void loadIssues();
+   }, [loadIssues]);
 
    const issue = useMemo(
       () => issues.find((candidate) => candidate.identifier === issueId),
@@ -26,11 +34,37 @@ export default function IssueDetails() {
 
    const detail = useMemo(() => (issue ? getIssueDetail(issue) : null), [issue]);
 
+   const team = teams.find((candidate) => candidate.id === issue?.teamId);
+   const listHref = useRef(`/${orgId ?? 'lndev-ui'}/my-issues`);
+   useEffect(() => {
+      if (team) listHref.current = `/${orgId}/team/${team.identifier}/all`;
+   }, [orgId, team]);
+
+   // Deleting the issue drops it from the store. Leaving a "not found" page
+   // behind reads as a failure, so return to the list it was opened from —
+   // but only while the rest of the list is intact, otherwise a failed reload
+   // would navigate away on its own.
+   const seen = useRef(false);
+   useEffect(() => {
+      if (issue) {
+         seen.current = true;
+         return;
+      }
+      if (seen.current && issues.length > 0) router.replace(listHref.current);
+   }, [issue, issues.length, router]);
+
    if (!issue || !detail) {
+      if (loading) {
+         return (
+            <div className="h-full grid place-items-center text-sm text-muted-foreground">
+               Loading issue…
+            </div>
+         );
+      }
       return (
          <div className="flex flex-col items-center justify-center h-full gap-2 text-sm text-muted-foreground">
             <p>Issue {issueId} not found.</p>
-            <Link href={`/${orgId ?? 'lndev-ui'}/team/CORE/all`} className="underline">
+            <Link href={listHref.current} className="underline">
                Back to issues
             </Link>
          </div>

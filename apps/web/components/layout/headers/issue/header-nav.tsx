@@ -2,11 +2,34 @@
 
 import { CyclePlayIcon } from '@/components/common/cycles/cycle-line';
 import { Button } from '@/components/ui/button';
+import {
+   DropdownMenu,
+   DropdownMenuContent,
+   DropdownMenuItem,
+   DropdownMenuSeparator,
+   DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { cn } from '@/lib/utils';
+import { useIssueActionDialogStore } from '@/store/issue-action-dialog-store';
 import { useIssuesStore } from '@/store/issues-store';
-import { ChevronDown, ChevronRight, ChevronUp, MoreHorizontal, Star } from 'lucide-react';
+import {
+   ArrowRightLeft,
+   Bell,
+   BellOff,
+   CalendarClock,
+   ChevronDown,
+   ChevronRight,
+   ChevronUp,
+   Link2,
+   MoreHorizontal,
+   PenLine,
+   Star,
+   Trash2,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { toast } from 'sonner';
 
 /**
  * Issue page header: breadcrumb (team › cycle › identifier + title) and
@@ -14,7 +37,8 @@ import { useParams } from 'next/navigation';
  */
 export default function HeaderNav() {
    const { orgId, issueId } = useParams<{ orgId: string; issueId: string }>();
-   const { issues, teams, cycles } = useIssuesStore();
+   const { issues, teams, cycles, updateIssueFavorite, updateIssueSubscription } = useIssuesStore();
+   const openIssueAction = useIssueActionDialogStore((state) => state.openForIssue);
    const index = issues.findIndex((candidate) => candidate.identifier === issueId);
    const issue = index >= 0 ? issues[index] : undefined;
    const team = teams.find((candidate) => candidate.id === issue?.teamId);
@@ -61,8 +85,77 @@ export default function HeaderNav() {
                   <span className="font-medium">{issue.title}</span>
                </span>
             )}
-            <Star className="size-3.5 text-muted-foreground shrink-0" />
-            <MoreHorizontal className="size-3.5 text-muted-foreground shrink-0" />
+            {issue && (
+               <>
+                  <button
+                     type="button"
+                     aria-label={issue.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                     className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                     onClick={() => void updateIssueFavorite(issue.id, !issue.isFavorite)}
+                  >
+                     <Star
+                        className={cn(
+                           'size-3.5',
+                           issue.isFavorite && 'fill-current text-amber-400'
+                        )}
+                     />
+                  </button>
+                  <DropdownMenu>
+                     <DropdownMenuTrigger asChild>
+                        <button
+                           type="button"
+                           aria-label="Issue actions"
+                           className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                           <MoreHorizontal className="size-3.5" />
+                        </button>
+                     </DropdownMenuTrigger>
+                     <DropdownMenuContent align="start" className="w-56">
+                        <DropdownMenuItem onClick={() => openIssueAction(issue.id, 'rename')}>
+                           <PenLine className="size-4" /> Rename...
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openIssueAction(issue.id, 'due-date')}>
+                           <CalendarClock className="size-4" /> Set due date...
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openIssueAction(issue.id, 'move')}>
+                           <ArrowRightLeft className="size-4" /> Move to team...
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                           onClick={() =>
+                              void updateIssueSubscription(issue.id, !issue.isSubscribed)
+                           }
+                        >
+                           {issue.isSubscribed ? (
+                              <>
+                                 <BellOff className="size-4" /> Unsubscribe
+                              </>
+                           ) : (
+                              <>
+                                 <Bell className="size-4" /> Subscribe
+                              </>
+                           )}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                           onClick={() => {
+                              void navigator.clipboard
+                                 .writeText(window.location.href)
+                                 .then(() => toast.success('Issue link copied'))
+                                 .catch(() => toast.error('Could not copy the link.'));
+                           }}
+                        >
+                           <Link2 className="size-4" /> Copy link
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                           variant="destructive"
+                           onClick={() => openIssueAction(issue.id, 'archive')}
+                        >
+                           <Trash2 className="size-4" /> Delete...
+                        </DropdownMenuItem>
+                     </DropdownMenuContent>
+                  </DropdownMenu>
+               </>
+            )}
          </div>
 
          <div className="flex items-center gap-1 shrink-0">
