@@ -37,6 +37,7 @@ import {
    ChevronDown,
    FilePenLine,
    FileText,
+   FolderKanban,
    Plus,
    Tag,
    UserRound,
@@ -386,40 +387,69 @@ function Overview({
                      </button>
                   </div>
 
+                  {/* The properties aside is hidden below lg, so this inline row is the
+                      only way to edit an initiative on a narrow window: every entry
+                      opens the same dialog as its counterpart in the aside. */}
                   <div className="flex items-center gap-3 flex-wrap text-sm">
                      <span className="text-muted-foreground text-xs w-24">Properties</span>
-                     <span className="inline-flex items-center gap-1.5">
+                     <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 hover:text-muted-foreground transition-colors"
+                        onClick={() => openAction('status')}
+                     >
                         <InitiativeStatusIcon status={initiative.status} />
                         {INITIATIVE_STATUS_META[initiative.status].label}
-                     </span>
-                     <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                     </button>
+                     <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={() => openAction('priority')}
+                     >
                         <initiative.priority.icon className="size-4" />
                         {initiative.priority.name}
-                     </span>
-                     {initiative.owner ? (
-                        <span className="inline-flex items-center gap-1.5">
-                           <Avatar className="size-4">
-                              <AvatarImage
-                                 src={initiative.owner.avatarUrl ?? undefined}
-                                 alt={initiative.owner.name}
-                              />
-                              <AvatarFallback className="text-[8px]">
-                                 {initiative.owner.name[0]}
-                              </AvatarFallback>
-                           </Avatar>
-                           {initiative.owner.name}
-                        </span>
-                     ) : (
-                        <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                           <UserRound className="size-4" /> Owner
-                        </span>
-                     )}
-                     {initiative.target && (
-                        <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                           <CalendarRange className="size-4" />
-                           {initiative.target}
-                        </span>
-                     )}
+                     </button>
+                     <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={() => openAction('owner')}
+                     >
+                        {initiative.owner ? (
+                           <>
+                              <Avatar className="size-4">
+                                 <AvatarImage
+                                    src={initiative.owner.avatarUrl ?? undefined}
+                                    alt={initiative.owner.name}
+                                 />
+                                 <AvatarFallback className="text-[8px]">
+                                    {initiative.owner.name[0]}
+                                 </AvatarFallback>
+                              </Avatar>
+                              <span className="text-foreground">{initiative.owner.name}</span>
+                           </>
+                        ) : (
+                           <>
+                              <UserRound className="size-4" /> Owner
+                           </>
+                        )}
+                     </button>
+                     <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={() => openAction('target-date')}
+                     >
+                        <CalendarRange className="size-4" />
+                        {initiative.target ?? 'Add target date'}
+                     </button>
+                     <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={() => openAction('label')}
+                     >
+                        <Tag className="size-4" />
+                        {initiative.labelLinks.length > 0
+                           ? initiative.labelLinks.map((link) => link.label.name).join(', ')
+                           : 'Add label'}
+                     </button>
                   </div>
 
                   <div className="flex items-center gap-3 text-sm">
@@ -627,7 +657,13 @@ function Overview({
                            <SelectContent>
                               {initiativeHealth.map((health) => (
                                  <SelectItem key={health.id} value={health.id}>
-                                    {health.name}
+                                    <span className="flex items-center gap-2">
+                                       <span
+                                          className="size-2.5 rounded-full"
+                                          style={{ backgroundColor: health.color }}
+                                       />
+                                       {health.name}
+                                    </span>
                                  </SelectItem>
                               ))}
                            </SelectContent>
@@ -674,8 +710,11 @@ function Overview({
                         <SelectContent>
                            {availableProjects.map((project) => (
                               <SelectItem key={project.id} value={project.id}>
-                                 {project.name}
-                                 {project.identifier ? ` · ${project.identifier}` : ''}
+                                 <span className="flex items-center gap-2">
+                                    <FolderKanban className="size-4 text-muted-foreground" />
+                                    {project.name}
+                                    {project.identifier ? ` · ${project.identifier}` : ''}
+                                 </span>
                               </SelectItem>
                            ))}
                         </SelectContent>
@@ -719,7 +758,13 @@ function Overview({
                         <SelectContent>
                            {availableLabels.map((label) => (
                               <SelectItem key={label.id} value={label.id}>
-                                 {label.name}
+                                 <span className="flex items-center gap-2">
+                                    <span
+                                       className="size-2.5 rounded-full"
+                                       style={{ backgroundColor: label.color }}
+                                    />
+                                    {label.name}
+                                 </span>
                               </SelectItem>
                            ))}
                         </SelectContent>
@@ -771,7 +816,10 @@ function Overview({
                               >
                            ).map((value) => (
                               <SelectItem key={value} value={value}>
-                                 {INITIATIVE_STATUS_META[value].label}
+                                 <span className="flex items-center gap-2">
+                                    <InitiativeStatusIcon status={value} />
+                                    {INITIATIVE_STATUS_META[value].label}
+                                 </span>
                               </SelectItem>
                            ))}
                         </SelectContent>
@@ -790,7 +838,10 @@ function Overview({
                         <SelectContent>
                            {priorities.map((option) => (
                               <SelectItem key={option.id} value={option.id}>
-                                 {option.name}
+                                 <span className="flex items-center gap-2">
+                                    <option.icon className="size-4 text-muted-foreground" />
+                                    {option.name}
+                                 </span>
                               </SelectItem>
                            ))}
                         </SelectContent>
@@ -826,7 +877,18 @@ function Overview({
                         <SelectContent>
                            {members.map((member) => (
                               <SelectItem key={member.user.id} value={member.user.id}>
-                                 {member.user.name}
+                                 <span className="flex items-center gap-2">
+                                    <Avatar className="size-5">
+                                       <AvatarImage
+                                          src={member.user.avatarUrl ?? undefined}
+                                          alt={member.user.name}
+                                       />
+                                       <AvatarFallback className="text-[9px]">
+                                          {member.user.name[0]}
+                                       </AvatarFallback>
+                                    </Avatar>
+                                    {member.user.name}
+                                 </span>
                               </SelectItem>
                            ))}
                         </SelectContent>
