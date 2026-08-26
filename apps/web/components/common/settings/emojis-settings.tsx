@@ -1,6 +1,7 @@
 'use client';
 
 import { loadCurrentWorkspaceTeams } from '@/components/common/teams/team-types';
+import { authenticatedFetch } from '@/lib/workspaces';
 import { Button } from '@/components/ui/button';
 import {
    AlertDialog,
@@ -65,9 +66,9 @@ export default function EmojisSettings() {
       setLoadError(undefined);
       try {
          const { workspaceId: id } = await loadCurrentWorkspaceTeams();
-         const response = await fetch(`${api}/emojis?${new URLSearchParams({ workspaceId: id })}`, {
-            credentials: 'include',
-         });
+         const response = await authenticatedFetch(
+            `${api}/emojis?${new URLSearchParams({ workspaceId: id })}`
+         );
          if (!response.ok) throw new Error('Could not load workspace emojis.');
          setWorkspaceId(id);
          setEmojis(((await response.json()) as { data: WorkspaceEmoji[] }).data);
@@ -128,7 +129,7 @@ export default function EmojisSettings() {
          form.set('workspaceId', workspaceId);
          form.set('name', name);
          form.set('file', file);
-         const response = await fetch(`${api}/emojis`, {
+         const response = await authenticatedFetch(`${api}/emojis`, {
             method: 'POST',
             credentials: 'include',
             body: form,
@@ -148,7 +149,7 @@ export default function EmojisSettings() {
    const archive = async (emoji: WorkspaceEmoji) => {
       if (!workspaceId || removing) return;
       setRemoving(true);
-      const response = await fetch(
+      const response = await authenticatedFetch(
          `${api}/emojis/${emoji.id}?${new URLSearchParams({ workspaceId })}`,
          { method: 'DELETE', credentials: 'include' }
       );
