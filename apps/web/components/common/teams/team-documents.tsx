@@ -1,6 +1,18 @@
 'use client';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { IconPicker } from '@/components/common/icon-picker';
+import { MarkdownDocumentEditor } from './markdown-document-editor';
+import {
+   AlertDialog,
+   AlertDialogAction,
+   AlertDialogCancel,
+   AlertDialogContent,
+   AlertDialogDescription,
+   AlertDialogFooter,
+   AlertDialogHeader,
+   AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
@@ -29,12 +41,13 @@ import {
    Pin,
    Plus,
    SlidersHorizontal,
+   Trash2,
    Upload,
 } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { useLiveTeam } from './use-live-team';
+import { type LiveDocument, useLiveTeam } from './use-live-team';
 
 const timeAgo = (date: string) =>
    formatDistanceToNowStrict(parseISO(date), { addSuffix: true })
@@ -56,16 +69,22 @@ export default function TeamDocuments() {
       createDocument,
       createFolder,
       uploadDocumentFile,
+      updateFolder,
+      updateDocument,
+      deleteDocument,
    } = useLiveTeam(teamId);
    const [documentOpen, setDocumentOpen] = useState(false);
    const [folderOpen, setFolderOpen] = useState(false);
    const [title, setTitle] = useState('');
    const [folderId, setFolderId] = useState('');
-   const [documentType, setDocumentType] = useState<'flowie' | 'upload' | 'link'>('flowie');
+   const [documentType, setDocumentType] = useState<'markdown' | 'upload' | 'link'>('markdown');
    const [sourceUrl, setSourceUrl] = useState('');
    const [file, setFile] = useState<File>();
    const [folderName, setFolderName] = useState('');
+   const [folderIcon, setFolderIcon] = useState('📁');
    const [saving, setSaving] = useState(false);
+   const [editorDocument, setEditorDocument] = useState<LiveDocument>();
+   const [documentToDelete, setDocumentToDelete] = useState<LiveDocument>();
 
    if (loading)
       return (
@@ -82,7 +101,7 @@ export default function TeamDocuments() {
 
    const openDocument = () => {
       setTitle('');
-      setDocumentType('flowie');
+      setDocumentType('markdown');
       setSourceUrl('');
       setFile(undefined);
       setFolderId(documentFolders[0]?.id ?? '');
@@ -103,16 +122,17 @@ export default function TeamDocuments() {
             folderId,
             sourceType: documentType,
             sourceUrl: documentType === 'link' ? sourceUrl.trim() : undefined,
-            icon: documentType === 'link' ? '🔗' : documentType === 'upload' ? '📎' : '📄',
+            icon: documentType === 'link' ? '🔗' : documentType === 'upload' ? '📎' : '📝',
          });
          if (file) await uploadDocumentFile(document.id, file);
          setDocumentOpen(false);
+         if (documentType === 'markdown') setEditorDocument(document);
          toast.success(
             documentType === 'upload'
                ? 'File uploaded.'
                : documentType === 'link'
                  ? 'Document link added.'
-                 : 'Document created.'
+                 : 'Markdown document created.'
          );
       } catch (caught) {
          toast.error(caught instanceof Error ? caught.message : 'Could not create document.');
@@ -124,8 +144,9 @@ export default function TeamDocuments() {
       if (!folderName.trim()) return;
       setSaving(true);
       try {
-         await createFolder(folderName.trim());
+         await createFolder(folderName.trim(), folderIcon);
          setFolderName('');
+         setFolderIcon('📁');
          setFolderOpen(false);
          toast.success('Folder created.');
       } catch (caught) {
@@ -138,14 +159,14 @@ export default function TeamDocuments() {
 
    return (
       <div className="w-full">
-         <div className="flex items-center justify-between px-6 py-3 gap-2">
-            <div className="grid grid-cols-[1fr_40px] md:grid-cols-[1fr_90px_90px_40px] w-full items-center text-sm text-muted-foreground">
+         <div className="relative grid grid-cols-[1fr_64px] md:grid-cols-[1fr_90px_90px_72px] items-center px-6 py-3 text-sm text-muted-foreground">
+            <div className="contents">
                <span className="flex items-center gap-1 font-medium">Name ↓</span>
                <span className="hidden md:block">Created</span>
                <span className="hidden md:block">Last edited</span>
                <span />
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center gap-2">
                <Button size="xs" variant="outline" onClick={() => setFolderOpen(true)}>
                   <FolderPlus className="size-4 md:mr-1" />
                   <span className="hidden md:inline">New folder</span>
@@ -169,23 +190,51 @@ export default function TeamDocuments() {
                key={folder.id}
                defaultOpen={folder.documents.some((document) => document.pinned)}
             >
-               <CollapsibleTrigger asChild>
-                  <button className="group w-full flex items-center gap-2 px-6 h-10 bg-sidebar/30 hover:bg-sidebar/60 border-b border-border/50 text-sm">
-                     <ChevronRight className="size-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
-                     <span className="text-base leading-none">{folder.icon}</span>
-                     <span className="font-medium">{folder.name}</span>
-                     <span className="text-muted-foreground">{folder.documents.length}</span>
-                  </button>
-               </CollapsibleTrigger>
+               <div className="group flex items-center bg-sidebar/30 hover:bg-sidebar/60 border-b border-border/50">
+                  <CollapsibleTrigger asChild>
+                     <button className="flex-1 flex items-center gap-2 px-6 h-10 text-sm text-left">
+                        <ChevronRight className="size-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
+                        <span className="text-base leading-none">{folder.icon}</span>
+                        <span className="font-medium">{folder.name}</span>
+                        <span className="text-muted-foreground">{folder.documents.length}</span>
+                     </button>
+                  </CollapsibleTrigger>
+                  <IconPicker
+                     value={folder.icon}
+                     onChange={(icon) =>
+                        void updateFolder(folder.id, { icon }).catch((caught) =>
+                           toast.error(
+                              caught instanceof Error
+                                 ? caught.message
+                                 : 'Could not update folder icon.'
+                           )
+                        )
+                     }
+                     label={`Change icon for ${folder.name}`}
+                     compact
+                     className="size-7 p-0 mr-4 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                  />
+               </div>
                <CollapsibleContent>
                   {folder.documents.map((document) => (
                      <div
                         key={document.id}
-                        className="grid grid-cols-[1fr_40px] md:grid-cols-[1fr_90px_90px_40px] items-center px-6 h-11 hover:bg-sidebar/50 border-b border-border/30 text-sm"
+                        className="group grid grid-cols-[1fr_64px] md:grid-cols-[1fr_90px_90px_72px] items-center px-6 h-11 hover:bg-sidebar/50 border-b border-border/30 text-sm"
                      >
                         <div className="flex items-center gap-2 min-w-0 pl-6">
                            <span className="text-base leading-none">{document.icon}</span>
-                           <span className="font-medium truncate">{document.title}</span>
+                           {document.sourceType === 'markdown' ||
+                           document.sourceType === 'flowie' ? (
+                              <button
+                                 type="button"
+                                 className="font-medium truncate text-left hover:underline"
+                                 onClick={() => setEditorDocument(document)}
+                              >
+                                 {document.title}
+                              </button>
+                           ) : (
+                              <span className="font-medium truncate">{document.title}</span>
+                           )}
                            {document.sourceType === 'link' && (
                               <a
                                  href={document.sourceUrl ?? '#'}
@@ -216,13 +265,24 @@ export default function TeamDocuments() {
                         <span className="hidden md:block text-xs text-muted-foreground">
                            {timeAgo(document.updatedAt)}
                         </span>
-                        <Avatar className="size-5">
-                           <AvatarImage
-                              src={document.createdBy.avatarUrl ?? undefined}
-                              alt={document.createdBy.name}
-                           />
-                           <AvatarFallback>{document.createdBy.name[0]}</AvatarFallback>
-                        </Avatar>
+                        <div className="flex items-center justify-end gap-2">
+                           <Avatar className="size-5">
+                              <AvatarImage
+                                 src={document.createdBy.avatarUrl ?? undefined}
+                                 alt={document.createdBy.name}
+                              />
+                              <AvatarFallback>{document.createdBy.name[0]}</AvatarFallback>
+                           </Avatar>
+                           <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-7 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                              aria-label={`Delete ${document.title}`}
+                              onClick={() => setDocumentToDelete(document)}
+                           >
+                              <Trash2 className="size-3.5" />
+                           </Button>
+                        </div>
                      </div>
                   ))}
                </CollapsibleContent>
@@ -245,6 +305,14 @@ export default function TeamDocuments() {
                      placeholder="Folder name"
                      autoFocus
                   />
+                  <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                     <span className="text-sm text-muted-foreground">Folder icon</span>
+                     <IconPicker
+                        value={folderIcon}
+                        onChange={setFolderIcon}
+                        label="Choose folder icon"
+                     />
+                  </div>
                </div>
                <DialogFooter>
                   <Button variant="outline" disabled={saving} onClick={() => setFolderOpen(false)}>
@@ -267,16 +335,18 @@ export default function TeamDocuments() {
                <div className="space-y-3">
                   <Select
                      value={documentType}
-                     onValueChange={(value: 'flowie' | 'upload' | 'link') => setDocumentType(value)}
+                     onValueChange={(value: 'markdown' | 'upload' | 'link') =>
+                        setDocumentType(value)
+                     }
                   >
                      <SelectTrigger>
                         <SelectValue />
                      </SelectTrigger>
                      <SelectContent>
-                        <SelectItem value="flowie">
+                        <SelectItem value="markdown">
                            <span className="inline-flex items-center gap-2">
                               <FileText className="size-4" />
-                              Flowie document
+                              Markdown document
                            </span>
                         </SelectItem>
                         <SelectItem value="upload">
@@ -368,6 +438,47 @@ export default function TeamDocuments() {
                </DialogFooter>
             </DialogContent>
          </Dialog>
+         <MarkdownDocumentEditor
+            document={editorDocument}
+            open={Boolean(editorDocument)}
+            onOpenChange={(open) => !open && setEditorDocument(undefined)}
+            onUpdate={async (documentId, draft) => updateDocument(documentId, draft)}
+         />
+         <AlertDialog
+            open={Boolean(documentToDelete)}
+            onOpenChange={(open) => !open && setDocumentToDelete(undefined)}
+         >
+            <AlertDialogContent>
+               <AlertDialogHeader>
+                  <AlertDialogTitle>Delete document?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                     “{documentToDelete?.title}” will be removed from this team. This can be
+                     recovered only from a database backup.
+                  </AlertDialogDescription>
+               </AlertDialogHeader>
+               <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                     className="bg-destructive text-white hover:bg-destructive/90"
+                     onClick={() => {
+                        if (!documentToDelete) return;
+                        void deleteDocument(documentToDelete.id)
+                           .then(() => toast.success('Document deleted.'))
+                           .catch((caught) =>
+                              toast.error(
+                                 caught instanceof Error
+                                    ? caught.message
+                                    : 'Could not delete document.'
+                              )
+                           )
+                           .finally(() => setDocumentToDelete(undefined));
+                     }}
+                  >
+                     Delete document
+                  </AlertDialogAction>
+               </AlertDialogFooter>
+            </AlertDialogContent>
+         </AlertDialog>
       </div>
    );
 }

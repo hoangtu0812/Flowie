@@ -38,7 +38,7 @@ class CreateDocumentInput(BaseModel):
     title: str = Field(min_length=2, max_length=250)
     content: str = Field(default='', max_length=100000)
     icon: str | None = Field(default=None, min_length=1, max_length=32)
-    sourceType: Literal['flowie', 'upload', 'link'] = 'flowie'
+    sourceType: Literal['markdown', 'flowie', 'upload', 'link'] = 'markdown'
     sourceUrl: str | None = Field(default=None, max_length=2048)
     pinned: bool = False
     position: int | None = Field(default=None, ge=0)
@@ -49,7 +49,7 @@ class UpdateDocumentInput(BaseModel):
     title: str | None = Field(default=None, min_length=2, max_length=250)
     content: str | None = Field(default=None, max_length=100000)
     icon: str | None = Field(default=None, min_length=1, max_length=32)
-    sourceType: Literal['flowie', 'upload', 'link'] | None = None
+    sourceType: Literal['markdown', 'flowie', 'upload', 'link'] | None = None
     sourceUrl: str | None = Field(default=None, max_length=2048)
     pinned: bool | None = None
     position: int | None = Field(default=None, ge=0)
@@ -73,7 +73,11 @@ def _document(row: Any) -> dict[str, Any]:
     return {
         'id': row['id'], 'workspaceId': row['workspace_id'], 'teamId': row['team_id'],
         'folderId': row['folder_id'], 'title': row['title'], 'content': row['content'],
-        'icon': row['icon'], 'sourceType': row['source_type'], 'sourceUrl': row['source_url'],
+        'icon': row['icon'],
+        # `flowie` was the old internal name for native documents. Keep existing rows
+        # readable while exposing the clear product name to the client.
+        'sourceType': 'markdown' if row['source_type'] == 'flowie' else row['source_type'],
+        'sourceUrl': row['source_url'],
         'sourceAttachment': ({
             'id': row['source_attachment_id'], 'filename': row['source_attachment_filename'],
             'mimeType': row['source_attachment_mime_type'], 'size': row['source_attachment_size'],

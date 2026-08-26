@@ -41,7 +41,7 @@ export type LiveDocument = {
    title: string;
    content: string;
    icon: string;
-   sourceType: 'flowie' | 'upload' | 'link';
+   sourceType: 'markdown' | 'flowie' | 'upload' | 'link';
    sourceUrl: string | null;
    sourceAttachment: { id: string; filename: string; mimeType: string; size: number } | null;
    pinned: boolean;
@@ -219,7 +219,7 @@ export function useLiveTeam(teamReference: string) {
          folderId?: string;
          icon?: string;
          pinned?: boolean;
-         sourceType?: 'flowie' | 'upload' | 'link';
+         sourceType?: 'markdown' | 'flowie' | 'upload' | 'link';
          sourceUrl?: string;
       }) => {
          const context = requireContext();
@@ -287,6 +287,55 @@ export function useLiveTeam(teamReference: string) {
       [reload, requireContext]
    );
 
+   const updateFolder = useCallback(
+      async (folderId: string, input: { name?: string; icon?: string }) => {
+         const context = requireContext();
+         const response = await authenticatedFetch(
+            `${api}/documents/folders/${folderId}?${new URLSearchParams({ workspaceId: context.workspaceId })}`,
+            {
+               method: 'PATCH',
+               headers: { 'content-type': 'application/json' },
+               body: JSON.stringify(input),
+            }
+         );
+         if (!response.ok) throw new Error('Could not update document folder.');
+         reload();
+      },
+      [reload, requireContext]
+   );
+
+   const updateDocument = useCallback(
+      async (documentId: string, input: { title?: string; content?: string; icon?: string }) => {
+         const context = requireContext();
+         const response = await authenticatedFetch(
+            `${api}/documents/${documentId}?${new URLSearchParams({ workspaceId: context.workspaceId })}`,
+            {
+               method: 'PATCH',
+               headers: { 'content-type': 'application/json' },
+               body: JSON.stringify(input),
+            }
+         );
+         if (!response.ok) throw new Error('Could not save document.');
+         const document = ((await response.json()) as { data: LiveDocument }).data;
+         reload();
+         return document;
+      },
+      [reload, requireContext]
+   );
+
+   const deleteDocument = useCallback(
+      async (documentId: string) => {
+         const context = requireContext();
+         const response = await authenticatedFetch(
+            `${api}/documents/${documentId}?${new URLSearchParams({ workspaceId: context.workspaceId })}`,
+            { method: 'DELETE' }
+         );
+         if (!response.ok) throw new Error('Could not delete document.');
+         reload();
+      },
+      [reload, requireContext]
+   );
+
    return {
       workspaceId,
       team,
@@ -303,5 +352,8 @@ export function useLiveTeam(teamReference: string) {
       createDocument,
       uploadDocumentFile,
       createFolder,
+      updateFolder,
+      updateDocument,
+      deleteDocument,
    };
 }

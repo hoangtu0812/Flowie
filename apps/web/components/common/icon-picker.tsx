@@ -74,11 +74,13 @@ export function IconPicker({
    onChange,
    label = 'Choose icon',
    className,
+   compact = false,
 }: {
    value?: string;
    onChange: (icon: string) => void;
    label?: string;
    className?: string;
+   compact?: boolean;
 }) {
    const [open, setOpen] = useState(false);
 
@@ -94,7 +96,7 @@ export function IconPicker({
                title={label}
             >
                <Smile className="size-4" />
-               <span className="hidden sm:inline">Choose</span>
+               {!compact && <span className="hidden sm:inline">Choose</span>}
             </Button>
          </PopoverTrigger>
          <PopoverContent align="end" className="w-80 p-3">

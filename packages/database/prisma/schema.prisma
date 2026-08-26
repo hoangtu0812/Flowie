@@ -1079,7 +1079,7 @@ model Document {
   title       String
     content     String    @default("")
     icon        String    @default("📄")
-    sourceType  String    @default("flowie") @map("source_type")
+    sourceType  String    @default("markdown") @map("source_type")
     sourceUrl   String?   @map("source_url")
     pinned      Boolean   @default(false)
   position    Int       @default(0)
