@@ -83,6 +83,7 @@ export function SettingsRow({
    chevron,
    onClick,
    muted,
+   disabled,
 }: {
    icon?: React.ReactNode;
    title: React.ReactNode;
@@ -91,15 +92,19 @@ export function SettingsRow({
    chevron?: boolean;
    onClick?: () => void;
    muted?: boolean;
+   /** Keeps a settings row visible while preventing it from becoming interactive. */
+   disabled?: boolean;
 }) {
-   const Comp = onClick ? 'button' : 'div';
+   const Comp = onClick && !disabled ? 'button' : 'div';
    return (
       <Comp
          onClick={onClick}
+         aria-disabled={disabled || undefined}
          className={cn(
             'w-full flex items-center gap-3 px-4 py-3 text-left',
             onClick && 'hover:bg-accent/40 transition-colors cursor-pointer',
-            muted && 'opacity-60'
+            (muted || disabled) && 'opacity-60',
+            disabled && 'cursor-not-allowed'
          )}
       >
          {icon && (
