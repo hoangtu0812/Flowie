@@ -12,7 +12,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { loadCurrentWorkspace } from '@/lib/workspaces';
+import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -24,9 +24,9 @@ export type DiscordStatus = {
 
 export async function loadDiscordStatus(): Promise<DiscordStatus> {
    const workspaceId = (await loadCurrentWorkspace()).id;
-   const response = await fetch(`${api}/integrations/discord?workspaceId=${workspaceId}`, {
-      credentials: 'include',
-   });
+   const response = await authenticatedFetch(
+      `${api}/integrations/discord?workspaceId=${workspaceId}`
+   );
    if (!response.ok) throw new Error('Could not load the Discord integration.');
    return ((await response.json()) as { data: DiscordStatus }).data;
 }
@@ -61,12 +61,14 @@ export function DiscordIntegration({
       if (!workspaceId) return;
       setSaving(true);
       setMessage(undefined);
-      const response = await fetch(`${api}/integrations/discord?workspaceId=${workspaceId}`, {
-         method: 'POST',
-         credentials: 'include',
-         headers: { 'content-type': 'application/json' },
-         body: JSON.stringify({ ...(url ? { webhookUrl: url } : {}), enabled }),
-      });
+      const response = await authenticatedFetch(
+         `${api}/integrations/discord?workspaceId=${workspaceId}`,
+         {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ ...(url ? { webhookUrl: url } : {}), enabled }),
+         }
+      );
       setSaving(false);
       if (!response.ok) {
          setMessage('Could not save. Check the webhook URL and your workspace role.');
@@ -82,10 +84,12 @@ export function DiscordIntegration({
 
    async function test() {
       if (!workspaceId) return;
-      const response = await fetch(`${api}/integrations/discord/test?workspaceId=${workspaceId}`, {
-         method: 'POST',
-         credentials: 'include',
-      });
+      const response = await authenticatedFetch(
+         `${api}/integrations/discord/test?workspaceId=${workspaceId}`,
+         {
+            method: 'POST',
+         }
+      );
       const payload = (await response.json().catch(() => null)) as {
          data?: { delivered: boolean };
       } | null;
