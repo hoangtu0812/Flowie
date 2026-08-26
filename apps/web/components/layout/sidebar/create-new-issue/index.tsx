@@ -1,8 +1,13 @@
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTrigger } from '@/components/ui/dialog';
+import {
+   DropdownMenu,
+   DropdownMenuContent,
+   DropdownMenuItem,
+   DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Heart } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { RiEditLine } from '@remixicon/react';
@@ -48,6 +53,8 @@ type CreateIssueForm = {
 type IssueContext = {
    workspaceId: string;
    team: WorkspaceTeam;
+   /** Joined teams the issue can be filed under. */
+   teams: WorkspaceTeam[];
    options: NativeIssueOptions;
 };
 
@@ -88,6 +95,13 @@ export function CreateNewIssue() {
       setAddIssueForm(createDefaultData());
    }, [createDefaultData]);
 
+   const loadOptions = useCallback(async (workspaceId: string, teamId: string) => {
+      const query = new URLSearchParams({ workspaceId, teamId });
+      const response = await authenticatedFetch(`${api}/issues/options?${query}`);
+      if (!response.ok) throw new Error('Could not load issue options.');
+      return ((await response.json()) as { data: NativeIssueOptions }).data;
+   }, []);
+
    const loadContext = useCallback(async () => {
       if (!isOpen) return;
       try {
@@ -101,16 +115,37 @@ export function CreateNewIssue() {
                   candidate.id === teamIdentifier || candidate.identifier === teamIdentifier
             ) ?? joinedTeams.teams[0];
          if (!team) throw new Error('Join a team before creating an issue.');
-         const query = new URLSearchParams({ workspaceId: workspace.id, teamId: team.id });
-         const response = await authenticatedFetch(`${api}/issues/options?${query}`);
-         if (!response.ok) throw new Error('Could not load issue options.');
-         const payload = (await response.json()) as { data: NativeIssueOptions };
-         setContext({ workspaceId: workspace.id, team, options: payload.data });
+         setContext({
+            workspaceId: workspace.id,
+            team,
+            teams: joinedTeams.teams,
+            options: await loadOptions(workspace.id, team.id),
+         });
       } catch (error) {
          setContext(undefined);
          toast.error(error instanceof Error ? error.message : 'Workspace is not ready yet.');
       }
-   }, [isOpen, teamIdentifier]);
+   }, [isOpen, loadOptions, teamIdentifier]);
+
+   /** Members, projects and labels are team-scoped, so a switch reloads them. */
+   const selectTeam = useCallback(
+      async (team: WorkspaceTeam) => {
+         if (!context || team.id === context.team.id) return;
+         try {
+            const options = await loadOptions(context.workspaceId, team.id);
+            setContext({ ...context, team, options });
+            setAddIssueForm((form) => ({
+               ...form,
+               assignee: null,
+               project: undefined,
+               labels: [],
+            }));
+         } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Could not switch team.');
+         }
+      },
+      [context, loadOptions]
+   );
 
    useEffect(() => {
       void loadContext();
@@ -210,10 +245,27 @@ export function CreateNewIssue() {
             <DialogHeader>
                <DialogTitle>
                   <div className="flex items-center px-4 pt-4 gap-2">
-                     <Button size="sm" variant="outline" className="gap-1.5">
-                        <Heart className="size-4 text-orange-500 fill-orange-500" />
-                        <span className="font-medium">CORE</span>
-                     </Button>
+                     <DropdownMenu>
+                        <DropdownMenuTrigger asChild disabled={!context}>
+                           <Button size="sm" variant="outline" className="gap-1.5">
+                              <span>{context?.team.icon ?? '👥'}</span>
+                              <span className="font-medium">
+                                 {context?.team.identifier ?? 'Loading…'}
+                              </span>
+                           </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-56">
+                           {(context?.teams ?? []).map((team) => (
+                              <DropdownMenuItem key={team.id} onClick={() => void selectTeam(team)}>
+                                 <span>{team.icon ?? '👥'}</span>
+                                 <span className="truncate">{team.name}</span>
+                                 <span className="ml-auto text-xs text-muted-foreground">
+                                    {team.identifier}
+                                 </span>
+                              </DropdownMenuItem>
+                           ))}
+                        </DropdownMenuContent>
+                     </DropdownMenu>
                   </div>
                </DialogTitle>
             </DialogHeader>

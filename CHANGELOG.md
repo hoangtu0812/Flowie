@@ -12,6 +12,12 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## [0.2.1] — 2026-08-26 20:05 +07
 
+### Changed
+
+- The create-issue dialog names the team the issue will actually be filed
+  under, and lets it be picked, instead of printing a fixed `CORE` badge left
+  over from the interface template.
+
 ### Added
 
 - The Help menu states the running release and links to it: version, release
@@ -20,6 +26,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- The root URL opens the signed-in user's own workspace instead of redirecting
+  to a workspace and team that only exist in the interface template.
 - Opening the due date or reminder picker from an issue's context menu left the
   page unresponsive — the browser's own menu on right click, no clicks landing
   anywhere. Both dialogs were rendered inside the context menu, so the two modal
