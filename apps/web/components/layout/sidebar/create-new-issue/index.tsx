@@ -72,8 +72,11 @@ export function CreateNewIssue() {
    const [createMore, setCreateMore] = useState<boolean>(false);
    const { isOpen, defaultStatus, openModal, closeModal } = useCreateIssueStore();
    const { issues, loadIssues } = useIssuesStore();
-   const params = useParams<{ teamId?: string | string[] }>();
+   const params = useParams<{ teamId?: string | string[]; projectId?: string | string[] }>();
    const teamIdentifier = Array.isArray(params.teamId) ? params.teamId[0] : params.teamId;
+   const projectIdFromRoute = Array.isArray(params.projectId)
+      ? params.projectId[0]
+      : params.projectId;
    const [context, setContext] = useState<IssueContext>();
    const [creating, setCreating] = useState(false);
 
@@ -170,6 +173,15 @@ export function CreateNewIssue() {
       () => (context?.options.projects ?? []).map((project) => ({ ...project, icon: Box })),
       [context]
    );
+
+   // Opened from a project screen, the dialog starts on that project; the
+   // picker stays available for anything else.
+   useEffect(() => {
+      if (!isOpen || !projectIdFromRoute) return;
+      const routeProject = liveProjects.find((project) => project.id === projectIdFromRoute);
+      if (!routeProject) return;
+      setAddIssueForm((form) => (form.project ? form : { ...form, project: routeProject }));
+   }, [isOpen, liveProjects, projectIdFromRoute]);
    const statusCounts = useMemo(
       () =>
          Object.fromEntries(

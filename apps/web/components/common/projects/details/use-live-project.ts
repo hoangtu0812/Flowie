@@ -7,9 +7,11 @@ import {
    useCallback,
    useContext,
    useEffect,
+   useRef,
    useState,
 } from 'react';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
+import { useIssuesStore } from '@/store/issues-store';
 
 export type LiveProject = {
    id: string;
@@ -137,13 +139,15 @@ export function useLiveProject(projectId: string) {
    const [availableMembers, setAvailableMembers] = useState<LiveWorkspaceMember[]>([]);
    const [availableTeams, setAvailableTeams] = useState<LiveWorkspaceTeam[]>([]);
    const [loading, setLoading] = useState(true);
+   /** A refetch keeps the current screen on screen instead of blanking it. */
+   const loadedOnce = useRef(false);
    const [error, setError] = useState<string>();
    const [refreshKey, setRefreshKey] = useState(0);
 
    useEffect(() => {
       let current = true;
       void (async () => {
-         setLoading(true);
+         if (!loadedOnce.current) setLoading(true);
          setError(undefined);
          try {
             const workspaceId = (await loadCurrentWorkspace()).id;
@@ -224,7 +228,10 @@ export function useLiveProject(projectId: string) {
             if (current)
                setError(caught instanceof Error ? caught.message : 'Could not load project.');
          } finally {
-            if (current) setLoading(false);
+            if (current) {
+               loadedOnce.current = true;
+               setLoading(false);
+            }
          }
       })();
       return () => {
@@ -233,6 +240,17 @@ export function useLiveProject(projectId: string) {
    }, [projectId, refreshKey]);
 
    const reload = useCallback(() => setRefreshKey((value) => value + 1), []);
+
+   // Every issue mutation in the app lands in the issues store, including the
+   // ones started from the command palette or a context menu. Following that
+   // store keeps this screen from showing a list the user already changed.
+   useEffect(
+      () =>
+         useIssuesStore.subscribe((state, previous) => {
+            if (state.issues !== previous.issues) reload();
+         }),
+      [reload]
+   );
 
    const createUpdate = useCallback(
       async (body: string, health: string, kind: 'update' | 'comment', attachment?: File) => {

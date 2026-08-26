@@ -4,7 +4,8 @@ import { GroupedIssuesView } from '@/components/common/issues/grouped-issues-vie
 import { applyIssueFilters } from '@/components/common/issues/issue-filter-columns';
 import { IssueFilterBar } from '@/components/common/issues/issue-filter-bar';
 import { useFilterStore } from '@/store/filter-store';
-import { useMemo } from 'react';
+import { useIssuesStore } from '@/store/issues-store';
+import { useEffect, useMemo } from 'react';
 import { toIssueUi, toProjectDetailUi, toProjectUi } from './project-detail-ui-adapter';
 import { ProjectSidePanel } from './project-side-panel';
 import { useLiveProjectData } from './use-live-project';
@@ -26,6 +27,12 @@ export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
       error,
    } = useLiveProjectData();
    const { filters } = useFilterStore();
+   // Rows here share the issue components, whose assignee picker and cycle
+   // names read the issues store; nothing else on this route populates it.
+   const loadIssues = useIssuesStore((state) => state.loadIssues);
+   useEffect(() => {
+      void loadIssues();
+   }, [loadIssues]);
    const project = useMemo(
       () => (liveProject ? toProjectUi(liveProject, liveIssues) : null),
       [liveProject, liveIssues]

@@ -10,7 +10,15 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+### Fixed
+
+- The Project detail tabs refresh when an issue is created or edited elsewhere
+  — the command palette, a context menu, an inline status picker — instead of
+  showing a stale list until the page is reloaded by hand.
+
 ### Changed
+
+- Creating an issue from a project screen files it in that project by default.
 
 - Discord notifications are embeds instead of one grey line: who acted, the
   issue code and title, a link straight to the item, the values that moved
