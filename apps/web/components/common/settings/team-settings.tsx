@@ -1,5 +1,6 @@
 'use client';
 
+import { LoadingState } from '@/components/common/loading-state';
 import { useLiveTeam } from '@/components/common/teams/use-live-team';
 import type { WorkspaceTeam } from '@/components/common/teams/team-types';
 import { authenticatedFetch } from '@/lib/workspaces';
@@ -70,12 +71,7 @@ export default function TeamSettings({ teamId }: { teamId: string }) {
       [team]
    );
 
-   if (loading)
-      return (
-         <div className="h-full grid place-items-center text-sm text-muted-foreground">
-            Loading team settings…
-         </div>
-      );
+   if (loading) return <LoadingState label="Loading team settings…" />;
    if (error || !team || !workspaceTeam)
       return (
          <div className="h-full grid place-items-center text-sm text-destructive">

@@ -1,5 +1,6 @@
 'use client';
 
+import { LoadingState } from '@/components/common/loading-state';
 import { ContentBlocks } from '@/components/common/issues/details/content-blocks';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -103,12 +104,7 @@ export default function ProjectActivity({ projectId }: ProjectActivityProps) {
       return [...groups.entries()];
    }, [detail]);
 
-   if (loading)
-      return (
-         <div className="h-full grid place-items-center text-sm text-muted-foreground">
-            Loading project…
-         </div>
-      );
+   if (loading) return <LoadingState label="Loading project…" />;
    if (error || !project || !detail)
       return (
          <div className="h-full grid place-items-center text-sm text-destructive">

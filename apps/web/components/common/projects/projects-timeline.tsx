@@ -11,6 +11,18 @@ import {
 import { cn } from '@/lib/utils';
 import type { Project } from '@/types/projects';
 import { useProjectsDisplayStore } from '@/store/projects-display-store';
+import {
+   BIWEEKLY_DATES,
+   LIST_WIDTH,
+   MONTHS,
+   offsetFor,
+   offsetForTime,
+   monthWidthOf,
+   totalWidthOf,
+   WEEKLY_DATES,
+   ZOOM_LEVELS,
+   type TimelineZoom,
+} from '@/components/common/timeline/timeline-scale';
 import { format, parseISO } from 'date-fns';
 import { ArrowLeft, ArrowRight, Check, ChevronDown, Plus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -20,90 +32,6 @@ import { ProjectGroup } from './projects';
 interface ProjectsTimelineProps {
    groups: ProjectGroup[];
 }
-
-/* Wide, deterministic range (feels infinite): Jan 2020 → Dec 2032 (SSR safe). */
-const RANGE_START = Date.UTC(2020, 0, 1);
-const RANGE_END = Date.UTC(2032, 11, 31);
-/** Width of the sticky project list column. */
-const LIST_WIDTH = 224;
-
-/** Zoom levels for the scale dropdown (month column width in px). */
-const ZOOM_LEVELS = [
-   { id: 'year', label: 'Year', shortcut: 'Y', monthWidth: 120 },
-   { id: 'quarter', label: 'Quarter', shortcut: 'Q', monthWidth: 240 },
-   { id: 'month', label: 'Month', shortcut: 'M', monthWidth: 480 },
-   { id: 'week', label: 'Week', shortcut: 'W', monthWidth: 960 },
-] as const;
-type TimelineZoom = (typeof ZOOM_LEVELS)[number]['id'];
-
-const monthWidthOf = (zoom: TimelineZoom) =>
-   ZOOM_LEVELS.find((level) => level.id === zoom)!.monthWidth;
-
-interface MonthCell {
-   key: string;
-   label: string;
-}
-
-const MONTHS: MonthCell[] = [];
-for (let index = 0; ; index++) {
-   const date = new Date(Date.UTC(2020, index, 1));
-   if (date.getTime() > RANGE_END) break;
-   MONTHS.push({
-      key: date.toISOString().slice(0, 7),
-      label:
-         date.getUTCMonth() === 0
-            ? `${date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' })} ${date.getUTCFullYear()}`
-            : date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' }),
-   });
-}
-
-const totalWidthOf = (monthWidth: number) => MONTHS.length * monthWidth;
-
-/* --------------------------- Scale date labels --------------------------- */
-
-const DAY_MS = 86_400_000;
-/** First Monday inside the range (Jan 6, 2020). */
-const FIRST_MONDAY = Date.UTC(2020, 0, 6);
-
-interface ScaleDate {
-   time: number;
-   /** Day of month, e.g. 17. */
-   day: number;
-   /** ISO week number, for the "Show week numbers" display option. */
-   week: number;
-}
-
-const isoWeekOf = (time: number): number => {
-   const date = new Date(time);
-   const target = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-   const dayNumber = (target.getUTCDay() + 6) % 7;
-   target.setUTCDate(target.getUTCDate() - dayNumber + 3);
-   const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
-   const firstDayNumber = (firstThursday.getUTCDay() + 6) % 7;
-   firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDayNumber + 3);
-   return 1 + Math.round((target.getTime() - firstThursday.getTime()) / (7 * DAY_MS));
-};
-
-/** Every Monday of the range (weekly ticks + zoomed-in date labels). */
-const WEEKLY_DATES: ScaleDate[] = [];
-for (let time = FIRST_MONDAY; time <= RANGE_END; time += 7 * DAY_MS) {
-   WEEKLY_DATES.push({ time, day: new Date(time).getUTCDate(), week: isoWeekOf(time) });
-}
-/** Every other Monday (date labels at the Year zoom). */
-const BIWEEKLY_DATES: ScaleDate[] = WEEKLY_DATES.filter((_, index) => index % 2 === 0);
-
-const offsetForTime = (time: number, monthWidth: number): number =>
-   ((time - RANGE_START) / (RANGE_END - RANGE_START)) * totalWidthOf(monthWidth);
-
-const offsetFor = (iso: string, monthWidth: number): number => {
-   const time = Date.UTC(
-      Number(iso.slice(0, 4)),
-      Number(iso.slice(5, 7)) - 1,
-      Number(iso.slice(8, 10))
-   );
-   const clamped = Math.min(Math.max(time, RANGE_START), RANGE_END);
-   return ((clamped - RANGE_START) / (RANGE_END - RANGE_START)) * totalWidthOf(monthWidth);
-};
 
 const barBounds = (project: Project, monthWidth: number) => {
    const left = offsetFor(project.startDate, monthWidth);

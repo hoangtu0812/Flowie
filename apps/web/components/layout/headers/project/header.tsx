@@ -22,6 +22,7 @@ const PROJECT_TABS = [
    { label: 'Overview', segment: 'overview' },
    { label: 'Activity', segment: 'activity' },
    { label: 'Issues', segment: 'issues' },
+   { label: 'Timeline', segment: 'timeline' },
 ];
 
 function ProjectTabs({ projectId }: { projectId: string }) {
@@ -87,7 +88,9 @@ export default function Header({ projectId }: { projectId: string }) {
       try {
          await toggleFavorite(!favorited);
       } catch (caught) {
-         toast.error(caught instanceof Error ? caught.message : 'Could not update project favorite.');
+         toast.error(
+            caught instanceof Error ? caught.message : 'Could not update project favorite.'
+         );
       }
    };
 
@@ -122,9 +125,13 @@ export default function Header({ projectId }: { projectId: string }) {
                      size="icon"
                      className="size-6 text-muted-foreground"
                      onClick={() => void onToggleFavorite()}
-                     aria-label={favorited ? 'Remove project from favorites' : 'Add project to favorites'}
+                     aria-label={
+                        favorited ? 'Remove project from favorites' : 'Add project to favorites'
+                     }
                   >
-                     <Star className={cn('size-3.5', favorited && 'fill-current text-foreground')} />
+                     <Star
+                        className={cn('size-3.5', favorited && 'fill-current text-foreground')}
+                     />
                   </Button>
                </div>
             </div>

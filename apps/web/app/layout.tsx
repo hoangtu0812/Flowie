@@ -55,6 +55,7 @@ export const metadata: Metadata = {
    keywords: ['flowie', 'project management', 'team collaboration', 'fastapi', 'next.js'],
 };
 
+import { RouteProgress } from '@/components/layout/route-progress';
 import { ThemeProvider } from '@/components/layout/theme-provider';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 
@@ -74,6 +75,7 @@ export default function RootLayout({
          >
             <NuqsAdapter>
                <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+                  <RouteProgress />
                   {children}
                   <Toaster />
                </ThemeProvider>

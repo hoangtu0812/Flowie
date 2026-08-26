@@ -10,6 +10,21 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+### Added
+
+- A Timeline tab on the Project screen: every issue as a bar from the day it
+  was opened to the day it is due, grouped by status, on the same month scale
+  the Projects timeline uses.
+- A navigation progress bar, and a moving indicator on the screens that wait
+  for their own data, so a slow request no longer reads as a frozen page.
+
+### Changed
+
+- An issue can be filed into a project from its detail panel; the Project
+  section used to appear only once the issue already had one.
+- The issue breadcrumb returns to the team's issue list rather than the team
+  overview.
+
 ### Fixed
 
 - The Project detail tabs refresh when an issue is created or edited elsewhere

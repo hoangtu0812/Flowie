@@ -1,5 +1,6 @@
 'use client';
 
+import { LoadingState } from '@/components/common/loading-state';
 import { getIssueDetail } from '@/mock-data/issue-details';
 import { useIssuesStore } from '@/store/issues-store';
 import { Paperclip, Plus, SmilePlus } from 'lucide-react';
@@ -55,11 +56,7 @@ export default function IssueDetails() {
 
    if (!issue || !detail) {
       if (loading) {
-         return (
-            <div className="h-full grid place-items-center text-sm text-muted-foreground">
-               Loading issue…
-            </div>
-         );
+         return <LoadingState label="Loading issue…" />;
       }
       return (
          <div className="flex flex-col items-center justify-center h-full gap-2 text-sm text-muted-foreground">

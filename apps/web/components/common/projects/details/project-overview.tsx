@@ -1,5 +1,6 @@
 'use client';
 
+import { LoadingState } from '@/components/common/loading-state';
 import { ContentBlocks } from '@/components/common/issues/details/content-blocks';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -77,12 +78,7 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
    const [propertyTargetDate, setPropertyTargetDate] = useState('');
    const [propertyTeamId, setPropertyTeamId] = useState('unassigned');
    const [savingProperty, setSavingProperty] = useState(false);
-   if (loading)
-      return (
-         <div className="h-full grid place-items-center text-sm text-muted-foreground">
-            Loading project…
-         </div>
-      );
+   if (loading) return <LoadingState label="Loading project…" />;
    if (error || !liveProject)
       return (
          <div className="h-full grid place-items-center text-sm text-destructive">

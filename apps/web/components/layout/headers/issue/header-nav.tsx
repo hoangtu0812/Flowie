@@ -55,7 +55,9 @@ export default function HeaderNav() {
             <SidebarTrigger />
             {team && (
                <Link
-                  href={`/${orgId}/team/${team.identifier}/overview`}
+                  // The crumb goes back to the list the issue was opened from,
+                  // not to a team landing page nobody navigated through.
+                  href={`/${orgId}/team/${team.identifier}/all`}
                   className="flex items-center gap-1.5 shrink-0 hover:opacity-80"
                >
                   <div className="inline-flex size-5 bg-muted/50 items-center justify-center rounded shrink-0 text-xs">

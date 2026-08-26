@@ -1,5 +1,6 @@
 'use client';
 
+import { LoadingState } from '@/components/common/loading-state';
 import { GroupedIssuesView } from '@/components/common/issues/grouped-issues-view';
 import { applyIssueFilters } from '@/components/common/issues/issue-filter-columns';
 import { IssueFilterBar } from '@/components/common/issues/issue-filter-bar';
@@ -54,12 +55,7 @@ export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
       [issues]
    );
 
-   if (loading)
-      return (
-         <div className="h-full grid place-items-center text-sm text-muted-foreground">
-            Loading project…
-         </div>
-      );
+   if (loading) return <LoadingState label="Loading project…" />;
    if (error || !project || !detail)
       return (
          <div className="h-full grid place-items-center text-sm text-destructive">

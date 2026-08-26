@@ -12,7 +12,7 @@ import {
 import { IssueDetail } from '@/mock-data/issue-details';
 import { Issue } from '@/mock-data/issues';
 import { useIssuesStore } from '@/store/issues-store';
-import { Ban, Check, GitPullRequestArrow, Plus } from 'lucide-react';
+import { Ban, Box, Check, GitPullRequestArrow, Plus } from 'lucide-react';
 import { AssigneeUser } from '../assignee-user';
 import { LabelBadge } from '../label-badge';
 import { PrioritySelector } from '../priority-selector';
@@ -38,10 +38,18 @@ function Section({ title, children }: { title: string; children: React.ReactNode
  * assignee), cycle, labels, project + milestone, relations and linked PRs.
  */
 export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProps) {
-   const { cycles, labels, addIssueLabel, removeIssueLabel } = useIssuesStore();
+   const { cycles, labels, projects, addIssueLabel, removeIssueLabel, updateIssueProject } =
+      useIssuesStore();
    const cycle = issue.cycleId
       ? cycles.find((candidate) => candidate.id === issue.cycleId)
       : undefined;
+
+   const setProject = async (projectId: string | null) => {
+      await updateIssueProject(
+         issue.id,
+         projectId ? projects.find((candidate) => candidate.id === projectId) : undefined
+      );
+   };
 
    const toggleLabel = async (labelId: string) => {
       const label = labels.find((candidate) => candidate.id === labelId);
@@ -123,20 +131,56 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
             </div>
          </Section>
 
-         {issue.project && (
-            <Section title="Project">
-               <div className="flex items-center gap-2 text-sm">
-                  <issue.project.icon className="size-4 text-muted-foreground shrink-0" />
-                  <span className="truncate">{issue.project.name}</span>
+         <Section title="Project">
+            <DropdownMenu>
+               <DropdownMenuTrigger asChild>
+                  <button
+                     type="button"
+                     className="flex items-center gap-2 text-sm w-full text-left rounded-md -mx-1 px-1 py-0.5 hover:bg-accent/50 transition-colors"
+                  >
+                     {issue.project ? (
+                        <>
+                           <issue.project.icon className="size-4 text-muted-foreground shrink-0" />
+                           <span className="truncate">{issue.project.name}</span>
+                        </>
+                     ) : (
+                        <>
+                           <Box className="size-4 text-muted-foreground shrink-0" />
+                           <span className="text-muted-foreground">Add to project</span>
+                        </>
+                     )}
+                  </button>
+               </DropdownMenuTrigger>
+               <DropdownMenuContent align="start" className="w-56">
+                  <DropdownMenuLabel>Project</DropdownMenuLabel>
+                  <DropdownMenuItem onSelect={() => void setProject(null)}>
+                     <span className="text-muted-foreground">No project</span>
+                     {!issue.project && <Check className="ml-auto size-4 shrink-0" />}
+                  </DropdownMenuItem>
+                  {projects.map((project) => (
+                     <DropdownMenuItem
+                        key={project.id}
+                        onSelect={() => void setProject(project.id)}
+                     >
+                        <Box className="size-4 text-muted-foreground shrink-0" />
+                        <span className="truncate">{project.name}</span>
+                        {issue.project?.id === project.id && (
+                           <Check className="ml-auto size-4 shrink-0" />
+                        )}
+                     </DropdownMenuItem>
+                  ))}
+                  {projects.length === 0 && (
+                     <DropdownMenuItem disabled>No projects in this workspace</DropdownMenuItem>
+                  )}
+               </DropdownMenuContent>
+            </DropdownMenu>
+            {issue.project && detail.milestone && (
+               <div className="flex items-center gap-2 text-sm mt-1.5 pl-6 text-muted-foreground">
+                  <span className="size-2 rotate-45 border border-amber-400 shrink-0" />
+                  <span className="truncate">{detail.milestone}</span>
                </div>
-               {detail.milestone && (
-                  <div className="flex items-center gap-2 text-sm mt-1.5 pl-6 text-muted-foreground">
-                     <span className="size-2 rotate-45 border border-amber-400 shrink-0" />
-                     <span className="truncate">{detail.milestone}</span>
-                  </div>
-               )}
-            </Section>
-         )}
+            )}
+         </Section>
 
          {detail.blockedByIds && detail.blockedByIds.length > 0 && (
             <Section title="Blocked by">
