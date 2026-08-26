@@ -50,6 +50,13 @@ export function OrgSwitcher() {
    const [createOpen, setCreateOpen] = React.useState(false);
    const [workspaceName, setWorkspaceName] = React.useState('');
    const [creating, setCreating] = React.useState(false);
+   const [workspaceVersion, setWorkspaceVersion] = React.useState(0);
+
+   React.useEffect(() => {
+      const onWorkspaceUpdated = () => setWorkspaceVersion((version) => version + 1);
+      window.addEventListener('flowie:workspace-updated', onWorkspaceUpdated);
+      return () => window.removeEventListener('flowie:workspace-updated', onWorkspaceUpdated);
+   }, []);
 
    React.useEffect(() => {
       let current = true;
@@ -84,7 +91,7 @@ export function OrgSwitcher() {
       return () => {
          current = false;
       };
-   }, [orgId, pathname, router]);
+   }, [orgId, pathname, router, workspaceVersion]);
 
    const currentWorkspace = memberships.find(
       ({ workspace }) => workspace.slug === orgId || workspace.id === orgId
@@ -120,6 +127,8 @@ export function OrgSwitcher() {
          setCreating(false);
       }
    };
+   const workspaceMark = (workspace?: { name: string; icon?: string | null }) =>
+      workspace?.icon?.trim() || workspace?.name.slice(0, 2).toUpperCase() || 'FL';
 
    return (
       <>
@@ -133,7 +142,7 @@ export function OrgSwitcher() {
                            className="h-8 p-1 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                         >
                            <div className="flex aspect-square size-6 items-center justify-center rounded bg-orange-500 text-sidebar-primary-foreground">
-                              {currentWorkspace?.name.slice(0, 2).toUpperCase() ?? 'FL'}
+                              {workspaceMark(currentWorkspace)}
                            </div>
                            <div className="grid flex-1 text-left text-sm leading-tight">
                               <span className="truncate font-semibold">
@@ -163,7 +172,7 @@ export function OrgSwitcher() {
                         {currentWorkspace ? (
                            <>
                               <DropdownMenuItem asChild>
-                                 <Link href={`/${currentWorkspace.slug}/settings`}>
+                                 <Link href={`/${currentWorkspace.slug}/settings/workspace`}>
                                     Settings
                                     <DropdownMenuShortcut>G then S</DropdownMenuShortcut>
                                  </Link>
@@ -201,7 +210,7 @@ export function OrgSwitcher() {
                                  <DropdownMenuItem key={workspace.id} asChild>
                                     <Link href={workspaceHref(workspace.slug)}>
                                        <div className="flex aspect-square size-6 items-center justify-center rounded bg-orange-500 text-sidebar-primary-foreground">
-                                          {workspace.name.slice(0, 2).toUpperCase()}
+                                          {workspaceMark(workspace)}
                                        </div>
                                        {workspace.name}
                                     </Link>

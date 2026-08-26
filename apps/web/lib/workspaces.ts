@@ -22,6 +22,7 @@ export type WorkspaceSummary = {
    id: string;
    name: string;
    slug: string;
+   icon?: string | null;
    organization?: { id: string; name: string; slug: string };
 };
 

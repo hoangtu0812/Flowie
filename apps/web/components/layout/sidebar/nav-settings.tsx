@@ -47,6 +47,10 @@ interface SettingsNavGroup {
 /** Linear-style settings navigation. */
 export const settingsNav: SettingsNavGroup[] = [
    {
+      label: 'Workspace',
+      items: [{ name: 'General', url: '/settings/workspace', icon: Settings }],
+   },
+   {
       label: 'Personal',
       items: [
          { name: 'Preferences', url: '/settings/preferences', icon: Settings },

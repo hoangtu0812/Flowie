@@ -263,6 +263,7 @@ model Workspace {
   organizationId         String   @map("organization_id")
   name                   String
   slug                   String   @unique
+  icon                   String?
   description            String?
   timezone               String   @default("UTC")
   projectDisplayDefaults Json?    @map("project_display_defaults")

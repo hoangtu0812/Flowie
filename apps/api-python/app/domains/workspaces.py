@@ -29,6 +29,10 @@ class CreateWorkspaceInput(BaseModel):
     name: str = Field(min_length=2, max_length=120)
 
 
+class UpdateWorkspaceInput(BaseModel):
+    icon: str | None = Field(default=None, max_length=16)
+
+
 class InviteMemberInput(BaseModel):
     email: str = Field(max_length=320)
     role: str | None = Field(default=None, max_length=16)
@@ -236,6 +240,7 @@ def _workspace(row: Any) -> dict[str, Any]:
         'organizationId': row['organization_id'],
         'name': row['workspace_name'],
         'slug': row['workspace_slug'],
+        'icon': row['workspace_icon'],
         'description': row['workspace_description'],
         'timezone': row['workspace_timezone'],
         'projectDisplayDefaults': row['project_display_defaults'],
@@ -260,7 +265,7 @@ async def _workspace_summary(db: AsyncSession, workspace_id: str) -> dict[str, A
         text(
             '''
             SELECT w.id AS workspace_id_value, w.organization_id, w.name AS workspace_name,
-                   w.slug AS workspace_slug, w.description AS workspace_description,
+                   w.slug AS workspace_slug, w.icon AS workspace_icon, w.description AS workspace_description,
                    w.timezone AS workspace_timezone, w.project_display_defaults,
                    w.issue_display_defaults, w.issue_insight_defaults,
                    w.created_at AS workspace_created_at, w.updated_at AS workspace_updated_at,
@@ -373,7 +378,7 @@ async def mine(
                    wm.joined_at AS member_joined_at, wm.invited_by AS member_invited_by,
                    wm.created_at AS member_created_at, wm.updated_at AS member_updated_at,
                    w.id AS workspace_id_value, w.organization_id, w.name AS workspace_name,
-                   w.slug AS workspace_slug, w.description AS workspace_description,
+                   w.slug AS workspace_slug, w.icon AS workspace_icon, w.description AS workspace_description,
                    w.timezone AS workspace_timezone, w.project_display_defaults,
                    w.issue_display_defaults, w.issue_insight_defaults,
                    w.created_at AS workspace_created_at, w.updated_at AS workspace_updated_at,
@@ -410,7 +415,7 @@ async def pending_invitations(
                    wm.joined_at AS member_joined_at, wm.invited_by AS member_invited_by,
                    wm.created_at AS member_created_at, wm.updated_at AS member_updated_at,
                    w.id AS workspace_id_value, w.organization_id, w.name AS workspace_name,
-                   w.slug AS workspace_slug, w.description AS workspace_description,
+                   w.slug AS workspace_slug, w.icon AS workspace_icon, w.description AS workspace_description,
                    w.timezone AS workspace_timezone, w.project_display_defaults,
                    w.issue_display_defaults, w.issue_insight_defaults,
                    w.created_at AS workspace_created_at, w.updated_at AS workspace_updated_at,
@@ -464,6 +469,57 @@ async def create_workspace(
         await db.rollback()
         raise ApiError(409, 'A workspace with this name already exists.', 'Conflict') from error
     return {'data': await _created_organization(db, bootstrap['workspace_id'])}
+
+
+@router.patch('/{workspace_id}')
+async def update_workspace(
+    workspace_id: str,
+    payload: UpdateWorkspaceInput,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    await _authorize_manager(db, workspace_id, user['id'])
+    icon = payload.icon.strip() if payload.icon else None
+    if icon == '':
+        icon = None
+    result = await db.execute(
+        text(
+            '''
+            UPDATE workspaces
+            SET icon = :icon, updated_at = :now
+            WHERE id = :workspace_id
+            RETURNING id
+            '''
+        ),
+        {'workspace_id': workspace_id, 'icon': icon, 'now': _utcnow()},
+    )
+    if not result.scalar_one_or_none():
+        raise ApiError(404, 'Workspace not found.', 'Not Found')
+    await db.execute(
+        text(
+            '''
+            INSERT INTO audit_logs (
+                id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at
+            ) VALUES (
+                :id, :workspace_id, :actor_id, 'workspace.icon.updated', 'workspace', :entity_id,
+                CAST(:metadata AS jsonb), :now
+            )
+            '''
+        ),
+        {
+            'id': _cuid(),
+            'workspace_id': workspace_id,
+            'actor_id': user['id'],
+            'entity_id': workspace_id,
+            'metadata': json.dumps({'icon': icon}),
+            'now': _utcnow(),
+        },
+    )
+    await db.commit()
+    workspace = await _workspace_summary(db, workspace_id)
+    if not workspace:
+        raise ApiError(404, 'Workspace not found.', 'Not Found')
+    return {'data': workspace}
 
 
 @router.get('/{workspace_id}/project-display-defaults')
