@@ -30,19 +30,21 @@ export default function AccountCodeReviews() {
    return (
       <SettingsShell
          title="Code & reviews"
-         description="Review GitHub pull requests and agent code diffs in LNDev UI"
+         description="Review GitHub pull requests and agent code diffs in Flowie. This feature is not available yet."
       >
          <SettingsSection>
             <SettingsCard>
                <SettingsRow
                   title="Enable code reviews"
                   description="Review GitHub pull requests, accessible from the sidebar"
-                  trailing={<Switch defaultChecked />}
+                  trailing={<Switch defaultChecked disabled />}
+                  disabled
                />
                <SettingsRow
                   title="Auto-convert draft pull requests"
                   description="Automatically mark your drafts as ready upon approval or requesting a review"
-                  trailing={<Switch />}
+                  trailing={<Switch disabled />}
+                  disabled
                />
                <SettingsRow
                   title="Merge strategy"
@@ -50,8 +52,10 @@ export default function AccountCodeReviews() {
                   trailing={
                      <SelectMenu
                         options={['Squash and merge', 'Merge commit', 'Rebase and merge']}
+                        disabled
                      />
                   }
+                  disabled
                />
             </SettingsCard>
          </SettingsSection>
@@ -61,16 +65,22 @@ export default function AccountCodeReviews() {
                <SettingsRow
                   title="Code theme"
                   description="Select the syntax highlighting theme used in code diffs and viewers"
-                  trailing={<SelectMenu options={['LNDev Light', 'LNDev Dark', 'Contrast']} />}
+                  trailing={
+                     <SelectMenu options={['Flowie Light', 'Flowie Dark', 'Contrast']} disabled />
+                  }
+                  disabled
                />
                <SettingsRow
                   title="Font"
-                  trailing={<SelectMenu options={['12px, Regular, Default', '13px, Medium']} />}
+                  trailing={
+                     <SelectMenu options={['12px, Regular, Default', '13px, Medium']} disabled />
+                  }
+                  disabled
                />
                <div className="p-3">
                   <div className="relative rounded-md border overflow-hidden bg-container">
                      <div className="absolute top-2 right-2 z-10">
-                        <SelectMenu options={['TypeScript', 'JavaScript', 'Python']} />
+                        <SelectMenu options={['TypeScript', 'JavaScript', 'Python']} disabled />
                      </div>
                      <pre className="text-xs leading-5 font-mono overflow-x-auto py-2">
                         {DIFF_LINES.map((line, index) => (
@@ -104,22 +114,26 @@ export default function AccountCodeReviews() {
                <SettingsRow
                   title="Comments & reviews"
                   description="Comments, mentions, and submitted reviews"
-                  trailing={<SelectMenu options={['Exclude Bots', 'Everyone', 'None']} />}
+                  trailing={<SelectMenu options={['Exclude Bots', 'Everyone', 'None']} disabled />}
+                  disabled
                />
                <SettingsRow
                   title="Review requests"
                   description="Requests for your personal review"
-                  trailing={<Switch defaultChecked />}
+                  trailing={<Switch defaultChecked disabled />}
+                  disabled
                />
                <SettingsRow
                   title="GitHub team review requests"
                   description="Requests for review from your GitHub teams with 10 or fewer members"
-                  trailing={<Switch defaultChecked />}
+                  trailing={<Switch defaultChecked disabled />}
+                  disabled
                />
                <SettingsRow
                   title="Checks & merge queue"
                   description="Check failures and merge queue updates"
-                  trailing={<Switch defaultChecked />}
+                  trailing={<Switch defaultChecked disabled />}
+                  disabled
                />
             </SettingsCard>
          </SettingsSection>
@@ -129,15 +143,17 @@ export default function AccountCodeReviews() {
                <SettingsRow
                   title="Require signed commits"
                   description="Users must upload a signing key before starting a coding session"
-                  trailing={<Switch />}
+                  trailing={<Switch disabled />}
+                  disabled
                />
                <SettingsRow
                   title="No signing key added"
                   trailing={
-                     <Button size="xs" variant="ghost">
+                     <Button size="xs" variant="ghost" disabled>
                         Add key
                      </Button>
                   }
+                  disabled
                />
             </SettingsCard>
          </SettingsSection>
@@ -149,21 +165,25 @@ export default function AccountCodeReviews() {
                   description="Configure the external coding tools you can open issues in"
                   trailing={<ChevronRight className="size-4" />}
                   onClick={() => {}}
+                  disabled
                />
                <SettingsRow
                   title="Git attachment format"
                   description="The format of GitHub/GitLab attachments on issues"
-                  trailing={<SelectMenu options={['Title', 'URL', 'Compact']} />}
+                  trailing={<SelectMenu options={['Title', 'URL', 'Compact']} disabled />}
+                  disabled
                />
                <SettingsRow
                   title="On git branch copy, move issue to started status"
                   description="After copying the git branch name, issue status is moved to the team's first started workflow status. Hold ⌥ to disable."
-                  trailing={<Switch defaultChecked />}
+                  trailing={<Switch defaultChecked disabled />}
+                  disabled
                />
                <SettingsRow
                   title="On open in coding tool, move issue to started status"
                   description="After opening an issue in a coding tool or copying as prompt, issue status is moved to the team's first started workflow status. Hold ⌥ to disable."
-                  trailing={<Switch defaultChecked />}
+                  trailing={<Switch defaultChecked disabled />}
+                  disabled
                />
             </SettingsCard>
          </SettingsSection>

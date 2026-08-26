@@ -102,7 +102,7 @@ export function SettingsRow({
          aria-disabled={disabled || undefined}
          className={cn(
             'w-full flex items-center gap-3 px-4 py-3 text-left',
-            onClick && 'hover:bg-accent/40 transition-colors cursor-pointer',
+            onClick && !disabled && 'hover:bg-accent/40 transition-colors cursor-pointer',
             (muted || disabled) && 'opacity-60',
             disabled && 'cursor-not-allowed'
          )}
@@ -134,18 +134,26 @@ export function SelectMenu({
    defaultValue,
    value: controlledValue,
    onChange,
+   disabled,
 }: {
    options: string[];
    defaultValue?: string;
    /** Optional controlled value (e.g. wired to next-themes). */
    value?: string;
    onChange?: (value: string) => void;
+   disabled?: boolean;
 }) {
    const [internal, setInternal] = useState(defaultValue ?? options[0]);
    const value = controlledValue ?? internal;
    return (
       <DropdownMenu>
-         <DropdownMenuTrigger className="h-8 px-3 rounded-md border bg-container text-sm inline-flex items-center gap-1.5 hover:bg-accent transition-colors outline-none">
+         <DropdownMenuTrigger
+            disabled={disabled}
+            className={cn(
+               'h-8 px-3 rounded-md border bg-container text-sm inline-flex items-center gap-1.5 hover:bg-accent transition-colors outline-none',
+               disabled && 'cursor-not-allowed opacity-60'
+            )}
+         >
             {value}
             <ChevronDown className="size-3.5 text-muted-foreground" />
          </DropdownMenuTrigger>
