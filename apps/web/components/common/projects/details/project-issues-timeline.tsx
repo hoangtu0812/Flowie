@@ -10,10 +10,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
    BIWEEKLY_DATES,
-   LIST_WIDTH,
    MONTHS,
    monthWidthOf,
    offsetFor,
+   offsetForTime,
    totalWidthOf,
    WEEKLY_DATES,
    ZOOM_LEVELS,
@@ -28,35 +28,24 @@ import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 /** A bar narrower than this is unreadable, so it is the floor for every issue. */
-const MIN_BAR_WIDTH = 120;
-const ROW_HEIGHT = 36;
-
-type TimelineIssue = Issue;
+const MIN_BAR_WIDTH = 130;
 
 /**
- * An issue occupies the span it was worked over: from the day it was opened to
- * the day it is due. Without a due date there is nothing to draw a length
- * from, so the bar keeps the minimum width and is marked as open-ended.
+ * An issue occupies the span it is worked over: from the day it was opened to
+ * the day it is due. Without a due date there is no length to draw, so the bar
+ * keeps the minimum width and says so with a dashed edge.
  */
-function span(issue: TimelineIssue): { start: string; end: string | null } {
+function span(issue: Issue): { start: string; end: string | null } {
    return { start: issue.createdAt.slice(0, 10), end: issue.dueDate?.slice(0, 10) ?? null };
 }
 
-function rangeLabel(issue: TimelineIssue): string {
+function rangeLabel(issue: Issue): string {
    const { start, end } = span(issue);
    const startLabel = format(parseISO(start), 'MMM d');
    return end && end !== start ? `${startLabel} – ${format(parseISO(end), 'MMM d')}` : startLabel;
 }
 
-function IssueBar({
-   issue,
-   monthWidth,
-   href,
-}: {
-   issue: TimelineIssue;
-   monthWidth: number;
-   href: string;
-}) {
+function IssueBar({ issue, monthWidth, href }: { issue: Issue; monthWidth: number; href: string }) {
    const { start, end } = span(issue);
    const left = offsetFor(start, monthWidth);
    const width = Math.max(offsetFor(end ?? start, monthWidth) - left, MIN_BAR_WIDTH);
@@ -67,8 +56,7 @@ function IssueBar({
             href={href}
             title={`${issue.identifier} · ${issue.title} — ${rangeLabel(issue)}`}
             className={cn(
-               'absolute top-1 h-7 flex items-center gap-1.5 rounded-md border px-2.5 text-xs transition-colors overflow-hidden',
-               'bg-accent/40 hover:bg-accent',
+               'absolute top-1 h-7 flex items-center gap-1.5 rounded-md border bg-accent/40 hover:bg-accent px-2.5 text-xs transition-colors overflow-hidden',
                !end && 'border-dashed'
             )}
             style={{ left, width }}
@@ -90,10 +78,10 @@ function IssueBar({
 }
 
 /**
- * Project "Timeline" tab: every issue of the project as a bar on the same
- * month scale the Projects timeline uses, grouped by status.
+ * Project "Timeline" tab: the project's issues on the same month scale the
+ * Projects timeline uses, so the two screens read as one instrument.
  */
-export function ProjectIssuesTimeline({ issues }: { issues: TimelineIssue[] }) {
+export function ProjectIssuesTimeline({ issues }: { issues: Issue[] }) {
    const { orgId } = useParams<{ orgId: string }>();
    const [zoom, setZoom] = useState<TimelineZoom>('year');
    const [todayIso, setTodayIso] = useState<string | null>(null);
@@ -103,9 +91,10 @@ export function ProjectIssuesTimeline({ issues }: { issues: TimelineIssue[] }) {
    const totalWidth = totalWidthOf(monthWidth);
    const scaleDates = zoom === 'year' ? BIWEEKLY_DATES : WEEKLY_DATES;
    const todayOffset = todayIso ? offsetFor(todayIso, monthWidth) : null;
+   const todayLabel = todayIso ? format(parseISO(todayIso), 'MMM d').toUpperCase() : null;
 
    const groups = useMemo(() => {
-      const byStatus = new Map<string, { name: string; color: string; issues: TimelineIssue[] }>();
+      const byStatus = new Map<string, { name: string; color: string; issues: Issue[] }>();
       for (const issue of issues) {
          const group = byStatus.get(issue.status.id) ?? {
             name: issue.status.name,
@@ -121,23 +110,22 @@ export function ProjectIssuesTimeline({ issues }: { issues: TimelineIssue[] }) {
       return [...byStatus.values()];
    }, [issues]);
 
-   const scrollToOffset = useCallback((offset: number) => {
+   const scrollToOffset = useCallback((offset: number, smooth = true) => {
       const element = scrollRef.current;
       if (!element) return;
-      const anchor = Math.max(element.clientWidth / 3, LIST_WIDTH + 80);
-      element.scrollTo({ left: Math.max(0, offset - anchor), behavior: 'smooth' });
+      const anchor = Math.max(element.clientWidth / 3, 300);
+      element.scrollTo({
+         left: Math.max(0, offset - anchor),
+         behavior: smooth ? 'smooth' : 'auto',
+      });
    }, []);
 
    useEffect(() => {
       const iso = new Date().toISOString().slice(0, 10);
       setTodayIso(iso);
-      const element = scrollRef.current;
-      if (!element) return;
-      // Land on today without a transition on mount, so the view opens where
-      // the work is rather than in 2020.
-      const anchor = Math.max(element.clientWidth / 3, LIST_WIDTH + 80);
-      element.scrollLeft = Math.max(0, offsetFor(iso, monthWidthOf('year')) - anchor);
-   }, []);
+      // Open where the work is rather than in 2020, without an animation.
+      scrollToOffset(offsetFor(iso, monthWidthOf('year')), false);
+   }, [scrollToOffset]);
 
    if (issues.length === 0) {
       return (
@@ -175,96 +163,114 @@ export function ProjectIssuesTimeline({ issues }: { issues: TimelineIssue[] }) {
             </DropdownMenu>
          </div>
 
-         <div ref={scrollRef} className="flex-1 min-h-0 overflow-auto relative">
-            <div style={{ width: totalWidth + LIST_WIDTH }} className="relative">
-               {/* Month scale */}
-               <div className="sticky top-0 z-20 flex h-10 bg-container border-b">
-                  <div
-                     className="sticky left-0 z-10 shrink-0 bg-container border-r"
-                     style={{ width: LIST_WIDTH }}
-                  />
-                  <div className="relative" style={{ width: totalWidth }}>
-                     {MONTHS.map((month, index) => (
+         <div ref={scrollRef} className="w-full flex-1 min-h-0 overflow-auto">
+            <div style={{ width: totalWidth }} className="relative min-h-full">
+               {/* Month scale: month names, weekly ticks and date labels */}
+               <div className="sticky top-0 z-20 border-b bg-container select-none">
+                  <div className="relative flex">
+                     {MONTHS.map((month) => (
                         <div
                            key={month.key}
-                           className="absolute top-0 h-full flex items-center border-l text-xs text-muted-foreground pl-2"
-                           style={{ left: index * monthWidth, width: monthWidth }}
+                           style={{ width: monthWidth }}
+                           className="shrink-0 px-2 pt-1.5 pb-0.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap overflow-hidden"
                         >
                            {month.label}
                         </div>
                      ))}
-                     {scaleDates.map((date) => (
-                        <span
-                           key={date.time}
-                           className="absolute bottom-0.5 text-[10px] text-muted-foreground/70"
-                           style={{
-                              left: offsetFor(new Date(date.time).toISOString(), monthWidth) + 2,
-                           }}
-                        >
-                           {date.day}
-                        </span>
-                     ))}
+                     <div className="absolute inset-x-0 bottom-0 pointer-events-none">
+                        {WEEKLY_DATES.map((date) => (
+                           <span
+                              key={date.time}
+                              className="absolute bottom-0 h-1 w-px bg-muted-foreground/30"
+                              style={{ left: offsetForTime(date.time, monthWidth) }}
+                           />
+                        ))}
+                     </div>
+                  </div>
+                  <div className="relative h-5">
+                     {scaleDates.map((date) => {
+                        const left = offsetForTime(date.time, monthWidth);
+                        // The today pill owns this stretch of the scale.
+                        if (todayOffset !== null && Math.abs(left - todayOffset) < 30) return null;
+                        return (
+                           <span
+                              key={date.time}
+                              className="absolute top-0 -translate-x-1/2 text-[10px] text-muted-foreground/80 whitespace-nowrap"
+                              style={{ left }}
+                           >
+                              {date.day}
+                           </span>
+                        );
+                     })}
                      {todayOffset !== null && (
                         <span
-                           className="absolute bottom-0.5 -translate-x-1/2 rounded px-1.5 py-px text-[10px] font-medium bg-violet-600 text-white"
+                           className="absolute -top-0.5 -translate-x-1/2 text-[10px] font-semibold bg-violet-500 text-white rounded-full px-1.5 py-px uppercase whitespace-nowrap pointer-events-none z-10"
                            style={{ left: todayOffset }}
                         >
-                           {format(parseISO(todayIso!), 'MMM d').toUpperCase()}
+                           {todayLabel}
                         </span>
                      )}
                   </div>
                </div>
 
-               {/* Rows */}
-               <div className="relative">
-                  {todayOffset !== null && (
+               {/* Month grid lines */}
+               <div className="absolute inset-0 top-7 flex pointer-events-none">
+                  {MONTHS.map((month) => (
                      <div
-                        className="absolute top-0 bottom-0 w-px bg-violet-600/70 z-[5] pointer-events-none"
-                        style={{ left: LIST_WIDTH + todayOffset }}
+                        key={month.key}
+                        style={{ width: monthWidth }}
+                        className="shrink-0 border-r border-border/25 h-full"
                      />
-                  )}
+                  ))}
+               </div>
+
+               {todayOffset !== null && (
+                  <div
+                     className="absolute top-7 bottom-0 w-px bg-violet-500 z-10"
+                     style={{ left: todayOffset }}
+                  />
+               )}
+
+               <div className="relative z-[5] pb-8">
                   {groups.map((group) => (
                      <div key={group.name}>
-                        <div className="flex items-center h-9 sticky left-0 z-[6] bg-container/95 border-b">
-                           <div
-                              className="flex items-center gap-2 px-3 text-sm font-medium"
-                              style={{ width: LIST_WIDTH }}
-                           >
-                              <span
-                                 className="size-2.5 rounded-full"
-                                 style={{ backgroundColor: group.color }}
-                              />
-                              <span className="truncate">{group.name}</span>
-                              <span className="text-xs text-muted-foreground">
-                                 {group.issues.length}
-                              </span>
-                           </div>
+                        <div className="sticky left-0 flex items-center gap-2 px-4 h-9 text-sm font-medium bg-[color-mix(in_oklab,var(--accent)_30%,var(--container))] border-y border-border/40 w-screen max-w-full">
+                           <span
+                              className="size-2.5 rounded-full shrink-0"
+                              style={{ backgroundColor: group.color }}
+                           />
+                           {group.name}
+                           <span className="text-xs text-muted-foreground">
+                              {group.issues.length}
+                           </span>
                         </div>
-                        {group.issues.map((issue) => (
-                           <div
-                              key={issue.id}
-                              className="flex border-b border-border/40 hover:bg-sidebar/40"
-                              style={{ height: ROW_HEIGHT }}
-                           >
-                              <div
-                                 className="sticky left-0 z-[6] shrink-0 flex items-center gap-2 px-3 bg-container border-r"
-                                 style={{ width: LIST_WIDTH }}
-                              >
-                                 <issue.priority.icon className="size-3.5 text-muted-foreground shrink-0" />
-                                 <span className="text-[11px] text-muted-foreground shrink-0">
-                                    {issue.identifier}
-                                 </span>
-                                 <span className="text-xs truncate">{issue.title}</span>
-                              </div>
-                              <div className="relative" style={{ width: totalWidth }}>
+                        <div className="py-1">
+                           {group.issues.map((issue) => (
+                              <div key={issue.id} className="relative h-9 flex items-center">
                                  <IssueBar
                                     issue={issue}
                                     monthWidth={monthWidth}
                                     href={`/${orgId}/issue/${issue.identifier}`}
                                  />
+                                 <div className="sticky left-0 z-10 flex items-center gap-1.5 w-56 shrink-0 px-4 h-9 bg-container/95 backdrop-blur-sm text-xs border-r border-border/40">
+                                    <issue.priority.icon className="size-3.5 shrink-0 text-muted-foreground" />
+                                    <span className="text-muted-foreground shrink-0">
+                                       {issue.identifier}
+                                    </span>
+                                    <span className="truncate flex-1">{issue.title}</span>
+                                    {issue.assignee && (
+                                       <Avatar className="size-4 shrink-0">
+                                          <AvatarImage
+                                             src={issue.assignee.avatarUrl}
+                                             alt={issue.assignee.name}
+                                          />
+                                          <AvatarFallback>{issue.assignee.name[0]}</AvatarFallback>
+                                       </Avatar>
+                                    )}
+                                 </div>
                               </div>
-                           </div>
-                        ))}
+                           ))}
+                        </div>
                      </div>
                   ))}
                </div>

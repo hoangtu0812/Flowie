@@ -9,6 +9,7 @@ import {
    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import type { Project } from '@/types/projects';
 import { useProjectsDisplayStore } from '@/store/projects-display-store';
 import {
@@ -24,7 +25,9 @@ import {
    type TimelineZoom,
 } from '@/components/common/timeline/timeline-scale';
 import { format, parseISO } from 'date-fns';
-import { ArrowLeft, ArrowRight, Check, ChevronDown, Plus } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ProjectPeekPanel } from './project-peek-panel';
 import { ProjectGroup } from './projects';
@@ -51,6 +54,115 @@ const dateRangeLabel = (project: Project) => {
 interface Viewport {
    left: number;
    width: number;
+}
+
+const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+
+/** The fields an issue bar needs, as the project issue endpoint returns them. */
+type TimelineIssue = {
+   id: string;
+   identifier: string;
+   title: string;
+   createdAt: string;
+   dueDate: string | null;
+   status: { name: string; color: string };
+   assignee: { name: string; avatarUrl: string | null } | null;
+};
+
+/**
+ * An issue spans the days it is worked over: opened until due. Without a due
+ * date there is no length to draw, so the bar keeps a readable minimum and
+ * says so with a dashed edge.
+ */
+function IssueRow({
+   issue,
+   monthWidth,
+   href,
+}: {
+   issue: TimelineIssue;
+   monthWidth: number;
+   href: string;
+}) {
+   const start = issue.createdAt.slice(0, 10);
+   const end = issue.dueDate?.slice(0, 10) ?? null;
+   const left = offsetFor(start, monthWidth);
+   const width = Math.max(offsetFor(end ?? start, monthWidth) - left, 120);
+   const label = `${format(parseISO(start), 'MMM d')}${end ? ` - ${format(parseISO(end), 'MMM d')}` : ''}`;
+
+   return (
+      <div className="relative h-8 flex items-center">
+         <div className="absolute inset-0">
+            <Link
+               href={href}
+               title={`${issue.identifier} · ${issue.title} - ${label}`}
+               className={cn(
+                  'absolute top-1 h-6 flex items-center gap-1.5 rounded border bg-accent/25 hover:bg-accent/60 px-2 text-[11px] transition-colors overflow-hidden',
+                  !end && 'border-dashed'
+               )}
+               style={{ left, width }}
+            >
+               <span
+                  className="size-1.5 rounded-full shrink-0"
+                  style={{ backgroundColor: issue.status.color }}
+               />
+               <span className="truncate">{issue.title}</span>
+            </Link>
+         </div>
+         <div className="sticky left-0 z-10 flex items-center gap-1.5 w-56 shrink-0 pl-10 pr-4 h-8 bg-container/95 backdrop-blur-sm text-[11px] border-r border-border/40">
+            <span className="text-muted-foreground shrink-0">{issue.identifier}</span>
+            <span className="truncate flex-1 text-muted-foreground">{issue.title}</span>
+            {issue.assignee && (
+               <Avatar className="size-4 shrink-0">
+                  <AvatarImage
+                     src={issue.assignee.avatarUrl ?? undefined}
+                     alt={issue.assignee.name}
+                  />
+                  <AvatarFallback>{issue.assignee.name[0]}</AvatarFallback>
+               </Avatar>
+            )}
+         </div>
+      </div>
+   );
+}
+
+/** The issues of one opened project, indented under its bar. */
+function ExpandedIssues({
+   issues,
+   loading,
+   monthWidth,
+   orgId,
+}: {
+   issues?: TimelineIssue[];
+   loading: boolean;
+   monthWidth: number;
+   orgId: string;
+}) {
+   if (loading || !issues) {
+      return (
+         <div className="sticky left-0 w-56 pl-10 pr-4 h-8 flex items-center text-[11px] text-muted-foreground">
+            Loading issues...
+         </div>
+      );
+   }
+   if (issues.length === 0) {
+      return (
+         <div className="sticky left-0 w-56 pl-10 pr-4 h-8 flex items-center text-[11px] text-muted-foreground">
+            No issues yet
+         </div>
+      );
+   }
+   return (
+      <>
+         {issues.map((issue) => (
+            <IssueRow
+               key={issue.id}
+               issue={issue}
+               monthWidth={monthWidth}
+               href={`/${orgId}/issue/${issue.identifier}`}
+            />
+         ))}
+      </>
+   );
 }
 
 /**
@@ -151,6 +263,11 @@ export default function ProjectsTimeline({ groups }: ProjectsTimelineProps) {
    const [viewport, setViewport] = useState<Viewport | null>(null);
    const [zoom, setZoom] = useState<TimelineZoom>('year');
    const [peekProjectId, setPeekProjectId] = useState<string | null>(null);
+   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+   const [issuesByProject, setIssuesByProject] = useState<Record<string, TimelineIssue[]>>({});
+   const [loadingIssues, setLoadingIssues] = useState<Set<string>>(new Set());
+   const [workspaceId, setWorkspaceId] = useState<string>();
+   const { orgId } = useParams<{ orgId: string }>();
    const scrollRef = useRef<HTMLDivElement>(null);
    const frameRef = useRef<number | null>(null);
 
@@ -235,6 +352,44 @@ export default function ProjectsTimeline({ groups }: ProjectsTimelineProps) {
       window.addEventListener('keydown', onKeyDown);
       return () => window.removeEventListener('keydown', onKeyDown);
    }, [setZoomLevel]);
+
+   useEffect(() => {
+      void loadCurrentWorkspace()
+         .then((workspace) => setWorkspaceId(workspace.id))
+         .catch(() => setWorkspaceId(undefined));
+   }, []);
+
+   /** Issues are fetched the first time a project is opened, then kept. */
+   const toggleProject = useCallback(
+      async (projectId: string) => {
+         setExpanded((current) => {
+            const next = new Set(current);
+            if (next.has(projectId)) next.delete(projectId);
+            else next.add(projectId);
+            return next;
+         });
+         if (!workspaceId || issuesByProject[projectId]) return;
+         setLoadingIssues((current) => new Set(current).add(projectId));
+         try {
+            const query = new URLSearchParams({ workspaceId });
+            const response = await authenticatedFetch(
+               `${api}/projects/${projectId}/issues?${query}`
+            );
+            if (!response.ok) throw new Error('Could not load project issues.');
+            const payload = (await response.json()) as { data: TimelineIssue[] };
+            setIssuesByProject((current) => ({ ...current, [projectId]: payload.data }));
+         } catch {
+            setIssuesByProject((current) => ({ ...current, [projectId]: [] }));
+         } finally {
+            setLoadingIssues((current) => {
+               const next = new Set(current);
+               next.delete(projectId);
+               return next;
+            });
+         }
+      },
+      [issuesByProject, workspaceId]
+   );
 
    const jumpTo = useCallback(
       (contentX: number) => {
@@ -382,58 +537,90 @@ export default function ProjectsTimeline({ groups }: ProjectsTimelineProps) {
                         </div>
                         <div className="py-1">
                            {group.projects.map((project) => (
-                              <div key={project.id} className="relative h-9 flex items-center">
-                                 <TimelineBar
-                                    project={project}
-                                    monthWidth={monthWidth}
-                                    selected={peekProjectId === project.id}
-                                    onSelect={(projectId) =>
-                                       setPeekProjectId((current) =>
-                                          current === projectId ? null : projectId
-                                       )
-                                    }
-                                 />
-                                 {showProjectList && (
-                                    <div className="sticky left-0 z-10 flex items-center gap-1.5 w-56 shrink-0 px-4 h-9 bg-container/95 backdrop-blur-sm text-xs border-r border-border/40">
-                                       <span className="inline-flex size-5 bg-muted/50 items-center justify-center rounded shrink-0">
-                                          <project.icon className="size-3" />
-                                       </span>
-                                       <span className="truncate flex-1">{project.name}</span>
-                                       {displayProperties.health && (
-                                          <span
-                                             className="size-2 rounded-full shrink-0"
-                                             style={{ backgroundColor: project.health.color }}
-                                          />
-                                       )}
-                                       {displayProperties.status && (
-                                          <CapacityRing
-                                             value={project.percentComplete}
-                                             color="#6771c5"
-                                          />
-                                       )}
-                                       {displayProperties.priority && (
-                                          <project.priority.icon
-                                             className={cn('size-3 shrink-0 text-muted-foreground')}
-                                          />
-                                       )}
-                                       {displayProperties.lead && (
-                                          <Avatar className="size-4 shrink-0">
-                                             <AvatarImage
-                                                src={project.lead.avatarUrl}
-                                                alt={project.lead.name}
-                                             />
-                                             <AvatarFallback>{project.lead.name[0]}</AvatarFallback>
-                                          </Avatar>
-                                       )}
-                                    </div>
-                                 )}
-                                 {viewport && (
-                                    <OutOfViewIndicator
+                              <div key={project.id}>
+                                 <div className="relative h-9 flex items-center">
+                                    <TimelineBar
                                        project={project}
-                                       viewport={viewport}
-                                       listOffset={listOffset}
                                        monthWidth={monthWidth}
-                                       onJump={jumpTo}
+                                       selected={peekProjectId === project.id}
+                                       onSelect={(projectId) =>
+                                          setPeekProjectId((current) =>
+                                             current === projectId ? null : projectId
+                                          )
+                                       }
+                                    />
+                                    {showProjectList && (
+                                       <div className="sticky left-0 z-10 flex items-center gap-1.5 w-56 shrink-0 pl-1 pr-4 h-9 bg-container/95 backdrop-blur-sm text-xs border-r border-border/40">
+                                          <button
+                                             type="button"
+                                             aria-label={
+                                                expanded.has(project.id)
+                                                   ? `Hide issues of ${project.name}`
+                                                   : `Show issues of ${project.name}`
+                                             }
+                                             aria-expanded={expanded.has(project.id)}
+                                             onClick={() => void toggleProject(project.id)}
+                                             className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                                          >
+                                             <ChevronRight
+                                                className={cn(
+                                                   'size-3.5 transition-transform',
+                                                   expanded.has(project.id) && 'rotate-90'
+                                                )}
+                                             />
+                                          </button>
+                                          <span className="inline-flex size-5 bg-muted/50 items-center justify-center rounded shrink-0">
+                                             <project.icon className="size-3" />
+                                          </span>
+                                          <span className="truncate flex-1">{project.name}</span>
+                                          {displayProperties.health && (
+                                             <span
+                                                className="size-2 rounded-full shrink-0"
+                                                style={{ backgroundColor: project.health.color }}
+                                             />
+                                          )}
+                                          {displayProperties.status && (
+                                             <CapacityRing
+                                                value={project.percentComplete}
+                                                color="#6771c5"
+                                             />
+                                          )}
+                                          {displayProperties.priority && (
+                                             <project.priority.icon
+                                                className={cn(
+                                                   'size-3 shrink-0 text-muted-foreground'
+                                                )}
+                                             />
+                                          )}
+                                          {displayProperties.lead && (
+                                             <Avatar className="size-4 shrink-0">
+                                                <AvatarImage
+                                                   src={project.lead.avatarUrl}
+                                                   alt={project.lead.name}
+                                                />
+                                                <AvatarFallback>
+                                                   {project.lead.name[0]}
+                                                </AvatarFallback>
+                                             </Avatar>
+                                          )}
+                                       </div>
+                                    )}
+                                    {viewport && (
+                                       <OutOfViewIndicator
+                                          project={project}
+                                          viewport={viewport}
+                                          listOffset={listOffset}
+                                          monthWidth={monthWidth}
+                                          onJump={jumpTo}
+                                       />
+                                    )}
+                                 </div>
+                                 {expanded.has(project.id) && (
+                                    <ExpandedIssues
+                                       issues={issuesByProject[project.id]}
+                                       loading={loadingIssues.has(project.id)}
+                                       monthWidth={monthWidth}
+                                       orgId={orgId}
                                     />
                                  )}
                               </div>

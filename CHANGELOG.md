@@ -10,6 +10,23 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+## [0.3.2] — 2026-08-26 23:59 +07
+
+### Added
+
+- A project row on the Projects timeline opens to show its issues on the same
+  scale: click the arrow and each issue appears as a bar from the day it was
+  opened to the day it is due, indented under the project. Issues are fetched
+  the first time a project is opened and kept afterwards.
+
+### Changed
+
+- The Project timeline is drawn with the same scale rendering as the Projects
+  and Initiative timelines: month names over a row of date ticks rather than
+  both crammed into one band, month grid lines behind the rows, the today pill
+  pinned to the scale above a full-height marker, and the issue list overlaying
+  the grid instead of sitting in a column beside it.
+
 ## [0.3.1] — 2026-08-26 23:41 +07
 
 ### Added
