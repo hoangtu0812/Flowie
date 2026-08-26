@@ -91,12 +91,15 @@ export function DiscordIntegration({
          }
       );
       const payload = (await response.json().catch(() => null)) as {
-         data?: { delivered: boolean };
+         data?: { delivered: boolean; reason?: string };
       } | null;
+      if (response.ok && payload?.data?.delivered) {
+         setMessage('Test notification queued for Discord.');
+         return;
+      }
       setMessage(
-         response.ok && payload?.data?.delivered
-            ? 'Test notification queued for Discord.'
-            : 'The test could not be delivered. Check the webhook and enabled state.'
+         payload?.data?.reason ??
+            'The test could not be delivered. Check the webhook and enabled state.'
       );
    }
 

@@ -20,21 +20,6 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Changed
 
-- An issue can be filed into a project from its detail panel; the Project
-  section used to appear only once the issue already had one.
-- The issue breadcrumb returns to the team's issue list rather than the team
-  overview.
-
-### Fixed
-
-- The Project detail tabs refresh when an issue is created or edited elsewhere
-  — the command palette, a context menu, an inline status picker — instead of
-  showing a stale list until the page is reloaded by hand.
-
-### Changed
-
-- Creating an issue from a project screen files it in that project by default.
-
 - Discord notifications are embeds instead of one grey line: who acted, the
   issue code and title, a link straight to the item, the values that moved
   (`Todo → In Progress`), and the comment or project update itself. The link
@@ -42,12 +27,26 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 - Issue property edits (title, priority, project, due date, estimate,
   description) are reported as `issue.updated`; a status change carries the
   rest of the same save, so one edit is one notification.
+- An issue can be filed into a project from its detail panel; the Project
+  section used to appear only once the issue already had one.
+- Creating an issue from a project screen files it in that project by default.
+- The issue breadcrumb returns to the team's issue list rather than the team
+  overview.
 
 ### Fixed
 
+- Discord notifications stopped arriving once they became embeds: the actor's
+  avatar is stored as an app-relative path, and Discord rejects an entire embed
+  whose `icon_url` or `url` is not absolute — answering 4xx, which was
+  swallowed. Non-absolute links are dropped, the title, author and field values
+  are cut to Discord's limits, and a refused delivery is logged instead of
+  vanishing. The Discord "Send test" button reports what Discord answered.
 - Editing any issue property announced a status change to Discord even when
   the status had not moved: the notification batch was built regardless of the
   condition and only the Inbox rows were skipped.
+- The Project detail tabs refresh when an issue is created or edited elsewhere
+  — the command palette, a context menu, an inline status picker — instead of
+  showing a stale list until the page is reloaded by hand.
 
 ## [0.2.1] — 2026-08-26 20:05 +07
 

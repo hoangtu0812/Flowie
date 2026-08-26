@@ -116,18 +116,29 @@ async def test_discord(
     workspaceId: str = Query(min_length=1),
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
-) -> dict[str, dict[str, bool]]:
+) -> dict[str, dict[str, Any]]:
     await _manager_access(db, workspaceId, user['id'])
     result = await db.execute(
         text('SELECT webhook_url, enabled FROM discord_webhooks WHERE workspace_id = :workspace_id'),
         {'workspace_id': workspaceId},
     )
     webhook = result.mappings().first()
-    if not webhook or not webhook['enabled']:
-        return {'data': {'delivered': False}}
+    if not webhook:
+        return {'data': {'delivered': False, 'reason': 'No Discord webhook is configured.'}}
+    if not webhook['enabled']:
+        return {'data': {'delivered': False, 'reason': 'Discord notifications are turned off.'}}
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.post(webhook['webhook_url'], json={'content': '✅ Flowie đã kết nối Discord thành công.'})
-        return {'data': {'delivered': response.is_success}}
-    except httpx.HTTPError:
-        return {'data': {'delivered': False}}
+        if response.is_success:
+            return {'data': {'delivered': True}}
+        # Discord answers 4xx instead of raising, so report what it said
+        # rather than a bare failure the caller cannot act on.
+        return {
+            'data': {
+                'delivered': False,
+                'reason': f'Discord answered {response.status_code}: {response.text[:200]}',
+            }
+        }
+    except httpx.HTTPError as error:
+        return {'data': {'delivered': False, 'reason': f'Discord is unreachable: {error}'}}

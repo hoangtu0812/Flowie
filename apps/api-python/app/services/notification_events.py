@@ -14,6 +14,7 @@ producers or the Circle UI contract.
 
 import asyncio
 import json
+import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 from os import getenv
@@ -25,6 +26,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..domains.auth import _cuid, _utcnow
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -138,6 +141,19 @@ async def _workspace_slug(db: AsyncSession, workspace_id: str) -> str | None:
     return result.scalar_one_or_none()
 
 
+def _http_url(value: str | None) -> str | None:
+    """Keep only absolute links.
+
+    Discord rejects a whole embed — with a 4xx nobody sees — when a `url` or an
+    `icon_url` is not absolute. Stored avatars are object keys or app-relative
+    paths, so they must never be passed through unchecked.
+    """
+
+    if not value:
+        return None
+    return value if value.startswith('http://') or value.startswith('https://') else None
+
+
 def _excerpt(value: str | None, limit: int = DISCORD_DESCRIPTION_LIMIT) -> str | None:
     if not value:
         return None
@@ -160,28 +176,35 @@ def _embed(
 ) -> dict[str, Any]:
     """A Discord embed carrying what changed, not merely that something did."""
 
-    author = f'{actor_data["name"]} {message}'
+    # Discord caps a title at 256 characters and an author at 256; over either
+    # limit it rejects the entire embed.
+    heading = f'{entity_label} · {title}' if entity_label else title
     embed: dict[str, Any] = {
-        'title': f'{entity_label} · {title}' if entity_label else title,
+        'title': _excerpt(heading, 256),
         'color': EVENT_COLORS.get(event_type, 0x5E6AD2),
-        'author': {'name': author},
+        'author': {'name': _excerpt(f'{actor_data["name"]} {message}', 256)},
         'footer': {'text': f'Flowie · {ENTITY_LABELS.get(entity_type, entity_type.title())}'},
         # Timestamps are stored naive in UTC; Discord rejects an embed whose
         # timestamp carries no zone, and a rejected embed fails silently.
         'timestamp': now.isoformat() if now.tzinfo else f'{now.isoformat()}Z',
     }
-    if actor_data.get('avatarUrl'):
-        embed['author']['icon_url'] = actor_data['avatarUrl']
-    if url:
-        embed['url'] = url
+    icon_url = _http_url(actor_data.get('avatarUrl'))
+    if icon_url:
+        embed['author']['icon_url'] = icon_url
+    absolute_url = _http_url(url)
+    if absolute_url:
+        embed['url'] = absolute_url
     if body:
         embed['description'] = body
     # A field value is capped by Discord at 1024 characters, and a renamed
     # title can carry far more than that.
     fields = [
-        {'name': name, 'value': _excerpt(value, 200) or '', 'inline': len(value) <= 40}
-        for name, value in (details or [])
-        if value
+        {'name': name, 'value': shortened, 'inline': len(value) <= 40}
+        for name, value, shortened in (
+            (name, value, _excerpt(value, 200)) for name, value in (details or [])
+        )
+        # An empty field value is rejected as hard as an oversized one.
+        if name and shortened
     ]
     if fields:
         embed['fields'] = fields
@@ -292,11 +315,19 @@ async def create_notification_batch(
 async def _send_discord(url: str, embed: dict[str, Any]) -> None:
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(url, json={'embeds': [embed]})
-    except httpx.HTTPError:
+            response = await client.post(url, json={'embeds': [embed]})
+        # A rejected webhook answers 4xx rather than raising, so without this
+        # line a deleted webhook or a malformed embed fails in total silence.
+        if not response.is_success:
+            logger.warning(
+                'Discord webhook rejected the notification: %s %s',
+                response.status_code,
+                response.text[:500],
+            )
+    except httpx.HTTPError as error:
         # Delivery failures intentionally do not roll back an already durable
         # Inbox event. A future outbox worker can retry these failures.
-        return
+        logger.warning('Discord webhook is unreachable: %s', error)
 
 
 async def _send_discord_bot(embed: dict[str, Any]) -> None:
@@ -308,13 +339,19 @@ async def _send_discord_bot(embed: dict[str, Any]) -> None:
         return
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(
+            response = await client.post(
                 f'https://discord.com/api/v10/channels/{channel_id}/messages',
                 headers={'Authorization': f'Bot {token}'},
                 json={'embeds': [embed]},
             )
-    except httpx.HTTPError:
-        return
+        if not response.is_success:
+            logger.warning(
+                'Discord bot rejected the notification: %s %s',
+                response.status_code,
+                response.text[:500],
+            )
+    except httpx.HTTPError as error:
+        logger.warning('Discord bot is unreachable: %s', error)
 
 
 async def publish_notification_batches(*batches: NotificationBatch | None) -> None:
@@ -335,6 +372,8 @@ async def publish_notification_batches(*batches: NotificationBatch | None) -> No
         bot_deliveries[key] = batch.discord_embed
         if batch.discord_url:
             webhook_deliveries.append((batch.discord_url, batch.discord_embed))
+    if not webhook_deliveries and bot_deliveries:
+        logger.info('Notification has no Discord webhook configured for this workspace.')
     for url, embed in webhook_deliveries:
         asyncio.create_task(_send_discord(url, embed))
     for embed in bot_deliveries.values():
