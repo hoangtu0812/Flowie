@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from html import escape
+from io import BytesIO
 from re import sub
 from secrets import token_urlsafe
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
-from fastapi.responses import Response
+from fastapi.responses import HTMLResponse, Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -92,3 +94,47 @@ async def download_attachment(attachment_id: str, request: Request, user: Any = 
     body = await MinioStorage(request.app.state.settings).get(row['object_key'])
     safe_filename = row['filename'].replace('"', '')
     return Response(body, media_type=row['mime_type'], headers={'content-disposition': f'attachment; filename="{safe_filename}"'})
+
+
+@router.get('/{attachment_id}/preview')
+@public_router.get('/{attachment_id}/preview')
+async def preview_attachment(attachment_id: str, request: Request, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)):
+    """Render a private document in-browser without exposing it to a third party."""
+    result = await db.execute(text('SELECT * FROM attachments WHERE id = :attachment_id'), {'attachment_id': attachment_id})
+    row = result.mappings().first()
+    if not row:
+        raise ApiError(404, 'Attachment not found.', 'Not Found')
+    await _authorize_entity(db, row['workspace_id'], row['entity_type'], row['entity_id'], user['id'])
+    body = await MinioStorage(request.app.state.settings).get(row['object_key'])
+    filename = row['filename']
+    suffix = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+    safe_filename = filename.replace('"', '')
+
+    if suffix == 'pdf' or row['mime_type'] == 'application/pdf':
+        return Response(
+            body,
+            media_type='application/pdf',
+            headers={'content-disposition': f'inline; filename="{safe_filename}"'},
+        )
+
+    if suffix == 'docx':
+        import mammoth
+
+        converted = mammoth.convert_to_html(BytesIO(body))
+        page = f'''<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{escape(filename)}</title><style>body{{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.6;color:#202124;margin:0 auto;max-width:900px;padding:48px 32px}}img{{max-width:100%;height:auto}}table{{border-collapse:collapse;max-width:100%}}td,th{{border:1px solid #d0d7de;padding:8px;text-align:left}}pre{{overflow:auto;background:#f6f8fa;padding:16px;border-radius:6px}}</style></head><body>{converted.value}</body></html>'''
+        return HTMLResponse(
+            page,
+            headers={
+                'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; img-src data:",
+                'x-content-type-options': 'nosniff',
+            },
+        )
+
+    if suffix == 'md':
+        text_content = body.decode('utf-8', errors='replace')
+        return HTMLResponse(
+            f'<!doctype html><html><head><meta charset="utf-8"><title>{escape(filename)}</title><style>body{{margin:0;padding:32px;font:14px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap}}</style></head><body>{escape(text_content)}</body></html>',
+            headers={'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'"},
+        )
+
+    raise ApiError(415, 'This file type cannot be previewed.', 'Unsupported Media Type')

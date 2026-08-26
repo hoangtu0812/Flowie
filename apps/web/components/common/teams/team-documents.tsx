@@ -34,6 +34,7 @@ import { formatDistanceToNowStrict, parseISO } from 'date-fns';
 import {
    ChevronRight,
    Download,
+   Eye,
    ExternalLink,
    FileText,
    FolderPlus,
@@ -84,6 +85,7 @@ export default function TeamDocuments() {
    const [folderIcon, setFolderIcon] = useState('📁');
    const [saving, setSaving] = useState(false);
    const [editorDocument, setEditorDocument] = useState<LiveDocument>();
+   const [previewDocument, setPreviewDocument] = useState<LiveDocument>();
    const [documentToDelete, setDocumentToDelete] = useState<LiveDocument>();
 
    if (loading)
@@ -232,6 +234,14 @@ export default function TeamDocuments() {
                               >
                                  {document.title}
                               </button>
+                           ) : document.sourceType === 'upload' && document.sourceAttachment ? (
+                              <button
+                                 type="button"
+                                 className="font-medium truncate text-left hover:underline"
+                                 onClick={() => setPreviewDocument(document)}
+                              >
+                                 {document.title}
+                              </button>
                            ) : (
                               <span className="font-medium truncate">{document.title}</span>
                            )}
@@ -247,13 +257,23 @@ export default function TeamDocuments() {
                               </a>
                            )}
                            {document.sourceType === 'upload' && document.sourceAttachment && (
-                              <a
-                                 href={`${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'}/attachments/${document.sourceAttachment.id}/download`}
-                                 aria-label={`Download ${document.sourceAttachment.filename}`}
-                                 className="text-muted-foreground hover:text-foreground"
-                              >
-                                 <Download className="size-3.5" />
-                              </a>
+                              <>
+                                 <button
+                                    type="button"
+                                    aria-label={`Preview ${document.sourceAttachment.filename}`}
+                                    className="text-muted-foreground hover:text-foreground"
+                                    onClick={() => setPreviewDocument(document)}
+                                 >
+                                    <Eye className="size-3.5" />
+                                 </button>
+                                 <a
+                                    href={`${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'}/attachments/${document.sourceAttachment.id}/download`}
+                                    aria-label={`Download ${document.sourceAttachment.filename}`}
+                                    className="text-muted-foreground hover:text-foreground"
+                                 >
+                                    <Download className="size-3.5" />
+                                 </a>
+                              </>
                            )}
                            {document.pinned && (
                               <Pin className="size-3 text-muted-foreground shrink-0" />
@@ -444,6 +464,39 @@ export default function TeamDocuments() {
             onOpenChange={(open) => !open && setEditorDocument(undefined)}
             onUpdate={async (documentId, draft) => updateDocument(documentId, draft)}
          />
+         <Dialog
+            open={Boolean(previewDocument)}
+            onOpenChange={(open) => !open && setPreviewDocument(undefined)}
+         >
+            <DialogContent className="flex h-[calc(100svh-2rem)] w-[calc(100vw-2rem)] !max-w-none flex-col gap-0 overflow-hidden p-0 sm:!max-w-none">
+               <DialogHeader className="border-b px-6 py-4 pr-12">
+                  <DialogTitle className="truncate">{previewDocument?.title}</DialogTitle>
+               </DialogHeader>
+               <div className="min-h-0 flex-1 bg-muted/20">
+                  {previewDocument?.sourceAttachment && (
+                     <iframe
+                        title={`Preview ${previewDocument.sourceAttachment.filename}`}
+                        src={`${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'}/attachments/${previewDocument.sourceAttachment.id}/preview`}
+                        className="size-full border-0 bg-white"
+                     />
+                  )}
+               </div>
+               <DialogFooter className="border-t px-6 py-4 sm:justify-between">
+                  {previewDocument?.sourceAttachment && (
+                     <a
+                        href={`${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'}/attachments/${previewDocument.sourceAttachment.id}/download`}
+                        className="inline-flex h-9 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-accent"
+                     >
+                        <Download className="size-4" />
+                        Download original
+                     </a>
+                  )}
+                  <Button variant="outline" onClick={() => setPreviewDocument(undefined)}>
+                     Close
+                  </Button>
+               </DialogFooter>
+            </DialogContent>
+         </Dialog>
          <AlertDialog
             open={Boolean(documentToDelete)}
             onOpenChange={(open) => !open && setDocumentToDelete(undefined)}
