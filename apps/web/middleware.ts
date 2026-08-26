@@ -10,6 +10,16 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 export function middleware(request: NextRequest) {
    const { pathname, search } = request.nextUrl;
+   // Public files are fetched before a user can have a session (for example
+   // the manifest icon on the login page). Never turn those requests into the
+   // login HTML document.
+   if (
+      pathname === '/flowie-icon.svg' ||
+      pathname.startsWith('/images/') ||
+      /\.(?:svg|png|jpe?g|gif|webp|ico)$/i.test(pathname)
+   ) {
+      return NextResponse.next();
+   }
    if (pathname.startsWith('/auth/')) return NextResponse.next();
 
    const hasSession = request.cookies.has('flowie_access') || request.cookies.has('flowie_refresh');
