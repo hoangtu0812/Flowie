@@ -8,7 +8,7 @@ import { useParams } from 'next/navigation';
 import { useMemo } from 'react';
 import { AssigneeUser } from '../assignee-user';
 import { ActivityFeed } from './activity-feed';
-import { ContentBlocks } from './content-blocks';
+import { IssueDescription } from './issue-description';
 import { IssuePropertiesPanel } from './issue-properties-panel';
 
 /**
@@ -48,9 +48,7 @@ export default function IssueDetails() {
             <div className="max-w-3xl mx-auto px-8 py-10">
                <h1 className="text-3xl font-semibold leading-tight text-balance">{issue.title}</h1>
 
-               <div className="mt-6">
-                  <ContentBlocks blocks={detail.description} />
-               </div>
+               <IssueDescription issue={issue} />
 
                {/* Quick actions */}
                <div className="flex items-center gap-3 mt-6 text-muted-foreground">

@@ -79,6 +79,9 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
    const issue = issueId ? getIssueById(issueId) : undefined;
    const isSubscribed = issue?.isSubscribed ?? false;
    const isFavorite = issue?.isFavorite ?? false;
+   const [dueDateOpen, setDueDateOpen] = useState(false);
+   const [dueDateValue, setDueDateValue] = useState('');
+   const [dueDateSaving, setDueDateSaving] = useState(false);
    const [reminderOpen, setReminderOpen] = useState(false);
    const [reminderValue, setReminderValue] = useState('');
    const [reminderSaving, setReminderSaving] = useState(false);
@@ -135,12 +138,40 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
       }
    };
 
-   const handleSetDueDate = async () => {
+   const openDueDate = () => {
+      // Quick edit means picking the date, not accepting a fixed offset.
+      setDueDateValue(issue?.dueDate ? issue.dueDate.slice(0, 10) : '');
+      setDueDateOpen(true);
+   };
+
+   const saveDueDate = async () => {
+      if (!issueId || !dueDateValue) return;
+      const dueDate = new Date(`${dueDateValue}T12:00:00`);
+      if (Number.isNaN(dueDate.getTime())) {
+         toast.error('Choose a valid date');
+         return;
+      }
+      setDueDateSaving(true);
+      try {
+         if (await updateIssueDueDate(issueId, dueDate.toISOString())) {
+            toast.success('Due date saved');
+            setDueDateOpen(false);
+         }
+      } finally {
+         setDueDateSaving(false);
+      }
+   };
+
+   const clearDueDate = async () => {
       if (!issueId) return;
-      const dueDate = new Date();
-      dueDate.setDate(dueDate.getDate() + 7);
-      if (await updateIssueDueDate(issueId, dueDate.toISOString())) {
-         toast.success('Due date set to 7 days from now');
+      setDueDateSaving(true);
+      try {
+         if (await updateIssueDueDate(issueId, undefined)) {
+            toast.success('Due date cleared');
+            setDueDateOpen(false);
+         }
+      } finally {
+         setDueDateSaving(false);
       }
    };
 
@@ -233,7 +264,10 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
 
    const handleRemindMe = () => {
       const existingReminder = issue?.reminderAt ? new Date(issue.reminderAt) : null;
-      const date = existingReminder && !Number.isNaN(existingReminder.getTime()) ? existingReminder : new Date(Date.now() + 60 * 60 * 1000);
+      const date =
+         existingReminder && !Number.isNaN(existingReminder.getTime())
+            ? existingReminder
+            : new Date(Date.now() + 60 * 60 * 1000);
       date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
       setReminderValue(date.toISOString().slice(0, 16));
       setReminderOpen(true);
@@ -273,225 +307,278 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
 
    return (
       <>
-      <ContextMenuContent className="w-64">
-         <ContextMenuGroup>
-            <ContextMenuSub>
-               <ContextMenuSubTrigger>
-                  <CircleCheck className="mr-2 size-4" /> Status
-               </ContextMenuSubTrigger>
-               <ContextMenuSubContent className="w-48">
-                  {status.map((s) => {
-                     const Icon = s.icon;
-                     return (
-                        <ContextMenuItem key={s.id} onClick={() => handleStatusChange(s.id)}>
-                           <Icon /> {s.name}
+         <ContextMenuContent className="w-64">
+            <ContextMenuGroup>
+               <ContextMenuSub>
+                  <ContextMenuSubTrigger>
+                     <CircleCheck className="mr-2 size-4" /> Status
+                  </ContextMenuSubTrigger>
+                  <ContextMenuSubContent className="w-48">
+                     {status.map((s) => {
+                        const Icon = s.icon;
+                        return (
+                           <ContextMenuItem key={s.id} onClick={() => handleStatusChange(s.id)}>
+                              <Icon /> {s.name}
+                           </ContextMenuItem>
+                        );
+                     })}
+                  </ContextMenuSubContent>
+               </ContextMenuSub>
+
+               <ContextMenuSub>
+                  <ContextMenuSubTrigger>
+                     <User className="mr-2 size-4" /> Assignee
+                  </ContextMenuSubTrigger>
+                  <ContextMenuSubContent className="w-48">
+                     <ContextMenuItem onClick={() => void handleAssigneeChange(null)}>
+                        <User className="size-4" /> Unassigned
+                     </ContextMenuItem>
+                     {members.map((user) => (
+                        <ContextMenuItem
+                           key={user.id}
+                           onClick={() => void handleAssigneeChange(user.id)}
+                        >
+                           <Avatar className="size-4">
+                              <AvatarImage src={user.avatarUrl} alt={user.name} />
+                              <AvatarFallback>{user.name[0]}</AvatarFallback>
+                           </Avatar>
+                           {user.name}
                         </ContextMenuItem>
-                     );
-                  })}
-               </ContextMenuSubContent>
-            </ContextMenuSub>
+                     ))}
+                  </ContextMenuSubContent>
+               </ContextMenuSub>
 
-            <ContextMenuSub>
-               <ContextMenuSubTrigger>
-                  <User className="mr-2 size-4" /> Assignee
-               </ContextMenuSubTrigger>
-               <ContextMenuSubContent className="w-48">
-                  <ContextMenuItem onClick={() => void handleAssigneeChange(null)}>
-                     <User className="size-4" /> Unassigned
-                  </ContextMenuItem>
-                  {members.map((user) => (
-                     <ContextMenuItem
-                        key={user.id}
-                        onClick={() => void handleAssigneeChange(user.id)}
-                     >
-                        <Avatar className="size-4">
-                           <AvatarImage src={user.avatarUrl} alt={user.name} />
-                           <AvatarFallback>{user.name[0]}</AvatarFallback>
-                        </Avatar>
-                        {user.name}
+               <ContextMenuSub>
+                  <ContextMenuSubTrigger>
+                     <BarChart3 className="mr-2 size-4" /> Priority
+                  </ContextMenuSubTrigger>
+                  <ContextMenuSubContent className="w-48">
+                     {priorities.map((priority) => (
+                        <ContextMenuItem
+                           key={priority.id}
+                           onClick={() => handlePriorityChange(priority.id)}
+                        >
+                           <priority.icon className="size-4" /> {priority.name}
+                        </ContextMenuItem>
+                     ))}
+                  </ContextMenuSubContent>
+               </ContextMenuSub>
+
+               <ContextMenuSub>
+                  <ContextMenuSubTrigger>
+                     <Tag className="mr-2 size-4" /> Labels
+                  </ContextMenuSubTrigger>
+                  <ContextMenuSubContent className="w-48">
+                     {labels.map((label) => (
+                        <ContextMenuItem
+                           key={label.id}
+                           onClick={() => void handleLabelToggle(label.id)}
+                        >
+                           <span
+                              className="inline-block size-3 rounded-full"
+                              style={{ backgroundColor: label.color }}
+                              aria-hidden="true"
+                           />
+                           {label.name}
+                        </ContextMenuItem>
+                     ))}
+                  </ContextMenuSubContent>
+               </ContextMenuSub>
+
+               <ContextMenuSub>
+                  <ContextMenuSubTrigger>
+                     <Folder className="mr-2 size-4" /> Project
+                  </ContextMenuSubTrigger>
+                  <ContextMenuSubContent className="w-64">
+                     <ContextMenuItem onClick={() => void handleProjectChange(null)}>
+                        <Folder className="size-4" /> No Project
                      </ContextMenuItem>
-                  ))}
-               </ContextMenuSubContent>
-            </ContextMenuSub>
+                     {projects.slice(0, 5).map((project) => (
+                        <ContextMenuItem
+                           key={project.id}
+                           onClick={() => void handleProjectChange(project.id)}
+                        >
+                           <project.icon className="size-4" /> {project.name}
+                        </ContextMenuItem>
+                     ))}
+                  </ContextMenuSubContent>
+               </ContextMenuSub>
 
-            <ContextMenuSub>
-               <ContextMenuSubTrigger>
-                  <BarChart3 className="mr-2 size-4" /> Priority
-               </ContextMenuSubTrigger>
-               <ContextMenuSubContent className="w-48">
-                  {priorities.map((priority) => (
-                     <ContextMenuItem
-                        key={priority.id}
-                        onClick={() => handlePriorityChange(priority.id)}
-                     >
-                        <priority.icon className="size-4" /> {priority.name}
+               <ContextMenuItem onClick={openDueDate}>
+                  <CalendarClock className="size-4" /> Set due date...
+                  <ContextMenuShortcut>D</ContextMenuShortcut>
+               </ContextMenuItem>
+
+               <ContextMenuItem onClick={() => issueId && openIssueAction(issueId, 'rename')}>
+                  <Pencil className="size-4" /> Rename...
+                  <ContextMenuShortcut>R</ContextMenuShortcut>
+               </ContextMenuItem>
+
+               <ContextMenuSeparator />
+
+               <ContextMenuItem onClick={handleAddLink}>
+                  <LinkIcon className="size-4" /> Add link...
+                  <ContextMenuShortcut>Ctrl L</ContextMenuShortcut>
+               </ContextMenuItem>
+
+               <ContextMenuSub>
+                  <ContextMenuSubTrigger>
+                     <Repeat2 className="mr-2 size-4" /> Convert into
+                  </ContextMenuSubTrigger>
+                  <ContextMenuSubContent className="w-48">
+                     <ContextMenuItem>
+                        <FileText className="size-4" /> Document
                      </ContextMenuItem>
-                  ))}
-               </ContextMenuSubContent>
-            </ContextMenuSub>
-
-            <ContextMenuSub>
-               <ContextMenuSubTrigger>
-                  <Tag className="mr-2 size-4" /> Labels
-               </ContextMenuSubTrigger>
-               <ContextMenuSubContent className="w-48">
-                  {labels.map((label) => (
                      <ContextMenuItem
-                        key={label.id}
-                        onClick={() => void handleLabelToggle(label.id)}
+                        onClick={() => issueId && openIssueAction(issueId, 'convert-comment')}
                      >
-                        <span
-                           className="inline-block size-3 rounded-full"
-                           style={{ backgroundColor: label.color }}
-                           aria-hidden="true"
-                        />
-                        {label.name}
+                        <MessageSquare className="size-4" /> Comment
                      </ContextMenuItem>
-                  ))}
-               </ContextMenuSubContent>
-            </ContextMenuSub>
+                  </ContextMenuSubContent>
+               </ContextMenuSub>
 
-            <ContextMenuSub>
-               <ContextMenuSubTrigger>
-                  <Folder className="mr-2 size-4" /> Project
-               </ContextMenuSubTrigger>
-               <ContextMenuSubContent className="w-64">
-                  <ContextMenuItem onClick={() => void handleProjectChange(null)}>
-                     <Folder className="size-4" /> No Project
-                  </ContextMenuItem>
-                  {projects.slice(0, 5).map((project) => (
-                     <ContextMenuItem
-                        key={project.id}
-                        onClick={() => void handleProjectChange(project.id)}
-                     >
-                        <project.icon className="size-4" /> {project.name}
-                     </ContextMenuItem>
-                  ))}
-               </ContextMenuSubContent>
-            </ContextMenuSub>
+               <ContextMenuItem onClick={() => void handleMakeCopy()}>
+                  <CopyIcon className="size-4" /> Make a copy...
+               </ContextMenuItem>
+            </ContextMenuGroup>
 
-            <ContextMenuItem onClick={() => void handleSetDueDate()}>
-               <CalendarClock className="size-4" /> Set due date...
-               <ContextMenuShortcut>D</ContextMenuShortcut>
+            <ContextMenuSeparator />
+
+            <ContextMenuItem onClick={handleCreateRelated}>
+               <PlusSquare className="size-4" /> Create related
             </ContextMenuItem>
 
-            <ContextMenuItem onClick={() => issueId && openIssueAction(issueId, 'rename')}>
-               <Pencil className="size-4" /> Rename...
-               <ContextMenuShortcut>R</ContextMenuShortcut>
+            <ContextMenuSub>
+               <ContextMenuSubTrigger>
+                  <Flag className="mr-2 size-4" /> Mark as
+               </ContextMenuSubTrigger>
+               <ContextMenuSubContent className="w-48">
+                  <ContextMenuItem onClick={() => void handleMarkAs('Completed')}>
+                     <CheckCircle2 className="size-4" /> Completed
+                  </ContextMenuItem>
+                  <ContextMenuItem onClick={() => void handleMarkAs('Duplicate')}>
+                     <CopyIcon className="size-4" /> Duplicate
+                  </ContextMenuItem>
+                  <ContextMenuItem onClick={() => void handleMarkAs("Won't Fix")}>
+                     <Clock className="size-4" /> Won&apos;t Fix
+                  </ContextMenuItem>
+               </ContextMenuSubContent>
+            </ContextMenuSub>
+
+            <ContextMenuItem onClick={handleMove}>
+               <ArrowRightLeft className="size-4" /> Move
             </ContextMenuItem>
 
             <ContextMenuSeparator />
 
-            <ContextMenuItem onClick={handleAddLink}>
-               <LinkIcon className="size-4" /> Add link...
-               <ContextMenuShortcut>Ctrl L</ContextMenuShortcut>
+            <ContextMenuItem onClick={() => void handleSubscribe()}>
+               <Bell className="size-4" /> {isSubscribed ? 'Unsubscribe' : 'Subscribe'}
+               <ContextMenuShortcut>S</ContextMenuShortcut>
             </ContextMenuItem>
 
-            <ContextMenuSub>
-               <ContextMenuSubTrigger>
-                  <Repeat2 className="mr-2 size-4" /> Convert into
-               </ContextMenuSubTrigger>
-               <ContextMenuSubContent className="w-48">
-                  <ContextMenuItem>
-                     <FileText className="size-4" /> Document
-                  </ContextMenuItem>
-                  <ContextMenuItem onClick={() => issueId && openIssueAction(issueId, 'convert-comment')}>
-                     <MessageSquare className="size-4" /> Comment
-                  </ContextMenuItem>
-               </ContextMenuSubContent>
-            </ContextMenuSub>
-
-            <ContextMenuItem onClick={() => void handleMakeCopy()}>
-               <CopyIcon className="size-4" /> Make a copy...
+            <ContextMenuItem onClick={() => void handleFavorite()}>
+               <Star className="size-4" /> {isFavorite ? 'Unfavorite' : 'Favorite'}
+               <ContextMenuShortcut>F</ContextMenuShortcut>
             </ContextMenuItem>
-         </ContextMenuGroup>
 
-         <ContextMenuSeparator />
+            <ContextMenuItem onClick={handleCopy}>
+               <Clipboard className="size-4" /> Copy
+            </ContextMenuItem>
 
-         <ContextMenuItem onClick={handleCreateRelated}>
-            <PlusSquare className="size-4" /> Create related
-         </ContextMenuItem>
+            <ContextMenuItem onClick={handleRemindMe}>
+               <AlarmClock className="size-4" /> Remind me
+               <ContextMenuShortcut>H</ContextMenuShortcut>
+            </ContextMenuItem>
 
-         <ContextMenuSub>
-            <ContextMenuSubTrigger>
-               <Flag className="mr-2 size-4" /> Mark as
-            </ContextMenuSubTrigger>
-            <ContextMenuSubContent className="w-48">
-               <ContextMenuItem onClick={() => void handleMarkAs('Completed')}>
-                  <CheckCircle2 className="size-4" /> Completed
-               </ContextMenuItem>
-               <ContextMenuItem onClick={() => void handleMarkAs('Duplicate')}>
-                  <CopyIcon className="size-4" /> Duplicate
-               </ContextMenuItem>
-               <ContextMenuItem onClick={() => void handleMarkAs("Won't Fix")}>
-                  <Clock className="size-4" /> Won&apos;t Fix
-               </ContextMenuItem>
-            </ContextMenuSubContent>
-         </ContextMenuSub>
+            <ContextMenuSeparator />
 
-         <ContextMenuItem onClick={handleMove}>
-            <ArrowRightLeft className="size-4" /> Move
-         </ContextMenuItem>
-
-         <ContextMenuSeparator />
-
-         <ContextMenuItem onClick={() => void handleSubscribe()}>
-            <Bell className="size-4" /> {isSubscribed ? 'Unsubscribe' : 'Subscribe'}
-            <ContextMenuShortcut>S</ContextMenuShortcut>
-         </ContextMenuItem>
-
-         <ContextMenuItem onClick={() => void handleFavorite()}>
-            <Star className="size-4" /> {isFavorite ? 'Unfavorite' : 'Favorite'}
-            <ContextMenuShortcut>F</ContextMenuShortcut>
-         </ContextMenuItem>
-
-         <ContextMenuItem onClick={handleCopy}>
-            <Clipboard className="size-4" /> Copy
-         </ContextMenuItem>
-
-         <ContextMenuItem onClick={handleRemindMe}>
-            <AlarmClock className="size-4" /> Remind me
-            <ContextMenuShortcut>H</ContextMenuShortcut>
-         </ContextMenuItem>
-
-         <ContextMenuSeparator />
-
-         <ContextMenuItem
-            variant="destructive"
-            onClick={() => issueId && openIssueAction(issueId, 'archive')}
-         >
-            <Trash2 className="size-4" /> Delete...
-            <ContextMenuShortcut>⌘⌫</ContextMenuShortcut>
-         </ContextMenuItem>
-      </ContextMenuContent>
-      <Dialog open={reminderOpen} onOpenChange={(open) => !reminderSaving && setReminderOpen(open)}>
-         <DialogContent>
-            <DialogHeader>
-               <DialogTitle>Set reminder</DialogTitle>
-               <DialogDescription>Receive an in-app notification at the selected time.</DialogDescription>
-            </DialogHeader>
-            <Input
-               type="datetime-local"
-               value={reminderValue}
-               min={new Date(Date.now() + 60_000).toISOString().slice(0, 16)}
-               onChange={(event) => setReminderValue(event.target.value)}
-               disabled={reminderSaving}
-            />
-            <DialogFooter>
-               {issue?.reminderAt && (
-                  <Button variant="ghost" onClick={() => void clearReminder()} disabled={reminderSaving}>
-                     Clear reminder
+            <ContextMenuItem
+               variant="destructive"
+               onClick={() => issueId && openIssueAction(issueId, 'archive')}
+            >
+               <Trash2 className="size-4" /> Delete...
+               <ContextMenuShortcut>⌘⌫</ContextMenuShortcut>
+            </ContextMenuItem>
+         </ContextMenuContent>
+         <Dialog open={dueDateOpen} onOpenChange={(open) => !dueDateSaving && setDueDateOpen(open)}>
+            <DialogContent>
+               <DialogHeader>
+                  <DialogTitle>Set due date</DialogTitle>
+                  <DialogDescription>The date this issue is expected to be done.</DialogDescription>
+               </DialogHeader>
+               <Input
+                  type="date"
+                  value={dueDateValue}
+                  onChange={(event) => setDueDateValue(event.target.value)}
+                  disabled={dueDateSaving}
+               />
+               <DialogFooter>
+                  {issue?.dueDate && (
+                     <Button
+                        variant="ghost"
+                        onClick={() => void clearDueDate()}
+                        disabled={dueDateSaving}
+                     >
+                        Clear due date
+                     </Button>
+                  )}
+                  <Button
+                     variant="outline"
+                     onClick={() => setDueDateOpen(false)}
+                     disabled={dueDateSaving}
+                  >
+                     Cancel
                   </Button>
-               )}
-               <Button variant="outline" onClick={() => setReminderOpen(false)} disabled={reminderSaving}>
-                  Cancel
-               </Button>
-               <Button onClick={() => void saveReminder()} disabled={reminderSaving}>
-                  {reminderSaving ? 'Saving…' : 'Set reminder'}
-               </Button>
-            </DialogFooter>
-         </DialogContent>
-      </Dialog>
+                  <Button
+                     onClick={() => void saveDueDate()}
+                     disabled={dueDateSaving || !dueDateValue}
+                  >
+                     {dueDateSaving ? 'Saving…' : 'Set due date'}
+                  </Button>
+               </DialogFooter>
+            </DialogContent>
+         </Dialog>
+         <Dialog
+            open={reminderOpen}
+            onOpenChange={(open) => !reminderSaving && setReminderOpen(open)}
+         >
+            <DialogContent>
+               <DialogHeader>
+                  <DialogTitle>Set reminder</DialogTitle>
+                  <DialogDescription>
+                     Receive an in-app notification at the selected time.
+                  </DialogDescription>
+               </DialogHeader>
+               <Input
+                  type="datetime-local"
+                  value={reminderValue}
+                  min={new Date(Date.now() + 60_000).toISOString().slice(0, 16)}
+                  onChange={(event) => setReminderValue(event.target.value)}
+                  disabled={reminderSaving}
+               />
+               <DialogFooter>
+                  {issue?.reminderAt && (
+                     <Button
+                        variant="ghost"
+                        onClick={() => void clearReminder()}
+                        disabled={reminderSaving}
+                     >
+                        Clear reminder
+                     </Button>
+                  )}
+                  <Button
+                     variant="outline"
+                     onClick={() => setReminderOpen(false)}
+                     disabled={reminderSaving}
+                  >
+                     Cancel
+                  </Button>
+                  <Button onClick={() => void saveReminder()} disabled={reminderSaving}>
+                     {reminderSaving ? 'Saving…' : 'Set reminder'}
+                  </Button>
+               </DialogFooter>
+            </DialogContent>
+         </Dialog>
       </>
    );
 }

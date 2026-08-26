@@ -76,7 +76,9 @@ export function IssueLine({ issue, layoutId = false }: { issue: Issue; layoutId?
                         {format(new Date(issue.createdAt), 'MMM dd')}
                      </span>
                   )}
-                  {displayProperties.assignee && <AssigneeUser user={issue.assignee} />}
+                  {displayProperties.assignee && (
+                     <AssigneeUser user={issue.assignee} issueId={issue.id} />
+                  )}
                </div>
             </motion.div>
          </ContextMenuTrigger>

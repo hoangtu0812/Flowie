@@ -53,6 +53,7 @@ export function TeamSettingsDialog({
    onSave: (data: Record<string, unknown>) => Promise<void>;
 }) {
    const [name, setName] = useState(team.name);
+   const [identifier, setIdentifier] = useState(team.identifier);
    const [description, setDescription] = useState(team.description ?? '');
    const [icon, setIcon] = useState(team.icon ?? '👥');
    const [joinPolicy, setJoinPolicy] = useState(team.joinPolicy);
@@ -69,6 +70,7 @@ export function TeamSettingsDialog({
    useEffect(() => {
       if (!kind) return;
       setName(team.name);
+      setIdentifier(team.identifier);
       setDescription(team.description ?? '');
       setIcon(team.icon ?? '👥');
       setJoinPolicy(team.joinPolicy);
@@ -98,6 +100,7 @@ export function TeamSettingsDialog({
          const data: Record<TeamSettingsEditKind, Record<string, unknown>> = {
             general: {
                name: name.trim(),
+               identifier: identifier.trim().toUpperCase(),
                description: description.trim(),
                icon: icon.trim() || '👥',
             },
@@ -112,6 +115,9 @@ export function TeamSettingsDialog({
          };
          if (kind === 'general' && name.trim().length < 2) {
             throw new Error('Team name must contain at least two characters.');
+         }
+         if (kind === 'general' && !/^[A-Za-z0-9]{1,12}$/.test(identifier.trim())) {
+            throw new Error('The issue prefix must be 1 to 12 letters or digits.');
          }
          await onSave(data[kind]);
          onOpenChange(false);
@@ -140,6 +146,22 @@ export function TeamSettingsDialog({
                            onChange={(event) => setName(event.target.value)}
                            autoFocus
                         />
+                     </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="team-identifier">Issue prefix</Label>
+                        <Input
+                           id="team-identifier"
+                           value={identifier}
+                           onChange={(event) => setIdentifier(event.target.value.toUpperCase())}
+                           maxLength={12}
+                           placeholder="GEN"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                           Issues in this team are numbered {identifier.trim() || 'GEN'}-1,{' '}
+                           {identifier.trim() || 'GEN'}-2 and so on. Changing it renames the
+                           existing issues of this team too, so links using the old code stop
+                           working.
+                        </p>
                      </div>
                      <div className="space-y-2">
                         <Label htmlFor="team-description">Description</Label>

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 import json
+import re
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query
@@ -29,6 +30,9 @@ class CreateTeamInput(BaseModel):
 
 class UpdateTeamInput(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=80)
+    # The identifier is the issue prefix (GEN-1, GEN-2). Renaming it renumbers
+    # nothing: only the printed prefix of the team's existing issues changes.
+    identifier: str | None = Field(default=None, min_length=1, max_length=12)
     description: str | None = Field(default=None, max_length=500)
     icon: str | None = Field(default=None, max_length=16)
     color: str | None = Field(default=None, pattern=r'^#[0-9a-fA-F]{6}$')
@@ -178,6 +182,13 @@ async def update_team(team_id: str, payload: UpdateTeamInput, workspaceId: str =
             if not parent_row: raise ApiError(404, 'Parent team not found.', 'Not Found')
             if parent_row['parent_team_id'] == team_id: raise ApiError(400, 'Team hierarchy cannot contain a cycle.', 'Bad Request')
             cursor = parent_row['parent_team_id']
+    identifier = None
+    if 'identifier' in values:
+        identifier = (values.pop('identifier') or '').strip().upper()
+        if not re.fullmatch(r'[A-Z0-9]{1,12}', identifier):
+            raise ApiError(400, 'The issue prefix must be 1 to 12 letters or digits.', 'Bad Request')
+        if identifier == current['identifier']:
+            identifier = None
     close_days = values.get('autoCloseDays', current['auto_close_days'])
     archive_days = values.get('autoArchiveDays', current['auto_archive_days'])
     if close_days and archive_days and archive_days < close_days: raise ApiError(400, 'Auto-archive must not run before auto-close.', 'Bad Request')
@@ -187,9 +198,36 @@ async def update_team(team_id: str, payload: UpdateTeamInput, workspaceId: str =
         if field in values:
             params[field] = values[field].strip() if field in {'name', 'description', 'icon'} and isinstance(values[field], str) else values[field]
             sets.append(f'{column} = :{field}')
+    if identifier:
+        params['identifier'] = identifier
+        sets.append('identifier = :identifier')
     if sets:
-        await db.execute(text(f"UPDATE teams SET {', '.join(sets)}, updated_at = :now WHERE id = :id"), params)
-        await db.commit()
+        try:
+            await db.execute(text(f"UPDATE teams SET {', '.join(sets)}, updated_at = :now WHERE id = :id"), params)
+            if identifier:
+                # Issue identifiers are stored, not derived, so the printed code of
+                # every existing issue has to follow the team prefix. The sequence
+                # number is kept, which keeps every issue's history recognisable.
+                await db.execute(
+                    text('''UPDATE issues SET identifier = :identifier || '-' || number::text, updated_at = :now
+                            WHERE team_id = :id AND workspace_id = :workspace_id'''),
+                    {'identifier': identifier, 'id': team_id, 'workspace_id': workspaceId, 'now': params['now']},
+                )
+                # Inbox entries deep-link by identifier, so repoint them at the new
+                # code instead of leaving the notification on a dead URL.
+                await db.execute(
+                    text('''UPDATE notifications AS n
+                            SET data = jsonb_set(n.data, '{entityPath}', to_jsonb('/issue/' || i.identifier))
+                            FROM issues AS i
+                            WHERE n.entity_type = 'issue' AND n.entity_id = i.id
+                              AND i.team_id = :id AND n.data -> 'entityPath' IS NOT NULL'''),
+                    {'id': team_id},
+                )
+                await _audit(db, workspaceId, user['id'], 'team.identifier_changed', team_id, json.dumps({'from': current['identifier'], 'to': identifier}))
+            await db.commit()
+        except IntegrityError as error:
+            await db.rollback()
+            raise ApiError(409, 'A team with this issue prefix already exists.', 'Conflict') from error
     return {'data': await _detail(db, team_id, workspaceId)}
 
 

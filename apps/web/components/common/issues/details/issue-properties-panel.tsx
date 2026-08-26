@@ -2,10 +2,17 @@
 
 import { CyclePlayIcon } from '@/components/common/cycles/cycle-line';
 import { Button } from '@/components/ui/button';
+import {
+   DropdownMenu,
+   DropdownMenuContent,
+   DropdownMenuItem,
+   DropdownMenuLabel,
+   DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { IssueDetail } from '@/mock-data/issue-details';
 import { Issue } from '@/mock-data/issues';
 import { useIssuesStore } from '@/store/issues-store';
-import { Ban, GitPullRequestArrow, Plus } from 'lucide-react';
+import { Ban, Check, GitPullRequestArrow, Plus } from 'lucide-react';
 import { AssigneeUser } from '../assignee-user';
 import { LabelBadge } from '../label-badge';
 import { PrioritySelector } from '../priority-selector';
@@ -31,10 +38,20 @@ function Section({ title, children }: { title: string; children: React.ReactNode
  * assignee), cycle, labels, project + milestone, relations and linked PRs.
  */
 export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProps) {
-   const { cycles } = useIssuesStore();
+   const { cycles, labels, addIssueLabel, removeIssueLabel } = useIssuesStore();
    const cycle = issue.cycleId
       ? cycles.find((candidate) => candidate.id === issue.cycleId)
       : undefined;
+
+   const toggleLabel = async (labelId: string) => {
+      const label = labels.find((candidate) => candidate.id === labelId);
+      if (!label) return;
+      if (issue.labels.some((candidate) => candidate.id === labelId)) {
+         await removeIssueLabel(issue.id, labelId);
+         return;
+      }
+      await addIssueLabel(issue.id, label);
+   };
 
    return (
       <div className="flex flex-col gap-7">
@@ -49,7 +66,7 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
                   <span className="text-sm">{issue.priority.name}</span>
                </div>
                <div className="flex items-center gap-2 mt-0.5">
-                  <AssigneeUser user={issue.assignee} />
+                  <AssigneeUser user={issue.assignee} issueId={issue.id} />
                   <span className="text-sm">{issue.assignee ? issue.assignee.name : 'Assign'}</span>
                </div>
                {cycle && (
@@ -64,9 +81,45 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
          <Section title="Labels">
             <div className="flex items-center flex-wrap gap-1.5">
                <LabelBadge label={issue.labels} />
-               <Button variant="ghost" size="icon" className="size-6 rounded-full border">
-                  <Plus className="size-3.5" />
-               </Button>
+               <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                     <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-6 rounded-full border"
+                        aria-label="Edit labels"
+                     >
+                        <Plus className="size-3.5" />
+                     </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-56">
+                     <DropdownMenuLabel>Labels</DropdownMenuLabel>
+                     {labels.map((label) => (
+                        <DropdownMenuItem
+                           key={label.id}
+                           onSelect={(event) => {
+                              // Keep the menu open so several labels can be toggled
+                              // in one pass, the way the context menu behaves.
+                              event.preventDefault();
+                              void toggleLabel(label.id);
+                           }}
+                        >
+                           <span
+                              className="inline-block size-3 rounded-full"
+                              style={{ backgroundColor: label.color }}
+                              aria-hidden="true"
+                           />
+                           <span className="truncate">{label.name}</span>
+                           {issue.labels.some((candidate) => candidate.id === label.id) && (
+                              <Check className="ml-auto size-4 shrink-0" />
+                           )}
+                        </DropdownMenuItem>
+                     ))}
+                     {labels.length === 0 && (
+                        <DropdownMenuItem disabled>No workspace labels yet</DropdownMenuItem>
+                     )}
+                  </DropdownMenuContent>
+               </DropdownMenu>
             </div>
          </Section>
 

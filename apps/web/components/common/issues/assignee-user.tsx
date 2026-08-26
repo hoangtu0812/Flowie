@@ -8,50 +8,67 @@ import {
    DropdownMenuSeparator,
    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { statusUserColors, User, users } from '@/mock-data/users';
-import { CheckIcon, CircleUserRound, Send, UserIcon } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { statusUserColors, User } from '@/mock-data/users';
+import { useIssuesStore } from '@/store/issues-store';
+import { CheckIcon, CircleUserRound, UserIcon } from 'lucide-react';
+import { useState } from 'react';
 
 interface AssigneeUserProps {
    user: User | null;
+   /** Persists the choice when supplied; without it the control stays read-only. */
+   issueId?: string;
 }
 
-export function AssigneeUser({ user }: AssigneeUserProps) {
+export function AssigneeUser({ user, issueId }: AssigneeUserProps) {
    const [open, setOpen] = useState(false);
-   const [currentAssignee, setCurrentAssignee] = useState<User | null>(user);
+   const [saving, setSaving] = useState(false);
+   const { members, updateIssueAssignee } = useIssuesStore();
 
-   useEffect(() => {
-      setCurrentAssignee(user);
-   }, [user]);
+   const assign = async (nextAssignee: User | null) => {
+      setOpen(false);
+      if (!issueId || nextAssignee?.id === user?.id) return;
+      setSaving(true);
+      await updateIssueAssignee(issueId, nextAssignee);
+      setSaving(false);
+   };
 
    const renderAvatar = () => {
-      if (currentAssignee) {
+      if (user) {
          return (
             <Avatar className="size-6 shrink-0">
-               <AvatarImage src={currentAssignee.avatarUrl} alt={currentAssignee.name} />
-               <AvatarFallback>{currentAssignee.name[0]}</AvatarFallback>
+               <AvatarImage src={user.avatarUrl} alt={user.name} />
+               <AvatarFallback>{user.name[0]}</AvatarFallback>
             </Avatar>
          );
-      } else {
-         return (
-            <div className="size-6 flex items-center justify-center">
-               <CircleUserRound className="size-5 text-zinc-600" />
-            </div>
-         );
       }
+      return (
+         <div className="size-6 flex items-center justify-center">
+            <CircleUserRound className="size-5 text-zinc-600" />
+         </div>
+      );
    };
+
+   // Without an issue the avatar is pure presentation — rendering a picker that
+   // cannot save anything is what made this control look mocked.
+   if (!issueId) {
+      return <span className="relative w-fit block">{renderAvatar()}</span>;
+   }
 
    return (
       <DropdownMenu open={open} onOpenChange={setOpen}>
          <DropdownMenuTrigger asChild>
-            <button className="relative w-fit focus:outline-none">
+            <button
+               className="relative w-fit focus:outline-none disabled:opacity-60"
+               disabled={saving}
+               onClick={(event) => event.stopPropagation()}
+            >
                {renderAvatar()}
-               {currentAssignee && (
+               {user && (
                   <span
                      className="border-background absolute -end-0.5 -bottom-0.5 size-2.5 rounded-full border-2"
-                     style={{ backgroundColor: statusUserColors[currentAssignee.status] }}
+                     style={{ backgroundColor: statusUserColors[user.status] }}
                   >
-                     <span className="sr-only">{currentAssignee.status}</span>
+                     <span className="sr-only">{user.status}</span>
                   </span>
                )}
             </button>
@@ -59,48 +76,39 @@ export function AssigneeUser({ user }: AssigneeUserProps) {
          <DropdownMenuContent align="start" className="w-[206px]">
             <DropdownMenuLabel>Assign to...</DropdownMenuLabel>
             <DropdownMenuItem
-               onClick={(e) => {
-                  e.stopPropagation();
-                  setCurrentAssignee(null);
-                  setOpen(false);
+               onClick={(event) => {
+                  event.stopPropagation();
+                  void assign(null);
                }}
             >
                <div className="flex items-center gap-2">
                   <UserIcon className="h-5 w-5" />
                   <span>No assignee</span>
                </div>
-               {!currentAssignee && <CheckIcon className="ml-auto h-4 w-4" />}
+               {!user && <CheckIcon className="ml-auto h-4 w-4" />}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            {users
-               .filter((user) => user.teamIds.includes('CORE'))
-               .map((user) => (
-                  <DropdownMenuItem
-                     key={user.id}
-                     onClick={(e) => {
-                        e.stopPropagation();
-                        setCurrentAssignee(user);
-                        setOpen(false);
-                     }}
-                  >
-                     <div className="flex items-center gap-2">
-                        <Avatar className="h-5 w-5">
-                           <AvatarImage src={user.avatarUrl} alt={user.name} />
-                           <AvatarFallback>{user.name[0]}</AvatarFallback>
-                        </Avatar>
-                        <span>{user.name}</span>
-                     </div>
-                     {currentAssignee?.id === user.id && <CheckIcon className="ml-auto h-4 w-4" />}
-                  </DropdownMenuItem>
-               ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>New user</DropdownMenuLabel>
-            <DropdownMenuItem>
-               <div className="flex items-center gap-2">
-                  <Send className="h-4 w-4" />
-                  <span>Invite and assign...</span>
-               </div>
-            </DropdownMenuItem>
+            {members.map((member) => (
+               <DropdownMenuItem
+                  key={member.id}
+                  onClick={(event) => {
+                     event.stopPropagation();
+                     void assign(member);
+                  }}
+               >
+                  <div className="flex items-center gap-2 min-w-0">
+                     <Avatar className="h-5 w-5">
+                        <AvatarImage src={member.avatarUrl} alt={member.name} />
+                        <AvatarFallback>{member.name[0]}</AvatarFallback>
+                     </Avatar>
+                     <span className="truncate">{member.name}</span>
+                  </div>
+                  {user?.id === member.id && <CheckIcon className="ml-auto h-4 w-4 shrink-0" />}
+               </DropdownMenuItem>
+            ))}
+            {members.length === 0 && (
+               <DropdownMenuItem disabled>No workspace members yet</DropdownMenuItem>
+            )}
          </DropdownMenuContent>
       </DropdownMenu>
    );

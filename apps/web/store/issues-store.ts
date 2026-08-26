@@ -251,6 +251,7 @@ interface IssuesState {
    // Advanced issue actions
    createIssue: (payload: CreateIssuePayload) => Promise<Issue>;
    updateIssueTitle: (issueId: string, title: string) => Promise<Issue>;
+   updateIssueDescription: (issueId: string, description: string) => Promise<Issue>;
    moveIssue: (issueId: string, teamId: string) => Promise<Issue>;
    classifyIssue: (
       issueId: string,
@@ -752,6 +753,25 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
       if (!response.ok) {
          const body = (await response.json().catch(() => null)) as { message?: string } | null;
          throw new Error(body?.message ?? 'Could not rename issue.');
+      }
+      const issue = asIssue(((await response.json()) as { data: NativeIssue }).data);
+      get().updateIssue(issueId, issue);
+      return issue;
+   },
+
+   updateIssueDescription: async (issueId, description) => {
+      const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
+      const response = await authenticatedFetch(
+         `${api}/issues/${issueId}?${new URLSearchParams({ workspaceId })}`,
+         {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ description }),
+         }
+      );
+      if (!response.ok) {
+         const body = (await response.json().catch(() => null)) as { message?: string } | null;
+         throw new Error(body?.message ?? 'Could not update the description.');
       }
       const issue = asIssue(((await response.json()) as { data: NativeIssue }).data);
       get().updateIssue(issueId, issue);
