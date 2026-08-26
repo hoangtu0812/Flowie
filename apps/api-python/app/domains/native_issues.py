@@ -1457,6 +1457,16 @@ async def archive_issue(
     return {'data': {'id': issue_id, 'archivedAt': now}}
 
 
+@public_router.get('/c{issue_suffix}')
+async def public_get_issue(
+    issue_suffix: str,
+    workspaceId: str = Query(min_length=1),
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    return await get_issue(f'c{issue_suffix}', workspaceId, user, db)
+
+
 @public_router.patch('/c{issue_suffix}')
 async def public_update_issue(
     issue_suffix: str,
@@ -1571,7 +1581,7 @@ async def issue_reactions(
 
 @router.post('/{issue_id}/reactions/toggle')
 @public_router.post('/{issue_id}/reactions/toggle')
-async def toggle_issue_reaction(
+async def toggle_issue_reaction(  # noqa: D401 - kept for existing API clients
     issue_id: str,
     payload: IssueReactionInput,
     user: Any = Depends(current_user),
@@ -1590,5 +1600,52 @@ async def toggle_issue_reaction(
                     VALUES (:issue_id, :user_id, :emoji)'''),
             {'issue_id': issue_id, 'user_id': user['id'], 'emoji': emoji},
         )
+    await db.commit()
+    return {'data': await _issue_reactions(db, issue_id, user['id'])}
+
+
+@router.post('/{issue_id}/reactions/{emoji}')
+@public_router.post('/{issue_id}/reactions/{emoji}')
+async def add_issue_reaction(
+    issue_id: str,
+    emoji: str,
+    workspaceId: str = Query(min_length=1),
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, list[dict[str, Any]]]:
+    """Add one emoji for the signed-in user; reacting twice is not an error."""
+
+    await _issue_row(db, issue_id, workspaceId, user['id'])
+    value = emoji.strip()
+    if not value:
+        raise ApiError(400, 'emoji must not be empty', 'Bad Request')
+    await db.execute(
+        text(
+            '''INSERT INTO issue_reactions (issue_id, user_id, emoji)
+               VALUES (:issue_id, :user_id, :emoji) ON CONFLICT DO NOTHING'''
+        ),
+        {'issue_id': issue_id, 'user_id': user['id'], 'emoji': value},
+    )
+    await db.commit()
+    return {'data': await _issue_reactions(db, issue_id, user['id'])}
+
+
+@router.delete('/{issue_id}/reactions/{emoji}')
+@public_router.delete('/{issue_id}/reactions/{emoji}')
+async def remove_issue_reaction(
+    issue_id: str,
+    emoji: str,
+    workspaceId: str = Query(min_length=1),
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, list[dict[str, Any]]]:
+    await _issue_row(db, issue_id, workspaceId, user['id'])
+    await db.execute(
+        text(
+            '''DELETE FROM issue_reactions WHERE issue_id = :issue_id
+               AND user_id = :user_id AND emoji = :emoji'''
+        ),
+        {'issue_id': issue_id, 'user_id': user['id'], 'emoji': emoji.strip()},
+    )
     await db.commit()
     return {'data': await _issue_reactions(db, issue_id, user['id'])}

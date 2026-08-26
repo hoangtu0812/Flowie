@@ -53,41 +53,6 @@ services:
          timeout: 5s
          retries: 5
 
-   api-legacy:
-      profiles: ['app']
-      pull_policy: never
-      build:
-         context: .
-         dockerfile: infrastructure/docker/api.Dockerfile
-      container_name: circle-api-legacy
-      environment:
-         NODE_ENV: production
-         API_PORT: 4001
-         API_CORS_ORIGIN: ${API_CORS_ORIGIN:-http://localhost:3000}
-         # The Python API mints the session cookie and proxies the paths it has
-         # not ported yet, so the legacy service must verify tokens with the very
-         # same secret. Without it every proxied request answers 401.
-         AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-development-only-change-me}
-         AUTH_ACCESS_TOKEN_TTL_SECONDS: ${AUTH_ACCESS_TOKEN_TTL_SECONDS:-900}
-         AUTH_REFRESH_TOKEN_TTL_DAYS: ${AUTH_REFRESH_TOKEN_TTL_DAYS:-30}
-         AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
-         ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-}
-         ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}
-         ADMIN_BOOTSTRAP_NAME: ${ADMIN_BOOTSTRAP_NAME:-Flowie Administrator}
-         ADMIN_RESET_PASSWORD: ${ADMIN_RESET_PASSWORD:-false}
-         DATABASE_URL: postgresql://${POSTGRES_USER:-circle}:${POSTGRES_PASSWORD:-circle}@postgres:5432/${POSTGRES_DB:-circle}?schema=public
-         REDIS_URL: redis://redis:6379
-         S3_ENDPOINT: http://minio:9000
-         S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
-         S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin123}
-         S3_BUCKET: ${S3_BUCKET:-flowie}
-         S3_REGION: ${S3_REGION:-us-east-1}
-      depends_on:
-         postgres:
-            condition: service_healthy
-         redis:
-            condition: service_healthy
-
    api:
       profiles: ['app']
       pull_policy: never
@@ -100,8 +65,6 @@ services:
          API_CORS_ORIGIN: http://localhost:3000
          # Absolute base for the links carried by Discord notifications.
          APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
-         LEGACY_API_URL: http://api-legacy:4001
-         LEGACY_API_TIMEOUT_SECONDS: ${LEGACY_API_TIMEOUT_SECONDS:-30}
          POSTGRES_HOST: postgres
          POSTGRES_PORT_INTERNAL: 5432
          REDIS_HOST: redis
@@ -129,8 +92,6 @@ services:
             condition: service_healthy
          minio:
             condition: service_healthy
-         api-legacy:
-            condition: service_started
 
    web:
       profiles: ['app']

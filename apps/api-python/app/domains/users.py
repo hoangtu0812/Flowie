@@ -4,7 +4,7 @@ from mimetypes import guess_type
 from secrets import token_urlsafe
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, Depends, File, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -156,3 +156,121 @@ async def get_avatar(user_id: str, request: Request, db: AsyncSession = Depends(
     body = await MinioStorage(request.app.state.settings).get(object_key)
     content_type = guess_type(object_key)[0] or 'application/octet-stream'
     return Response(body, media_type=content_type, headers={'cache-control': 'private, no-store'})
+
+
+async def _workspace_member_access(db: AsyncSession, workspace_id: str, user_id: str) -> None:
+    result = await db.execute(
+        text(
+            """SELECT 1 FROM workspace_members
+               WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'"""
+        ),
+        {'workspace_id': workspace_id, 'user_id': user_id},
+    )
+    if result.scalar_one_or_none() is None:
+        raise ApiError(403, 'You do not have access to this workspace.', 'Forbidden')
+
+
+async def _workspace_members(
+    db: AsyncSession, workspace_id: str, user_id: str | None = None
+) -> list[dict[str, object]]:
+    """The Members directory: the profile plus the teams and projects joined.
+
+    Teams and projects are read once for the whole directory rather than per
+    member, so opening the screen costs three queries whatever the headcount.
+    """
+
+    condition = 'AND wm.user_id = :user_id' if user_id else ''
+    result = await db.execute(
+        text(
+            f"""SELECT u.id, u.name, u.email, u.username, u.title, u.timezone, u.avatar_url,
+                       u.created_at, wm.role, wm.joined_at, wm.created_at AS member_created_at
+                FROM workspace_members wm JOIN users u ON u.id = wm.user_id
+                WHERE wm.workspace_id = :workspace_id AND wm.status = 'ACTIVE' {condition}
+                ORDER BY wm.joined_at ASC"""
+        ),
+        {'workspace_id': workspace_id, **({'user_id': user_id} if user_id else {})},
+    )
+    rows = result.mappings().all()
+    if not rows:
+        return []
+
+    member_ids = [row['id'] for row in rows]
+    teams = await db.execute(
+        text(
+            """SELECT tm.user_id, tm.role, t.id, t.name, t.identifier, t.icon
+               FROM team_members tm JOIN teams t ON t.id = tm.team_id
+               WHERE tm.user_id = ANY(:ids) AND t.workspace_id = :workspace_id
+                 AND t.archived_at IS NULL"""
+        ),
+        {'ids': member_ids, 'workspace_id': workspace_id},
+    )
+    projects = await db.execute(
+        text(
+            """SELECT pm.user_id, p.id, p.name, p.identifier
+               FROM project_members pm JOIN projects p ON p.id = pm.project_id
+               WHERE pm.user_id = ANY(:ids) AND p.workspace_id = :workspace_id
+                 AND p.archived_at IS NULL"""
+        ),
+        {'ids': member_ids, 'workspace_id': workspace_id},
+    )
+
+    team_rows: dict[str, list[dict[str, object]]] = {}
+    for row in teams.mappings().all():
+        team_rows.setdefault(row['user_id'], []).append(
+            {
+                'id': row['id'],
+                'name': row['name'],
+                'identifier': row['identifier'],
+                'icon': row['icon'],
+                'role': row['role'],
+            }
+        )
+    project_rows: dict[str, list[dict[str, object]]] = {}
+    for row in projects.mappings().all():
+        project_rows.setdefault(row['user_id'], []).append(
+            {'id': row['id'], 'name': row['name'], 'identifier': row['identifier']}
+        )
+
+    return [
+        {
+            'id': row['id'],
+            'name': row['name'],
+            'email': row['email'],
+            'username': row['username'],
+            'title': row['title'],
+            'timezone': row['timezone'],
+            'avatarUrl': f'/users/{row["id"]}/avatar'
+            if row['avatar_url'] and row['avatar_url'].startswith(AVATAR_PREFIX)
+            else row['avatar_url'],
+            'createdAt': row['created_at'],
+            'workspaceRole': row['role'],
+            'joinedAt': row['joined_at'] or row['member_created_at'],
+            'teams': team_rows.get(row['id'], []),
+            'projects': project_rows.get(row['id'], []),
+        }
+        for row in rows
+    ]
+
+
+@router.get('')
+async def list_workspace_members(
+    workspaceId: str = Query(min_length=1),
+    user: object = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, list[dict[str, object]]]:
+    await _workspace_member_access(db, workspaceId, user['id'])
+    return {'data': await _workspace_members(db, workspaceId)}
+
+
+@router.get('/{user_id}')
+async def get_workspace_member(
+    user_id: str,
+    workspaceId: str = Query(min_length=1),
+    user: object = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, object]]:
+    await _workspace_member_access(db, workspaceId, user['id'])
+    members = await _workspace_members(db, workspaceId, user_id)
+    if not members:
+        raise ApiError(404, 'Member not found.', 'Not Found')
+    return {'data': members[0]}

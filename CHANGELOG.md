@@ -10,6 +10,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+## [0.3.0] — 2026-08-26 22:00 +07
+
 ### Added
 
 - A Timeline tab on the Project screen: every issue as a bar from the day it
@@ -18,8 +20,20 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 - A navigation progress bar, and a moving indicator on the screens that wait
   for their own data, so a slow request no longer reads as a frozen page.
 
+### Removed
+
+- The NestJS compatibility service is switched off. Every API path is served by
+  the Python API, so the proxy that forwarded unported paths, its client, the
+  readiness probe against it and the `api-legacy` container are all gone.
+
 ### Changed
 
+- The members directory (`GET /users`, `GET /users/:id`) is served by Python,
+  which was the last path the web still reached through the proxy.
+- Four more API groups are served by Python instead of being proxied to the
+  Node facade: the project issue list, reading a single issue, issue emoji
+  reactions, notification preferences and the whole platform admin console.
+  Nine legacy endpoints remain, none of which the web calls today.
 - Discord notifications are embeds instead of one grey line: who acted, the
   issue code and title, a link straight to the item, the values that moved
   (`Todo → In Progress`), and the comment or project update itself. The link
@@ -35,6 +49,12 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Issue rows on the Project screens showed the same priority icon for every
+  issue: the API answers with the enum casing (`NONE`, `HIGH`) while the icon
+  table is keyed in lower case, so every lookup missed and fell back.
+- Adding an emoji reaction never worked: the interface posts the emoji in the
+  path, which the Node service did not route. The Python API implements what
+  the interface calls.
 - A slow PyPI read no longer fails the whole production deploy: the Python
   image keeps a wheel cache between builds and gives pip a longer timeout with
   retries, and the deploy retries the image build before giving up.

@@ -1,20 +1,28 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import jwt
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
 from ..db.session import get_session
-from .auth import _utcnow, current_user
+from .auth import _cuid, _utcnow, current_user
 from .native_projects import _workspace_access
 from ..services.notification_events import notification_hub
 
 
 router = APIRouter(prefix='/api/v1/notifications', tags=['notifications'])
+
+
+class NotificationPreferencesInput(BaseModel):
+    teamIssueAdded: bool
+    issueCompleted: bool
+    issueAddedToTriage: bool
 
 
 async def _access(db: AsyncSession, workspace_id: str, user_id: str) -> None:
@@ -98,6 +106,79 @@ async def list_notifications(
         }
         for row in result.mappings().all()
     ]}
+
+
+@router.get('/preferences')
+async def notification_preferences(
+    workspaceId: str = Query(min_length=1),
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, bool]]:
+    """A member with no stored row simply has every notification switched off."""
+
+    await _access(db, workspaceId, user['id'])
+    result = await db.execute(
+        text(
+            """SELECT team_issue_added, issue_completed, issue_added_to_triage
+               FROM notification_preferences
+               WHERE workspace_id = :workspace_id AND user_id = :user_id"""
+        ),
+        {'workspace_id': workspaceId, 'user_id': user['id']},
+    )
+    row = result.mappings().first()
+    return {
+        'data': {
+            'teamIssueAdded': bool(row['team_issue_added']) if row else False,
+            'issueCompleted': bool(row['issue_completed']) if row else False,
+            'issueAddedToTriage': bool(row['issue_added_to_triage']) if row else False,
+        }
+    }
+
+
+@router.patch('/preferences')
+async def update_notification_preferences(
+    payload: NotificationPreferencesInput,
+    workspaceId: str = Query(min_length=1),
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, bool]]:
+    await _access(db, workspaceId, user['id'])
+    now = _utcnow()
+    await db.execute(
+        text(
+            """INSERT INTO notification_preferences
+               (workspace_id, user_id, team_issue_added, issue_completed, issue_added_to_triage, created_at, updated_at)
+               VALUES (:workspace_id, :user_id, :team_issue_added, :issue_completed, :issue_added_to_triage, :now, :now)
+               ON CONFLICT (workspace_id, user_id) DO UPDATE
+               SET team_issue_added = EXCLUDED.team_issue_added,
+                   issue_completed = EXCLUDED.issue_completed,
+                   issue_added_to_triage = EXCLUDED.issue_added_to_triage,
+                   updated_at = EXCLUDED.updated_at"""
+        ),
+        {
+            'workspace_id': workspaceId,
+            'user_id': user['id'],
+            'team_issue_added': payload.teamIssueAdded,
+            'issue_completed': payload.issueCompleted,
+            'issue_added_to_triage': payload.issueAddedToTriage,
+            'now': now,
+        },
+    )
+    await db.execute(
+        text(
+            """INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
+               VALUES (:id, :workspace_id, :actor_id, 'notification.preferences.updated', 'user', :actor_id, CAST(:metadata AS jsonb), :now)"""
+        ),
+        {
+            'id': _cuid(),
+            'workspace_id': workspaceId,
+            'actor_id': user['id'],
+            'metadata': json.dumps(payload.model_dump()),
+            'now': now,
+        },
+    )
+    await db.commit()
+    return {'data': payload.model_dump()}
 
 
 async def _notification_exists(

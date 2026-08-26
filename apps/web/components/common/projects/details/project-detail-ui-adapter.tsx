@@ -188,6 +188,15 @@ export function toProjectUi(
    };
 }
 
+const priorityPresentation = (value: string) => {
+   const normalized = value.trim().toLowerCase().replace(/_/g, '-');
+   return (
+      priorities.find(
+         (priority) => priority.id === (normalized === 'none' ? 'no-priority' : normalized)
+      ) ?? priorities[0]
+   );
+};
+
 export function toIssueUi(
    issue: LiveProjectIssue,
    project: ProjectDetailUiProject
@@ -200,11 +209,10 @@ export function toIssueUi(
       status: projectStatusPresentation(issue.status.name, issue.status.category),
       assignee: issue.assignee ? memberPresentation(issue.assignee, issue.createdAt) : null,
       creator: issue.creator ? memberPresentation(issue.creator, issue.createdAt) : undefined,
-      priority:
-         priorities.find(
-            (priority) =>
-               priority.id === (issue.priority === 'none' ? 'no-priority' : issue.priority)
-         ) ?? priorities[0],
+      // The API answers with the enum casing (NONE, HIGH); the presentation
+      // ids are lower case, so a raw comparison always fell back to the first
+      // priority and every issue showed the same icon.
+      priority: priorityPresentation(issue.priority),
       labels: issue.labelLinks.map((link) => link.label),
       createdAt: issue.createdAt,
       team: issue.team,

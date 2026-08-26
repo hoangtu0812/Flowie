@@ -50,7 +50,7 @@ The implementation inventory and remaining adapter work are tracked in [implemen
 | Services | Redis, MinIO | Background coordination and object storage |
 | Runtime | Docker Compose | Reproducible local and internal-network deployment |
 
-> A legacy compatibility service remains only while routes are migrated. New backend work belongs in `apps/api-python`; the plan records the exact migration status.
+> The backend is served entirely by `apps/api-python`. The NestJS service in `apps/api` no longer runs and is kept only as migration reference.
 
 ## 🚀 Quick start
 

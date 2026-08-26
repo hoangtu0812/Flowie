@@ -1,1 +1,1 @@
-"""Native Python domains. Unlisted API paths remain behind the legacy facade."""
+"""Native Python domains. Every public API path is served from here."""

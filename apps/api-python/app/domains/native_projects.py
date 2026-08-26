@@ -808,6 +808,92 @@ async def project_issues(project_id: str, workspaceId: str = Query(min_length=1)
     return {'data': (await _project(db, project_id, workspaceId, user['id']))['issues']}
 
 
+async def _project_issue_rows(db: AsyncSession, project_id: str, workspace_id: str) -> list[dict[str, Any]]:
+    """Every issue of a project with the relations the Project screens render.
+
+    Labels and cycles are fetched once for the whole page rather than per
+    issue, so the payload costs three queries no matter how large the project
+    grows.
+    """
+
+    result = await db.execute(
+        text(
+            """SELECT i.*,
+                      s.id AS status_id_value, s.name AS status_name, s.category AS status_category, s.color AS status_color,
+                      t.id AS team_id_value, t.name AS team_name, t.identifier AS team_identifier,
+                      c.id AS creator_id_value, c.name AS creator_name, c.avatar_url AS creator_avatar_url,
+                      a.id AS assignee_id_value, a.name AS assignee_name, a.avatar_url AS assignee_avatar_url
+               FROM issues i
+               JOIN issue_statuses s ON s.id = i.status_id
+               JOIN teams t ON t.id = i.team_id
+               JOIN users c ON c.id = i.creator_id
+               LEFT JOIN users a ON a.id = i.assignee_id
+               WHERE i.project_id = :project_id AND i.workspace_id = :workspace_id AND i.archived_at IS NULL
+               ORDER BY i.updated_at DESC"""
+        ),
+        {'project_id': project_id, 'workspace_id': workspace_id},
+    )
+    rows = result.mappings().all()
+    if not rows:
+        return []
+
+    issue_ids = [row['id'] for row in rows]
+    labels = await db.execute(
+        text(
+            """SELECT il.issue_id, il.label_id, il.created_at, l.name, l.color
+               FROM issue_labels il JOIN labels l ON l.id = il.label_id
+               WHERE il.issue_id = ANY(:issue_ids) ORDER BY l.name"""
+        ),
+        {'issue_ids': issue_ids},
+    )
+    cycles = await db.execute(
+        text(
+            """SELECT ic.issue_id, ic.cycle_id, ic.created_at, cy.name
+               FROM issue_cycles ic JOIN cycles cy ON cy.id = ic.cycle_id
+               WHERE ic.issue_id = ANY(:issue_ids) ORDER BY ic.created_at"""
+        ),
+        {'issue_ids': issue_ids},
+    )
+
+    label_links: dict[str, list[dict[str, Any]]] = {}
+    for link in labels.mappings().all():
+        label_links.setdefault(link['issue_id'], []).append({
+            'issueId': link['issue_id'], 'labelId': link['label_id'], 'createdAt': link['created_at'],
+            'label': {'id': link['label_id'], 'name': link['name'], 'color': link['color']},
+        })
+    cycle_links: dict[str, list[dict[str, Any]]] = {}
+    for link in cycles.mappings().all():
+        cycle_links.setdefault(link['issue_id'], []).append({
+            'issueId': link['issue_id'], 'cycleId': link['cycle_id'], 'createdAt': link['created_at'],
+            'cycle': {'id': link['cycle_id'], 'name': link['name']},
+        })
+
+    return [
+        {
+            'id': row['id'], 'workspaceId': row['workspace_id'], 'teamId': row['team_id'],
+            'statusId': row['status_id'], 'projectId': row['project_id'],
+            'parentIssueId': row['parent_issue_id'], 'duplicateOfId': row['duplicate_of_id'],
+            'identifier': row['identifier'], 'number': row['number'], 'title': row['title'],
+            'description': row['description'], 'priority': row['priority'],
+            'resolution': row['resolution'], 'estimate': row['estimate'], 'dueDate': row['due_date'],
+            'creatorId': row['creator_id'], 'assigneeId': row['assignee_id'],
+            'completedAt': row['completed_at'], 'canceledAt': row['canceled_at'],
+            'archivedAt': row['archived_at'], 'createdAt': row['created_at'],
+            'updatedAt': row['updated_at'],
+            'status': {
+                'id': row['status_id_value'], 'name': row['status_name'],
+                'category': row['status_category'], 'color': row['status_color'],
+            },
+            'team': {'id': row['team_id_value'], 'name': row['team_name'], 'identifier': row['team_identifier']},
+            'creator': {'id': row['creator_id_value'], 'name': row['creator_name'], 'avatarUrl': row['creator_avatar_url']},
+            'assignee': {'id': row['assignee_id_value'], 'name': row['assignee_name'], 'avatarUrl': row['assignee_avatar_url']} if row['assignee_id_value'] else None,
+            'labelLinks': label_links.get(row['id'], []),
+            'cycleLinks': cycle_links.get(row['id'], []),
+        }
+        for row in rows
+    ]
+
+
 @router.get('/{project_id}/custom-fields')
 async def project_custom_fields(project_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
     await _project(db, project_id, workspaceId, user['id'])
@@ -1063,6 +1149,15 @@ async def public_archive_project(project_suffix: str, workspaceId: str = Query(m
 @public_router.patch('/c{project_suffix}/members')
 async def public_update_members(project_suffix: str, payload: ProjectMembersInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
     return await update_members(_public_project_id(project_suffix), payload, user, db)
+
+
+@public_router.get('/c{project_suffix}/issues')
+async def public_project_issues(project_suffix: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
+    project_id = _public_project_id(project_suffix)
+    # Access is decided exactly as the single-project read decides it.
+    await _workspace_access(db, workspaceId, user['id'])
+    await _project(db, project_id, workspaceId, user['id'])
+    return {'data': await _project_issue_rows(db, project_id, workspaceId)}
 
 
 @public_router.get('/c{project_suffix}/custom-fields')

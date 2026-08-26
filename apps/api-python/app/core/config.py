@@ -20,15 +20,9 @@ def _async_database_url(value: str) -> str:
 
 @dataclass(frozen=True, slots=True)
 class Settings:
-    """Runtime settings for the public Python facade.
-
-    The legacy target is deliberately configured as a fixed base URL.  A
-    request can only supply a relative API path, never a host to proxy to.
-    """
+    """Runtime settings for the API."""
 
     api_port: int
-    legacy_api_url: str
-    legacy_timeout_seconds: float
     cors_origins: tuple[str, ...]
     postgres_host: str
     postgres_port: int
@@ -51,8 +45,6 @@ class Settings:
     def from_environment(cls) -> 'Settings':
         return cls(
             api_port=int(getenv('API_PORT', '4000')),
-            legacy_api_url=getenv('LEGACY_API_URL', 'http://api-legacy:4001').rstrip('/'),
-            legacy_timeout_seconds=float(getenv('LEGACY_API_TIMEOUT_SECONDS', '30')),
             cors_origins=_origins(getenv('API_CORS_ORIGIN', 'http://localhost:3000')),
             postgres_host=getenv('POSTGRES_HOST', 'postgres'),
             postgres_port=int(getenv('POSTGRES_PORT_INTERNAL', '5432')),
