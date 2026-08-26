@@ -16,6 +16,7 @@ import {
    useSidebarPrefsStore,
 } from '@/store/sidebar-prefs-store';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 const ITEM_KEYS: Record<string, SidebarItemKey> = {
@@ -28,6 +29,7 @@ const ITEM_KEYS: Record<string, SidebarItemKey> = {
 const DISABLED_ITEMS = new Set(['Reviews', 'Agent']);
 
 export function NavInbox() {
+   const { orgId } = useParams<{ orgId: string }>();
    const { visibility, badgeStyle, order } = useSidebarPrefsStore();
    const { getUnreadCount } = useNotificationsStore();
    const [mounted, setMounted] = useState(false);
@@ -63,7 +65,7 @@ export function NavInbox() {
                         </SidebarMenuButton>
                      ) : (
                         <SidebarMenuButton asChild>
-                           <Link href={item.url}>
+                           <Link href={`/${orgId}${item.url.replace(/^\/lndev-ui/, '')}`}>
                               <item.icon />
                               <span>{item.name}</span>
                            </Link>
