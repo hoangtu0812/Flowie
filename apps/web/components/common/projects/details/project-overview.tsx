@@ -11,21 +11,21 @@ import {
    DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import {
-   Select,
-   SelectContent,
-   SelectItem,
-   SelectTrigger,
-   SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { format, parseISO } from 'date-fns';
 import { ArrowRight, Check, ChevronDown, FileText, PenLine, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { priorities } from '@/lib/priority-presentations';
 import { DocumentOutline, getOutlineItems } from './document-outline';
-import { toIssueUi, toProjectDetailUi, toProjectUi } from './project-detail-ui-adapter';
+import {
+   projectStatusPresentation,
+   toIssueUi,
+   toProjectDetailUi,
+   toProjectUi,
+} from './project-detail-ui-adapter';
 import { ProjectSidePanel } from './project-side-panel';
 import { useLiveProjectData } from './use-live-project';
 
@@ -95,6 +95,14 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
    const issues = liveIssues.map((issue) => toIssueUi(issue, project));
    const outlineItems = getOutlineItems(detail.description);
    const team = project.team;
+   const selectedStatusOption = availableStatuses.find((option) => option.name === propertyStatus);
+   const selectedStatus = projectStatusPresentation(
+      selectedStatusOption?.name ?? propertyStatus,
+      selectedStatusOption?.category
+   );
+   const selectedPriority = priorities.find((option) => option.id === propertyPriority);
+   const selectedLead = availableMembers.find((member) => member.userId === propertyLeadId)?.user;
+   const selectedTeam = availableTeams.find((option) => option.id === propertyTeamId);
 
    const submitResource = async () => {
       if (!resourceLabel.trim() || !resourceUrl.trim()) return;
@@ -563,28 +571,46 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
                {propertyEditor === 'status' && (
                   <Select value={propertyStatus} onValueChange={setPropertyStatus}>
                      <SelectTrigger>
-                        <SelectValue />
+                        <span className="flex items-center gap-2">
+                           <selectedStatus.icon />
+                           {selectedStatus.name}
+                        </span>
                      </SelectTrigger>
                      <SelectContent>
-                        {availableStatuses.map((option) => (
-                           <SelectItem key={option.id} value={option.name}>
-                              {option.name}
-                           </SelectItem>
-                        ))}
+                        {availableStatuses.map((option) => {
+                           const presentation = projectStatusPresentation(
+                              option.name,
+                              option.category
+                           );
+                           return (
+                              <SelectItem key={option.id} value={option.name}>
+                                 <span className="flex items-center gap-2">
+                                    <presentation.icon />
+                                    {presentation.name}
+                                 </span>
+                              </SelectItem>
+                           );
+                        })}
                      </SelectContent>
                   </Select>
                )}
                {propertyEditor === 'priority' && (
                   <Select value={propertyPriority} onValueChange={setPropertyPriority}>
                      <SelectTrigger>
-                        <SelectValue />
+                        <span className="flex items-center gap-2">
+                           {selectedPriority && (
+                              <selectedPriority.icon className="size-4 text-muted-foreground" />
+                           )}
+                           {selectedPriority?.name ?? 'No priority'}
+                        </span>
                      </SelectTrigger>
                      <SelectContent>
-                        {['no-priority', 'urgent', 'high', 'medium', 'low'].map((priority) => (
-                           <SelectItem key={priority} value={priority}>
-                              {priority === 'no-priority'
-                                 ? 'No priority'
-                                 : priority[0].toUpperCase() + priority.slice(1)}
+                        {priorities.map((priority) => (
+                           <SelectItem key={priority.id} value={priority.id}>
+                              <span className="flex items-center gap-2">
+                                 <priority.icon className="size-4 text-muted-foreground" />
+                                 {priority.name}
+                              </span>
                            </SelectItem>
                         ))}
                      </SelectContent>
@@ -593,13 +619,33 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
                {propertyEditor === 'lead' && (
                   <Select value={propertyLeadId} onValueChange={setPropertyLeadId}>
                      <SelectTrigger>
-                        <SelectValue placeholder="No lead" />
+                        <span className="flex items-center gap-2">
+                           {selectedLead && (
+                              <Avatar className="size-5">
+                                 <AvatarImage
+                                    src={selectedLead.avatarUrl ?? undefined}
+                                    alt={selectedLead.name}
+                                 />
+                                 <AvatarFallback>{selectedLead.name[0]}</AvatarFallback>
+                              </Avatar>
+                           )}
+                           {selectedLead?.name ?? 'No lead'}
+                        </span>
                      </SelectTrigger>
                      <SelectContent>
                         <SelectItem value="unassigned">No lead</SelectItem>
                         {availableMembers.map((member) => (
                            <SelectItem key={member.userId} value={member.userId}>
-                              {member.user.name}
+                              <span className="flex items-center gap-2">
+                                 <Avatar className="size-5">
+                                    <AvatarImage
+                                       src={member.user.avatarUrl ?? undefined}
+                                       alt={member.user.name}
+                                    />
+                                    <AvatarFallback>{member.user.name[0]}</AvatarFallback>
+                                 </Avatar>
+                                 {member.user.name}
+                              </span>
                            </SelectItem>
                         ))}
                      </SelectContent>
@@ -634,14 +680,19 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
                {propertyEditor === 'team' && (
                   <Select value={propertyTeamId} onValueChange={setPropertyTeamId}>
                      <SelectTrigger>
-                        <SelectValue placeholder="No team" />
+                        <span className="flex items-center gap-2">
+                           <span>{selectedTeam?.icon ?? '—'}</span>
+                           {selectedTeam?.name ?? 'No team'}
+                        </span>
                      </SelectTrigger>
                      <SelectContent>
                         <SelectItem value="unassigned">No team</SelectItem>
                         {availableTeams.map((option) => (
                            <SelectItem key={option.id} value={option.id}>
-                              {option.icon ? `${option.icon} ` : ''}
-                              {option.name}
+                              <span className="flex items-center gap-2">
+                                 <span>{option.icon ?? '—'}</span>
+                                 {option.name}
+                              </span>
                            </SelectItem>
                         ))}
                      </SelectContent>
