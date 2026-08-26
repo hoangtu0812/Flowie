@@ -3,7 +3,13 @@
 import { ContentBlocks } from '@/components/common/issues/details/content-blocks';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+   Dialog,
+   DialogContent,
+   DialogFooter,
+   DialogHeader,
+   DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { format, parseISO } from 'date-fns';
 import { ArrowRight, ChevronDown, FileText, PenLine, Plus } from 'lucide-react';
@@ -32,6 +38,7 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
       updates,
       activities,
       createResource,
+      updateProject,
       loading,
       error,
    } = useLiveProjectData();
@@ -41,6 +48,9 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
    const [resourceLabel, setResourceLabel] = useState('');
    const [resourceUrl, setResourceUrl] = useState('');
    const [savingResource, setSavingResource] = useState(false);
+   const [descriptionEditing, setDescriptionEditing] = useState(false);
+   const [descriptionDraft, setDescriptionDraft] = useState('');
+   const [savingDescription, setSavingDescription] = useState(false);
    if (loading)
       return (
          <div className="h-full grid place-items-center text-sm text-muted-foreground">
@@ -73,6 +83,24 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
          toast.error(caught instanceof Error ? caught.message : 'Could not add resource.');
       } finally {
          setSavingResource(false);
+      }
+   };
+
+   const editDescription = () => {
+      setDescriptionDraft(liveProject.description ?? '');
+      setDescriptionEditing(true);
+   };
+
+   const saveDescription = async () => {
+      setSavingDescription(true);
+      try {
+         await updateProject({ description: descriptionDraft.trim() || null });
+         setDescriptionEditing(false);
+         toast.success('Project description updated.');
+      } catch (caught) {
+         toast.error(caught instanceof Error ? caught.message : 'Could not update description.');
+      } finally {
+         setSavingDescription(false);
       }
    };
 
@@ -200,10 +228,60 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
                      <div className="flex items-center gap-1 text-sm font-medium text-muted-foreground mb-2">
                         Description
                         <ChevronDown className="size-3.5" />
+                        <Button
+                           type="button"
+                           variant="ghost"
+                           size="icon"
+                           className="size-6"
+                           aria-label="Edit project description"
+                           onClick={editDescription}
+                        >
+                           <PenLine className="size-3.5" />
+                        </Button>
                      </div>
-                     <div className="text-[15px] leading-relaxed">
-                        <ContentBlocks blocks={detail.description} />
-                     </div>
+                     {descriptionEditing ? (
+                        <div className="space-y-3">
+                           <textarea
+                              aria-label="Project description"
+                              value={descriptionDraft}
+                              onChange={(event) => setDescriptionDraft(event.target.value)}
+                              placeholder="Add a project description…"
+                              className="border-input min-h-40 w-full rounded-md border bg-transparent px-3 py-2 text-[15px] leading-relaxed outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+                              autoFocus
+                           />
+                           <div className="flex justify-end gap-2">
+                              <Button
+                                 type="button"
+                                 variant="outline"
+                                 disabled={savingDescription}
+                                 onClick={() => setDescriptionEditing(false)}
+                              >
+                                 Cancel
+                              </Button>
+                              <Button
+                                 type="button"
+                                 disabled={savingDescription}
+                                 onClick={() => void saveDescription()}
+                              >
+                                 {savingDescription ? 'Saving…' : 'Save description'}
+                              </Button>
+                           </div>
+                        </div>
+                     ) : (
+                        <div className="text-[15px] leading-relaxed">
+                           {detail.description.length ? (
+                              <ContentBlocks blocks={detail.description} />
+                           ) : (
+                              <button
+                                 type="button"
+                                 onClick={editDescription}
+                                 className="text-muted-foreground hover:text-foreground"
+                              >
+                                 Add a description…
+                              </button>
+                           )}
+                        </div>
+                     )}
                   </div>
                </div>
             </div>
@@ -211,14 +289,54 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
 
          {/* Side panel */}
          <ProjectSidePanel project={project} detail={detail} issues={issues} />
-         <Dialog open={resourceDialogOpen} onOpenChange={(open) => !savingResource && setResourceDialogOpen(open)}>
+         <Dialog
+            open={resourceDialogOpen}
+            onOpenChange={(open) => !savingResource && setResourceDialogOpen(open)}
+         >
             <DialogContent>
-               <DialogHeader><DialogTitle>Add resource</DialogTitle></DialogHeader>
+               <DialogHeader>
+                  <DialogTitle>Add resource</DialogTitle>
+               </DialogHeader>
                <div className="space-y-3">
-                  <div className="space-y-1.5"><label className="text-sm font-medium" htmlFor="project-resource-label">Name</label><Input id="project-resource-label" value={resourceLabel} onChange={(event) => setResourceLabel(event.target.value)} autoFocus /></div>
-                  <div className="space-y-1.5"><label className="text-sm font-medium" htmlFor="project-resource-url">URL</label><Input id="project-resource-url" type="url" value={resourceUrl} onChange={(event) => setResourceUrl(event.target.value)} placeholder="https://" /></div>
+                  <div className="space-y-1.5">
+                     <label className="text-sm font-medium" htmlFor="project-resource-label">
+                        Name
+                     </label>
+                     <Input
+                        id="project-resource-label"
+                        value={resourceLabel}
+                        onChange={(event) => setResourceLabel(event.target.value)}
+                        autoFocus
+                     />
+                  </div>
+                  <div className="space-y-1.5">
+                     <label className="text-sm font-medium" htmlFor="project-resource-url">
+                        URL
+                     </label>
+                     <Input
+                        id="project-resource-url"
+                        type="url"
+                        value={resourceUrl}
+                        onChange={(event) => setResourceUrl(event.target.value)}
+                        placeholder="https://"
+                     />
+                  </div>
                </div>
-               <DialogFooter><Button variant="outline" disabled={savingResource} onClick={() => setResourceDialogOpen(false)}>Cancel</Button><Button disabled={savingResource || !resourceLabel.trim() || !resourceUrl.trim()} onClick={() => void submitResource()}>{savingResource ? 'Adding…' : 'Add resource'}</Button></DialogFooter>
+               <DialogFooter>
+                  <Button
+                     variant="outline"
+                     disabled={savingResource}
+                     onClick={() => setResourceDialogOpen(false)}
+                  >
+                     Cancel
+                  </Button>
+                  <Button
+                     disabled={savingResource || !resourceLabel.trim() || !resourceUrl.trim()}
+                     onClick={() => void submitResource()}
+                  >
+                     {savingResource ? 'Adding…' : 'Add resource'}
+                  </Button>
+               </DialogFooter>
             </DialogContent>
          </Dialog>
       </div>

@@ -46,7 +46,7 @@ import {
    Upload,
 } from 'lucide-react';
 import { useParams } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { type LiveDocument, useLiveTeam } from './use-live-team';
 
@@ -87,6 +87,21 @@ export default function TeamDocuments() {
    const [editorDocument, setEditorDocument] = useState<LiveDocument>();
    const [previewDocument, setPreviewDocument] = useState<LiveDocument>();
    const [documentToDelete, setDocumentToDelete] = useState<LiveDocument>();
+   const createIntentHandled = useRef(false);
+
+   useEffect(() => {
+      if (createIntentHandled.current || !team || documentFolders.length === 0) return;
+      const requestedType = new URLSearchParams(window.location.search).get('create');
+      if (requestedType !== 'markdown' && requestedType !== 'link') return;
+      createIntentHandled.current = true;
+      setTitle('');
+      setDocumentType(requestedType);
+      setSourceUrl('');
+      setFile(undefined);
+      setFolderId(documentFolders[0].id);
+      setDocumentOpen(true);
+      window.history.replaceState({}, '', window.location.pathname);
+   }, [documentFolders, team]);
 
    if (loading)
       return (
