@@ -35,6 +35,9 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- A slow PyPI read no longer fails the whole production deploy: the Python
+  image keeps a wheel cache between builds and gives pip a longer timeout with
+  retries, and the deploy retries the image build before giving up.
 - Discord notifications stopped arriving once they became embeds: the actor's
   avatar is stored as an app-relative path, and Discord rejects an entire embed
   whose `icon_url` or `url` is not absolute — answering 4xx, which was

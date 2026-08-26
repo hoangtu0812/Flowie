@@ -21,6 +21,10 @@ jobs:
     steps:
       - name: Update source and deploy
         shell: bash
+        env:
+          # Cache mounts in the image builds need BuildKit explicitly enabled.
+          DOCKER_BUILDKIT: '1'
+          COMPOSE_DOCKER_CLI_BUILD: '1'
         run: |
           set -euo pipefail
 
@@ -29,7 +33,23 @@ jobs:
           git checkout main
           git pull --ff-only origin main
 
-          docker compose --env-file .env.production --profile app build api-legacy api web worker
+          # A registry read that times out is not a broken release. Retry the
+          # build before failing the deploy, since every attempt resumes from
+          # the layers and package caches the previous one produced.
+          built=0
+          for attempt in 1 2 3; do
+            if docker compose --env-file .env.production --profile app build api-legacy api web worker; then
+              built=1
+              break
+            fi
+            echo "Build attempt ${attempt} failed; retrying in 20s."
+            sleep 20
+          done
+          if [ "${built}" -ne 1 ]; then
+            echo 'The image build failed three times; leaving the running deployment untouched.'
+            exit 1
+          fi
+
           docker compose --env-file .env.production --profile app up -d --force-recreate --remove-orphans
 
       - name: Verify API readiness
