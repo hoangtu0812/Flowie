@@ -13,6 +13,7 @@ from ..core.errors import ApiError
 from ..db.session import get_session
 from .auth import _cuid, _utcnow, current_user
 from .native_projects import _date, _team_access, _workspace_access
+from .native_slas import resolve_deadline
 from .teams import _manager
 from .workflow_catalog import DEFAULT_CIRCLE_ISSUE_STATUSES
 
@@ -534,6 +535,8 @@ async def create_issue(
     await _team_access(db, payload.workspaceId, payload.teamId, user['id'])
     values = payload.model_dump()
     category = await _validate_references(db, payload.workspaceId, payload.teamId, values, creating=True)
+    if not values.get('dueDate'):
+        values['dueDate'] = await resolve_deadline(db, payload.workspaceId, payload.teamId, values['priority'])
     if values.get('parentIssueId'):
         parent = await db.execute(
             text('''SELECT 1 FROM issues WHERE id = :issue_id AND workspace_id = :workspace_id

@@ -4,6 +4,7 @@ import {
    loadCurrentWorkspaceTeams,
    type WorkspaceTeam,
 } from '@/components/common/teams/team-types';
+import { authenticatedFetch } from '@/lib/workspaces';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -86,7 +87,7 @@ export default function SlasSettings() {
       setLoadError(undefined);
       try {
          const workspace = await loadCurrentWorkspaceTeams();
-         const response = await fetch(
+         const response = await authenticatedFetch(
             `${api}/slas?${new URLSearchParams({ workspaceId: workspace.workspaceId })}`,
             { credentials: 'include' }
          );
@@ -161,7 +162,7 @@ export default function SlasSettings() {
       setFormError(undefined);
       try {
          const query = new URLSearchParams({ workspaceId });
-         const response = await fetch(
+         const response = await authenticatedFetch(
             editingId ? `${api}/slas/${editingId}?${query}` : `${api}/slas`,
             {
                method: editingId ? 'PATCH' : 'POST',
@@ -198,7 +199,7 @@ export default function SlasSettings() {
       setSaving(true);
       setFormError(undefined);
       try {
-         const response = await fetch(
+         const response = await authenticatedFetch(
             `${api}/slas/${editingId}?${new URLSearchParams({ workspaceId })}`,
             { method: 'DELETE', credentials: 'include' }
          );
