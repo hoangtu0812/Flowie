@@ -11,6 +11,13 @@ import {
    DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import {
+   Select,
+   SelectContent,
+   SelectItem,
+   SelectTrigger,
+   SelectValue,
+} from '@/components/ui/select';
 import { format, parseISO } from 'date-fns';
 import { ArrowRight, Check, ChevronDown, FileText, PenLine, Plus } from 'lucide-react';
 import Link from 'next/link';
@@ -27,6 +34,7 @@ interface ProjectOverviewProps {
 }
 
 const formatDay = (iso?: string) => (iso ? format(parseISO(iso), 'MMM do') : '—');
+type InlinePropertyEditor = 'status' | 'priority' | 'lead' | 'dates' | 'team';
 
 /** Project "Overview" tab: description column + properties side panel. */
 export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
@@ -41,6 +49,9 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
       updateProject,
       availableLabels,
       availableInitiatives,
+      availableStatuses,
+      availableMembers,
+      availableTeams,
       updateLabels,
       updateInitiatives,
       loading,
@@ -58,6 +69,14 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
    const [selector, setSelector] = useState<'labels' | 'initiatives'>();
    const [selectedIds, setSelectedIds] = useState<string[]>([]);
    const [savingSelection, setSavingSelection] = useState(false);
+   const [propertyEditor, setPropertyEditor] = useState<InlinePropertyEditor>();
+   const [propertyStatus, setPropertyStatus] = useState('');
+   const [propertyPriority, setPropertyPriority] = useState('');
+   const [propertyLeadId, setPropertyLeadId] = useState('unassigned');
+   const [propertyStartDate, setPropertyStartDate] = useState('');
+   const [propertyTargetDate, setPropertyTargetDate] = useState('');
+   const [propertyTeamId, setPropertyTeamId] = useState('unassigned');
+   const [savingProperty, setSavingProperty] = useState(false);
    if (loading)
       return (
          <div className="h-full grid place-items-center text-sm text-muted-foreground">
@@ -145,6 +164,49 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
       }
    };
 
+   const openPropertyEditor = (kind: InlinePropertyEditor) => {
+      setPropertyEditor(kind);
+      setPropertyStatus(project.status.id);
+      setPropertyPriority(project.priority.id);
+      setPropertyLeadId(project.lead.id === 'unassigned' ? 'unassigned' : project.lead.id);
+      setPropertyStartDate(project.persistedStartDate?.slice(0, 10) ?? '');
+      setPropertyTargetDate(project.targetDate?.slice(0, 10) ?? '');
+      setPropertyTeamId(project.team?.id ?? 'unassigned');
+   };
+
+   const saveProperty = async () => {
+      if (!propertyEditor) return;
+      setSavingProperty(true);
+      try {
+         if (propertyEditor === 'status') await updateProject({ status: propertyStatus });
+         if (propertyEditor === 'priority') await updateProject({ priority: propertyPriority });
+         if (propertyEditor === 'lead') {
+            await updateProject({
+               leadId: propertyLeadId === 'unassigned' ? null : propertyLeadId,
+            });
+         }
+         if (propertyEditor === 'dates') {
+            await updateProject({
+               startDate: propertyStartDate || null,
+               targetDate: propertyTargetDate || null,
+            });
+         }
+         if (propertyEditor === 'team') {
+            await updateProject({
+               teamId: propertyTeamId === 'unassigned' ? null : propertyTeamId,
+            });
+         }
+         setPropertyEditor(undefined);
+         toast.success('Project properties updated.');
+      } catch (caught) {
+         toast.error(
+            caught instanceof Error ? caught.message : 'Could not update project properties.'
+         );
+      } finally {
+         setSavingProperty(false);
+      }
+   };
+
    return (
       <div className="w-full h-full flex overflow-hidden">
          {/* Main column */}
@@ -163,15 +225,27 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
                      <div className="flex items-center gap-3">
                         <span className="w-24 text-muted-foreground shrink-0">Properties</span>
                         <div className="flex items-center gap-3 flex-wrap">
-                           <span className="inline-flex items-center gap-1.5">
+                           <button
+                              type="button"
+                              onClick={() => openPropertyEditor('status')}
+                              className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
+                           >
                               <project.status.icon />
                               {project.status.name}
-                           </span>
-                           <span className="inline-flex items-center gap-1.5">
+                           </button>
+                           <button
+                              type="button"
+                              onClick={() => openPropertyEditor('priority')}
+                              className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
+                           >
                               <project.priority.icon className="size-3.5 text-muted-foreground" />
                               {project.priority.name}
-                           </span>
-                           <span className="inline-flex items-center gap-1.5">
+                           </button>
+                           <button
+                              type="button"
+                              onClick={() => openPropertyEditor('lead')}
+                              className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
+                           >
                               <Avatar className="size-4">
                                  <AvatarImage
                                     src={project.lead.avatarUrl}
@@ -180,17 +254,29 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
                                  <AvatarFallback>{project.lead.name[0]}</AvatarFallback>
                               </Avatar>
                               {project.lead.name}
-                           </span>
-                           <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                           </button>
+                           <button
+                              type="button"
+                              onClick={() => openPropertyEditor('dates')}
+                              className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                           >
                               {formatDay(project.startDate)}
                               <ArrowRight className="size-3" />
                               {formatDay(project.targetDate)}
-                           </span>
-                           {team && (
-                              <span className="inline-flex items-center gap-1.5">
-                                 {team.icon} {team.name}
-                              </span>
-                           )}
+                           </button>
+                           <button
+                              type="button"
+                              onClick={() => openPropertyEditor('team')}
+                              className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
+                           >
+                              {team ? (
+                                 <>
+                                    {team.icon} {team.name}
+                                 </>
+                              ) : (
+                                 'No team'
+                              )}
+                           </button>
                         </div>
                      </div>
 
@@ -452,6 +538,125 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
                   </Button>
                   <Button disabled={savingSelection} onClick={() => void saveSelection()}>
                      {savingSelection ? 'Saving…' : 'Save'}
+                  </Button>
+               </DialogFooter>
+            </DialogContent>
+         </Dialog>
+         <Dialog
+            open={Boolean(propertyEditor)}
+            onOpenChange={(open) => !savingProperty && !open && setPropertyEditor(undefined)}
+         >
+            <DialogContent>
+               <DialogHeader>
+                  <DialogTitle>
+                     {propertyEditor === 'status'
+                        ? 'Set project status'
+                        : propertyEditor === 'priority'
+                          ? 'Set project priority'
+                          : propertyEditor === 'lead'
+                            ? 'Set project lead'
+                            : propertyEditor === 'dates'
+                              ? 'Set project dates'
+                              : 'Set project team'}
+                  </DialogTitle>
+               </DialogHeader>
+               {propertyEditor === 'status' && (
+                  <Select value={propertyStatus} onValueChange={setPropertyStatus}>
+                     <SelectTrigger>
+                        <SelectValue />
+                     </SelectTrigger>
+                     <SelectContent>
+                        {availableStatuses.map((option) => (
+                           <SelectItem key={option.id} value={option.name}>
+                              {option.name}
+                           </SelectItem>
+                        ))}
+                     </SelectContent>
+                  </Select>
+               )}
+               {propertyEditor === 'priority' && (
+                  <Select value={propertyPriority} onValueChange={setPropertyPriority}>
+                     <SelectTrigger>
+                        <SelectValue />
+                     </SelectTrigger>
+                     <SelectContent>
+                        {['no-priority', 'urgent', 'high', 'medium', 'low'].map((priority) => (
+                           <SelectItem key={priority} value={priority}>
+                              {priority === 'no-priority'
+                                 ? 'No priority'
+                                 : priority[0].toUpperCase() + priority.slice(1)}
+                           </SelectItem>
+                        ))}
+                     </SelectContent>
+                  </Select>
+               )}
+               {propertyEditor === 'lead' && (
+                  <Select value={propertyLeadId} onValueChange={setPropertyLeadId}>
+                     <SelectTrigger>
+                        <SelectValue placeholder="No lead" />
+                     </SelectTrigger>
+                     <SelectContent>
+                        <SelectItem value="unassigned">No lead</SelectItem>
+                        {availableMembers.map((member) => (
+                           <SelectItem key={member.userId} value={member.userId}>
+                              {member.user.name}
+                           </SelectItem>
+                        ))}
+                     </SelectContent>
+                  </Select>
+               )}
+               {propertyEditor === 'dates' && (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                     <div className="space-y-1.5">
+                        <label className="text-sm font-medium" htmlFor="project-start-date">
+                           Start date
+                        </label>
+                        <Input
+                           id="project-start-date"
+                           type="date"
+                           value={propertyStartDate}
+                           onChange={(event) => setPropertyStartDate(event.target.value)}
+                        />
+                     </div>
+                     <div className="space-y-1.5">
+                        <label className="text-sm font-medium" htmlFor="project-target-date">
+                           Target date
+                        </label>
+                        <Input
+                           id="project-target-date"
+                           type="date"
+                           value={propertyTargetDate}
+                           onChange={(event) => setPropertyTargetDate(event.target.value)}
+                        />
+                     </div>
+                  </div>
+               )}
+               {propertyEditor === 'team' && (
+                  <Select value={propertyTeamId} onValueChange={setPropertyTeamId}>
+                     <SelectTrigger>
+                        <SelectValue placeholder="No team" />
+                     </SelectTrigger>
+                     <SelectContent>
+                        <SelectItem value="unassigned">No team</SelectItem>
+                        {availableTeams.map((option) => (
+                           <SelectItem key={option.id} value={option.id}>
+                              {option.icon ? `${option.icon} ` : ''}
+                              {option.name}
+                           </SelectItem>
+                        ))}
+                     </SelectContent>
+                  </Select>
+               )}
+               <DialogFooter>
+                  <Button
+                     variant="outline"
+                     disabled={savingProperty}
+                     onClick={() => setPropertyEditor(undefined)}
+                  >
+                     Cancel
+                  </Button>
+                  <Button disabled={savingProperty} onClick={() => void saveProperty()}>
+                     {savingProperty ? 'Saving…' : 'Save'}
                   </Button>
                </DialogFooter>
             </DialogContent>

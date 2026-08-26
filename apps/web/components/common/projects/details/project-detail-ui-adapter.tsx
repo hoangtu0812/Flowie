@@ -6,7 +6,11 @@ import { priorities } from '@/lib/priority-presentations';
 import { health as projectHealth } from '@/lib/project-presentations';
 import type { Project } from '@/types/projects';
 import type { ProjectDetail, ProjectUpdateHealth } from '@/types/project-details';
-import { status as circleStatuses, type Status, type StatusCategory } from '@/lib/status-presentations';
+import {
+   status as circleStatuses,
+   type Status,
+   type StatusCategory,
+} from '@/lib/status-presentations';
 import type { User } from '@/types/users';
 import { Circle, CircleCheck, CircleDashed, CirclePlay, CircleX, FolderKanban } from 'lucide-react';
 import { createElement } from 'react';
@@ -22,6 +26,7 @@ export type ProjectDetailUiProject = Project & {
    team?: { id: string; name: string; identifier: string; icon: string | null } | null;
    persistedStartDate: string | null;
    members: LiveProject['members'];
+   initiatives: LiveProject['initiativeLinks'];
 };
 
 export type ProjectDetailUiIssue = Issue & { cycleName?: string };
@@ -178,6 +183,7 @@ export function toProjectUi(
       team: project.team,
       members: project.members,
       labels: project.labelLinks.map((link) => link.label),
+      initiatives: project.initiativeLinks,
       initiative: project.initiativeLinks[0]?.initiative.name,
    };
 }
