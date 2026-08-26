@@ -31,6 +31,7 @@ from .domains.native_documents import router as native_documents_router
 from .domains.native_customer_requests import router as customer_requests_router
 from .domains.native_asks import router as asks_router
 from .domains.native_slas import router as slas_router
+from .domains.native_pulse import router as pulse_router
 from .domains.native_emojis import router as emojis_router
 from .domains.native_notifications import router as notifications_router
 from .domains.native_views import router as views_router
@@ -101,6 +102,7 @@ def create_app(
     app.include_router(customer_requests_router)
     app.include_router(asks_router)
     app.include_router(slas_router)
+    app.include_router(pulse_router)
     app.include_router(emojis_router)
     app.include_router(notifications_router)
     app.include_router(views_router)

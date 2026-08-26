@@ -1,6 +1,7 @@
 'use client';
 
 import { loadCurrentWorkspaceTeams } from '@/components/common/teams/team-types';
+import { authenticatedFetch } from '@/lib/workspaces';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Activity, FolderKanban, MessageSquareText } from 'lucide-react';
@@ -34,7 +35,7 @@ export default function PulseSettings() {
       setLoadError(undefined);
       try {
          const { workspaceId } = await loadCurrentWorkspaceTeams();
-         const response = await fetch(
+         const response = await authenticatedFetch(
             `${api}/pulse?${new URLSearchParams({ workspaceId, limit: '150' })}`,
             { credentials: 'include' }
          );
