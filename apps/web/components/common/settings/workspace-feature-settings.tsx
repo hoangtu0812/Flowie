@@ -1,6 +1,7 @@
 'use client';
 
 import { loadCurrentWorkspaceTeams } from '@/components/common/teams/team-types';
+import { authenticatedFetch } from '@/lib/workspaces';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -103,14 +104,14 @@ export default function WorkspaceFeatureSettings({ feature }: { feature: Feature
       try {
          const { workspaceId: id } = await loadCurrentWorkspaceTeams();
          const [recordsResponse, membersResponse] = await Promise.all([
-            fetch(
+            authenticatedFetch(
                feature === 'documents'
                   ? `${api}/documents?${new URLSearchParams({ workspaceId: id }).toString()}`
                   : `${api}/initiatives?${new URLSearchParams({ workspaceId: id }).toString()}`,
-               { credentials: 'include' }
+               {}
             ),
             feature === 'initiatives'
-               ? fetch(`${api}/workspaces/${id}/members`, { credentials: 'include' })
+               ? authenticatedFetch(`${api}/workspaces/${id}/members`)
                : Promise.resolve(undefined),
          ]);
          if (!recordsResponse.ok || (membersResponse && !membersResponse.ok)) {
@@ -205,9 +206,8 @@ export default function WorkspaceFeatureSettings({ feature }: { feature: Feature
                     targetDate: targetDate || null,
                     ...(ownerId ? { ownerId } : {}),
                  };
-         const response = await fetch(endpoint, {
+         const response = await authenticatedFetch(endpoint, {
             method: editingId ? 'PATCH' : 'POST',
-            credentials: 'include',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify(body),
          });
@@ -238,9 +238,9 @@ export default function WorkspaceFeatureSettings({ feature }: { feature: Feature
       setSaving(true);
       setFormError(undefined);
       try {
-         const response = await fetch(
+         const response = await authenticatedFetch(
             `${api}/${feature}/${editingId}?${new URLSearchParams({ workspaceId }).toString()}`,
-            { method: 'DELETE', credentials: 'include' }
+            { method: 'DELETE' }
          );
          if (!response.ok) throw new Error(`Could not archive ${feature.slice(0, -1)}.`);
          setDialogOpen(false);
