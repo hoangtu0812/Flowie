@@ -1,6 +1,5 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import { SettingsCard, SettingsRow, SettingsSection, SettingsShell } from './shared';
 
@@ -9,7 +8,7 @@ export default function AgentPersonalization() {
    return (
       <SettingsShell
          title="Agent personalization"
-         description="Your personal settings for the LNDev Agent"
+         description="Personal settings for Flowie automation (coming soon)"
       >
          <SettingsSection
             title="Guidance"
@@ -17,7 +16,9 @@ export default function AgentPersonalization() {
          >
             <textarea
                placeholder="Enter personal guidance for the agent (optional)..."
-               className="w-full min-h-36 rounded-lg border bg-container p-4 text-sm outline-none resize-y placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
+               disabled
+               aria-disabled="true"
+               className="w-full min-h-36 rounded-lg border bg-container p-4 text-sm outline-none resize-y placeholder:text-muted-foreground opacity-60 cursor-not-allowed"
             />
          </SettingsSection>
 
@@ -28,10 +29,15 @@ export default function AgentPersonalization() {
             <SettingsCard>
                <SettingsRow
                   title="No skills created"
+                  description="Skills are not available in Flowie yet."
+                  disabled
                   trailing={
-                     <Button size="icon" variant="ghost" className="size-7">
+                     <span
+                        aria-disabled="true"
+                        className="inline-flex size-7 items-center justify-center rounded-md opacity-60 cursor-not-allowed"
+                     >
                         <Plus className="size-4" />
-                     </Button>
+                     </span>
                   }
                />
             </SettingsCard>
@@ -39,17 +45,14 @@ export default function AgentPersonalization() {
 
          <SettingsSection
             title="MCP connectors"
-            description="Add MCP connectors for use with the agent. Workspace admins can manage available connectors in security settings."
+            description="Agent connectors are not available in Flowie yet."
          >
             <SettingsCard>
                <SettingsRow
                   title="Agent MCP access disabled in this workspace"
-                  muted
-                  trailing={
-                     <Button size="xs" variant="ghost">
-                        Configure
-                     </Button>
-                  }
+                  description="This feature will be enabled with Flowie automation in a later release."
+                  disabled
+                  trailing={<span className="text-xs text-muted-foreground">Unavailable</span>}
                />
             </SettingsCard>
          </SettingsSection>
