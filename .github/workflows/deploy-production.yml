@@ -1,0 +1,50 @@
+name: Deploy Flowie production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flowie-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy to CT107
+    runs-on: [self-hosted, flowie-production]
+    timeout-minutes: 30
+
+    steps:
+      - name: Update source and deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd /opt/flowie
+          git fetch origin main
+          git checkout main
+          git pull --ff-only origin main
+
+          docker compose --env-file .env.production --profile app build api-legacy api web worker
+          docker compose --env-file .env.production --profile app up -d --force-recreate --remove-orphans
+
+      - name: Verify API readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for attempt in {1..24}; do
+            if curl -fsS http://localhost:4000/readyz; then
+              exit 0
+            fi
+            sleep 5
+          done
+
+          cd /opt/flowie
+          docker compose --env-file .env.production --profile app ps
+          docker compose --env-file .env.production --profile app logs --tail=150 api api-legacy web
+          exit 1
