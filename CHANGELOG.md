@@ -18,6 +18,14 @@ All notable changes to Flowie are documented here.
 
 - Discord integration configuration is now served by the Python/FastAPI API.
 
+### Fixed
+
+- The legacy API container now receives the shared `AUTH_JWT_SECRET`, so the
+  paths the Python API still proxies (such as the project issue list) accept the
+  session cookie instead of answering 401.
+- Project detail pages name the request that failed instead of reporting a
+  single generic "Could not load project details." message.
+
 ## 2026-08-25
 
 ### Added

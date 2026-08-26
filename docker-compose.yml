@@ -64,6 +64,12 @@ services:
          NODE_ENV: production
          API_PORT: 4001
          API_CORS_ORIGIN: ${API_CORS_ORIGIN:-http://localhost:3000}
+         # The Python API mints the session cookie and proxies the paths it has
+         # not ported yet, so the legacy service must verify tokens with the very
+         # same secret. Without it every proxied request answers 401.
+         AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-development-only-change-me}
+         AUTH_ACCESS_TOKEN_TTL_SECONDS: ${AUTH_ACCESS_TOKEN_TTL_SECONDS:-900}
+         AUTH_REFRESH_TOKEN_TTL_DAYS: ${AUTH_REFRESH_TOKEN_TTL_DAYS:-30}
          AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
          ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-}
          ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}
@@ -75,6 +81,7 @@ services:
          S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
          S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin123}
          S3_BUCKET: ${S3_BUCKET:-flowie}
+         S3_REGION: ${S3_REGION:-us-east-1}
       depends_on:
          postgres:
             condition: service_healthy

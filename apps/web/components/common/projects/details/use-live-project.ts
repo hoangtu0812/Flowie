@@ -148,6 +148,36 @@ export function useLiveProject(projectId: string) {
          try {
             const workspaceId = (await loadCurrentWorkspace()).id;
             const query = new URLSearchParams({ workspaceId });
+            // Every Project detail tab needs all of these, so the page fails as a
+            // whole. Keep the label next to the URL: a failing request has to name
+            // itself, otherwise a single generic message hides which endpoint (and
+            // which service behind the API) rejected the session.
+            const endpoints: Array<[string, string]> = [
+               ['details', `${api}/projects/${projectId}?${query}`],
+               ['issues', `${api}/projects/${projectId}/issues?${query}`],
+               ['milestones', `${api}/projects/${projectId}/milestones?${query}`],
+               ['activity', `${api}/activities?${new URLSearchParams({ workspaceId, projectId })}`],
+               ['updates', `${api}/projects/${projectId}/updates?${query}`],
+               ['labels', `${api}/projects/labels?${query}`],
+               ['custom fields', `${api}/projects/${projectId}/custom-fields?${query}`],
+               ['initiatives', `${api}/initiatives?${query}`],
+               ['members', `${api}/workspaces/${workspaceId}/members`],
+               ['statuses', `${api}/projects/statuses?${query}`],
+               ['teams', `${api}/teams?${query}`],
+            ];
+            const responses = await Promise.all(
+               endpoints.map(([, url]) => authenticatedFetch(url))
+            );
+            const failed = responses.findIndex((response) => !response.ok);
+            if (failed !== -1) {
+               const response = responses[failed];
+               const payload = (await response.json().catch(() => null)) as {
+                  message?: string;
+               } | null;
+               throw new Error(
+                  `Could not load project ${endpoints[failed][0]} (${response.status} ${payload?.message ?? response.statusText}).`
+               );
+            }
             const [
                projectResponse,
                issuesResponse,
@@ -160,45 +190,7 @@ export function useLiveProject(projectId: string) {
                membersResponse,
                statusesResponse,
                teamsResponse,
-            ] = await Promise.all([
-               authenticatedFetch(`${api}/projects/${projectId}?${query}`),
-               authenticatedFetch(`${api}/projects/${projectId}/issues?${query}`),
-               authenticatedFetch(`${api}/projects/${projectId}/milestones?${query}`, {
-                  credentials: 'include',
-               }),
-               authenticatedFetch(
-                  `${api}/activities?${new URLSearchParams({ workspaceId, projectId })}`,
-                  {
-                     credentials: 'include',
-                  }
-               ),
-               authenticatedFetch(`${api}/projects/${projectId}/updates?${query}`, {
-                  credentials: 'include',
-               }),
-               authenticatedFetch(`${api}/projects/labels?${query}`),
-               authenticatedFetch(`${api}/projects/${projectId}/custom-fields?${query}`, {
-                  credentials: 'include',
-               }),
-               authenticatedFetch(`${api}/initiatives?${query}`),
-               authenticatedFetch(`${api}/workspaces/${workspaceId}/members`),
-               authenticatedFetch(`${api}/projects/statuses?${query}`),
-               authenticatedFetch(`${api}/teams?${query}`),
-            ]);
-            if (
-               !projectResponse.ok ||
-               !issuesResponse.ok ||
-               !milestonesResponse.ok ||
-               !activitiesResponse.ok ||
-               !updatesResponse.ok ||
-               !labelsResponse.ok ||
-               !customFieldsResponse.ok ||
-               !initiativesResponse.ok ||
-               !membersResponse.ok ||
-               !statusesResponse.ok ||
-               !teamsResponse.ok
-            ) {
-               throw new Error('Could not load project details.');
-            }
+            ] = responses;
             if (!current) return;
             setWorkspaceId(workspaceId);
             setProject(((await projectResponse.json()) as { data: LiveProject }).data);
