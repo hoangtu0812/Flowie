@@ -299,9 +299,16 @@ export function useLiveTeam(teamReference: string) {
             }
          );
          if (!response.ok) throw new Error('Could not update document folder.');
-         reload();
+         const folder = (
+            (await response.json()) as {
+               data: Pick<LiveDocumentFolder, 'id' | 'name' | 'icon' | 'position'>;
+            }
+         ).data;
+         setDocumentFolders((current) =>
+            current.map((item) => (item.id === folderId ? { ...item, ...folder } : item))
+         );
       },
-      [reload, requireContext]
+      [requireContext]
    );
 
    const updateDocument = useCallback(
@@ -317,10 +324,22 @@ export function useLiveTeam(teamReference: string) {
          );
          if (!response.ok) throw new Error('Could not save document.');
          const document = ((await response.json()) as { data: LiveDocument }).data;
-         reload();
+         // Do not reload the whole team while an editor is open: that remounts the
+         // modal and makes autosave appear as a page refresh on every keystroke.
+         setDocuments((current) =>
+            current.map((item) => (item.id === document.id ? document : item))
+         );
+         setDocumentFolders((current) =>
+            current.map((folder) => ({
+               ...folder,
+               documents: folder.documents.map((item) =>
+                  item.id === document.id ? document : item
+               ),
+            }))
+         );
          return document;
       },
-      [reload, requireContext]
+      [requireContext]
    );
 
    const deleteDocument = useCallback(
@@ -331,9 +350,15 @@ export function useLiveTeam(teamReference: string) {
             { method: 'DELETE' }
          );
          if (!response.ok) throw new Error('Could not delete document.');
-         reload();
+         setDocuments((current) => current.filter((item) => item.id !== documentId));
+         setDocumentFolders((current) =>
+            current.map((folder) => ({
+               ...folder,
+               documents: folder.documents.filter((item) => item.id !== documentId),
+            }))
+         );
       },
-      [reload, requireContext]
+      [requireContext]
    );
 
    return {
