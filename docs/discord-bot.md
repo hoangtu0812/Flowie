@@ -57,9 +57,19 @@ it is pasted into a terminal recording, a Git commit, or chat.
 - project properties updated;
 - project update/comment posted.
 
+Plus `issue.updated` for the remaining issue properties (title, priority,
+project, due date, estimate, description).
+
+Each event is delivered as a Discord embed: who did it, the issue code and
+title, a link straight to the item, the values that moved (`Todo → In
+Progress`) and the comment or project update itself. The link needs `APP_URL`
+(or `NEXT_PUBLIC_APP_URL`) to be set on the API container — without it the embed
+is still delivered, only without a clickable title.
+
 Discord delivery is not limited to the Inbox recipients: the Inbox skips the
 person who caused the event, while Discord receives every supported event. A
-single-member workspace therefore still sees its own activity in the channel.
+single-member workspace therefore still sees its own activity in the channel —
+which is also why an Inbox can be empty while the Discord channel is busy.
 
 Interactive slash commands are intentionally not enabled yet: they require a
 public Discord interactions endpoint and request-signature verification. The

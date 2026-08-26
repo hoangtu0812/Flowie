@@ -10,6 +10,22 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+### Changed
+
+- Discord notifications are embeds instead of one grey line: who acted, the
+  issue code and title, a link straight to the item, the values that moved
+  (`Todo → In Progress`), and the comment or project update itself. The link
+  needs `APP_URL` on the API container, now wired through docker-compose.
+- Issue property edits (title, priority, project, due date, estimate,
+  description) are reported as `issue.updated`; a status change carries the
+  rest of the same save, so one edit is one notification.
+
+### Fixed
+
+- Editing any issue property announced a status change to Discord even when
+  the status had not moved: the notification batch was built regardless of the
+  condition and only the Inbox rows were skipped.
+
 ## [0.2.1] — 2026-08-26 20:05 +07
 
 ### Changed

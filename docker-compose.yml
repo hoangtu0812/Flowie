@@ -98,6 +98,8 @@ services:
       environment:
          API_PORT: 4000
          API_CORS_ORIGIN: http://localhost:3000
+         # Absolute base for the links carried by Discord notifications.
+         APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
          LEGACY_API_URL: http://api-legacy:4001
          LEGACY_API_TIMEOUT_SECONDS: ${LEGACY_API_TIMEOUT_SECONDS:-30}
          POSTGRES_HOST: postgres

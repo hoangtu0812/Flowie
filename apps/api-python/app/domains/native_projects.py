@@ -178,6 +178,16 @@ class UpdateProjectTemplateInput(BaseModel):
     config: dict[str, Any] | None = None
 
 
+def _readable(value: Any) -> str:
+    """A project property as a person reads it: dates as dates, dashes as spaces."""
+
+    if value is None or value == '':
+        return '—'
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    return str(value).replace('-', ' ').title() if isinstance(value, str) else str(value)
+
+
 async def _workspace_access(db: AsyncSession, workspace_id: str, user_id: str) -> None:
     result = await db.execute(text("SELECT 1 FROM workspace_members WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'"), {'workspace_id': workspace_id, 'user_id': user_id})
     if result.scalar_one_or_none() is None:
@@ -730,17 +740,48 @@ async def update_project(project_id: str, payload: UpdateProjectInput, workspace
         await db.execute(text('DELETE FROM project_label_links WHERE project_id = :project_id'), {'project_id': project_id})
         for label_id in set(label_ids): await db.execute(text('INSERT INTO project_label_links (project_id, label_id) VALUES (:project_id, :label_id)'), {'project_id': project_id, 'label_id': label_id})
     await db.execute(text("INSERT INTO activities (id, workspace_id, project_id, actor_id, type, data, created_at) VALUES (:id, :workspace_id, :project_id, :actor_id, 'project.updated', CAST('{}' AS jsonb), :now)"), {'id': _cuid(), 'workspace_id': workspaceId, 'project_id': project_id, 'actor_id': user['id'], 'now': _utcnow()})
-    batch = await create_notification_batch(
-        db,
-        workspace_id=workspaceId,
-        recipient_ids=await project_recipient_ids(db, project_id, current.get('leadId')),
-        actor=user,
-        event_type='project.updated',
-        entity_type='project',
-        entity_id=project_id,
-        title=current['name'],
-        message='updated project properties',
-        entity_path=f'/project/{project_id}/overview',
+    updated = await _project(db, project_id, workspaceId, user['id'])
+    tracked = {
+        'name': 'Name',
+        'status': 'Status',
+        'priority': 'Priority',
+        'health': 'Health',
+        'startDate': 'Start date',
+        'targetDate': 'Target date',
+    }
+    changes = [
+        (label, f"{_readable(current.get(key))} → {_readable(updated.get(key))}")
+        for key, label in tracked.items()
+        if key in values and current.get(key) != updated.get(key)
+    ]
+    if 'leadId' in values and current.get('leadId') != updated.get('leadId'):
+        changes.append(
+            (
+                'Lead',
+                f"{_readable((current.get('lead') or {}).get('name'))} → "
+                f"{_readable((updated.get('lead') or {}).get('name'))}",
+            )
+        )
+    if label_ids is not None:
+        changes.append(('Labels', ', '.join(link['label']['name'] for link in updated['labelLinks']) or '—'))
+    # Nothing observable changed, so there is nothing to announce.
+    batch = (
+        await create_notification_batch(
+            db,
+            workspace_id=workspaceId,
+            recipient_ids=await project_recipient_ids(db, project_id, current.get('leadId')),
+            actor=user,
+            event_type='project.updated',
+            entity_type='project',
+            entity_id=project_id,
+            title=current['name'],
+            message='updated project properties',
+            entity_path=f'/project/{project_id}/overview',
+            entity_label=current['identifier'],
+            details=changes,
+        )
+        if changes
+        else None
     )
     await db.commit()
     await publish_notification_batches(batch)
@@ -960,6 +1001,11 @@ async def create_update(project_id: str, payload: ProjectUpdateInput, user: Any 
         title=project['name'],
         message='posted a project update' if kind != 'comment' else 'commented on a project update',
         entity_path=f'/project/{project_id}/overview',
+        entity_label=project['identifier'],
+        details=[('Health', (payload.health or project['health'] or '').replace('-', ' ').title())]
+        if kind != 'comment'
+        else None,
+        body=body,
     )
     await db.commit()
     await publish_notification_batches(batch)

@@ -31,7 +31,20 @@ from ..domains.auth import _cuid, _utcnow
 class NotificationBatch:
     records: list[dict[str, Any]] = field(default_factory=list)
     discord_url: str | None = None
-    discord_content: str | None = None
+    discord_embed: dict[str, Any] | None = None
+
+
+# One colour per event so a channel can be read at a glance.
+EVENT_COLORS: dict[str, int] = {
+    'issue.created': 0x5E6AD2,
+    'issue.status_changed': 0xF2C94C,
+    'issue.assignment': 0x26B5CE,
+    'issue.comment_created': 0x4CB782,
+    'project.updated': 0x5E6AD2,
+    'project.update_created': 0x4CB782,
+}
+ENTITY_LABELS: dict[str, str] = {'issue': 'Issue', 'project': 'Project'}
+DISCORD_DESCRIPTION_LIMIT = 500
 
 
 class NotificationHub:
@@ -114,6 +127,67 @@ async def _discord_webhook(db: AsyncSession, workspace_id: str) -> str | None:
     return result.scalar_one_or_none()
 
 
+def _app_url() -> str:
+    return (getenv('APP_URL') or getenv('NEXT_PUBLIC_APP_URL') or '').rstrip('/')
+
+
+async def _workspace_slug(db: AsyncSession, workspace_id: str) -> str | None:
+    result = await db.execute(
+        text('SELECT slug FROM workspaces WHERE id = :workspace_id'), {'workspace_id': workspace_id}
+    )
+    return result.scalar_one_or_none()
+
+
+def _excerpt(value: str | None, limit: int = DISCORD_DESCRIPTION_LIMIT) -> str | None:
+    if not value:
+        return None
+    collapsed = ' '.join(value.split())
+    return collapsed if len(collapsed) <= limit else f'{collapsed[: limit - 1]}…'
+
+
+def _embed(
+    *,
+    event_type: str,
+    entity_type: str,
+    entity_label: str | None,
+    title: str,
+    message: str,
+    url: str | None,
+    actor_data: dict[str, str | None],
+    details: list[tuple[str, str]] | None,
+    body: str | None,
+    now: Any,
+) -> dict[str, Any]:
+    """A Discord embed carrying what changed, not merely that something did."""
+
+    author = f'{actor_data["name"]} {message}'
+    embed: dict[str, Any] = {
+        'title': f'{entity_label} · {title}' if entity_label else title,
+        'color': EVENT_COLORS.get(event_type, 0x5E6AD2),
+        'author': {'name': author},
+        'footer': {'text': f'Flowie · {ENTITY_LABELS.get(entity_type, entity_type.title())}'},
+        # Timestamps are stored naive in UTC; Discord rejects an embed whose
+        # timestamp carries no zone, and a rejected embed fails silently.
+        'timestamp': now.isoformat() if now.tzinfo else f'{now.isoformat()}Z',
+    }
+    if actor_data.get('avatarUrl'):
+        embed['author']['icon_url'] = actor_data['avatarUrl']
+    if url:
+        embed['url'] = url
+    if body:
+        embed['description'] = body
+    # A field value is capped by Discord at 1024 characters, and a renamed
+    # title can carry far more than that.
+    fields = [
+        {'name': name, 'value': _excerpt(value, 200) or '', 'inline': len(value) <= 40}
+        for name, value in (details or [])
+        if value
+    ]
+    if fields:
+        embed['fields'] = fields
+    return embed
+
+
 async def create_notification_batch(
     db: AsyncSession,
     *,
@@ -126,18 +200,34 @@ async def create_notification_batch(
     title: str,
     message: str,
     entity_path: str,
+    entity_label: str | None = None,
+    details: list[tuple[str, str]] | None = None,
+    body: str | None = None,
     discord: bool = True,
 ) -> NotificationBatch:
-    """Persist one Inbox row per recipient and prepare post-commit delivery."""
+    """Persist one Inbox row per recipient and prepare post-commit delivery.
+
+    ``entity_label`` (an issue code), ``details`` (``from → to`` pairs) and
+    ``body`` (a comment or an update) are what make a delivered message
+    readable without opening the app. They are stored on the Inbox row too, so
+    the same detail is available there without another migration.
+    """
 
     now = _utcnow()
     actor_data = actor_payload(actor)
-    data = {
+    body_excerpt = _excerpt(body)
+    data: dict[str, Any] = {
         'title': title,
         'message': message,
         'entityPath': entity_path,
         'actor': actor_data,
     }
+    if entity_label:
+        data['entityLabel'] = entity_label
+    if details:
+        data['details'] = [{'name': name, 'value': value} for name, value in details if value]
+    if body_excerpt:
+        data['body'] = body_excerpt
     records: list[dict[str, Any]] = []
     for recipient_id in set(recipient_ids) - {actor['id']}:
         notification_id = _cuid()
@@ -173,28 +263,43 @@ async def create_notification_batch(
             }
         )
 
-    webhook = await _discord_webhook(db, workspace_id) if discord else None
+    if not discord:
+        return NotificationBatch(records=records)
+
+    slug = await _workspace_slug(db, workspace_id)
+    app_url = _app_url()
     return NotificationBatch(
         records=records,
-        discord_url=webhook,
+        discord_url=await _discord_webhook(db, workspace_id),
         # The optional bot channel is configured globally, rather than per
         # workspace. Keep a payload even when this workspace has no webhook
         # so a bot-only installation still receives the event.
-        discord_content=f'**{actor_data["name"]}** {message}: **{title}**',
+        discord_embed=_embed(
+            event_type=event_type,
+            entity_type=entity_type,
+            entity_label=entity_label,
+            title=title,
+            message=message,
+            url=f'{app_url}/{slug}{entity_path}' if app_url and slug else None,
+            actor_data=actor_data,
+            details=details,
+            body=body_excerpt,
+            now=now,
+        ),
     )
 
 
-async def _send_discord(url: str, content: str) -> None:
+async def _send_discord(url: str, embed: dict[str, Any]) -> None:
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(url, json={'content': content})
+            await client.post(url, json={'embeds': [embed]})
     except httpx.HTTPError:
         # Delivery failures intentionally do not roll back an already durable
         # Inbox event. A future outbox worker can retry these failures.
         return
 
 
-async def _send_discord_bot(content: str) -> None:
+async def _send_discord_bot(embed: dict[str, Any]) -> None:
     """Deliver to a channel as the optional Flowie Discord bot."""
 
     token = getenv('DISCORD_BOT_TOKEN', '').strip()
@@ -206,23 +311,31 @@ async def _send_discord_bot(content: str) -> None:
             await client.post(
                 f'https://discord.com/api/v10/channels/{channel_id}/messages',
                 headers={'Authorization': f'Bot {token}'},
-                json={'content': content},
+                json={'embeds': [embed]},
             )
     except httpx.HTTPError:
         return
 
 
-async def publish_notification_batches(*batches: NotificationBatch) -> None:
-    discord_deliveries: dict[str, str] = {}
-    bot_deliveries: set[str] = set()
+async def publish_notification_batches(*batches: NotificationBatch | None) -> None:
+    webhook_deliveries: list[tuple[str, dict[str, Any]]] = []
+    bot_deliveries: dict[str, dict[str, Any]] = {}
     for batch in batches:
+        if batch is None:
+            continue
         for record in batch.records:
             await notification_hub.publish(record)
-        if batch.discord_url and batch.discord_content:
-            discord_deliveries.setdefault(batch.discord_url, batch.discord_content)
-        if batch.discord_content:
-            bot_deliveries.add(batch.discord_content)
-    for url, content in discord_deliveries.items():
-        asyncio.create_task(_send_discord(url, content))
-    for content in bot_deliveries:
-        asyncio.create_task(_send_discord_bot(content))
+        if batch.discord_embed is None:
+            continue
+        # Several batches can report the same event; deliver each distinct
+        # embed once.
+        key = json.dumps(batch.discord_embed, sort_keys=True, default=str)
+        if key in bot_deliveries:
+            continue
+        bot_deliveries[key] = batch.discord_embed
+        if batch.discord_url:
+            webhook_deliveries.append((batch.discord_url, batch.discord_embed))
+    for url, embed in webhook_deliveries:
+        asyncio.create_task(_send_discord(url, embed))
+    for embed in bot_deliveries.values():
+        asyncio.create_task(_send_discord_bot(embed))

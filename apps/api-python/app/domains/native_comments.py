@@ -162,6 +162,8 @@ async def create_comment(
         title=issue['title'],
         message='commented on an issue',
         entity_path=f"/issue/{issue['identifier']}",
+        entity_label=issue['identifier'],
+        body=content,
     )
     await db.commit()
     await publish_notification_batches(batch)

@@ -595,6 +595,14 @@ async def create_issue(
             'identifier': f"{sequence['identifier']}-{sequence['issue_sequence']}",
             'title': payload.title.strip(),
         })
+    created_details = [
+        ('Team', sequence['identifier']),
+        ('Status', await _status_name(db, values['statusId']) or ''),
+        ('Priority', (values.get('priority') or 'NONE').title()),
+    ]
+    assignee_name = await _person_name(db, values.get('assigneeId'))
+    if assignee_name:
+        created_details.append(('Assignee', assignee_name))
     created_batch = await create_notification_batch(
         db,
         workspace_id=payload.workspaceId,
@@ -606,6 +614,9 @@ async def create_issue(
         title=payload.title.strip(),
         message='created a new issue',
         entity_path=f"/issue/{sequence['identifier']}-{sequence['issue_sequence']}",
+        entity_label=f"{sequence['identifier']}-{sequence['issue_sequence']}",
+        details=created_details,
+        body=values.get('description'),
     )
     assignment_batch = await create_notification_batch(
         db,
@@ -618,6 +629,7 @@ async def create_issue(
         title=payload.title.strip(),
         message='assigned you to an issue',
         entity_path=f"/issue/{sequence['identifier']}-{sequence['issue_sequence']}",
+        entity_label=f"{sequence['identifier']}-{sequence['issue_sequence']}",
         discord=False,
     )
     await db.commit()
@@ -1259,6 +1271,36 @@ async def get_issue(
     return {'data': await _issue_row(db, issue_id, workspaceId, user['id'])}
 
 
+async def _status_name(db: AsyncSession, status_id: str | None) -> str | None:
+    if not status_id:
+        return None
+    result = await db.execute(text('SELECT name FROM issue_statuses WHERE id = :id'), {'id': status_id})
+    return result.scalar_one_or_none()
+
+
+async def _person_name(db: AsyncSession, user_id: str | None) -> str | None:
+    if not user_id:
+        return None
+    result = await db.execute(text('SELECT name FROM users WHERE id = :id'), {'id': user_id})
+    return result.scalar_one_or_none()
+
+
+async def _project_name(db: AsyncSession, project_id: str | None) -> str | None:
+    if not project_id:
+        return None
+    result = await db.execute(text('SELECT name FROM projects WHERE id = :id'), {'id': project_id})
+    return result.scalar_one_or_none()
+
+
+def _transition(before: Any, after: Any) -> str:
+    """Render a change as ``Todo → In Progress``.
+
+    The pair is the point: the new value on its own does not say what happened.
+    """
+
+    return f'{before or "—"} → {after or "—"}'
+
+
 @router.patch('/{issue_id}')
 async def update_issue(
     issue_id: str,
@@ -1308,33 +1350,95 @@ async def update_issue(
         await db.execute(text('INSERT INTO issue_subscriptions (issue_id, user_id) VALUES (:issue_id, :user_id) ON CONFLICT DO NOTHING'), {'issue_id': issue_id, 'user_id': values['assigneeId']})
     await _write_activity(db, workspaceId, issue_id, user['id'], 'issue.updated', {'fields': list(values)})
     recipients = await issue_recipient_ids(db, issue_id, previous_assignee_id)
-    status_batch = await create_notification_batch(
-        db,
-        workspace_id=workspaceId,
-        recipient_ids=recipients if values.get('statusId') and values.get('statusId') != previous_status_id else set(),
-        actor=user,
-        event_type='issue.status_changed',
-        entity_type='issue',
-        entity_id=issue_id,
-        title=issue['title'],
-        message='changed the status of an issue',
-        entity_path=f"/issue/{issue['identifier']}",
+    entity_path, entity_label = f"/issue/{issue['identifier']}", issue['identifier']
+    status_changed = bool(values.get('statusId')) and values['statusId'] != previous_status_id
+    assignee_changed = 'assigneeId' in values and values['assigneeId'] != previous_assignee_id
+    assignee_transition = (
+        _transition(
+            issue['assignee']['name'] if issue.get('assignee') else None,
+            await _person_name(db, values.get('assigneeId')),
+        )
+        if assignee_changed
+        else None
     )
-    assignment_batch = await create_notification_batch(
-        db,
-        workspace_id=workspaceId,
-        recipient_ids={values['assigneeId']} if values.get('assigneeId') and values.get('assigneeId') != previous_assignee_id else set(),
-        actor=user,
-        event_type='issue.assignment',
-        entity_type='issue',
-        entity_id=issue_id,
-        title=issue['title'],
-        message='assigned you to an issue',
-        entity_path=f"/issue/{issue['identifier']}",
-        discord=False,
+
+    # What actually moved, so a reader sees the change and not just the field
+    # name. One save produces one notification: a status change carries the
+    # rest of the edit with it.
+    changes: list[tuple[str, str]] = []
+    if status_changed:
+        changes.append(
+            ('Status', _transition(issue['status']['name'], await _status_name(db, values['statusId'])))
+        )
+    if assignee_transition:
+        changes.append(('Assignee', assignee_transition))
+    if 'title' in values and values['title'] != issue['title']:
+        changes.append(('Title', _transition(issue['title'], values['title'])))
+    if 'priority' in values and values['priority'] != issue['priority']:
+        changes.append(('Priority', _transition(issue['priority'], values['priority'])))
+    if 'projectId' in values and values['projectId'] != issue['projectId']:
+        changes.append(
+            (
+                'Project',
+                _transition(
+                    issue['project']['name'] if issue.get('project') else None,
+                    await _project_name(db, values['projectId']),
+                ),
+            )
+        )
+    if 'dueDate' in values:
+        before = issue['dueDate'].date().isoformat() if issue.get('dueDate') else None
+        after = _date(values['dueDate'])
+        after_text = after.date().isoformat() if after else None
+        if before != after_text:
+            changes.append(('Due date', _transition(before, after_text)))
+    if 'estimate' in values and values['estimate'] != issue['estimate']:
+        changes.append(('Estimate', _transition(issue['estimate'], values['estimate'])))
+    if 'description' in values and values['description'] != issue['description']:
+        changes.append(('Description', 'updated'))
+
+    # An event is only reported when it happened: the batch used to be built
+    # regardless and still reached Discord, so renaming an issue announced a
+    # status change that never took place.
+    change_batch = (
+        await create_notification_batch(
+            db,
+            workspace_id=workspaceId,
+            recipient_ids=recipients,
+            actor=user,
+            event_type='issue.status_changed' if status_changed else 'issue.updated',
+            entity_type='issue',
+            entity_id=issue_id,
+            title=issue['title'],
+            message='changed the status of an issue' if status_changed else 'updated an issue',
+            entity_path=entity_path,
+            entity_label=entity_label,
+            details=changes,
+        )
+        if changes
+        else None
+    )
+    assignment_batch = (
+        await create_notification_batch(
+            db,
+            workspace_id=workspaceId,
+            recipient_ids={values['assigneeId']} if values.get('assigneeId') else set(),
+            actor=user,
+            event_type='issue.assignment',
+            entity_type='issue',
+            entity_id=issue_id,
+            title=issue['title'],
+            message='assigned you to an issue',
+            entity_path=entity_path,
+            entity_label=entity_label,
+            details=[('Assignee', assignee_transition or '')],
+            discord=False,
+        )
+        if assignee_changed and values.get('assigneeId')
+        else None
     )
     await db.commit()
-    await publish_notification_batches(status_batch, assignment_batch)
+    await publish_notification_batches(change_batch, assignment_batch)
     return {'data': await _issue_row(db, issue_id, workspaceId, user['id'])}
 
 
