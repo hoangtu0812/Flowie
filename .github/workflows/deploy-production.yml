@@ -16,7 +16,10 @@ jobs:
   deploy:
     name: Build and deploy to CT107
     runs-on: [self-hosted, flowie-production]
-    timeout-minutes: 30
+    # The host downloads Python wheels at a few kB/s, so a cold build can run
+    # well past half an hour. Once BuildKit has the wheel cache the build is
+    # short again; this ceiling only has to cover the first one.
+    timeout-minutes: 120
 
     steps:
       - name: Update source and deploy

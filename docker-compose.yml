@@ -59,6 +59,8 @@ services:
       build:
          context: .
          dockerfile: infrastructure/docker/python-api.Dockerfile
+         args:
+            PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
       container_name: circle-api
       environment:
          API_PORT: 4000

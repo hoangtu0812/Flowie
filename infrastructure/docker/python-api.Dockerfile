@@ -7,6 +7,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 RUN useradd --create-home --uid 10001 flowie
+# Defaults to pypi.org. A deployment on a slow link can point this at a mirror
+# it trusts by setting PIP_INDEX_URL in its environment file.
+ARG PIP_INDEX_URL=https://pypi.org/simple
+ENV PIP_INDEX_URL=$PIP_INDEX_URL
 COPY apps/api-python/requirements.txt ./requirements.txt
 # The wheel cache lives in the builder, not in a layer, so the image stays as
 # small as it was while a rebuild after a code-only change downloads nothing.
