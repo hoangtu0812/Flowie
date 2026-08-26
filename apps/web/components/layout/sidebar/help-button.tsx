@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { APP_HIGHLIGHTS, CHANGELOG_URL, releaseLabel } from '@/lib/release';
 import Link from 'next/link';
 import { RiGithubFill, RiGlobalLine, RiRocket2Fill } from '@remixicon/react';
 
@@ -63,30 +64,17 @@ export function HelpButton() {
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuLabel>What&apos;s new</DropdownMenuLabel>
-            <DropdownMenuItem asChild>
-               <Link
-                  href="https://github.com/hoangtu0812/Flowie/blob/main/CHANGELOG.md"
-                  target="_blank"
-                  className="flex items-center"
-               >
-                  <div className="mr-2 flex h-4 w-4 items-center justify-center">
-                     <div className="h-1.5 w-1.5 rounded-full bg-blue-500"></div>
-                  </div>
-                  <span>Realtime Inbox &amp; Discord</span>
-               </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-               <Link
-                  href="https://flowie.loopstudio.io.vn"
-                  target="_blank"
-                  className="flex items-center"
-               >
-                  <div className="mr-2 flex h-4 w-4 items-center justify-center">
-                     <div className="h-1.5 w-1.5 rounded-full bg-blue-500"></div>
-                  </div>
-                  <span>Flowie production launch</span>
-               </Link>
-            </DropdownMenuItem>
+            {/* Straight from the top release section of CHANGELOG.md. */}
+            {APP_HIGHLIGHTS.map((highlight) => (
+               <DropdownMenuItem key={highlight} asChild>
+                  <Link href={CHANGELOG_URL} target="_blank" className="flex items-start">
+                     <div className="mr-2 mt-1.5 flex h-4 w-1.5 shrink-0 items-start justify-center">
+                        <div className="h-1.5 w-1.5 rounded-full bg-blue-500"></div>
+                     </div>
+                     <span className="line-clamp-2 whitespace-normal">{highlight}</span>
+                  </Link>
+               </DropdownMenuItem>
+            ))}
             <DropdownMenuItem asChild>
                <Link
                   href="https://github.com/hoangtu0812/Flowie"
@@ -100,6 +88,21 @@ export function HelpButton() {
                   <ExternalLink className="ml-2 h-3 w-3 text-muted-foreground" />
                </Link>
             </DropdownMenuItem>
+            {releaseLabel() && (
+               <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                     <Link
+                        href={CHANGELOG_URL}
+                        target="_blank"
+                        className="flex items-center text-xs text-muted-foreground"
+                     >
+                        <span>Flowie {releaseLabel()}</span>
+                        <ExternalLink className="ml-auto h-3 w-3" />
+                     </Link>
+                  </DropdownMenuItem>
+               </>
+            )}
          </DropdownMenuContent>
       </DropdownMenu>
    );

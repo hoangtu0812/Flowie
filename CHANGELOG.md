@@ -2,7 +2,31 @@
 
 All notable changes to Flowie are documented here.
 
+Each released section is headed by its version and the moment it went to
+production: `## [x.y.z] — YYYY-MM-DD HH:MM +07`. The Help menu in the app reads
+this file at build time, so the topmost released section is exactly what users
+see under "What's new" — a release that is not written down here is a release
+nobody can identify. Work that has not shipped yet stays under Unreleased.
+
 ## Unreleased
+
+## [0.2.1] — 2026-08-26 20:05 +07
+
+### Added
+
+- The Help menu states the running release and links to it: version, release
+  time and the first entries of the current section, all read from this file at
+  build time.
+
+### Fixed
+
+- Opening the due date or reminder picker from an issue's context menu left the
+  page unresponsive — the browser's own menu on right click, no clicks landing
+  anywhere. Both dialogs were rendered inside the context menu, so the two modal
+  layers fought over `document.body` when the menu unmounted underneath them.
+  They now use the shared issue action dialog, which lives outside the menu.
+
+## [0.2.0] — 2026-08-26 19:41 +07
 
 ### Added
 
@@ -40,14 +64,13 @@ All notable changes to Flowie are documented here.
 - Opening an issue URL directly — a refresh, an Inbox entry, a Discord link —
   loads the issue instead of reporting it as not found, and shows a loading
   state while it arrives.
-
 - The legacy API container now receives the shared `AUTH_JWT_SECRET`, so the
   paths the Python API still proxies (such as the project issue list) accept the
   session cookie instead of answering 401.
 - Project detail pages name the request that failed instead of reporting a
   single generic "Could not load project details." message.
 
-## 2026-08-25
+## [0.1.0] — 2026-08-25 00:00 +07
 
 ### Added
 

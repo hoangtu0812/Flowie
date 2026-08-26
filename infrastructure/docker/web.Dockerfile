@@ -17,6 +17,9 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 RUN printf '%s' "$UI_BUILD_REVISION" > /tmp/ui-build-revision
 COPY apps/web apps/web
 COPY packages/contracts packages/contracts
+# next.config.ts reads the release version and date from here; without it the
+# built image cannot tell anyone which release it is running.
+COPY CHANGELOG.md ./CHANGELOG.md
 RUN pnpm --filter @circle/web build
 
 FROM node:22-alpine AS runtime
