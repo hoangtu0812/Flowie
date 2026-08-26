@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { IconPicker } from '@/components/common/icon-picker';
 import {
    Dialog,
    DialogContent,
@@ -151,13 +152,16 @@ export function TeamSettingsDialog({
                      </div>
                      <div className="space-y-2">
                         <Label htmlFor="team-icon">Icon</Label>
-                        <Input
-                           id="team-icon"
-                           value={icon}
-                           onChange={(event) => setIcon(event.target.value)}
-                           maxLength={32}
-                           placeholder="👥"
-                        />
+                        <div className="flex gap-2">
+                           <Input
+                              id="team-icon"
+                              value={icon}
+                              onChange={(event) => setIcon(event.target.value)}
+                              maxLength={32}
+                              placeholder="👥"
+                           />
+                           <IconPicker value={icon} onChange={setIcon} label="Choose team icon" />
+                        </div>
                         <p className="text-xs text-muted-foreground">
                            Use an emoji or a short symbol displayed throughout this team.
                         </p>

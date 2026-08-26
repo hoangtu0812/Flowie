@@ -1,12 +1,25 @@
 'use client';
 
 import ProjectsTimeline from '@/components/common/projects/projects-timeline';
+import { IconPicker } from '@/components/common/icon-picker';
 import { ProjectGroup } from '@/components/common/projects/projects';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+   Dialog,
+   DialogContent,
+   DialogFooter,
+   DialogHeader,
+   DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+   Select,
+   SelectContent,
+   SelectItem,
+   SelectTrigger,
+   SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { authenticatedFetch } from '@/lib/workspaces';
 import { priorities } from '@/lib/priority-presentations';
@@ -68,7 +81,11 @@ const formatTarget = (iso: string): string => {
 
 /* ------------------------------ projects table ---------------------------- */
 
-const GROUP_ORDER: { key: string; label: string; match: (project: ReturnType<typeof getInitiativeProjects>[number]) => boolean }[] = [
+const GROUP_ORDER: {
+   key: string;
+   label: string;
+   match: (project: ReturnType<typeof getInitiativeProjects>[number]) => boolean;
+}[] = [
    { key: 'in-progress', label: 'In Progress', match: (p) => p.status.category === 'started' },
    { key: 'planned', label: 'Planned', match: (p) => p.status.category === 'unstarted' },
    {
@@ -244,8 +261,22 @@ function Overview({
       setSaving(true);
       setError(undefined);
       try {
-         const isPropertyChange = ['status', 'priority', 'target-date', 'owner', 'description', 'icon'].includes(action);
-         const path = action === 'update' ? 'updates' : action === 'resource' ? 'resources' : action === 'project' ? 'projects' : 'labels';
+         const isPropertyChange = [
+            'status',
+            'priority',
+            'target-date',
+            'owner',
+            'description',
+            'icon',
+         ].includes(action);
+         const path =
+            action === 'update'
+               ? 'updates'
+               : action === 'resource'
+                 ? 'resources'
+                 : action === 'project'
+                   ? 'projects'
+                   : 'labels';
          const body =
             action === 'update'
                ? { workspaceId, body: updateBody.trim(), health: updateHealth }
@@ -258,7 +289,7 @@ function Overview({
                      : action === 'status'
                        ? { status }
                        : action === 'priority'
-                       ? { priority }
+                         ? { priority }
                          : action === 'target-date'
                            ? { targetDate: targetDate || null }
                            : action === 'owner'
@@ -271,13 +302,15 @@ function Overview({
                ? `${api}/initiatives/${initiative.id}?workspaceId=${workspaceId}`
                : `${api}/initiatives/${initiative.id}/${path}`,
             {
-            method: isPropertyChange ? 'PATCH' : 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify(body),
+               method: isPropertyChange ? 'PATCH' : 'POST',
+               headers: { 'content-type': 'application/json' },
+               body: JSON.stringify(body),
             }
          );
          if (!response.ok) {
-            const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+            const payload = (await response.json().catch(() => null)) as {
+               message?: string;
+            } | null;
             throw new Error(payload?.message ?? 'Could not save initiative changes.');
          }
          setAction(null);
@@ -304,7 +337,9 @@ function Overview({
             { method: 'DELETE' }
          );
          if (!response.ok) {
-            const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+            const payload = (await response.json().catch(() => null)) as {
+               message?: string;
+            } | null;
             throw new Error(payload?.message ?? `Could not unlink ${kind}.`);
          }
          window.dispatchEvent(new Event('flowie:initiatives-changed'));
@@ -330,213 +365,224 @@ function Overview({
    return (
       <>
          <div className="w-full h-full flex overflow-hidden">
-         <div className="flex-1 min-w-0 overflow-y-auto">
-            <div className="max-w-3xl mx-auto px-8 py-10 flex flex-col gap-6">
-               <button
-                  type="button"
-                  aria-label="Change initiative icon"
-                  className="inline-flex size-10 items-center justify-center rounded-md bg-muted/50 text-2xl hover:bg-accent transition-colors"
-                  onClick={() => openAction('icon')}
-               >
-                  {initiative.icon}
-               </button>
-               <div className="flex flex-col gap-2">
-                  <h1 className="text-2xl font-semibold">{initiative.name}</h1>
+            <div className="flex-1 min-w-0 overflow-y-auto">
+               <div className="max-w-3xl mx-auto px-8 py-10 flex flex-col gap-6">
                   <button
                      type="button"
-                     className="text-left text-sm text-muted-foreground hover:text-foreground transition-colors"
-                     onClick={() => openAction('description')}
+                     aria-label="Change initiative icon"
+                     className="inline-flex size-10 items-center justify-center rounded-md bg-muted/50 text-2xl hover:bg-accent transition-colors"
+                     onClick={() => openAction('icon')}
                   >
-                     {initiative.description ?? 'Add a short summary…'}
+                     {initiative.icon}
                   </button>
-               </div>
-
-               <div className="flex items-center gap-3 flex-wrap text-sm">
-                  <span className="text-muted-foreground text-xs w-24">Properties</span>
-                  <span className="inline-flex items-center gap-1.5">
-                     <InitiativeStatusIcon status={initiative.status} />
-                     {INITIATIVE_STATUS_META[initiative.status].label}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                     <initiative.priority.icon className="size-4" />
-                     {initiative.priority.name}
-                  </span>
-                  {initiative.owner ? (
-                     <span className="inline-flex items-center gap-1.5">
-                        <Avatar className="size-4">
-                           <AvatarImage
-                              src={initiative.owner.avatarUrl ?? undefined}
-                              alt={initiative.owner.name}
-                           />
-                           <AvatarFallback className="text-[8px]">
-                              {initiative.owner.name[0]}
-                           </AvatarFallback>
-                        </Avatar>
-                        {initiative.owner.name}
-                     </span>
-                  ) : (
-                     <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                        <UserRound className="size-4" /> Owner
-                     </span>
-                  )}
-                  {initiative.target && (
-                     <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                        <CalendarRange className="size-4" />
-                        {initiative.target}
-                     </span>
-                  )}
-               </div>
-
-               <div className="flex items-center gap-3 text-sm">
-                  <span className="text-muted-foreground text-xs w-24">Resources</span>
-                  <button
-                     type="button"
-                     className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
-                     onClick={() => openAction('resource')}
-                  >
-                     <Plus className="size-4" />
-                     Add document or link…
-                  </button>
-                  {initiative.resources.map((resource) => (
-                     <a
-                        key={resource.id}
-                        href={resource.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs text-muted-foreground hover:text-foreground transition-colors truncate max-w-40"
+                  <div className="flex flex-col gap-2">
+                     <h1 className="text-2xl font-semibold">{initiative.name}</h1>
+                     <button
+                        type="button"
+                        className="text-left text-sm text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={() => openAction('description')}
                      >
-                        {resource.label}
-                     </a>
-                  ))}
-               </div>
+                        {initiative.description ?? 'Add a short summary…'}
+                     </button>
+                  </div>
 
-               <button
-                  type="button"
-                  className="flex items-center justify-center gap-2 rounded-lg border py-4 text-sm text-muted-foreground hover:bg-accent/40 transition-colors"
-                  onClick={() => openAction('update')}
-               >
-                  <FilePenLine className="size-4" />
-                  {initiative.updates.length > 0 ? 'Write initiative update' : 'Write first initiative update'}
-               </button>
-
-               <div className="flex flex-col gap-2">
-                  <h2 className="text-sm font-medium">Description</h2>
-                  <button
-                     type="button"
-                     className="text-left text-sm text-muted-foreground hover:text-foreground transition-colors whitespace-pre-wrap"
-                     onClick={() => openAction('description')}
-                  >
-                     {initiative.description ?? 'Add description…'}
-                  </button>
-               </div>
-
-               <ProjectsSection initiative={initiative} onLinkProject={() => openAction('project')} />
-            </div>
-         </div>
-
-         <aside className="hidden lg:flex flex-col w-80 shrink-0 border-l h-full overflow-y-auto p-5 gap-6 bg-container">
-            <div className="flex flex-col gap-3">
-               <span className="text-sm font-medium">Properties</span>
-               <PropertyRow label="Status">
-                  <button
-                     type="button"
-                     className="inline-flex items-center gap-1.5 hover:text-foreground text-muted-foreground transition-colors"
-                     onClick={() => openAction('status')}
-                  >
-                     <InitiativeStatusIcon status={initiative.status} />
-                     {INITIATIVE_STATUS_META[initiative.status].label}
-                  </button>
-               </PropertyRow>
-               <PropertyRow label="Priority">
-                  <button
-                     type="button"
-                     className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
-                     onClick={() => openAction('priority')}
-                  >
-                     <initiative.priority.icon className="size-4" />
-                     {initiative.priority.name}
-                  </button>
-               </PropertyRow>
-               <PropertyRow label="Owner">
-                  <button
-                     type="button"
-                     className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
-                     onClick={() => openAction('owner')}
-                  >
-                     {initiative.owner ? (
-                        <>
-                        <Avatar className="size-4">
-                           <AvatarImage
-                              src={initiative.owner.avatarUrl ?? undefined}
-                              alt={initiative.owner.name}
-                           />
-                           <AvatarFallback className="text-[8px]">
-                              {initiative.owner.name[0]}
-                           </AvatarFallback>
-                        </Avatar>
-                        {initiative.owner.name}
-                        </>
-                     ) : (
-                        <>
-                        <UserRound className="size-4" /> Add owner
-                        </>
-                     )}
-                  </button>
-               </PropertyRow>
-               <PropertyRow label="Target date">
-                  <button
-                     type="button"
-                     className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
-                     onClick={() => openAction('target-date')}
-                  >
-                     <CalendarRange className="size-4" />
-                     {initiative.target ?? 'Add target date'}
-                  </button>
-               </PropertyRow>
-               <PropertyRow label="Labels">
-                  <button
-                     type="button"
-                     className="text-muted-foreground inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
-                     onClick={() => openAction('label')}
-                  >
-                     <Tag className="size-4" />
-                     {initiative.labelLinks.length > 0
-                        ? initiative.labelLinks.map((link) => link.label.name).join(', ')
-                        : 'Add label'}
-                  </button>
-               </PropertyRow>
-               <PropertyRow label="Projects">
-                  <span className="text-muted-foreground text-xs">
-                     {completed} / {total} completed
-                  </span>
-               </PropertyRow>
-            </div>
-
-            <InitiativeProgressPanel initiative={initiative} />
-
-            <div className="flex flex-col gap-3">
-               <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Activity</span>
-                  <button className="text-xs text-muted-foreground hover:text-foreground transition-colors">
-                     See all
-                  </button>
-               </div>
-               <div className="flex flex-col gap-2 text-xs text-muted-foreground">
-                  {initiative.updates.slice(0, 2).map((update) => (
-                     <span key={update.id} className="flex items-start gap-2">
-                        <FilePenLine className="size-3.5 mt-px shrink-0" />
-                        <span className="flex flex-col gap-0.5">
-                           <span>{update.author.name} posted an update · {formatTarget(update.createdAt)}</span>
-                           <span className="text-foreground line-clamp-2">{update.body}</span>
-                        </span>
+                  <div className="flex items-center gap-3 flex-wrap text-sm">
+                     <span className="text-muted-foreground text-xs w-24">Properties</span>
+                     <span className="inline-flex items-center gap-1.5">
+                        <InitiativeStatusIcon status={initiative.status} />
+                        {INITIATIVE_STATUS_META[initiative.status].label}
                      </span>
-                  ))}
-                  {initiative.updates.length === 0 && <span>No activity yet</span>}
+                     <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                        <initiative.priority.icon className="size-4" />
+                        {initiative.priority.name}
+                     </span>
+                     {initiative.owner ? (
+                        <span className="inline-flex items-center gap-1.5">
+                           <Avatar className="size-4">
+                              <AvatarImage
+                                 src={initiative.owner.avatarUrl ?? undefined}
+                                 alt={initiative.owner.name}
+                              />
+                              <AvatarFallback className="text-[8px]">
+                                 {initiative.owner.name[0]}
+                              </AvatarFallback>
+                           </Avatar>
+                           {initiative.owner.name}
+                        </span>
+                     ) : (
+                        <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                           <UserRound className="size-4" /> Owner
+                        </span>
+                     )}
+                     {initiative.target && (
+                        <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                           <CalendarRange className="size-4" />
+                           {initiative.target}
+                        </span>
+                     )}
+                  </div>
+
+                  <div className="flex items-center gap-3 text-sm">
+                     <span className="text-muted-foreground text-xs w-24">Resources</span>
+                     <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={() => openAction('resource')}
+                     >
+                        <Plus className="size-4" />
+                        Add document or link…
+                     </button>
+                     {initiative.resources.map((resource) => (
+                        <a
+                           key={resource.id}
+                           href={resource.url}
+                           target="_blank"
+                           rel="noreferrer"
+                           className="text-xs text-muted-foreground hover:text-foreground transition-colors truncate max-w-40"
+                        >
+                           {resource.label}
+                        </a>
+                     ))}
+                  </div>
+
+                  <button
+                     type="button"
+                     className="flex items-center justify-center gap-2 rounded-lg border py-4 text-sm text-muted-foreground hover:bg-accent/40 transition-colors"
+                     onClick={() => openAction('update')}
+                  >
+                     <FilePenLine className="size-4" />
+                     {initiative.updates.length > 0
+                        ? 'Write initiative update'
+                        : 'Write first initiative update'}
+                  </button>
+
+                  <div className="flex flex-col gap-2">
+                     <h2 className="text-sm font-medium">Description</h2>
+                     <button
+                        type="button"
+                        className="text-left text-sm text-muted-foreground hover:text-foreground transition-colors whitespace-pre-wrap"
+                        onClick={() => openAction('description')}
+                     >
+                        {initiative.description ?? 'Add description…'}
+                     </button>
+                  </div>
+
+                  <ProjectsSection
+                     initiative={initiative}
+                     onLinkProject={() => openAction('project')}
+                  />
                </div>
             </div>
-         </aside>
+
+            <aside className="hidden lg:flex flex-col w-80 shrink-0 border-l h-full overflow-y-auto p-5 gap-6 bg-container">
+               <div className="flex flex-col gap-3">
+                  <span className="text-sm font-medium">Properties</span>
+                  <PropertyRow label="Status">
+                     <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 hover:text-foreground text-muted-foreground transition-colors"
+                        onClick={() => openAction('status')}
+                     >
+                        <InitiativeStatusIcon status={initiative.status} />
+                        {INITIATIVE_STATUS_META[initiative.status].label}
+                     </button>
+                  </PropertyRow>
+                  <PropertyRow label="Priority">
+                     <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={() => openAction('priority')}
+                     >
+                        <initiative.priority.icon className="size-4" />
+                        {initiative.priority.name}
+                     </button>
+                  </PropertyRow>
+                  <PropertyRow label="Owner">
+                     <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={() => openAction('owner')}
+                     >
+                        {initiative.owner ? (
+                           <>
+                              <Avatar className="size-4">
+                                 <AvatarImage
+                                    src={initiative.owner.avatarUrl ?? undefined}
+                                    alt={initiative.owner.name}
+                                 />
+                                 <AvatarFallback className="text-[8px]">
+                                    {initiative.owner.name[0]}
+                                 </AvatarFallback>
+                              </Avatar>
+                              {initiative.owner.name}
+                           </>
+                        ) : (
+                           <>
+                              <UserRound className="size-4" /> Add owner
+                           </>
+                        )}
+                     </button>
+                  </PropertyRow>
+                  <PropertyRow label="Target date">
+                     <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={() => openAction('target-date')}
+                     >
+                        <CalendarRange className="size-4" />
+                        {initiative.target ?? 'Add target date'}
+                     </button>
+                  </PropertyRow>
+                  <PropertyRow label="Labels">
+                     <button
+                        type="button"
+                        className="text-muted-foreground inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
+                        onClick={() => openAction('label')}
+                     >
+                        <Tag className="size-4" />
+                        {initiative.labelLinks.length > 0
+                           ? initiative.labelLinks.map((link) => link.label.name).join(', ')
+                           : 'Add label'}
+                     </button>
+                  </PropertyRow>
+                  <PropertyRow label="Projects">
+                     <span className="text-muted-foreground text-xs">
+                        {completed} / {total} completed
+                     </span>
+                  </PropertyRow>
+               </div>
+
+               <InitiativeProgressPanel initiative={initiative} />
+
+               <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                     <span className="text-sm font-medium">Activity</span>
+                     <button className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+                        See all
+                     </button>
+                  </div>
+                  <div className="flex flex-col gap-2 text-xs text-muted-foreground">
+                     {initiative.updates.slice(0, 2).map((update) => (
+                        <span key={update.id} className="flex items-start gap-2">
+                           <FilePenLine className="size-3.5 mt-px shrink-0" />
+                           <span className="flex flex-col gap-0.5">
+                              <span>
+                                 {update.author.name} posted an update ·{' '}
+                                 {formatTarget(update.createdAt)}
+                              </span>
+                              <span className="text-foreground line-clamp-2">{update.body}</span>
+                           </span>
+                        </span>
+                     ))}
+                     {initiative.updates.length === 0 && <span>No activity yet</span>}
+                  </div>
+               </div>
+            </aside>
          </div>
-         <Dialog open={action !== null} onOpenChange={(open) => !saving && !open && setAction(null)}>
+         <Dialog
+            open={action !== null}
+            onOpenChange={(open) => !saving && !open && setAction(null)}
+         >
             <DialogContent>
                <DialogHeader>
                   <DialogTitle>
@@ -556,7 +602,7 @@ function Overview({
                                     ? 'Edit description'
                                     : action === 'icon'
                                       ? 'Change icon'
-                                : `Set ${action}`}
+                                      : `Set ${action}`}
                   </DialogTitle>
                </DialogHeader>
                {action === 'update' && (
@@ -568,17 +614,21 @@ function Overview({
                         autoFocus
                      />
                      <div className="space-y-1.5">
-                        <label className="text-sm font-medium" htmlFor="initiative-update-health">Health</label>
+                        <label className="text-sm font-medium" htmlFor="initiative-update-health">
+                           Health
+                        </label>
                         <Select
                            value={updateHealth}
-                           onValueChange={(value) =>
-                              setUpdateHealth(value as typeof updateHealth)
-                           }
+                           onValueChange={(value) => setUpdateHealth(value as typeof updateHealth)}
                         >
-                           <SelectTrigger id="initiative-update-health"><SelectValue /></SelectTrigger>
+                           <SelectTrigger id="initiative-update-health">
+                              <SelectValue />
+                           </SelectTrigger>
                            <SelectContent>
                               {initiativeHealth.map((health) => (
-                                 <SelectItem key={health.id} value={health.id}>{health.name}</SelectItem>
+                                 <SelectItem key={health.id} value={health.id}>
+                                    {health.name}
+                                 </SelectItem>
                               ))}
                            </SelectContent>
                         </Select>
@@ -588,35 +638,69 @@ function Overview({
                {action === 'resource' && (
                   <div className="space-y-3">
                      <div className="space-y-1.5">
-                        <label className="text-sm font-medium" htmlFor="initiative-resource-label">Name</label>
-                        <Input id="initiative-resource-label" value={resourceLabel} onChange={(event) => setResourceLabel(event.target.value)} autoFocus />
+                        <label className="text-sm font-medium" htmlFor="initiative-resource-label">
+                           Name
+                        </label>
+                        <Input
+                           id="initiative-resource-label"
+                           value={resourceLabel}
+                           onChange={(event) => setResourceLabel(event.target.value)}
+                           autoFocus
+                        />
                      </div>
                      <div className="space-y-1.5">
-                        <label className="text-sm font-medium" htmlFor="initiative-resource-url">URL</label>
-                        <Input id="initiative-resource-url" type="url" value={resourceUrl} onChange={(event) => setResourceUrl(event.target.value)} placeholder="https://…" />
+                        <label className="text-sm font-medium" htmlFor="initiative-resource-url">
+                           URL
+                        </label>
+                        <Input
+                           id="initiative-resource-url"
+                           type="url"
+                           value={resourceUrl}
+                           onChange={(event) => setResourceUrl(event.target.value)}
+                           placeholder="https://…"
+                        />
                      </div>
                   </div>
                )}
                {action === 'project' && (
                   <div className="space-y-2">
-                     <label className="text-sm font-medium" htmlFor="initiative-project">Project</label>
+                     <label className="text-sm font-medium" htmlFor="initiative-project">
+                        Project
+                     </label>
                      <Select value={projectId} onValueChange={setProjectId}>
-                        <SelectTrigger id="initiative-project"><SelectValue placeholder="Select a project" /></SelectTrigger>
+                        <SelectTrigger id="initiative-project">
+                           <SelectValue placeholder="Select a project" />
+                        </SelectTrigger>
                         <SelectContent>
                            {availableProjects.map((project) => (
                               <SelectItem key={project.id} value={project.id}>
-                                 {project.name}{project.identifier ? ` · ${project.identifier}` : ''}
+                                 {project.name}
+                                 {project.identifier ? ` · ${project.identifier}` : ''}
                               </SelectItem>
                            ))}
                         </SelectContent>
                      </Select>
-                     {availableProjects.length === 0 && <p className="text-sm text-muted-foreground">All workspace projects are already linked.</p>}
+                     {availableProjects.length === 0 && (
+                        <p className="text-sm text-muted-foreground">
+                           All workspace projects are already linked.
+                        </p>
+                     )}
                      {initiative.projectLinks.length > 0 && (
                         <div className="pt-2 space-y-1 border-t">
                            {initiative.projectLinks.map((link) => (
-                              <div key={link.project.id} className="flex items-center gap-2 text-sm">
+                              <div
+                                 key={link.project.id}
+                                 className="flex items-center gap-2 text-sm"
+                              >
                                  <span className="flex-1 truncate">{link.project.name}</span>
-                                 <Button size="xs" variant="ghost" disabled={saving} onClick={() => void unlink('project', link.project.id)}>Remove</Button>
+                                 <Button
+                                    size="xs"
+                                    variant="ghost"
+                                    disabled={saving}
+                                    onClick={() => void unlink('project', link.project.id)}
+                                 >
+                                    Remove
+                                 </Button>
                               </div>
                            ))}
                         </div>
@@ -625,9 +709,13 @@ function Overview({
                )}
                {action === 'label' && (
                   <div className="space-y-2">
-                     <label className="text-sm font-medium" htmlFor="initiative-label">Label</label>
+                     <label className="text-sm font-medium" htmlFor="initiative-label">
+                        Label
+                     </label>
                      <Select value={labelId} onValueChange={setLabelId}>
-                        <SelectTrigger id="initiative-label"><SelectValue placeholder="Select a label" /></SelectTrigger>
+                        <SelectTrigger id="initiative-label">
+                           <SelectValue placeholder="Select a label" />
+                        </SelectTrigger>
                         <SelectContent>
                            {availableLabels.map((label) => (
                               <SelectItem key={label.id} value={label.id}>
@@ -645,9 +733,19 @@ function Overview({
                         <div className="pt-2 space-y-1 border-t">
                            {initiative.labelLinks.map((link) => (
                               <div key={link.label.id} className="flex items-center gap-2 text-sm">
-                                 <span className="size-2 rounded-full" style={{ backgroundColor: link.label.color }} />
+                                 <span
+                                    className="size-2 rounded-full"
+                                    style={{ backgroundColor: link.label.color }}
+                                 />
                                  <span className="flex-1 truncate">{link.label.name}</span>
-                                 <Button size="xs" variant="ghost" disabled={saving} onClick={() => void unlink('label', link.label.id)}>Remove</Button>
+                                 <Button
+                                    size="xs"
+                                    variant="ghost"
+                                    disabled={saving}
+                                    onClick={() => void unlink('label', link.label.id)}
+                                 >
+                                    Remove
+                                 </Button>
                               </div>
                            ))}
                         </div>
@@ -656,12 +754,25 @@ function Overview({
                )}
                {action === 'status' && (
                   <div className="space-y-2">
-                     <label className="text-sm font-medium" htmlFor="initiative-status">Status</label>
-                     <Select value={status} onValueChange={(value) => setStatus(value as typeof status)}>
-                        <SelectTrigger id="initiative-status"><SelectValue /></SelectTrigger>
+                     <label className="text-sm font-medium" htmlFor="initiative-status">
+                        Status
+                     </label>
+                     <Select
+                        value={status}
+                        onValueChange={(value) => setStatus(value as typeof status)}
+                     >
+                        <SelectTrigger id="initiative-status">
+                           <SelectValue />
+                        </SelectTrigger>
                         <SelectContent>
-                           {(Object.keys(INITIATIVE_STATUS_META) as Array<keyof typeof INITIATIVE_STATUS_META>).map((value) => (
-                              <SelectItem key={value} value={value}>{INITIATIVE_STATUS_META[value].label}</SelectItem>
+                           {(
+                              Object.keys(INITIATIVE_STATUS_META) as Array<
+                                 keyof typeof INITIATIVE_STATUS_META
+                              >
+                           ).map((value) => (
+                              <SelectItem key={value} value={value}>
+                                 {INITIATIVE_STATUS_META[value].label}
+                              </SelectItem>
                            ))}
                         </SelectContent>
                      </Select>
@@ -669,12 +780,18 @@ function Overview({
                )}
                {action === 'priority' && (
                   <div className="space-y-2">
-                     <label className="text-sm font-medium" htmlFor="initiative-priority">Priority</label>
+                     <label className="text-sm font-medium" htmlFor="initiative-priority">
+                        Priority
+                     </label>
                      <Select value={priority} onValueChange={setPriority}>
-                        <SelectTrigger id="initiative-priority"><SelectValue /></SelectTrigger>
+                        <SelectTrigger id="initiative-priority">
+                           <SelectValue />
+                        </SelectTrigger>
                         <SelectContent>
                            {priorities.map((option) => (
-                              <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>
+                              <SelectItem key={option.id} value={option.id}>
+                                 {option.name}
+                              </SelectItem>
                            ))}
                         </SelectContent>
                      </Select>
@@ -682,7 +799,9 @@ function Overview({
                )}
                {action === 'target-date' && (
                   <div className="space-y-2">
-                     <label className="text-sm font-medium" htmlFor="initiative-target-date">Target date</label>
+                     <label className="text-sm font-medium" htmlFor="initiative-target-date">
+                        Target date
+                     </label>
                      <Input
                         id="initiative-target-date"
                         type="date"
@@ -690,17 +809,25 @@ function Overview({
                         onChange={(event) => setTargetDate(event.target.value)}
                         autoFocus
                      />
-                     <p className="text-xs text-muted-foreground">Clear the field and save to remove the date.</p>
+                     <p className="text-xs text-muted-foreground">
+                        Clear the field and save to remove the date.
+                     </p>
                   </div>
                )}
                {action === 'owner' && (
                   <div className="space-y-2">
-                     <label className="text-sm font-medium" htmlFor="initiative-owner">Owner</label>
+                     <label className="text-sm font-medium" htmlFor="initiative-owner">
+                        Owner
+                     </label>
                      <Select value={ownerId} onValueChange={setOwnerId}>
-                        <SelectTrigger id="initiative-owner"><SelectValue placeholder="Select an owner" /></SelectTrigger>
+                        <SelectTrigger id="initiative-owner">
+                           <SelectValue placeholder="Select an owner" />
+                        </SelectTrigger>
                         <SelectContent>
                            {members.map((member) => (
-                              <SelectItem key={member.user.id} value={member.user.id}>{member.user.name}</SelectItem>
+                              <SelectItem key={member.user.id} value={member.user.id}>
+                                 {member.user.name}
+                              </SelectItem>
                            ))}
                         </SelectContent>
                      </Select>
@@ -708,7 +835,9 @@ function Overview({
                )}
                {action === 'description' && (
                   <div className="space-y-2">
-                     <label className="text-sm font-medium" htmlFor="initiative-description">Description</label>
+                     <label className="text-sm font-medium" htmlFor="initiative-description">
+                        Description
+                     </label>
                      <Textarea
                         id="initiative-description"
                         value={description}
@@ -716,24 +845,37 @@ function Overview({
                         placeholder="Add a description…"
                         autoFocus
                      />
-                     <p className="text-xs text-muted-foreground">Clear the field and save to remove the description.</p>
+                     <p className="text-xs text-muted-foreground">
+                        Clear the field and save to remove the description.
+                     </p>
                   </div>
                )}
                {action === 'icon' && (
                   <div className="space-y-2">
-                     <label className="text-sm font-medium" htmlFor="initiative-icon">Icon</label>
-                     <Input
-                        id="initiative-icon"
-                        value={icon}
-                        onChange={(event) => setIcon(event.target.value)}
-                        maxLength={16}
-                        autoFocus
-                     />
+                     <label className="text-sm font-medium" htmlFor="initiative-icon">
+                        Icon
+                     </label>
+                     <div className="flex gap-2">
+                        <Input
+                           id="initiative-icon"
+                           value={icon}
+                           onChange={(event) => setIcon(event.target.value)}
+                           maxLength={16}
+                           autoFocus
+                        />
+                        <IconPicker
+                           value={icon}
+                           onChange={setIcon}
+                           label="Choose initiative icon"
+                        />
+                     </div>
                   </div>
                )}
                {error && <p className="text-sm text-destructive">{error}</p>}
                <DialogFooter>
-                  <Button variant="outline" onClick={() => setAction(null)} disabled={saving}>Cancel</Button>
+                  <Button variant="outline" onClick={() => setAction(null)} disabled={saving}>
+                     Cancel
+                  </Button>
                   <Button onClick={() => void submit()} disabled={saving || !canSubmit}>
                      {saving
                         ? 'Saving…'
@@ -780,7 +922,9 @@ function Activity({ initiative }: { initiative: Initiative }) {
                   <span className="text-xs text-muted-foreground">{event.date}</span>
                </div>
             ))}
-            {events.length === 0 && <p className="py-8 text-sm text-muted-foreground">No activity yet.</p>}
+            {events.length === 0 && (
+               <p className="py-8 text-sm text-muted-foreground">No activity yet.</p>
+            )}
          </div>
       </div>
    );
@@ -791,7 +935,15 @@ function Activity({ initiative }: { initiative: Initiative }) {
 /** Initiative detail page: Overview / Activity / Projects tabs. */
 export default function InitiativeDetails({ initiativeId }: { initiativeId: string }) {
    const [tab] = useQueryState('tab', parseAsStringLiteral(TABS).withDefault('overview'));
-   const { workspaceId, initiatives: liveInitiatives, projects, labels, members, loading, error } = useLiveInitiatives();
+   const {
+      workspaceId,
+      initiatives: liveInitiatives,
+      projects,
+      labels,
+      members,
+      loading,
+      error,
+   } = useLiveInitiatives();
    const initiatives = useMemo(() => adaptInitiatives(liveInitiatives), [liveInitiatives]);
    const initiative = initiatives.find((item) => item.id === initiativeId);
 

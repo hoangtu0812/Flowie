@@ -1,9 +1,10 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { IconPicker } from '@/components/common/icon-picker';
 import { Input } from '@/components/ui/input';
 import { authenticatedFetch, loadCurrentWorkspace, type WorkspaceSummary } from '@/lib/workspaces';
-import { Building2, Check, Smile } from 'lucide-react';
+import { Building2, Check } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { SettingsCard, SettingsRow, SettingsSection, SettingsShell } from './shared';
@@ -74,7 +75,7 @@ export default function WorkspaceSettings() {
                      </p>
                   </div>
                   <div className="flex items-center gap-2">
-                     <Smile className="size-4 text-muted-foreground" aria-hidden="true" />
+                     <IconPicker value={icon} onChange={setIcon} label="Choose workspace icon" />
                      <Input
                         aria-label="Workspace icon"
                         value={icon}
