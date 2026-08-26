@@ -28,6 +28,7 @@ from .domains.native_issues import router as native_issues_router
 from .domains.native_initiatives import public_router as initiatives_router
 from .domains.native_initiatives import router as native_initiatives_router
 from .domains.native_documents import router as native_documents_router
+from .domains.native_notifications import router as notifications_router
 from .domains.native_projects import public_router as projects_router
 from .domains.native_projects import router as native_projects_router
 from .domains.labels import router as labels_router
@@ -91,6 +92,7 @@ def create_app(
     app.include_router(native_initiatives_router)
     app.include_router(initiatives_router)
     app.include_router(native_documents_router)
+    app.include_router(notifications_router)
     app.include_router(native_projects_router)
     app.include_router(projects_router)
     app.include_router(labels_router)

@@ -7,8 +7,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { getNotificationIcon } from '@/lib/notification-utils';
-import { getIssueDetail } from '@/mock-data/issue-details';
-import { InboxItem } from '@/mock-data/inbox';
+import { IssueDetail } from '@/mock-data/issue-details';
+import { InboxItem } from '@/store/notifications-store';
 import { useIssuesStore } from '@/store/issues-store';
 import { useNotificationsStore } from '@/store/notifications-store';
 import { ArrowUpRight, Check, Paperclip, Send } from 'lucide-react';
@@ -23,8 +23,8 @@ interface IssuePreviewProps {
 
 /**
  * Inbox preview pane: shows the REAL issue behind the selected
- * notification (live status/assignee from the store, rich description
- * from issue-details) plus the notification context.
+ * notification (live status/assignee and persisted issue description) plus
+ * the notification context.
  */
 export default function IssuePreview({ notification, onMarkAsRead }: IssuePreviewProps) {
    const { orgId } = useParams<{ orgId: string }>();
@@ -50,7 +50,13 @@ export default function IssuePreview({ notification, onMarkAsRead }: IssuePrevie
    // Live issue from the store (falls back to the notification snapshot).
    const issue = issues.find((candidate) => candidate.identifier === notification.identifier);
    const displayIssue = issue ?? notification;
-   const detail = getIssueDetail(displayIssue);
+   const detail: IssueDetail = {
+      identifier: displayIssue.identifier,
+      description: displayIssue.description
+         ? [{ type: 'paragraph', text: displayIssue.description }]
+         : [{ type: 'paragraph', text: 'No description yet.' }],
+      activity: [],
+   };
 
    return (
       <div className="flex flex-col h-full overflow-hidden">

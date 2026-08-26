@@ -2,7 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import { Issue } from '@/mock-data/issues';
-import { teams } from '@/mock-data/teams';
+import { useIssuesStore } from '@/store/issues-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { X } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -44,6 +44,7 @@ const PRIORITY_COLORS: Record<string, string> = {
  */
 export function BreakdownPanel({ issues }: { issues: Issue[] }) {
    const { closePanel } = useRightPanelStore();
+   const { teams } = useIssuesStore();
    const [tab, setTab] = useState<BreakdownTab>('labels');
 
    const rows = useMemo<BreakdownRow[]>(() => {
@@ -72,16 +73,16 @@ export function BreakdownPanel({ issues }: { issues: Issue[] }) {
             if (issue.project) {
                bump(issue.project.id, { key: issue.project.id, label: issue.project.name });
             }
-         } else if (issue.project) {
-            const team = teams.find((candidate) => candidate.id === issue.project?.teamId);
-            bump(issue.project.teamId, {
-               key: issue.project.teamId,
-               label: team ? `${team.icon} ${team.name}` : issue.project.teamId,
+         } else if (issue.teamId) {
+            const team = teams.find((candidate) => candidate.id === issue.teamId);
+            bump(issue.teamId, {
+               key: issue.teamId,
+               label: team ? `${team.icon} ${team.name}` : issue.teamId,
             });
          }
       }
       return [...counter.values()].sort((a, b) => b.count - a.count);
-   }, [tab, issues]);
+   }, [tab, issues, teams]);
 
    return (
       <div className="w-full h-full overflow-y-auto p-4 flex flex-col gap-4">

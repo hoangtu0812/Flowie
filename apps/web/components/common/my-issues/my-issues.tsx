@@ -6,14 +6,13 @@ import { GroupedIssuesView } from '@/components/common/issues/grouped-issues-vie
 import { InsightsPanel } from '@/components/common/issues/insights-panel';
 import { SearchIssues } from '@/components/common/issues/search-issues';
 import { BreakdownPanel } from './breakdown-panel';
-import { displayOrderedStatus } from '@/mock-data/status';
 import { useFilterStore } from '@/store/filter-store';
 import { useIssuesStore } from '@/store/issues-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { useSearchStore } from '@/store/search-store';
 import { useViewStore } from '@/store/view-store';
-import { useMemo } from 'react';
-import { scopeMyIssues, useMyIssuesTab } from './use-my-issues';
+import { useEffect, useMemo } from 'react';
+import { scopeMyIssues, useCurrentUserId, useMyIssuesTab } from './use-my-issues';
 
 /**
  * "My issues" body — the exact same machinery as the team issue views
@@ -25,13 +24,22 @@ export default function MyIssues() {
    const { isSearchOpen, searchQuery } = useSearchStore();
    const { viewType } = useViewStore();
    const { filters } = useFilterStore();
-   const { issues } = useIssuesStore();
+   const { issues, statuses, loadIssues } = useIssuesStore();
    const { openPanel } = useRightPanelStore();
 
    const isSearching = isSearchOpen && searchQuery.trim() !== '';
    const isViewTypeGrid = viewType === 'grid';
 
-   const scopedIssues = useMemo(() => scopeMyIssues(issues, tab), [issues, tab]);
+   const currentUserId = useCurrentUserId();
+
+   useEffect(() => {
+      void loadIssues();
+   }, [loadIssues]);
+
+   const scopedIssues = useMemo(
+      () => scopeMyIssues(issues, tab, currentUserId),
+      [issues, tab, currentUserId]
+   );
 
    const displayedIssues = useMemo(
       () => applyIssueFilters(scopedIssues, filters),
@@ -56,7 +64,7 @@ export default function MyIssues() {
                <GroupedIssuesView
                   issues={displayedIssues}
                   totalIssues={scopedIssues}
-                  statuses={displayOrderedStatus}
+                  statuses={statuses}
                   isViewTypeGrid={isViewTypeGrid}
                />
             </div>

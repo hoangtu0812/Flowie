@@ -9,8 +9,9 @@ import {
    Edit,
    Plus,
    Upload,
+   BellRing,
 } from 'lucide-react';
-import { NotificationType } from '@/mock-data/inbox';
+import { NotificationType } from '@/store/notifications-store';
 import { cn } from '@/lib/utils';
 
 export function getNotificationIcon(type: NotificationType, className?: string) {
@@ -33,6 +34,8 @@ export function getNotificationIcon(type: NotificationType, className?: string) 
          return <Plus className={cn('text-emerald-500', className)} />;
       case 'upload':
          return <Upload className={cn('text-pink-500', className)} />;
+      case 'reminder':
+         return <BellRing className={cn('text-amber-500', className)} />;
       default:
          return <MessageCircle className={cn('text-blue-500', className)} />;
    }

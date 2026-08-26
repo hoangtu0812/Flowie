@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { useNotificationsStore } from '@/store/notifications-store';
 import { Button } from '@/components/ui/button';
@@ -28,6 +28,7 @@ import IssueLine from './issue-line';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { ChevronLeft } from 'lucide-react';
+import { useIssuesStore } from '@/store/issues-store';
 
 export default function Inbox() {
    const {
@@ -36,8 +37,13 @@ export default function Inbox() {
       setSelectedNotification,
       markAsRead,
       markAllAsRead,
+      loadNotifications,
+      deleteAll,
+      deleteRead,
+      deleteCompletedIssues,
       getUnreadNotifications,
    } = useNotificationsStore();
+   const { loadIssues } = useIssuesStore();
 
    const isMobile = useIsMobile();
    const [showRead, setShowRead] = useState(true);
@@ -46,6 +52,13 @@ export default function Inbox() {
    const [ordering, setOrdering] = useState('newest');
    const [showId, setShowId] = useState(true);
    const [showStatusIcon, setShowStatusIcon] = useState(true);
+
+   useEffect(() => {
+      void (async () => {
+         await loadIssues();
+         await loadNotifications();
+      })();
+   }, [loadIssues, loadNotifications]);
 
    // Filter and sort notifications based on settings
    const filteredNotifications = notifications
@@ -65,17 +78,11 @@ export default function Inbox() {
             : new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
       });
 
-   const handleDeleteAllNotifications = () => {
-      console.log('Delete all notifications');
-   };
+   const handleDeleteAllNotifications = () => void deleteAll();
 
-   const handleDeleteReadNotifications = () => {
-      console.log('Delete read notifications');
-   };
+   const handleDeleteReadNotifications = () => void deleteRead();
 
-   const handleDeleteCompletedIssues = () => {
-      console.log('Delete notifications for completed issues');
-   };
+   const handleDeleteCompletedIssues = () => void deleteCompletedIssues();
 
    const listPane = (
       <>
@@ -200,6 +207,9 @@ export default function Inbox() {
             </div>
          </div>
          <div className="w-full flex flex-col items-center justify-start overflow-y-scroll h-[calc(100%-40px)] pb-0.25">
+            {filteredNotifications.length === 0 && (
+               <p className="py-12 text-sm text-muted-foreground">No notifications to show.</p>
+            )}
             {filteredNotifications.map((notification) => (
                <IssueLine
                   key={notification.id}

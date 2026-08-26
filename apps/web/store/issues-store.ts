@@ -20,6 +20,7 @@ declare module '@/mock-data/issues' {
       reminderAt?: string;
       /** API-only reference used by durable issue actions; never changes Circle presentation. */
       teamId?: string;
+      creatorId?: string;
       releaseIds?: string[];
    }
 }
@@ -35,6 +36,7 @@ type NativeIssue = {
    createdAt: string;
    updatedAt: string;
    status: { id: string; name: string; color: string; category: string };
+   creator?: { id: string; name: string; avatarUrl?: string | null };
    assignee?: { id: string; name: string; avatarUrl?: string | null } | null;
    project?: { id: string; name: string } | null;
    labelLinks?: { label: LabelInterface }[];
@@ -142,6 +144,7 @@ function asIssue(native: NativeIssue): Issue {
    return {
       id: native.id,
       teamId: native.teamId,
+      creatorId: native.creator?.id,
       identifier: native.identifier,
       title: native.title,
       description: native.description ?? '',
