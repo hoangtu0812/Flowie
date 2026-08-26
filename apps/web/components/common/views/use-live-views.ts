@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { loadCurrentWorkspace } from '@/lib/workspaces';
+import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 
 export type LiveView = {
    id: string;
@@ -37,10 +37,8 @@ export function useLiveViews() {
          try {
             const currentWorkspaceId = await workspaceIdForCurrentUser();
             const [response, userResponse] = await Promise.all([
-               fetch(`${api}/views?workspaceId=${currentWorkspaceId}`, {
-                  credentials: 'include',
-               }),
-               fetch(`${api}/users/me`, { credentials: 'include' }),
+               authenticatedFetch(`${api}/views?workspaceId=${currentWorkspaceId}`),
+               authenticatedFetch(`${api}/users/me`),
             ]);
             if (!response.ok || !userResponse.ok) throw new Error('Could not load views.');
             if (current) {
