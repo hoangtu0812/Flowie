@@ -205,7 +205,7 @@ export function MarkdownDocumentEditor({
 
    return (
       <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
-         <DialogContent className="flex h-[min(90svh,900px)] w-[min(96vw,1100px)] max-w-none flex-col gap-0 overflow-hidden p-0">
+         <DialogContent className="flex h-[calc(100svh-2rem)] w-[calc(100vw-2rem)] !max-w-none flex-col gap-0 overflow-hidden p-0 sm:!max-w-none">
             <DialogHeader className="flex-row items-start justify-between gap-4 border-b p-6 pr-12">
                <div className="min-w-0 text-left">
                   <DialogTitle>
