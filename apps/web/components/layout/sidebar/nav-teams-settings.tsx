@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { PlusIcon } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 import {
    SidebarGroup,
@@ -10,13 +11,34 @@ import {
    SidebarMenuButton,
    SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { teams } from '@/mock-data/teams';
 import { Button } from '@/components/ui/button';
 import { useParams } from 'next/navigation';
+import { loadJoinedWorkspaceTeams, type WorkspaceTeam } from '@/components/common/teams/team-types';
 
 export function NavTeamsSettings() {
    const { orgId } = useParams<{ orgId: string }>();
-   const joinedTeams = teams.filter((t) => t.joined);
+   const [joinedTeams, setJoinedTeams] = useState<WorkspaceTeam[]>([]);
+
+   useEffect(() => {
+      let active = true;
+      const load = () => {
+         void loadJoinedWorkspaceTeams()
+            .then(({ teams }) => {
+               if (active) setJoinedTeams(teams);
+            })
+            .catch(() => {
+               if (active) setJoinedTeams([]);
+            });
+      };
+
+      load();
+      window.addEventListener('flowie-teams-changed', load);
+      return () => {
+         active = false;
+         window.removeEventListener('flowie-teams-changed', load);
+      };
+   }, [orgId]);
+
    return (
       <SidebarGroup>
          <SidebarGroupLabel>Your teams</SidebarGroupLabel>
