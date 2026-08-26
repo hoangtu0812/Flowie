@@ -21,6 +21,9 @@ All notable changes to Flowie are documented here.
 ### Changed
 
 - Discord integration configuration is now served by the Python/FastAPI API.
+- The issues list view has a column header, and each row lays its properties
+  out in fixed columns: Created and Due date are now separate labelled columns
+  instead of one unlabelled date.
 - The issue assignee picker lists live workspace members and persists the
   choice; it no longer offers a mock roster.
 - The issue description is the stored one and is editable in place.

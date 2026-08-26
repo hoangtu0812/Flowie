@@ -13,6 +13,7 @@ import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { GroupIssues, IssueGroupDescriptor } from './group-issues';
 import { CustomDragLayer } from './issue-grid';
+import { IssuesListHeader } from './issues-list-header';
 
 interface GroupedIssuesViewProps {
    /** Issues to display (after the filter bar has been applied). */
@@ -253,7 +254,9 @@ export const GroupedIssuesView: FC<GroupedIssuesViewProps> = ({
       const boardGroups = hasActiveFilters
          ? groups.filter((entry) => entry.issues.length > 0)
          : groups.filter((entry) => showEmptyGroups || entry.issues.length > 0);
-      const hiddenGroups = hasActiveFilters ? groups.filter((entry) => entry.issues.length === 0) : [];
+      const hiddenGroups = hasActiveFilters
+         ? groups.filter((entry) => entry.issues.length === 0)
+         : [];
 
       return (
          <DndProvider backend={HTML5Backend}>
@@ -294,6 +297,7 @@ export const GroupedIssuesView: FC<GroupedIssuesViewProps> = ({
       <DndProvider backend={HTML5Backend}>
          <CustomDragLayer />
          <div className="h-full overflow-y-auto">
+            <IssuesListHeader />
             {listGroups.length === 0 && !showFooter && (
                <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
                   No issues to show.

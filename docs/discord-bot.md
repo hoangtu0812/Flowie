@@ -7,6 +7,25 @@ Flowie supports two Discord delivery modes:
 2. **Flowie bot broadcaster** — optional server-wide delivery through a Discord
    bot account. It posts the same supported events to one configured channel.
 
+## Configure the workspace webhook
+
+The webhook is the per-workspace mode and is configured entirely from the UI by
+a workspace owner or admin; no server change or redeploy is involved.
+
+1. In Discord, open the target channel, then **Edit Channel → Integrations →
+   Webhooks → New Webhook**. Name it, pick the channel, then **Copy Webhook
+   URL**.
+2. In Flowie, open **Settings → Connected accounts → Discord → Connect**.
+3. Paste the URL, leave **Enable Discord notifications** on, then **Save
+   configuration**. Only `https://discord.com/api/webhooks/...` (or
+   `discordapp.com`) is accepted.
+4. Press **Send test**. A successful test posts a confirmation message in the
+   channel; the button stays disabled until a configuration is saved.
+
+The stored URL is never returned to the browser again — the endpoint reports it
+masked — so replacing it means pasting a new URL over the old one. Turning the
+switch off keeps the URL but stops delivery.
+
 ## Configure the bot broadcaster
 
 1. In the [Discord Developer Portal](https://discord.com/developers/applications),
@@ -37,6 +56,10 @@ it is pasted into a terminal recording, a Git commit, or chat.
 - issue comment created;
 - project properties updated;
 - project update/comment posted.
+
+Discord delivery is not limited to the Inbox recipients: the Inbox skips the
+person who caused the event, while Discord receives every supported event. A
+single-member workspace therefore still sees its own activity in the channel.
 
 Interactive slash commands are intentionally not enabled yet: they require a
 public Discord interactions endpoint and request-signature verification. The

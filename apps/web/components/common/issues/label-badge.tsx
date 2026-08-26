@@ -8,7 +8,7 @@ export function LabelBadge({ label }: { label: LabelInterface[] }) {
             <Badge
                key={l.id}
                variant="outline"
-               className="gap-1.5 rounded-full text-muted-foreground bg-background"
+               className="gap-1.5 rounded-full text-muted-foreground bg-background max-w-full"
             >
                <span
                   className="size-1.5 rounded-full"

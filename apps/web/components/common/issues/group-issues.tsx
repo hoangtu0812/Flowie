@@ -50,8 +50,9 @@ export function GroupIssues({ group, issues, count }: GroupIssuesProps) {
       >
          <div
             className={cn(
-               'sticky top-0 z-10 bg-container w-full',
-               isViewTypeGrid ? 'rounded-t-md h-[50px]' : 'h-10'
+               'sticky z-10 bg-container w-full',
+               // The list has a column header of its own to stay clear of.
+               isViewTypeGrid ? 'top-0 rounded-t-md h-[50px]' : 'top-8 h-10'
             )}
          >
             <div

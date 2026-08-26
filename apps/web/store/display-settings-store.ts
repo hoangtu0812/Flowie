@@ -35,7 +35,7 @@ const DEFAULT_DISPLAY_PROPERTIES: Record<DisplayPropertyKey, boolean> = {
    assignee: true,
    labels: true,
    project: true,
-   dueDate: false,
+   dueDate: true,
    created: true,
    cycle: false,
 };
@@ -97,6 +97,23 @@ export const useDisplaySettingsStore = create<DisplaySettingsState>()(
       {
          name: 'display-settings',
          storage: createJSONStorage(() => localStorage),
+         version: 1,
+         // Issue rows now carry labelled Created and Due date columns. A due
+         // date column that defaults to hidden makes the remaining date read
+         // as the deadline, so turn it on once for browsers holding the old
+         // default.
+         migrate: (persisted, version) => {
+            const state = persisted as Partial<DisplaySettingsState> | undefined;
+            if (!state || version >= 1) return state as DisplaySettingsState;
+            return {
+               ...state,
+               displayProperties: {
+                  ...DEFAULT_DISPLAY_PROPERTIES,
+                  ...state.displayProperties,
+                  dueDate: true,
+               },
+            } as DisplaySettingsState;
+         },
       }
    )
 );
