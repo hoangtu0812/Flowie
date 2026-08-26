@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { format, parseISO } from 'date-fns';
-import { ArrowRight, ChevronDown, FileText, PenLine, Plus } from 'lucide-react';
+import { ArrowRight, Check, ChevronDown, FileText, PenLine, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useRef, useState } from 'react';
@@ -39,6 +39,10 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
       activities,
       createResource,
       updateProject,
+      availableLabels,
+      availableInitiatives,
+      updateLabels,
+      updateInitiatives,
       loading,
       error,
    } = useLiveProjectData();
@@ -51,6 +55,9 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
    const [descriptionEditing, setDescriptionEditing] = useState(false);
    const [descriptionDraft, setDescriptionDraft] = useState('');
    const [savingDescription, setSavingDescription] = useState(false);
+   const [selector, setSelector] = useState<'labels' | 'initiatives'>();
+   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+   const [savingSelection, setSavingSelection] = useState(false);
    if (loading)
       return (
          <div className="h-full grid place-items-center text-sm text-muted-foreground">
@@ -104,6 +111,40 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
       }
    };
 
+   const openSelector = (kind: 'labels' | 'initiatives') => {
+      setSelector(kind);
+      setSelectedIds(
+         kind === 'labels'
+            ? liveProject.labelLinks.map((link) => link.label.id)
+            : liveProject.initiativeLinks.map((link) => link.initiative.id)
+      );
+   };
+
+   const toggleSelected = (id: string) => {
+      setSelectedIds((current) =>
+         current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+      );
+   };
+
+   const saveSelection = async () => {
+      if (!selector) return;
+      setSavingSelection(true);
+      try {
+         if (selector === 'labels') await updateLabels(selectedIds);
+         else await updateInitiatives(selectedIds);
+         setSelector(undefined);
+         toast.success(
+            selector === 'labels' ? 'Project labels updated.' : 'Project initiatives updated.'
+         );
+      } catch (caught) {
+         toast.error(
+            caught instanceof Error ? caught.message : 'Could not update project selection.'
+         );
+      } finally {
+         setSavingSelection(false);
+      }
+   };
+
    return (
       <div className="w-full h-full flex overflow-hidden">
          {/* Main column */}
@@ -153,17 +194,29 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
                         </div>
                      </div>
 
-                     {project.initiative && (
-                        <div className="flex items-center gap-3">
-                           <span className="w-24 text-muted-foreground shrink-0">Initiatives</span>
-                           <span className="inline-flex items-center gap-1.5">
-                              📄 {project.initiative}
-                              <button className="text-muted-foreground hover:text-foreground transition-colors">
-                                 <Plus className="size-3.5" />
+                     <div className="flex items-center gap-3">
+                        <span className="w-24 text-muted-foreground shrink-0">Initiatives</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                           {liveProject.initiativeLinks.map((link) => (
+                              <button
+                                 key={link.initiative.id}
+                                 type="button"
+                                 onClick={() => openSelector('initiatives')}
+                                 className="inline-flex items-center gap-1.5 text-sm hover:underline"
+                              >
+                                 📄 {link.initiative.name}
                               </button>
-                           </span>
+                           ))}
+                           <button
+                              type="button"
+                              className="text-muted-foreground hover:text-foreground transition-colors"
+                              aria-label="Change project initiatives"
+                              onClick={() => openSelector('initiatives')}
+                           >
+                              <Plus className="size-3.5" />
+                           </button>
                         </div>
-                     )}
+                     </div>
 
                      <div className="flex items-center gap-3">
                         <span className="w-24 text-muted-foreground shrink-0">Labels</span>
@@ -181,7 +234,12 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
                                  <ChevronDown className="size-3 text-muted-foreground" />
                               </span>
                            ))}
-                           <button className="text-muted-foreground hover:text-foreground transition-colors">
+                           <button
+                              type="button"
+                              className="text-muted-foreground hover:text-foreground transition-colors"
+                              aria-label="Change project labels"
+                              onClick={() => openSelector('labels')}
+                           >
                               <Plus className="size-3.5" />
                            </button>
                         </div>
@@ -335,6 +393,65 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
                      onClick={() => void submitResource()}
                   >
                      {savingResource ? 'Adding…' : 'Add resource'}
+                  </Button>
+               </DialogFooter>
+            </DialogContent>
+         </Dialog>
+         <Dialog open={Boolean(selector)} onOpenChange={(open) => !open && setSelector(undefined)}>
+            <DialogContent>
+               <DialogHeader>
+                  <DialogTitle>
+                     {selector === 'labels' ? 'Project labels' : 'Project initiatives'}
+                  </DialogTitle>
+               </DialogHeader>
+               <div className="max-h-72 space-y-1 overflow-y-auto rounded-md border p-1">
+                  {(selector === 'labels' ? availableLabels : availableInitiatives).map((item) => {
+                     const selected = selectedIds.includes(item.id);
+                     const color =
+                        selector === 'labels'
+                           ? (item as (typeof availableLabels)[number]).color
+                           : undefined;
+                     return (
+                        <button
+                           key={item.id}
+                           type="button"
+                           onClick={() => toggleSelected(item.id)}
+                           className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-accent ${selected ? 'bg-accent' : ''}`}
+                        >
+                           {color ? (
+                              <span
+                                 className="size-2.5 rounded-full"
+                                 style={{ backgroundColor: color }}
+                              />
+                           ) : (
+                              <span>📄</span>
+                           )}
+                           <span className="flex-1">{item.name}</span>
+                           {selected && <Check className="size-4" />}
+                        </button>
+                     );
+                  })}
+                  {selector === 'labels' && availableLabels.length === 0 && (
+                     <p className="px-2 py-4 text-sm text-muted-foreground">
+                        Create a Project label in Settings first.
+                     </p>
+                  )}
+                  {selector === 'initiatives' && availableInitiatives.length === 0 && (
+                     <p className="px-2 py-4 text-sm text-muted-foreground">
+                        No initiatives are available in this workspace yet.
+                     </p>
+                  )}
+               </div>
+               <DialogFooter>
+                  <Button
+                     variant="outline"
+                     disabled={savingSelection}
+                     onClick={() => setSelector(undefined)}
+                  >
+                     Cancel
+                  </Button>
+                  <Button disabled={savingSelection} onClick={() => void saveSelection()}>
+                     {savingSelection ? 'Saving…' : 'Save'}
                   </Button>
                </DialogFooter>
             </DialogContent>
