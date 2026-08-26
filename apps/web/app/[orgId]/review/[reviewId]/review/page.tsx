@@ -1,15 +1,10 @@
-import Reviews from '@/components/common/reviews/reviews';
+import { DisabledFeature } from '@/components/common/disabled-feature';
 import MainLayout from '@/components/layout/main-layout';
 
-export default async function ReviewGuidePage({
-   params,
-}: {
-   params: Promise<{ reviewId: string }>;
-}) {
-   const { reviewId } = await params;
+export default function ReviewGuidePage() {
    return (
       <MainLayout>
-         <Reviews selectedReviewId={reviewId} section="guide" />
+         <DisabledFeature title="Reviews" />
       </MainLayout>
    );
 }

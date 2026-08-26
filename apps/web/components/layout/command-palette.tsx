@@ -209,20 +209,8 @@ export function CommandPalette() {
                if (event.key === 'Backspace' && query === '' && route !== 'root') {
                   setRoute('root');
                }
-               if (event.key === 'Tab' && route === 'root') {
-                  event.preventDefault();
-                  go('/agent');
-               }
             }}
          />
-         {route === 'root' && (
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-xs text-muted-foreground pointer-events-none">
-               Ask Agent
-               <kbd className="h-5 px-1.5 inline-flex items-center rounded border bg-muted/50 text-[11px] font-sans">
-                  Tab
-               </kbd>
-            </span>
-         )}
       </div>
    );
 
@@ -458,9 +446,6 @@ export function CommandPalette() {
                            <CommandItem onSelect={() => go('/my-issues')}>
                               <ClipboardList className="text-muted-foreground" /> My issues
                               <Keys keys={['G', 'M']} />
-                           </CommandItem>
-                           <CommandItem onSelect={() => go('/reviews')}>
-                              <GitBranch className="text-muted-foreground" /> Reviews
                            </CommandItem>
                            <CommandItem onSelect={() => go('/initiatives')}>
                               <Compass className="text-muted-foreground" /> Initiatives

@@ -1,6 +1,5 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { RiSlackFill } from '@remixicon/react';
 import { Bot, MessageCircleQuestion, Radar, RefreshCcw, Sparkles, Terminal } from 'lucide-react';
@@ -41,21 +40,22 @@ export default function AiAgents() {
    return (
       <SettingsShell
          title="AI & Agents"
-         description="Automate your product development processes and operations with AI"
+         description="Flowie automation is not available in this deployment yet"
       >
          <SettingsSection>
             <SettingsCard>
                <SettingsRow
                   title="Enable usage feedback"
-                  description="Improve AI functionality by sharing usage feedback. Never used to train models"
-                  trailing={<Switch defaultChecked />}
+                  description="This preference will be available when Flowie automation launches."
+                  trailing={<Switch checked={false} disabled />}
+                  disabled
                />
             </SettingsCard>
          </SettingsSection>
 
          <SettingsSection
-            title="LNDev Agent"
-            description="Create issues and answer questions about your workspace"
+            title="Flowie automation"
+            description="Automation, coding sessions and agent workflows are coming soon"
          >
             <SettingsCard>
                {AGENT_FEATURES.map((feature) => (
@@ -73,9 +73,8 @@ export default function AiAgents() {
                         </>
                      }
                      description={feature.description}
-                     trailing={<span>Enabled</span>}
-                     chevron
-                     onClick={() => {}}
+                     trailing={<span>Unavailable</span>}
+                     disabled
                   />
                ))}
             </SettingsCard>
@@ -83,29 +82,23 @@ export default function AiAgents() {
 
          <SettingsSection
             title="Agent integrations"
-            description="Integrations available to the agent"
-            action={
-               <Button size="xs" variant="secondary">
-                  Browse integrations
-               </Button>
-            }
+            description="Agent integrations are not available yet"
+            action={<span className="text-xs text-muted-foreground opacity-60">Unavailable</span>}
          >
             <SettingsCard>
                <SettingsRow
                   icon={<RiSlackFill className="size-4" />}
                   title="Slack"
-                  description="Settings and additional guidance for creating issues from Slack messages"
-                  trailing={<span>Enabled</span>}
-                  chevron
-                  onClick={() => {}}
+                  description="Will be available when Flowie automation is released."
+                  trailing={<span>Unavailable</span>}
+                  disabled
                />
                <SettingsRow
                   icon={<MessageCircleQuestion className="size-4" />}
                   title="Asks for Slack"
-                  description="Settings and issue templates for creating issues from Asks for Slack"
-                  trailing={<span>Enabled</span>}
-                  chevron
-                  onClick={() => {}}
+                  description="Will be available when Flowie automation is released."
+                  trailing={<span>Unavailable</span>}
+                  disabled
                />
             </SettingsCard>
          </SettingsSection>
