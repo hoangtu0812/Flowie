@@ -4,6 +4,7 @@ import {
    loadCurrentWorkspaceTeams,
    type WorkspaceTeam,
 } from '@/components/common/teams/team-types';
+import { authenticatedFetch } from '@/lib/workspaces';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -89,8 +90,8 @@ export default function AsksSettings() {
          const workspace = await loadCurrentWorkspaceTeams();
          const query = new URLSearchParams({ workspaceId: workspace.workspaceId });
          const [askResponse, projectResponse] = await Promise.all([
-            fetch(`${api}/asks?${query}`, { credentials: 'include' }),
-            fetch(`${api}/projects?${query}`, { credentials: 'include' }),
+            authenticatedFetch(`${api}/asks?${query}`),
+            authenticatedFetch(`${api}/projects?${query}`),
          ]);
          if (!askResponse.ok || !projectResponse.ok) throw new Error('Could not load Asks.');
          setWorkspaceId(workspace.workspaceId);
@@ -161,7 +162,7 @@ export default function AsksSettings() {
       setFormError(undefined);
       try {
          const query = new URLSearchParams({ workspaceId });
-         const response = await fetch(
+         const response = await authenticatedFetch(
             editingId ? `${api}/asks/${editingId}?${query}` : `${api}/asks`,
             {
                method: editingId ? 'PATCH' : 'POST',
@@ -197,7 +198,7 @@ export default function AsksSettings() {
       setSaving(true);
       setFormError(undefined);
       try {
-         const response = await fetch(
+         const response = await authenticatedFetch(
             `${api}/asks/${editingId}/convert?${new URLSearchParams({ workspaceId })}`,
             { method: 'POST', credentials: 'include' }
          );
@@ -221,7 +222,7 @@ export default function AsksSettings() {
       if (!workspaceId || !editingId) return;
       setSaving(true);
       try {
-         const response = await fetch(
+         const response = await authenticatedFetch(
             `${api}/asks/${editingId}?${new URLSearchParams({ workspaceId })}`,
             { method: 'DELETE', credentials: 'include' }
          );
