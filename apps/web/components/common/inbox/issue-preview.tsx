@@ -50,6 +50,9 @@ export default function IssuePreview({ notification, onMarkAsRead }: IssuePrevie
    // Live issue from the store (falls back to the notification snapshot).
    const issue = issues.find((candidate) => candidate.identifier === notification.identifier);
    const displayIssue = issue ?? notification;
+   const destination = notification.entityPath
+      ? `/${orgId ?? 'lndev-ui'}${notification.entityPath}`
+      : `/${orgId ?? 'lndev-ui'}/issue/${displayIssue.identifier}`;
    const detail: IssueDetail = {
       identifier: displayIssue.identifier,
       description: displayIssue.description
@@ -80,7 +83,7 @@ export default function IssuePreview({ notification, onMarkAsRead }: IssuePrevie
                   </Button>
                )}
                <Button variant="ghost" size="xs" asChild>
-                  <Link href={`/${orgId ?? 'lndev-ui'}/issue/${displayIssue.identifier}`}>
+                  <Link href={destination}>
                      Open
                      <ArrowUpRight className="size-3.5 ml-0.5" />
                   </Link>

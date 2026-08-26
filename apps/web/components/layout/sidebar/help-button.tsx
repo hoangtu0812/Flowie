@@ -14,7 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import Link from 'next/link';
-import { RiBox3Fill, RiLinkedinFill, RiThreadsFill, RiTwitterXFill } from '@remixicon/react';
+import { RiGithubFill, RiGlobalLine, RiRocket2Fill } from '@remixicon/react';
 
 export function HelpButton() {
    return (
@@ -39,56 +39,57 @@ export function HelpButton() {
                <span className="ml-auto text-xs text-muted-foreground">⌘/</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuLabel>Follow me</DropdownMenuLabel>
+            <DropdownMenuLabel>Flowie links</DropdownMenuLabel>
             <DropdownMenuItem asChild>
-               <Link href="https://x.com/ln_dev7" target="_blank">
-                  <RiTwitterXFill className="mr-2 h-4 w-4" />
-                  <span>X - Twitter</span>
+               <Link href="https://hoangtu.io.vn" target="_blank">
+                  <RiGlobalLine className="mr-2 h-4 w-4" />
+                  <span>Hoang Tu</span>
                   <ExternalLink className="ml-auto h-3 w-3 text-muted-foreground" />
                </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-               <Link href="https://threads.net/@ln_dev7" target="_blank">
-                  <RiThreadsFill className="mr-2 h-4 w-4" />
-                  <span>Threads</span>
-                  <ExternalLink className="ml-auto h-3 w-3 text-muted-foreground" />
-               </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-               <Link href="https://linkedin.com/in/lndev" target="_blank">
-                  <RiLinkedinFill className="mr-2 h-4 w-4" />
-                  <span>LinkedIn</span>
+               <Link href="https://flowie.loopstudio.io.vn" target="_blank">
+                  <RiRocket2Fill className="mr-2 h-4 w-4" />
+                  <span>Flowie</span>
                   <ExternalLink className="ml-auto h-3 w-3 text-muted-foreground" />
                </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-               <Link href="https://lndev.mychariow.shop/prd_3cu1s0" target="_blank">
-                  <RiBox3Fill className="mr-2 h-4 w-4" />
-                  <span>Support project</span>
+               <Link href="https://github.com/hoangtu0812/Flowie/issues" target="_blank">
+                  <RiGithubFill className="mr-2 h-4 w-4" />
+                  <span>Report an issue</span>
                </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuLabel>What&apos;s new</DropdownMenuLabel>
             <DropdownMenuItem asChild>
-               <Link href="https://ui.lndev.me" target="_blank" className="flex items-center">
+               <Link
+                  href="https://github.com/hoangtu0812/Flowie/blob/main/CHANGELOG.md"
+                  target="_blank"
+                  className="flex items-center"
+               >
                   <div className="mr-2 flex h-4 w-4 items-center justify-center">
                      <div className="h-1.5 w-1.5 rounded-full bg-blue-500"></div>
                   </div>
-                  <span>Launch lndev-ui</span>
-               </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-               <Link href="https://lndev.me" target="_blank" className="flex items-center">
-                  <div className="mr-2 flex h-4 w-4 items-center justify-center">
-                     <div className="h-1.5 w-1.5 rounded-full bg-blue-500"></div>
-                  </div>
-                  <span>New portfolio</span>
+                  <span>Realtime Inbox &amp; Discord</span>
                </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
                <Link
-                  href="https://github.com/ln-dev7/circle"
+                  href="https://flowie.loopstudio.io.vn"
+                  target="_blank"
+                  className="flex items-center"
+               >
+                  <div className="mr-2 flex h-4 w-4 items-center justify-center">
+                     <div className="h-1.5 w-1.5 rounded-full bg-blue-500"></div>
+                  </div>
+                  <span>Flowie production launch</span>
+               </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+               <Link
+                  href="https://github.com/hoangtu0812/Flowie"
                   target="_blank"
                   className="flex items-center"
                >

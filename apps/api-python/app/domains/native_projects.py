@@ -13,6 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
 from ..db.session import get_session
+from ..services.notification_events import (
+    create_notification_batch,
+    project_recipient_ids,
+    publish_notification_batches,
+)
 from .auth import _cuid, _utcnow, current_user
 from .teams import _team
 
@@ -725,7 +730,20 @@ async def update_project(project_id: str, payload: UpdateProjectInput, workspace
         await db.execute(text('DELETE FROM project_label_links WHERE project_id = :project_id'), {'project_id': project_id})
         for label_id in set(label_ids): await db.execute(text('INSERT INTO project_label_links (project_id, label_id) VALUES (:project_id, :label_id)'), {'project_id': project_id, 'label_id': label_id})
     await db.execute(text("INSERT INTO activities (id, workspace_id, project_id, actor_id, type, data, created_at) VALUES (:id, :workspace_id, :project_id, :actor_id, 'project.updated', CAST('{}' AS jsonb), :now)"), {'id': _cuid(), 'workspace_id': workspaceId, 'project_id': project_id, 'actor_id': user['id'], 'now': _utcnow()})
+    batch = await create_notification_batch(
+        db,
+        workspace_id=workspaceId,
+        recipient_ids=await project_recipient_ids(db, project_id, current.get('leadId')),
+        actor=user,
+        event_type='project.updated',
+        entity_type='project',
+        entity_id=project_id,
+        title=current['name'],
+        message='updated project properties',
+        entity_path=f'/project/{project_id}/overview',
+    )
     await db.commit()
+    await publish_notification_batches(batch)
     return {'data': await _project(db, project_id, workspaceId, user['id'])}
 
 
@@ -931,7 +949,20 @@ async def create_update(project_id: str, payload: ProjectUpdateInput, user: Any 
     if kind != 'comment' and payload.health: await db.execute(text('UPDATE projects SET health = :health, updated_at = :now WHERE id = :id'), {'id': project_id, 'health': payload.health, 'now': now})
     await db.execute(text('INSERT INTO project_subscriptions (project_id, user_id, created_at) VALUES (:project_id, :user_id, :now) ON CONFLICT (project_id, user_id) DO NOTHING'), {'project_id': project_id, 'user_id': user['id'], 'now': now})
     await db.execute(text("INSERT INTO activities (id, workspace_id, project_id, actor_id, type, data, created_at) VALUES (:id, :workspace_id, :project_id, :actor_id, 'project.update.created', CAST(:data AS jsonb), :now)"), {'id': _cuid(), 'workspace_id': payload.workspaceId, 'project_id': project_id, 'actor_id': user['id'], 'data': json.dumps({'updateId': update_id, 'preview': body[:200]}), 'now': now})
+    batch = await create_notification_batch(
+        db,
+        workspace_id=payload.workspaceId,
+        recipient_ids=await project_recipient_ids(db, project_id, project.get('leadId')),
+        actor=user,
+        event_type='project.update_created',
+        entity_type='project',
+        entity_id=project_id,
+        title=project['name'],
+        message='posted a project update' if kind != 'comment' else 'commented on a project update',
+        entity_path=f'/project/{project_id}/overview',
+    )
     await db.commit()
+    await publish_notification_batches(batch)
     return {'data': {'id': update_id, 'workspaceId': payload.workspaceId, 'projectId': project_id, 'authorId': user['id'], 'body': body, 'kind': kind, 'health': None if kind == 'comment' else (payload.health or 'on-track'), 'createdAt': now, 'updatedAt': now, 'author': {'id': user['id'], 'name': user['name'], 'avatarUrl': user['avatar_url']}, 'attachments': []}}
 
 

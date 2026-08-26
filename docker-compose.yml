@@ -63,7 +63,7 @@ services:
       environment:
          NODE_ENV: production
          API_PORT: 4001
-         API_CORS_ORIGIN: http://localhost:3000
+         API_CORS_ORIGIN: ${API_CORS_ORIGIN:-http://localhost:3000}
          AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
          ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-}
          ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}
@@ -109,6 +109,8 @@ services:
          AUTH_ACCESS_TOKEN_TTL_SECONDS: ${AUTH_ACCESS_TOKEN_TTL_SECONDS:-900}
          AUTH_REFRESH_TOKEN_TTL_DAYS: ${AUTH_REFRESH_TOKEN_TTL_DAYS:-30}
          AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+         DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
+         DISCORD_BOT_CHANNEL_ID: ${DISCORD_BOT_CHANNEL_ID:-}
       ports:
          - '${API_PORT:-4000}:4000'
       depends_on:

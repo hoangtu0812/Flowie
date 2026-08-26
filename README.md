@@ -35,7 +35,7 @@ It supports more than software delivery: product, operations, research, marketin
 - **Issues** — real workflows, statuses, priorities, assignees, labels, due dates, comments, relations, templates and reminders.
 - **Cycles** — create Active or Upcoming cycles, assign issues and inspect persisted progress/burn-up data.
 - **Projects & initiatives** — projects, milestones, custom fields, templates, labels, updates and initiative links.
-- **Collaboration** — documents, resources, activity history, attachments and Discord notification configuration.
+- **Collaboration** — documents, resources, activity history, attachments, real-time Inbox delivery and Discord notification configuration.
 - **Administration** — platform administrator bootstrap, workspace management and audit endpoints.
 
 The implementation inventory and remaining adapter work are tracked in [implement_plan.md](./implement_plan.md). A control is not marked complete merely because it has a mock screen.

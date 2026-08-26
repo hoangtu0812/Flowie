@@ -34,6 +34,7 @@ from .domains.native_slas import router as slas_router
 from .domains.native_pulse import router as pulse_router
 from .domains.native_emojis import router as emojis_router
 from .domains.native_notifications import router as notifications_router
+from .domains.native_integrations import router as integrations_router
 from .domains.native_views import router as views_router
 from .domains.native_projects import public_router as projects_router
 from .domains.native_projects import router as native_projects_router
@@ -105,6 +106,7 @@ def create_app(
     app.include_router(pulse_router)
     app.include_router(emojis_router)
     app.include_router(notifications_router)
+    app.include_router(integrations_router)
     app.include_router(views_router)
     app.include_router(native_projects_router)
     app.include_router(projects_router)

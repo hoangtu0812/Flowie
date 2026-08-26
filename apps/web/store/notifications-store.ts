@@ -4,6 +4,7 @@ import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import { useIssuesStore } from '@/store/issues-store';
 import { toast } from 'sonner';
 import { create } from 'zustand';
+import { CircleDot } from 'lucide-react';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -26,6 +27,9 @@ export interface InboxItem extends Issue {
    user: User;
    timestamp: string;
    read: boolean;
+   entityType?: string;
+   entityPath?: string;
+   notificationCreatedAt?: string;
 }
 
 type NativeNotification = {
@@ -85,11 +89,44 @@ function fallbackUser(): User {
    };
 }
 
+function entityFallback(notification: NativeNotification): Issue {
+   const title =
+      typeof notification.data?.title === 'string'
+         ? notification.data.title
+         : notification.entityType === 'project'
+           ? 'Project update'
+           : 'Flowie notification';
+   return {
+      id: notification.entityId,
+      identifier: notification.entityType === 'project' ? 'PROJECT' : 'FLOWIE',
+      title,
+      description: '',
+      status: {
+         id: 'notification',
+         name: 'Notification',
+         category: 'started',
+         color: '#6b7280',
+         icon: CircleDot,
+      } as Issue['status'],
+      assignee: null,
+      priority: {
+         id: 'no-priority',
+         name: 'No priority',
+         icon: CircleDot,
+      } as Issue['priority'],
+      labels: [],
+      createdAt: notification.createdAt,
+      cycleId: '',
+      rank: '',
+   };
+}
+
 interface NotificationsState {
    notifications: InboxItem[];
    selectedNotification: InboxItem | undefined;
    loading: boolean;
    loadNotifications: () => Promise<void>;
+   connectRealtime: (workspaceId: string) => () => void;
    setSelectedNotification: (notification: InboxItem | undefined) => void;
    markAsRead: (id: string) => Promise<void>;
    markAllAsRead: () => Promise<void>;
@@ -151,30 +188,77 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => {
             const issuesById = new Map(
                useIssuesStore.getState().issues.map((issue) => [issue.id, issue])
             );
-            const notifications = payload.data.flatMap((notification) => {
+            const notifications = payload.data.map((notification) => {
                const issue =
                   notification.entityType === 'issue'
                      ? issuesById.get(notification.entityId)
                      : undefined;
-               if (!issue) return [];
                const dataActor = notification.data?.actor as Partial<User> | undefined;
-               return [
-                  {
-                     ...issue,
-                     id: notification.id,
-                     content: contentFor(notification),
-                     type: notificationType(notification.type),
-                     user: dataActor?.id ? ({ ...actor, ...dataActor } as User) : actor,
-                     timestamp: readableTime(notification.createdAt),
-                     read: Boolean(notification.readAt),
-                  },
-               ];
+               return {
+                  ...(issue ?? entityFallback(notification)),
+                  id: notification.id,
+                  content: contentFor(notification),
+                  type: notificationType(notification.type),
+                  user: dataActor?.id ? ({ ...actor, ...dataActor } as User) : actor,
+                  timestamp: readableTime(notification.createdAt),
+                  notificationCreatedAt: notification.createdAt,
+                  entityType: notification.entityType,
+                  entityPath:
+                     typeof notification.data?.entityPath === 'string'
+                        ? notification.data.entityPath
+                        : undefined,
+                  read: Boolean(notification.readAt),
+               };
             });
             set({ notifications, loading: false });
          } catch (error) {
             set({ notifications: [], selectedNotification: undefined, loading: false });
             toast.error(error instanceof Error ? error.message : 'Could not load notifications.');
          }
+      },
+      connectRealtime: (workspaceId) => {
+         if (typeof window === 'undefined') return () => undefined;
+         let closed = false;
+         let socket: WebSocket | undefined;
+         let reconnectTimer: number | undefined;
+         let heartbeatTimer: number | undefined;
+         let attempt = 0;
+
+         const connect = () => {
+            const stream = new URL(`${api}/notifications/stream`);
+            stream.protocol = stream.protocol === 'https:' ? 'wss:' : 'ws:';
+            stream.searchParams.set('workspaceId', workspaceId);
+            socket = new WebSocket(stream);
+            socket.onopen = () => {
+               attempt = 0;
+               heartbeatTimer = window.setInterval(() => {
+                  if (socket?.readyState === WebSocket.OPEN) socket.send('ping');
+               }, 25_000);
+            };
+            socket.onmessage = (event) => {
+               if (event.data === 'pong') return;
+               try {
+                  const payload = JSON.parse(event.data) as { type?: string };
+                  if (payload.type === 'notification.created') void get().loadNotifications();
+               } catch {
+                  // Ignore malformed data; the durable REST list remains the source of truth.
+               }
+            };
+            socket.onclose = () => {
+               if (heartbeatTimer) window.clearInterval(heartbeatTimer);
+               if (!closed) {
+                  const delay = Math.min(30_000, 1_000 * 2 ** attempt++);
+                  reconnectTimer = window.setTimeout(connect, delay);
+               }
+            };
+         };
+         connect();
+         return () => {
+            closed = true;
+            if (reconnectTimer) window.clearTimeout(reconnectTimer);
+            if (heartbeatTimer) window.clearInterval(heartbeatTimer);
+            socket?.close();
+         };
       },
       setSelectedNotification: (notification) => set({ selectedNotification: notification }),
       markAsRead: async (id) => {

@@ -18,6 +18,7 @@ import {
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { loadCurrentWorkspace } from '@/lib/workspaces';
 
 const ITEM_KEYS: Record<string, SidebarItemKey> = {
    'Inbox': 'inbox',
@@ -31,9 +32,22 @@ const DISABLED_ITEMS = new Set(['Reviews', 'Agent']);
 export function NavInbox() {
    const { orgId } = useParams<{ orgId: string }>();
    const { visibility, badgeStyle, order } = useSidebarPrefsStore();
-   const { getUnreadCount } = useNotificationsStore();
+   const { getUnreadCount, loadNotifications, connectRealtime } = useNotificationsStore();
    const [mounted, setMounted] = useState(false);
    useEffect(() => setMounted(true), []);
+
+   useEffect(() => {
+      let unsubscribe: () => void = () => undefined;
+      void loadCurrentWorkspace()
+         .then((workspace) => {
+            void loadNotifications();
+            unsubscribe = connectRealtime(workspace.id);
+         })
+         // The login page can render the sidebar briefly while the session is
+         // changing. The Inbox will retry after authentication succeeds.
+         .catch(() => undefined);
+      return () => unsubscribe();
+   }, [connectRealtime, loadNotifications, orgId]);
 
    const unread = mounted ? getUnreadCount() : 0;
 

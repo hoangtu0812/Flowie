@@ -11,6 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
 from ..db.session import get_session
+from ..services.notification_events import (
+    create_notification_batch,
+    issue_recipient_ids,
+    publish_notification_batches,
+    team_recipient_ids,
+)
 from .auth import _cuid, _utcnow, current_user
 from .native_projects import _date, _team_access, _workspace_access
 from .native_slas import resolve_deadline
@@ -589,7 +595,33 @@ async def create_issue(
             'identifier': f"{sequence['identifier']}-{sequence['issue_sequence']}",
             'title': payload.title.strip(),
         })
+    created_batch = await create_notification_batch(
+        db,
+        workspace_id=payload.workspaceId,
+        recipient_ids=await team_recipient_ids(db, payload.teamId),
+        actor=user,
+        event_type='issue.created',
+        entity_type='issue',
+        entity_id=issue_id,
+        title=payload.title.strip(),
+        message='created a new issue',
+        entity_path=f"/issue/{sequence['identifier']}-{sequence['issue_sequence']}",
+    )
+    assignment_batch = await create_notification_batch(
+        db,
+        workspace_id=payload.workspaceId,
+        recipient_ids={values['assigneeId']} if values.get('assigneeId') else set(),
+        actor=user,
+        event_type='issue.assignment',
+        entity_type='issue',
+        entity_id=issue_id,
+        title=payload.title.strip(),
+        message='assigned you to an issue',
+        entity_path=f"/issue/{sequence['identifier']}-{sequence['issue_sequence']}",
+        discord=False,
+    )
     await db.commit()
+    await publish_notification_batches(created_batch, assignment_batch)
     return {'data': await _issue_row(db, issue_id, payload.workspaceId, user['id'])}
 
 
@@ -1237,6 +1269,8 @@ async def update_issue(
 ) -> dict[str, dict[str, Any]]:
     issue = await _issue_row(db, issue_id, workspaceId, user['id'])
     values = payload.model_dump(exclude_unset=True)
+    previous_status_id = issue['statusId']
+    previous_assignee_id = issue['assignee']['id'] if issue.get('assignee') else None
     if 'statusId' in values and values['statusId'] is None:
         raise ApiError(400, 'statusId cannot be empty.', 'Bad Request')
     category = await _validate_references(db, workspaceId, issue['teamId'], values, creating=False)
@@ -1273,7 +1307,34 @@ async def update_issue(
     if values.get('assigneeId'):
         await db.execute(text('INSERT INTO issue_subscriptions (issue_id, user_id) VALUES (:issue_id, :user_id) ON CONFLICT DO NOTHING'), {'issue_id': issue_id, 'user_id': values['assigneeId']})
     await _write_activity(db, workspaceId, issue_id, user['id'], 'issue.updated', {'fields': list(values)})
+    recipients = await issue_recipient_ids(db, issue_id, previous_assignee_id)
+    status_batch = await create_notification_batch(
+        db,
+        workspace_id=workspaceId,
+        recipient_ids=recipients if values.get('statusId') and values.get('statusId') != previous_status_id else set(),
+        actor=user,
+        event_type='issue.status_changed',
+        entity_type='issue',
+        entity_id=issue_id,
+        title=issue['title'],
+        message='changed the status of an issue',
+        entity_path=f"/issue/{issue['identifier']}",
+    )
+    assignment_batch = await create_notification_batch(
+        db,
+        workspace_id=workspaceId,
+        recipient_ids={values['assigneeId']} if values.get('assigneeId') and values.get('assigneeId') != previous_assignee_id else set(),
+        actor=user,
+        event_type='issue.assignment',
+        entity_type='issue',
+        entity_id=issue_id,
+        title=issue['title'],
+        message='assigned you to an issue',
+        entity_path=f"/issue/{issue['identifier']}",
+        discord=False,
+    )
     await db.commit()
+    await publish_notification_batches(status_batch, assignment_batch)
     return {'data': await _issue_row(db, issue_id, workspaceId, user['id'])}
 
 
