@@ -41,6 +41,9 @@ export type LiveDocument = {
    title: string;
    content: string;
    icon: string;
+   sourceType: 'flowie' | 'upload' | 'link';
+   sourceUrl: string | null;
+   sourceAttachment: { id: string; filename: string; mimeType: string; size: number } | null;
    pinned: boolean;
    position: number;
    createdAt: string;
@@ -144,10 +147,16 @@ export function useLiveTeam(teamReference: string) {
          const context = requireContext();
          const response = await authenticatedFetch(
             `${api}/teams/${context.teamId}?${new URLSearchParams({ workspaceId: context.workspaceId })}`,
-            { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(data) }
+            {
+               method: 'PATCH',
+               headers: { 'content-type': 'application/json' },
+               body: JSON.stringify(data),
+            }
          );
          if (!response.ok) {
-            const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+            const payload = (await response.json().catch(() => null)) as {
+               message?: string;
+            } | null;
             throw new Error(payload?.message ?? 'Could not update team settings.');
          }
          setTeam(((await response.json()) as { data: LiveTeam }).data);
@@ -159,11 +168,14 @@ export function useLiveTeam(teamReference: string) {
       async (userId: string, role: 'LEAD' | 'MEMBER') => {
          const context = requireContext();
          const response = await authenticatedFetch(`${api}/teams/${context.teamId}/members`, {
-            method: 'POST', headers: { 'content-type': 'application/json' },
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ workspaceId: context.workspaceId, userId, role }),
          });
          if (!response.ok) {
-            const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+            const payload = (await response.json().catch(() => null)) as {
+               message?: string;
+            } | null;
             throw new Error(payload?.message ?? 'Could not add team member.');
          }
          reload();
@@ -176,7 +188,11 @@ export function useLiveTeam(teamReference: string) {
          const context = requireContext();
          const response = await authenticatedFetch(
             `${api}/teams/${context.teamId}/members/${userId}?${new URLSearchParams({ workspaceId: context.workspaceId })}`,
-            { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ role }) }
+            {
+               method: 'PATCH',
+               headers: { 'content-type': 'application/json' },
+               body: JSON.stringify({ role }),
+            }
          );
          if (!response.ok) throw new Error('Could not update team member.');
          reload();
@@ -198,15 +214,54 @@ export function useLiveTeam(teamReference: string) {
    );
 
    const createDocument = useCallback(
-      async (input: { title: string; folderId?: string; icon?: string; pinned?: boolean }) => {
+      async (input: {
+         title: string;
+         folderId?: string;
+         icon?: string;
+         pinned?: boolean;
+         sourceType?: 'flowie' | 'upload' | 'link';
+         sourceUrl?: string;
+      }) => {
          const context = requireContext();
          const response = await authenticatedFetch(`${api}/documents`, {
-            method: 'POST', headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ workspaceId: context.workspaceId, teamId: context.teamId, ...input }),
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+               workspaceId: context.workspaceId,
+               teamId: context.teamId,
+               ...input,
+            }),
          });
          if (!response.ok) {
-            const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+            const payload = (await response.json().catch(() => null)) as {
+               message?: string;
+            } | null;
             throw new Error(payload?.message ?? 'Could not create document.');
+         }
+         const document = ((await response.json()) as { data: LiveDocument }).data;
+         reload();
+         return document;
+      },
+      [reload, requireContext]
+   );
+
+   const uploadDocumentFile = useCallback(
+      async (documentId: string, file: File) => {
+         const context = requireContext();
+         const form = new FormData();
+         form.set('workspaceId', context.workspaceId);
+         form.set('entityType', 'document');
+         form.set('entityId', documentId);
+         form.set('file', file);
+         const response = await authenticatedFetch(`${api}/attachments`, {
+            method: 'POST',
+            body: form,
+         });
+         if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as {
+               message?: string;
+            } | null;
+            throw new Error(payload?.message ?? 'Could not upload document file.');
          }
          reload();
       },
@@ -217,8 +272,14 @@ export function useLiveTeam(teamReference: string) {
       async (name: string, icon = '📁') => {
          const context = requireContext();
          const response = await authenticatedFetch(`${api}/documents/folders`, {
-            method: 'POST', headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ workspaceId: context.workspaceId, teamId: context.teamId, name, icon }),
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+               workspaceId: context.workspaceId,
+               teamId: context.teamId,
+               name,
+               icon,
+            }),
          });
          if (!response.ok) throw new Error('Could not create document folder.');
          reload();
@@ -240,6 +301,7 @@ export function useLiveTeam(teamReference: string) {
       updateMember,
       removeMember,
       createDocument,
+      uploadDocumentFile,
       createFolder,
    };
 }

@@ -22,6 +22,7 @@ router = APIRouter(prefix='/api/v1/_native/attachments', tags=['native-attachmen
 public_router = APIRouter(prefix='/api/v1/attachments', tags=['attachments'])
 EntityType = Literal['issue', 'comment', 'project', 'project-update', 'document']
 MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+DOCUMENT_FILE_EXTENSIONS = ('.docx', '.pdf', '.md')
 
 
 async def _entity_team_id(db: AsyncSession, workspace_id: str, entity_type: EntityType, entity_id: str) -> str | None:
@@ -68,6 +69,8 @@ async def create_attachment(request: Request, workspaceId: str = Form(), entityT
     if len(body) > MAX_ATTACHMENT_BYTES:
         raise ApiError(400, 'Files may not exceed 10 MB.', 'Bad Request')
     filename = sub(r'[^a-zA-Z0-9._-]', '_', file.filename or 'attachment')[:180] or 'attachment'
+    if entityType == 'document' and not filename.lower().endswith(DOCUMENT_FILE_EXTENSIONS):
+        raise ApiError(400, 'Documents accept DOCX, PDF, or Markdown files only.', 'Bad Request')
     object_key = f'{workspaceId}/{user["id"]}/{token_urlsafe(18)}-{filename}'
     storage = MinioStorage(request.app.state.settings)
     await storage.put(object_key, body, file.content_type or 'application/octet-stream')

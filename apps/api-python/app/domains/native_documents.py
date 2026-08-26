@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -37,6 +38,8 @@ class CreateDocumentInput(BaseModel):
     title: str = Field(min_length=2, max_length=250)
     content: str = Field(default='', max_length=100000)
     icon: str | None = Field(default=None, min_length=1, max_length=32)
+    sourceType: Literal['flowie', 'upload', 'link'] = 'flowie'
+    sourceUrl: str | None = Field(default=None, max_length=2048)
     pinned: bool = False
     position: int | None = Field(default=None, ge=0)
 
@@ -46,6 +49,8 @@ class UpdateDocumentInput(BaseModel):
     title: str | None = Field(default=None, min_length=2, max_length=250)
     content: str | None = Field(default=None, max_length=100000)
     icon: str | None = Field(default=None, min_length=1, max_length=32)
+    sourceType: Literal['flowie', 'upload', 'link'] | None = None
+    sourceUrl: str | None = Field(default=None, max_length=2048)
     pinned: bool | None = None
     position: int | None = Field(default=None, ge=0)
 
@@ -68,7 +73,12 @@ def _document(row: Any) -> dict[str, Any]:
     return {
         'id': row['id'], 'workspaceId': row['workspace_id'], 'teamId': row['team_id'],
         'folderId': row['folder_id'], 'title': row['title'], 'content': row['content'],
-        'icon': row['icon'], 'pinned': row['pinned'], 'position': row['position'],
+        'icon': row['icon'], 'sourceType': row['source_type'], 'sourceUrl': row['source_url'],
+        'sourceAttachment': ({
+            'id': row['source_attachment_id'], 'filename': row['source_attachment_filename'],
+            'mimeType': row['source_attachment_mime_type'], 'size': row['source_attachment_size'],
+        } if row['source_attachment_id'] else None),
+        'pinned': row['pinned'], 'position': row['position'],
         'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
         'createdBy': {'id': row['created_by_id'], 'name': row['created_by_name'], 'avatarUrl': row['created_by_avatar_url']},
         'updatedBy': {'id': row['updated_by_id'], 'name': row['updated_by_name'], 'avatarUrl': row['updated_by_avatar_url']},
@@ -87,10 +97,19 @@ async def _documents(db: AsyncSession, workspace_id: str, team_id: str | None = 
     result = await db.execute(
         text(f'''SELECT d.*, creator.id AS created_by_id, creator.name AS created_by_name,
                         creator.avatar_url AS created_by_avatar_url, updater.id AS updated_by_id,
-                        updater.name AS updated_by_name, updater.avatar_url AS updated_by_avatar_url
+                        updater.name AS updated_by_name, updater.avatar_url AS updated_by_avatar_url,
+                        source_attachment.id AS source_attachment_id,
+                        source_attachment.filename AS source_attachment_filename,
+                        source_attachment.mime_type AS source_attachment_mime_type,
+                        source_attachment.size AS source_attachment_size
                  FROM documents d
                  JOIN users creator ON creator.id = d.created_by
                  JOIN users updater ON updater.id = d.updated_by
+                 LEFT JOIN LATERAL (
+                    SELECT id, filename, mime_type, size FROM attachments
+                    WHERE workspace_id = d.workspace_id AND entity_type = 'document' AND entity_id = d.id
+                    ORDER BY created_at ASC LIMIT 1
+                 ) source_attachment ON TRUE
                  WHERE {' AND '.join(filters)}
                  ORDER BY d.position ASC, d.created_at ASC, d.id ASC'''),
         params,
@@ -133,6 +152,16 @@ async def _resolve_folder(db: AsyncSession, workspace_id: str, team_id: str | No
     if not folder:
         raise ApiError(404, 'Document folder not found.', 'Not Found')
     return folder
+
+
+def _source_url(source_type: str, source_url: str | None) -> str | None:
+    value = source_url.strip() if source_url else None
+    if source_type == 'link':
+        if not value or urlparse(value).scheme not in {'http', 'https'}:
+            raise ApiError(400, 'A valid HTTP(S) link is required.', 'Bad Request')
+    elif value:
+        raise ApiError(400, 'Only linked documents may include a source URL.', 'Bad Request')
+    return value
 
 
 @router.get('')
@@ -194,8 +223,8 @@ async def create_document(payload: CreateDocumentInput, user: Any = Depends(curr
     if position is None and folder:
         position = (await db.execute(text('SELECT COALESCE(MAX(position), -1) + 1 FROM documents WHERE folder_id = :folder_id'), {'folder_id': folder['id']})).scalar_one()
     document_id, now = _cuid(), _utcnow()
-    await db.execute(text('''INSERT INTO documents (id, workspace_id, team_id, folder_id, title, content, icon, pinned, position, created_by, updated_by, created_at, updated_at)
-                            VALUES (:id, :workspace_id, :team_id, :folder_id, :title, :content, :icon, :pinned, :position, :user_id, :user_id, :now, :now)'''), {'id': document_id, 'workspace_id': payload.workspaceId, 'team_id': payload.teamId, 'folder_id': folder['id'] if folder else None, 'title': payload.title.strip(), 'content': payload.content, 'icon': payload.icon or '📄', 'pinned': payload.pinned, 'position': position or 0, 'user_id': user['id'], 'now': now})
+    await db.execute(text('''INSERT INTO documents (id, workspace_id, team_id, folder_id, title, content, icon, source_type, source_url, pinned, position, created_by, updated_by, created_at, updated_at)
+                            VALUES (:id, :workspace_id, :team_id, :folder_id, :title, :content, :icon, :source_type, :source_url, :pinned, :position, :user_id, :user_id, :now, :now)'''), {'id': document_id, 'workspace_id': payload.workspaceId, 'team_id': payload.teamId, 'folder_id': folder['id'] if folder else None, 'title': payload.title.strip(), 'content': payload.content, 'icon': payload.icon or '📄', 'source_type': payload.sourceType, 'source_url': _source_url(payload.sourceType, payload.sourceUrl), 'pinned': payload.pinned, 'position': position or 0, 'user_id': user['id'], 'now': now})
     await db.commit()
     document = await _document_by_id(db, document_id, payload.workspaceId)
     if not document:
@@ -211,8 +240,14 @@ async def update_document(document_id: str, payload: UpdateDocumentInput, worksp
     await _team_access(db, workspaceId, current['team_id'], user['id'])
     values = payload.model_dump(exclude_unset=True)
     folder = await _resolve_folder(db, workspaceId, current['team_id'], values['folderId']) if 'folderId' in values and values['folderId'] else None
-    columns = {'folderId': 'folder_id', 'title': 'title', 'content': 'content', 'icon': 'icon', 'pinned': 'pinned', 'position': 'position'}
+    columns = {'folderId': 'folder_id', 'title': 'title', 'content': 'content', 'icon': 'icon', 'sourceType': 'source_type', 'sourceUrl': 'source_url', 'pinned': 'pinned', 'position': 'position'}
     if values:
+        source_type = values.get('sourceType', current['source_type'])
+        if 'sourceType' in values or 'sourceUrl' in values:
+            values['sourceUrl'] = _source_url(
+                source_type,
+                values.get('sourceUrl', current['source_url'] if source_type == 'link' else None),
+            )
         params = {'id': document_id, 'updated_by': user['id'], 'now': _utcnow()}
         sets = []
         for field, column in columns.items():
