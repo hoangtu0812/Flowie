@@ -172,7 +172,7 @@ export function OrgSwitcher() {
                         {currentWorkspace ? (
                            <>
                               <DropdownMenuItem asChild>
-                                 <Link href={`/${currentWorkspace.slug}/settings/workspace`}>
+                                 <Link href={`/${currentWorkspace.slug}/settings`}>
                                     Settings
                                     <DropdownMenuShortcut>G then S</DropdownMenuShortcut>
                                  </Link>
