@@ -10,6 +10,13 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+### Changed
+
+- The workspace mark in the sidebar no longer paints a fixed orange square: a
+  workspace icon sits on the same neutral tile as every other icon in the app,
+  and initials take a colour derived from the workspace id so two workspaces
+  are told apart.
+
 ## [0.3.0] — 2026-08-26 22:00 +07
 
 ### Added

@@ -27,7 +27,9 @@ import {
    createWorkspace,
    loadWorkspaceMemberships,
    type WorkspaceMembership,
+   type WorkspaceSummary,
 } from '@/lib/workspaces';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
    Dialog,
@@ -39,6 +41,42 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+
+const WORKSPACE_MARK_COLORS = ['#5e6ad2', '#26b5ce', '#4cb782', '#f2994a', '#eb5757', '#8b5cf6'];
+
+const workspaceMark = (workspace?: { name: string; icon?: string | null }) =>
+   workspace?.icon?.trim() || workspace?.name.slice(0, 2).toUpperCase() || 'FL';
+
+/**
+ * An emoji sits on the same neutral tile every other icon in the app uses.
+ * Initials have nothing to stand on, so they take a colour derived from the
+ * workspace id: stable for one workspace and different between two, which a
+ * fixed orange square could never be.
+ */
+function WorkspaceMark({ workspace }: { workspace?: WorkspaceSummary }) {
+   const icon = workspace?.icon?.trim();
+   const seed = [...(workspace?.id ?? '')].reduce(
+      (total, character) => total + character.charCodeAt(0),
+      0
+   );
+   return (
+      <div
+         className={cn(
+            'flex aspect-square size-6 items-center justify-center rounded text-xs font-medium shrink-0',
+            icon ? 'bg-muted/50' : 'text-white'
+         )}
+         style={
+            icon
+               ? undefined
+               : {
+                    backgroundColor: WORKSPACE_MARK_COLORS[seed % WORKSPACE_MARK_COLORS.length],
+                 }
+         }
+      >
+         {workspaceMark(workspace)}
+      </div>
+   );
+}
 
 export function OrgSwitcher() {
    const { orgId } = useParams<{ orgId: string }>();
@@ -127,9 +165,6 @@ export function OrgSwitcher() {
          setCreating(false);
       }
    };
-   const workspaceMark = (workspace?: { name: string; icon?: string | null }) =>
-      workspace?.icon?.trim() || workspace?.name.slice(0, 2).toUpperCase() || 'FL';
-
    return (
       <>
          <SidebarMenu>
@@ -141,9 +176,7 @@ export function OrgSwitcher() {
                            size="lg"
                            className="h-8 p-1 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                         >
-                           <div className="flex aspect-square size-6 items-center justify-center rounded bg-orange-500 text-sidebar-primary-foreground">
-                              {workspaceMark(currentWorkspace)}
-                           </div>
+                           <WorkspaceMark workspace={currentWorkspace} />
                            <div className="grid flex-1 text-left text-sm leading-tight">
                               <span className="truncate font-semibold">
                                  {currentWorkspace?.name ??
@@ -209,9 +242,7 @@ export function OrgSwitcher() {
                               {memberships.map(({ workspace }) => (
                                  <DropdownMenuItem key={workspace.id} asChild>
                                     <Link href={workspaceHref(workspace.slug)}>
-                                       <div className="flex aspect-square size-6 items-center justify-center rounded bg-orange-500 text-sidebar-primary-foreground">
-                                          {workspaceMark(workspace)}
-                                       </div>
+                                       <WorkspaceMark workspace={workspace} />
                                        {workspace.name}
                                     </Link>
                                  </DropdownMenuItem>
