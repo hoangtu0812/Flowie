@@ -32,6 +32,7 @@ from .domains.native_notifications import router as notifications_router
 from .domains.native_views import router as views_router
 from .domains.native_projects import public_router as projects_router
 from .domains.native_projects import router as native_projects_router
+from .domains.native_releases import router as releases_router
 from .domains.labels import router as labels_router
 from .domains.teams import router as teams_router
 from .domains.users import router as users_router
@@ -97,6 +98,7 @@ def create_app(
     app.include_router(views_router)
     app.include_router(native_projects_router)
     app.include_router(projects_router)
+    app.include_router(releases_router)
     app.include_router(labels_router)
     app.include_router(teams_router)
     app.include_router(users_router)

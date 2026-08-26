@@ -1,6 +1,7 @@
 'use client';
 
 import { loadCurrentWorkspaceTeams } from '@/components/common/teams/team-types';
+import { authenticatedFetch } from '@/lib/workspaces';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -73,8 +74,8 @@ export default function ReleasesSettings() {
          const { workspaceId: id } = await loadCurrentWorkspaceTeams();
          const query = new URLSearchParams({ workspaceId: id });
          const [releaseResponse, projectResponse] = await Promise.all([
-            fetch(`${api}/releases?${query}`, { credentials: 'include' }),
-            fetch(`${api}/projects?${query}`, { credentials: 'include' }),
+            authenticatedFetch(`${api}/releases?${query}`),
+            authenticatedFetch(`${api}/projects?${query}`),
          ]);
          if (!releaseResponse.ok || !projectResponse.ok) {
             throw new Error('Could not load releases.');
@@ -142,7 +143,7 @@ export default function ReleasesSettings() {
       setFormError(undefined);
       try {
          const query = new URLSearchParams({ workspaceId });
-         const response = await fetch(
+         const response = await authenticatedFetch(
             editingId ? `${api}/releases/${editingId}?${query}` : `${api}/releases`,
             {
                method: editingId ? 'PATCH' : 'POST',
@@ -179,7 +180,7 @@ export default function ReleasesSettings() {
       setSaving(true);
       setFormError(undefined);
       try {
-         const response = await fetch(
+         const response = await authenticatedFetch(
             `${api}/releases/${editingId}?${new URLSearchParams({ workspaceId })}`,
             { method: 'DELETE', credentials: 'include' }
          );
