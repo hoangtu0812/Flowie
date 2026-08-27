@@ -47,6 +47,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Changed
 
+- Personal Agent skills now expose a detail dialog before installation, showing
+  their scope, behavior, and custom instructions when present.
 - Timeline bars now show their label over status color; project bars also fill
   by their calculated completion percentage.
 - Project timelines reserve the sub-issue expand column on every parent row,

@@ -64,6 +64,7 @@ export default function AgentPersonalization() {
    const [saving, setSaving] = useState(false);
    const [message, setMessage] = useState<string | null>(null);
    const [customSkill, setCustomSkill] = useState<CustomSkillDraft | null>(null);
+   const [skillDetails, setSkillDetails] = useState<SkillRecord | null>(null);
 
    useEffect(() => {
       let active = true;
@@ -171,6 +172,7 @@ export default function AgentPersonalization() {
          setSkills((current) =>
             current.map((item) => (item.key === skill.key ? payload.data! : item))
          );
+         setSkillDetails((current) => (current?.key === skill.key ? payload.data! : current));
       } catch (error) {
          setMessage(error instanceof Error ? error.message : 'Could not update skill.');
       } finally {
@@ -349,6 +351,14 @@ export default function AgentPersonalization() {
                            <p className="text-xs text-muted-foreground">{skill.description}</p>
                         </div>
                         <div className="flex items-center gap-1">
+                           <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={loading}
+                              onClick={() => setSkillDetails(skill)}
+                           >
+                              Details
+                           </Button>
                            {!skill.builtIn && skill.installed && (
                               <Button
                                  variant="ghost"
@@ -489,6 +499,58 @@ export default function AgentPersonalization() {
                   >
                      {saving ? 'Saving…' : 'Save skill'}
                   </Button>
+               </DialogFooter>
+            </DialogContent>
+         </Dialog>
+
+         <Dialog
+            open={skillDetails !== null}
+            onOpenChange={(open) => !open && setSkillDetails(null)}
+         >
+            <DialogContent className="sm:max-w-[560px]">
+               <DialogHeader>
+                  <DialogTitle>{skillDetails?.title}</DialogTitle>
+                  <DialogDescription>{skillDetails?.description}</DialogDescription>
+               </DialogHeader>
+               {skillDetails && (
+                  <div className="grid gap-4 text-sm">
+                     <div className="grid gap-1">
+                        <span className="font-medium">Scope</span>
+                        <span className="text-muted-foreground">
+                           Personal to your account. It is not shared with your workspace or team.
+                        </span>
+                     </div>
+                     {skillDetails.key === 'issue.defaults' && (
+                        <div className="grid gap-1">
+                           <span className="font-medium">How it works</span>
+                           <span className="text-muted-foreground">
+                              Sets a default priority and due-date offset when Agent drafts issues.
+                              Explicit values in your request always take precedence.
+                           </span>
+                        </div>
+                     )}
+                     {skillDetails.instructions && (
+                        <div className="grid gap-1">
+                           <span className="font-medium">Instructions</span>
+                           <p className="whitespace-pre-wrap rounded-md border bg-muted/40 p-3 text-muted-foreground">
+                              {skillDetails.instructions}
+                           </p>
+                        </div>
+                     )}
+                  </div>
+               )}
+               <DialogFooter>
+                  <Button variant="outline" onClick={() => setSkillDetails(null)} disabled={saving}>
+                     Close
+                  </Button>
+                  {skillDetails && !skillDetails.installed && (
+                     <Button
+                        disabled={saving}
+                        onClick={() => void changeSkill(skillDetails, 'install')}
+                     >
+                        {saving ? 'Installing…' : 'Install skill'}
+                     </Button>
+                  )}
                </DialogFooter>
             </DialogContent>
          </Dialog>
