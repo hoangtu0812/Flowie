@@ -4,7 +4,10 @@
 FROM node:22-bookworm-slim
 
 WORKDIR /app
-RUN corepack enable
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends openssl \
+    && rm -rf /var/lib/apt/lists/* \
+    && corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/database/package.json ./packages/database/package.json

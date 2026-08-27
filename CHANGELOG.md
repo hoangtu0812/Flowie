@@ -25,8 +25,13 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
   production environment, require a changelog entry in every commit, and
   require a verified deployment before a version tag is published.
 - Issue lists retain their column header and show a loading indicator while the
-  issue request is pending. Rows now show up to three label badges before
-  collapsing any remaining labels into a count.
+  issue request is pending. Rows show one primary label and a compact count for
+  any remaining labels.
+- Failed production migrations now emit the migration container log directly in
+  the deployment workflow, rather than only reporting a generic dependency
+  exit status.
+- The Prisma migration image installs OpenSSL explicitly so Prisma selects the
+  supported engine instead of relying on an unavailable compatibility library.
 
 ## [0.3.2] — 2026-08-26 23:59 +07
 

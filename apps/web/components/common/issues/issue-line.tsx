@@ -59,13 +59,10 @@ export function IssueLine({ issue, layoutId = false }: { issue: Issue; layoutId?
                    IssuesListHeader, so every cell renders even when empty. */}
                {displayProperties.labels && (
                   <div className={ISSUE_COLUMN.labels}>
-                     <LabelBadge
-                        label={issue.labels.slice(0, 3)}
-                        className="max-w-[72px] truncate"
-                     />
-                     {issue.labels.length > 3 && (
+                     <LabelBadge label={issue.labels.slice(0, 1)} />
+                     {issue.labels.length > 1 && (
                         <span className="text-xs text-muted-foreground shrink-0">
-                           +{issue.labels.length - 3}
+                           +{issue.labels.length - 1}
                         </span>
                      )}
                   </div>

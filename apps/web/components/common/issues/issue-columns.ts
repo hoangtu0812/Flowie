@@ -4,7 +4,7 @@
  * drift apart and leave the labels hanging over the wrong column.
  */
 export const ISSUE_COLUMN = {
-   labels: 'hidden lg:flex items-center gap-1 w-[260px] shrink-0 pl-2 overflow-hidden',
+   labels: 'hidden lg:flex items-center gap-1 w-[160px] shrink-0 pl-2 overflow-hidden',
    project: 'hidden xl:flex items-center w-[120px] shrink-0 pl-2 overflow-hidden',
    cycle: 'hidden xl:flex items-center w-[90px] shrink-0 pl-2',
    created: 'hidden sm:flex items-center w-[80px] shrink-0 pl-2',

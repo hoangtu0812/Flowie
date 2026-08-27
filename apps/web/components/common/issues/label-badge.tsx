@@ -1,18 +1,14 @@
 import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
 import { LabelInterface } from '@/mock-data/labels';
 
-export function LabelBadge({ label, className }: { label: LabelInterface[]; className?: string }) {
+export function LabelBadge({ label }: { label: LabelInterface[] }) {
    return (
       <>
          {label.map((l) => (
             <Badge
                key={l.id}
                variant="outline"
-               className={cn(
-                  'gap-1.5 rounded-full text-muted-foreground bg-background max-w-full',
-                  className
-               )}
+               className="gap-1.5 rounded-full text-muted-foreground bg-background max-w-full"
             >
                <span
                   className="size-1.5 rounded-full"

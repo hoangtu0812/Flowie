@@ -73,7 +73,11 @@ jobs:
             exit 1
           fi
 
-          docker compose --env-file .env.production --profile app up -d --force-recreate --remove-orphans
+          if ! docker compose --env-file .env.production --profile app up -d --force-recreate --remove-orphans; then
+            # Compose reports dependency exit status without the migration engine diagnostic.
+            docker compose --env-file .env.production --profile app logs --tail=200 migrate || true
+            exit 1
+          fi
 
       - name: Verify API readiness
         shell: bash
