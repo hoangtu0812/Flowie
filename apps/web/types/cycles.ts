@@ -15,10 +15,13 @@ export interface Cycle {
    id: string;
    number: number;
    name: string;
+   description?: string;
    teamId: string;
    status: CycleStatus;
    startDate: string;
    endDate: string;
+   scheduleStartDate?: string;
+   scheduleEndDate?: string;
    capacity: number;
    scope: number;
    scopeDelta: number;

@@ -4,6 +4,8 @@ import { Cycle, cycleStatusLabel } from '@/types/cycles';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { Pencil } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { CapacityRing } from './capacity-ring';
 
 export function CyclePlayIcon({ className }: { className?: string }) {
@@ -25,13 +27,14 @@ export function CyclePlayIcon({ className }: { className?: string }) {
 
 interface CycleLineProps {
    cycle: Cycle;
+   onEdit: () => void;
 }
 
 /**
  * One row of the cycles timeline. Current / upcoming cycles link to their
  * dedicated issue views ("/cycle/active" and "/cycle/upcoming").
  */
-export default function CycleLine({ cycle }: CycleLineProps) {
+export default function CycleLine({ cycle, onEdit }: CycleLineProps) {
    const { orgId, teamId } = useParams<{ orgId: string; teamId: string }>();
 
    const href =
@@ -41,14 +44,37 @@ export default function CycleLine({ cycle }: CycleLineProps) {
            ? `/${orgId}/team/${teamId}/cycle/upcoming`
            : undefined;
 
-   const content = (
-      <div className="w-full flex items-center justify-between gap-4 px-6 h-12 hover:bg-sidebar/50 rounded-md">
-         <div className="flex items-center gap-3 min-w-0">
-            <CyclePlayIcon />
-            <span className="text-sm font-medium truncate">{cycle.name}</span>
-         </div>
+   const primary = (
+      <div className="flex items-center gap-3 min-w-0">
+         <CyclePlayIcon />
+         <span className="text-sm font-medium truncate">{cycle.name}</span>
+      </div>
+   );
 
+   return (
+      <div className="w-full flex items-center justify-between gap-4 px-6 h-12 hover:bg-sidebar/50 rounded-md">
+         {href ? (
+            <Link href={href} className="min-w-0">
+               {primary}
+            </Link>
+         ) : (
+            primary
+         )}
          <div className="flex items-center gap-3 sm:gap-6 shrink-0">
+            <Button
+               type="button"
+               variant="ghost"
+               size="xxs"
+               className="text-muted-foreground"
+               onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onEdit();
+               }}
+               aria-label={`Edit ${cycle.name}`}
+            >
+               <Pencil className="size-3.5" />
+            </Button>
             <span className="text-xs px-2 py-1 rounded-md bg-accent text-muted-foreground whitespace-nowrap">
                {cycleStatusLabel[cycle.status]}
             </span>
@@ -81,14 +107,4 @@ export default function CycleLine({ cycle }: CycleLineProps) {
          </div>
       </div>
    );
-
-   if (href) {
-      return (
-         <Link href={href} className="block w-full">
-            {content}
-         </Link>
-      );
-   }
-
-   return content;
 }

@@ -18,8 +18,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
   status, project throughput, workload in mandays, and focused issue drill-ins
   respond to its filters.
 - Issues now record estimated and actual effort in fractional mandays. Both
-  values are editable from the issue properties panel, shown alongside the
-  planned Start → End window in issue lists, and preserved when the database
+  values are editable from the issue properties panel, shown as dedicated
+  columns beside the planned issue window in lists, and preserved when the database
   migration promotes existing whole-day estimates.
 - Issues now support independent Start date and Target end date schedule
   boundaries in addition to their existing Due date. The issue detail sidebar
@@ -75,6 +75,13 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Changed
 
+- Cycle status now reconciles from its Start and End dates whenever a team
+  cycle view is loaded: a started cycle is Current, a future cycle is Upcoming,
+  and a passed end date is Completed. Each cycle row now exposes an editor for
+  its schedule, so correcting dates immediately corrects its computed state.
+- Issue lists now present Start date, Target end date, estimated effort, and
+  actual effort as four separately configurable columns instead of combining
+  dates and manday values into two cells.
 - Agent capability and help questions now receive a normal reply in the
   requester's language instead of an empty proposal that cannot be accepted.
   Proposal cards appear only when Agent has drafted at least one project or

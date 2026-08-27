@@ -12,8 +12,14 @@ export function IssuesListHeader() {
          <div className="flex-1 min-w-0">Title</div>
          {displayProperties.labels && <div className={ISSUE_COLUMN.labels}>Labels</div>}
          {displayProperties.project && <div className={ISSUE_COLUMN.project}>Project</div>}
-         {displayProperties.schedule && <div className={ISSUE_COLUMN.schedule}>Start → End</div>}
-         {displayProperties.effort && <div className={ISSUE_COLUMN.effort}>Effort (mandays)</div>}
+         {displayProperties.startDate && <div className={ISSUE_COLUMN.startDate}>Start</div>}
+         {displayProperties.targetDate && <div className={ISSUE_COLUMN.targetDate}>End</div>}
+         {displayProperties.estimatedEffort && (
+            <div className={ISSUE_COLUMN.estimatedEffort}>Est. effort</div>
+         )}
+         {displayProperties.actualEffort && (
+            <div className={ISSUE_COLUMN.actualEffort}>Act. effort</div>
+         )}
          {displayProperties.cycle && <div className={ISSUE_COLUMN.cycle}>Cycle</div>}
          {displayProperties.created && <div className={ISSUE_COLUMN.created}>Created</div>}
          {displayProperties.dueDate && <div className={ISSUE_COLUMN.dueDate}>Due date</div>}

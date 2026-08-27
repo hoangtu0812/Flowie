@@ -75,14 +75,26 @@ export function IssueLine({ issue, layoutId = false }: { issue: Issue; layoutId?
                      {issue.project && <ProjectBadge project={issue.project} />}
                   </div>
                )}
-               {displayProperties.schedule && (
-                  <div className={cn(ISSUE_COLUMN.schedule, 'text-xs text-muted-foreground')}>
-                     {formatScheduleDate(issue.startDate)} → {formatScheduleDate(issue.targetDate)}
+               {displayProperties.startDate && (
+                  <div className={cn(ISSUE_COLUMN.startDate, 'text-xs text-muted-foreground')}>
+                     {formatScheduleDate(issue.startDate)}
                   </div>
                )}
-               {displayProperties.effort && (
-                  <div className={cn(ISSUE_COLUMN.effort, 'text-xs text-muted-foreground')}>
-                     Est {issue.estimatedEffort ?? '—'} · Act {issue.actualEffort ?? '—'}
+               {displayProperties.targetDate && (
+                  <div className={cn(ISSUE_COLUMN.targetDate, 'text-xs text-muted-foreground')}>
+                     {formatScheduleDate(issue.targetDate)}
+                  </div>
+               )}
+               {displayProperties.estimatedEffort && (
+                  <div
+                     className={cn(ISSUE_COLUMN.estimatedEffort, 'text-xs text-muted-foreground')}
+                  >
+                     {issue.estimatedEffort ?? '—'}
+                  </div>
+               )}
+               {displayProperties.actualEffort && (
+                  <div className={cn(ISSUE_COLUMN.actualEffort, 'text-xs text-muted-foreground')}>
+                     {issue.actualEffort ?? '—'}
                   </div>
                )}
                {displayProperties.cycle && (

@@ -139,6 +139,48 @@ def _validate_dates(start_date: datetime | None, end_date: datetime | None) -> N
         raise ApiError(400, 'Cycle end date must be after the start date.', 'Bad Request')
 
 
+def _scheduled_status(
+    status: CycleStatus,
+    start_date: datetime | None,
+    end_date: datetime | None,
+) -> CycleStatus:
+    """Resolve a non-terminal cycle state from its calendar boundaries."""
+    if status == 'CANCELED':
+        return status
+    today = _day(_utcnow())
+    if end_date and _day(end_date) < today:
+        return 'COMPLETED'
+    if start_date and _day(start_date) <= today:
+        return 'ACTIVE'
+    return 'UPCOMING'
+
+
+async def _reconcile_schedule_statuses(
+    db: AsyncSession, workspace_id: str, team_id: str
+) -> None:
+    """Persist date-driven state changes so filtered Cycle views remain consistent."""
+    result = await db.execute(
+        text(
+            '''SELECT id, status, start_date, end_date
+               FROM cycles
+               WHERE workspace_id = :workspace_id AND team_id = :team_id
+                 AND status IN ('UPCOMING', 'ACTIVE')'''
+        ),
+        {'workspace_id': workspace_id, 'team_id': team_id},
+    )
+    updates = []
+    for cycle in result.mappings().all():
+        resolved = _scheduled_status(cycle['status'], cycle['start_date'], cycle['end_date'])
+        if resolved != cycle['status']:
+            updates.append({'id': cycle['id'], 'status': resolved, 'updated_at': _utcnow()})
+    if updates:
+        await db.execute(
+            text('UPDATE cycles SET status = :status, updated_at = :updated_at WHERE id = :id'),
+            updates,
+        )
+        await db.commit()
+
+
 @router.get('')
 @public_router.get('')
 async def list_cycles(
@@ -150,6 +192,7 @@ async def list_cycles(
 ) -> dict[str, list[dict[str, Any]]]:
     await _workspace_access(db, workspaceId, user['id'])
     await _team_access(db, workspaceId, teamId, user['id'])
+    await _reconcile_schedule_statuses(db, workspaceId, teamId)
     query = '''SELECT id FROM cycles WHERE workspace_id = :workspace_id AND team_id = :team_id'''
     params: dict[str, Any] = {'workspace_id': workspaceId, 'team_id': teamId}
     # PostgreSQL cannot infer the type of a nullable bind reused in an
@@ -175,6 +218,7 @@ async def create_cycle(
     start_date, end_date = _date(payload.startDate), _date(payload.endDate)
     _validate_dates(start_date, end_date)
     cycle_id, now = _cuid(), _utcnow()
+    status = _scheduled_status(payload.status, start_date, end_date)
     await db.execute(
         text(
             '''INSERT INTO cycles (id, workspace_id, team_id, name, description, status, start_date, end_date, created_at, updated_at)
@@ -182,7 +226,7 @@ async def create_cycle(
         ),
         {
             'id': cycle_id, 'workspace_id': payload.workspaceId, 'team_id': payload.teamId,
-            'name': payload.name.strip(), 'description': payload.description, 'status': payload.status,
+            'name': payload.name.strip(), 'description': payload.description, 'status': status,
             'start_date': start_date, 'end_date': end_date, 'now': now,
         },
     )
@@ -191,6 +235,7 @@ async def create_cycle(
 
 
 @router.patch('/{cycle_id}')
+@public_router.patch('/{cycle_id}')
 async def update_cycle(
     cycle_id: str,
     payload: UpdateCycleInput,
@@ -203,7 +248,16 @@ async def update_cycle(
     start_date = _date(values['startDate']) if 'startDate' in values else current['startDate']
     end_date = _date(values['endDate']) if 'endDate' in values else current['endDate']
     _validate_dates(start_date, end_date)
-    columns = {'name': 'name', 'description': 'description', 'status': 'status', 'startDate': 'start_date', 'endDate': 'end_date'}
+    requested_status = values.get('status', current['status'])
+    schedule_changed = 'startDate' in values or 'endDate' in values
+    resolved_status = (
+        current['status']
+        if not schedule_changed and 'status' not in values
+        else requested_status
+        if values.get('status') in {'COMPLETED', 'CANCELED'}
+        else _scheduled_status(requested_status, start_date, end_date)
+    )
+    columns = {'name': 'name', 'description': 'description', 'startDate': 'start_date', 'endDate': 'end_date'}
     sets, params = [], {'cycle_id': cycle_id, 'now': _utcnow()}
     for field, column in columns.items():
         if field in values:
@@ -211,6 +265,9 @@ async def update_cycle(
             if field == 'name' and isinstance(params[field], str):
                 params[field] = params[field].strip()
             sets.append(f'{column} = :{field}')
+    if resolved_status != current['status']:
+        params['status'] = resolved_status
+        sets.append('status = :status')
     if sets:
         await db.execute(text(f"UPDATE cycles SET {', '.join(sets)}, updated_at = :now WHERE id = :cycle_id"), params)
         await db.commit()

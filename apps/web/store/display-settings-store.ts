@@ -12,8 +12,10 @@ export type DisplayPropertyKey =
    | 'assignee'
    | 'labels'
    | 'project'
-   | 'schedule'
-   | 'effort'
+   | 'startDate'
+   | 'targetDate'
+   | 'estimatedEffort'
+   | 'actualEffort'
    | 'dueDate'
    | 'created'
    | 'cycle';
@@ -25,8 +27,10 @@ export const DISPLAY_PROPERTIES: { key: DisplayPropertyKey; label: string }[] = 
    { key: 'priority', label: 'Priority' },
    { key: 'labels', label: 'Labels' },
    { key: 'project', label: 'Project' },
-   { key: 'schedule', label: 'Schedule' },
-   { key: 'effort', label: 'Effort' },
+   { key: 'startDate', label: 'Start date' },
+   { key: 'targetDate', label: 'End date' },
+   { key: 'estimatedEffort', label: 'Est. effort' },
+   { key: 'actualEffort', label: 'Act. effort' },
    { key: 'dueDate', label: 'Due date' },
    { key: 'created', label: 'Created' },
    { key: 'cycle', label: 'Cycle' },
@@ -39,8 +43,10 @@ const DEFAULT_DISPLAY_PROPERTIES: Record<DisplayPropertyKey, boolean> = {
    assignee: true,
    labels: true,
    project: true,
-   schedule: true,
-   effort: true,
+   startDate: true,
+   targetDate: true,
+   estimatedEffort: true,
+   actualEffort: true,
    dueDate: true,
    created: true,
    cycle: false,
@@ -103,20 +109,23 @@ export const useDisplaySettingsStore = create<DisplaySettingsState>()(
       {
          name: 'display-settings',
          storage: createJSONStorage(() => localStorage),
-         version: 2,
-         // New list columns must be enabled for an existing browser because
-         // persisted display settings otherwise retain no keys for them.
+         version: 3,
+         // Keep a user's visibility choice when the combined schedule and
+         // effort columns are promoted to independently configurable fields.
          migrate: (persisted, version) => {
             const state = persisted as Partial<DisplaySettingsState> | undefined;
-            if (!state || version >= 2) return state as DisplaySettingsState;
+            if (!state || version >= 3) return state as DisplaySettingsState;
+            const legacyProperties = state.displayProperties as Record<string, boolean> | undefined;
             return {
                ...state,
                displayProperties: {
                   ...DEFAULT_DISPLAY_PROPERTIES,
-                  ...state.displayProperties,
+                  ...legacyProperties,
                   dueDate: true,
-                  schedule: true,
-                  effort: true,
+                  startDate: legacyProperties?.schedule ?? true,
+                  targetDate: legacyProperties?.schedule ?? true,
+                  estimatedEffort: legacyProperties?.effort ?? true,
+                  actualEffort: legacyProperties?.effort ?? true,
                },
             } as DisplaySettingsState;
          },
