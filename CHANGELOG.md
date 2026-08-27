@@ -66,6 +66,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Changed
 
+- Agent capability and help questions now receive a normal reply in the
+  requester's language instead of an empty proposal that cannot be accepted.
+  Proposal cards appear only when Agent has drafted at least one project or
+  issue for review.
 - Initiative list rows now let workspace managers change an initiative's
   priority or owner directly, using the same persisted API update path as the
   initiative detail view. The list refreshes after a successful change and

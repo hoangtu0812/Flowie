@@ -151,7 +151,7 @@ function DraftPlan({
    onAccept: () => void;
 }) {
    const proposal = message.proposal;
-   if (!proposal) return null;
+   if (!proposal || (proposal.projects.length === 0 && proposal.issues.length === 0)) return null;
    const accepted = Boolean(message.appliedAt);
 
    return (
