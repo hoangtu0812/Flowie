@@ -12,6 +12,9 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- The web application now includes the Astryx Design core, neutral theme,
+  StyleX, and CLI foundations. Its generated agent conventions are committed
+  with the application to guide future Astryx-based UI work.
 - `Write with Agent` on the project Activity composer drafts an update or a
   comment from the project's own record — status, health, lead, target date,
   issue progress, open issues, milestones, and the last few updates. Anything
