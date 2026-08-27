@@ -1,5 +1,6 @@
 'use client';
 
+import { AttachmentImage } from '@/components/common/attachment-image';
 import { cn } from '@/lib/utils';
 import { ContentBlock } from '@/mock-data/issue-details';
 import { useIssuesStore } from '@/store/issues-store';
@@ -9,14 +10,19 @@ import { useParams } from 'next/navigation';
 import { Fragment } from 'react';
 
 /**
- * Lightweight inline formatting: `code` spans and **bold** runs.
+ * Lightweight inline formatting: `code` spans, **bold** runs and the
+ * `![alt](url)` images an editor writes when a screenshot is pasted.
  */
 export function InlineText({ text }: { text: string }) {
-   const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*)/g);
+   const parts = text.split(/(!\[[^\]]*\]\([^)\s]+\)|`[^`]+`|\*\*[^*]+\*\*)/g);
 
    return (
       <>
          {parts.map((part, index) => {
+            const image = /^!\[([^\]]*)\]\(([^)\s]+)\)$/.exec(part);
+            if (image) {
+               return <AttachmentImage key={index} src={image[2]} alt={image[1] || 'Image'} />;
+            }
             if (part.startsWith('`') && part.endsWith('`')) {
                return (
                   <code

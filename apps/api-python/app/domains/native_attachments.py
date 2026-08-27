@@ -24,6 +24,7 @@ router = APIRouter(prefix='/api/v1/_native/attachments', tags=['native-attachmen
 public_router = APIRouter(prefix='/api/v1/attachments', tags=['attachments'])
 EntityType = Literal['issue', 'comment', 'project', 'project-update', 'document']
 MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+INLINE_IMAGE_MIME_TYPES = frozenset({'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif'})
 DOCUMENT_FILE_EXTENSIONS = ('.docx', '.pdf', '.md')
 
 
@@ -109,6 +110,20 @@ async def preview_attachment(attachment_id: str, request: Request, user: Any = D
     filename = row['filename']
     suffix = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
     safe_filename = filename.replace('"', '')
+
+    # Pasted screenshots are stored like any other attachment, so the preview
+    # route is what lets a description or comment embed them. SVG stays out:
+    # it can carry script, and nothing pasted from a clipboard needs it.
+    if row['mime_type'] in INLINE_IMAGE_MIME_TYPES:
+        return Response(
+            body,
+            media_type=row['mime_type'],
+            headers={
+                'content-disposition': f'inline; filename="{safe_filename}"',
+                'x-content-type-options': 'nosniff',
+                'cache-control': 'private, max-age=3600',
+            },
+        )
 
     if suffix == 'pdf' or row['mime_type'] == 'application/pdf':
         return Response(

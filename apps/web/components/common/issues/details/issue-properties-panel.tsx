@@ -12,7 +12,16 @@ import {
 import { IssueDetail } from '@/mock-data/issue-details';
 import { Issue } from '@/mock-data/issues';
 import { useIssuesStore } from '@/store/issues-store';
-import { Ban, Box, CalendarDays, Check, GitPullRequestArrow, Plus } from 'lucide-react';
+import {
+   Ban,
+   Box,
+   CalendarDays,
+   CalendarPlus,
+   Check,
+   GitPullRequestArrow,
+   Plus,
+} from 'lucide-react';
+import { format } from 'date-fns';
 import { AssigneeUser } from '../assignee-user';
 import { LabelBadge } from '../label-badge';
 import { PrioritySelector } from '../priority-selector';
@@ -23,6 +32,11 @@ interface IssuePropertiesPanelProps {
    issue: Issue;
    detail: IssueDetail;
 }
+
+const formatDay = (value: string | undefined) => {
+   const date = value ? new Date(value) : undefined;
+   return date && !Number.isNaN(date.getTime()) ? format(date, 'dd/MM/yyyy') : '—';
+};
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
    return (
@@ -86,18 +100,25 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
                   <AssigneeUser user={issue.assignee} issueId={issue.id} />
                   <span className="text-sm">{issue.assignee ? issue.assignee.name : 'Assign'}</span>
                </div>
+               {/* Created and due date sit next to each other, so each one is
+                   labelled — an unlabelled date reads as either. */}
                <label className="flex items-center gap-2 mt-0.5 text-sm cursor-pointer">
                   <CalendarDays className="size-4 text-muted-foreground shrink-0" />
-                  <span className="sr-only">Due date</span>
+                  <span className="w-20 shrink-0 text-xs text-muted-foreground">Due date</span>
                   <input
                      type="date"
                      value={issue.dueDate?.slice(0, 10) ?? ''}
                      onChange={(event) =>
                         void updateIssueDueDate(issue.id, event.target.value || undefined)
                      }
-                     className="h-7 min-w-0 bg-transparent text-sm outline-none"
+                     className="h-7 min-w-0 flex-1 bg-transparent text-sm outline-none"
                   />
                </label>
+               <div className="flex items-center gap-2 mt-0.5 text-sm">
+                  <CalendarPlus className="size-4 text-muted-foreground shrink-0" />
+                  <span className="w-20 shrink-0 text-xs text-muted-foreground">Created</span>
+                  <span className="min-w-0 flex-1 truncate">{formatDay(issue.createdAt)}</span>
+               </div>
                <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                      <button

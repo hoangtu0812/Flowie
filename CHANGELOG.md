@@ -12,6 +12,11 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Descriptions and issue comments accept an image pasted from the clipboard.
+  The screenshot is uploaded as an issue attachment and embedded where the
+  caret was; embedded images are fetched with the session so private
+  attachments stay private. The `Show sub-issues` display option now takes
+  effect on the issue lists instead of being inert.
 - Issue details now expose an editable due date and a Cycle selector. Cycles
   are intentional team-scoped planning containers; adding an issue to one is
   always a user action and is never assigned automatically.
@@ -85,6 +90,15 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 - Workspace AI provider keys are encrypted before storage, excluded from all
   API responses, and require `AGENT_SECRETS_ENCRYPTION_KEY` on the API service.
+
+### Fixed
+
+- Sub-issues are no longer missing from every issue list. The issue list query
+  excluded any issue that had a parent, so a sub-issue never appeared under its
+  team and opening it by identifier reported `Issue not found` — the detail
+  page resolves an issue from that same list.
+- The issue properties panel labels its dates and shows the created date next
+  to the due date; a single unlabelled date field read as either one.
 
 ## [0.3.2] — 2026-08-26 23:59 +07
 

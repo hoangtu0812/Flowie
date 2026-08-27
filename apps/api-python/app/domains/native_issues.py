@@ -454,7 +454,7 @@ async def list_issues(
     result = await db.execute(
         text(
             f'''SELECT i.id FROM issues i JOIN issue_statuses s ON s.id = i.status_id
-                WHERE i.workspace_id = :workspace_id AND i.archived_at IS NULL AND i.parent_issue_id IS NULL
+                WHERE i.workspace_id = :workspace_id AND i.archived_at IS NULL
                 {team_clause} {category_clause} {scope_clauses.get(scope, '')}
                 ORDER BY i.updated_at DESC, i.created_at DESC'''
         ),

@@ -2,6 +2,7 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { useImagePaste } from '@/hooks/use-image-paste';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import { ActivityItem, ContentBlock } from '@/mock-data/issue-details';
 import { User } from '@/mock-data/users';
@@ -11,7 +12,6 @@ import {
    GitPullRequestArrow,
    Link2,
    PenLine,
-   Plus,
    RefreshCcw,
    SmilePlus,
    Tag,
@@ -176,6 +176,14 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
       };
    }, [issueId]);
 
+   const { onPaste: onPasteImage, uploading: uploadingImage } = useImagePaste({
+      workspaceId,
+      entityType: 'issue',
+      entityId: issueId,
+      value: draft,
+      onChange: setDraft,
+   });
+
    const submitComment = async () => {
       const content = draft.trim();
       if (!content || !workspaceId) return;
@@ -214,6 +222,7 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
             <textarea
                value={draft}
                onChange={(event) => setDraft(event.target.value)}
+               onPaste={onPasteImage}
                onKeyDown={(event) => {
                   if (event.key === 'Enter' && (event.metaKey || event.ctrlKey))
                      void submitComment();
@@ -223,11 +232,13 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
                className="w-full resize-none bg-transparent outline-none text-sm placeholder:text-muted-foreground"
             />
             <div className="flex items-center justify-between">
-               <Plus className="size-4 text-muted-foreground" />
+               <span className="text-xs text-muted-foreground">
+                  {uploadingImage ? 'Uploading image…' : 'Paste a screenshot to attach it'}
+               </span>
                <Button
                   size="xs"
                   onClick={() => void submitComment()}
-                  disabled={!draft.trim() || !workspaceId}
+                  disabled={!draft.trim() || !workspaceId || uploadingImage}
                >
                   Comment
                </Button>

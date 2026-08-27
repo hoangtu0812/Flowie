@@ -2,6 +2,7 @@
 
 import { Issue } from '@/mock-data/issues';
 import { Status, StatusCategory } from '@/mock-data/status';
+import { useDisplaySettingsStore } from '@/store/display-settings-store';
 import { useFilterStore } from '@/store/filter-store';
 import { useIssuesStore } from '@/store/issues-store';
 import { applyIssueFilters } from './issue-filter-columns';
@@ -27,6 +28,7 @@ export default function AllIssues({ categories }: AllIssuesProps) {
    const { isSearchOpen, searchQuery } = useSearchStore();
    const { viewType } = useViewStore();
    const { filters } = useFilterStore();
+   const showSubIssues = useDisplaySettingsStore((state) => state.showSubIssues);
    const { issues, statuses: workflowStatuses, loading, loadIssues } = useIssuesStore();
    const { openPanel } = useRightPanelStore();
    const params = useParams<{ teamId?: string | string[] }>();
@@ -55,11 +57,14 @@ export default function AllIssues({ categories }: AllIssuesProps) {
          : liveStatuses;
    }, [issues, workflowStatuses, categories]);
 
-   const scopedIssues = useMemo<Issue[]>(
-      () =>
-         categories ? issues.filter((issue) => categories.includes(issue.status.category)) : issues,
-      [issues, categories]
-   );
+   const scopedIssues = useMemo<Issue[]>(() => {
+      // Sub-issues are ordinary issues in the list; the Display option decides
+      // whether they show alongside their parent or stay tucked under it.
+      const visible = showSubIssues ? issues : issues.filter((issue) => !issue.parentIssueId);
+      return categories
+         ? visible.filter((issue) => categories.includes(issue.status.category))
+         : visible;
+   }, [issues, categories, showSubIssues]);
 
    const displayedIssues = useMemo(
       () => applyIssueFilters(scopedIssues, filters),
