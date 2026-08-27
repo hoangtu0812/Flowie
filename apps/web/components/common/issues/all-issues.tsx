@@ -10,7 +10,7 @@ import { useRightPanelStore } from '@/store/right-panel-store';
 import { useSearchStore } from '@/store/search-store';
 import { useViewStore } from '@/store/view-store';
 import { useParams } from 'next/navigation';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { GroupedIssuesView } from './grouped-issues-view';
 import { InsightsPanel } from './insights-panel';
 import { SearchIssues } from './search-issues';
@@ -27,16 +27,23 @@ export default function AllIssues({ categories }: AllIssuesProps) {
    const { isSearchOpen, searchQuery } = useSearchStore();
    const { viewType } = useViewStore();
    const { filters } = useFilterStore();
-   const { issues, statuses: workflowStatuses, loadIssues } = useIssuesStore();
+   const { issues, statuses: workflowStatuses, loading, loadIssues } = useIssuesStore();
    const { openPanel } = useRightPanelStore();
    const params = useParams<{ teamId?: string | string[] }>();
    const teamIdentifier = Array.isArray(params.teamId) ? params.teamId[0] : params.teamId;
+   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
    const isSearching = isSearchOpen && searchQuery.trim() !== '';
    const isViewTypeGrid = viewType === 'grid';
 
    useEffect(() => {
-      void loadIssues(teamIdentifier);
+      let active = true;
+      void loadIssues(teamIdentifier).finally(() => {
+         if (active) setIsInitialLoad(false);
+      });
+      return () => {
+         active = false;
+      };
    }, [loadIssues, teamIdentifier]);
 
    const statuses = useMemo<Status[]>(() => {
@@ -79,6 +86,7 @@ export default function AllIssues({ categories }: AllIssuesProps) {
                   totalIssues={scopedIssues}
                   statuses={statuses}
                   isViewTypeGrid={isViewTypeGrid}
+                  loading={loading || isInitialLoad}
                />
             </div>
 

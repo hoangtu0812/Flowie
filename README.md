@@ -97,6 +97,11 @@ pnpm docker:up         # start existing images without build/pull
 pnpm docker:down       # stop the application profile
 ```
 
+Every Docker application start runs the committed Prisma migrations in the
+one-shot `migrate` service before the FastAPI or worker containers start. A
+failed migration blocks the deployment; do not manually start the API to
+bypass it.
+
 Never commit `.env`, credentials, tokens or webhook URLs.
 
 ## 🗺️ Development rules
@@ -105,6 +110,9 @@ Never commit `.env`, credentials, tokens or webhook URLs.
 2. Replace mock reads/writes with Python/PostgreSQL, or add an explicitly approved feature.
 3. Verify persistence after refresh and workspace/RBAC isolation.
 4. Update [implement_plan.md](./implement_plan.md), commit and push every completed vertical slice.
+5. Follow [AGENTS.md](./AGENTS.md) and the [release process](./docs/release-process.md):
+   `main` deploys directly to the sole production environment, and every commit
+   must include its `CHANGELOG.md` entry.
 
 ## 🙏 Attribution & license
 

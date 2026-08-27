@@ -53,6 +53,20 @@ services:
          timeout: 5s
          retries: 5
 
+   migrate:
+      profiles: ['app']
+      pull_policy: never
+      build:
+         context: .
+         dockerfile: infrastructure/docker/prisma-migrate.Dockerfile
+      container_name: circle-migrate
+      restart: 'no'
+      environment:
+         DATABASE_URL: postgresql://${POSTGRES_USER:-circle}:${POSTGRES_PASSWORD:-circle}@postgres:5432/${POSTGRES_DB:-circle}?schema=public
+      depends_on:
+         postgres:
+            condition: service_healthy
+
    api:
       profiles: ['app']
       pull_policy: never
@@ -94,6 +108,8 @@ services:
       depends_on:
          postgres:
             condition: service_healthy
+         migrate:
+            condition: service_completed_successfully
          redis:
             condition: service_healthy
          minio:
@@ -130,6 +146,8 @@ services:
          DATABASE_URL: postgresql://${POSTGRES_USER:-circle}:${POSTGRES_PASSWORD:-circle}@postgres:5432/${POSTGRES_DB:-circle}?schema=public
          TEAM_POLICY_SCAN_INTERVAL_MS: ${TEAM_POLICY_SCAN_INTERVAL_MS:-3600000}
       depends_on:
+         migrate:
+            condition: service_completed_successfully
          redis:
             condition: service_healthy
          postgres:

@@ -11,7 +11,7 @@ import { useIssuesStore } from '@/store/issues-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { useSearchStore } from '@/store/search-store';
 import { useViewStore } from '@/store/view-store';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { scopeMyIssues, useCurrentUserId, useMyIssuesTab } from './use-my-issues';
 
 /**
@@ -24,8 +24,9 @@ export default function MyIssues() {
    const { isSearchOpen, searchQuery } = useSearchStore();
    const { viewType } = useViewStore();
    const { filters } = useFilterStore();
-   const { issues, statuses, loadIssues } = useIssuesStore();
+   const { issues, statuses, loading, loadIssues } = useIssuesStore();
    const { openPanel } = useRightPanelStore();
+   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
    const isSearching = isSearchOpen && searchQuery.trim() !== '';
    const isViewTypeGrid = viewType === 'grid';
@@ -33,7 +34,13 @@ export default function MyIssues() {
    const currentUserId = useCurrentUserId();
 
    useEffect(() => {
-      void loadIssues();
+      let active = true;
+      void loadIssues().finally(() => {
+         if (active) setIsInitialLoad(false);
+      });
+      return () => {
+         active = false;
+      };
    }, [loadIssues]);
 
    const scopedIssues = useMemo(
@@ -66,6 +73,7 @@ export default function MyIssues() {
                   totalIssues={scopedIssues}
                   statuses={statuses}
                   isViewTypeGrid={isViewTypeGrid}
+                  loading={loading || isInitialLoad}
                />
             </div>
 

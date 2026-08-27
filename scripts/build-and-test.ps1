@@ -24,13 +24,13 @@ if (-not $AllowNetwork) {
 }
 
 Write-Host 'Building Flowie images. Network access is explicitly enabled for this run...' -ForegroundColor Cyan
-& docker compose --profile app build api-legacy api web
+& docker compose --profile app build migrate api web worker
 if ($LASTEXITCODE -ne 0) {
    throw 'Docker build failed. Check the network or Docker output above; no offline start was attempted.'
 }
 
-Write-Host 'Starting the newly built containers without pulling images...' -ForegroundColor Cyan
-& docker compose --profile app up -d --no-build --pull never --force-recreate api-legacy api web worker
+Write-Host 'Applying migrations, then starting the newly built containers without pulling images...' -ForegroundColor Cyan
+& docker compose --profile app up -d --no-build --pull never --force-recreate migrate api web worker
 if ($LASTEXITCODE -ne 0) {
    throw 'Docker containers could not be started from the newly built images.'
 }
@@ -53,7 +53,7 @@ function Wait-ForHttpOk {
       }
    }
 
-   & docker compose logs --tail=80 api api-legacy web
+   & docker compose logs --tail=80 migrate api web
    throw "Smoke test failed: $Name did not return HTTP 200."
 }
 

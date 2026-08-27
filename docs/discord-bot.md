@@ -40,7 +40,8 @@ switch off keeps the URL but stops delivery.
    DISCORD_BOT_CHANNEL_ID=your-channel-id
    ```
 
-5. Redeploy the API:
+5. Redeploy the API. The Compose `migrate` service applies committed database
+   migrations before the API starts:
 
    ```bash
    docker compose --env-file .env.production --profile app up -d --build api

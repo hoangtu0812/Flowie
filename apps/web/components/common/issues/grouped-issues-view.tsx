@@ -14,6 +14,7 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { GroupIssues, IssueGroupDescriptor } from './group-issues';
 import { CustomDragLayer } from './issue-grid';
 import { IssuesListHeader } from './issues-list-header';
+import { LoadingState } from '@/components/common/loading-state';
 
 interface GroupedIssuesViewProps {
    /** Issues to display (after the filter bar has been applied). */
@@ -23,6 +24,8 @@ interface GroupedIssuesViewProps {
    /** Statuses to render when grouping by status (empty groups are skipped unless enabled). */
    statuses: Status[];
    isViewTypeGrid: boolean;
+   /** Prevents the empty state from rendering while the scoped issue request is pending. */
+   loading?: boolean;
 }
 
 interface GroupEntry {
@@ -129,6 +132,7 @@ export const GroupedIssuesView: FC<GroupedIssuesViewProps> = ({
    totalIssues,
    statuses,
    isViewTypeGrid,
+   loading = false,
 }) => {
    const { grouping, ordering, completedIssues, showEmptyGroups } = useDisplaySettingsStore();
    const { filters } = useFilterStore();
@@ -264,23 +268,31 @@ export const GroupedIssuesView: FC<GroupedIssuesViewProps> = ({
             <div className="h-full flex flex-col">
                <div className="flex-1 min-h-0 overflow-x-auto">
                   <div className="flex h-full gap-3 px-2 py-2 min-w-max">
-                     {boardGroups.map((entry) => (
-                        <GroupIssues
-                           key={entry.group.id}
-                           group={entry.group}
-                           issues={entry.issues}
-                           count={entry.issues.length}
-                        />
-                     ))}
-                     {hiddenGroups.length > 0 && <HiddenColumns entries={hiddenGroups} />}
-                     {boardGroups.length === 0 && hiddenGroups.length === 0 && (
-                        <div className="flex items-center justify-center w-full h-40 text-sm text-muted-foreground">
-                           No issues to show.
-                        </div>
+                     {!loading &&
+                        boardGroups.map((entry) => (
+                           <GroupIssues
+                              key={entry.group.id}
+                              group={entry.group}
+                              issues={entry.issues}
+                              count={entry.issues.length}
+                           />
+                        ))}
+                     {!loading && hiddenGroups.length > 0 && (
+                        <HiddenColumns entries={hiddenGroups} />
+                     )}
+                     {loading ? (
+                        <LoadingState label="Loading issues…" className="min-w-[280px]" />
+                     ) : (
+                        boardGroups.length === 0 &&
+                        hiddenGroups.length === 0 && (
+                           <div className="flex items-center justify-center w-full h-40 text-sm text-muted-foreground">
+                              No issues to show.
+                           </div>
+                        )
                      )}
                   </div>
                </div>
-               {showFooter && (
+               {!loading && showFooter && (
                   <div className="shrink-0 border-t bg-container">
                      <HiddenByFiltersFooter hiddenCount={hiddenCount} />
                   </div>
@@ -298,20 +310,22 @@ export const GroupedIssuesView: FC<GroupedIssuesViewProps> = ({
          <CustomDragLayer />
          <div className="h-full overflow-y-auto">
             <IssuesListHeader />
-            {listGroups.length === 0 && !showFooter && (
+            {loading && <LoadingState label="Loading issues…" className="min-h-40" />}
+            {!loading && listGroups.length === 0 && !showFooter && (
                <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
                   No issues to show.
                </div>
             )}
-            {listGroups.map((entry) => (
-               <GroupIssues
-                  key={entry.group.id}
-                  group={entry.group}
-                  issues={entry.issues}
-                  count={entry.issues.length}
-               />
-            ))}
-            {showFooter && <HiddenByFiltersFooter hiddenCount={hiddenCount} />}
+            {!loading &&
+               listGroups.map((entry) => (
+                  <GroupIssues
+                     key={entry.group.id}
+                     group={entry.group}
+                     issues={entry.issues}
+                     count={entry.issues.length}
+                  />
+               ))}
+            {!loading && showFooter && <HiddenByFiltersFooter hiddenCount={hiddenCount} />}
          </div>
       </DndProvider>
    );

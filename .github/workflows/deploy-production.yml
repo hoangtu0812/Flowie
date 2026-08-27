@@ -61,7 +61,7 @@ jobs:
           # the layers and package caches the previous one produced.
           built=0
           for attempt in 1 2 3; do
-            if docker compose --env-file .env.production --profile app build api web worker; then
+            if docker compose --env-file .env.production --profile app build migrate api web worker; then
               built=1
               break
             fi
@@ -89,7 +89,7 @@ jobs:
 
           cd /opt/flowie
           docker compose --env-file .env.production --profile app ps
-          docker compose --env-file .env.production --profile app logs --tail=150 api web
+          docker compose --env-file .env.production --profile app logs --tail=150 migrate api web
           exit 1
 
       - name: Reclaim disk

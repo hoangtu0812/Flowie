@@ -10,6 +10,24 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+### Added
+
+- Local account registration requires a time-limited Discord OTP before a user
+  and workspace are created. The private registration channel is provisioned by
+  the configured Flowie bot and OTP material is stored only as a hash.
+
+### Changed
+
+- Production deployment now builds and runs a one-shot Prisma migration service
+  before starting the FastAPI or worker containers. A migration failure blocks
+  the new release instead of serving an API against an outdated schema.
+- Repository operating and release rules now define CT107 as the single
+  production environment, require a changelog entry in every commit, and
+  require a verified deployment before a version tag is published.
+- Issue lists retain their column header and show a loading indicator while the
+  issue request is pending. Rows now show up to three label badges before
+  collapsing any remaining labels into a count.
+
 ## [0.3.2] — 2026-08-26 23:59 +07
 
 ### Added

@@ -57,12 +57,19 @@ Mở [http://localhost:3000](http://localhost:3000). FastAPI readiness: [http://
 
 Script sẽ build image, start Docker và kiểm tra Login/FastAPI. Khi hoàn tất, quay lại mạng nội bộ và dùng `start-local.ps1` cho các lần chạy bình thường.
 
+Mỗi lần chạy Docker, service một lần `migrate` sẽ áp dụng toàn bộ Prisma
+migration đã commit trước khi API FastAPI hoặc worker được khởi động. Migration
+thất bại sẽ chặn deployment; không khởi động riêng API để bỏ qua bước này.
+
 ## 🗺️ Quy ước phát triển
 
 1. Giữ nguyên cấu trúc, spacing và tương tác của Circle UI gốc.
 2. Chỉ thay mock bằng API Python/PostgreSQL hoặc bổ sung tính năng đã được duyệt.
 3. Kiểm tra persistence sau refresh và workspace/RBAC isolation.
 4. Mỗi lát hoàn chỉnh phải cập nhật [implement_plan.md](./implement_plan.md), commit và push.
+5. Tuân thủ [AGENTS.md](./AGENTS.md) và [quy trình release](./docs/release-process.md):
+   `main` deploy trực tiếp lên môi trường production duy nhất, và mọi commit
+   phải có mục tương ứng trong `CHANGELOG.md`.
 
 ## 🙏 Ghi nhận & giấy phép
 
