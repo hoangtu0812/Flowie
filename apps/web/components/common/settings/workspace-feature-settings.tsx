@@ -439,6 +439,13 @@ export default function WorkspaceFeatureSettings({ feature }: { feature: Feature
                               <SelectContent>
                                  {members.map((member) => (
                                     <SelectItem key={member.userId} value={member.userId}>
+                                       <Avatar className="size-5">
+                                          <AvatarImage
+                                             src={member.user.avatarUrl ?? undefined}
+                                             alt={member.user.name}
+                                          />
+                                          <AvatarFallback>{member.user.name[0]}</AvatarFallback>
+                                       </Avatar>
                                        {member.user.name}
                                     </SelectItem>
                                  ))}

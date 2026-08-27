@@ -12,6 +12,12 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- `Write with Agent` on the project Activity composer drafts an update or a
+  comment from the project's own record — status, health, lead, target date,
+  issue progress, open issues, milestones, and the last few updates. Anything
+  already typed is used as the angle to write from. The draft is placed in the
+  composer for the author to edit; nothing is posted automatically. Requires an
+  enabled OpenAI or Google provider in Agent personalization.
 - Descriptions and issue comments accept an image pasted from the clipboard.
   The screenshot is uploaded as an issue attachment and embedded where the
   caret was; embedded images are fetched with the session so private
@@ -52,6 +58,13 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Changed
 
+- Priority icons carry their own colour — urgent red, high orange, medium
+  amber, low blue — so a priority is read at a glance instead of by counting
+  bars. "No priority" stays neutral and inherits the surrounding text colour.
+- Project status, priority, lead and team dropdowns show the same icon or
+  avatar the rest of the app uses for those values, as do the issue and
+  destination-team pickers in the issue action dialog and the initiative owner
+  picker in workspace settings.
 - Personal Agent skills now expose a detail dialog before installation, showing
   their scope, behavior, and custom instructions when present.
 - Timeline bars now show their label over status color; project bars also fill
@@ -93,6 +106,11 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Returning to a tab left open for a long time no longer shows empty screens
+  until a reload. Refresh tokens are single-use, and every request that met an
+  expired access cookie spent the same one: the first succeeded and the rest
+  were rejected against the session it had just revoked. A burst now shares one
+  refresh attempt.
 - Moving between sidebar destinations no longer rebuilds the whole interface.
   The workspace shell — sidebar, command palette, dialogs — was rendered by
   each page rather than by a route layout, so every navigation unmounted it and
@@ -104,6 +122,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
   page resolves an issue from that same list.
 - The issue properties panel labels its dates and shows the created date next
   to the due date; a single unlabelled date field read as either one.
+- A page that stops responding to clicks after a dialog closes recovers by
+  itself. Overlapping modal layers can leave pointer events disabled on the
+  document body, which previously required a reload; the next click or
+  keypress now restores interaction when no modal is open.
 
 ## [0.3.2] — 2026-08-26 23:59 +07
 

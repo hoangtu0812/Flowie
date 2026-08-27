@@ -10,6 +10,7 @@ import {
    DropdownMenuItem,
    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { authenticatedFetch } from '@/lib/workspaces';
 import { cn } from '@/lib/utils';
 import {
    ProjectUpdate,
@@ -24,6 +25,8 @@ import { toast } from 'sonner';
 import { toIssueUi, toProjectDetailUi, toProjectUi } from './project-detail-ui-adapter';
 import { ProjectSidePanel } from './project-side-panel';
 import { useLiveProjectData } from './use-live-project';
+
+const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 interface ProjectActivityProps {
    projectId: string;
@@ -68,6 +71,7 @@ function UpdateCard({ update }: { update: ProjectUpdate }) {
 export default function ProjectActivity({ projectId }: ProjectActivityProps) {
    void projectId;
    const {
+      workspaceId,
       project: liveProject,
       issues: liveIssues,
       milestones,
@@ -81,6 +85,7 @@ export default function ProjectActivity({ projectId }: ProjectActivityProps) {
    const [health, setHealth] = useState<ProjectUpdateHealth>('on-track');
    const [text, setText] = useState('');
    const [posting, setPosting] = useState(false);
+   const [drafting, setDrafting] = useState(false);
    const project = useMemo(
       () => (liveProject ? toProjectUi(liveProject, liveIssues) : null),
       [liveProject, liveIssues]
@@ -120,6 +125,42 @@ export default function ProjectActivity({ projectId }: ProjectActivityProps) {
                  100
            )
          : 0;
+
+   /**
+    * The Agent drafts from the project's own record and hands the text back
+    * here rather than posting it: an update carries the author's name, so it
+    * is theirs to read and edit before it goes out. Anything already typed is
+    * passed along as the angle to write from.
+    */
+   const draftWithAgent = async () => {
+      if (!workspaceId || !liveProject || drafting) return;
+      setDrafting(true);
+      try {
+         const response = await authenticatedFetch(`${api}/agent/compose/project-update`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+               workspaceId,
+               projectId: liveProject.id,
+               kind: mode,
+               ...(mode === 'update' ? { health } : {}),
+               ...(text.trim() ? { notes: text.trim() } : {}),
+            }),
+         });
+         const payload = (await response.json().catch(() => null)) as {
+            data?: { body?: string };
+            message?: string;
+         } | null;
+         if (!response.ok || !payload?.data?.body) {
+            throw new Error(payload?.message ?? 'Could not draft with Agent.');
+         }
+         setText(payload.data.body);
+      } catch (caught) {
+         toast.error(caught instanceof Error ? caught.message : 'Could not draft with Agent.');
+      } finally {
+         setDrafting(false);
+      }
+   };
 
    const handlePost = async () => {
       if (text.trim() === '') return;
@@ -227,9 +268,15 @@ export default function ProjectActivity({ projectId }: ProjectActivityProps) {
                   )}
 
                   <div className="mt-3 flex items-center justify-between">
-                     <Button variant="outline" size="xs" className="gap-1.5">
-                        <Sparkles className="size-3.5" />
-                        Write with Agent
+                     <Button
+                        variant="outline"
+                        size="xs"
+                        className="gap-1.5"
+                        onClick={() => void draftWithAgent()}
+                        disabled={drafting || !workspaceId}
+                     >
+                        <Sparkles className={cn('size-3.5', drafting && 'animate-pulse')} />
+                        {drafting ? 'Writing…' : 'Write with Agent'}
                      </Button>
                      <div className="flex items-center gap-2">
                         <Button

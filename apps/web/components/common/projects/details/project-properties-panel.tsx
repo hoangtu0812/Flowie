@@ -24,7 +24,11 @@ import { priorities } from '@/lib/priority-presentations';
 import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { ProjectProgressChart } from './project-progress-chart';
-import type { ProjectDetailUiIssue, ProjectDetailUiProject } from './project-detail-ui-adapter';
+import {
+   projectStatusPresentation,
+   type ProjectDetailUiIssue,
+   type ProjectDetailUiProject,
+} from './project-detail-ui-adapter';
 import type { ProjectDetail } from '@/types/project-details';
 import { ArrowRight, Calendar, Check, Compass, Plus, Slack, Tag, UserPlus } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -698,11 +702,18 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
                         <SelectValue />
                      </SelectTrigger>
                      <SelectContent>
-                        {availableStatuses.map((option) => (
-                           <SelectItem key={option.id} value={option.name}>
-                              {option.name}
-                           </SelectItem>
-                        ))}
+                        {availableStatuses.map((option) => {
+                           const presentation = projectStatusPresentation(
+                              option.name,
+                              option.category
+                           );
+                           return (
+                              <SelectItem key={option.id} value={option.name}>
+                                 <presentation.icon />
+                                 {presentation.name}
+                              </SelectItem>
+                           );
+                        })}
                      </SelectContent>
                   </Select>
                )}
@@ -714,6 +725,7 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
                      <SelectContent>
                         {priorities.map((option) => (
                            <SelectItem key={option.id} value={option.id}>
+                              <option.icon className="size-4" />
                               {option.name}
                            </SelectItem>
                         ))}
@@ -726,9 +738,19 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
                         <SelectValue placeholder="No lead" />
                      </SelectTrigger>
                      <SelectContent>
-                        <SelectItem value="unassigned">No lead</SelectItem>
+                        <SelectItem value="unassigned">
+                           <UserPlus className="size-4" />
+                           No lead
+                        </SelectItem>
                         {availableMembers.map((member) => (
                            <SelectItem key={member.userId} value={member.userId}>
+                              <Avatar className="size-5">
+                                 <AvatarImage
+                                    src={member.user.avatarUrl ?? undefined}
+                                    alt={member.user.name}
+                                 />
+                                 <AvatarFallback>{member.user.name[0]}</AvatarFallback>
+                              </Avatar>
                               {member.user.name}
                            </SelectItem>
                         ))}
@@ -800,6 +822,7 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
                         <SelectItem value="unassigned">No team</SelectItem>
                         {availableTeams.map((option) => (
                            <SelectItem key={option.id} value={option.id}>
+                              <span className="text-sm">{option.icon}</span>
                               {option.name}
                            </SelectItem>
                         ))}

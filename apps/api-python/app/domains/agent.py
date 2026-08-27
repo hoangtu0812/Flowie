@@ -28,6 +28,7 @@ from .native_issues import CreateIssueInput, create_issue
 from .native_projects import (
     CreateProjectInput,
     UpdateProjectInput,
+    _team_access,
     _workspace_access,
     _workspace_manager,
     create_project,
@@ -805,6 +806,184 @@ async def remove_skill(skill_key: str, user: Any = Depends(current_user), db: As
     if skill_key in PERSONAL_SKILL_DETAILS:
         return {'data': _skill_view(skill_key, False)}
     return {'data': {'key': skill_key, 'installed': False, 'builtIn': False}}
+
+
+class ComposeProjectUpdateInput(BaseModel):
+    workspaceId: str = Field(min_length=1)
+    projectId: str = Field(min_length=1)
+    kind: Literal['update', 'comment'] = 'update'
+    health: str | None = None
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class ComposedText(BaseModel):
+    """The provider is held to JSON mode, so the draft arrives in one field."""
+
+    model_config = ConfigDict(extra='ignore')
+
+    body: str = Field(min_length=1, max_length=4000)
+
+
+COMPOSE_UPDATE_PROMPT = (
+    'You write project status updates for a work tracker. '
+    'You are given facts about one project as JSON. Write the update the project lead would post: '
+    'what the state is, what moved, and what is at risk or blocked. '
+    'Use only the facts provided - never invent issues, dates, names, or numbers, and omit anything the facts do not cover. '
+    'When authorNotes is present, that is the angle the author wants: build the update around it. '
+    'When intendedHealth is present, the update must read consistently with it. '
+    'Write plain prose in short paragraphs, no headings and no markdown, at most 120 words. '
+    'Write in the language the project name and issue titles are written in. '
+    'Respond with JSON shaped exactly as {"body": "<the update>"}.'
+)
+
+COMPOSE_COMMENT_PROMPT = (
+    'You write short comments on a project in a work tracker. '
+    'You are given facts about one project as JSON. Write a comment raising what most needs attention. '
+    'Use only the facts provided - never invent issues, dates, names, or numbers. '
+    'When authorNotes is present, that is the point the author wants made. '
+    'Write plain prose, no headings and no markdown, at most 60 words. '
+    'Write in the language the project name and issue titles are written in. '
+    'Respond with JSON shaped exactly as {"body": "<the comment>"}.'
+)
+
+
+async def _project_facts(db: AsyncSession, workspace_id: str, project_id: str, user_id: str) -> dict[str, Any]:
+    """Everything a draft is allowed to be built from, and nothing else."""
+    result = await db.execute(
+        text(
+            """SELECT p.id, p.name, p.description, p.status, p.priority, p.health, p.team_id,
+                      p.start_date, p.target_date,
+                      t.name AS team_name, u.name AS lead_name
+               FROM projects p
+               LEFT JOIN teams t ON t.id = p.team_id
+               LEFT JOIN users u ON u.id = p.lead_id
+               WHERE p.id = :project_id AND p.workspace_id = :workspace_id AND p.archived_at IS NULL"""
+        ),
+        {'project_id': project_id, 'workspace_id': workspace_id},
+    )
+    project = result.mappings().first()
+    if not project:
+        raise ApiError(404, 'Project not found.', 'Not Found')
+    if project['team_id']:
+        await _team_access(db, workspace_id, project['team_id'], user_id)
+
+    statuses = await db.execute(
+        text(
+            """SELECT s.category, COUNT(*) AS total FROM issues i
+               JOIN issue_statuses s ON s.id = i.status_id
+               WHERE i.project_id = :project_id AND i.archived_at IS NULL
+               GROUP BY s.category"""
+        ),
+        {'project_id': project_id},
+    )
+    counts = {row['category']: row['total'] for row in statuses.mappings().all()}
+
+    open_issues = await db.execute(
+        text(
+            """SELECT i.identifier, i.title, s.name AS status, i.due_date FROM issues i
+               JOIN issue_statuses s ON s.id = i.status_id
+               WHERE i.project_id = :project_id AND i.archived_at IS NULL
+                 AND s.category NOT IN ('COMPLETED', 'CANCELED')
+               ORDER BY i.due_date NULLS LAST, i.updated_at DESC LIMIT 12"""
+        ),
+        {'project_id': project_id},
+    )
+
+    milestones = await db.execute(
+        text(
+            """SELECT title, target_date, completed_at FROM project_milestones
+               WHERE project_id = :project_id ORDER BY target_date NULLS LAST LIMIT 8"""
+        ),
+        {'project_id': project_id},
+    )
+
+    previous = await db.execute(
+        text(
+            """SELECT body, health, created_at FROM project_updates
+               WHERE project_id = :project_id AND kind = 'update'
+               ORDER BY created_at DESC LIMIT 3"""
+        ),
+        {'project_id': project_id},
+    )
+
+    completed = counts.get('COMPLETED', 0)
+    total = sum(counts.values())
+    return {
+        'today': date.today().isoformat(),
+        'project': {
+            'name': project['name'],
+            'description': project['description'],
+            'status': project['status'],
+            'priority': project['priority'],
+            'health': project['health'],
+            'team': project['team_name'],
+            'lead': project['lead_name'],
+            'startDate': project['start_date'].isoformat() if project['start_date'] else None,
+            'targetDate': project['target_date'].isoformat() if project['target_date'] else None,
+        },
+        'issueCounts': {
+            **counts,
+            'total': total,
+            'completedPercent': round(completed * 100 / total) if total else 0,
+        },
+        'openIssues': [
+            {
+                'identifier': row['identifier'],
+                'title': row['title'],
+                'status': row['status'],
+                'dueDate': row['due_date'].isoformat() if row['due_date'] else None,
+            }
+            for row in open_issues.mappings().all()
+        ],
+        'milestones': [
+            {
+                'title': row['title'],
+                'targetDate': row['target_date'].isoformat() if row['target_date'] else None,
+                'completed': row['completed_at'] is not None,
+            }
+            for row in milestones.mappings().all()
+        ],
+        'previousUpdates': [
+            {'body': row['body'], 'health': row['health'], 'postedAt': row['created_at'].isoformat()}
+            for row in previous.mappings().all()
+        ],
+    }
+
+
+@router.post('/compose/project-update')
+async def compose_project_update(
+    payload: ComposeProjectUpdateInput,
+    request: Request,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, str]]:
+    """Draft a project update from the project's own record.
+
+    Nothing is written: the text comes back for the author to edit and post,
+    so the agent never publishes on someone's behalf.
+    """
+    await _workspace_access(db, payload.workspaceId, user['id'])
+    facts = await _project_facts(db, payload.workspaceId, payload.projectId, user['id'])
+    if payload.health:
+        facts['intendedHealth'] = payload.health
+    if payload.notes and payload.notes.strip():
+        facts['authorNotes'] = payload.notes.strip()
+
+    provider = await _configured_provider(request, db, payload.workspaceId)
+    system_prompt = COMPOSE_UPDATE_PROMPT if payload.kind == 'update' else COMPOSE_COMMENT_PROMPT
+    history = [{'role': 'user', 'content': json.dumps(facts, ensure_ascii=False)}]
+    raw = await (
+        _call_openai(provider, system_prompt, history)
+        if provider['provider'] == 'OPENAI'
+        else _call_google(provider, system_prompt, history)
+    )
+    try:
+        composed = ComposedText.model_validate_json(raw)
+    except ValidationError as error:
+        raise ApiError(
+            502, 'The AI provider returned a draft in an invalid format. Please try again.', 'Bad Gateway'
+        ) from error
+    return {'data': {'body': composed.body.strip()}}
 
 
 @router.get('/conversations')

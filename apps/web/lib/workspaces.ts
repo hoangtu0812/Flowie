@@ -1,6 +1,27 @@
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 /**
+ * Refresh tokens are single-use: `/auth/refresh` revokes the session it was
+ * given and issues a new cookie pair. A screen loads several protected
+ * resources at once, so after the access cookie expires they all see 401 at
+ * the same moment — and without this, each would spend the same refresh
+ * token. The first call wins, every other one is rejected against the session
+ * it just revoked, and the screen renders empty until the user reloads.
+ * One shared attempt per burst is what keeps that from happening.
+ */
+let refreshInFlight: Promise<boolean> | undefined;
+
+function refreshSession(): Promise<boolean> {
+   refreshInFlight ??= fetch(`${api}/auth/refresh`, { method: 'POST', credentials: 'include' })
+      .then((response) => response.ok)
+      .catch(() => false)
+      .finally(() => {
+         refreshInFlight = undefined;
+      });
+   return refreshInFlight;
+}
+
+/**
  * Workspace is the first protected resource requested after a page reload.
  * If only the durable refresh cookie remains, restore the short-lived access
  * cookie once and retry so a valid session never renders an empty workspace.
@@ -10,11 +31,7 @@ export async function authenticatedFetch(url: string, init: RequestInit = {}): P
    const response = await fetch(url, request);
    if (response.status !== 401) return response;
 
-   const refreshed = await fetch(`${api}/auth/refresh`, {
-      method: 'POST',
-      credentials: 'include',
-   });
-   if (!refreshed.ok) return response;
+   if (!(await refreshSession())) return response;
    return fetch(url, request);
 }
 

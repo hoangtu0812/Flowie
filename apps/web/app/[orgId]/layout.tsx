@@ -5,6 +5,7 @@ import { CreateIssueModalProvider } from '@/components/common/issues/create-issu
 import { IssueActionDialog } from '@/components/common/issues/issue-action-dialog';
 import { IssueRelationDialog } from '@/components/common/issues/issue-relation-dialog';
 import { CommandPalette } from '@/components/layout/command-palette';
+import { BodyInteractionGuard } from '@/components/layout/body-interaction-guard';
 
 /**
  * The workspace shell lives in a route layout, not in the page, so moving
@@ -16,6 +17,7 @@ import { CommandPalette } from '@/components/layout/command-palette';
 export default function WorkspaceLayout({ children }: { children: React.ReactNode }) {
    return (
       <SidebarProvider>
+         <BodyInteractionGuard />
          <CreateIssueModalProvider />
          <IssueActionDialog />
          <IssueRelationDialog />

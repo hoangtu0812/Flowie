@@ -4,6 +4,20 @@ interface IconProps extends React.SVGProps<SVGSVGElement> {
    className?: string;
 }
 
+/**
+ * The ranked levels carry their own colour rather than inheriting the text
+ * colour around them: priority is read at a glance down a list, and four
+ * identical grey glyphs are only told apart by counting bars. "No priority"
+ * keeps `currentColor` so the neutral state stays as quiet as its surroundings.
+ */
+export const priorityColor = {
+   'no-priority': 'currentColor',
+   'urgent': '#ef4444',
+   'high': '#f97316',
+   'medium': '#f59e0b',
+   'low': '#3b82f6',
+} as const;
+
 const NoPriorityIcon = ({ className, ...props }: IconProps) => (
    <svg
       width="16"
@@ -28,7 +42,7 @@ const UrgentPriorityIcon = ({ className, ...props }: IconProps) => (
       width="16"
       height="16"
       viewBox="0 0 16 16"
-      fill="currentColor"
+      fill={priorityColor['urgent']}
       className={className}
       aria-label="Urgent Priority"
       role="img"
@@ -45,7 +59,7 @@ const HighPriorityIcon = ({ className, ...props }: IconProps) => (
       width="16"
       height="16"
       viewBox="0 0 16 16"
-      fill="currentColor"
+      fill={priorityColor['high']}
       className={className}
       aria-label="High Priority"
       role="img"
@@ -64,7 +78,7 @@ const MediumPriorityIcon = ({ className, ...props }: IconProps) => (
       width="16"
       height="16"
       viewBox="0 0 16 16"
-      fill="currentColor"
+      fill={priorityColor['medium']}
       className={className}
       aria-label="Medium Priority"
       role="img"
@@ -83,7 +97,7 @@ const LowPriorityIcon = ({ className, ...props }: IconProps) => (
       width="16"
       height="16"
       viewBox="0 0 16 16"
-      fill="currentColor"
+      fill={priorityColor['low']}
       className={className}
       aria-label="Low Priority"
       role="img"
@@ -101,12 +115,19 @@ export interface Priority {
    id: string;
    name: string;
    icon: React.FC<React.SVGProps<SVGSVGElement>>;
+   /** Matches the icon, for text or dots that sit beside it. */
+   color: string;
 }
 
 export const priorities: Priority[] = [
-   { id: 'no-priority', name: 'No priority', icon: NoPriorityIcon },
-   { id: 'urgent', name: 'Urgent', icon: UrgentPriorityIcon },
-   { id: 'high', name: 'High', icon: HighPriorityIcon },
-   { id: 'medium', name: 'Medium', icon: MediumPriorityIcon },
-   { id: 'low', name: 'Low', icon: LowPriorityIcon },
+   {
+      id: 'no-priority',
+      name: 'No priority',
+      icon: NoPriorityIcon,
+      color: priorityColor['no-priority'],
+   },
+   { id: 'urgent', name: 'Urgent', icon: UrgentPriorityIcon, color: priorityColor.urgent },
+   { id: 'high', name: 'High', icon: HighPriorityIcon, color: priorityColor.high },
+   { id: 'medium', name: 'Medium', icon: MediumPriorityIcon, color: priorityColor.medium },
+   { id: 'low', name: 'Low', icon: LowPriorityIcon, color: priorityColor.low },
 ];

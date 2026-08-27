@@ -113,6 +113,7 @@ function entityFallback(notification: NativeNotification): Issue {
          id: 'no-priority',
          name: 'No priority',
          icon: CircleDot,
+         color: 'currentColor',
       } as Issue['priority'],
       labels: [],
       createdAt: notification.createdAt,

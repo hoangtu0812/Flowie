@@ -211,7 +211,11 @@ export function IssueActionDialog() {
                            <SelectContent>
                               {candidates.map((candidate) => (
                                  <SelectItem key={candidate.id} value={candidate.id}>
-                                    {candidate.identifier} · {candidate.title}
+                                    <candidate.status.icon />
+                                    <span className="text-muted-foreground">
+                                       {candidate.identifier}
+                                    </span>
+                                    {candidate.title}
                                  </SelectItem>
                               ))}
                            </SelectContent>
@@ -227,6 +231,7 @@ export function IssueActionDialog() {
                            <SelectContent>
                               {destinations.map((team) => (
                                  <SelectItem key={team.id} value={team.id}>
+                                    <span className="text-sm">{team.icon}</span>
                                     {team.name} ({team.identifier})
                                  </SelectItem>
                               ))}
