@@ -108,6 +108,14 @@ class IssueDefaultsInput(BaseModel):
     dueInDays: int | None = Field(default=None, ge=1, le=365)
 
 
+class PersonalSkillInput(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    name: str = Field(min_length=2, max_length=80)
+    description: str | None = Field(default=None, max_length=240)
+    instructions: str = Field(min_length=2, max_length=4_000)
+
+
 ReadOnlyCapability = tuple[
     str,
     Callable[[str], bool],
@@ -404,8 +412,19 @@ async def _installed_tool_keys(db: AsyncSession, workspace_id: str) -> set[str]:
 
 
 async def _personal_skills(db: AsyncSession, user_id: str) -> dict[str, Any]:
-    rows = await db.execute(text('SELECT skill_key, config FROM user_agent_skills WHERE user_id = :user_id'), {'user_id': user_id})
-    return {row['skill_key']: row['config'] for row in rows.mappings().all() if row['skill_key'] in PERSONAL_SKILL_DETAILS}
+    rows = await db.execute(text('''SELECT skill_key, name, description, instructions, config
+            FROM user_agent_skills WHERE user_id = :user_id'''), {'user_id': user_id})
+    skills: dict[str, Any] = {}
+    for row in rows.mappings().all():
+        if row['skill_key'] == 'issue.defaults':
+            skills[row['skill_key']] = row['config']
+        elif row['skill_key'].startswith('custom.'):
+            skills[row['skill_key']] = {
+                'name': row['name'],
+                'description': row['description'],
+                'instructions': row['instructions'],
+            }
+    return skills
 
 
 def _apply_personal_skill_defaults(proposal: AgentProposal, skills: dict[str, Any]) -> None:
@@ -702,13 +721,38 @@ async def remove_tool(tool_key: str, workspaceId: str = Query(min_length=1), use
 
 def _skill_view(key: str, installed: bool, config: Any = None) -> dict[str, Any]:
     title, description = PERSONAL_SKILL_DETAILS[key]
-    return {'key': key, 'title': title, 'description': description, 'installed': installed, 'config': config if installed else None}
+    return {'key': key, 'title': title, 'description': description, 'installed': installed, 'config': config if installed else None, 'builtIn': True, 'instructions': None}
 
 
 @router.get('/skills')
 async def list_skills(user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     installed = await _personal_skills(db, user['id'])
-    return {'data': {'skills': [_skill_view(key, key in installed, installed.get(key)) for key in PERSONAL_SKILL_DETAILS]}}
+    rows = await db.execute(text('''SELECT skill_key, name, description, instructions, config
+            FROM user_agent_skills WHERE user_id = :user_id AND skill_key LIKE 'custom.%'
+            ORDER BY updated_at DESC, created_at DESC'''), {'user_id': user['id']})
+    custom = [
+        {
+            'key': row['skill_key'], 'title': row['name'], 'description': row['description'],
+            'instructions': row['instructions'], 'config': row['config'], 'installed': True, 'builtIn': False,
+        }
+        for row in rows.mappings().all()
+    ]
+    built_in = [_skill_view(key, key in installed, installed.get(key)) for key in PERSONAL_SKILL_DETAILS]
+    return {'data': {'skills': [*built_in, *custom]}}
+
+
+@router.post('/skills')
+async def create_personal_skill(payload: PersonalSkillInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    key, now = f'custom.{_cuid()}', _utcnow()
+    await db.execute(text('''INSERT INTO user_agent_skills
+            (id, user_id, skill_key, name, description, instructions, config, created_at, updated_at)
+            VALUES (:id, :user_id, :skill_key, :name, :description, :instructions, '{}'::jsonb, :now, :now)'''), {
+        'id': _cuid(), 'user_id': user['id'], 'skill_key': key, 'name': payload.name.strip(),
+        'description': payload.description.strip() if payload.description else None,
+        'instructions': payload.instructions.strip(), 'now': now,
+    })
+    await db.commit()
+    return {'data': {'key': key, 'title': payload.name.strip(), 'description': payload.description.strip() if payload.description else None, 'instructions': payload.instructions.strip(), 'config': {}, 'installed': True, 'builtIn': False}}
 
 
 @router.post('/skills/{skill_key}')
@@ -724,10 +768,9 @@ async def install_skill(skill_key: str, user: Any = Depends(current_user), db: A
     return {'data': _skill_view(skill_key, True, config)}
 
 
-@router.put('/skills/{skill_key}')
-async def update_skill(skill_key: str, payload: IssueDefaultsInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
-    if skill_key != 'issue.defaults':
-        raise ApiError(404, 'Agent skill not found.', 'Not Found')
+@router.put('/skills/issue.defaults')
+async def update_issue_defaults(payload: IssueDefaultsInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    skill_key = 'issue.defaults'
     config = payload.model_dump(mode='json')
     result = await db.execute(text('''UPDATE user_agent_skills SET config = CAST(:config AS jsonb), updated_at = :now
             WHERE user_id = :user_id AND skill_key = :skill_key'''), {'user_id': user['id'], 'skill_key': skill_key, 'config': json.dumps(config), 'now': _utcnow()})
@@ -737,13 +780,31 @@ async def update_skill(skill_key: str, payload: IssueDefaultsInput, user: Any = 
     return {'data': _skill_view(skill_key, True, config)}
 
 
+@router.put('/skills/{skill_key}')
+async def update_personal_skill(skill_key: str, payload: PersonalSkillInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    if not skill_key.startswith('custom.'):
+        raise ApiError(404, 'Agent skill not found.', 'Not Found')
+    result = await db.execute(text('''UPDATE user_agent_skills
+            SET name = :name, description = :description, instructions = :instructions, updated_at = :now
+            WHERE user_id = :user_id AND skill_key = :skill_key AND skill_key LIKE 'custom.%' '''), {
+        'name': payload.name.strip(), 'description': payload.description.strip() if payload.description else None,
+        'instructions': payload.instructions.strip(), 'now': _utcnow(), 'user_id': user['id'], 'skill_key': skill_key,
+    })
+    if result.rowcount != 1:
+        raise ApiError(404, 'Agent skill not found.', 'Not Found')
+    await db.commit()
+    return {'data': {'key': skill_key, 'title': payload.name.strip(), 'description': payload.description.strip() if payload.description else None, 'instructions': payload.instructions.strip(), 'config': {}, 'installed': True, 'builtIn': False}}
+
+
 @router.delete('/skills/{skill_key}')
 async def remove_skill(skill_key: str, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
-    if skill_key not in PERSONAL_SKILL_DETAILS:
+    if skill_key not in PERSONAL_SKILL_DETAILS and not skill_key.startswith('custom.'):
         raise ApiError(404, 'Agent skill not found.', 'Not Found')
     await db.execute(text('DELETE FROM user_agent_skills WHERE user_id = :user_id AND skill_key = :skill_key'), {'user_id': user['id'], 'skill_key': skill_key})
     await db.commit()
-    return {'data': _skill_view(skill_key, False)}
+    if skill_key in PERSONAL_SKILL_DETAILS:
+        return {'data': _skill_view(skill_key, False)}
+    return {'data': {'key': skill_key, 'installed': False, 'builtIn': False}}
 
 
 @router.get('/conversations')

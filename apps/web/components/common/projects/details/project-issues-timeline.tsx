@@ -22,7 +22,7 @@ import {
 import { cn } from '@/lib/utils';
 import type { Issue } from '@/mock-data/issues';
 import { format, parseISO } from 'date-fns';
-import { Check, ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -85,6 +85,7 @@ export function ProjectIssuesTimeline({ issues }: { issues: Issue[] }) {
    const { orgId } = useParams<{ orgId: string }>();
    const [zoom, setZoom] = useState<TimelineZoom>('year');
    const [todayIso, setTodayIso] = useState<string | null>(null);
+   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
    const scrollRef = useRef<HTMLDivElement>(null);
 
    const monthWidth = monthWidthOf(zoom);
@@ -93,9 +94,21 @@ export function ProjectIssuesTimeline({ issues }: { issues: Issue[] }) {
    const todayOffset = todayIso ? offsetFor(todayIso, monthWidth) : null;
    const todayLabel = todayIso ? format(parseISO(todayIso), 'MMM d').toUpperCase() : null;
 
+   const childrenByParent = useMemo(() => {
+      const children = new Map<string, Issue[]>();
+      for (const issue of issues) {
+         if (!issue.parentIssueId) continue;
+         const current = children.get(issue.parentIssueId) ?? [];
+         current.push(issue);
+         children.set(issue.parentIssueId, current);
+      }
+      return children;
+   }, [issues]);
+
    const groups = useMemo(() => {
       const byStatus = new Map<string, { name: string; color: string; issues: Issue[] }>();
       for (const issue of issues) {
+         if (issue.parentIssueId) continue;
          const group = byStatus.get(issue.status.id) ?? {
             name: issue.status.name,
             color: issue.status.color,
@@ -245,31 +258,75 @@ export function ProjectIssuesTimeline({ issues }: { issues: Issue[] }) {
                            </span>
                         </div>
                         <div className="py-1">
-                           {group.issues.map((issue) => (
-                              <div key={issue.id} className="relative h-9 flex items-center">
-                                 <IssueBar
-                                    issue={issue}
-                                    monthWidth={monthWidth}
-                                    href={`/${orgId}/issue/${issue.identifier}`}
-                                 />
-                                 <div className="sticky left-0 z-10 flex items-center gap-1.5 w-56 shrink-0 px-4 h-9 bg-container/95 backdrop-blur-sm text-xs border-r border-border/40">
-                                    <issue.priority.icon className="size-3.5 shrink-0 text-muted-foreground" />
-                                    <span className="text-muted-foreground shrink-0">
-                                       {issue.identifier}
-                                    </span>
-                                    <span className="truncate flex-1">{issue.title}</span>
-                                    {issue.assignee && (
-                                       <Avatar className="size-4 shrink-0">
-                                          <AvatarImage
-                                             src={issue.assignee.avatarUrl}
-                                             alt={issue.assignee.name}
-                                          />
-                                          <AvatarFallback>{issue.assignee.name[0]}</AvatarFallback>
-                                       </Avatar>
-                                    )}
+                           {group.issues.map((issue) => {
+                              const children = childrenByParent.get(issue.id) ?? [];
+                              const expanded = expandedParents.has(issue.id);
+                              const renderRow = (item: Issue, nested = false) => (
+                                 <div key={item.id} className="relative h-9 flex items-center">
+                                    <IssueBar
+                                       issue={item}
+                                       monthWidth={monthWidth}
+                                       href={`/${orgId}/issue/${item.identifier}`}
+                                    />
+                                    <div
+                                       className={cn(
+                                          'sticky left-0 z-10 flex items-center gap-1.5 w-56 shrink-0 pr-4 h-9 bg-container/95 backdrop-blur-sm text-xs border-r border-border/40',
+                                          nested ? 'pl-10' : 'pl-4'
+                                       )}
+                                    >
+                                       {!nested && children.length > 0 && (
+                                          <button
+                                             type="button"
+                                             aria-label={
+                                                expanded
+                                                   ? `Hide sub-issues of ${issue.title}`
+                                                   : `Show sub-issues of ${issue.title}`
+                                             }
+                                             aria-expanded={expanded}
+                                             onClick={() =>
+                                                setExpandedParents((current) => {
+                                                   const next = new Set(current);
+                                                   if (next.has(issue.id)) next.delete(issue.id);
+                                                   else next.add(issue.id);
+                                                   return next;
+                                                })
+                                             }
+                                             className="text-muted-foreground hover:text-foreground"
+                                          >
+                                             <ChevronRight
+                                                className={cn(
+                                                   'size-3.5 transition-transform',
+                                                   expanded && 'rotate-90'
+                                                )}
+                                             />
+                                          </button>
+                                       )}
+                                       <item.priority.icon className="size-3.5 shrink-0 text-muted-foreground" />
+                                       <span className="text-muted-foreground shrink-0">
+                                          {item.identifier}
+                                       </span>
+                                       <span className="truncate flex-1">{item.title}</span>
+                                       {item.assignee && (
+                                          <Avatar className="size-4 shrink-0">
+                                             <AvatarImage
+                                                src={item.assignee.avatarUrl}
+                                                alt={item.assignee.name}
+                                             />
+                                             <AvatarFallback>
+                                                {item.assignee.name[0]}
+                                             </AvatarFallback>
+                                          </Avatar>
+                                       )}
+                                    </div>
                                  </div>
-                              </div>
-                           ))}
+                              );
+                              return (
+                                 <div key={issue.id}>
+                                    {renderRow(issue)}
+                                    {expanded && children.map((child) => renderRow(child, true))}
+                                 </div>
+                              );
+                           })}
                         </div>
                      </div>
                   ))}

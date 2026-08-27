@@ -454,7 +454,7 @@ async def list_issues(
     result = await db.execute(
         text(
             f'''SELECT i.id FROM issues i JOIN issue_statuses s ON s.id = i.status_id
-                WHERE i.workspace_id = :workspace_id AND i.archived_at IS NULL
+                WHERE i.workspace_id = :workspace_id AND i.archived_at IS NULL AND i.parent_issue_id IS NULL
                 {team_clause} {category_clause} {scope_clauses.get(scope, '')}
                 ORDER BY i.updated_at DESC, i.created_at DESC'''
         ),
@@ -486,7 +486,7 @@ async def issue_options(
     ), await db.execute(
         text('SELECT id, name, color FROM labels WHERE workspace_id = :workspace_id ORDER BY name'), {'workspace_id': workspaceId}
     ), await db.execute(
-        text('''SELECT id, name, status, start_date, end_date FROM cycles WHERE workspace_id = :workspace_id ''' + ('AND team_id = :team_id ' if teamId else '') + 'ORDER BY start_date DESC NULLS LAST, created_at DESC'), params
+        text('''SELECT id, team_id, name, status, start_date, end_date FROM cycles WHERE workspace_id = :workspace_id ''' + ('AND team_id = :team_id ' if teamId else '') + 'ORDER BY start_date DESC NULLS LAST, created_at DESC'), params
     )
     releases = await db.execute(
         text(
@@ -501,7 +501,7 @@ async def issue_options(
         'projects': [{'id': row['id'], 'name': row['name'], 'identifier': row['identifier'], 'status': row['status'], 'priority': row['priority'], 'health': row['health'], 'startDate': row['start_date'], 'targetDate': row['target_date'], 'leadId': row['lead_id'], 'teamId': row['team_id']} for row in projects.mappings().all()],
         'members': [{'id': row['id'], 'name': row['name'], 'email': row['email'], 'avatarUrl': row['avatar_url']} for row in members.mappings().all()],
         'labels': [dict(row) for row in labels.mappings().all()],
-        'cycles': [{'id': row['id'], 'name': row['name'], 'status': row['status'], 'startDate': row['start_date'], 'endDate': row['end_date']} for row in cycles.mappings().all()],
+        'cycles': [{'id': row['id'], 'teamId': row['team_id'], 'name': row['name'], 'status': row['status'], 'startDate': row['start_date'], 'endDate': row['end_date']} for row in cycles.mappings().all()],
         'releases': [{'id': row['id'], 'name': row['name'], 'version': row['version'], 'status': row['status'], 'targetDate': row['target_date']} for row in releases.mappings().all()],
     }}
 

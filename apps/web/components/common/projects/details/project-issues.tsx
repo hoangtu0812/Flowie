@@ -43,7 +43,12 @@ export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
       [activities, liveProject, milestones, updates]
    );
    const issues = useMemo(
-      () => (project ? liveIssues.map((issue) => toIssueUi(issue, project)) : []),
+      () =>
+         project
+            ? liveIssues
+                 .filter((issue) => !issue.parentIssueId)
+                 .map((issue) => toIssueUi(issue, project))
+            : [],
       [liveIssues, project]
    );
 

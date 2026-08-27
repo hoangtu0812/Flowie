@@ -83,3 +83,8 @@ skills from **Settings → Agent personalization → Personal skills**. The init
 of days until due. Agent applies these values to a draft only if that request
 does not explicitly provide a conflicting priority or due date. Workspace tool
 settings never expose or change another user's skill configuration.
+
+Users can also create and edit personal skills with a name, description, and
+instructions. These instructions are passed to the planning workflow as that
+user's preferences; they never grant new data access, install workspace tools,
+or bypass the required plan acceptance step.

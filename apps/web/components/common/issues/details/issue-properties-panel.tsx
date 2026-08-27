@@ -12,7 +12,7 @@ import {
 import { IssueDetail } from '@/mock-data/issue-details';
 import { Issue } from '@/mock-data/issues';
 import { useIssuesStore } from '@/store/issues-store';
-import { Ban, Box, Check, GitPullRequestArrow, Plus } from 'lucide-react';
+import { Ban, Box, CalendarDays, Check, GitPullRequestArrow, Plus } from 'lucide-react';
 import { AssigneeUser } from '../assignee-user';
 import { LabelBadge } from '../label-badge';
 import { PrioritySelector } from '../priority-selector';
@@ -38,11 +38,20 @@ function Section({ title, children }: { title: string; children: React.ReactNode
  * assignee), cycle, labels, project + milestone, relations and linked PRs.
  */
 export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProps) {
-   const { cycles, labels, projects, addIssueLabel, removeIssueLabel, updateIssueProject } =
-      useIssuesStore();
+   const {
+      cycles,
+      labels,
+      projects,
+      addIssueLabel,
+      removeIssueLabel,
+      setIssueCycle,
+      updateIssueDueDate,
+      updateIssueProject,
+   } = useIssuesStore();
    const cycle = issue.cycleId
       ? cycles.find((candidate) => candidate.id === issue.cycleId)
       : undefined;
+   const availableCycles = cycles.filter((candidate) => candidate.teamId === issue.teamId);
 
    const setProject = async (projectId: string | null) => {
       await updateIssueProject(
@@ -77,12 +86,49 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
                   <AssigneeUser user={issue.assignee} issueId={issue.id} />
                   <span className="text-sm">{issue.assignee ? issue.assignee.name : 'Assign'}</span>
                </div>
-               {cycle && (
-                  <div className="flex items-center gap-2 mt-0.5">
-                     <CyclePlayIcon className="size-4" />
-                     <span className="text-sm">{cycle.name}</span>
-                  </div>
-               )}
+               <label className="flex items-center gap-2 mt-0.5 text-sm cursor-pointer">
+                  <CalendarDays className="size-4 text-muted-foreground shrink-0" />
+                  <span className="sr-only">Due date</span>
+                  <input
+                     type="date"
+                     value={issue.dueDate?.slice(0, 10) ?? ''}
+                     onChange={(event) =>
+                        void updateIssueDueDate(issue.id, event.target.value || undefined)
+                     }
+                     className="h-7 min-w-0 bg-transparent text-sm outline-none"
+                  />
+               </label>
+               <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                     <button
+                        type="button"
+                        className="flex items-center gap-2 mt-0.5 -ml-1 px-1 py-0.5 rounded-md text-left hover:bg-accent/50 transition-colors"
+                     >
+                        <CyclePlayIcon className="size-4" />
+                        <span className="text-sm">{cycle?.name ?? 'Add to cycle'}</span>
+                     </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-56">
+                     <DropdownMenuLabel>Cycle</DropdownMenuLabel>
+                     <DropdownMenuItem onSelect={() => void setIssueCycle(issue.id, undefined)}>
+                        <span className="text-muted-foreground">No cycle</span>
+                        {!issue.cycleId && <Check className="ml-auto size-4" />}
+                     </DropdownMenuItem>
+                     {availableCycles.map((candidate) => (
+                        <DropdownMenuItem
+                           key={candidate.id}
+                           onSelect={() => void setIssueCycle(issue.id, candidate.id)}
+                        >
+                           <CyclePlayIcon className="size-4 text-muted-foreground" />
+                           <span className="truncate">{candidate.name}</span>
+                           {issue.cycleId === candidate.id && <Check className="ml-auto size-4" />}
+                        </DropdownMenuItem>
+                     ))}
+                     {availableCycles.length === 0 && (
+                        <DropdownMenuItem disabled>No cycles for this team</DropdownMenuItem>
+                     )}
+                  </DropdownMenuContent>
+               </DropdownMenu>
             </div>
          </Section>
 

@@ -29,6 +29,7 @@ export interface Issue {
    subissues?: string[];
    rank: string;
    dueDate?: string;
+   parentIssueId?: string;
 }
 
 export function groupIssuesByStatus(issues: Issue[]): Record<string, Issue[]> {

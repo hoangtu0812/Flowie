@@ -53,6 +53,7 @@ export type LiveWorkspaceMember = {
 
 export type LiveProjectIssue = {
    id: string;
+   parentIssueId: string | null;
    identifier: string;
    title: string;
    description: string | null;

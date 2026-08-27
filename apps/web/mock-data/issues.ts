@@ -21,6 +21,8 @@ export interface Issue {
    subissues?: string[];
    rank: string;
    dueDate?: string;
+   /** Parent issue when this record is a sub-issue. */
+   parentIssueId?: string;
 }
 
 /* -------------------------------------------------------------------------- */

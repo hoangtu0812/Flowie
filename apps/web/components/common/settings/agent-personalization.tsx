@@ -1,7 +1,16 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import {
+   Dialog,
+   DialogContent,
+   DialogDescription,
+   DialogFooter,
+   DialogHeader,
+   DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import { CheckCircle2, KeyRound, LoaderCircle, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -35,7 +44,11 @@ type ToolRecord = {
 
 type SkillRecord = ToolRecord & {
    config: { defaultPriority?: string; dueInDays?: number | null } | null;
+   builtIn: boolean;
+   instructions: string | null;
 };
+
+type CustomSkillDraft = { key?: string; name: string; description: string; instructions: string };
 
 /** Workspace-scoped AI provider configuration. The browser never receives a saved API key. */
 export default function AgentPersonalization() {
@@ -50,6 +63,7 @@ export default function AgentPersonalization() {
    const [loading, setLoading] = useState(true);
    const [saving, setSaving] = useState(false);
    const [message, setMessage] = useState<string | null>(null);
+   const [customSkill, setCustomSkill] = useState<CustomSkillDraft | null>(null);
 
    useEffect(() => {
       let active = true;
@@ -170,6 +184,43 @@ export default function AgentPersonalization() {
       );
    };
 
+   const saveCustomSkill = async () => {
+      if (!customSkill) return;
+      setSaving(true);
+      setMessage(null);
+      try {
+         const response = await authenticatedFetch(
+            customSkill.key ? `${api}/agent/skills/${customSkill.key}` : `${api}/agent/skills`,
+            {
+               method: customSkill.key ? 'PUT' : 'POST',
+               headers: { 'content-type': 'application/json' },
+               body: JSON.stringify({
+                  name: customSkill.name,
+                  description: customSkill.description || undefined,
+                  instructions: customSkill.instructions,
+               }),
+            }
+         );
+         const payload = (await response.json().catch(() => null)) as {
+            data?: SkillRecord;
+            message?: string;
+         } | null;
+         if (!response.ok || !payload?.data) {
+            throw new Error(payload?.message ?? 'Could not save skill.');
+         }
+         setSkills((current) =>
+            customSkill.key
+               ? current.map((skill) => (skill.key === customSkill.key ? payload.data! : skill))
+               : [...current, payload.data!]
+         );
+         setCustomSkill(null);
+      } catch (error) {
+         setMessage(error instanceof Error ? error.message : 'Could not save skill.');
+      } finally {
+         setSaving(false);
+      }
+   };
+
    const save = async () => {
       setSaving(true);
       setMessage(null);
@@ -280,6 +331,14 @@ export default function AgentPersonalization() {
          <SettingsSection
             title="Personal skills"
             description="Skills belong only to your account and supply preferences when Agent drafts a plan."
+            action={
+               <Button
+                  size="sm"
+                  onClick={() => setCustomSkill({ name: '', description: '', instructions: '' })}
+               >
+                  Create skill
+               </Button>
+            }
          >
             <SettingsCard>
                {skills.map((skill) => (
@@ -289,16 +348,35 @@ export default function AgentPersonalization() {
                            <p className="text-sm font-medium">{skill.title}</p>
                            <p className="text-xs text-muted-foreground">{skill.description}</p>
                         </div>
-                        <Button
-                           variant={skill.installed ? 'outline' : 'default'}
-                           size="sm"
-                           disabled={loading || saving}
-                           onClick={() =>
-                              void changeSkill(skill, skill.installed ? 'remove' : 'install')
-                           }
-                        >
-                           {skill.installed ? 'Remove' : 'Install'}
-                        </Button>
+                        <div className="flex items-center gap-1">
+                           {!skill.builtIn && skill.installed && (
+                              <Button
+                                 variant="ghost"
+                                 size="sm"
+                                 disabled={saving}
+                                 onClick={() =>
+                                    setCustomSkill({
+                                       key: skill.key,
+                                       name: skill.title,
+                                       description: skill.description,
+                                       instructions: skill.instructions ?? '',
+                                    })
+                                 }
+                              >
+                                 Edit
+                              </Button>
+                           )}
+                           <Button
+                              variant={skill.installed ? 'outline' : 'default'}
+                              size="sm"
+                              disabled={loading || saving}
+                              onClick={() =>
+                                 void changeSkill(skill, skill.installed ? 'remove' : 'install')
+                              }
+                           >
+                              {skill.installed ? 'Remove' : 'Install'}
+                           </Button>
+                        </div>
                      </div>
                      {skill.installed && skill.key === 'issue.defaults' && (
                         <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
@@ -352,6 +430,68 @@ export default function AgentPersonalization() {
                ))}
             </SettingsCard>
          </SettingsSection>
+
+         <Dialog open={customSkill !== null} onOpenChange={(open) => !open && setCustomSkill(null)}>
+            <DialogContent className="sm:max-w-[560px]">
+               <DialogHeader>
+                  <DialogTitle>
+                     {customSkill?.key ? 'Edit personal skill' : 'Create personal skill'}
+                  </DialogTitle>
+                  <DialogDescription>
+                     Agent follows these instructions whenever it drafts a plan for you. They never
+                     change workspace tools or another user&apos;s skills.
+                  </DialogDescription>
+               </DialogHeader>
+               {customSkill && (
+                  <div className="grid gap-3">
+                     <label className="grid gap-1.5 text-sm">
+                        Name
+                        <Input
+                           value={customSkill.name}
+                           onChange={(event) =>
+                              setCustomSkill({ ...customSkill, name: event.target.value })
+                           }
+                           placeholder="Example: Backend delivery defaults"
+                        />
+                     </label>
+                     <label className="grid gap-1.5 text-sm">
+                        Description
+                        <Input
+                           value={customSkill.description}
+                           onChange={(event) =>
+                              setCustomSkill({ ...customSkill, description: event.target.value })
+                           }
+                           placeholder="Optional short description"
+                        />
+                     </label>
+                     <label className="grid gap-1.5 text-sm">
+                        Instructions
+                        <Textarea
+                           value={customSkill.instructions}
+                           onChange={(event) =>
+                              setCustomSkill({ ...customSkill, instructions: event.target.value })
+                           }
+                           placeholder="For example: Draft backend issues with MEDIUM priority and include an API acceptance criterion."
+                           className="min-h-32"
+                        />
+                     </label>
+                  </div>
+               )}
+               <DialogFooter>
+                  <Button variant="outline" onClick={() => setCustomSkill(null)} disabled={saving}>
+                     Cancel
+                  </Button>
+                  <Button
+                     onClick={() => void saveCustomSkill()}
+                     disabled={
+                        saving || !customSkill?.name.trim() || !customSkill.instructions.trim()
+                     }
+                  >
+                     {saving ? 'Saving…' : 'Save skill'}
+                  </Button>
+               </DialogFooter>
+            </DialogContent>
+         </Dialog>
 
          <SettingsSection
             title={`${PROVIDERS[provider].label} connection`}

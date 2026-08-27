@@ -203,6 +203,7 @@ export function toIssueUi(
 ): ProjectDetailUiIssue {
    return {
       id: issue.id,
+      parentIssueId: issue.parentIssueId ?? undefined,
       identifier: issue.identifier,
       title: issue.title,
       description: issue.description ?? '',

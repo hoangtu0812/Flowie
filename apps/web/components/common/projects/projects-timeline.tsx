@@ -61,6 +61,7 @@ const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 /** The fields an issue bar needs, as the project issue endpoint returns them. */
 type TimelineIssue = {
    id: string;
+   parentIssueId: string | null;
    identifier: string;
    title: string;
    createdAt: string;
@@ -78,10 +79,18 @@ function IssueRow({
    issue,
    monthWidth,
    href,
+   nested = false,
+   childCount = 0,
+   expanded = false,
+   onToggle,
 }: {
    issue: TimelineIssue;
    monthWidth: number;
    href: string;
+   nested?: boolean;
+   childCount?: number;
+   expanded?: boolean;
+   onToggle?: () => void;
 }) {
    const start = issue.createdAt.slice(0, 10);
    const end = issue.dueDate?.slice(0, 10) ?? null;
@@ -108,7 +117,29 @@ function IssueRow({
                <span className="truncate">{issue.title}</span>
             </Link>
          </div>
-         <div className="sticky left-0 z-10 flex items-center gap-1.5 w-56 shrink-0 pl-10 pr-4 h-8 bg-container/95 backdrop-blur-sm text-[11px] border-r border-border/40">
+         <div
+            className={cn(
+               'sticky left-0 z-10 flex items-center gap-1.5 w-56 shrink-0 pr-4 h-8 bg-container/95 backdrop-blur-sm text-[11px] border-r border-border/40',
+               nested ? 'pl-14' : 'pl-10'
+            )}
+         >
+            {childCount > 0 && (
+               <button
+                  type="button"
+                  aria-label={
+                     expanded
+                        ? `Hide sub-issues of ${issue.title}`
+                        : `Show sub-issues of ${issue.title}`
+                  }
+                  aria-expanded={expanded}
+                  onClick={onToggle}
+                  className="text-muted-foreground hover:text-foreground"
+               >
+                  <ChevronRight
+                     className={cn('size-3.5 transition-transform', expanded && 'rotate-90')}
+                  />
+               </button>
+            )}
             <span className="text-muted-foreground shrink-0">{issue.identifier}</span>
             <span className="truncate flex-1 text-muted-foreground">{issue.title}</span>
             {issue.assignee && (
@@ -137,6 +168,7 @@ function ExpandedIssues({
    monthWidth: number;
    orgId: string;
 }) {
+   const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
    if (loading || !issues) {
       return (
          <div className="sticky left-0 w-56 pl-10 pr-4 h-8 flex items-center text-[11px] text-muted-foreground">
@@ -151,16 +183,50 @@ function ExpandedIssues({
          </div>
       );
    }
+   const childrenByParent = new Map<string, TimelineIssue[]>();
+   for (const issue of issues) {
+      if (!issue.parentIssueId) continue;
+      const children = childrenByParent.get(issue.parentIssueId) ?? [];
+      children.push(issue);
+      childrenByParent.set(issue.parentIssueId, children);
+   }
    return (
       <>
-         {issues.map((issue) => (
-            <IssueRow
-               key={issue.id}
-               issue={issue}
-               monthWidth={monthWidth}
-               href={`/${orgId}/issue/${issue.identifier}`}
-            />
-         ))}
+         {issues
+            .filter((issue) => !issue.parentIssueId)
+            .map((issue) => {
+               const children = childrenByParent.get(issue.id) ?? [];
+               const expanded = expandedParents.has(issue.id);
+               return (
+                  <div key={issue.id}>
+                     <IssueRow
+                        issue={issue}
+                        monthWidth={monthWidth}
+                        href={`/${orgId}/issue/${issue.identifier}`}
+                        childCount={children.length}
+                        expanded={expanded}
+                        onToggle={() =>
+                           setExpandedParents((current) => {
+                              const next = new Set(current);
+                              if (next.has(issue.id)) next.delete(issue.id);
+                              else next.add(issue.id);
+                              return next;
+                           })
+                        }
+                     />
+                     {expanded &&
+                        children.map((child) => (
+                           <IssueRow
+                              key={child.id}
+                              issue={child}
+                              monthWidth={monthWidth}
+                              href={`/${orgId}/issue/${child.identifier}`}
+                              nested
+                           />
+                        ))}
+                  </div>
+               );
+            })}
       </>
    );
 }

@@ -28,6 +28,7 @@ declare module '@/mock-data/issues' {
 type NativeIssue = {
    id: string;
    teamId: string;
+   parentIssueId?: string | null;
    identifier: string;
    title: string;
    description?: string | null;
@@ -61,6 +62,7 @@ type NativeIssueOptions = {
    labels: LabelInterface[];
    cycles: Array<{
       id: string;
+      teamId: string;
       name: string;
       status: string;
       startDate?: string | null;
@@ -144,6 +146,7 @@ function asIssue(native: NativeIssue): Issue {
    return {
       id: native.id,
       teamId: native.teamId,
+      parentIssueId: native.parentIssueId ?? undefined,
       creatorId: native.creator?.id,
       identifier: native.identifier,
       title: native.title,

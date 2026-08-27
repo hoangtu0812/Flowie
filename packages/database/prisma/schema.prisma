@@ -379,6 +379,9 @@ model UserAgentSkill {
   id        String   @id @default(cuid())
   userId    String   @map("user_id")
   skillKey  String   @map("skill_key")
+  name      String?
+  description String?
+  instructions String?
   config    Json     @default("{}")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

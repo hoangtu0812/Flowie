@@ -12,6 +12,12 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Issue details now expose an editable due date and a Cycle selector. Cycles
+  are intentional team-scoped planning containers; adding an issue to one is
+  always a user action and is never assigned automatically.
+- Users can create, edit, and remove personal Agent skills with their own
+  default instructions. Skills follow the user between workspaces; shared
+  workspace tools remain separately managed by workspace owners and admins.
 - Agent personalization now exposes workspace-scoped analytical tools and
   personal skills. Workspace owners and administrators can install or remove
   supported tools; each user can install the Issue defaults skill to apply a
@@ -41,6 +47,9 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Changed
 
+- Sub-issues remain linked to their parent and are excluded from normal issue
+  lists. Project timelines show only parent issues initially and reveal child
+  issues from an expand control on the parent row.
 - Agent planning runs as a LangGraph workflow with the active workspace
   provider. Follow-up messages revise the same proposal conversation; proposals
   requiring clarification cannot be accepted.
