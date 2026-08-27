@@ -3,12 +3,21 @@
 import { CyclePlayIcon } from '@/components/common/cycles/cycle-line';
 import { Button } from '@/components/ui/button';
 import {
+   Dialog,
+   DialogContent,
+   DialogFooter,
+   DialogHeader,
+   DialogTitle,
+} from '@/components/ui/dialog';
+import {
    DropdownMenu,
    DropdownMenuContent,
    DropdownMenuItem,
    DropdownMenuLabel,
    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { IssueDetail } from '@/mock-data/issue-details';
 import { Issue } from '@/mock-data/issues';
 import { useIssuesStore } from '@/store/issues-store';
@@ -17,11 +26,13 @@ import {
    Box,
    CalendarDays,
    CalendarPlus,
+   CalendarRange,
    Check,
    GitPullRequestArrow,
    Plus,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { useState } from 'react';
 import { AssigneeUser } from '../assignee-user';
 import { LabelBadge } from '../label-badge';
 import { PrioritySelector } from '../priority-selector';
@@ -59,13 +70,39 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
       addIssueLabel,
       removeIssueLabel,
       setIssueCycle,
+      updateIssueSchedule,
       updateIssueDueDate,
       updateIssueProject,
    } = useIssuesStore();
+   const [scheduleOpen, setScheduleOpen] = useState(false);
+   const [startDate, setStartDate] = useState('');
+   const [targetDate, setTargetDate] = useState('');
+   const [savingSchedule, setSavingSchedule] = useState(false);
    const cycle = issue.cycleId
       ? cycles.find((candidate) => candidate.id === issue.cycleId)
       : undefined;
    const availableCycles = cycles.filter((candidate) => candidate.teamId === issue.teamId);
+
+   const openSchedule = () => {
+      setStartDate(issue.startDate?.slice(0, 10) ?? '');
+      setTargetDate(issue.targetDate?.slice(0, 10) ?? '');
+      setScheduleOpen(true);
+   };
+
+   const saveSchedule = async () => {
+      setSavingSchedule(true);
+      const saved = await updateIssueSchedule(issue.id, {
+         startDate: startDate || undefined,
+         targetDate: targetDate || undefined,
+      });
+      setSavingSchedule(false);
+      if (saved) setScheduleOpen(false);
+   };
+
+   const scheduleLabel =
+      issue.startDate || issue.targetDate
+         ? `${formatDay(issue.startDate)} → ${formatDay(issue.targetDate)}`
+         : 'Set start and target dates';
 
    const setProject = async (projectId: string | null) => {
       await updateIssueProject(
@@ -100,20 +137,44 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
                   <AssigneeUser user={issue.assignee} issueId={issue.id} />
                   <span className="text-sm">{issue.assignee ? issue.assignee.name : 'Assign'}</span>
                </div>
-               {/* Created and due date sit next to each other, so each one is
-                   labelled — an unlabelled date reads as either. */}
-               <label className="flex items-center gap-2 mt-0.5 text-sm cursor-pointer">
-                  <CalendarDays className="size-4 text-muted-foreground shrink-0" />
-                  <span className="w-20 shrink-0 text-xs text-muted-foreground">Due date</span>
-                  <input
-                     type="date"
-                     value={issue.dueDate?.slice(0, 10) ?? ''}
-                     onChange={(event) =>
-                        void updateIssueDueDate(issue.id, event.target.value || undefined)
-                     }
-                     className="h-7 min-w-0 flex-1 bg-transparent text-sm outline-none"
-                  />
-               </label>
+               <button
+                  type="button"
+                  onClick={openSchedule}
+                  className="flex items-center gap-2 mt-0.5 -ml-1 px-1 py-0.5 rounded-md text-left hover:bg-accent/50 transition-colors"
+               >
+                  <CalendarRange className="size-4 text-muted-foreground shrink-0" />
+                  <span className="w-20 shrink-0 text-xs text-muted-foreground">Schedule</span>
+                  <span className="min-w-0 flex-1 truncate text-sm">{scheduleLabel}</span>
+               </button>
+               <Popover>
+                  <PopoverTrigger asChild>
+                     <button
+                        type="button"
+                        className="flex items-center gap-2 mt-0.5 -ml-1 px-1 py-0.5 rounded-md text-left hover:bg-accent/50 transition-colors"
+                     >
+                        <CalendarDays className="size-4 text-muted-foreground shrink-0" />
+                        <span className="w-20 shrink-0 text-xs text-muted-foreground">
+                           Due date
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-sm">
+                           {formatDay(issue.dueDate)}
+                        </span>
+                     </button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-64 space-y-2">
+                     <p className="text-sm font-medium">Due date</p>
+                     <Input
+                        type="date"
+                        value={issue.dueDate?.slice(0, 10) ?? ''}
+                        onChange={(event) =>
+                           void updateIssueDueDate(issue.id, event.target.value || undefined)
+                        }
+                     />
+                     <p className="text-xs text-muted-foreground">
+                        Clear the field to remove the due date.
+                     </p>
+                  </PopoverContent>
+               </Popover>
                <div className="flex items-center gap-2 mt-0.5 text-sm">
                   <CalendarPlus className="size-4 text-muted-foreground shrink-0" />
                   <span className="w-20 shrink-0 text-xs text-muted-foreground">Created</span>
@@ -152,6 +213,44 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
                </DropdownMenu>
             </div>
          </Section>
+
+         <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
+            <DialogContent>
+               <DialogHeader>
+                  <DialogTitle>Set issue dates</DialogTitle>
+               </DialogHeader>
+               <div className="grid grid-cols-2 gap-3">
+                  <label className="space-y-1.5 text-sm font-medium">
+                     Start date
+                     <Input
+                        type="date"
+                        value={startDate}
+                        onChange={(event) => setStartDate(event.target.value)}
+                     />
+                  </label>
+                  <label className="space-y-1.5 text-sm font-medium">
+                     Target end date
+                     <Input
+                        type="date"
+                        value={targetDate}
+                        onChange={(event) => setTargetDate(event.target.value)}
+                     />
+                  </label>
+               </div>
+               <DialogFooter>
+                  <Button
+                     variant="outline"
+                     onClick={() => setScheduleOpen(false)}
+                     disabled={savingSchedule}
+                  >
+                     Cancel
+                  </Button>
+                  <Button onClick={() => void saveSchedule()} disabled={savingSchedule}>
+                     {savingSchedule ? 'Saving…' : 'Save'}
+                  </Button>
+               </DialogFooter>
+            </DialogContent>
+         </Dialog>
 
          <Section title="Labels">
             <div className="flex items-center flex-wrap gap-1.5">

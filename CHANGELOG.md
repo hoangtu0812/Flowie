@@ -12,6 +12,11 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Issues now support independent Start date and Target end date schedule
+  boundaries in addition to their existing Due date. The issue detail sidebar
+  provides a two-date editor for the work window and a separate clickable due
+  date; deployment requires the committed Prisma migration
+  `20260827230000_issue_schedule_dates` to finish before the API starts.
 - The web application now includes the Astryx Design core, neutral theme,
   StyleX, and CLI foundations. Its generated agent conventions are committed
   with the application to guide future Astryx-based UI work.

@@ -1001,6 +1001,8 @@ model Issue {
   priority      IssuePriority    @default(NONE)
   resolution    IssueResolution?
   estimate      Int?
+  startDate     DateTime?        @map("start_date")
+  targetDate    DateTime?        @map("target_date")
   dueDate       DateTime?        @map("due_date")
   creatorId     String           @map("creator_id")
   assigneeId    String?          @map("assignee_id")

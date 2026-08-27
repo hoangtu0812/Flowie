@@ -33,6 +33,11 @@ IssuePriority = Literal['NONE', 'LOW', 'MEDIUM', 'HIGH', 'URGENT']
 IssueCategory = Literal['TRIAGE', 'BACKLOG', 'UNSTARTED', 'STARTED', 'COMPLETED', 'CANCELED']
 
 
+def _validate_schedule_dates(start_date: datetime | None, target_date: datetime | None) -> None:
+    if start_date and target_date and target_date < start_date:
+        raise ApiError(400, 'Target end date cannot be earlier than the start date.', 'Bad Request')
+
+
 class CreateIssueInput(BaseModel):
     workspaceId: str = Field(min_length=1)
     teamId: str = Field(min_length=1)
@@ -43,6 +48,8 @@ class CreateIssueInput(BaseModel):
     parentIssueId: str | None = None
     assigneeId: str | None = None
     priority: IssuePriority = 'NONE'
+    startDate: str | None = None
+    targetDate: str | None = None
     dueDate: str | None = None
     labelIds: list[str] | None = Field(default=None, max_length=100)
     estimate: int | None = Field(default=None, ge=0)
@@ -55,6 +62,8 @@ class UpdateIssueInput(BaseModel):
     projectId: str | None = None
     assigneeId: str | None = None
     priority: IssuePriority | None = None
+    startDate: str | None = None
+    targetDate: str | None = None
     dueDate: str | None = None
     labelIds: list[str] | None = Field(default=None, max_length=100)
     releaseIds: list[str] | None = Field(default=None, max_length=100)
@@ -236,6 +245,8 @@ async def _issue_row(
         'priority': row['priority'],
         'resolution': row['resolution'],
         'estimate': row['estimate'],
+        'startDate': row['start_date'],
+        'targetDate': row['target_date'],
         'dueDate': row['due_date'],
         'completedAt': row['completed_at'],
         'canceledAt': row['canceled_at'],
@@ -541,6 +552,7 @@ async def create_issue(
     await _team_access(db, payload.workspaceId, payload.teamId, user['id'])
     values = payload.model_dump()
     category = await _validate_references(db, payload.workspaceId, payload.teamId, values, creating=True)
+    _validate_schedule_dates(_date(values.get('startDate')), _date(values.get('targetDate')))
     if not values.get('dueDate'):
         values['dueDate'] = await resolve_deadline(db, payload.workspaceId, payload.teamId, values['priority'])
     if values.get('parentIssueId'):
@@ -566,10 +578,10 @@ async def create_issue(
     await db.execute(
         text(
             '''INSERT INTO issues (id, workspace_id, team_id, status_id, project_id, parent_issue_id,
-               identifier, number, title, description, priority, estimate, due_date, creator_id,
+               identifier, number, title, description, priority, estimate, start_date, target_date, due_date, creator_id,
                assignee_id, completed_at, canceled_at, created_at, updated_at)
                VALUES (:id, :workspace_id, :team_id, :status_id, :project_id, :parent_issue_id,
-               :identifier, :number, :title, :description, :priority, :estimate, :due_date, :creator_id,
+               :identifier, :number, :title, :description, :priority, :estimate, :start_date, :target_date, :due_date, :creator_id,
                :assignee_id, :completed_at, :canceled_at, :now, :now)'''
         ),
         {
@@ -579,7 +591,8 @@ async def create_issue(
             'identifier': f"{sequence['identifier']}-{sequence['issue_sequence']}",
             'number': sequence['issue_sequence'], 'title': payload.title.strip(),
             'description': values.get('description'), 'priority': values['priority'],
-            'estimate': values.get('estimate'), 'due_date': _date(values.get('dueDate')),
+            'estimate': values.get('estimate'), 'start_date': _date(values.get('startDate')),
+            'target_date': _date(values.get('targetDate')), 'due_date': _date(values.get('dueDate')),
             'creator_id': user['id'], 'assignee_id': values.get('assigneeId'),
             'completed_at': completed_at, 'canceled_at': canceled_at, 'now': now,
         },
@@ -1315,17 +1328,22 @@ async def update_issue(
     previous_assignee_id = issue['assignee']['id'] if issue.get('assignee') else None
     if 'statusId' in values and values['statusId'] is None:
         raise ApiError(400, 'statusId cannot be empty.', 'Bad Request')
+    _validate_schedule_dates(
+        _date(values['startDate']) if 'startDate' in values else issue.get('startDate'),
+        _date(values['targetDate']) if 'targetDate' in values else issue.get('targetDate'),
+    )
     category = await _validate_references(db, workspaceId, issue['teamId'], values, creating=False)
     if 'releaseIds' in values:
         values['releaseIds'] = await _validate_release_ids(db, workspaceId, values['releaseIds'])
     columns = {
         'title': 'title', 'description': 'description', 'statusId': 'status_id', 'projectId': 'project_id',
-        'assigneeId': 'assignee_id', 'priority': 'priority', 'estimate': 'estimate', 'dueDate': 'due_date',
+        'assigneeId': 'assignee_id', 'priority': 'priority', 'estimate': 'estimate',
+        'startDate': 'start_date', 'targetDate': 'target_date', 'dueDate': 'due_date',
     }
     sets, params = [], {'issue_id': issue_id, 'now': _utcnow()}
     for field, column in columns.items():
         if field in values:
-            params[field] = _date(values[field]) if field == 'dueDate' else values[field]
+            params[field] = _date(values[field]) if field in {'startDate', 'targetDate', 'dueDate'} else values[field]
             if field == 'title' and isinstance(params[field], str):
                 params[field] = params[field].strip()
             sets.append(f'{column} = :{field}')
@@ -1386,6 +1404,18 @@ async def update_issue(
                 ),
             )
         )
+    if 'startDate' in values:
+        before = issue['startDate'].date().isoformat() if issue.get('startDate') else None
+        after = _date(values['startDate'])
+        after_text = after.date().isoformat() if after else None
+        if before != after_text:
+            changes.append(('Start date', _transition(before, after_text)))
+    if 'targetDate' in values:
+        before = issue['targetDate'].date().isoformat() if issue.get('targetDate') else None
+        after = _date(values['targetDate'])
+        after_text = after.date().isoformat() if after else None
+        if before != after_text:
+            changes.append(('Target end date', _transition(before, after_text)))
     if 'dueDate' in values:
         before = issue['dueDate'].date().isoformat() if issue.get('dueDate') else None
         after = _date(values['dueDate'])
