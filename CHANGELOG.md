@@ -112,6 +112,9 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Docker application containers now resolve PostgreSQL, Redis, and MinIO
+  through their configured `circle-*` container hostnames, preventing
+  migrations and API dependencies from failing DNS lookups during startup.
 - Returning to a tab left open for a long time no longer shows empty screens
   until a reload. Refresh tokens are single-use, and every request that met an
   expired access cookie spent the same one: the first succeeded and the rest

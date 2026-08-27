@@ -62,7 +62,7 @@ services:
       container_name: circle-migrate
       restart: 'no'
       environment:
-         DATABASE_URL: postgresql://${POSTGRES_USER:-circle}:${POSTGRES_PASSWORD:-circle}@postgres:5432/${POSTGRES_DB:-circle}?schema=public
+         DATABASE_URL: postgresql://${POSTGRES_USER:-circle}:${POSTGRES_PASSWORD:-circle}@circle-postgres:5432/${POSTGRES_DB:-circle}?schema=public
       depends_on:
          postgres:
             condition: service_healthy
@@ -81,18 +81,18 @@ services:
          API_CORS_ORIGIN: http://localhost:3000
          # Absolute base for the links carried by Discord notifications.
          APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
-         POSTGRES_HOST: postgres
+         POSTGRES_HOST: circle-postgres
          POSTGRES_PORT_INTERNAL: 5432
-         REDIS_HOST: redis
+         REDIS_HOST: circle-redis
          REDIS_PORT_INTERNAL: 6379
-         MINIO_HOST: minio
+         MINIO_HOST: circle-minio
          MINIO_PORT_INTERNAL: 9000
-         S3_ENDPOINT: http://minio:9000
+         S3_ENDPOINT: http://circle-minio:9000
          S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
          S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin123}
          S3_BUCKET: ${S3_BUCKET:-flowie}
          S3_REGION: ${S3_REGION:-us-east-1}
-         DATABASE_URL: postgresql://${POSTGRES_USER:-circle}:${POSTGRES_PASSWORD:-circle}@postgres:5432/${POSTGRES_DB:-circle}?schema=public
+         DATABASE_URL: postgresql://${POSTGRES_USER:-circle}:${POSTGRES_PASSWORD:-circle}@circle-postgres:5432/${POSTGRES_DB:-circle}?schema=public
          AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-development-only-change-me}
          AUTH_ACCESS_TOKEN_TTL_SECONDS: ${AUTH_ACCESS_TOKEN_TTL_SECONDS:-900}
          AUTH_REFRESH_TOKEN_TTL_DAYS: ${AUTH_REFRESH_TOKEN_TTL_DAYS:-30}
@@ -143,8 +143,8 @@ services:
       container_name: circle-worker
       environment:
          NODE_ENV: production
-         REDIS_URL: redis://redis:6379
-         DATABASE_URL: postgresql://${POSTGRES_USER:-circle}:${POSTGRES_PASSWORD:-circle}@postgres:5432/${POSTGRES_DB:-circle}?schema=public
+         REDIS_URL: redis://circle-redis:6379
+         DATABASE_URL: postgresql://${POSTGRES_USER:-circle}:${POSTGRES_PASSWORD:-circle}@circle-postgres:5432/${POSTGRES_DB:-circle}?schema=public
          TEAM_POLICY_SCAN_INTERVAL_MS: ${TEAM_POLICY_SCAN_INTERVAL_MS:-3600000}
       depends_on:
          migrate:
