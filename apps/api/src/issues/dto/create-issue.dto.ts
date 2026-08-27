@@ -3,7 +3,7 @@ import {
    IsArray,
    IsDateString,
    IsEnum,
-   IsInt,
+   IsNumber,
    IsOptional,
    IsString,
    MaxLength,
@@ -26,7 +26,12 @@ export class CreateIssueDto {
    @IsOptional() @IsArray() @IsString({ each: true }) labelIds?: string[];
    @IsOptional()
    @Transform(({ value }) => Number(value))
-   @IsInt()
+   @IsNumber({ maxDecimalPlaces: 2 })
    @Min(0)
-   estimate?: number;
+   estimatedEffort?: number;
+   @IsOptional()
+   @Transform(({ value }) => Number(value))
+   @IsNumber({ maxDecimalPlaces: 2 })
+   @Min(0)
+   actualEffort?: number;
 }

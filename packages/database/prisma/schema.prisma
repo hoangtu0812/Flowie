@@ -1000,7 +1000,8 @@ model Issue {
   description   String?
   priority      IssuePriority    @default(NONE)
   resolution    IssueResolution?
-  estimate      Int?
+  estimatedEffort Float?         @map("estimated_effort")
+  actualEffort    Float?         @map("actual_effort")
   startDate     DateTime?        @map("start_date")
   targetDate    DateTime?        @map("target_date")
   dueDate       DateTime?        @map("due_date")

@@ -12,6 +12,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Issues now record estimated and actual effort in fractional mandays. Both
+  values are editable from the issue properties panel, shown alongside the
+  planned Start → End window in issue lists, and preserved when the database
+  migration promotes existing whole-day estimates.
 - Issues now support independent Start date and Target end date schedule
   boundaries in addition to their existing Due date. The issue detail sidebar
   provides a two-date editor for the work window and a separate clickable due

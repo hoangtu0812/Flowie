@@ -60,6 +60,10 @@ export type LiveProjectIssue = {
    priority: string;
    createdAt: string;
    rank: string;
+   startDate: string | null;
+   targetDate: string | null;
+   estimatedEffort: number | null;
+   actualEffort: number | null;
    dueDate: string | null;
    status: { id: string; name: string; category: string; color: string };
    team: { id: string; name: string; identifier: string };

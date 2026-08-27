@@ -35,6 +35,8 @@ type NativeIssue = {
    priority: 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
    startDate?: string | null;
    targetDate?: string | null;
+   estimatedEffort?: number | null;
+   actualEffort?: number | null;
    dueDate?: string | null;
    createdAt: string;
    updatedAt: string;
@@ -89,6 +91,8 @@ type CreateIssuePayload = {
    priority?: NativeIssue['priority'];
    startDate?: string;
    targetDate?: string;
+   estimatedEffort?: number;
+   actualEffort?: number;
    dueDate?: string;
    labelIds?: string[];
 };
@@ -169,6 +173,8 @@ function asIssue(native: NativeIssue): Issue {
       rank: native.updatedAt,
       startDate: native.startDate ?? undefined,
       targetDate: native.targetDate ?? undefined,
+      estimatedEffort: native.estimatedEffort ?? undefined,
+      actualEffort: native.actualEffort ?? undefined,
       dueDate: native.dueDate ?? undefined,
       isSubscribed: (native.subscribers?.length ?? 0) > 0,
       isFavorite: (native.favorites?.length ?? 0) > 0,
@@ -258,6 +264,10 @@ interface IssuesState {
    updateIssueSchedule: (
       issueId: string,
       schedule: { startDate?: string; targetDate?: string }
+   ) => Promise<boolean>;
+   updateIssueEffort: (
+      issueId: string,
+      effort: { estimatedEffort?: number; actualEffort?: number }
    ) => Promise<boolean>;
    updateIssueDueDate: (issueId: string, dueDate: string | undefined) => Promise<boolean>;
 
@@ -736,6 +746,46 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
          return true;
       } catch (error) {
          toast.error(error instanceof Error ? error.message : 'Could not update issue schedule.');
+         return false;
+      }
+   },
+
+   updateIssueEffort: async (issueId, effort) => {
+      try {
+         const issue = get().getIssueById(issueId);
+         const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
+         if (!issue) {
+            toast.error('This issue is not ready yet.');
+            return false;
+         }
+         const response = await authenticatedFetch(
+            `${api}/issues/${issue.id}?${new URLSearchParams({ workspaceId })}`,
+            {
+               method: 'PATCH',
+               headers: { 'content-type': 'application/json' },
+               body: JSON.stringify({
+                  estimatedEffort: effort.estimatedEffort ?? null,
+                  actualEffort: effort.actualEffort ?? null,
+               }),
+            }
+         );
+         if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as {
+               message?: string;
+            } | null;
+            throw new Error(payload?.message ?? 'Could not update issue effort.');
+         }
+         const payload = (await response.json()) as { data: NativeIssue };
+         const updatedIssue = asIssue(payload.data);
+         set((state) => {
+            const issues = state.issues.map((candidate) =>
+               candidate.id === issueId ? updatedIssue : candidate
+            );
+            return { issues, issuesByStatus: groupIssuesByStatus(issues) };
+         });
+         return true;
+      } catch (error) {
+         toast.error(error instanceof Error ? error.message : 'Could not update issue effort.');
          return false;
       }
    },

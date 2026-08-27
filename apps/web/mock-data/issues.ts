@@ -24,6 +24,10 @@ export interface Issue {
    startDate?: string;
    /** Planned end of the issue work window; distinct from the due date. */
    targetDate?: string;
+   /** Planned workload, measured in mandays. */
+   estimatedEffort?: number;
+   /** Work recorded against the issue, measured in mandays. */
+   actualEffort?: number;
    dueDate?: string;
    /** Parent issue when this record is a sub-issue. */
    parentIssueId?: string;

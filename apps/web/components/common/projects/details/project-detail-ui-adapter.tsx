@@ -221,6 +221,10 @@ export function toIssueUi(
       cycleName: issue.cycleLinks[0]?.cycle.name,
       project,
       rank: issue.rank,
+      startDate: issue.startDate ?? undefined,
+      targetDate: issue.targetDate ?? undefined,
+      estimatedEffort: issue.estimatedEffort ?? undefined,
+      actualEffort: issue.actualEffort ?? undefined,
       dueDate: issue.dueDate ?? undefined,
    };
 }

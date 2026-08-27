@@ -3,7 +3,7 @@ import {
    IsArray,
    IsDateString,
    IsEnum,
-   IsInt,
+   IsNumber,
    IsOptional,
    IsString,
    MaxLength,
@@ -24,7 +24,12 @@ export class UpdateIssueDto {
    @IsOptional() @IsDateString() dueDate?: string | null;
    @IsOptional()
    @Transform(({ value }) => Number(value))
-   @IsInt()
+   @IsNumber({ maxDecimalPlaces: 2 })
    @Min(0)
-   estimate?: number;
+   estimatedEffort?: number;
+   @IsOptional()
+   @Transform(({ value }) => Number(value))
+   @IsNumber({ maxDecimalPlaces: 2 })
+   @Min(0)
+   actualEffort?: number;
 }

@@ -30,12 +30,14 @@ const MIN_DATED_BAR_WIDTH = 20;
 const MIN_UNSCHEDULED_BAR_WIDTH = 130;
 
 /**
- * An issue occupies the span it is worked over: from the day it was opened to
- * the day it is due. Without a due date there is no length to draw, so the bar
- * keeps the minimum width and says so with a dashed edge.
+ * An issue occupies its planned work window. A due date is a deadline rather
+ * than a duration, so it must not stretch the timeline after the target end.
  */
 function span(issue: Issue): { start: string; end: string | null } {
-   return { start: issue.createdAt.slice(0, 10), end: issue.dueDate?.slice(0, 10) ?? null };
+   return {
+      start: issue.startDate?.slice(0, 10) ?? issue.createdAt.slice(0, 10),
+      end: issue.targetDate?.slice(0, 10) ?? null,
+   };
 }
 
 function rangeLabel(issue: Issue): string {

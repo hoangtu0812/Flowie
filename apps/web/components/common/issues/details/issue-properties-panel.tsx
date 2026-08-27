@@ -30,6 +30,7 @@ import {
    Check,
    GitPullRequestArrow,
    Plus,
+   Timer,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useState } from 'react';
@@ -71,6 +72,7 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
       removeIssueLabel,
       setIssueCycle,
       updateIssueSchedule,
+      updateIssueEffort,
       updateIssueDueDate,
       updateIssueProject,
    } = useIssuesStore();
@@ -78,6 +80,10 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
    const [startDate, setStartDate] = useState('');
    const [targetDate, setTargetDate] = useState('');
    const [savingSchedule, setSavingSchedule] = useState(false);
+   const [effortOpen, setEffortOpen] = useState(false);
+   const [estimatedEffort, setEstimatedEffort] = useState('');
+   const [actualEffort, setActualEffort] = useState('');
+   const [savingEffort, setSavingEffort] = useState(false);
    const cycle = issue.cycleId
       ? cycles.find((candidate) => candidate.id === issue.cycleId)
       : undefined;
@@ -97,6 +103,27 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
       });
       setSavingSchedule(false);
       if (saved) setScheduleOpen(false);
+   };
+
+   const openEffort = () => {
+      setEstimatedEffort(issue.estimatedEffort?.toString() ?? '');
+      setActualEffort(issue.actualEffort?.toString() ?? '');
+      setEffortOpen(true);
+   };
+
+   const effortValue = (value: string) => {
+      const parsed = Number(value);
+      return value.trim() && Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+   };
+
+   const saveEffort = async () => {
+      setSavingEffort(true);
+      const saved = await updateIssueEffort(issue.id, {
+         estimatedEffort: effortValue(estimatedEffort),
+         actualEffort: effortValue(actualEffort),
+      });
+      setSavingEffort(false);
+      if (saved) setEffortOpen(false);
    };
 
    const scheduleLabel =
@@ -175,6 +202,17 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
                      </p>
                   </PopoverContent>
                </Popover>
+               <button
+                  type="button"
+                  onClick={openEffort}
+                  className="flex items-center gap-2 mt-0.5 -ml-1 px-1 py-0.5 rounded-md text-left hover:bg-accent/50 transition-colors"
+               >
+                  <Timer className="size-4 text-muted-foreground shrink-0" />
+                  <span className="w-20 shrink-0 text-xs text-muted-foreground">Effort</span>
+                  <span className="min-w-0 flex-1 truncate text-sm">
+                     Est {issue.estimatedEffort ?? '—'} · Act {issue.actualEffort ?? '—'} mandays
+                  </span>
+               </button>
                <div className="flex items-center gap-2 mt-0.5 text-sm">
                   <CalendarPlus className="size-4 text-muted-foreground shrink-0" />
                   <span className="w-20 shrink-0 text-xs text-muted-foreground">Created</span>
@@ -247,6 +285,48 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
                   </Button>
                   <Button onClick={() => void saveSchedule()} disabled={savingSchedule}>
                      {savingSchedule ? 'Saving…' : 'Save'}
+                  </Button>
+               </DialogFooter>
+            </DialogContent>
+         </Dialog>
+
+         <Dialog open={effortOpen} onOpenChange={setEffortOpen}>
+            <DialogContent>
+               <DialogHeader>
+                  <DialogTitle>Set issue effort</DialogTitle>
+               </DialogHeader>
+               <div className="grid grid-cols-2 gap-3">
+                  <label className="space-y-1.5 text-sm font-medium">
+                     Est effort (mandays)
+                     <Input
+                        type="number"
+                        min="0"
+                        step="0.25"
+                        value={estimatedEffort}
+                        onChange={(event) => setEstimatedEffort(event.target.value)}
+                     />
+                  </label>
+                  <label className="space-y-1.5 text-sm font-medium">
+                     Act effort (mandays)
+                     <Input
+                        type="number"
+                        min="0"
+                        step="0.25"
+                        value={actualEffort}
+                        onChange={(event) => setActualEffort(event.target.value)}
+                     />
+                  </label>
+               </div>
+               <DialogFooter>
+                  <Button
+                     variant="outline"
+                     onClick={() => setEffortOpen(false)}
+                     disabled={savingEffort}
+                  >
+                     Cancel
+                  </Button>
+                  <Button onClick={() => void saveEffort()} disabled={savingEffort}>
+                     {savingEffort ? 'Saving…' : 'Save'}
                   </Button>
                </DialogFooter>
             </DialogContent>

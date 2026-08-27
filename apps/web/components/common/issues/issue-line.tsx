@@ -18,6 +18,9 @@ import { motion } from 'motion/react';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { IssueContextMenu } from './issue-context-menu';
 
+const formatScheduleDate = (value: string | undefined) =>
+   value ? format(new Date(value), 'MMM dd') : '—';
+
 export function IssueLine({ issue, layoutId = false }: { issue: Issue; layoutId?: boolean }) {
    const { orgId } = useParams<{ orgId: string }>();
    const { displayProperties } = useDisplaySettingsStore();
@@ -70,6 +73,16 @@ export function IssueLine({ issue, layoutId = false }: { issue: Issue; layoutId?
                {displayProperties.project && (
                   <div className={ISSUE_COLUMN.project}>
                      {issue.project && <ProjectBadge project={issue.project} />}
+                  </div>
+               )}
+               {displayProperties.schedule && (
+                  <div className={cn(ISSUE_COLUMN.schedule, 'text-xs text-muted-foreground')}>
+                     {formatScheduleDate(issue.startDate)} → {formatScheduleDate(issue.targetDate)}
+                  </div>
+               )}
+               {displayProperties.effort && (
+                  <div className={cn(ISSUE_COLUMN.effort, 'text-xs text-muted-foreground')}>
+                     Est {issue.estimatedEffort ?? '—'} · Act {issue.actualEffort ?? '—'}
                   </div>
                )}
                {displayProperties.cycle && (

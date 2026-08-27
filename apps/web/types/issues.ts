@@ -28,6 +28,10 @@ export interface Issue {
    project?: Project;
    subissues?: string[];
    rank: string;
+   startDate?: string;
+   targetDate?: string;
+   estimatedEffort?: number;
+   actualEffort?: number;
    dueDate?: string;
    parentIssueId?: string;
 }

@@ -12,6 +12,8 @@ export type DisplayPropertyKey =
    | 'assignee'
    | 'labels'
    | 'project'
+   | 'schedule'
+   | 'effort'
    | 'dueDate'
    | 'created'
    | 'cycle';
@@ -23,6 +25,8 @@ export const DISPLAY_PROPERTIES: { key: DisplayPropertyKey; label: string }[] = 
    { key: 'priority', label: 'Priority' },
    { key: 'labels', label: 'Labels' },
    { key: 'project', label: 'Project' },
+   { key: 'schedule', label: 'Schedule' },
+   { key: 'effort', label: 'Effort' },
    { key: 'dueDate', label: 'Due date' },
    { key: 'created', label: 'Created' },
    { key: 'cycle', label: 'Cycle' },
@@ -35,6 +39,8 @@ const DEFAULT_DISPLAY_PROPERTIES: Record<DisplayPropertyKey, boolean> = {
    assignee: true,
    labels: true,
    project: true,
+   schedule: true,
+   effort: true,
    dueDate: true,
    created: true,
    cycle: false,
@@ -97,20 +103,20 @@ export const useDisplaySettingsStore = create<DisplaySettingsState>()(
       {
          name: 'display-settings',
          storage: createJSONStorage(() => localStorage),
-         version: 1,
-         // Issue rows now carry labelled Created and Due date columns. A due
-         // date column that defaults to hidden makes the remaining date read
-         // as the deadline, so turn it on once for browsers holding the old
-         // default.
+         version: 2,
+         // New list columns must be enabled for an existing browser because
+         // persisted display settings otherwise retain no keys for them.
          migrate: (persisted, version) => {
             const state = persisted as Partial<DisplaySettingsState> | undefined;
-            if (!state || version >= 1) return state as DisplaySettingsState;
+            if (!state || version >= 2) return state as DisplaySettingsState;
             return {
                ...state,
                displayProperties: {
                   ...DEFAULT_DISPLAY_PROPERTIES,
                   ...state.displayProperties,
                   dueDate: true,
+                  schedule: true,
+                  effort: true,
                },
             } as DisplaySettingsState;
          },

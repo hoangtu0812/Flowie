@@ -52,7 +52,8 @@ class CreateIssueInput(BaseModel):
     targetDate: str | None = None
     dueDate: str | None = None
     labelIds: list[str] | None = Field(default=None, max_length=100)
-    estimate: int | None = Field(default=None, ge=0)
+    estimatedEffort: float | None = Field(default=None, ge=0)
+    actualEffort: float | None = Field(default=None, ge=0)
 
 
 class UpdateIssueInput(BaseModel):
@@ -67,7 +68,8 @@ class UpdateIssueInput(BaseModel):
     dueDate: str | None = None
     labelIds: list[str] | None = Field(default=None, max_length=100)
     releaseIds: list[str] | None = Field(default=None, max_length=100)
-    estimate: int | None = Field(default=None, ge=0)
+    estimatedEffort: float | None = Field(default=None, ge=0)
+    actualEffort: float | None = Field(default=None, ge=0)
 
 
 class IssueReactionInput(BaseModel):
@@ -244,7 +246,8 @@ async def _issue_row(
         'description': row['description'],
         'priority': row['priority'],
         'resolution': row['resolution'],
-        'estimate': row['estimate'],
+        'estimatedEffort': row['estimated_effort'],
+        'actualEffort': row['actual_effort'],
         'startDate': row['start_date'],
         'targetDate': row['target_date'],
         'dueDate': row['due_date'],
@@ -578,10 +581,10 @@ async def create_issue(
     await db.execute(
         text(
             '''INSERT INTO issues (id, workspace_id, team_id, status_id, project_id, parent_issue_id,
-               identifier, number, title, description, priority, estimate, start_date, target_date, due_date, creator_id,
+               identifier, number, title, description, priority, estimated_effort, actual_effort, start_date, target_date, due_date, creator_id,
                assignee_id, completed_at, canceled_at, created_at, updated_at)
                VALUES (:id, :workspace_id, :team_id, :status_id, :project_id, :parent_issue_id,
-               :identifier, :number, :title, :description, :priority, :estimate, :start_date, :target_date, :due_date, :creator_id,
+               :identifier, :number, :title, :description, :priority, :estimated_effort, :actual_effort, :start_date, :target_date, :due_date, :creator_id,
                :assignee_id, :completed_at, :canceled_at, :now, :now)'''
         ),
         {
@@ -591,7 +594,8 @@ async def create_issue(
             'identifier': f"{sequence['identifier']}-{sequence['issue_sequence']}",
             'number': sequence['issue_sequence'], 'title': payload.title.strip(),
             'description': values.get('description'), 'priority': values['priority'],
-            'estimate': values.get('estimate'), 'start_date': _date(values.get('startDate')),
+            'estimated_effort': values.get('estimatedEffort'), 'actual_effort': values.get('actualEffort'),
+            'start_date': _date(values.get('startDate')),
             'target_date': _date(values.get('targetDate')), 'due_date': _date(values.get('dueDate')),
             'creator_id': user['id'], 'assignee_id': values.get('assigneeId'),
             'completed_at': completed_at, 'canceled_at': canceled_at, 'now': now,
@@ -1337,7 +1341,8 @@ async def update_issue(
         values['releaseIds'] = await _validate_release_ids(db, workspaceId, values['releaseIds'])
     columns = {
         'title': 'title', 'description': 'description', 'statusId': 'status_id', 'projectId': 'project_id',
-        'assigneeId': 'assignee_id', 'priority': 'priority', 'estimate': 'estimate',
+        'assigneeId': 'assignee_id', 'priority': 'priority',
+        'estimatedEffort': 'estimated_effort', 'actualEffort': 'actual_effort',
         'startDate': 'start_date', 'targetDate': 'target_date', 'dueDate': 'due_date',
     }
     sets, params = [], {'issue_id': issue_id, 'now': _utcnow()}
@@ -1422,8 +1427,10 @@ async def update_issue(
         after_text = after.date().isoformat() if after else None
         if before != after_text:
             changes.append(('Due date', _transition(before, after_text)))
-    if 'estimate' in values and values['estimate'] != issue['estimate']:
-        changes.append(('Estimate', _transition(issue['estimate'], values['estimate'])))
+    if 'estimatedEffort' in values and values['estimatedEffort'] != issue['estimatedEffort']:
+        changes.append(('Estimated effort', _transition(issue['estimatedEffort'], values['estimatedEffort'])))
+    if 'actualEffort' in values and values['actualEffort'] != issue['actualEffort']:
+        changes.append(('Actual effort', _transition(issue['actualEffort'], values['actualEffort'])))
     if 'description' in values and values['description'] != issue['description']:
         changes.append(('Description', 'updated'))
 
