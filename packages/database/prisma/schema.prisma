@@ -225,6 +225,23 @@ model EmailVerificationToken {
   @@map("email_verification_tokens")
 }
 
+model RegistrationVerificationToken {
+  id                 String   @id @default(cuid())
+  email              String   @unique
+  name               String
+  passwordHash       String   @map("password_hash")
+  timezone           String   @default("UTC")
+  codeHash           String   @map("code_hash")
+  requestFingerprint String?  @map("request_fingerprint")
+  attemptCount       Int      @default(0) @map("attempt_count")
+  expiresAt          DateTime @map("expires_at")
+  createdAt          DateTime @default(now()) @map("created_at")
+  lastSentAt         DateTime @map("last_sent_at")
+
+  @@index([expiresAt])
+  @@map("registration_verification_tokens")
+}
+
 model UserIdentity {
   id                String           @id @default(cuid())
   userId            String           @map("user_id")

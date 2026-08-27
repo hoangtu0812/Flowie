@@ -40,6 +40,12 @@ class Settings:
     auth_access_token_ttl_seconds: int
     auth_refresh_token_ttl_days: int
     auth_cookie_secure: bool
+    discord_bot_token: str
+    discord_bot_channel_id: str
+    discord_bot_guild_id: str
+    discord_registration_channel_id: str
+    discord_registration_channel_role_id: str
+    registration_otp_ttl_seconds: int
 
     @classmethod
     def from_environment(cls) -> 'Settings':
@@ -62,4 +68,10 @@ class Settings:
             auth_access_token_ttl_seconds=int(getenv('AUTH_ACCESS_TOKEN_TTL_SECONDS', '900')),
             auth_refresh_token_ttl_days=int(getenv('AUTH_REFRESH_TOKEN_TTL_DAYS', '30')),
             auth_cookie_secure=getenv('AUTH_COOKIE_SECURE', 'false').lower() == 'true',
+            discord_bot_token=getenv('DISCORD_BOT_TOKEN', '').strip(),
+            discord_bot_channel_id=getenv('DISCORD_BOT_CHANNEL_ID', '').strip(),
+            discord_bot_guild_id=getenv('DISCORD_BOT_GUILD_ID', '').strip(),
+            discord_registration_channel_id=getenv('DISCORD_REGISTRATION_CHANNEL_ID', '').strip(),
+            discord_registration_channel_role_id=getenv('DISCORD_REGISTRATION_CHANNEL_ROLE_ID', '').strip(),
+            registration_otp_ttl_seconds=int(getenv('REGISTRATION_OTP_TTL_SECONDS', '600')),
         )

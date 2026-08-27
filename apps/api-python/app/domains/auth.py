@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
+from hmac import compare_digest
 import re
-from secrets import token_urlsafe
+from secrets import choice, token_urlsafe
+from string import digits
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -20,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.config import Settings
 from ..core.errors import ApiError
 from ..db.session import get_session
+from ..services.registration_verification import RegistrationDeliveryError, deliver_registration_code
 from .workflow_catalog import DEFAULT_CIRCLE_ISSUE_STATUSES
 
 router = APIRouter(prefix='/api/v1/auth', tags=['auth'])
@@ -53,6 +56,11 @@ class RegisterInput(BaseModel):
     timezone: str | None = Field(default=None, max_length=100)
 
 
+class VerifyRegistrationInput(BaseModel):
+    email: str = Field(max_length=320)
+    code: str = Field(min_length=6, max_length=6, pattern=r'^\d{6}$')
+
+
 class CreateApiKeyInput(BaseModel):
     name: str = Field(min_length=2, max_length=80)
     expiresAt: str | None = Field(default=None, max_length=64)
@@ -71,6 +79,16 @@ def _cuid() -> str:
 
 def _hash_token(token: str) -> str:
     return sha256(token.encode('utf-8')).hexdigest()
+
+
+def _registration_code() -> str:
+    return ''.join(choice(digits) for _ in range(6))
+
+
+def _request_fingerprint(request: Request, secret: str) -> str | None:
+    if not request.client:
+        return None
+    return sha256(f'{secret}:{request.client.host}'.encode('utf-8')).hexdigest()
 
 
 def _compatible_argon2_hash(value: str) -> str:
@@ -346,8 +364,8 @@ async def current_user(
     return user
 
 
-@router.post('/register')
-async def register(
+@router.post('/register', status_code=202)
+async def request_registration_verification(
     payload: RegisterInput,
     request: Request,
     db: AsyncSession = Depends(get_session),
@@ -356,60 +374,169 @@ async def register(
     email = _normalized_email(payload.email)
     timezone_name = _valid_timezone(payload.timezone) or 'UTC'
     now = _utcnow()
-    user = {
-        'id': _cuid(),
-        'email': email,
-        'name': name,
-        'username': None,
-        'title': None,
-        'timezone': timezone_name,
-        'avatar_url': None,
-        'password_hash': password_hasher.hash(payload.password),
-        'is_platform_admin': False,
-        'email_verified_at': None,
-        'status': 'ACTIVE',
-        'created_at': now,
-    }
+    expires_at = now + timedelta(seconds=request.app.state.settings.registration_otp_ttl_seconds)
+    code = _registration_code()
+    fingerprint = _request_fingerprint(request, request.app.state.settings.auth_jwt_secret)
     try:
         async with db.begin():
             if await _find_user_by_email(db, email):
                 raise ApiError(409, 'An account already exists for this email address.', 'Conflict')
+            if fingerprint:
+                recent_requests = await db.execute(
+                    text(
+                        '''
+                        SELECT COUNT(*) FROM registration_verification_tokens
+                        WHERE request_fingerprint = :fingerprint
+                          AND created_at > :window_start
+                        '''
+                    ),
+                    {'fingerprint': fingerprint, 'window_start': now - timedelta(minutes=10)},
+                )
+                if int(recent_requests.scalar_one()) >= 5:
+                    raise ApiError(429, 'Too many registration requests. Please try again later.', 'Too Many Requests')
+            existing_pending = await db.execute(
+                text(
+                    '''
+                    SELECT last_sent_at FROM registration_verification_tokens
+                    WHERE email = :email
+                    FOR UPDATE
+                    '''
+                ),
+                {'email': email},
+            )
+            last_pending = existing_pending.mappings().first()
+            if last_pending and last_pending['last_sent_at'] > now - timedelta(minutes=1):
+                raise ApiError(429, 'Wait one minute before requesting another verification code.', 'Too Many Requests')
             await db.execute(
                 text(
                     '''
-                    INSERT INTO users (
-                        id, email, name, timezone, password_hash, is_platform_admin,
-                        status, created_at, updated_at
+                    DELETE FROM registration_verification_tokens WHERE email = :email
+                    '''
+                ),
+                {'email': email},
+            )
+            await db.execute(
+                text(
+                    '''
+                    INSERT INTO registration_verification_tokens (
+                        id, email, name, password_hash, timezone, code_hash, request_fingerprint,
+                        expires_at, created_at, last_sent_at
                     ) VALUES (
-                        :id, :email, :name, :timezone, :password_hash, :is_platform_admin,
-                        :status, :created_at, :updated_at
+                        :id, :email, :name, :password_hash, :timezone, :code_hash, :request_fingerprint,
+                        :expires_at, :created_at, :last_sent_at
                     )
                     '''
                 ),
-                {**user, 'updated_at': now},
+                {
+                    'id': _cuid(),
+                    'email': email,
+                    'name': name,
+                    'password_hash': password_hasher.hash(payload.password),
+                    'timezone': timezone_name,
+                    'code_hash': _hash_token(code),
+                    'request_fingerprint': fingerprint,
+                    'expires_at': expires_at,
+                    'created_at': now,
+                    'last_sent_at': now,
+                },
             )
-            await db.execute(
-                text(
-                    '''
-                    INSERT INTO user_identities (
-                        id, user_id, provider, provider_account_id, email, created_at, updated_at
-                    ) VALUES (:id, :user_id, 'LOCAL', :provider_account_id, :email, :now, :now)
-                    '''
-                ),
-                {'id': _cuid(), 'user_id': user['id'], 'provider_account_id': email, 'email': email, 'now': now},
-            )
-            await create_workspace_bootstrap(
-                db,
-                user_id=user['id'],
-                organization_name=f"{name}'s organization",
-                workspace_name=f"{name}'s workspace",
-                now=now,
-            )
-            access_token, refresh_token, data = await _create_session(db, user, request, request.app.state.settings)
     except IntegrityError as error:
-        # A concurrent request can pass the pre-check; retain the legacy API
-        # contract instead of leaking the database constraint.
         raise ApiError(409, 'An account already exists for this email address.', 'Conflict') from error
+
+    try:
+        await deliver_registration_code(request.app.state.settings, email=email, code=code, expires_at=expires_at)
+    except RegistrationDeliveryError as error:
+        await db.execute(
+            text('DELETE FROM registration_verification_tokens WHERE email = :email AND code_hash = :code_hash'),
+            {'email': email, 'code_hash': _hash_token(code)},
+        )
+        await db.commit()
+        raise ApiError(503, str(error), 'Service Unavailable') from error
+    return JSONResponse({'data': {'email': email, 'expiresAt': expires_at.isoformat()}}, status_code=202)
+
+
+@router.post('/register/verify')
+async def verify_registration(
+    payload: VerifyRegistrationInput,
+    request: Request,
+    db: AsyncSession = Depends(get_session),
+) -> JSONResponse:
+    email = _normalized_email(payload.email)
+    now = _utcnow()
+    async with db.begin():
+        result = await db.execute(
+            text(
+                '''
+                SELECT id, email, name, password_hash, timezone, code_hash, expires_at, attempt_count
+                FROM registration_verification_tokens
+                WHERE email = :email
+                FOR UPDATE
+                '''
+            ),
+            {'email': email},
+        )
+        pending = result.mappings().first()
+        if not pending or pending['expires_at'] <= now:
+            if pending:
+                await db.execute(text('DELETE FROM registration_verification_tokens WHERE id = :id'), {'id': pending['id']})
+            raise ApiError(400, 'The verification code has expired. Request a new code.', 'Bad Request')
+        if pending['attempt_count'] >= 5:
+            raise ApiError(429, 'Too many incorrect codes. Request a new code.', 'Too Many Requests')
+        if not compare_digest(pending['code_hash'], _hash_token(payload.code)):
+            await db.execute(
+                text('UPDATE registration_verification_tokens SET attempt_count = attempt_count + 1 WHERE id = :id'),
+                {'id': pending['id']},
+            )
+            raise ApiError(400, 'The verification code is incorrect.', 'Bad Request')
+        if await _find_user_by_email(db, email):
+            raise ApiError(409, 'An account already exists for this email address.', 'Conflict')
+        user = {
+            'id': _cuid(),
+            'email': email,
+            'name': pending['name'],
+            'username': None,
+            'title': None,
+            'timezone': pending['timezone'],
+            'avatar_url': None,
+            'password_hash': pending['password_hash'],
+            'is_platform_admin': False,
+            'email_verified_at': now,
+            'status': 'ACTIVE',
+            'created_at': now,
+        }
+        await db.execute(
+            text(
+                '''
+                INSERT INTO users (
+                    id, email, name, timezone, password_hash, is_platform_admin,
+                    email_verified_at, status, created_at, updated_at
+                ) VALUES (
+                    :id, :email, :name, :timezone, :password_hash, :is_platform_admin,
+                    :email_verified_at, :status, :created_at, :updated_at
+                )
+                '''
+            ),
+            {**user, 'updated_at': now},
+        )
+        await db.execute(
+            text(
+                '''
+                INSERT INTO user_identities (
+                    id, user_id, provider, provider_account_id, email, created_at, updated_at
+                ) VALUES (:id, :user_id, 'LOCAL', :provider_account_id, :email, :now, :now)
+                '''
+            ),
+            {'id': _cuid(), 'user_id': user['id'], 'provider_account_id': email, 'email': email, 'now': now},
+        )
+        await create_workspace_bootstrap(
+            db,
+            user_id=user['id'],
+            organization_name=f"{user['name']}'s organization",
+            workspace_name=f"{user['name']}'s workspace",
+            now=now,
+        )
+        await db.execute(text('DELETE FROM registration_verification_tokens WHERE id = :id'), {'id': pending['id']})
+        access_token, refresh_token, data = await _create_session(db, user, request, request.app.state.settings)
 
     response = JSONResponse({'data': data}, status_code=201)
     _set_cookies(response, access_token, refresh_token, request.app.state.settings)

@@ -75,3 +75,32 @@ Interactive slash commands are intentionally not enabled yet: they require a
 public Discord interactions endpoint and request-signature verification. The
 bot broadcaster above is fully operational for notifications without exposing
 any inbound command surface.
+
+## Registration OTP channel
+
+Local-password registration is completed only after the applicant enters a
+six-digit OTP. The bot sends that OTP to a private `#flowie-register` text
+channel and creates the channel automatically on its first use when it does
+not already exist. SSO providers do not call this local-registration flow, so
+they do not require a Discord OTP.
+
+Give the bot **View Channels**, **Send Messages**, and **Manage Channels** in
+the Discord server. Configure `DISCORD_BOT_GUILD_ID` (or an existing
+`DISCORD_BOT_CHANNEL_ID`, from which Flowie can discover the server) and set
+`DISCORD_REGISTRATION_CHANNEL_ROLE_ID` to a trusted registration-admin role.
+The bot denies `@everyone` access when creating the channel. Use
+`DISCORD_REGISTRATION_CHANNEL_ID` only when you have already created and
+permissioned the private channel yourself; Flowie refuses a configured channel
+that is not private.
+
+This is an admin-mediated verification flow: the applicant is not granted
+access to the shared channel, because otherwise they could see another
+applicant's OTP. An authorized registration admin must provide the code through
+an already verified contact method. For fully self-service sign-up, use a
+per-user delivery mechanism such as email or Discord DM after the applicant's
+Discord identity has been authenticated.
+
+Codes expire after 10 minutes, are stored only as SHA-256 hashes, allow five
+incorrect attempts, and the registration endpoint limits each client to five
+pending requests per 10 minutes. If Discord is not configured or cannot accept
+the code, Flowie does not create the account.
