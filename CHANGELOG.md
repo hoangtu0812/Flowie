@@ -58,6 +58,9 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Changed
 
+- The application sidebar now follows the shell-side-nav layout with a wider
+  header, separated navigation sections, footer boundary, and side rail while
+  preserving Flowie workspace and team navigation.
 - Priority icons carry their own colour — urgent red, high orange, medium
   amber, low blue — so a priority is read at a glance instead of by counting
   bars. "No priority" stays neutral and inherits the surrounding text colour.
