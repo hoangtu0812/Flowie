@@ -61,6 +61,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Changed
 
+- Initiative list rows now let workspace managers change an initiative's
+  priority or owner directly, using the same persisted API update path as the
+  initiative detail view. The list refreshes after a successful change and
+  leaves the owner unassigned when selected explicitly.
 - The application sidebar now follows the shell-side-nav layout with a wider
   header, separated navigation sections, footer boundary, and side rail while
   preserving Flowie workspace and team navigation.

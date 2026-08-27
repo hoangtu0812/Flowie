@@ -18,6 +18,7 @@ import {
    SelectTrigger,
    SelectValue,
 } from '@/components/ui/select';
+import { authenticatedFetch } from '@/lib/workspaces';
 import { cn } from '@/lib/utils';
 import {
    adaptInitiatives,
@@ -29,10 +30,7 @@ import {
    InitiativeStatus,
 } from './initiative-ui-adapter';
 import { priorities } from '@/lib/priority-presentations';
-import {
-   InitiativesFilterType,
-   useInitiativesFilterStore,
-} from '@/store/initiatives-filter-store';
+import { InitiativesFilterType, useInitiativesFilterStore } from '@/store/initiatives-filter-store';
 import {
    InitiativesDisplayProperties,
    useInitiativesDisplayStore,
@@ -51,6 +49,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { parseAsStringLiteral, useQueryState } from 'nuqs';
 import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { InitiativeStatusIcon } from './initiative-status-icon';
 import { InitiativesSidePanel } from './initiatives-side-panel';
 import { type LiveWorkspaceMember, useLiveInitiatives } from './use-live-initiatives';
@@ -162,21 +161,24 @@ function InitiativesFilter({ members }: { members: LiveWorkspaceMember[] }) {
                         {members.slice(0, 10).map((member) => {
                            const user = member.user;
                            return (
-                           <CommandItem
-                              key={user.id}
-                              onSelect={() => toggleFilter('owner', user.id)}
-                           >
-                              <Avatar className="size-4">
-                                 <AvatarImage src={user.avatarUrl ?? undefined} alt={user.name} />
-                                 <AvatarFallback className="text-[8px]">
-                                    {user.name[0]}
-                                 </AvatarFallback>
-                              </Avatar>
-                              {user.name}
-                              {filters.owner.includes(user.id) && (
-                                 <CheckIcon className="ml-auto size-3.5" />
-                              )}
-                           </CommandItem>
+                              <CommandItem
+                                 key={user.id}
+                                 onSelect={() => toggleFilter('owner', user.id)}
+                              >
+                                 <Avatar className="size-4">
+                                    <AvatarImage
+                                       src={user.avatarUrl ?? undefined}
+                                       alt={user.name}
+                                    />
+                                    <AvatarFallback className="text-[8px]">
+                                       {user.name[0]}
+                                    </AvatarFallback>
+                                 </Avatar>
+                                 {user.name}
+                                 {filters.owner.includes(user.id) && (
+                                    <CheckIcon className="ml-auto size-3.5" />
+                                 )}
+                              </CommandItem>
                            );
                         })}
                      </CommandGroup>
@@ -319,29 +321,222 @@ function ActiveProjectDots({ initiative }: { initiative: Initiative }) {
    );
 }
 
+async function updateInitiativeProperty(
+   initiativeId: string,
+   workspaceId: string | undefined,
+   patch: { priority?: string; ownerId?: string | null }
+) {
+   if (!workspaceId) {
+      throw new Error('Workspace context is not ready.');
+   }
+   const response = await authenticatedFetch(
+      `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'}/initiatives/${initiativeId}?workspaceId=${workspaceId}`,
+      {
+         method: 'PATCH',
+         headers: { 'content-type': 'application/json' },
+         body: JSON.stringify(patch),
+      }
+   );
+   if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+      throw new Error(payload?.message ?? 'Could not update initiative.');
+   }
+}
+
+function InitiativePrioritySelector({
+   initiative,
+   workspaceId,
+   onUpdated,
+}: {
+   initiative: Initiative;
+   workspaceId?: string;
+   onUpdated: () => void;
+}) {
+   const [open, setOpen] = useState(false);
+   const [saving, setSaving] = useState(false);
+   const PriorityIcon = initiative.priority.icon;
+
+   const update = async (priority: string) => {
+      if (priority === initiative.priority.id) {
+         setOpen(false);
+         return;
+      }
+      setSaving(true);
+      try {
+         await updateInitiativeProperty(initiative.id, workspaceId, { priority });
+         setOpen(false);
+         onUpdated();
+         toast.success('Initiative priority updated.');
+      } catch (error) {
+         toast.error(
+            error instanceof Error ? error.message : 'Could not update initiative priority.'
+         );
+      } finally {
+         setSaving(false);
+      }
+   };
+
+   return (
+      <Popover open={open} onOpenChange={setOpen}>
+         <PopoverTrigger asChild>
+            <button
+               type="button"
+               disabled={saving || !workspaceId}
+               onClick={(event) => event.stopPropagation()}
+               className="inline-flex size-7 items-center justify-center rounded hover:bg-accent disabled:opacity-50"
+               aria-label={`Change priority for ${initiative.name}`}
+            >
+               <PriorityIcon className="size-4 text-muted-foreground" />
+            </button>
+         </PopoverTrigger>
+         <PopoverContent align="start" className="w-48 p-0">
+            <Command>
+               <CommandList>
+                  <CommandGroup heading="Priority">
+                     {priorities.map((option) => {
+                        const OptionIcon = option.icon;
+                        return (
+                           <CommandItem key={option.id} onSelect={() => void update(option.id)}>
+                              <OptionIcon className="size-4 text-muted-foreground" />
+                              {option.name}
+                              {option.id === initiative.priority.id && (
+                                 <CheckIcon className="ml-auto size-3.5" />
+                              )}
+                           </CommandItem>
+                        );
+                     })}
+                  </CommandGroup>
+               </CommandList>
+            </Command>
+         </PopoverContent>
+      </Popover>
+   );
+}
+
+function InitiativeOwnerSelector({
+   initiative,
+   members,
+   workspaceId,
+   onUpdated,
+}: {
+   initiative: Initiative;
+   members: LiveWorkspaceMember[];
+   workspaceId?: string;
+   onUpdated: () => void;
+}) {
+   const [open, setOpen] = useState(false);
+   const [saving, setSaving] = useState(false);
+
+   const update = async (ownerId: string | null) => {
+      if (ownerId === initiative.owner?.id) {
+         setOpen(false);
+         return;
+      }
+      setSaving(true);
+      try {
+         await updateInitiativeProperty(initiative.id, workspaceId, { ownerId });
+         setOpen(false);
+         onUpdated();
+         toast.success('Initiative owner updated.');
+      } catch (error) {
+         toast.error(error instanceof Error ? error.message : 'Could not update initiative owner.');
+      } finally {
+         setSaving(false);
+      }
+   };
+
+   return (
+      <Popover open={open} onOpenChange={setOpen}>
+         <PopoverTrigger asChild>
+            <button
+               type="button"
+               disabled={saving || !workspaceId}
+               onClick={(event) => event.stopPropagation()}
+               className="inline-flex size-7 items-center justify-center rounded hover:bg-accent disabled:opacity-50"
+               aria-label={`Change owner for ${initiative.name}`}
+            >
+               {initiative.owner ? (
+                  <Avatar className="size-5">
+                     <AvatarImage
+                        src={initiative.owner.avatarUrl ?? undefined}
+                        alt={initiative.owner.name}
+                     />
+                     <AvatarFallback className="text-[9px]">
+                        {initiative.owner.name[0]}
+                     </AvatarFallback>
+                  </Avatar>
+               ) : (
+                  <UserRound className="size-4 text-muted-foreground" />
+               )}
+            </button>
+         </PopoverTrigger>
+         <PopoverContent align="start" className="w-56 p-0">
+            <Command>
+               <CommandInput placeholder="Assign owner…" />
+               <CommandList>
+                  <CommandEmpty>No members found.</CommandEmpty>
+                  <CommandGroup>
+                     <CommandItem onSelect={() => void update(null)}>
+                        <UserRound className="size-4 text-muted-foreground" />
+                        No owner
+                        {!initiative.owner && <CheckIcon className="ml-auto size-3.5" />}
+                     </CommandItem>
+                     {members.map((member) => {
+                        const user = member.user;
+                        return (
+                           <CommandItem key={user.id} onSelect={() => void update(user.id)}>
+                              <Avatar className="size-5">
+                                 <AvatarImage src={user.avatarUrl ?? undefined} alt={user.name} />
+                                 <AvatarFallback className="text-[9px]">
+                                    {user.name[0]}
+                                 </AvatarFallback>
+                              </Avatar>
+                              {user.name}
+                              {initiative.owner?.id === user.id && (
+                                 <CheckIcon className="ml-auto size-3.5" />
+                              )}
+                           </CommandItem>
+                        );
+                     })}
+                  </CommandGroup>
+               </CommandList>
+            </Command>
+         </PopoverContent>
+      </Popover>
+   );
+}
+
 function InitiativeRow({
    initiative,
    orgId,
    showStatus,
+   workspaceId,
+   members,
+   onUpdated,
 }: {
    initiative: Initiative;
    orgId: string;
    showStatus: boolean;
+   workspaceId?: string;
+   members: LiveWorkspaceMember[];
+   onUpdated: () => void;
 }) {
    const { displayProperties } = useInitiativesDisplayStore();
    const projects = getInitiativeProjects(initiative);
    const completed = countCompletedProjects(initiative);
 
    return (
-      <Link
-         href={`/${orgId}/initiative/${initiative.id}`}
-         className="flex items-center gap-2 px-6 py-2 border-b border-border/50 hover:bg-sidebar/50 transition-colors text-sm"
-      >
+      <div className="flex items-center gap-2 px-6 py-2 border-b border-border/50 hover:bg-sidebar/50 transition-colors text-sm">
          <span className="inline-flex size-6 items-center justify-center rounded bg-muted/50 text-sm shrink-0">
             {initiative.icon}
          </span>
          <span className="flex flex-col min-w-0 flex-1">
-            <span className="font-medium truncate">{initiative.name}</span>
+            <Link
+               href={`/${orgId}/initiative/${initiative.id}`}
+               className="font-medium truncate hover:underline underline-offset-2"
+            >
+               {initiative.name}
+            </Link>
             {displayProperties.description && initiative.description && (
                <span className="text-xs text-muted-foreground truncate">
                   {initiative.description}
@@ -356,21 +551,21 @@ function InitiativeRow({
          )}
          {displayProperties.priority && (
             <span className="hidden sm:flex w-16 shrink-0 items-center">
-               <initiative.priority.icon className="size-4 text-muted-foreground" />
+               <InitiativePrioritySelector
+                  initiative={initiative}
+                  workspaceId={workspaceId}
+                  onUpdated={onUpdated}
+               />
             </span>
          )}
          {displayProperties.owner && (
             <span className="hidden sm:flex w-14 shrink-0">
-               {initiative.owner ? (
-                  <Avatar className="size-5">
-                     <AvatarImage src={initiative.owner.avatarUrl ?? undefined} alt={initiative.owner.name} />
-                     <AvatarFallback className="text-[9px]">
-                        {initiative.owner.name[0]}
-                     </AvatarFallback>
-                  </Avatar>
-               ) : (
-                  <UserRound className="size-4 text-muted-foreground" />
-               )}
+               <InitiativeOwnerSelector
+                  initiative={initiative}
+                  members={members}
+                  workspaceId={workspaceId}
+                  onUpdated={onUpdated}
+               />
             </span>
          )}
          {displayProperties.target && (
@@ -405,7 +600,7 @@ function InitiativeRow({
                <ActiveProjectDots initiative={initiative} />
             </span>
          )}
-      </Link>
+      </div>
    );
 }
 
@@ -417,7 +612,14 @@ export default function Initiatives() {
    const { filters } = useInitiativesFilterStore();
    const { grouping, ordering, displayProperties } = useInitiativesDisplayStore();
    const [showPanel, setShowPanel] = useState(true);
-   const { initiatives: liveInitiatives, members, loading, error } = useLiveInitiatives();
+   const {
+      workspaceId,
+      initiatives: liveInitiatives,
+      members,
+      loading,
+      error,
+      reload,
+   } = useLiveInitiatives();
    const allInitiatives = useMemo(() => adaptInitiatives(liveInitiatives), [liveInitiatives]);
 
    const displayed = useMemo(() => {
@@ -513,8 +715,12 @@ export default function Initiatives() {
                )}
             </div>
 
-            {loading && <p className="px-6 py-10 text-sm text-muted-foreground">Loading initiatives…</p>}
-            {error && <p className="px-6 py-10 text-sm text-destructive">Could not load initiatives.</p>}
+            {loading && (
+               <p className="px-6 py-10 text-sm text-muted-foreground">Loading initiatives…</p>
+            )}
+            {error && (
+               <p className="px-6 py-10 text-sm text-destructive">Could not load initiatives.</p>
+            )}
             {!loading && !error && groups
                ? groups.map((group) => (
                     <div key={group.statusId}>
@@ -531,16 +737,24 @@ export default function Initiatives() {
                              initiative={initiative}
                              orgId={orgId}
                              showStatus={showStatus}
+                             workspaceId={workspaceId}
+                             members={members}
+                             onUpdated={reload}
                           />
                        ))}
                     </div>
                  ))
-               : !loading && !error && displayed.map((initiative) => (
+               : !loading &&
+                 !error &&
+                 displayed.map((initiative) => (
                     <InitiativeRow
                        key={initiative.id}
                        initiative={initiative}
                        orgId={orgId}
                        showStatus={showStatus}
+                       workspaceId={workspaceId}
+                       members={members}
+                       onUpdated={reload}
                     />
                  ))}
          </div>
