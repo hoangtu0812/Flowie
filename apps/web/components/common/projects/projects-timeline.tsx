@@ -115,7 +115,11 @@ function IssueRow({
                   backgroundColor: issue.status.color,
                   borderColor: issue.status.color,
                }}
-            />
+            >
+               <span className="relative z-10 block truncate px-2 text-[11px] font-medium text-foreground drop-shadow-sm">
+                  {issue.title}
+               </span>
+            </button>
          </div>
          <div
             className={cn(
@@ -309,9 +313,13 @@ function TimelineBar({
          >
             <span
                aria-hidden="true"
-               className="absolute inset-y-0 left-0"
+               className="pointer-events-none absolute inset-y-0 left-0"
                style={{ width: `${completion}%`, backgroundColor: project.status.color }}
             />
+            <span className="relative z-10 flex h-full min-w-0 items-center gap-1.5 px-2.5 text-xs font-medium text-foreground drop-shadow-sm">
+               <span className="truncate">{project.name}</span>
+               <span className="shrink-0">{completion}%</span>
+            </span>
          </button>
       </div>
    );

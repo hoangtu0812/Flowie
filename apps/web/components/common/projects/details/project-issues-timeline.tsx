@@ -76,7 +76,11 @@ function IssueBar({
                backgroundColor: issue.status.color,
                borderColor: issue.status.color,
             }}
-         />
+         >
+            <span className="block truncate px-2 text-xs font-medium text-foreground drop-shadow-sm">
+               {issue.title}
+            </span>
+         </button>
       </div>
    );
 }
