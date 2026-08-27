@@ -15,9 +15,20 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 - Local account registration requires a time-limited Discord OTP before a user
   and workspace are created. The private registration channel is provisioned by
   the configured Flowie bot and OTP material is stored only as a hash.
+- The Agent workspace is available again as a UI preview so its conversation,
+  skills, example prompts, and chat-history presentation can be reviewed before
+  agent workflows are planned.
+- Workspace owners and administrators can configure one active OpenAI or Google
+  provider for Agent, including its endpoint and model. Agent now persists
+  conversations, reads Markdown, DOCX, and XLSX source files, drafts project
+  and issue plans, and creates those records only after the proposal is
+  explicitly accepted.
 
 ### Changed
 
+- Agent planning runs as a LangGraph workflow with the active workspace
+  provider. Follow-up messages revise the same proposal conversation; proposals
+  requiring clarification cannot be accepted.
 - Production deployment now builds and runs a one-shot Prisma migration service
   before starting the FastAPI or worker containers. A migration failure blocks
   the new release instead of serving an API against an outdated schema.
@@ -32,6 +43,11 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
   exit status.
 - The Prisma migration image installs OpenSSL explicitly so Prisma selects the
   supported engine instead of relying on an unavailable compatibility library.
+
+### Security
+
+- Workspace AI provider keys are encrypted before storage, excluded from all
+  API responses, and require `AGENT_SECRETS_ENCRYPTION_KEY` on the API service.
 
 ## [0.3.2] — 2026-08-26 23:59 +07
 

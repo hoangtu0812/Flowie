@@ -27,7 +27,7 @@ const ITEM_KEYS: Record<string, SidebarItemKey> = {
    'Agent': 'agent',
 };
 
-const DISABLED_ITEMS = new Set(['Reviews', 'Agent']);
+const DISABLED_ITEMS = new Set(['Reviews']);
 
 export function NavInbox() {
    const { orgId } = useParams<{ orgId: string }>();

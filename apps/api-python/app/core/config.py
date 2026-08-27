@@ -46,6 +46,7 @@ class Settings:
     discord_registration_channel_id: str
     discord_registration_channel_role_id: str
     registration_otp_ttl_seconds: int
+    agent_secrets_encryption_key: str
 
     @classmethod
     def from_environment(cls) -> 'Settings':
@@ -74,4 +75,5 @@ class Settings:
             discord_registration_channel_id=getenv('DISCORD_REGISTRATION_CHANNEL_ID', '').strip(),
             discord_registration_channel_role_id=getenv('DISCORD_REGISTRATION_CHANNEL_ROLE_ID', '').strip(),
             registration_otp_ttl_seconds=int(getenv('REGISTRATION_OTP_TTL_SECONDS', '600')),
+            agent_secrets_encryption_key=getenv('AGENT_SECRETS_ENCRYPTION_KEY', '').strip(),
         )

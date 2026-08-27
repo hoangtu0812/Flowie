@@ -13,6 +13,7 @@ from .core.errors import ApiError, api_error_handler, validation_error_handler
 from .core.readiness import dependency_status
 from .db.session import create_session_factory
 from .domains.auth import router as auth_router
+from .domains.agent import router as agent_router
 from .domains.native_admin import router as admin_router
 from .domains.native_activities import router as native_activities_router
 from .domains.native_activities import public_router as activities_router
@@ -73,6 +74,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_exception_handler(ApiError, api_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.include_router(auth_router)
+    app.include_router(agent_router)
     app.include_router(admin_router)
     app.include_router(native_activities_router)
     app.include_router(activities_router)
