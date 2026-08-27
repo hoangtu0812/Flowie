@@ -12,6 +12,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Agent can answer the first read-only workspace insight: the current count of
+  overdue issues, scoped to teams the requester can access. Insight queries do
+  not create a proposal or require approval, and their capability registry is
+  designed for additional reports.
 - Local account registration requires a time-limited Discord OTP before a user
   and workspace are created. The private registration channel is provisioned by
   the configured Flowie bot and OTP material is stored only as a hash.
@@ -29,6 +33,9 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 - Agent planning runs as a LangGraph workflow with the active workspace
   provider. Follow-up messages revise the same proposal conversation; proposals
   requiring clarification cannot be accepted.
+- A failed Agent provider request no longer becomes conversation context. A
+  retry now drafts only from successful turns after the last accepted plan, so
+  hidden failed prompts cannot be combined into duplicate issues.
 - Production deployment now builds and runs a one-shot Prisma migration service
   before starting the FastAPI or worker containers. A migration failure blocks
   the new release instead of serving an API against an outdated schema.

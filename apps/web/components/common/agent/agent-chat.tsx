@@ -66,6 +66,7 @@ const EXAMPLES = [
    'Create a project for improving the customer onboarding experience, with implementation issues.',
    'Read the attached document and draft the related backlog issues.',
    'Break this delivery goal into a project plan with dates and owners to confirm.',
+   'How many issues are overdue?',
 ];
 
 function MessageText({ content }: { content: string }) {
@@ -250,7 +251,7 @@ function ChatComposer({
                   submit();
                }
             }}
-            placeholder="Describe the project or issues you want to plan…"
+            placeholder="Ask about your work or describe a project and issues to plan…"
             disabled={pending}
             className="w-full min-h-16 resize-none bg-transparent px-4 pt-3.5 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
          />
@@ -389,7 +390,11 @@ export default function AgentChat() {
             body,
          });
          const payload = (await response.json().catch(() => null)) as {
-            data?: { conversation: { id: string; title: string }; message: AgentMessage };
+            data?: {
+               conversation: { id: string; title: string };
+               userMessage: AgentMessage;
+               message: AgentMessage;
+            };
             message?: string;
          } | null;
          const data = payload?.data;
@@ -397,7 +402,7 @@ export default function AgentChat() {
             throw new Error(payload?.message ?? 'Could not generate a plan.');
          setMessages((current) => [
             ...current.filter((item) => item.id !== optimistic.id),
-            optimistic,
+            data.userMessage,
             data.message,
          ]);
          const updated = {

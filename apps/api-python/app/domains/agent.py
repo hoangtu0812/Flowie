@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Literal, TypedDict
+from typing import Any, Awaitable, Callable, Literal, TypedDict
 from urllib.parse import urlsplit
 from zipfile import BadZipFile, ZipFile
 from xml.etree import ElementTree
+from zoneinfo import ZoneInfo
 
 import httpx
 import mammoth
@@ -92,6 +93,19 @@ class PlannerState(TypedDict):
     proposal: dict[str, Any]
 
 
+class ReadOnlyInsight(TypedDict):
+    capability: str
+    content: str
+    data: dict[str, Any]
+
+
+ReadOnlyCapability = tuple[
+    str,
+    Callable[[str], bool],
+    Callable[[AsyncSession, str, str], Awaitable[ReadOnlyInsight]],
+]
+
+
 def _cipher(request: Request) -> Fernet:
     value = request.app.state.settings.agent_secrets_encryption_key
     if not value:
@@ -155,6 +169,92 @@ async def _workspace_catalog(db: AsyncSession, workspace_id: str) -> dict[str, A
         {'workspace_id': workspace_id},
     )
     return {'teams': [dict(row) for row in teams.mappings().all()], 'projects': [dict(row) for row in projects.mappings().all()]}
+
+
+def _is_overdue_issue_question(message: str) -> bool:
+    normalized = message.casefold()
+    overdue_terms = ('trễ hạn', 'qua han', 'quá hạn', 'overdue', 'past due', 'late issue')
+    issue_terms = ('issue', 'issues', 'công việc', 'cong viec', 'task', 'tasks')
+    question_terms = ('thống kê', 'bao nhiêu', 'số lượng', 'how many', 'count', 'report', 'stats', 'statistics', '?')
+    creation_terms = ('create', 'draft', 'plan', 'add', 'tạo', 'lập', 'thêm', 'viết', 'xử lý')
+    return (
+        any(term in normalized for term in overdue_terms)
+        and any(term in normalized for term in issue_terms)
+        and any(term in normalized for term in question_terms)
+        and not any(term in normalized for term in creation_terms)
+    )
+
+
+async def _overdue_issue_insight(
+    db: AsyncSession, workspace_id: str, user_id: str
+) -> ReadOnlyInsight:
+    today = datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).date()
+    params = {'workspace_id': workspace_id, 'user_id': user_id, 'today': today}
+    summary = await db.execute(
+        text('''SELECT COUNT(*)::int AS total,
+                       COUNT(DISTINCT issue.team_id)::int AS team_count,
+                       COALESCE(MAX(:today - issue.due_date::date), 0)::int AS longest_days
+                FROM issues issue
+                JOIN issue_statuses status ON status.id = issue.status_id
+                WHERE issue.workspace_id = :workspace_id
+                  AND issue.archived_at IS NULL
+                  AND issue.due_date::date < :today
+                  AND status.category NOT IN ('COMPLETED', 'CANCELED')
+                  AND EXISTS(
+                      SELECT 1 FROM team_members member
+                      WHERE member.team_id = issue.team_id AND member.user_id = :user_id
+                  )'''),
+        params,
+    )
+    totals = summary.mappings().one()
+    by_team = await db.execute(
+        text('''SELECT team.name, COUNT(*)::int AS total
+                FROM issues issue
+                JOIN teams team ON team.id = issue.team_id
+                JOIN issue_statuses status ON status.id = issue.status_id
+                WHERE issue.workspace_id = :workspace_id
+                  AND issue.archived_at IS NULL
+                  AND issue.due_date::date < :today
+                  AND status.category NOT IN ('COMPLETED', 'CANCELED')
+                  AND EXISTS(
+                      SELECT 1 FROM team_members member
+                      WHERE member.team_id = issue.team_id AND member.user_id = :user_id
+                  )
+                GROUP BY team.id, team.name
+                ORDER BY total DESC, team.name ASC
+                LIMIT 5'''),
+        params,
+    )
+    teams = [dict(row) for row in by_team.mappings().all()]
+    team_breakdown = ', '.join(f"{team['name']}: {team['total']}" for team in teams)
+    if totals['total']:
+        content = (
+            f"Hiện có {totals['total']} issue đang trễ hạn, tính đến {today.isoformat()}. "
+            f"Chúng thuộc {totals['team_count']} team bạn có quyền xem; issue trễ lâu nhất là {totals['longest_days']} ngày."
+        )
+        if team_breakdown:
+            content += f" Theo team: {team_breakdown}."
+    else:
+        content = f"Không có issue nào đang trễ hạn tính đến {today.isoformat()} trong các team bạn có quyền xem."
+    return {
+        'capability': 'issues.overdue',
+        'content': content,
+        'data': {'asOfDate': today.isoformat(), 'total': totals['total'], 'teamCount': totals['team_count'], 'longestDays': totals['longest_days'], 'teams': teams},
+    }
+
+
+READ_ONLY_CAPABILITIES: tuple[ReadOnlyCapability, ...] = (
+    ('issues.overdue', _is_overdue_issue_question, _overdue_issue_insight),
+)
+
+
+async def _read_only_insight(
+    db: AsyncSession, workspace_id: str, user_id: str, message: str
+) -> ReadOnlyInsight | None:
+    for _name, matches, execute in READ_ONLY_CAPABILITIES:
+        if matches(message):
+            return await execute(db, workspace_id, user_id)
+    return None
 
 
 def _system_prompt(catalog: dict[str, Any], source_text: str) -> str:
@@ -281,6 +381,39 @@ def _message_view(row: Any) -> dict[str, Any]:
     }
 
 
+async def _persist_turn(
+    db: AsyncSession,
+    *,
+    conversation_id: str,
+    conversation: Any,
+    workspace_id: str,
+    user_id: str,
+    is_new_conversation: bool,
+    user_content: str,
+    assistant_content: str,
+    proposal: dict[str, Any] | None,
+) -> dict[str, Any]:
+    now = _utcnow()
+    user_message_id = _cuid()
+    assistant_id = _cuid()
+    if is_new_conversation:
+        await db.execute(text('''INSERT INTO agent_conversations (id, workspace_id, user_id, title, created_at, updated_at)
+                VALUES (:id, :workspace_id, :user_id, :title, :now, :now)'''), {'id': conversation_id, 'workspace_id': workspace_id, 'user_id': user_id, 'title': conversation['title'], 'now': now})
+    await db.execute(text('''INSERT INTO agent_messages (id, conversation_id, role, content, created_at)
+            VALUES (:id, :conversation_id, 'USER', :content, :now)'''), {'id': user_message_id, 'conversation_id': conversation_id, 'content': user_content, 'now': now})
+    await db.execute(text('''INSERT INTO agent_messages (id, conversation_id, role, content, proposal, created_at)
+            VALUES (:id, :conversation_id, 'ASSISTANT', :content, CAST(:proposal AS jsonb), :now)'''), {'id': assistant_id, 'conversation_id': conversation_id, 'content': assistant_content, 'proposal': json.dumps(proposal) if proposal else None, 'now': now})
+    await db.execute(text('UPDATE agent_conversations SET updated_at = :now WHERE id = :id'), {'id': conversation_id, 'now': now})
+    await db.commit()
+    user_message = await db.execute(text('SELECT * FROM agent_messages WHERE id = :id'), {'id': user_message_id})
+    assistant = await db.execute(text('SELECT * FROM agent_messages WHERE id = :id'), {'id': assistant_id})
+    return {
+        'conversation': {'id': conversation_id, 'title': conversation['title']},
+        'userMessage': _message_view(user_message.mappings().one()),
+        'message': _message_view(assistant.mappings().one()),
+    }
+
+
 def _extract_xlsx(data: bytes) -> str:
     try:
         with ZipFile(BytesIO(data)) as workbook:
@@ -400,25 +533,63 @@ async def send_message(request: Request, workspaceId: str = Form(), message: str
     if len(files) > 5:
         raise ApiError(400, 'Attach at most five source files.', 'Bad Request')
     source_text = await _source_text(files)
-    provider = await _configured_provider(request, db, workspaceId)
     if conversationId:
         conversation = await db.execute(text('SELECT id, title FROM agent_conversations WHERE id = :id AND workspace_id = :workspace_id AND user_id = :user_id'), {'id': conversationId, 'workspace_id': workspaceId, 'user_id': user['id']})
         conversation_row = conversation.mappings().first()
         if not conversation_row:
             raise ApiError(404, 'Agent conversation not found.', 'Not Found')
         conversation_id = conversationId
+        is_new_conversation = False
     else:
         conversation_id = _cuid()
         conversation_row = {'id': conversation_id, 'title': message.strip()[:80]}
-        await db.execute(text('''INSERT INTO agent_conversations (id, workspace_id, user_id, title, created_at, updated_at)
-                VALUES (:id, :workspace_id, :user_id, :title, :now, :now)'''), {'id': conversation_id, 'workspace_id': workspaceId, 'user_id': user['id'], 'title': conversation_row['title'], 'now': _utcnow()})
-    user_message_id = _cuid()
-    await db.execute(text('''INSERT INTO agent_messages (id, conversation_id, role, content, created_at)
-            VALUES (:id, :conversation_id, 'USER', :content, :now)'''), {'id': user_message_id, 'conversation_id': conversation_id, 'content': message.strip(), 'now': _utcnow()})
-    await db.execute(text('UPDATE agent_conversations SET updated_at = :now WHERE id = :id'), {'id': conversation_id, 'now': _utcnow()})
-    await db.commit()
-    history_rows = await db.execute(text('''SELECT role, content, proposal FROM agent_messages WHERE conversation_id = :conversation_id
-            ORDER BY created_at DESC LIMIT 12'''), {'conversation_id': conversation_id})
+        is_new_conversation = True
+
+    insight = await _read_only_insight(db, workspaceId, user['id'], message) if not files else None
+    if insight:
+        data = await _persist_turn(
+            db,
+            conversation_id=conversation_id,
+            conversation=conversation_row,
+            workspace_id=workspaceId,
+            user_id=user['id'],
+            is_new_conversation=is_new_conversation,
+            user_content=message.strip(),
+            assistant_content=insight['content'],
+            proposal=None,
+        )
+        data['responseType'] = 'INSIGHT'
+        data['insight'] = insight
+        return {'data': data}
+
+    provider = await _configured_provider(request, db, workspaceId)
+
+    # A turn becomes durable only after its provider response validates. This
+    # prevents a failed request from becoming hidden context on a later retry.
+    history_rows = await db.execute(text('''WITH recent_messages AS (
+                SELECT id, role, content, proposal, created_at,
+                       LEAD(role) OVER (
+                           ORDER BY created_at ASC,
+                                    CASE role WHEN 'USER' THEN 0 ELSE 1 END,
+                                    id ASC
+                       ) AS next_role,
+                       LEAD(proposal) OVER (
+                           ORDER BY created_at ASC,
+                                    CASE role WHEN 'USER' THEN 0 ELSE 1 END,
+                                    id ASC
+                       ) AS next_proposal
+                FROM agent_messages
+                WHERE conversation_id = :conversation_id
+                  AND created_at > COALESCE((
+                      SELECT MAX(applied_at) FROM agent_messages
+                      WHERE conversation_id = :conversation_id AND applied_at IS NOT NULL
+                  ), to_timestamp(0))
+            )
+            SELECT role, content, proposal FROM recent_messages
+            WHERE (role = 'ASSISTANT' AND proposal IS NOT NULL)
+               OR (role = 'USER' AND next_role = 'ASSISTANT' AND next_proposal IS NOT NULL)
+            ORDER BY created_at DESC, CASE role WHEN 'USER' THEN 1 ELSE 0 END, id DESC
+            LIMIT 12'''), {'conversation_id': conversation_id})
     history = [
         {
             'role': row['role'].lower(),
@@ -429,17 +600,24 @@ async def send_message(request: Request, workspaceId: str = Form(), message: str
         }
         for row in reversed(history_rows.mappings().all())
     ]
+    history.append({'role': 'user', 'content': message.strip()})
     catalog = await _workspace_catalog(db, workspaceId)
     result = await planner_graph.ainvoke({'provider': provider, 'system_prompt': _system_prompt(catalog, source_text), 'history': history})
     proposal = AgentProposal.model_validate(result['proposal'])
     _validate_proposal(proposal, catalog)
-    assistant_id = _cuid()
-    await db.execute(text('''INSERT INTO agent_messages (id, conversation_id, role, content, proposal, created_at)
-            VALUES (:id, :conversation_id, 'ASSISTANT', :content, CAST(:proposal AS jsonb), :now)'''), {'id': assistant_id, 'conversation_id': conversation_id, 'content': proposal.summary, 'proposal': json.dumps(proposal.model_dump(mode='json')), 'now': _utcnow()})
-    await db.execute(text('UPDATE agent_conversations SET updated_at = :now WHERE id = :id'), {'id': conversation_id, 'now': _utcnow()})
-    await db.commit()
-    assistant = await db.execute(text('SELECT * FROM agent_messages WHERE id = :id'), {'id': assistant_id})
-    return {'data': {'conversation': {'id': conversation_id, 'title': conversation_row['title']}, 'message': _message_view(assistant.mappings().one())}}
+    data = await _persist_turn(
+        db,
+        conversation_id=conversation_id,
+        conversation=conversation_row,
+        workspace_id=workspaceId,
+        user_id=user['id'],
+        is_new_conversation=is_new_conversation,
+        user_content=message.strip(),
+        assistant_content=proposal.summary,
+        proposal=proposal.model_dump(mode='json'),
+    )
+    data['responseType'] = 'PLAN'
+    return {'data': data}
 
 
 @router.post('/messages/{message_id}/accept')

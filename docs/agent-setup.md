@@ -45,3 +45,17 @@ encrypted in PostgreSQL and is never included in an API response.
 5. **Accept plan** creates the approved projects and issues through Flowie's
    existing APIs and saves an audit record. No task, project, or issue is
    created during drafting.
+
+## Read-only insights
+
+Agent also supports explicit read-only workspace insights. These bypass the AI
+provider and return data directly from Flowie, so they never show **Accept
+plan** or create records. The first capability is `issues.overdue`, which
+counts active issues with a due date before the current Ho Chi Minh City date.
+It excludes completed, canceled, and archived issues, and only includes teams
+the requesting user can access.
+
+New insights must be added as an explicit entry in `READ_ONLY_CAPABILITIES` in
+`apps/api-python/app/domains/agent.py`, with a narrow request matcher and a
+permission-scoped query. Insight replies are deliberately excluded from future
+planning context, preventing a report request from changing a later draft.
