@@ -47,6 +47,9 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Changed
 
+- Project timelines reserve the sub-issue expand column on every parent row,
+  keeping issue identifiers and titles aligned when only some rows have child
+  issues.
 - Clicking an issue bar in either Project timeline now opens an in-place detail
   panel. Dated issue bars use their actual created-to-due span with a small
   readable minimum, rather than a project-sized minimum width.

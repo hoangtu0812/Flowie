@@ -288,36 +288,42 @@ export function ProjectIssuesTimeline({ issues }: { issues: Issue[] }) {
                                     <div
                                        className={cn(
                                           'sticky left-0 z-10 flex items-center gap-1.5 w-56 shrink-0 pr-4 h-9 bg-container/95 backdrop-blur-sm text-xs border-r border-border/40',
-                                          nested ? 'pl-10' : 'pl-4'
+                                          nested ? 'pl-9' : 'pl-4'
                                        )}
                                     >
-                                       {!nested && children.length > 0 && (
-                                          <button
-                                             type="button"
-                                             aria-label={
-                                                expanded
-                                                   ? `Hide sub-issues of ${issue.title}`
-                                                   : `Show sub-issues of ${issue.title}`
-                                             }
-                                             aria-expanded={expanded}
-                                             onClick={() =>
-                                                setExpandedParents((current) => {
-                                                   const next = new Set(current);
-                                                   if (next.has(issue.id)) next.delete(issue.id);
-                                                   else next.add(issue.id);
-                                                   return next;
-                                                })
-                                             }
-                                             className="text-muted-foreground hover:text-foreground"
-                                          >
-                                             <ChevronRight
-                                                className={cn(
-                                                   'size-3.5 transition-transform',
-                                                   expanded && 'rotate-90'
-                                                )}
+                                       {!nested &&
+                                          (children.length > 0 ? (
+                                             <button
+                                                type="button"
+                                                aria-label={
+                                                   expanded
+                                                      ? `Hide sub-issues of ${issue.title}`
+                                                      : `Show sub-issues of ${issue.title}`
+                                                }
+                                                aria-expanded={expanded}
+                                                onClick={() =>
+                                                   setExpandedParents((current) => {
+                                                      const next = new Set(current);
+                                                      if (next.has(issue.id)) next.delete(issue.id);
+                                                      else next.add(issue.id);
+                                                      return next;
+                                                   })
+                                                }
+                                                className="text-muted-foreground hover:text-foreground"
+                                             >
+                                                <ChevronRight
+                                                   className={cn(
+                                                      'size-3.5 transition-transform',
+                                                      expanded && 'rotate-90'
+                                                   )}
+                                                />
+                                             </button>
+                                          ) : (
+                                             <span
+                                                className="size-3.5 shrink-0"
+                                                aria-hidden="true"
                                              />
-                                          </button>
-                                       )}
+                                          ))}
                                        <item.priority.icon className="size-3.5 shrink-0 text-muted-foreground" />
                                        <span className="text-muted-foreground shrink-0">
                                           {item.identifier}

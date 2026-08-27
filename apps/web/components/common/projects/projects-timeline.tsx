@@ -120,26 +120,29 @@ function IssueRow({
          <div
             className={cn(
                'sticky left-0 z-10 flex items-center gap-1.5 w-56 shrink-0 pr-4 h-8 bg-container/95 backdrop-blur-sm text-[11px] border-r border-border/40',
-               nested ? 'pl-14' : 'pl-10'
+               nested ? 'pl-15' : 'pl-10'
             )}
          >
-            {childCount > 0 && (
-               <button
-                  type="button"
-                  aria-label={
-                     expanded
-                        ? `Hide sub-issues of ${issue.title}`
-                        : `Show sub-issues of ${issue.title}`
-                  }
-                  aria-expanded={expanded}
-                  onClick={onToggle}
-                  className="text-muted-foreground hover:text-foreground"
-               >
-                  <ChevronRight
-                     className={cn('size-3.5 transition-transform', expanded && 'rotate-90')}
-                  />
-               </button>
-            )}
+            {!nested &&
+               (childCount > 0 ? (
+                  <button
+                     type="button"
+                     aria-label={
+                        expanded
+                           ? `Hide sub-issues of ${issue.title}`
+                           : `Show sub-issues of ${issue.title}`
+                     }
+                     aria-expanded={expanded}
+                     onClick={onToggle}
+                     className="text-muted-foreground hover:text-foreground"
+                  >
+                     <ChevronRight
+                        className={cn('size-3.5 transition-transform', expanded && 'rotate-90')}
+                     />
+                  </button>
+               ) : (
+                  <span className="size-3.5 shrink-0" aria-hidden="true" />
+               ))}
             <span className="text-muted-foreground shrink-0">{issue.identifier}</span>
             <span className="truncate flex-1 text-muted-foreground">{issue.title}</span>
             {issue.assignee && (
