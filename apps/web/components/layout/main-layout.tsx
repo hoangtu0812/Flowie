@@ -1,10 +1,4 @@
 import React from 'react';
-import { AppSidebar } from '@/components/layout/sidebar/app-sidebar';
-import { SidebarProvider } from '@/components/ui/sidebar';
-import { CreateIssueModalProvider } from '@/components/common/issues/create-issue-modal-provider';
-import { IssueActionDialog } from '@/components/common/issues/issue-action-dialog';
-import { IssueRelationDialog } from '@/components/common/issues/issue-relation-dialog';
-import { CommandPalette } from '@/components/layout/command-palette';
 import { cn } from '@/lib/utils';
 
 interface MainLayoutProps {
@@ -29,31 +23,27 @@ const isEmptyHeader = (header: React.ReactNode | undefined): boolean => {
    return false;
 };
 
+/**
+ * The per-page frame: header rows plus the scroll area sized around them. The
+ * surrounding shell — sidebar, command palette, dialogs — belongs to the
+ * `[orgId]` route layout so it survives navigation.
+ */
 export default function MainLayout({ children, header, headersNumber = 2 }: MainLayoutProps) {
    const height = {
       1: 'h-[calc(100svh-40px)] lg:h-[calc(100svh-56px)]',
       2: 'h-[calc(100svh-80px)] lg:h-[calc(100svh-96px)]',
    };
    return (
-      <SidebarProvider>
-         <CreateIssueModalProvider />
-         <IssueActionDialog />
-         <IssueRelationDialog />
-         <CommandPalette />
-         <AppSidebar />
-         <div className="h-svh overflow-hidden lg:p-2 w-full">
-            <div className="lg:border lg:rounded-md overflow-hidden flex flex-col items-center justify-start bg-container h-full w-full">
-               {header}
-               <div
-                  className={cn(
-                     'overflow-auto w-full',
-                     isEmptyHeader(header) ? 'h-full' : height[headersNumber as keyof typeof height]
-                  )}
-               >
-                  {children}
-               </div>
-            </div>
+      <>
+         {header}
+         <div
+            className={cn(
+               'overflow-auto w-full',
+               isEmptyHeader(header) ? 'h-full' : height[headersNumber as keyof typeof height]
+            )}
+         >
+            {children}
          </div>
-      </SidebarProvider>
+      </>
    );
 }

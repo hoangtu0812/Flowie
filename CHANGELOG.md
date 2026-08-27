@@ -93,6 +93,11 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Moving between sidebar destinations no longer rebuilds the whole interface.
+  The workspace shell — sidebar, command palette, dialogs — was rendered by
+  each page rather than by a route layout, so every navigation unmounted it and
+  re-ran its workspace, team, and notification queries. It is now a `[orgId]`
+  layout and stays mounted across navigation.
 - Sub-issues are no longer missing from every issue list. The issue list query
   excluded any issue that had a parent, so a sub-issue never appeared under its
   team and opening it by identifier reported `Issue not found` — the detail
