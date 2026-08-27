@@ -24,7 +24,7 @@ import { ProjectOption, ProjectSelector } from './project-selector';
 import { LabelSelector } from './label-selector';
 import { DialogTitle } from '@radix-ui/react-dialog';
 import { useParams } from 'next/navigation';
-import { Box } from 'lucide-react';
+import { Box, Loader2 } from 'lucide-react';
 import { LabelInterface } from '@/mock-data/labels';
 import { Priority } from '@/mock-data/priorities';
 import { User } from '@/mock-data/users';
@@ -247,7 +247,13 @@ export function CreateNewIssue() {
    };
 
    return (
-      <Dialog open={isOpen} onOpenChange={(value) => (value ? openModal() : closeModal())}>
+      <Dialog
+         open={isOpen}
+         onOpenChange={(value) => {
+            if (value) openModal();
+            else if (!creating) closeModal();
+         }}
+      >
          <DialogTrigger asChild>
             <Button className="size-8 shrink-0" variant="secondary" size="icon">
                <RiEditLine />
@@ -287,6 +293,7 @@ export function CreateNewIssue() {
                   className="border-none w-full shadow-none outline-none text-2xl font-medium px-0 h-auto focus-visible:ring-0 overflow-hidden text-ellipsis whitespace-normal break-words"
                   placeholder="Issue title"
                   value={addIssueForm.title}
+                  disabled={creating}
                   onChange={(e) => setAddIssueForm({ ...addIssueForm, title: e.target.value })}
                />
 
@@ -294,6 +301,7 @@ export function CreateNewIssue() {
                   className="border-none w-full shadow-none outline-none resize-none px-0 min-h-16 focus-visible:ring-0 break-words whitespace-normal overflow-wrap"
                   placeholder="Add description..."
                   value={addIssueForm.description}
+                  disabled={creating}
                   onChange={(e) =>
                      setAddIssueForm({ ...addIssueForm, description: e.target.value })
                   }
@@ -343,6 +351,7 @@ export function CreateNewIssue() {
                      <Switch
                         id="create-more"
                         checked={createMore}
+                        disabled={creating}
                         onCheckedChange={setCreateMore}
                      />
                      <Label htmlFor="create-more">Create more</Label>
@@ -350,11 +359,20 @@ export function CreateNewIssue() {
                </div>
                <Button
                   size="sm"
+                  disabled={creating}
+                  aria-busy={creating}
                   onClick={() => {
                      void createIssue();
                   }}
                >
-                  Create issue
+                  {creating ? (
+                     <>
+                        <Loader2 className="animate-spin" aria-hidden="true" />
+                        Creating issue…
+                     </>
+                  ) : (
+                     'Create issue'
+                  )}
                </Button>
             </div>
          </DialogContent>
