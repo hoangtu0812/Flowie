@@ -10,6 +10,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+## [0.3.3] — 2026-08-28 00:18 +07
+
 ### Added
 
 - The workspace Dashboard provides an interactive overview of accessible work
