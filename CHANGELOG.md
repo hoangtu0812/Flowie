@@ -75,6 +75,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Changed
 
+- Project and initiative timelines now open at Week zoom, centered on today;
+  the Year, Quarter, and Month zoom controls remain available.
 - Cycle status now reconciles from its Start and End dates whenever a team
   cycle view is loaded: a started cycle is Current, a future cycle is Upcoming,
   and a passed end date is Completed. Each cycle row now exposes an editor for

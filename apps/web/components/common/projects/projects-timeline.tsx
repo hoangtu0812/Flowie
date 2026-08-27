@@ -335,7 +335,7 @@ export default function ProjectsTimeline({ groups }: ProjectsTimelineProps) {
    const { showProjectList, showWeekNumbers, displayProperties } = useProjectsDisplayStore();
    const [todayIso, setTodayIso] = useState<string | null>(null);
    const [viewport, setViewport] = useState<Viewport | null>(null);
-   const [zoom, setZoom] = useState<TimelineZoom>('year');
+   const [zoom, setZoom] = useState<TimelineZoom>('week');
    const [peekProjectId, setPeekProjectId] = useState<string | null>(null);
    const [peekIssueId, setPeekIssueId] = useState<string | null>(null);
    const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -375,7 +375,7 @@ export default function ProjectsTimeline({ groups }: ProjectsTimelineProps) {
       // Bring today into view on mount (a third from the left edge, but always
       // clear of the sticky project list so the line stays visible).
       if (scrollRef.current) {
-         const offset = offsetFor(iso, monthWidthOf('year'));
+         const offset = offsetFor(iso, monthWidthOf('week'));
          const listWidth = useProjectsDisplayStore.getState().showProjectList ? LIST_WIDTH : 0;
          const anchor = Math.max(scrollRef.current.clientWidth / 3, listWidth + 80);
          scrollRef.current.scrollLeft = Math.max(0, offset - anchor);

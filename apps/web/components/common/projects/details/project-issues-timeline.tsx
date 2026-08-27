@@ -92,7 +92,7 @@ function IssueBar({
  * Projects timeline uses, so the two screens read as one instrument.
  */
 export function ProjectIssuesTimeline({ issues }: { issues: Issue[] }) {
-   const [zoom, setZoom] = useState<TimelineZoom>('year');
+   const [zoom, setZoom] = useState<TimelineZoom>('week');
    const [todayIso, setTodayIso] = useState<string | null>(null);
    const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
    const [peekIssueId, setPeekIssueId] = useState<string | null>(null);
@@ -147,7 +147,7 @@ export function ProjectIssuesTimeline({ issues }: { issues: Issue[] }) {
       const iso = new Date().toISOString().slice(0, 10);
       setTodayIso(iso);
       // Open where the work is rather than in 2020, without an animation.
-      scrollToOffset(offsetFor(iso, monthWidthOf('year')), false);
+      scrollToOffset(offsetFor(iso, monthWidthOf('week')), false);
    }, [scrollToOffset]);
 
    if (issues.length === 0) {
