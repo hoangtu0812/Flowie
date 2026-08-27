@@ -62,12 +62,24 @@ the production build independent of public package-registry availability.
 
 Agent also supports explicit read-only workspace insights. These bypass the AI
 provider and return data directly from Flowie, so they never show **Accept
-plan** or create records. The first capability is `issues.overdue`, which
-counts active issues with a due date before the current Ho Chi Minh City date.
-It excludes completed, canceled, and archived issues, and only includes teams
-the requesting user can access.
+plan** or create records. Workspace owners and administrators manage the
+installed set from **Settings → Agent personalization → Workspace tools**.
+The initial registry provides `issues.count`, `issues.overdue`,
+`issues.by_status`, `issues.by_assignee`, `projects.progress`, and
+`cycles.progress`. Each query is scoped to teams the requester can access;
+removed tools are not callable and Agent reports that the workspace must
+install the relevant tool.
 
 New insights must be added as an explicit entry in `READ_ONLY_CAPABILITIES` in
 `apps/api-python/app/domains/agent.py`, with a narrow request matcher and a
 permission-scoped query. Insight replies are deliberately excluded from future
 planning context, preventing a report request from changing a later draft.
+
+## Personal skills
+
+Skills follow a user across workspaces. Users install and remove their own
+skills from **Settings → Agent personalization → Personal skills**. The initial
+`issue.defaults` skill lets a user set a default priority and optional number
+of days until due. Agent applies these values to a draft only if that request
+does not explicitly provide a conflicting priority or due date. Workspace tool
+settings never expose or change another user's skill configuration.

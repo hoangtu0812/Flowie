@@ -225,6 +225,12 @@ async def create_workspace_bootstrap(
         ),
         {'id': workspace_id, 'organization_id': organization_id, 'name': workspace_name, 'slug': slug, 'now': now},
     )
+    for tool_key in ('issues.count', 'issues.overdue', 'issues.by_status', 'issues.by_assignee', 'projects.progress', 'cycles.progress'):
+        await db.execute(
+            text('''INSERT INTO workspace_agent_tools (id, workspace_id, tool_key, created_at, updated_at)
+                    VALUES (:id, :workspace_id, :tool_key, :now, :now)'''),
+            {'id': _cuid(), 'workspace_id': workspace_id, 'tool_key': tool_key, 'now': now},
+        )
     await db.execute(
         text(
             '''

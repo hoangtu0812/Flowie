@@ -12,6 +12,13 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Agent personalization now exposes workspace-scoped analytical tools and
+  personal skills. Workspace owners and administrators can install or remove
+  supported tools; each user can install the Issue defaults skill to apply a
+  preferred priority and due-date offset to their own proposed issues.
+- Agent can answer counts of accessible issues, issue status and assignee
+  breakdowns, plus project and cycle progress when the corresponding workspace
+  tool is installed.
 - Agent now streams concrete workflow progress in chat, including source-file
   reading, workspace and insight queries, provider calls, validation, and
   conversation saving. Completed steps stack under the active `thinking-orbs`

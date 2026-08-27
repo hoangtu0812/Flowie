@@ -26,10 +26,23 @@ type ProviderRecord = {
    enabled: boolean;
 };
 
+type ToolRecord = {
+   key: string;
+   title: string;
+   description: string;
+   installed: boolean;
+};
+
+type SkillRecord = ToolRecord & {
+   config: { defaultPriority?: string; dueInDays?: number | null } | null;
+};
+
 /** Workspace-scoped AI provider configuration. The browser never receives a saved API key. */
 export default function AgentPersonalization() {
    const [provider, setProvider] = useState<Provider>('OPENAI');
    const [records, setRecords] = useState<ProviderRecord[]>([]);
+   const [tools, setTools] = useState<ToolRecord[]>([]);
+   const [skills, setSkills] = useState<SkillRecord[]>([]);
    const [endpoint, setEndpoint] = useState<string>(PROVIDERS.OPENAI.endpoint);
    const [model, setModel] = useState<string>(PROVIDERS.OPENAI.model);
    const [apiKey, setApiKey] = useState('');
@@ -43,16 +56,28 @@ export default function AgentPersonalization() {
       void (async () => {
          try {
             const workspace = await loadCurrentWorkspace();
-            const response = await authenticatedFetch(
-               `${api}/agent/providers?workspaceId=${workspace.id}`
-            );
-            if (!response.ok) throw new Error('Could not load Agent provider settings.');
-            const payload = (await response.json()) as {
+            const [providerResponse, toolResponse, skillResponse] = await Promise.all([
+               authenticatedFetch(`${api}/agent/providers?workspaceId=${workspace.id}`),
+               authenticatedFetch(`${api}/agent/tools?workspaceId=${workspace.id}`),
+               authenticatedFetch(`${api}/agent/skills`),
+            ]);
+            if (!providerResponse.ok || !toolResponse.ok || !skillResponse.ok) {
+               throw new Error('Could not load Agent settings.');
+            }
+            const payload = (await providerResponse.json()) as {
                data: { canManage: boolean; providers: ProviderRecord[] };
+            };
+            const toolPayload = (await toolResponse.json()) as {
+               data: { tools: ToolRecord[] };
+            };
+            const skillPayload = (await skillResponse.json()) as {
+               data: { skills: SkillRecord[] };
             };
             if (!active) return;
             setCanManage(payload.data.canManage);
             setRecords(payload.data.providers);
+            setTools(toolPayload.data.tools);
+            setSkills(skillPayload.data.skills);
             const selected =
                payload.data.providers.find((item) => item.enabled) ?? payload.data.providers[0];
             if (selected) {
@@ -81,6 +106,68 @@ export default function AgentPersonalization() {
       setModel(record?.model ?? PROVIDERS[next].model);
       setApiKey('');
       setMessage(null);
+   };
+
+   const changeTool = async (tool: ToolRecord) => {
+      setSaving(true);
+      setMessage(null);
+      try {
+         const workspace = await loadCurrentWorkspace();
+         const response = await authenticatedFetch(
+            `${api}/agent/tools/${tool.key}?workspaceId=${workspace.id}`,
+            { method: tool.installed ? 'DELETE' : 'POST' }
+         );
+         const payload = (await response.json().catch(() => null)) as {
+            data?: ToolRecord;
+            message?: string;
+         } | null;
+         if (!response.ok || !payload?.data)
+            throw new Error(payload?.message ?? 'Could not update tool.');
+         setTools((current) =>
+            current.map((item) => (item.key === tool.key ? payload.data! : item))
+         );
+      } catch (error) {
+         setMessage(error instanceof Error ? error.message : 'Could not update tool.');
+      } finally {
+         setSaving(false);
+      }
+   };
+
+   const changeSkill = async (skill: SkillRecord, action: 'install' | 'remove' | 'save') => {
+      setSaving(true);
+      setMessage(null);
+      try {
+         const response = await authenticatedFetch(`${api}/agent/skills/${skill.key}`, {
+            method: action === 'install' ? 'POST' : action === 'remove' ? 'DELETE' : 'PUT',
+            headers: action === 'save' ? { 'content-type': 'application/json' } : undefined,
+            body:
+               action === 'save'
+                  ? JSON.stringify({
+                       defaultPriority: skill.config?.defaultPriority ?? 'NONE',
+                       dueInDays: skill.config?.dueInDays ?? null,
+                    })
+                  : undefined,
+         });
+         const payload = (await response.json().catch(() => null)) as {
+            data?: SkillRecord;
+            message?: string;
+         } | null;
+         if (!response.ok || !payload?.data)
+            throw new Error(payload?.message ?? 'Could not update skill.');
+         setSkills((current) =>
+            current.map((item) => (item.key === skill.key ? payload.data! : item))
+         );
+      } catch (error) {
+         setMessage(error instanceof Error ? error.message : 'Could not update skill.');
+      } finally {
+         setSaving(false);
+      }
+   };
+
+   const updateSkillConfig = (skillKey: string, config: NonNullable<SkillRecord['config']>) => {
+      setSkills((current) =>
+         current.map((skill) => (skill.key === skillKey ? { ...skill, config } : skill))
+      );
    };
 
    const save = async () => {
@@ -127,7 +214,7 @@ export default function AgentPersonalization() {
    return (
       <SettingsShell
          title="Agent personalization"
-         description="Configure the AI provider used by Agent in this workspace. Only workspace owners and admins can change these settings."
+         description="Configure Agent's provider and workspace tools. Workspace owners and admins manage shared settings; personal skills belong only to you."
       >
          <SettingsSection
             title="AI provider"
@@ -156,6 +243,113 @@ export default function AgentPersonalization() {
                      />
                   );
                })}
+            </SettingsCard>
+         </SettingsSection>
+
+         <SettingsSection
+            title="Workspace tools"
+            description="Tools retrieve live workspace data. Owners and admins can install or remove them for everyone in this workspace."
+         >
+            <SettingsCard>
+               {tools.map((tool) => (
+                  <SettingsRow
+                     key={tool.key}
+                     title={tool.title}
+                     description={tool.description}
+                     trailing={
+                        canManage ? (
+                           <Button
+                              variant={tool.installed ? 'outline' : 'default'}
+                              size="sm"
+                              disabled={loading || saving}
+                              onClick={() => void changeTool(tool)}
+                           >
+                              {tool.installed ? 'Remove' : 'Install'}
+                           </Button>
+                        ) : (
+                           <span className="text-xs text-muted-foreground">
+                              {tool.installed ? 'Installed' : 'Not installed'}
+                           </span>
+                        )
+                     }
+                  />
+               ))}
+            </SettingsCard>
+         </SettingsSection>
+
+         <SettingsSection
+            title="Personal skills"
+            description="Skills belong only to your account and supply preferences when Agent drafts a plan."
+         >
+            <SettingsCard>
+               {skills.map((skill) => (
+                  <div key={skill.key} className="border-b px-4 py-4 last:border-b-0">
+                     <div className="flex items-center justify-between gap-3">
+                        <div>
+                           <p className="text-sm font-medium">{skill.title}</p>
+                           <p className="text-xs text-muted-foreground">{skill.description}</p>
+                        </div>
+                        <Button
+                           variant={skill.installed ? 'outline' : 'default'}
+                           size="sm"
+                           disabled={loading || saving}
+                           onClick={() =>
+                              void changeSkill(skill, skill.installed ? 'remove' : 'install')
+                           }
+                        >
+                           {skill.installed ? 'Remove' : 'Install'}
+                        </Button>
+                     </div>
+                     {skill.installed && skill.key === 'issue.defaults' && (
+                        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                           <label className="grid gap-1.5 text-sm">
+                              Default priority
+                              <select
+                                 className="h-9 rounded-md border bg-background px-3 text-sm"
+                                 value={skill.config?.defaultPriority ?? 'NONE'}
+                                 onChange={(event) =>
+                                    updateSkillConfig(skill.key, {
+                                       defaultPriority: event.target.value,
+                                       dueInDays: skill.config?.dueInDays ?? null,
+                                    })
+                                 }
+                              >
+                                 {['NONE', 'LOW', 'MEDIUM', 'HIGH', 'URGENT'].map((priority) => (
+                                    <option key={priority} value={priority}>
+                                       {priority}
+                                    </option>
+                                 ))}
+                              </select>
+                           </label>
+                           <label className="grid gap-1.5 text-sm">
+                              Due in days
+                              <Input
+                                 type="number"
+                                 min={1}
+                                 max={365}
+                                 placeholder="No default"
+                                 value={skill.config?.dueInDays ?? ''}
+                                 onChange={(event) =>
+                                    updateSkillConfig(skill.key, {
+                                       defaultPriority: skill.config?.defaultPriority ?? 'NONE',
+                                       dueInDays: event.target.value
+                                          ? Number(event.target.value)
+                                          : null,
+                                    })
+                                 }
+                              />
+                           </label>
+                           <Button
+                              size="sm"
+                              disabled={saving}
+                              onClick={() => void changeSkill(skill, 'save')}
+                           >
+                              Save defaults
+                           </Button>
+                        </div>
+                     )}
+                  </div>
+               ))}
             </SettingsCard>
          </SettingsSection>
 

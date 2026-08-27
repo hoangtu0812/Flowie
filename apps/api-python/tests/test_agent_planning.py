@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.core.errors import ApiError
 from app.domains.agent import (
     AgentProposal,
+    _apply_personal_skill_defaults,
     _matching_read_only_capability,
     _sse,
     _is_overdue_issue_question,
@@ -61,6 +62,34 @@ class AgentPlanningTests(unittest.TestCase):
 
         self.assertIsNotNone(capability)
         self.assertEqual(capability[0], 'issues.overdue')
+
+    def test_matches_the_general_issue_count_tool(self) -> None:
+        capability = _matching_read_only_capability('Team tôi đang có bao nhiêu issue?')
+
+        self.assertIsNotNone(capability)
+        self.assertEqual(capability[0], 'issues.count')
+
+    def test_applies_personal_issue_defaults_only_to_missing_values(self) -> None:
+        proposal = AgentProposal.model_validate(
+            {
+                'summary': 'Draft one issue.',
+                'issues': [
+                    {
+                        'key': 'skill-defaults',
+                        'title': 'Use defaults',
+                        'teamId': 'team-1',
+                    }
+                ],
+            }
+        )
+
+        _apply_personal_skill_defaults(
+            proposal,
+            {'issue.defaults': {'defaultPriority': 'HIGH', 'dueInDays': 3}},
+        )
+
+        self.assertEqual(proposal.issues[0].priority, 'HIGH')
+        self.assertIsNotNone(proposal.issues[0].dueDate)
 
     def test_serializes_sse_events(self) -> None:
         self.assertEqual(

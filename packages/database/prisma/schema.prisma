@@ -166,6 +166,7 @@ model User {
   createdAsks              Ask[]                    @relation("AskCreator")
   createdWorkspaceEmojis   WorkspaceEmoji[]         @relation("WorkspaceEmojiCreator")
   agentConversations       AgentConversation[]
+  agentSkills              UserAgentSkill[]
 
   @@map("users")
 }
@@ -335,6 +336,7 @@ model Workspace {
   asks                    Ask[]
   emojis                  WorkspaceEmoji[]
   agentProviders          WorkspaceAgentProvider[]
+  agentTools              WorkspaceAgentTool[]
   agentConversations      AgentConversation[]
 
   @@index([organizationId])
@@ -357,6 +359,35 @@ model WorkspaceAgentProvider {
   @@unique([workspaceId, provider])
   @@index([workspaceId, enabled])
   @@map("workspace_agent_providers")
+}
+
+model WorkspaceAgentTool {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  toolKey     String   @map("tool_key")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, toolKey])
+  @@index([workspaceId])
+  @@map("workspace_agent_tools")
+}
+
+model UserAgentSkill {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  skillKey  String   @map("skill_key")
+  config    Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, skillKey])
+  @@index([userId])
+  @@map("user_agent_skills")
 }
 
 model AgentConversation {
