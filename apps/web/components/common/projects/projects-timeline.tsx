@@ -1,6 +1,7 @@
 'use client';
 
 import { CapacityRing } from '@/components/common/cycles/capacity-ring';
+import { IssuePeekPanel } from '@/components/common/issues/issue-peek-panel';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
    DropdownMenu,
@@ -26,8 +27,6 @@ import {
 } from '@/components/common/timeline/timeline-scale';
 import { format, parseISO } from 'date-fns';
 import { ArrowLeft, ArrowRight, Check, ChevronDown, ChevronRight, Plus } from 'lucide-react';
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ProjectPeekPanel } from './project-peek-panel';
 import { ProjectGroup } from './projects';
@@ -78,7 +77,7 @@ type TimelineIssue = {
 function IssueRow({
    issue,
    monthWidth,
-   href,
+   onSelect,
    nested = false,
    childCount = 0,
    expanded = false,
@@ -86,7 +85,7 @@ function IssueRow({
 }: {
    issue: TimelineIssue;
    monthWidth: number;
-   href: string;
+   onSelect: (issueId: string) => void;
    nested?: boolean;
    childCount?: number;
    expanded?: boolean;
@@ -95,14 +94,15 @@ function IssueRow({
    const start = issue.createdAt.slice(0, 10);
    const end = issue.dueDate?.slice(0, 10) ?? null;
    const left = offsetFor(start, monthWidth);
-   const width = Math.max(offsetFor(end ?? start, monthWidth) - left, 120);
+   const width = end ? Math.max(offsetFor(end, monthWidth) - left, 20) : 120;
    const label = `${format(parseISO(start), 'MMM d')}${end ? ` - ${format(parseISO(end), 'MMM d')}` : ''}`;
 
    return (
       <div className="relative h-8 flex items-center">
          <div className="absolute inset-0">
-            <Link
-               href={href}
+            <button
+               type="button"
+               onClick={() => onSelect(issue.id)}
                title={`${issue.identifier} · ${issue.title} - ${label}`}
                className={cn(
                   'absolute top-1 h-6 flex items-center gap-1.5 rounded border bg-accent/25 hover:bg-accent/60 px-2 text-[11px] transition-colors overflow-hidden',
@@ -115,7 +115,7 @@ function IssueRow({
                   style={{ backgroundColor: issue.status.color }}
                />
                <span className="truncate">{issue.title}</span>
-            </Link>
+            </button>
          </div>
          <div
             className={cn(
@@ -161,12 +161,12 @@ function ExpandedIssues({
    issues,
    loading,
    monthWidth,
-   orgId,
+   onSelect,
 }: {
    issues?: TimelineIssue[];
    loading: boolean;
    monthWidth: number;
-   orgId: string;
+   onSelect: (issueId: string) => void;
 }) {
    const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
    if (loading || !issues) {
@@ -202,7 +202,7 @@ function ExpandedIssues({
                      <IssueRow
                         issue={issue}
                         monthWidth={monthWidth}
-                        href={`/${orgId}/issue/${issue.identifier}`}
+                        onSelect={onSelect}
                         childCount={children.length}
                         expanded={expanded}
                         onToggle={() =>
@@ -220,7 +220,7 @@ function ExpandedIssues({
                               key={child.id}
                               issue={child}
                               monthWidth={monthWidth}
-                              href={`/${orgId}/issue/${child.identifier}`}
+                              onSelect={onSelect}
                               nested
                            />
                         ))}
@@ -329,11 +329,11 @@ export default function ProjectsTimeline({ groups }: ProjectsTimelineProps) {
    const [viewport, setViewport] = useState<Viewport | null>(null);
    const [zoom, setZoom] = useState<TimelineZoom>('year');
    const [peekProjectId, setPeekProjectId] = useState<string | null>(null);
+   const [peekIssueId, setPeekIssueId] = useState<string | null>(null);
    const [expanded, setExpanded] = useState<Set<string>>(new Set());
    const [issuesByProject, setIssuesByProject] = useState<Record<string, TimelineIssue[]>>({});
    const [loadingIssues, setLoadingIssues] = useState<Set<string>>(new Set());
    const [workspaceId, setWorkspaceId] = useState<string>();
-   const { orgId } = useParams<{ orgId: string }>();
    const scrollRef = useRef<HTMLDivElement>(null);
    const frameRef = useRef<number | null>(null);
 
@@ -486,6 +486,9 @@ export default function ProjectsTimeline({ groups }: ProjectsTimelineProps) {
          {peekProjectId !== null && (
             <ProjectPeekPanel projectId={peekProjectId} onClose={() => setPeekProjectId(null)} />
          )}
+         {peekIssueId !== null && (
+            <IssuePeekPanel issueId={peekIssueId} onClose={() => setPeekIssueId(null)} />
+         )}
          {/* Floating scale controls (Linear-style) */}
          <div className="absolute top-1 right-4 z-30 flex items-center gap-1.5">
             <button
@@ -609,11 +612,12 @@ export default function ProjectsTimeline({ groups }: ProjectsTimelineProps) {
                                        project={project}
                                        monthWidth={monthWidth}
                                        selected={peekProjectId === project.id}
-                                       onSelect={(projectId) =>
+                                       onSelect={(projectId) => {
+                                          setPeekIssueId(null);
                                           setPeekProjectId((current) =>
                                              current === projectId ? null : projectId
-                                          )
-                                       }
+                                          );
+                                       }}
                                     />
                                     {showProjectList && (
                                        <div className="sticky left-0 z-10 flex items-center gap-1.5 w-56 shrink-0 pl-1 pr-4 h-9 bg-container/95 backdrop-blur-sm text-xs border-r border-border/40">
@@ -686,7 +690,12 @@ export default function ProjectsTimeline({ groups }: ProjectsTimelineProps) {
                                        issues={issuesByProject[project.id]}
                                        loading={loadingIssues.has(project.id)}
                                        monthWidth={monthWidth}
-                                       orgId={orgId}
+                                       onSelect={(issueId) => {
+                                          setPeekProjectId(null);
+                                          setPeekIssueId((current) =>
+                                             current === issueId ? null : issueId
+                                          );
+                                       }}
                                     />
                                  )}
                               </div>

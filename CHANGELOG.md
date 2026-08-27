@@ -47,6 +47,9 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Changed
 
+- Clicking an issue bar in either Project timeline now opens an in-place detail
+  panel. Dated issue bars use their actual created-to-due span with a small
+  readable minimum, rather than a project-sized minimum width.
 - Sub-issues remain linked to their parent and are excluded from normal issue
   lists. Project timelines show only parent issues initially and reveal child
   issues from an expand control on the parent row.

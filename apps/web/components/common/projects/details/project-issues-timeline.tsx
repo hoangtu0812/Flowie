@@ -20,15 +20,14 @@ import {
    type TimelineZoom,
 } from '@/components/common/timeline/timeline-scale';
 import { cn } from '@/lib/utils';
+import { IssuePeekPanel } from '@/components/common/issues/issue-peek-panel';
 import type { Issue } from '@/mock-data/issues';
 import { format, parseISO } from 'date-fns';
 import { Check, ChevronDown, ChevronRight } from 'lucide-react';
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-/** A bar narrower than this is unreadable, so it is the floor for every issue. */
-const MIN_BAR_WIDTH = 130;
+const MIN_DATED_BAR_WIDTH = 20;
+const MIN_UNSCHEDULED_BAR_WIDTH = 130;
 
 /**
  * An issue occupies the span it is worked over: from the day it was opened to
@@ -45,15 +44,26 @@ function rangeLabel(issue: Issue): string {
    return end && end !== start ? `${startLabel} – ${format(parseISO(end), 'MMM d')}` : startLabel;
 }
 
-function IssueBar({ issue, monthWidth, href }: { issue: Issue; monthWidth: number; href: string }) {
+function IssueBar({
+   issue,
+   monthWidth,
+   onSelect,
+}: {
+   issue: Issue;
+   monthWidth: number;
+   onSelect: (issueId: string) => void;
+}) {
    const { start, end } = span(issue);
    const left = offsetFor(start, monthWidth);
-   const width = Math.max(offsetFor(end ?? start, monthWidth) - left, MIN_BAR_WIDTH);
+   const width = end
+      ? Math.max(offsetFor(end, monthWidth) - left, MIN_DATED_BAR_WIDTH)
+      : MIN_UNSCHEDULED_BAR_WIDTH;
 
    return (
       <div className="absolute inset-0">
-         <Link
-            href={href}
+         <button
+            type="button"
+            onClick={() => onSelect(issue.id)}
             title={`${issue.identifier} · ${issue.title} — ${rangeLabel(issue)}`}
             className={cn(
                'absolute top-1 h-7 flex items-center gap-1.5 rounded-md border bg-accent/40 hover:bg-accent px-2.5 text-xs transition-colors overflow-hidden',
@@ -72,7 +82,7 @@ function IssueBar({ issue, monthWidth, href }: { issue: Issue; monthWidth: numbe
                   <AvatarFallback>{issue.assignee.name[0]}</AvatarFallback>
                </Avatar>
             )}
-         </Link>
+         </button>
       </div>
    );
 }
@@ -82,10 +92,10 @@ function IssueBar({ issue, monthWidth, href }: { issue: Issue; monthWidth: numbe
  * Projects timeline uses, so the two screens read as one instrument.
  */
 export function ProjectIssuesTimeline({ issues }: { issues: Issue[] }) {
-   const { orgId } = useParams<{ orgId: string }>();
    const [zoom, setZoom] = useState<TimelineZoom>('year');
    const [todayIso, setTodayIso] = useState<string | null>(null);
    const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
+   const [peekIssueId, setPeekIssueId] = useState<string | null>(null);
    const scrollRef = useRef<HTMLDivElement>(null);
 
    const monthWidth = monthWidthOf(zoom);
@@ -150,6 +160,9 @@ export function ProjectIssuesTimeline({ issues }: { issues: Issue[] }) {
 
    return (
       <div className="w-full h-full flex flex-col overflow-hidden">
+         {peekIssueId !== null && (
+            <IssuePeekPanel issueId={peekIssueId} onClose={() => setPeekIssueId(null)} />
+         )}
          <div className="flex items-center justify-end gap-2 px-6 h-10 border-b shrink-0">
             <Button
                size="xs"
@@ -266,7 +279,11 @@ export function ProjectIssuesTimeline({ issues }: { issues: Issue[] }) {
                                     <IssueBar
                                        issue={item}
                                        monthWidth={monthWidth}
-                                       href={`/${orgId}/issue/${item.identifier}`}
+                                       onSelect={(issueId) =>
+                                          setPeekIssueId((current) =>
+                                             current === issueId ? null : issueId
+                                          )
+                                       }
                                     />
                                     <div
                                        className={cn(
