@@ -47,6 +47,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Changed
 
+- Timeline bars now use status color without repeated text; project bars fill
+  by their calculated completion percentage.
 - Project timelines reserve the sub-issue expand column on every parent row,
   keeping issue identifiers and titles aligned when only some rows have child
   issues.

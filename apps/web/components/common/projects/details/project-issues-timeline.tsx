@@ -65,24 +65,18 @@ function IssueBar({
             type="button"
             onClick={() => onSelect(issue.id)}
             title={`${issue.identifier} · ${issue.title} — ${rangeLabel(issue)}`}
+            aria-label={`${issue.identifier} · ${issue.title} — ${rangeLabel(issue)}`}
             className={cn(
-               'absolute top-1 h-7 flex items-center gap-1.5 rounded-md border bg-accent/40 hover:bg-accent px-2.5 text-xs transition-colors overflow-hidden',
+               'absolute top-1 h-7 rounded-md border transition-opacity hover:opacity-85',
                !end && 'border-dashed'
             )}
-            style={{ left, width }}
-         >
-            <span
-               className="size-2 rounded-full shrink-0"
-               style={{ backgroundColor: issue.status.color }}
-            />
-            <span className="truncate font-medium">{issue.title}</span>
-            {issue.assignee && (
-               <Avatar className="size-4 shrink-0 ml-auto">
-                  <AvatarImage src={issue.assignee.avatarUrl} alt={issue.assignee.name} />
-                  <AvatarFallback>{issue.assignee.name[0]}</AvatarFallback>
-               </Avatar>
-            )}
-         </button>
+            style={{
+               left,
+               width,
+               backgroundColor: issue.status.color,
+               borderColor: issue.status.color,
+            }}
+         />
       </div>
    );
 }

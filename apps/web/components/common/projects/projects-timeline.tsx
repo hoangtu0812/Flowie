@@ -104,18 +104,18 @@ function IssueRow({
                type="button"
                onClick={() => onSelect(issue.id)}
                title={`${issue.identifier} · ${issue.title} - ${label}`}
+               aria-label={`${issue.identifier} · ${issue.title} - ${label}`}
                className={cn(
-                  'absolute top-1 h-6 flex items-center gap-1.5 rounded border bg-accent/25 hover:bg-accent/60 px-2 text-[11px] transition-colors overflow-hidden',
+                  'absolute top-1 h-6 rounded border transition-opacity hover:opacity-85',
                   !end && 'border-dashed'
                )}
-               style={{ left, width }}
-            >
-               <span
-                  className="size-1.5 rounded-full shrink-0"
-                  style={{ backgroundColor: issue.status.color }}
-               />
-               <span className="truncate">{issue.title}</span>
-            </button>
+               style={{
+                  left,
+                  width,
+                  backgroundColor: issue.status.color,
+                  borderColor: issue.status.color,
+               }}
+            />
          </div>
          <div
             className={cn(
@@ -289,32 +289,29 @@ function TimelineBar({
    selected: boolean;
    onSelect: (projectId: string) => void;
 }) {
-   const { displayProperties } = useProjectsDisplayStore();
    const left = offsetFor(project.startDate, monthWidth);
    const right = offsetFor(project.targetDate ?? project.startDate, monthWidth);
    const width = Math.max(right - left, 130);
+   const completion = Math.min(Math.max(project.percentComplete, 0), 100);
 
    return (
       <div className="absolute inset-0">
          <button
             type="button"
             onClick={() => onSelect(project.id)}
+            title={`${project.name} · ${completion}% complete · ${dateRangeLabel(project)}`}
+            aria-label={`${project.name} · ${completion}% complete · ${dateRangeLabel(project)}`}
             className={cn(
-               'absolute top-1 h-7 flex items-center gap-1.5 rounded-md border bg-accent/40 hover:bg-accent px-2.5 text-xs transition-colors overflow-hidden',
-               selected && 'border-dashed border-violet-500 bg-accent'
+               'absolute top-1 h-7 overflow-hidden rounded-md border bg-muted/35 transition-opacity hover:opacity-85',
+               selected && 'border-violet-500 ring-1 ring-violet-500'
             )}
             style={{ left, width }}
          >
-            <span className="truncate font-medium">{project.name}</span>
-            {displayProperties.lead && (
-               <Avatar className="size-4 shrink-0">
-                  <AvatarImage src={project.lead.avatarUrl} alt={project.lead.name} />
-                  <AvatarFallback>{project.lead.name[0]}</AvatarFallback>
-               </Avatar>
-            )}
-            {displayProperties.status && (
-               <span className="text-muted-foreground shrink-0">{project.percentComplete}%</span>
-            )}
+            <span
+               aria-hidden="true"
+               className="absolute inset-y-0 left-0"
+               style={{ width: `${completion}%`, backgroundColor: project.status.color }}
+            />
          </button>
       </div>
    );
