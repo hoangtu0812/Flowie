@@ -12,6 +12,11 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- The workspace Dashboard provides an interactive overview of accessible work
+  across all projects or a selected project. It supports custom date ranges
+  and one-week, month, quarter, and year presets; daily created/done trends,
+  status, project throughput, workload in mandays, and focused issue drill-ins
+  respond to its filters.
 - Issues now record estimated and actual effort in fractional mandays. Both
   values are editable from the issue properties panel, shown alongside the
   planned Start → End window in issue lists, and preserved when the database

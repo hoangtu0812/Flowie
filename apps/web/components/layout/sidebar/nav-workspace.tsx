@@ -2,6 +2,7 @@
 
 import {
    Box,
+   ChartNoAxesCombined,
    Compass,
    ContactRound,
    Layers,
@@ -45,6 +46,7 @@ interface WorkspaceNavItem {
 }
 
 const WORKSPACE_NAV: WorkspaceNavItem[] = [
+   { key: 'dashboard', name: 'Dashboard', icon: ChartNoAxesCombined, url: '/dashboard' },
    { key: 'initiatives', name: 'Initiatives', icon: Compass, url: '/initiatives' },
    { key: 'projects', name: 'Projects', icon: Box, url: '/projects' },
    { key: 'views', name: 'Views', icon: Layers, url: '/views' },
