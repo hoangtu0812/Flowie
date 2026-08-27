@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import date, datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Literal, TypedDict
+from typing import Any, AsyncIterator, Awaitable, Callable, Literal, TypedDict
 from urllib.parse import urlsplit
 from zipfile import BadZipFile, ZipFile
 from xml.etree import ElementTree
@@ -14,6 +15,7 @@ import httpx
 import mammoth
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
+from fastapi.responses import StreamingResponse
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import text
@@ -104,6 +106,16 @@ ReadOnlyCapability = tuple[
     Callable[[str], bool],
     Callable[[AsyncSession, str, str], Awaitable[ReadOnlyInsight]],
 ]
+
+
+class AgentProgress(TypedDict):
+    id: str
+    label: str
+    state: Literal['running', 'completed']
+    orb: Literal['working', 'searching', 'solving', 'composing', 'shaping']
+
+
+ProgressReporter = Callable[[AgentProgress], Awaitable[None]]
 
 
 def _cipher(request: Request) -> Fernet:
@@ -248,12 +260,10 @@ READ_ONLY_CAPABILITIES: tuple[ReadOnlyCapability, ...] = (
 )
 
 
-async def _read_only_insight(
-    db: AsyncSession, workspace_id: str, user_id: str, message: str
-) -> ReadOnlyInsight | None:
+def _matching_read_only_capability(message: str) -> ReadOnlyCapability | None:
     for _name, matches, execute in READ_ONLY_CAPABILITIES:
         if matches(message):
-            return await execute(db, workspace_id, user_id)
+            return (_name, matches, execute)
     return None
 
 
@@ -527,45 +537,71 @@ async def get_conversation(conversation_id: str, workspaceId: str = Query(min_le
     return {'data': {'id': row['id'], 'title': row['title'], 'createdAt': row['created_at'], 'updatedAt': row['updated_at'], 'messages': [_message_view(message) for message in messages.mappings().all()]}}
 
 
-@router.post('/conversations/messages')
-async def send_message(request: Request, workspaceId: str = Form(), message: str = Form(min_length=1, max_length=10_000), conversationId: str | None = Form(default=None), files: list[UploadFile] = File(default=[]), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
-    await _workspace_access(db, workspaceId, user['id'])
+async def _ignore_progress(_: AgentProgress) -> None:
+    return None
+
+
+async def _process_message(
+    request: Request,
+    workspace_id: str,
+    message: str,
+    conversation_id: str | None,
+    files: list[UploadFile],
+    user: Any,
+    db: AsyncSession,
+    progress: ProgressReporter,
+) -> dict[str, Any]:
+    await progress({'id': 'workspace.access', 'label': 'Checking workspace access', 'state': 'running', 'orb': 'working'})
+    await _workspace_access(db, workspace_id, user['id'])
+    await progress({'id': 'workspace.access', 'label': 'Workspace access checked', 'state': 'completed', 'orb': 'working'})
     if len(files) > 5:
         raise ApiError(400, 'Attach at most five source files.', 'Bad Request')
+    if files:
+        await progress({'id': 'source.read', 'label': f'Reading {len(files)} attached source file(s)', 'state': 'running', 'orb': 'searching'})
     source_text = await _source_text(files)
-    if conversationId:
-        conversation = await db.execute(text('SELECT id, title FROM agent_conversations WHERE id = :id AND workspace_id = :workspace_id AND user_id = :user_id'), {'id': conversationId, 'workspace_id': workspaceId, 'user_id': user['id']})
+    if files:
+        await progress({'id': 'source.read', 'label': 'Source files read', 'state': 'completed', 'orb': 'searching'})
+    if conversation_id:
+        conversation = await db.execute(text('SELECT id, title FROM agent_conversations WHERE id = :id AND workspace_id = :workspace_id AND user_id = :user_id'), {'id': conversation_id, 'workspace_id': workspace_id, 'user_id': user['id']})
         conversation_row = conversation.mappings().first()
         if not conversation_row:
             raise ApiError(404, 'Agent conversation not found.', 'Not Found')
-        conversation_id = conversationId
         is_new_conversation = False
     else:
         conversation_id = _cuid()
         conversation_row = {'id': conversation_id, 'title': message.strip()[:80]}
         is_new_conversation = True
 
-    insight = await _read_only_insight(db, workspaceId, user['id'], message) if not files else None
-    if insight:
+    capability = _matching_read_only_capability(message) if not files else None
+    if capability:
+        capability_id, _matches, execute = capability
+        await progress({'id': capability_id, 'label': 'Querying overdue issues', 'state': 'running', 'orb': 'searching'})
+        insight = await execute(db, workspace_id, user['id'])
+        await progress({'id': capability_id, 'label': 'Overdue issue report ready', 'state': 'completed', 'orb': 'searching'})
+        await progress({'id': 'conversation.persist', 'label': 'Saving conversation', 'state': 'running', 'orb': 'shaping'})
         data = await _persist_turn(
             db,
             conversation_id=conversation_id,
             conversation=conversation_row,
-            workspace_id=workspaceId,
+            workspace_id=workspace_id,
             user_id=user['id'],
             is_new_conversation=is_new_conversation,
             user_content=message.strip(),
             assistant_content=insight['content'],
             proposal=None,
         )
+        await progress({'id': 'conversation.persist', 'label': 'Conversation saved', 'state': 'completed', 'orb': 'shaping'})
         data['responseType'] = 'INSIGHT'
         data['insight'] = insight
-        return {'data': data}
+        return data
 
-    provider = await _configured_provider(request, db, workspaceId)
+    await progress({'id': 'provider.configure', 'label': 'Preparing the active AI provider', 'state': 'running', 'orb': 'working'})
+    provider = await _configured_provider(request, db, workspace_id)
+    await progress({'id': 'provider.configure', 'label': 'AI provider ready', 'state': 'completed', 'orb': 'working'})
 
     # A turn becomes durable only after its provider response validates. This
     # prevents a failed request from becoming hidden context on a later retry.
+    await progress({'id': 'conversation.context', 'label': 'Loading planning context', 'state': 'running', 'orb': 'searching'})
     history_rows = await db.execute(text('''WITH recent_messages AS (
                 SELECT id, role, content, proposal, created_at,
                        LEAD(role) OVER (
@@ -601,23 +637,73 @@ async def send_message(request: Request, workspaceId: str = Form(), message: str
         for row in reversed(history_rows.mappings().all())
     ]
     history.append({'role': 'user', 'content': message.strip()})
-    catalog = await _workspace_catalog(db, workspaceId)
+    await progress({'id': 'conversation.context', 'label': 'Planning context ready', 'state': 'completed', 'orb': 'searching'})
+    await progress({'id': 'workspace.catalog', 'label': 'Loading workspace teams and projects', 'state': 'running', 'orb': 'searching'})
+    catalog = await _workspace_catalog(db, workspace_id)
+    await progress({'id': 'workspace.catalog', 'label': 'Workspace catalog ready', 'state': 'completed', 'orb': 'searching'})
+    await progress({'id': 'provider.chat', 'label': f"Calling {provider['provider'].title()} to draft the plan", 'state': 'running', 'orb': 'composing'})
     result = await planner_graph.ainvoke({'provider': provider, 'system_prompt': _system_prompt(catalog, source_text), 'history': history})
+    await progress({'id': 'provider.chat', 'label': 'AI draft received', 'state': 'completed', 'orb': 'composing'})
+    await progress({'id': 'proposal.validate', 'label': 'Validating the proposed plan', 'state': 'running', 'orb': 'solving'})
     proposal = AgentProposal.model_validate(result['proposal'])
     _validate_proposal(proposal, catalog)
+    await progress({'id': 'proposal.validate', 'label': 'Plan validated', 'state': 'completed', 'orb': 'solving'})
+    await progress({'id': 'conversation.persist', 'label': 'Saving conversation', 'state': 'running', 'orb': 'shaping'})
     data = await _persist_turn(
         db,
         conversation_id=conversation_id,
         conversation=conversation_row,
-        workspace_id=workspaceId,
+        workspace_id=workspace_id,
         user_id=user['id'],
         is_new_conversation=is_new_conversation,
         user_content=message.strip(),
         assistant_content=proposal.summary,
         proposal=proposal.model_dump(mode='json'),
     )
+    await progress({'id': 'conversation.persist', 'label': 'Conversation saved', 'state': 'completed', 'orb': 'shaping'})
     data['responseType'] = 'PLAN'
+    return data
+
+
+def _sse(event: str, data: dict[str, Any]) -> str:
+    return f'event: {event}\ndata: {json.dumps(data, ensure_ascii=False, default=str)}\n\n'
+
+
+@router.post('/conversations/messages')
+async def send_message(request: Request, workspaceId: str = Form(), message: str = Form(min_length=1, max_length=10_000), conversationId: str | None = Form(default=None), files: list[UploadFile] = File(default=[]), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    data = await _process_message(request, workspaceId, message, conversationId, files, user, db, _ignore_progress)
     return {'data': data}
+
+
+@router.post('/conversations/messages/stream')
+async def stream_message(request: Request, workspaceId: str = Form(), message: str = Form(min_length=1, max_length=10_000), conversationId: str | None = Form(default=None), files: list[UploadFile] = File(default=[]), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> StreamingResponse:
+    queue: asyncio.Queue[tuple[str, dict[str, Any]]] = asyncio.Queue()
+
+    async def report(update: AgentProgress) -> None:
+        await queue.put(('progress', update))
+
+    async def run() -> None:
+        try:
+            data = await _process_message(request, workspaceId, message, conversationId, files, user, db, report)
+            await queue.put(('complete', data))
+        except ApiError as error:
+            await queue.put(('error', {'message': error.message, 'statusCode': error.status_code}))
+        except Exception:
+            await queue.put(('error', {'message': 'Could not generate an Agent response.', 'statusCode': 500}))
+
+    async def events() -> AsyncIterator[str]:
+        task = asyncio.create_task(run())
+        try:
+            while True:
+                event, data = await queue.get()
+                yield _sse(event, data)
+                if event in {'complete', 'error'}:
+                    break
+        finally:
+            if not task.done():
+                task.cancel()
+
+    return StreamingResponse(events(), media_type='text/event-stream', headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
 
 
 @router.post('/messages/{message_id}/accept')

@@ -9,6 +9,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.core.errors import ApiError
 from app.domains.agent import (
     AgentProposal,
+    _matching_read_only_capability,
+    _sse,
     _is_overdue_issue_question,
     _validate_proposal,
     _validated_endpoint,
@@ -53,6 +55,18 @@ class AgentPlanningTests(unittest.TestCase):
         self.assertTrue(_is_overdue_issue_question('Thống kê số issue đang trễ hạn'))
         self.assertTrue(_is_overdue_issue_question('How many issues are overdue?'))
         self.assertFalse(_is_overdue_issue_question('Create an issue to review overdue invoices'))
+
+    def test_exposes_the_matching_read_only_capability(self) -> None:
+        capability = _matching_read_only_capability('How many issues are overdue?')
+
+        self.assertIsNotNone(capability)
+        self.assertEqual(capability[0], 'issues.overdue')
+
+    def test_serializes_sse_events(self) -> None:
+        self.assertEqual(
+            _sse('progress', {'id': 'workspace.catalog'}),
+            'event: progress\ndata: {"id": "workspace.catalog"}\n\n',
+        )
 
 
 if __name__ == '__main__':

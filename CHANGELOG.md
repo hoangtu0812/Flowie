@@ -12,6 +12,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Agent now streams concrete workflow progress in chat, including source-file
+  reading, workspace and insight queries, provider calls, validation, and
+  conversation saving. Completed steps stack under the active `thinking-orbs`
+  indicator; no plan is created while it is running.
 - Agent can answer the first read-only workspace insight: the current count of
   overdue issues, scoped to teams the requester can access. Insight queries do
   not create a proposal or require approval, and their capability registry is

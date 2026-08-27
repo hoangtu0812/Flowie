@@ -8,6 +8,7 @@ COPY apps/web/package.json apps/web/package.json
 COPY packages/config/package.json packages/config/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/database/package.json packages/database/package.json
+COPY packages/thinking-orbs/package.json packages/thinking-orbs/package.json
 RUN pnpm install --frozen-lockfile
 
 FROM dependencies AS build
@@ -17,6 +18,7 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 RUN printf '%s' "$UI_BUILD_REVISION" > /tmp/ui-build-revision
 COPY apps/web apps/web
 COPY packages/contracts packages/contracts
+COPY packages/thinking-orbs packages/thinking-orbs
 # next.config.ts reads the release version and date from here; without it the
 # built image cannot tell anyone which release it is running.
 COPY CHANGELOG.md ./CHANGELOG.md
@@ -33,5 +35,6 @@ COPY --from=build /app/apps/web/node_modules ./apps/web/node_modules
 COPY --from=build /app/apps/web/public ./public
 COPY --from=build /app/apps/web/public ./apps/web/public
 COPY --from=build /app/apps/web/package.json ./apps/web/package.json
+COPY --from=build /app/packages/thinking-orbs ./packages/thinking-orbs
 EXPOSE 3000
 CMD ["node", "apps/web/node_modules/next/dist/bin/next", "start", "apps/web"]

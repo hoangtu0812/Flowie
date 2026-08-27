@@ -46,6 +46,18 @@ encrypted in PostgreSQL and is never included in an API response.
    existing APIs and saves an audit record. No task, project, or issue is
    created during drafting.
 
+## Live progress
+
+The chat uses the `POST /api/v1/agent/conversations/messages/stream` endpoint
+for Server-Sent Events. The API reports only concrete workflow steps: source
+reading, workspace or insight queries, provider calls, proposal validation, and
+conversation persistence. The browser replaces each running step with its
+completed state and stacks multiple steps under the current activity.
+
+The indicators use a vendored, reviewed snapshot of the MIT-licensed
+`thinking-orbs` package in `packages/thinking-orbs`. The source snapshot keeps
+the production build independent of public package-registry availability.
+
 ## Read-only insights
 
 Agent also supports explicit read-only workspace insights. These bypass the AI

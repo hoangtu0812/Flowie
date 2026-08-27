@@ -57,6 +57,7 @@ const release = readRelease();
 const nextConfig: NextConfig = {
    /* config options here */
    devIndicators: false,
+   transpilePackages: ['thinking-orbs'],
    env: {
       NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION ?? release.version,
       NEXT_PUBLIC_APP_RELEASED_AT: process.env.NEXT_PUBLIC_APP_RELEASED_AT ?? release.releasedAt,

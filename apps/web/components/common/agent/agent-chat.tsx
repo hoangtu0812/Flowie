@@ -6,6 +6,7 @@ import { authenticatedFetch, loadCurrentWorkspace, WorkspaceSummary } from '@/li
 import { useAgentChatStore } from '@/store/agent-chat-store';
 import { ArrowUp, Bot, CheckCircle2, FileText, LoaderCircle, Paperclip, X } from 'lucide-react';
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
+import { ThinkingOrb, type OrbState } from 'thinking-orbs';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -60,6 +61,19 @@ type Conversation = ConversationSummary & {
    messages: AgentMessage[];
 };
 
+type AgentProgress = {
+   id: string;
+   label: string;
+   state: 'running' | 'completed';
+   orb: OrbState;
+};
+
+type AgentResponse = {
+   conversation: { id: string; title: string };
+   userMessage: AgentMessage;
+   message: AgentMessage;
+};
+
 type Team = { id: string; name: string; identifier: string };
 
 const EXAMPLES = [
@@ -73,6 +87,54 @@ function MessageText({ content }: { content: string }) {
    return (
       <div className="text-sm leading-relaxed whitespace-pre-wrap">
          <InlineText text={content} />
+      </div>
+   );
+}
+
+function AgentActivity({ steps }: { steps: AgentProgress[] }) {
+   const current = [...steps].reverse().find((step) => step.state === 'running') ?? steps.at(-1);
+   if (!current) {
+      return (
+         <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <ThinkingOrb state="working" size={20} aria-label="Agent is preparing" />
+            Agent is preparing…
+         </div>
+      );
+   }
+
+   return (
+      <div className="flex items-start gap-2.5">
+         <span className="mt-0.5 inline-flex size-6 items-center justify-center rounded-full border bg-container shrink-0">
+            <ThinkingOrb state={current.orb} size={20} aria-label={current.label} />
+         </span>
+         <div className="min-w-0 flex-1 rounded-xl border bg-container px-3 py-2.5 text-sm">
+            <p className="font-medium text-foreground">{current.label}</p>
+            {steps.length > 1 && (
+               <details className="mt-1.5 group">
+                  <summary className="cursor-pointer text-xs text-muted-foreground select-none">
+                     {steps.length} Agent steps
+                  </summary>
+                  <ol className="mt-2 space-y-1.5 border-l pl-3 text-xs">
+                     {steps.map((step) => (
+                        <li
+                           key={step.id}
+                           className="flex items-center gap-1.5 text-muted-foreground"
+                        >
+                           {step.state === 'completed' ? (
+                              <CheckCircle2 className="size-3.5 text-emerald-600" />
+                           ) : (
+                              <LoaderCircle className="size-3.5 animate-spin" />
+                           )}
+                           <span className="min-w-0 truncate">{step.label}</span>
+                           <code className="ml-auto text-[10px] text-muted-foreground/70">
+                              {step.id}
+                           </code>
+                        </li>
+                     ))}
+                  </ol>
+               </details>
+            )}
+         </div>
       </div>
    );
 }
@@ -300,6 +362,7 @@ export default function AgentChat() {
    const [teamNames, setTeamNames] = useState<Record<string, string>>({});
    const [loading, setLoading] = useState(true);
    const [pending, setPending] = useState(false);
+   const [progress, setProgress] = useState<AgentProgress[]>([]);
    const [accepting, setAccepting] = useState<string | null>(null);
    const [error, setError] = useState<string | null>(null);
    const scrollRef = useRef<HTMLDivElement>(null);
@@ -366,11 +429,12 @@ export default function AgentChat() {
 
    useEffect(() => {
       scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-   }, [messages, pending]);
+   }, [messages, pending, progress]);
 
    const send = async (content: string, files: File[]) => {
       if (!workspace) return;
       setPending(true);
+      setProgress([]);
       setError(null);
       const optimistic: AgentMessage = {
          id: `pending-${Date.now()}`,
@@ -385,21 +449,52 @@ export default function AgentChat() {
          body.append('message', content);
          if (activeConversationId) body.append('conversationId', activeConversationId);
          files.forEach((file) => body.append('files', file));
-         const response = await authenticatedFetch(`${api}/agent/conversations/messages`, {
+         const response = await authenticatedFetch(`${api}/agent/conversations/messages/stream`, {
             method: 'POST',
             body,
          });
-         const payload = (await response.json().catch(() => null)) as {
-            data?: {
-               conversation: { id: string; title: string };
-               userMessage: AgentMessage;
-               message: AgentMessage;
-            };
-            message?: string;
-         } | null;
-         const data = payload?.data;
-         if (!response.ok || !data)
-            throw new Error(payload?.message ?? 'Could not generate a plan.');
+         if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as {
+               message?: string;
+            } | null;
+            throw new Error(payload?.message ?? 'Could not start the Agent response.');
+         }
+         if (!response.body) throw new Error('The Agent response stream was unavailable.');
+
+         const reader = response.body.getReader();
+         const decoder = new TextDecoder();
+         let buffer = '';
+         let data: AgentResponse | null = null;
+         while (true) {
+            const { done, value } = await reader.read();
+            buffer += decoder.decode(value, { stream: !done });
+            let separator = buffer.indexOf('\n\n');
+            while (separator !== -1) {
+               const frame = buffer.slice(0, separator);
+               buffer = buffer.slice(separator + 2);
+               separator = buffer.indexOf('\n\n');
+               const event = frame.match(/^event: (.+)$/m)?.[1];
+               const raw = frame.match(/^data: (.+)$/m)?.[1];
+               if (!event || !raw) continue;
+               const payload = JSON.parse(raw) as
+                  AgentProgress | AgentResponse | { message: string };
+               if (event === 'progress') {
+                  const step = payload as AgentProgress;
+                  setProgress((current) => {
+                     const existing = current.some((item) => item.id === step.id);
+                     return existing
+                        ? current.map((item) => (item.id === step.id ? step : item))
+                        : [...current, step];
+                  });
+               } else if (event === 'complete') {
+                  data = payload as AgentResponse;
+               } else if (event === 'error') {
+                  throw new Error((payload as { message: string }).message);
+               }
+            }
+            if (done) break;
+         }
+         if (!data) throw new Error('The Agent response ended before returning a result.');
          setMessages((current) => [
             ...current.filter((item) => item.id !== optimistic.id),
             data.userMessage,
@@ -415,8 +510,9 @@ export default function AgentChat() {
          setActiveConversation(updated.id);
       } catch (cause) {
          setMessages((current) => current.filter((item) => item.id !== optimistic.id));
-         setError(cause instanceof Error ? cause.message : 'Could not generate a plan.');
+         setError(cause instanceof Error ? cause.message : 'Could not get an Agent response.');
       } finally {
+         setProgress([]);
          setPending(false);
       }
    };
@@ -515,6 +611,7 @@ export default function AgentChat() {
                         </div>
                      )
                   )}
+                  {pending && <AgentActivity steps={progress} />}
                </div>
             )}
          </div>
