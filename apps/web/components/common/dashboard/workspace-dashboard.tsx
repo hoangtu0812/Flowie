@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { LoadingState } from '@/components/common/loading-state';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
@@ -18,7 +19,6 @@ import {
    CheckCircle2,
    CircleDot,
    ClipboardList,
-   Loader2,
    RotateCcw,
    Timer,
 } from 'lucide-react';
@@ -343,11 +343,7 @@ export function WorkspaceDashboard() {
    };
 
    if (loading) {
-      return (
-         <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" /> Loading workspace analytics…
-         </div>
-      );
+      return <LoadingState label="Loading workspace analytics…" />;
    }
 
    if (error) {

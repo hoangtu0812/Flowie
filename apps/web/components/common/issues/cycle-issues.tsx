@@ -1,6 +1,7 @@
 'use client';
 
 import { CycleDetailsPanel } from '@/components/common/cycles/cycle-details-panel';
+import { LoadingState } from '@/components/common/loading-state';
 import { useLiveCycle } from '@/components/common/cycles/use-live-cycle';
 import { useFilterStore } from '@/store/filter-store';
 import { useIssuesStore } from '@/store/issues-store';
@@ -56,13 +57,7 @@ export default function CycleIssues({ cycleView }: CycleIssuesProps) {
       );
    }
 
-   if (loading) {
-      return (
-         <div className="w-full h-full px-6 py-10 text-sm text-muted-foreground">
-            Loading cycle…
-         </div>
-      );
-   }
+   if (loading) return <LoadingState label="Loading cycle…" />;
 
    return (
       <div className="w-full h-full flex flex-col overflow-hidden">

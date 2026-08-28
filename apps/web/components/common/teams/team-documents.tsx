@@ -1,6 +1,7 @@
 'use client';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { LoadingState } from '@/components/common/loading-state';
 import { IconPicker } from '@/components/common/icon-picker';
 import { MarkdownDocumentEditor } from './markdown-document-editor';
 import {
@@ -103,12 +104,7 @@ export default function TeamDocuments() {
       window.history.replaceState({}, '', window.location.pathname);
    }, [documentFolders, team]);
 
-   if (loading)
-      return (
-         <div className="h-full grid place-items-center text-sm text-muted-foreground">
-            Loading documents…
-         </div>
-      );
+   if (loading) return <LoadingState label="Loading documents…" />;
    if (error || !team)
       return (
          <div className="h-full grid place-items-center text-sm text-destructive">

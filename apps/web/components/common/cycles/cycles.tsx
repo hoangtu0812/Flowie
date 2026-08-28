@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { LoadingState } from '@/components/common/loading-state';
 import {
    Dialog,
    DialogContent,
@@ -160,9 +161,7 @@ export default function Cycles() {
                <Plus className="size-3.5" /> Create cycle
             </Button>
          </div>
-         {state === 'loading' && (
-            <p className="px-6 py-10 text-sm text-muted-foreground">Loading cycles…</p>
-         )}
+         {state === 'loading' && <LoadingState label="Loading cycles…" className="min-h-48" />}
          {state === 'error' && (
             <p className="px-6 py-10 text-sm text-destructive">Could not load cycles.</p>
          )}

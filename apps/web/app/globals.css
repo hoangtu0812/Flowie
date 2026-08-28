@@ -132,6 +132,26 @@
    }
 }
 
+@keyframes flowie-loading-progress {
+   from {
+      transform: translateX(-175%);
+   }
+   to {
+      transform: translateX(275%);
+   }
+}
+
+.flowie-loading-progress {
+   animation: flowie-loading-progress 1.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+   .flowie-loading-progress {
+      animation: none;
+      transform: translateX(82%);
+   }
+}
+
 input::-webkit-search-cancel-button {
    -webkit-appearance: none;
    appearance: none;

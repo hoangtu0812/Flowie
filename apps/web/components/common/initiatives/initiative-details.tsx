@@ -1,6 +1,7 @@
 'use client';
 
 import ProjectsTimeline from '@/components/common/projects/projects-timeline';
+import { LoadingState } from '@/components/common/loading-state';
 import { IconPicker } from '@/components/common/icon-picker';
 import { ProjectGroup } from '@/components/common/projects/projects';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -1024,13 +1025,7 @@ export default function InitiativeDetails({ initiativeId }: { initiativeId: stri
       ];
    }, [initiative]);
 
-   if (loading) {
-      return (
-         <div className="w-full h-full flex items-center justify-center text-sm text-muted-foreground">
-            Loading initiative…
-         </div>
-      );
-   }
+   if (loading) return <LoadingState label="Loading initiative…" />;
 
    if (!initiative || error) {
       return (

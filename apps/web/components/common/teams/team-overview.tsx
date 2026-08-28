@@ -1,6 +1,7 @@
 'use client';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { LoadingState } from '@/components/common/loading-state';
 import { Button } from '@/components/ui/button';
 import { RiDonutChartFill } from '@remixicon/react';
 import { Box, CopyMinus, Layers, Link2, Plus, Settings } from 'lucide-react';
@@ -13,12 +14,7 @@ export default function TeamOverview() {
    const { orgId, teamId } = useParams<{ orgId: string; teamId: string }>();
    const { team, documents, loading, error } = useLiveTeam(teamId);
 
-   if (loading)
-      return (
-         <div className="h-full grid place-items-center text-sm text-muted-foreground">
-            Loading team…
-         </div>
-      );
+   if (loading) return <LoadingState label="Loading team…" />;
    if (error || !team)
       return (
          <div className="h-full grid place-items-center text-sm text-destructive">

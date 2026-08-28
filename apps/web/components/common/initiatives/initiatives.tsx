@@ -1,6 +1,7 @@
 'use client';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { LoadingState } from '@/components/common/loading-state';
 import { Button } from '@/components/ui/button';
 import {
    Command,
@@ -715,9 +716,7 @@ export default function Initiatives() {
                )}
             </div>
 
-            {loading && (
-               <p className="px-6 py-10 text-sm text-muted-foreground">Loading initiatives…</p>
-            )}
+            {loading && <LoadingState label="Loading initiatives…" className="min-h-48" />}
             {error && (
                <p className="px-6 py-10 text-sm text-destructive">Could not load initiatives.</p>
             )}

@@ -1,6 +1,7 @@
 'use client';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { LoadingState } from '@/components/common/loading-state';
 import { Button } from '@/components/ui/button';
 import {
    Dialog,
@@ -291,9 +292,7 @@ export default function Views({ teamId }: { teamId?: string }) {
                <Plus className="size-3.5" />
             </Button>
          </div>
-         {loading && (
-            <div className="py-12 text-center text-sm text-muted-foreground">Loading views…</div>
-         )}
+         {loading && <LoadingState label="Loading views…" className="min-h-48" />}
          {error && <div className="py-12 text-center text-sm text-destructive">{error}</div>}
          {!loading &&
             !error &&

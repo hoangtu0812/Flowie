@@ -10,6 +10,13 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+### Changed
+
+- Page-level loading states now use the animated Flowie mark and an accessible
+  indeterminate progress bar instead of a text label paired with a generic
+  spinner. The shared treatment covers workspace navigation, issue, project,
+  initiative, cycle, team, view, and dashboard loading screens.
+
 ## [0.3.3] — 2026-08-28 00:18 +07
 
 ### Added

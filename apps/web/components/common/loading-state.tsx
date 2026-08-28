@@ -1,10 +1,9 @@
-import { Loader2 } from 'lucide-react';
-
+import { FlowieLogo } from '@/components/brand/flowie-logo';
 import { cn } from '@/lib/utils';
 
 /**
- * The wait a screen shows while its own data is in flight. A moving indicator
- * reads as "working" where a line of static text reads as "stuck".
+ * Shared, non-blocking screen loader. The bar is intentionally indeterminate:
+ * request duration is unknown, so a fake percentage would misrepresent progress.
  */
 export function LoadingState({
    label = 'Loading…',
@@ -14,11 +13,16 @@ export function LoadingState({
    className?: string;
 }) {
    return (
-      <div className={cn('h-full grid place-items-center', className)}>
-         <span className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
-            {label}
-         </span>
+      <div className={cn('h-full min-h-32 grid place-items-center', className)} role="status">
+         <div className="flex w-36 flex-col items-center gap-3">
+            <div className="relative grid size-11 place-items-center rounded-xl bg-muted/70 shadow-sm">
+               <FlowieLogo loading className="[&>svg]:size-8" />
+            </div>
+            <div className="h-1 w-full overflow-hidden rounded-full bg-muted" aria-hidden="true">
+               <span className="flowie-loading-progress block h-full w-[38%] rounded-full bg-gradient-to-r from-orange-400 via-orange-500 to-amber-300" />
+            </div>
+            <span className="sr-only">{label}</span>
+         </div>
       </div>
    );
 }
