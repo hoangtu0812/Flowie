@@ -8,7 +8,7 @@ import { format } from 'date-fns';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { AssigneeUser } from './assignee-user';
-import { ISSUE_COLUMN } from './issue-columns';
+import { ISSUE_COLUMN, issueListMinWidth } from './issue-columns';
 import { LabelBadge } from './label-badge';
 import { PrioritySelector } from './priority-selector';
 import { ProjectBadge } from './project-badge';
@@ -35,7 +35,8 @@ export function IssueLine({ issue, layoutId = false }: { issue: Issue; layoutId?
          <ContextMenuTrigger asChild>
             <motion.div
                {...(layoutId && { layoutId: `issue-line-${issue.identifier}` })}
-               className="w-full flex items-center justify-start h-11 px-6 hover:bg-sidebar/50"
+               className="flex items-center justify-start h-11 px-6 hover:bg-sidebar/50"
+               style={{ minWidth: issueListMinWidth(displayProperties) }}
             >
                <div className="flex items-center gap-0.5">
                   {displayProperties.priority && (

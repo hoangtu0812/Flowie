@@ -15,6 +15,7 @@ import { GroupIssues, IssueGroupDescriptor } from './group-issues';
 import { CustomDragLayer } from './issue-grid';
 import { IssuesListHeader } from './issues-list-header';
 import { LoadingState } from '@/components/common/loading-state';
+import { issueListMinWidth } from './issue-columns';
 
 interface GroupedIssuesViewProps {
    /** Issues to display (after the filter bar has been applied). */
@@ -134,7 +135,8 @@ export const GroupedIssuesView: FC<GroupedIssuesViewProps> = ({
    isViewTypeGrid,
    loading = false,
 }) => {
-   const { grouping, ordering, completedIssues, showEmptyGroups } = useDisplaySettingsStore();
+   const { grouping, ordering, completedIssues, showEmptyGroups, displayProperties } =
+      useDisplaySettingsStore();
    const { filters } = useFilterStore();
    const hasActiveFilters = filters.length > 0;
 
@@ -308,24 +310,26 @@ export const GroupedIssuesView: FC<GroupedIssuesViewProps> = ({
    return (
       <DndProvider backend={HTML5Backend}>
          <CustomDragLayer />
-         <div className="h-full overflow-y-auto">
-            <IssuesListHeader />
-            {loading && <LoadingState label="Loading issues…" className="min-h-40" />}
-            {!loading && listGroups.length === 0 && !showFooter && (
-               <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
-                  No issues to show.
-               </div>
-            )}
-            {!loading &&
-               listGroups.map((entry) => (
-                  <GroupIssues
-                     key={entry.group.id}
-                     group={entry.group}
-                     issues={entry.issues}
-                     count={entry.issues.length}
-                  />
-               ))}
-            {!loading && showFooter && <HiddenByFiltersFooter hiddenCount={hiddenCount} />}
+         <div className="h-full overflow-auto">
+            <div className="min-h-full" style={{ minWidth: issueListMinWidth(displayProperties) }}>
+               <IssuesListHeader />
+               {loading && <LoadingState label="Loading issues…" className="min-h-40" />}
+               {!loading && listGroups.length === 0 && !showFooter && (
+                  <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
+                     No issues to show.
+                  </div>
+               )}
+               {!loading &&
+                  listGroups.map((entry) => (
+                     <GroupIssues
+                        key={entry.group.id}
+                        group={entry.group}
+                        issues={entry.issues}
+                        count={entry.issues.length}
+                     />
+                  ))}
+               {!loading && showFooter && <HiddenByFiltersFooter hiddenCount={hiddenCount} />}
+            </div>
          </div>
       </DndProvider>
    );

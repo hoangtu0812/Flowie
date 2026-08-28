@@ -30,6 +30,9 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Issue lists now retain aligned title and metadata columns when a project side
+  panel narrows the viewport; wide column selections scroll horizontally rather
+  than collapsing the title cell into adjacent headers.
 - Agent now asks focused follow-up questions for bare project or issue creation
   requests and safely recovers when a provider wraps a valid plan in Markdown
   or otherwise returns an invalid plan format, instead of showing a raw error.
