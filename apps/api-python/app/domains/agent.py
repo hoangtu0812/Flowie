@@ -236,6 +236,46 @@ def _is_project_progress_question(message: str) -> bool:
     return any(term in normalized for term in ('dự án', 'du an', 'project', 'projects')) and any(term in normalized for term in ('tiến độ', 'tien do', 'progress', 'hoàn thành', 'hoan thanh'))
 
 
+def _is_project_delivery_question(message: str) -> bool:
+    normalized = message.casefold()
+    project_terms = ('dự án', 'du an', 'project', 'projects')
+    delivery_terms = (
+        'chậm', 'cham', 'trễ', 'tre', 'delay', 'delayed', 'late', 'at risk',
+        'rủi ro', 'rui ro', 'off track', 'on track', 'ổn', 'tốt', 'tot',
+        'healthy', 'on-track',
+    )
+    creation_terms = ('create', 'draft', 'plan', 'add', 'tạo', 'lập', 'thêm', 'viết', 'xử lý')
+    return (
+        any(term in normalized for term in project_terms)
+        and any(term in normalized for term in delivery_terms)
+        and not any(term in normalized for term in creation_terms)
+    )
+
+
+def _is_stale_issue_question(message: str) -> bool:
+    normalized = message.casefold()
+    issue_terms = ('issue', 'issues', 'công việc', 'cong viec', 'task', 'tasks')
+    stale_terms = ('treo lâu', 'treo lau', 'bị treo', 'bi treo', 'không cập nhật', 'khong cap nhat', 'stale', 'stuck', 'inactive')
+    creation_terms = ('create', 'draft', 'plan', 'add', 'tạo', 'lập', 'thêm', 'viết', 'xử lý')
+    return (
+        any(term in normalized for term in issue_terms)
+        and any(term in normalized for term in stale_terms)
+        and not any(term in normalized for term in creation_terms)
+    )
+
+
+def _is_initiative_delivery_question(message: str) -> bool:
+    normalized = message.casefold()
+    initiative_terms = ('initiative', 'initiatives', 'sáng kiến', 'sang kien')
+    delivery_terms = ('chậm', 'cham', 'trễ', 'tre', 'delay', 'delayed', 'late', 'at risk', 'rủi ro', 'rui ro', 'off track')
+    creation_terms = ('create', 'draft', 'plan', 'add', 'tạo', 'lập', 'thêm', 'viết', 'xử lý')
+    return (
+        any(term in normalized for term in initiative_terms)
+        and any(term in normalized for term in delivery_terms)
+        and not any(term in normalized for term in creation_terms)
+    )
+
+
 def _is_cycle_progress_question(message: str) -> bool:
     normalized = message.casefold()
     return any(term in normalized for term in ('cycle', 'cycles', 'chu kỳ', 'chu ky', 'sprint')) and any(term in normalized for term in ('tiến độ', 'tien do', 'progress', 'hoàn thành', 'hoan thanh', 'status'))
@@ -379,6 +419,215 @@ async def _project_progress_insight(db: AsyncSession, workspace_id: str, user_id
     return {'capability': 'projects.progress', 'content': f'Tiến độ dự án: {detail}.', 'data': {'projects': rows}}
 
 
+def _project_delivery_reason(row: dict[str, Any], today: date) -> tuple[str, list[str]]:
+    target_date = row['targetDate']
+    reasons: list[str] = []
+    if target_date and target_date < today:
+        reasons.append(f"trễ {(today - target_date).days} ngày so với target {target_date.isoformat()}")
+        state = 'delayed'
+    elif row['health'] == 'off-track':
+        reasons.append('health đang là Off track')
+        state = 'at-risk'
+    elif row['health'] == 'at-risk':
+        reasons.append('health đang là At risk')
+        state = 'at-risk'
+    elif row['overdueIssues']:
+        state = 'at-risk'
+    elif row['health'] == 'on-track' and target_date:
+        state = 'on-track'
+    else:
+        state = 'insufficient-data'
+    if row['overdueIssues']:
+        reasons.append(f"{row['overdueIssues']} issue chưa hoàn thành đã quá hạn")
+    if state == 'insufficient-data':
+        if not target_date:
+            reasons.append('chưa có target date')
+        if row['health'] == 'no-update':
+            reasons.append('chưa có cập nhật health')
+    return state, reasons
+
+
+async def _project_delivery_insight(db: AsyncSession, workspace_id: str, user_id: str) -> ReadOnlyInsight:
+    today = datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).date()
+    result = await db.execute(
+        text('''SELECT project.name, project.identifier, project.health, project.target_date::date AS target_date,
+                       COUNT(issue.id)::int AS total,
+                       COUNT(issue.id) FILTER (WHERE status.category = 'COMPLETED')::int AS completed,
+                       COUNT(issue.id) FILTER (
+                           WHERE status.category NOT IN ('COMPLETED', 'CANCELED')
+                             AND issue.due_date::date < :today
+                       )::int AS overdue_issues
+                FROM projects project
+                LEFT JOIN issues issue ON issue.project_id = project.id AND issue.archived_at IS NULL
+                LEFT JOIN issue_statuses status ON status.id = issue.status_id
+                WHERE project.workspace_id = :workspace_id
+                  AND project.archived_at IS NULL
+                  AND project.status NOT IN ('done', 'shipped', 'canceled', 'duplicate')
+                  AND (
+                      project.team_id IS NULL OR EXISTS (
+                          SELECT 1 FROM team_members member
+                          WHERE member.team_id = project.team_id AND member.user_id = :user_id
+                      )
+                  )
+                GROUP BY project.id, project.name, project.identifier, project.health, project.target_date
+                ORDER BY project.target_date NULLS LAST, project.name
+                LIMIT 100'''),
+        {'workspace_id': workspace_id, 'user_id': user_id, 'today': today},
+    )
+    rows: list[dict[str, Any]] = []
+    for raw_row in result.mappings().all():
+        row = {
+            'name': raw_row['name'], 'identifier': raw_row['identifier'], 'health': raw_row['health'],
+            'targetDate': raw_row['target_date'], 'total': raw_row['total'],
+            'completed': raw_row['completed'], 'overdueIssues': raw_row['overdue_issues'],
+        }
+        row['progressPercent'] = round(row['completed'] * 100 / row['total']) if row['total'] else 0
+        row['deliveryState'], row['reasons'] = _project_delivery_reason(row, today)
+        rows.append(row)
+
+    delayed = [row for row in rows if row['deliveryState'] == 'delayed']
+    at_risk = [row for row in rows if row['deliveryState'] == 'at-risk']
+    on_track = [row for row in rows if row['deliveryState'] == 'on-track']
+    insufficient = [row for row in rows if row['deliveryState'] == 'insufficient-data']
+
+    def describe(row: dict[str, Any]) -> str:
+        detail = '; '.join(row['reasons']) or 'không có dấu hiệu chậm'
+        return f"{row['identifier']} ({row['name']}): {detail}; tiến độ {row['progressPercent']}% ({row['completed']}/{row['total']})"
+
+    sections: list[str] = []
+    if delayed:
+        sections.append('Dự án đang chậm: ' + '. '.join(describe(row) for row in delayed) + '.')
+    else:
+        sections.append(f'Không có dự án nào đã quá target date và chưa hoàn thành, tính đến {today.isoformat()}.')
+    if at_risk:
+        sections.append('Cần theo dõi: ' + '. '.join(describe(row) for row in at_risk) + '.')
+    if on_track:
+        sections.append('Đang ổn: ' + '. '.join(describe(row) for row in on_track) + '.')
+    if insufficient:
+        sections.append('Chưa thể đánh giá lịch: ' + '. '.join(describe(row) for row in insufficient) + '.')
+    return {
+        'capability': 'projects.delivery',
+        'content': ' '.join(sections),
+        'data': {
+            'asOfDate': today.isoformat(), 'delayed': delayed, 'atRisk': at_risk,
+            'onTrack': on_track, 'insufficientData': insufficient,
+        },
+    }
+
+
+async def _stale_issue_insight(db: AsyncSession, workspace_id: str, user_id: str) -> ReadOnlyInsight:
+    today = datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).date()
+    stale_since = today - timedelta(days=14)
+    result = await db.execute(
+        text('''SELECT issue.identifier, issue.title, issue.updated_at::date AS updated_date,
+                       issue.due_date::date AS due_date, status.name AS status_name,
+                       (:today - issue.updated_at::date)::int AS inactive_days
+                FROM issues issue
+                JOIN issue_statuses status ON status.id = issue.status_id
+                WHERE issue.workspace_id = :workspace_id
+                  AND issue.archived_at IS NULL
+                  AND status.category NOT IN ('COMPLETED', 'CANCELED')
+                  AND issue.updated_at::date <= :stale_since
+                  AND EXISTS (
+                      SELECT 1 FROM team_members member
+                      WHERE member.team_id = issue.team_id AND member.user_id = :user_id
+                  )
+                ORDER BY issue.updated_at ASC, issue.identifier ASC
+                LIMIT 20'''),
+        {'workspace_id': workspace_id, 'user_id': user_id, 'today': today, 'stale_since': stale_since},
+    )
+    rows = [
+        {
+            'identifier': row['identifier'], 'title': row['title'], 'updatedDate': row['updated_date'],
+            'dueDate': row['due_date'], 'status': row['status_name'], 'inactiveDays': row['inactive_days'],
+        }
+        for row in result.mappings().all()
+    ]
+    if rows:
+        detail = '. '.join(
+            f"{row['identifier']} ({row['title']}): không cập nhật {row['inactiveDays']} ngày, trạng thái {row['status']}"
+            + (f", quá hạn từ {row['dueDate'].isoformat()}" if row['dueDate'] and row['dueDate'] < today else '')
+            for row in rows
+        )
+        content = f"Có {len(rows)} issue đang treo từ 14 ngày trở lên, tính đến {today.isoformat()}: {detail}."
+    else:
+        content = f"Không có issue nào chưa hoàn thành và không cập nhật trong ít nhất 14 ngày, tính đến {today.isoformat()}."
+    return {
+        'capability': 'issues.stale',
+        'content': content,
+        'data': {'asOfDate': today.isoformat(), 'staleAfterDays': 14, 'issues': rows},
+    }
+
+
+async def _initiative_delivery_insight(db: AsyncSession, workspace_id: str, user_id: str) -> ReadOnlyInsight:
+    today = datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).date()
+    result = await db.execute(
+        text('''SELECT initiative.name, initiative.health, initiative.target_date::date AS target_date,
+                       COUNT(DISTINCT project.id)::int AS total_projects,
+                       COUNT(DISTINCT project.id) FILTER (
+                           WHERE project.status IN ('done', 'shipped')
+                       )::int AS completed_projects
+                FROM initiatives initiative
+                LEFT JOIN initiative_projects link ON link.initiative_id = initiative.id
+                LEFT JOIN projects project ON project.id = link.project_id
+                    AND project.archived_at IS NULL
+                    AND (
+                        project.team_id IS NULL OR EXISTS (
+                            SELECT 1 FROM team_members member
+                            WHERE member.team_id = project.team_id AND member.user_id = :user_id
+                        )
+                    )
+                WHERE initiative.workspace_id = :workspace_id
+                  AND initiative.archived_at IS NULL
+                  AND initiative.status NOT IN ('completed', 'canceled')
+                GROUP BY initiative.id, initiative.name, initiative.health, initiative.target_date
+                ORDER BY initiative.target_date NULLS LAST, initiative.name
+                LIMIT 100'''),
+        {'workspace_id': workspace_id, 'user_id': user_id},
+    )
+    delayed: list[dict[str, Any]] = []
+    at_risk: list[dict[str, Any]] = []
+    insufficient: list[dict[str, Any]] = []
+    for raw_row in result.mappings().all():
+        target_date = raw_row['target_date']
+        row = {
+            'name': raw_row['name'], 'health': raw_row['health'], 'targetDate': target_date,
+            'totalProjects': raw_row['total_projects'], 'completedProjects': raw_row['completed_projects'],
+        }
+        row['progressPercent'] = round(row['completedProjects'] * 100 / row['totalProjects']) if row['totalProjects'] else 0
+        if target_date and target_date < today:
+            row['deliveryState'] = 'delayed'
+            row['reason'] = f"trễ {(today - target_date).days} ngày so với target {target_date.isoformat()}"
+            delayed.append(row)
+        elif row['health'] in {'at-risk', 'off-track'}:
+            row['deliveryState'] = 'at-risk'
+            row['reason'] = f"health đang là {row['health'].replace('-', ' ')}"
+            at_risk.append(row)
+        else:
+            row['deliveryState'] = 'insufficient-data'
+            row['reason'] = 'chưa có target date' if not target_date else 'chưa có dấu hiệu chậm'
+            insufficient.append(row)
+
+    def describe(row: dict[str, Any]) -> str:
+        return f"{row['name']}: {row['reason']}; tiến độ project {row['progressPercent']}% ({row['completedProjects']}/{row['totalProjects']})"
+
+    sections: list[str] = []
+    if delayed:
+        sections.append('Initiative đang trễ: ' + '. '.join(describe(row) for row in delayed) + '.')
+    else:
+        sections.append(f'Không có initiative nào đã quá target date và chưa hoàn thành, tính đến {today.isoformat()}.')
+    if at_risk:
+        sections.append('Initiative cần theo dõi: ' + '. '.join(describe(row) for row in at_risk) + '.')
+    missing_dates = [row for row in insufficient if row['targetDate'] is None]
+    if missing_dates:
+        sections.append('Không thể đánh giá tiến độ lịch cho: ' + '. '.join(describe(row) for row in missing_dates) + '.')
+    return {
+        'capability': 'initiatives.delivery',
+        'content': ' '.join(sections),
+        'data': {'asOfDate': today.isoformat(), 'delayed': delayed, 'atRisk': at_risk, 'insufficientData': insufficient},
+    }
+
+
 async def _cycle_progress_insight(db: AsyncSession, workspace_id: str, user_id: str) -> ReadOnlyInsight:
     result = await db.execute(text('''SELECT cycle.name, cycle.status, COUNT(issue.id)::int AS total,
                     COUNT(issue.id) FILTER (WHERE issue_status.category = 'COMPLETED')::int AS completed
@@ -396,6 +645,9 @@ async def _cycle_progress_insight(db: AsyncSession, workspace_id: str, user_id: 
 
 
 READ_ONLY_CAPABILITIES: tuple[ReadOnlyCapability, ...] = (
+    ('projects.delivery', _is_project_delivery_question, _project_delivery_insight),
+    ('issues.stale', _is_stale_issue_question, _stale_issue_insight),
+    ('initiatives.delivery', _is_initiative_delivery_question, _initiative_delivery_insight),
     ('issues.overdue', _is_overdue_issue_question, _overdue_issue_insight),
     ('issues.by_status', _is_issue_status_question, _issue_status_insight),
     ('issues.by_assignee', _is_issue_assignee_question, _issue_assignee_insight),
@@ -410,6 +662,9 @@ TOOL_DETAILS = {
     'issues.by_status': ('Issues by status', 'Break down accessible issues by workflow status.'),
     'issues.by_assignee': ('Issues by assignee', 'Break down accessible issues by assigned person.'),
     'projects.progress': ('Project progress', 'Show completion progress for accessible projects.'),
+    'projects.delivery': ('Project delivery health', 'Identify delayed, at-risk, on-track, and insufficiently scheduled projects.'),
+    'issues.stale': ('Stale issues', 'List accessible open issues that have not been updated for at least 14 days.'),
+    'initiatives.delivery': ('Initiative delivery health', 'Identify delayed and at-risk initiatives using their target dates and health.'),
     'cycles.progress': ('Cycle progress', 'Show completion progress for accessible cycles.'),
 }
 

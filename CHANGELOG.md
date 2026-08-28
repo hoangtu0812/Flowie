@@ -17,6 +17,13 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
   spinner. The shared treatment covers workspace navigation, issue, project,
   initiative, cycle, team, view, and dashboard loading screens.
 
+### Added
+
+- Agent delivery insight tools now identify delayed and at-risk projects and
+  initiatives from target dates and health, and list open issues inactive for
+  at least 14 days. The tools are installed for existing and new workspaces,
+  while workspace administrators can still remove them in Agent settings.
+
 ## [0.3.3] — 2026-08-28 00:18 +07
 
 ### Added

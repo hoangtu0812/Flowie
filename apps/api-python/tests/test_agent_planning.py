@@ -10,6 +10,9 @@ from app.core.errors import ApiError
 from app.domains.agent import (
     AgentProposal,
     _apply_personal_skill_defaults,
+    _is_initiative_delivery_question,
+    _is_project_delivery_question,
+    _is_stale_issue_question,
     _matching_read_only_capability,
     _sse,
     _is_overdue_issue_question,
@@ -56,6 +59,20 @@ class AgentPlanningTests(unittest.TestCase):
         self.assertTrue(_is_overdue_issue_question('Thống kê số issue đang trễ hạn'))
         self.assertTrue(_is_overdue_issue_question('How many issues are overdue?'))
         self.assertFalse(_is_overdue_issue_question('Create an issue to review overdue invoices'))
+
+    def test_recognizes_delivery_insight_questions(self) -> None:
+        self.assertTrue(_is_project_delivery_question('Dự án nào đang chậm?'))
+        self.assertTrue(_is_project_delivery_question('Dự án nào đang có tiến độ tốt?'))
+        self.assertTrue(_is_project_delivery_question('Which projects are at risk?'))
+        self.assertFalse(_is_project_delivery_question('Tạo issue để xử lý dự án chậm'))
+        self.assertTrue(_is_stale_issue_question('Issue nào treo lâu?'))
+        self.assertTrue(_is_initiative_delivery_question('Initiatives nào đang trễ?'))
+
+    def test_routes_project_delivery_questions_to_the_delivery_tool(self) -> None:
+        capability = _matching_read_only_capability('Dự án nào đang chậm?')
+
+        self.assertIsNotNone(capability)
+        self.assertEqual(capability[0], 'projects.delivery')
 
     def test_exposes_the_matching_read_only_capability(self) -> None:
         capability = _matching_read_only_capability('How many issues are overdue?')
