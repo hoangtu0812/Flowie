@@ -24,6 +24,12 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
   at least 14 days. The tools are installed for existing and new workspaces,
   while workspace administrators can still remove them in Agent settings.
 
+### Fixed
+
+- Agent now asks focused follow-up questions for bare project or issue creation
+  requests and safely recovers when a provider wraps a valid plan in Markdown
+  or otherwise returns an invalid plan format, instead of showing a raw error.
+
 ## [0.3.3] — 2026-08-28 00:18 +07
 
 ### Added

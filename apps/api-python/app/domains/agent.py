@@ -777,6 +777,82 @@ async def _call_google(provider: dict[str, str], system_prompt: str, history: li
         raise ApiError(502, 'The Google provider returned no plan content.', 'Bad Gateway') from error
 
 
+def _clarification_proposal(message: str) -> AgentProposal:
+    normalized = message.casefold()
+    is_vietnamese = any(term in normalized for term in ('tạo', 'dự án', 'du an', 'vấn đề', 'van de', 'công việc', 'cong viec'))
+    asks_for_project = any(term in normalized for term in ('dự án', 'du an', 'project'))
+    asks_for_issue = any(term in normalized for term in ('issue', 'vấn đề', 'van de', 'công việc', 'cong viec', 'task'))
+    if asks_for_project and not asks_for_issue:
+        questions = (
+            [
+                'Tên và mục tiêu của dự án là gì?',
+                'Dự án thuộc team nào?',
+                'Ngày bắt đầu và target end date là khi nào?',
+                'Bạn muốn tạo các issue khởi đầu nào cho dự án?',
+            ]
+            if is_vietnamese else
+            [
+                'What is the project name and objective?',
+                'Which team owns the project?',
+                'What are the start date and target end date?',
+                'Which initial issues should be created for the project?',
+            ]
+        )
+    elif asks_for_issue and not asks_for_project:
+        questions = (
+            [
+                'Tiêu đề và mô tả của issue là gì?',
+                'Issue thuộc team và project nào?',
+                'Priority, target end date và due date là khi nào?',
+            ]
+            if is_vietnamese else
+            [
+                'What are the issue title and description?',
+                'Which team and project own the issue?',
+                'What are the priority, target end date, and due date?',
+            ]
+        )
+    else:
+        questions = (
+            ['Bạn muốn tạo project, issue, hay cả hai?', 'Mục tiêu và team phụ trách là gì?']
+            if is_vietnamese else
+            ['Would you like to create a project, issues, or both?', 'What is the goal and owning team?']
+        )
+    summary = (
+        'Tôi cần thêm thông tin trước khi tạo plan:\n' + ''.join(f'• {question}\n' for question in questions)
+        if is_vietnamese else
+        'I need a little more information before creating a plan:\n' + ''.join(f'• {question}\n' for question in questions)
+    )
+    return AgentProposal(summary=summary.strip(), requiresClarification=True, questions=questions)
+
+
+def _is_bare_creation_request(message: str) -> bool:
+    normalized = message.casefold().strip(' .?!')
+    return normalized in {
+        'tạo dự án', 'tao du an', 'tạo project', 'tao project', 'create project', 'create a project',
+        'tạo issue', 'tao issue', 'create issue', 'create an issue', 'tạo công việc', 'tao cong viec',
+    }
+
+
+def _parse_agent_proposal(raw: str) -> AgentProposal:
+    try:
+        return AgentProposal.model_validate_json(raw)
+    except ValidationError as first_error:
+        decoder = json.JSONDecoder()
+        for index, character in enumerate(raw):
+            if character != '{':
+                continue
+            try:
+                payload, _end = decoder.raw_decode(raw[index:])
+            except json.JSONDecodeError:
+                continue
+            try:
+                return AgentProposal.model_validate(payload)
+            except ValidationError:
+                continue
+        raise first_error
+
+
 async def _draft_proposal(state: PlannerState) -> dict[str, Any]:
     raw = await (
         _call_openai(state['provider'], state['system_prompt'], state['history'])
@@ -784,9 +860,11 @@ async def _draft_proposal(state: PlannerState) -> dict[str, Any]:
         else _call_google(state['provider'], state['system_prompt'], state['history'])
     )
     try:
-        proposal = AgentProposal.model_validate_json(raw)
-    except ValidationError as error:
-        raise ApiError(502, 'The AI provider returned a plan in an invalid format. Please try again.', 'Bad Gateway') from error
+        proposal = _parse_agent_proposal(raw)
+    except ValidationError:
+        # A malformed provider response must not discard the user's planning
+        # turn or force a duplicate retry that can create duplicate work.
+        proposal = _clarification_proposal(state['history'][-1]['content'])
     return {'proposal': proposal.model_dump(mode='json')}
 
 
@@ -1378,6 +1456,26 @@ async def _process_message(
         )
         await progress({'id': 'conversation.persist', 'label': 'Conversation saved', 'state': 'completed', 'orb': 'shaping'})
         data['responseType'] = 'CHAT'
+        return data
+
+    if not files and _is_bare_creation_request(message):
+        await progress({'id': 'proposal.clarify', 'label': 'Identifying required planning details', 'state': 'running', 'orb': 'working'})
+        proposal = _clarification_proposal(message)
+        await progress({'id': 'proposal.clarify', 'label': 'Planning questions prepared', 'state': 'completed', 'orb': 'working'})
+        await progress({'id': 'conversation.persist', 'label': 'Saving conversation', 'state': 'running', 'orb': 'shaping'})
+        data = await _persist_turn(
+            db,
+            conversation_id=conversation_id,
+            conversation=conversation_row,
+            workspace_id=workspace_id,
+            user_id=user['id'],
+            is_new_conversation=is_new_conversation,
+            user_content=message.strip(),
+            assistant_content=proposal.summary,
+            proposal=proposal.model_dump(mode='json'),
+        )
+        await progress({'id': 'conversation.persist', 'label': 'Conversation saved', 'state': 'completed', 'orb': 'shaping'})
+        data['responseType'] = 'PLAN'
         return data
 
     await progress({'id': 'provider.configure', 'label': 'Preparing the active AI provider', 'state': 'running', 'orb': 'working'})

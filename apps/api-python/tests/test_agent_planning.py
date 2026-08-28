@@ -11,9 +11,11 @@ from app.domains.agent import (
     AgentProposal,
     _apply_personal_skill_defaults,
     _is_initiative_delivery_question,
+    _is_bare_creation_request,
     _is_project_delivery_question,
     _is_stale_issue_question,
     _matching_read_only_capability,
+    _parse_agent_proposal,
     _sse,
     _is_overdue_issue_question,
     _validate_proposal,
@@ -73,6 +75,21 @@ class AgentPlanningTests(unittest.TestCase):
 
         self.assertIsNotNone(capability)
         self.assertEqual(capability[0], 'projects.delivery')
+
+    def test_recognizes_a_bare_creation_request(self) -> None:
+        self.assertTrue(_is_bare_creation_request('Tạo dự án'))
+        self.assertTrue(_is_bare_creation_request('Create an issue.'))
+        self.assertFalse(_is_bare_creation_request('Tạo dự án website cho team General'))
+
+    def test_parses_a_json_object_wrapped_by_provider_markdown(self) -> None:
+        proposal = _parse_agent_proposal(
+            '```json\n'
+            '{"summary":"Need details.","requiresClarification":true,"questions":["Which team?"],"projects":[],"issues":[]}\n'
+            '```'
+        )
+
+        self.assertTrue(proposal.requiresClarification)
+        self.assertEqual(proposal.questions, ['Which team?'])
 
     def test_exposes_the_matching_read_only_capability(self) -> None:
         capability = _matching_read_only_capability('How many issues are overdue?')
