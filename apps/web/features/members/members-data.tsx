@@ -24,11 +24,14 @@ type ApiMember = {
       email: string;
       avatarUrl: string | null;
       timezone: string;
+      lastSeenAt: string | null;
+      isOnline: boolean;
    };
 };
 
 type ApiTeam = {
    id: string;
+   name: string;
    identifier: string;
    members: Array<{ user: { id: string } }>;
 };
@@ -70,7 +73,7 @@ function useMembersDataSource(): MemberData {
          for (const teamMember of team.members) {
             memberTeams.set(teamMember.user.id, [
                ...(memberTeams.get(teamMember.user.id) ?? []),
-               team.identifier,
+               team.name || team.identifier,
             ]);
          }
       }
@@ -81,11 +84,12 @@ function useMembersDataSource(): MemberData {
             name: member.user.name,
             avatarUrl: member.user.avatarUrl ?? '',
             email: member.user.email,
-            status: 'offline',
+            status: member.user.isOnline ? 'online' : 'offline',
             role: roleLabel(member.role),
             joinedDate: member.joinedAt ?? member.createdAt,
             teamIds: memberTeams.get(member.userId) ?? [],
             timezone: member.user.timezone,
+            lastSeenAt: member.user.lastSeenAt,
             workspaceMemberId: member.id,
             workspaceRole: member.role,
             membershipStatus: member.status,
@@ -116,6 +120,16 @@ function useMembersDataSource(): MemberData {
          });
       return () => {
          active = false;
+      };
+   }, [load]);
+
+   useEffect(() => {
+      const refresh = () => void load().catch(() => undefined);
+      const interval = window.setInterval(refresh, 30_000);
+      window.addEventListener('flowie:presence-refreshed', refresh);
+      return () => {
+         window.clearInterval(interval);
+         window.removeEventListener('flowie:presence-refreshed', refresh);
       };
    }, [load]);
 

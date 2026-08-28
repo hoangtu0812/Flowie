@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from mimetypes import guess_type
 from secrets import token_urlsafe
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -13,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.errors import ApiError
 from ..db.session import get_session
 from ..storage.minio import MinioStorage
-from .auth import current_user
+from .auth import _utcnow, current_user
 
 router = APIRouter(prefix='/api/v1/users', tags=['users'])
 MAX_AVATAR_BYTES = 5 * 1024 * 1024
@@ -183,7 +184,7 @@ async def _workspace_members(
     result = await db.execute(
         text(
             f"""SELECT u.id, u.name, u.email, u.username, u.title, u.timezone, u.avatar_url,
-                       u.created_at, wm.role, wm.joined_at, wm.created_at AS member_created_at
+                       u.created_at, u.last_seen_at, wm.role, wm.joined_at, wm.created_at AS member_created_at
                 FROM workspace_members wm JOIN users u ON u.id = wm.user_id
                 WHERE wm.workspace_id = :workspace_id AND wm.status = 'ACTIVE' {condition}
                 ORDER BY wm.joined_at ASC"""
@@ -245,6 +246,10 @@ async def _workspace_members(
             'createdAt': row['created_at'],
             'workspaceRole': row['role'],
             'joinedAt': row['joined_at'] or row['member_created_at'],
+            'lastSeenAt': row['last_seen_at'],
+            'isOnline': bool(
+                row['last_seen_at'] and row['last_seen_at'] >= _utcnow() - timedelta(minutes=2)
+            ),
             'teams': team_rows.get(row['id'], []),
             'projects': project_rows.get(row['id'], []),
         }

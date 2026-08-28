@@ -6,6 +6,7 @@ import { IssueActionDialog } from '@/components/common/issues/issue-action-dialo
 import { IssueRelationDialog } from '@/components/common/issues/issue-relation-dialog';
 import { CommandPalette } from '@/components/layout/command-palette';
 import { BodyInteractionGuard } from '@/components/layout/body-interaction-guard';
+import { PresenceHeartbeat } from '@/components/common/presence-heartbeat';
 
 /**
  * The workspace shell lives in a route layout, not in the page, so moving
@@ -18,6 +19,7 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
    return (
       <SidebarProvider>
          <BodyInteractionGuard />
+         <PresenceHeartbeat />
          <CreateIssueModalProvider />
          <IssueActionDialog />
          <IssueRelationDialog />

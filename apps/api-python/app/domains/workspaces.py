@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends
@@ -21,7 +22,7 @@ USER_SELECT = '''
     u.avatar_url AS user_avatar_url, u.is_platform_admin AS user_is_platform_admin,
     u.email_verified_at AS user_email_verified_at, u.status AS user_status,
     u.created_at AS user_created_at, u.updated_at AS user_updated_at,
-    u.last_login_at AS user_last_login_at
+    u.last_login_at AS user_last_login_at, u.last_seen_at AS user_last_seen_at
 '''
 
 
@@ -173,6 +174,11 @@ def _user(row: Any) -> dict[str, Any]:
         'createdAt': row['user_created_at'],
         'updatedAt': row['user_updated_at'],
         'lastLoginAt': row['user_last_login_at'],
+        'lastSeenAt': row['user_last_seen_at'],
+        'isOnline': bool(
+            row['user_last_seen_at']
+            and row['user_last_seen_at'] >= _utcnow() - timedelta(minutes=2)
+        ),
     }
 
 

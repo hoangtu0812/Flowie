@@ -52,7 +52,7 @@ export default function Members() {
             <div className="w-[110px] shrink-0">Status</div>
             <div className="hidden lg:block w-[100px] shrink-0">Joined</div>
             <div className="hidden md:block w-[170px] shrink-0">Teams</div>
-            <div className="hidden sm:block w-[90px] shrink-0">Last seen</div>
+            <div className="hidden sm:block w-[120px] shrink-0">Last seen</div>
             <div className="w-8 shrink-0" />
          </div>
 

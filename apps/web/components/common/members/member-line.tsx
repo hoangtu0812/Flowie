@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { useMembersData } from '@/features/members/members-data';
 import { cn } from '@/lib/utils';
 import type { User } from '@/types/users';
-import { format, parseISO } from 'date-fns';
+import { format, formatDistanceToNowStrict, isValid, parseISO } from 'date-fns';
 import { MoreHorizontal, SquareUser } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -33,6 +33,12 @@ const displayNameOf = (user: User) =>
 const joinedLabel = (iso: string) => {
    const date = parseISO(iso);
    return date.getFullYear() === 2026 ? format(date, 'MMM d') : format(date, 'MMM yyyy');
+};
+
+const lastSeenLabel = (lastSeenAt?: string | null) => {
+   if (!lastSeenAt) return 'Never';
+   const date = parseISO(lastSeenAt);
+   return isValid(date) ? formatDistanceToNowStrict(date, { addSuffix: true }) : 'Unknown';
 };
 
 export default function MemberLine({ user }: MemberLineProps) {
@@ -71,10 +77,15 @@ export default function MemberLine({ user }: MemberLineProps) {
             href={`/${orgId}/profiles/${user.id}`}
             className="flex-1 min-w-0 flex items-center gap-2.5"
          >
-            <Avatar className="size-8 shrink-0">
-               <AvatarImage src={user.avatarUrl} alt={user.name} />
-               <AvatarFallback>{user.name[0]}</AvatarFallback>
-            </Avatar>
+            <div className="relative shrink-0">
+               <Avatar className="size-8">
+                  <AvatarImage src={user.avatarUrl} alt={user.name} />
+                  <AvatarFallback>{user.name[0]}</AvatarFallback>
+               </Avatar>
+               {user.status === 'online' && !isApplication && (
+                  <span className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2 border-background bg-[#00cc66]" />
+               )}
+            </div>
             <div className="flex flex-col items-start overflow-hidden">
                <span className="font-medium truncate w-full">{displayNameOf(user)}</span>
                <span className="text-xs text-muted-foreground truncate w-full">{user.name}</span>
@@ -117,13 +128,15 @@ export default function MemberLine({ user }: MemberLineProps) {
             )}
          </div>
 
-         {/* Last seen (Linear only shows currently-online members) */}
-         <div className="hidden sm:flex w-[90px] shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-            {user.status === 'online' && !isApplication && (
+         {/* Last seen */}
+         <div className="hidden sm:flex w-[120px] shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+            {user.status === 'online' && !isApplication ? (
                <>
                   <span className="size-1.5 rounded-full bg-[#00cc66]" />
-                  Online
+                  Online now
                </>
+            ) : (
+               lastSeenLabel(user.lastSeenAt)
             )}
          </div>
          <div className="w-8 shrink-0 flex justify-end">

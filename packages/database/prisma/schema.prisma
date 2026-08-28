@@ -124,6 +124,7 @@ model User {
   createdAt       DateTime   @default(now()) @map("created_at")
   updatedAt       DateTime   @updatedAt @map("updated_at")
   lastLoginAt     DateTime?  @map("last_login_at")
+  lastSeenAt      DateTime?  @map("last_seen_at")
 
   identities               UserIdentity[]
   sessions                 Session[]

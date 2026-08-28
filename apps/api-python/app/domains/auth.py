@@ -570,7 +570,7 @@ async def login(payload: LoginInput, request: Request, db: AsyncSession = Depend
 
     timezone_name = _valid_timezone(payload.timezone)
     await db.execute(
-        text('UPDATE users SET last_login_at = :now, timezone = COALESCE(:timezone, timezone), updated_at = :now WHERE id = :id'),
+        text('UPDATE users SET last_login_at = :now, last_seen_at = :now, timezone = COALESCE(:timezone, timezone), updated_at = :now WHERE id = :id'),
         {'id': user['id'], 'now': _utcnow(), 'timezone': timezone_name},
     )
     access_token, refresh_token, data = await _create_session(db, user, request, request.app.state.settings)
@@ -578,6 +578,21 @@ async def login(payload: LoginInput, request: Request, db: AsyncSession = Depend
     response = JSONResponse({'data': data})
     _set_cookies(response, access_token, refresh_token, request.app.state.settings)
     return response
+
+
+@router.post('/presence')
+async def refresh_presence(
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, datetime]]:
+    """Persist an explicit browser heartbeat without marking background API reads as activity."""
+    now = _utcnow()
+    await db.execute(
+        text('UPDATE users SET last_seen_at = :now WHERE id = :id'),
+        {'id': user['id'], 'now': now},
+    )
+    await db.commit()
+    return {'data': {'lastSeenAt': now}}
 
 
 @router.post('/refresh')

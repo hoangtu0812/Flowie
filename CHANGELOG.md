@@ -19,6 +19,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Members now display each user's current online state, a relative last-seen
+  time, and the current display names of their teams. Presence is refreshed by
+  an authenticated browser heartbeat; deployment requires the committed Prisma
+  migration `20260828020000_user_presence` to complete before the API starts.
 - Agent delivery insight tools now identify delayed and at-risk projects and
   initiatives from target dates and health, and list open issues inactive for
   at least 14 days. The tools are installed for existing and new workspaces,
