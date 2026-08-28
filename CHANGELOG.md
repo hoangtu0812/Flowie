@@ -30,6 +30,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Project Issue lists now respect the shared Show sub-issues display option,
+  so a project's child issues are no longer silently omitted from that tab.
 - Issue lists now retain aligned title and metadata columns when a project side
   panel narrows the viewport; wide column selections scroll horizontally rather
   than collapsing the title cell into adjacent headers.

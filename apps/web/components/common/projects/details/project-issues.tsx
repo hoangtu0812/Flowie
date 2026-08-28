@@ -5,6 +5,7 @@ import { GroupedIssuesView } from '@/components/common/issues/grouped-issues-vie
 import { applyIssueFilters } from '@/components/common/issues/issue-filter-columns';
 import { IssueFilterBar } from '@/components/common/issues/issue-filter-bar';
 import { useFilterStore } from '@/store/filter-store';
+import { useDisplaySettingsStore } from '@/store/display-settings-store';
 import { useIssuesStore } from '@/store/issues-store';
 import { useEffect, useMemo } from 'react';
 import { toIssueUi, toProjectDetailUi, toProjectUi } from './project-detail-ui-adapter';
@@ -28,6 +29,7 @@ export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
       error,
    } = useLiveProjectData();
    const { filters } = useFilterStore();
+   const showSubIssues = useDisplaySettingsStore((state) => state.showSubIssues);
    // Rows here share the issue components, whose assignee picker and cycle
    // names read the issues store; nothing else on this route populates it.
    const loadIssues = useIssuesStore((state) => state.loadIssues);
@@ -46,10 +48,10 @@ export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
       () =>
          project
             ? liveIssues
-                 .filter((issue) => !issue.parentIssueId)
+                 .filter((issue) => showSubIssues || !issue.parentIssueId)
                  .map((issue) => toIssueUi(issue, project))
             : [],
-      [liveIssues, project]
+      [liveIssues, project, showSubIssues]
    );
 
    // Filters (filter bar + click-to-filter from the insights panel) apply
