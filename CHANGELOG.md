@@ -19,6 +19,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Project Issues now includes AI scheduling. It sends open issue titles,
+  descriptions, estimates, parent-child structure, and the project schedule to
+  the enabled workspace provider, then presents validated start, target, and
+  due dates for explicit review before any issue is changed.
 - Members now display each user's current online state, a relative last-seen
   time, and the current display names of their teams. Presence is refreshed by
   an authenticated browser heartbeat; deployment requires the committed Prisma

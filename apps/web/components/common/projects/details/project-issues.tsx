@@ -11,6 +11,7 @@ import { useEffect, useMemo } from 'react';
 import { toIssueUi, toProjectDetailUi, toProjectUi } from './project-detail-ui-adapter';
 import { ProjectSidePanel } from './project-side-panel';
 import { useLiveProjectData } from './use-live-project';
+import { AiScheduleDialog } from './ai-schedule-dialog';
 
 interface ProjectIssuesProps {
    projectId: string;
@@ -73,6 +74,9 @@ export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
    return (
       <div className="w-full h-full flex flex-col overflow-hidden">
          <IssueFilterBar />
+         <div className="h-10 shrink-0 border-b px-6 flex items-center justify-end">
+            <AiScheduleDialog />
+         </div>
          <div className="flex-1 min-h-0 w-full flex overflow-hidden">
             <div className="flex-1 min-w-0 h-full overflow-hidden">
                <GroupedIssuesView

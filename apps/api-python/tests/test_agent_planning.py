@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.core.errors import ApiError
 from app.domains.agent import (
     AgentProposal,
+    ProjectScheduleProposal,
     _apply_personal_skill_defaults,
     _is_initiative_delivery_question,
     _is_bare_creation_request,
@@ -16,9 +17,11 @@ from app.domains.agent import (
     _is_stale_issue_question,
     _matching_read_only_capability,
     _parse_agent_proposal,
+    _parse_schedule_proposal,
     _sse,
     _is_overdue_issue_question,
     _validate_proposal,
+    _validate_schedule_proposal,
     _validated_endpoint,
 )
 
@@ -90,6 +93,43 @@ class AgentPlanningTests(unittest.TestCase):
 
         self.assertTrue(proposal.requiresClarification)
         self.assertEqual(proposal.questions, ['Which team?'])
+
+    def test_parses_a_schedule_wrapped_by_provider_markdown(self) -> None:
+        proposal = _parse_schedule_proposal(
+            '```json\n'
+            '{"summary":"Schedule the discovery work first.","schedules":['
+            '{"issueId":"issue-1","startDate":"2026-08-28","targetDate":"2026-08-29",'
+            '"dueDate":"2026-08-29","rationale":"It is the first task."}]}'
+            '\n```'
+        )
+
+        self.assertEqual(proposal.schedules[0].issueId, 'issue-1')
+
+    def test_rejects_schedule_dates_outside_the_project_window(self) -> None:
+        proposal = ProjectScheduleProposal.model_validate(
+            {
+                'summary': 'Schedule the issue.',
+                'schedules': [
+                    {
+                        'issueId': 'issue-1',
+                        'startDate': '2026-08-27',
+                        'targetDate': '2026-08-29',
+                        'dueDate': '2026-08-29',
+                        'rationale': 'One day of work.',
+                    }
+                ],
+            }
+        )
+
+        with self.assertRaises(ApiError):
+            _validate_schedule_proposal(
+                proposal,
+                {
+                    'schedulingStart': '2026-08-28',
+                    'project': {'targetDate': '2026-09-10'},
+                    'issues': [{'id': 'issue-1', 'parentIssueId': None}],
+                },
+            )
 
     def test_exposes_the_matching_read_only_capability(self) -> None:
         capability = _matching_read_only_capability('How many issues are overdue?')

@@ -1189,6 +1189,31 @@ class ComposedText(BaseModel):
     body: str = Field(min_length=1, max_length=4000)
 
 
+class ProjectScheduleInput(BaseModel):
+    workspaceId: str = Field(min_length=1)
+
+
+class ScheduledIssueDraft(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    issueId: str = Field(min_length=1)
+    startDate: str = Field(min_length=10, max_length=10)
+    targetDate: str = Field(min_length=10, max_length=10)
+    dueDate: str = Field(min_length=10, max_length=10)
+    rationale: str = Field(min_length=1, max_length=320)
+
+
+class ProjectScheduleProposal(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    summary: str = Field(min_length=1, max_length=1000)
+    schedules: list[ScheduledIssueDraft] = Field(min_length=1, max_length=100)
+
+
+class ApplyProjectScheduleInput(ProjectScheduleInput):
+    schedules: list[ScheduledIssueDraft] = Field(min_length=1, max_length=100)
+
+
 COMPOSE_UPDATE_PROMPT = (
     'You write project status updates for a work tracker. '
     'You are given facts about one project as JSON. Write the update the project lead would post: '
@@ -1209,6 +1234,18 @@ COMPOSE_COMMENT_PROMPT = (
     'Write plain prose, no headings and no markdown, at most 60 words. '
     'Write in the language the project name and issue titles are written in. '
     'Respond with JSON shaped exactly as {"body": "<the comment>"}.'
+)
+
+PROJECT_SCHEDULE_PROMPT = (
+    'You are a project scheduler for a work tracker. You receive one project and its open issues as JSON. '
+    'Create a realistic schedule for every listed issue. Use the issue title, description, estimated effort, '
+    'parent-child relationship, project start, and project target date. Do not invent issues or change scope. '
+    'Each child issue must fit inside its parent issue window. Schedule only on or after schedulingStart and no later '
+    'than the project target date. targetDate is the end of work; dueDate must be on or after targetDate and no later '
+    'than the project target date. Spread work sensibly and respect dependency order implied by parent-child structure. '
+    'Respond in the language used by the project and issue titles. Respond with JSON shaped exactly as '
+    '{"summary":"<brief scheduling summary>","schedules":[{"issueId":"<id>","startDate":"YYYY-MM-DD",'
+    '"targetDate":"YYYY-MM-DD","dueDate":"YYYY-MM-DD","rationale":"<short reason>"}]}.'
 )
 
 
@@ -1349,6 +1386,236 @@ async def compose_project_update(
             502, 'The AI provider returned a draft in an invalid format. Please try again.', 'Bad Gateway'
         ) from error
     return {'data': {'body': composed.body.strip()}}
+
+
+def _date_only(value: date | datetime | None) -> str | None:
+    if value is None:
+        return None
+    return value.date().isoformat() if isinstance(value, datetime) else value.isoformat()
+
+
+async def _project_schedule_facts(
+    db: AsyncSession, workspace_id: str, project_id: str, user_id: str
+) -> dict[str, Any]:
+    """Load only open project work because completed work must never be rescheduled."""
+    result = await db.execute(
+        text(
+            '''SELECT p.id, p.name, p.description, p.start_date, p.target_date, p.team_id
+               FROM projects p
+               WHERE p.id = :project_id AND p.workspace_id = :workspace_id AND p.archived_at IS NULL'''
+        ),
+        {'project_id': project_id, 'workspace_id': workspace_id},
+    )
+    project = result.mappings().first()
+    if not project:
+        raise ApiError(404, 'Project not found.', 'Not Found')
+    if project['team_id']:
+        await _team_access(db, workspace_id, project['team_id'], user_id)
+    if not project['target_date']:
+        raise ApiError(400, 'Set the project target date before asking AI to schedule its issues.', 'Bad Request')
+
+    issues = await db.execute(
+        text(
+            '''SELECT i.id, i.parent_issue_id, i.identifier, i.title, i.description,
+                      i.estimated_effort, i.start_date, i.target_date, i.due_date,
+                      s.name AS status_name
+               FROM issues i
+               JOIN issue_statuses s ON s.id = i.status_id
+               WHERE i.project_id = :project_id AND i.workspace_id = :workspace_id
+                 AND i.archived_at IS NULL AND s.category NOT IN ('COMPLETED', 'CANCELED')
+               ORDER BY i.created_at ASC
+               LIMIT 101'''
+        ),
+        {'project_id': project_id, 'workspace_id': workspace_id},
+    )
+    rows = issues.mappings().all()
+    if not rows:
+        raise ApiError(400, 'This project has no open issues to schedule.', 'Bad Request')
+    if len(rows) > 100:
+        raise ApiError(400, 'AI scheduling supports up to 100 open issues per project.', 'Bad Request')
+
+    today = date.today()
+    project_start = _date_only(project['start_date'])
+    target_date = _date_only(project['target_date'])
+    assert target_date is not None
+    schedule_start = max(date.fromisoformat(project_start), today) if project_start else today
+    if date.fromisoformat(target_date) < schedule_start:
+        raise ApiError(400, 'The project target date must be today or later to create a new schedule.', 'Bad Request')
+    return {
+        'project': {
+            'id': project['id'],
+            'name': project['name'],
+            'description': project['description'],
+            'startDate': project_start,
+            'targetDate': target_date,
+        },
+        'schedulingStart': schedule_start.isoformat(),
+        'issues': [
+            {
+                'id': row['id'],
+                'parentIssueId': row['parent_issue_id'],
+                'identifier': row['identifier'],
+                'title': row['title'],
+                'description': (row['description'] or '')[:1600],
+                'estimatedEffort': row['estimated_effort'],
+                'status': row['status_name'],
+                'currentStartDate': _date_only(row['start_date']),
+                'currentTargetDate': _date_only(row['target_date']),
+                'currentDueDate': _date_only(row['due_date']),
+            }
+            for row in rows
+        ],
+    }
+
+
+def _parse_schedule_proposal(raw: str) -> ProjectScheduleProposal:
+    try:
+        return ProjectScheduleProposal.model_validate_json(raw)
+    except ValidationError as first_error:
+        decoder = json.JSONDecoder()
+        for index, character in enumerate(raw):
+            if character != '{':
+                continue
+            try:
+                payload, _end = decoder.raw_decode(raw[index:])
+                return ProjectScheduleProposal.model_validate(payload)
+            except (json.JSONDecodeError, ValidationError):
+                continue
+        raise first_error
+
+
+def _validate_schedule_proposal(proposal: ProjectScheduleProposal, facts: dict[str, Any]) -> None:
+    issues = {issue['id']: issue for issue in facts['issues']}
+    scheduled_ids = [schedule.issueId for schedule in proposal.schedules]
+    if len(scheduled_ids) != len(set(scheduled_ids)) or set(scheduled_ids) != set(issues):
+        raise ApiError(502, 'The AI provider must schedule every open project issue exactly once.', 'Bad Gateway')
+
+    scheduling_start = date.fromisoformat(facts['schedulingStart'])
+    project_target = date.fromisoformat(facts['project']['targetDate'])
+    scheduled: dict[str, tuple[date, date, date]] = {}
+    for schedule in proposal.schedules:
+        try:
+            start = date.fromisoformat(schedule.startDate)
+            target = date.fromisoformat(schedule.targetDate)
+            due = date.fromisoformat(schedule.dueDate)
+        except ValueError as error:
+            raise ApiError(502, 'The AI provider returned an invalid schedule date.', 'Bad Gateway') from error
+        if start < scheduling_start or target < start or due < target or due > project_target:
+            raise ApiError(502, 'The AI provider returned dates outside the project schedule.', 'Bad Gateway')
+        scheduled[schedule.issueId] = (start, target, due)
+
+    for issue_id, issue in issues.items():
+        parent_id = issue['parentIssueId']
+        if not parent_id or parent_id not in scheduled:
+            continue
+        child_start, child_target, child_due = scheduled[issue_id]
+        parent_start, parent_target, parent_due = scheduled[parent_id]
+        if child_start < parent_start or child_target > parent_target or child_due > parent_due:
+            raise ApiError(502, 'The AI provider scheduled a sub-issue outside its parent issue window.', 'Bad Gateway')
+
+
+@router.post('/projects/{project_id}/schedule')
+async def draft_project_schedule(
+    project_id: str,
+    payload: ProjectScheduleInput,
+    request: Request,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    """Return a validated proposal; schedule dates remain unchanged until the user applies it."""
+    await _workspace_access(db, payload.workspaceId, user['id'])
+    facts = await _project_schedule_facts(db, payload.workspaceId, project_id, user['id'])
+    provider = await _configured_provider(request, db, payload.workspaceId)
+    history = [{'role': 'user', 'content': json.dumps(facts, ensure_ascii=False)}]
+    raw = await (
+        _call_openai(provider, PROJECT_SCHEDULE_PROMPT, history)
+        if provider['provider'] == 'OPENAI'
+        else _call_google(provider, PROJECT_SCHEDULE_PROMPT, history)
+    )
+    try:
+        proposal = _parse_schedule_proposal(raw)
+    except ValidationError as error:
+        raise ApiError(502, 'The AI provider returned a schedule in an invalid format. Please try again.', 'Bad Gateway') from error
+    _validate_schedule_proposal(proposal, facts)
+    issue_lookup = {issue['id']: issue for issue in facts['issues']}
+    return {
+        'data': {
+            'summary': proposal.summary.strip(),
+            'projectTargetDate': facts['project']['targetDate'],
+            'schedules': [
+                {
+                    **schedule.model_dump(),
+                    'identifier': issue_lookup[schedule.issueId]['identifier'],
+                    'title': issue_lookup[schedule.issueId]['title'],
+                }
+                for schedule in proposal.schedules
+            ],
+        }
+    }
+
+
+@router.post('/projects/{project_id}/schedule/apply')
+async def apply_project_schedule(
+    project_id: str,
+    payload: ApplyProjectScheduleInput,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    """Apply an already reviewed schedule atomically after revalidating current project scope."""
+    await _workspace_access(db, payload.workspaceId, user['id'])
+    facts = await _project_schedule_facts(db, payload.workspaceId, project_id, user['id'])
+    proposal = ProjectScheduleProposal(summary='Applied reviewed schedule.', schedules=payload.schedules)
+    _validate_schedule_proposal(proposal, facts)
+    now = _utcnow()
+    for schedule in payload.schedules:
+        await db.execute(
+            text(
+                '''UPDATE issues SET start_date = :start_date, target_date = :target_date,
+                       due_date = :due_date, updated_at = :now
+                   WHERE id = :issue_id AND project_id = :project_id AND workspace_id = :workspace_id'''
+            ),
+            {
+                'issue_id': schedule.issueId,
+                'project_id': project_id,
+                'workspace_id': payload.workspaceId,
+                'start_date': date.fromisoformat(schedule.startDate),
+                'target_date': date.fromisoformat(schedule.targetDate),
+                'due_date': date.fromisoformat(schedule.dueDate),
+                'now': now,
+            },
+        )
+        await db.execute(
+            text(
+                '''INSERT INTO activities (id, workspace_id, issue_id, actor_id, type, data, created_at)
+                   VALUES (:id, :workspace_id, :issue_id, :actor_id, 'issue.updated',
+                           CAST(:data AS jsonb), :now)'''
+            ),
+            {
+                'id': _cuid(),
+                'workspace_id': payload.workspaceId,
+                'issue_id': schedule.issueId,
+                'actor_id': user['id'],
+                'data': json.dumps({'fields': ['startDate', 'targetDate', 'dueDate'], 'source': 'ai-scheduling'}),
+                'now': now,
+            },
+        )
+    await db.execute(
+        text(
+            '''INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
+               VALUES (:id, :workspace_id, :actor_id, 'agent.project_schedule.applied', 'project', :project_id,
+                       CAST(:metadata AS jsonb), :now)'''
+        ),
+        {
+            'id': _cuid(),
+            'workspace_id': payload.workspaceId,
+            'actor_id': user['id'],
+            'project_id': project_id,
+            'metadata': json.dumps({'issueCount': len(payload.schedules)}),
+            'now': now,
+        },
+    )
+    await db.commit()
+    return {'data': {'updatedIssueIds': [schedule.issueId for schedule in payload.schedules]}}
 
 
 @router.get('/conversations')
