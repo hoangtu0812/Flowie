@@ -44,6 +44,9 @@ from .domains.teams import router as teams_router
 from .domains.users import router as users_router
 from .domains.workspaces import router as workspaces_router
 from .jobs.reminders import reminder_loop
+from .domains.scm.router import router as scm_router
+from .domains.scm.router import webhook_router as scm_webhook_router
+from .jobs.scm_deliveries import scm_delivery_loop
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -55,11 +58,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.session_factory = session_factory
         reminder_stop = asyncio.Event()
         reminder_task = asyncio.create_task(reminder_loop(session_factory, reminder_stop))
+        scm_stop = asyncio.Event()
+        scm_task = asyncio.create_task(scm_delivery_loop(session_factory, runtime, scm_stop))
         try:
             yield
         finally:
             reminder_stop.set()
+            scm_stop.set()
             await reminder_task
+            await scm_task
             await engine.dispose()
 
     app = FastAPI(title='Flowie Python API', version='0.1.0', lifespan=lifespan)
@@ -104,6 +111,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(teams_router)
     app.include_router(users_router)
     app.include_router(workspaces_router)
+    app.include_router(scm_router)
+    app.include_router(scm_webhook_router)
 
     @app.get('/readyz')
     async def readyz(request: Request) -> JSONResponse:

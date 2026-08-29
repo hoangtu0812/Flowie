@@ -47,6 +47,10 @@ class Settings:
     discord_registration_channel_role_id: str
     registration_otp_ttl_seconds: int
     agent_secrets_encryption_key: str
+    scm_secrets_encryption_key: str
+    scm_github_app_id: str
+    scm_github_app_private_key: str
+    scm_github_webhook_secret: str
 
     @classmethod
     def from_environment(cls) -> 'Settings':
@@ -76,4 +80,8 @@ class Settings:
             discord_registration_channel_role_id=getenv('DISCORD_REGISTRATION_CHANNEL_ROLE_ID', '').strip(),
             registration_otp_ttl_seconds=int(getenv('REGISTRATION_OTP_TTL_SECONDS', '600')),
             agent_secrets_encryption_key=getenv('AGENT_SECRETS_ENCRYPTION_KEY', '').strip(),
+            scm_secrets_encryption_key=getenv('SCM_SECRETS_ENCRYPTION_KEY', '').strip(),
+            scm_github_app_id=getenv('SCM_GITHUB_APP_ID', '').strip(),
+            scm_github_app_private_key=getenv('SCM_GITHUB_APP_PRIVATE_KEY', '').replace('\\n', '\n').strip(),
+            scm_github_webhook_secret=getenv('SCM_GITHUB_WEBHOOK_SECRET', '').strip(),
         )

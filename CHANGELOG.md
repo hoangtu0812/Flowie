@@ -19,6 +19,13 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Workspace administrators can now configure GitHub App installations and
+  Azure DevOps Microsoft Entra identities side by side, discover repositories,
+  map each enabled repository to a Flowie team, and run read-only review sync.
+  Provider credentials are encrypted, webhook deliveries are authenticated and
+  deduplicated, and failed deliveries retry from a durable PostgreSQL queue.
+  Production requires `SCM_SECRETS_ENCRYPTION_KEY`; GitHub additionally
+  requires its App ID, private key, and webhook secret.
 - Reviews now has a provider-neutral persistence and API contract foundation
   for connecting GitHub and Azure DevOps organizations to the same workspace.
   The schema keeps repository, external review, revision, reviewer, Issue-link,

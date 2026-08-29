@@ -695,16 +695,18 @@ model ScmWebhookDelivery {
   eventType          String            @map("event_type")
   action             String?
   status             ScmDeliveryStatus @default(PENDING)
+  payload            Json
   payloadHash        String            @map("payload_hash")
   attempts           Int               @default(0)
   lastError          String?           @map("last_error")
+  nextAttemptAt      DateTime          @default(now()) @map("next_attempt_at")
   receivedAt         DateTime          @default(now()) @map("received_at")
   processedAt        DateTime?         @map("processed_at")
 
   connection ScmConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
 
   @@unique([connectionId, externalDeliveryId])
-  @@index([status, receivedAt])
+  @@index([status, nextAttemptAt, receivedAt])
   @@map("scm_webhook_deliveries")
 }
 
