@@ -45,8 +45,10 @@ EVENT_COLORS: dict[str, int] = {
     'issue.comment_created': 0x4CB782,
     'project.updated': 0x5E6AD2,
     'project.update_created': 0x4CB782,
+    'review.assigned': 0x5E6AD2,
+    'review.updated': 0x26B5CE,
 }
-ENTITY_LABELS: dict[str, str] = {'issue': 'Issue', 'project': 'Project'}
+ENTITY_LABELS: dict[str, str] = {'issue': 'Issue', 'project': 'Project', 'review': 'Review'}
 DISCORD_DESCRIPTION_LIMIT = 500
 
 

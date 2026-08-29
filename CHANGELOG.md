@@ -19,6 +19,12 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Reviews now exposes one provider-neutral API for assigned, created, and
+  team-visible reviews from both GitHub and Azure DevOps. It includes revision
+  unread state, reviewer decisions, Flowie-to-provider identity mapping,
+  same-team Issue links, and in-app notifications for new assignments and
+  revisions. Review access is constrained to active workspace administrators
+  or members of the repository's explicitly mapped Flowie team.
 - Workspace administrators can now configure GitHub App installations and
   Azure DevOps Microsoft Entra identities side by side, discover repositories,
   map each enabled repository to a Flowie team, and run read-only review sync.

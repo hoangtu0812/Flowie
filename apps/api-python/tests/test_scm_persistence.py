@@ -16,6 +16,7 @@ from app.core.config import _async_database_url
 from app.domains.auth import _cuid, _utcnow
 from app.domains.scm.contracts import ProviderRepository, ProviderReview, ProviderReviewer, ProviderRevision
 from app.domains.scm.service import upsert_repository, upsert_review
+from app.domains.reviews import list_reviews
 
 
 class ScmPersistenceIntegrationTests(unittest.TestCase):
@@ -29,9 +30,12 @@ class ScmPersistenceIntegrationTests(unittest.TestCase):
                 try:
                     seed = await db.execute(
                         text(
-                            '''SELECT workspace.id AS workspace_id, member.user_id
+                            '''SELECT workspace.id AS workspace_id, member.user_id, team_member.team_id
                                FROM workspaces workspace
                                JOIN workspace_members member ON member.workspace_id = workspace.id
+                               JOIN team_members team_member ON team_member.user_id = member.user_id
+                               JOIN teams team ON team.id = team_member.team_id
+                                              AND team.workspace_id = workspace.id
                                WHERE member.status = 'ACTIVE' LIMIT 1'''
                         )
                     )
@@ -66,6 +70,30 @@ class ScmPersistenceIntegrationTests(unittest.TestCase):
                         externalRepositoryId='repo-1', name='repo', fullName='acme/repo'
                     )
                     repository_id = await upsert_repository(db, connection_row, provider_repository)
+                    await db.execute(
+                        text(
+                            '''UPDATE scm_repositories SET enabled = true, team_id = :team_id
+                               WHERE id = :repository_id'''
+                        ),
+                        {'repository_id': repository_id, 'team_id': owner['team_id']},
+                    )
+                    await db.execute(
+                        text(
+                            '''INSERT INTO scm_user_identities (
+                                   id, workspace_id, connection_id, user_id, external_user_id,
+                                   created_at, updated_at
+                               ) VALUES (
+                                   :id, :workspace_id, :connection_id, :user_id, 'reviewer-1', :now, :now
+                               )'''
+                        ),
+                        {
+                            'id': _cuid(),
+                            'workspace_id': owner['workspace_id'],
+                            'connection_id': connection_id,
+                            'user_id': owner['user_id'],
+                            'now': now,
+                        },
+                    )
                     repository = {
                         'id': repository_id,
                         'workspace_id': owner['workspace_id'],
@@ -88,6 +116,57 @@ class ScmPersistenceIntegrationTests(unittest.TestCase):
                         revisions=[ProviderRevision(externalRevisionId='abc123', headRevision='abc123')],
                     )
                     review_id = await upsert_review(db, repository, review)
+                    assigned = await list_reviews(
+                        workspaceId=owner['workspace_id'],
+                        view='assigned',
+                        state=None,
+                        provider=None,
+                        repositoryId=None,
+                        search=None,
+                        limit=50,
+                        offset=0,
+                        user={'id': owner['user_id']},
+                        db=db,
+                    )
+                    self.assertEqual(assigned['meta']['total'], 1)
+                    self.assertTrue(assigned['data'][0]['assignedToMe'])
+                    self.assertTrue(assigned['data'][0]['unread'])
+                    outsider_id = _cuid()
+                    await db.execute(
+                        text(
+                            '''INSERT INTO users (id, email, name, status, created_at, updated_at)
+                               VALUES (:id, :email, 'Reviews outsider', 'ACTIVE', :now, :now)'''
+                        ),
+                        {'id': outsider_id, 'email': f'{outsider_id}@example.invalid', 'now': now},
+                    )
+                    await db.execute(
+                        text(
+                            '''INSERT INTO workspace_members (
+                                   id, workspace_id, user_id, status, role, joined_at, created_at, updated_at
+                               ) VALUES (
+                                   :id, :workspace_id, :user_id, 'ACTIVE', 'MEMBER', :now, :now, :now
+                               )'''
+                        ),
+                        {
+                            'id': _cuid(),
+                            'workspace_id': owner['workspace_id'],
+                            'user_id': outsider_id,
+                            'now': now,
+                        },
+                    )
+                    hidden = await list_reviews(
+                        workspaceId=owner['workspace_id'],
+                        view='all',
+                        state=None,
+                        provider=None,
+                        repositoryId=None,
+                        search=None,
+                        limit=50,
+                        offset=0,
+                        user={'id': outsider_id},
+                        db=db,
+                    )
+                    self.assertEqual(hidden['meta']['total'], 0)
                     review.reviewers = []
                     second_id = await upsert_review(db, repository, review)
                     self.assertEqual(review_id, second_id)

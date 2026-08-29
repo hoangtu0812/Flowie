@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.config import Settings
 from ...core.errors import ApiError
+from ...services.notification_events import notification_hub
 from ..auth import _cuid, _utcnow
 from .contracts import ProviderRepository, ProviderReview, ReviewProvider
 from .providers import AzureDevOpsProvider, GitHubProvider
@@ -348,6 +349,24 @@ async def sync_delivery_review(db: AsyncSession, delivery: Any, settings: Settin
     repository = repository_result.mappings().first()
     if not repository:
         return False
+    existing_result = await db.execute(
+        text(
+            '''SELECT id, latest_revision_key FROM code_reviews
+               WHERE repository_id = :repository_id AND external_review_id = :external_review_id'''
+        ),
+        {'repository_id': repository['id'], 'external_review_id': external_review_id},
+    )
+    existing = existing_result.mappings().first()
+    previous_recipients: set[str] = set()
+    if existing:
+        previous_result = await db.execute(
+            text(
+                '''SELECT flowie_user_id FROM code_review_reviewers
+                   WHERE code_review_id = :review_id AND flowie_user_id IS NOT NULL'''
+            ),
+            {'review_id': existing['id']},
+        )
+        previous_recipients = {str(value) for value in previous_result.scalars().all()}
     provider_repository = ProviderRepository(
         externalRepositoryId=repository['external_repository_id'],
         externalProjectId=repository['external_project_id'],
@@ -362,6 +381,64 @@ async def sync_delivery_review(db: AsyncSession, delivery: Any, settings: Settin
         decrypt_secret_bundle(settings, connection['encrypted_value']),
     )
     review = await provider.get_review(provider_repository, external_review_id)
-    await upsert_review(db, repository, review)
+    review_id = await upsert_review(db, repository, review)
+    current_result = await db.execute(
+        text(
+            '''SELECT flowie_user_id FROM code_review_reviewers
+               WHERE code_review_id = :review_id AND flowie_user_id IS NOT NULL'''
+        ),
+        {'review_id': review_id},
+    )
+    current_recipients = {str(value) for value in current_result.scalars().all()}
+    revision_changed = not existing or existing['latest_revision_key'] != review.latestRevisionKey
+    recipients = current_recipients if revision_changed else current_recipients - previous_recipients
+    notification_records: list[dict[str, Any]] = []
+    if review.state == 'OPEN':
+        event_type = 'review.assigned' if not existing else 'review.updated'
+        now = _utcnow()
+        data = {
+            'title': review.title,
+            'message': 'assigned you a review' if not existing else 'updated a review that needs your attention',
+            'entityPath': f'/review/{review_id}',
+            'provider': connection['provider'],
+            'repository': repository['full_name'],
+            'number': review.number,
+        }
+        for recipient_id in recipients:
+            notification_id = _cuid()
+            await db.execute(
+                text(
+                    '''INSERT INTO notifications (
+                           id, workspace_id, user_id, type, entity_type, entity_id, data, created_at
+                       ) VALUES (
+                           :id, :workspace_id, :user_id, :type, 'review', :review_id,
+                           CAST(:data AS jsonb), :now
+                       )'''
+                ),
+                {
+                    'id': notification_id,
+                    'workspace_id': repository['workspace_id'],
+                    'user_id': recipient_id,
+                    'type': event_type,
+                    'review_id': review_id,
+                    'data': json.dumps(data),
+                    'now': now,
+                },
+            )
+            notification_records.append(
+                {
+                    'id': notification_id,
+                    'workspaceId': repository['workspace_id'],
+                    'userId': recipient_id,
+                    'type': event_type,
+                    'entityType': 'review',
+                    'entityId': review_id,
+                    'data': data,
+                    'readAt': None,
+                    'createdAt': now.isoformat(),
+                }
+            )
     await db.commit()
+    for record in notification_records:
+        await notification_hub.publish(record)
     return True

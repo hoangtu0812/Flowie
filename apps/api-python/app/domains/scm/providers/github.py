@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -90,18 +91,32 @@ class GitHubProvider:
             f'https://api.github.com/repos/{repository.fullName}/pulls',
             params={'state': 'all', 'sort': 'updated', 'direction': 'desc', 'per_page': 100},
         )
-        return [self._review(item) for item in response.json()]
+        semaphore = asyncio.Semaphore(8)
+
+        async def hydrate(item: dict[str, Any]) -> ProviderReview:
+            async with semaphore:
+                review = self._review(item)
+                return await self._with_decisions(repository, review)
+
+        return list(await asyncio.gather(*(hydrate(item) for item in response.json())))
 
     async def get_review(self, repository: ProviderRepository, external_review_id: str) -> ProviderReview:
         detail = await self._request(
             'GET', f'https://api.github.com/repos/{repository.fullName}/pulls/{external_review_id}'
         )
+        review = self._review(detail.json())
+        return await self._with_decisions(repository, review)
+
+    async def _with_decisions(
+        self,
+        repository: ProviderRepository,
+        review: ProviderReview,
+    ) -> ProviderReview:
         reviews_response = await self._request(
             'GET',
-            f'https://api.github.com/repos/{repository.fullName}/pulls/{external_review_id}/reviews',
+            f'https://api.github.com/repos/{repository.fullName}/pulls/{review.externalReviewId}/reviews',
             params={'per_page': 100},
         )
-        review = self._review(detail.json())
         decisions: dict[str, ProviderReviewer] = {item.externalUserId: item for item in review.reviewers}
         for item in reviews_response.json():
             user = item.get('user') or {}

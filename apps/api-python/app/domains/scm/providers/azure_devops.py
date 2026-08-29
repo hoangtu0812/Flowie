@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from urllib.parse import quote
 
@@ -95,7 +96,14 @@ class AzureDevOpsProvider:
             f'/{project}/_apis/git/repositories/{repo}/pullrequests',
             params={'searchCriteria.status': 'all', '$top': 100, 'api-version': '7.1'},
         )
-        return [self._review(item) for item in response.json().get('value', [])]
+        semaphore = asyncio.Semaphore(8)
+
+        async def hydrate(item: dict[str, Any]) -> ProviderReview:
+            async with semaphore:
+                iterations = await self._iterations(repository, str(item['pullRequestId']))
+                return self._review(item, iterations)
+
+        return list(await asyncio.gather(*(hydrate(item) for item in response.json().get('value', []))))
 
     async def get_review(self, repository: ProviderRepository, external_review_id: str) -> ProviderReview:
         project = quote(repository.externalProjectId or '', safe='')
@@ -105,13 +113,22 @@ class AzureDevOpsProvider:
             f'/{project}/_apis/git/repositories/{repo}/pullrequests/{quote(external_review_id, safe="")}',
             params={'api-version': '7.1'},
         )
-        iterations = await self._request(
+        iterations = await self._iterations(repository, external_review_id)
+        return self._review(detail.json(), iterations)
+
+    async def _iterations(
+        self,
+        repository: ProviderRepository,
+        external_review_id: str,
+    ) -> list[dict[str, Any]]:
+        project = quote(repository.externalProjectId or '', safe='')
+        repo = quote(repository.externalRepositoryId, safe='')
+        response = await self._request(
             'GET',
             f'/{project}/_apis/git/repositories/{repo}/pullrequests/{quote(external_review_id, safe="")}/iterations',
             params={'api-version': '7.1'},
         )
-        values = iterations.json().get('value', [])
-        return self._review(detail.json(), values)
+        return list(response.json().get('value', []))
 
     @staticmethod
     def _repository(item: dict[str, Any]) -> ProviderRepository:

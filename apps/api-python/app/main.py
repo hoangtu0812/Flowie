@@ -47,6 +47,7 @@ from .jobs.reminders import reminder_loop
 from .domains.scm.router import router as scm_router
 from .domains.scm.router import webhook_router as scm_webhook_router
 from .jobs.scm_deliveries import scm_delivery_loop
+from .domains.reviews import router as reviews_router
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -113,6 +114,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(workspaces_router)
     app.include_router(scm_router)
     app.include_router(scm_webhook_router)
+    app.include_router(reviews_router)
 
     @app.get('/readyz')
     async def readyz(request: Request) -> JSONResponse:

@@ -63,6 +63,14 @@ class CredentialRotationInput(BaseModel):
     rotateWebhookSecret: bool = False
 
 
+class IdentityInput(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    externalUserId: str = Field(min_length=1, max_length=300)
+    displayName: str | None = Field(default=None, max_length=200)
+    email: str | None = Field(default=None, max_length=320)
+
+
 async def _audit(
     db: AsyncSession,
     workspace_id: str,
@@ -285,6 +293,187 @@ async def list_repositories(
             for row in result.mappings().all()
         ]
     }
+
+
+@router.get('/identities')
+async def list_identities(
+    workspaceId: str = Query(min_length=1),
+    connectionId: str = Query(min_length=1),
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, list[dict[str, Any]]]:
+    await _workspace_manager(db, workspaceId, user['id'])
+    await connection_row(db, connectionId, workspaceId)
+    result = await db.execute(
+        text(
+            '''SELECT identity.*, account.name AS flowie_name, account.email AS flowie_email
+               FROM scm_user_identities identity
+               JOIN users account ON account.id = identity.user_id
+               WHERE identity.connection_id = :connection_id
+               ORDER BY account.name, account.email'''
+        ),
+        {'connection_id': connectionId},
+    )
+    return {
+        'data': [
+            {
+                'id': row['id'],
+                'connectionId': row['connection_id'],
+                'userId': row['user_id'],
+                'flowieName': row['flowie_name'],
+                'flowieEmail': row['flowie_email'],
+                'externalUserId': row['external_user_id'],
+                'displayName': row['display_name'],
+                'email': row['email'],
+                'updatedAt': row['updated_at'],
+            }
+            for row in result.mappings().all()
+        ]
+    }
+
+
+@router.put('/connections/{connection_id}/identities/{user_id}')
+async def save_identity(
+    connection_id: str,
+    user_id: str,
+    payload: IdentityInput,
+    workspaceId: str = Query(min_length=1),
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    await _workspace_manager(db, workspaceId, user['id'])
+    await connection_row(db, connection_id, workspaceId)
+    member = await db.execute(
+        text(
+            '''SELECT 1 FROM workspace_members
+               WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE' '''
+        ),
+        {'workspace_id': workspaceId, 'user_id': user_id},
+    )
+    if member.scalar_one_or_none() is None:
+        raise ApiError(400, 'The selected user is not an active workspace member.', 'Bad Request')
+    now = _utcnow()
+    try:
+        result = await db.execute(
+            text(
+                '''INSERT INTO scm_user_identities (
+                       id, workspace_id, connection_id, user_id, external_user_id,
+                       display_name, email, created_at, updated_at
+                   ) VALUES (
+                       :id, :workspace_id, :connection_id, :user_id, :external_user_id,
+                       :display_name, :email, :now, :now
+                   ) ON CONFLICT (connection_id, user_id) DO UPDATE SET
+                       external_user_id = EXCLUDED.external_user_id,
+                       display_name = EXCLUDED.display_name, email = EXCLUDED.email,
+                       updated_at = EXCLUDED.updated_at
+                   RETURNING id, user_id, external_user_id, display_name, email, updated_at'''
+            ),
+            {
+                'id': _cuid(),
+                'workspace_id': workspaceId,
+                'connection_id': connection_id,
+                'user_id': user_id,
+                'external_user_id': payload.externalUserId.strip(),
+                'display_name': payload.displayName.strip() if payload.displayName else None,
+                'email': payload.email.strip().lower() if payload.email else None,
+                'now': now,
+            },
+        )
+        row = result.mappings().one()
+        await db.execute(
+            text(
+                '''UPDATE code_review_reviewers reviewer
+                   SET flowie_user_id = NULL, updated_at = :now
+                   FROM code_reviews review
+                   JOIN scm_repositories repository ON repository.id = review.repository_id
+                   WHERE reviewer.code_review_id = review.id
+                     AND repository.connection_id = :connection_id
+                     AND reviewer.flowie_user_id = :user_id'''
+            ),
+            {'user_id': user_id, 'connection_id': connection_id, 'now': now},
+        )
+        await db.execute(
+            text(
+                '''UPDATE code_review_reviewers reviewer
+                   SET flowie_user_id = :user_id, updated_at = :now
+                   FROM code_reviews review
+                   JOIN scm_repositories repository ON repository.id = review.repository_id
+                   WHERE reviewer.code_review_id = review.id
+                     AND repository.connection_id = :connection_id
+                     AND reviewer.external_user_id = :external_user_id'''
+            ),
+            {
+                'user_id': user_id,
+                'connection_id': connection_id,
+                'external_user_id': payload.externalUserId.strip(),
+                'now': now,
+            },
+        )
+        await _audit(
+            db,
+            workspaceId,
+            user['id'],
+            'scm.identity.mapped',
+            connection_id,
+            {'userId': user_id, 'externalUserId': payload.externalUserId},
+        )
+        await db.commit()
+    except IntegrityError as error:
+        await db.rollback()
+        raise ApiError(409, 'This provider identity is already mapped to another Flowie user.', 'Conflict') from error
+    return {
+        'data': {
+            'id': row['id'],
+            'userId': row['user_id'],
+            'externalUserId': row['external_user_id'],
+            'displayName': row['display_name'],
+            'email': row['email'],
+            'updatedAt': row['updated_at'],
+        }
+    }
+
+
+@router.delete('/connections/{connection_id}/identities/{user_id}')
+async def delete_identity(
+    connection_id: str,
+    user_id: str,
+    workspaceId: str = Query(min_length=1),
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    await _workspace_manager(db, workspaceId, user['id'])
+    await connection_row(db, connection_id, workspaceId)
+    result = await db.execute(
+        text(
+            '''DELETE FROM scm_user_identities
+               WHERE connection_id = :connection_id AND user_id = :user_id RETURNING id'''
+        ),
+        {'connection_id': connection_id, 'user_id': user_id},
+    )
+    if result.scalar_one_or_none() is None:
+        raise ApiError(404, 'Source-control identity mapping not found.', 'Not Found')
+    await db.execute(
+        text(
+            '''UPDATE code_review_reviewers reviewer
+               SET flowie_user_id = NULL, updated_at = :now
+               FROM code_reviews review
+               JOIN scm_repositories repository ON repository.id = review.repository_id
+               WHERE reviewer.code_review_id = review.id
+                 AND repository.connection_id = :connection_id
+                 AND reviewer.flowie_user_id = :user_id'''
+        ),
+        {'connection_id': connection_id, 'user_id': user_id, 'now': _utcnow()},
+    )
+    await _audit(
+        db,
+        workspaceId,
+        user['id'],
+        'scm.identity.unmapped',
+        connection_id,
+        {'userId': user_id},
+    )
+    await db.commit()
+    return {'data': {'connectionId': connection_id, 'userId': user_id, 'deleted': True}}
 
 
 @router.patch('/connections/{connection_id}/credentials')

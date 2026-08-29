@@ -25,7 +25,7 @@ async def process_scm_deliveries(
         result = await db.execute(
             text(
                 '''SELECT id FROM scm_webhook_deliveries
-                   WHERE status IN ('PENDING', 'FAILED') AND next_attempt_at <= :now
+                   WHERE status IN ('PENDING', 'FAILED', 'PROCESSING') AND next_attempt_at <= :now
                      AND attempts < :max_attempts
                    ORDER BY received_at ASC
                    FOR UPDATE SKIP LOCKED LIMIT 20'''
@@ -37,10 +37,10 @@ async def process_scm_deliveries(
             await db.execute(
                 text(
                     '''UPDATE scm_webhook_deliveries
-                       SET status = 'PROCESSING', attempts = attempts + 1
+                       SET status = 'PROCESSING', next_attempt_at = :lease_until
                        WHERE id = ANY(:ids)'''
                 ),
-                {'ids': ids},
+                {'ids': ids, 'lease_until': _utcnow() + timedelta(minutes=5)},
             )
         await db.commit()
 
@@ -67,18 +67,20 @@ async def process_scm_deliveries(
                 processed += 1
             except Exception as error:
                 await db.rollback()
-                attempts = int(delivery['attempts'])
+                attempts = int(delivery['attempts']) + 1
                 terminal = attempts >= MAX_ATTEMPTS
                 retry_at = _utcnow() + timedelta(seconds=min(30 * (2 ** max(attempts - 1, 0)), 3600))
                 await db.execute(
                     text(
                         '''UPDATE scm_webhook_deliveries
-                           SET status = 'FAILED', last_error = :error, next_attempt_at = :retry_at,
+                           SET status = 'FAILED', attempts = :attempts, last_error = :error,
+                               next_attempt_at = :retry_at,
                                processed_at = CASE WHEN :terminal THEN :now ELSE NULL END
                            WHERE id = :id'''
                     ),
                     {
                         'id': delivery_id,
+                        'attempts': attempts,
                         'error': str(error)[:1000],
                         'retry_at': retry_at,
                         'terminal': terminal,
