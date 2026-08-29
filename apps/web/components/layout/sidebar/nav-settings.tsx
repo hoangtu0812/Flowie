@@ -48,7 +48,10 @@ interface SettingsNavGroup {
 export const settingsNav: SettingsNavGroup[] = [
    {
       label: 'Workspace',
-      items: [{ name: 'General', url: '/settings/workspace', icon: Settings }],
+      items: [
+         { name: 'General', url: '/settings/workspace', icon: Settings },
+         { name: 'Code & reviews', url: '/settings/code-and-reviews', icon: Code },
+      ],
    },
    {
       label: 'Personal',
@@ -56,7 +59,6 @@ export const settingsNav: SettingsNavGroup[] = [
          { name: 'Preferences', url: '/settings/preferences', icon: Settings },
          { name: 'Profile', url: '/settings/profile', icon: UserRound },
          { name: 'Notifications', url: '/settings/notifications', icon: Bell },
-         { name: 'Code & reviews', url: '/settings/code-and-reviews', icon: Code },
          { name: 'Security & access', url: '/settings/security', icon: KeyRound },
          { name: 'Connected accounts', url: '/settings/connected-accounts', icon: Users },
          { name: 'Agent personalization', url: '/settings/agent-personalization', icon: Bot },

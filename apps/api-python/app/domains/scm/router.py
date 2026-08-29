@@ -244,7 +244,11 @@ async def create_connection(
         raise ApiError(409, 'This provider account is already connected to the workspace.', 'Conflict') from error
     row = await connection_row(db, connection_id, payload.workspaceId)
     data = _connection_view(row)
-    data['webhookPath'] = f'/api/v1/scm/webhooks/{payload.provider.lower().replace("_devops", "")}/{connection_id}'
+    data['webhookPath'] = (
+        '/api/v1/scm/webhooks/github'
+        if payload.provider == 'GITHUB'
+        else f'/api/v1/scm/webhooks/azure/{connection_id}'
+    )
     if payload.provider == 'AZURE_DEVOPS':
         data['webhookUsername'] = 'flowie'
         data['webhookSecret'] = bundle['webhookSecret']
@@ -737,6 +741,50 @@ async def github_webhook(
         relevant=event_type in GITHUB_EVENTS,
     )
     return JSONResponse({'data': {'accepted': True, 'duplicate': not created}}, status_code=202)
+
+
+@webhook_router.post('/github', status_code=202)
+async def github_app_webhook(
+    request: Request,
+    db: AsyncSession = Depends(get_session),
+) -> JSONResponse:
+    raw, payload = await _webhook_payload(request)
+    settings = request.app.state.settings
+    if not verify_github_signature(settings.scm_github_webhook_secret, raw, request.headers.get('x-hub-signature-256')):
+        raise ApiError(401, 'GitHub webhook signature is invalid.', 'Unauthorized')
+    installation_id = str((payload.get('installation') or {}).get('id') or '')
+    delivery_id = request.headers.get('x-github-delivery')
+    event_type = request.headers.get('x-github-event')
+    if not installation_id or not delivery_id or not event_type:
+        raise ApiError(400, 'GitHub installation, delivery, and event headers are required.', 'Bad Request')
+    result = await db.execute(
+        text(
+            '''SELECT connection.*, secret.encrypted_value
+               FROM scm_connections connection
+               LEFT JOIN scm_connection_secrets secret ON secret.connection_id = connection.id
+               WHERE connection.provider = 'GITHUB' AND connection.status = 'ACTIVE'
+                 AND connection.external_account_id = :installation_id'''
+        ),
+        {'installation_id': installation_id},
+    )
+    connections = result.mappings().all()
+    duplicates = 0
+    for connection in connections:
+        created = await _save_delivery(
+            db,
+            connection=connection,
+            external_delivery_id=delivery_id,
+            event_type=event_type,
+            action=payload.get('action'),
+            raw=raw,
+            payload=payload,
+            relevant=event_type in GITHUB_EVENTS,
+        )
+        duplicates += int(not created)
+    return JSONResponse(
+        {'data': {'accepted': True, 'connections': len(connections), 'duplicates': duplicates}},
+        status_code=202,
+    )
 
 
 @webhook_router.post('/azure/{connection_id}', status_code=202)

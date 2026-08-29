@@ -6,7 +6,9 @@ import {
    type DiscordStatus,
 } from '@/components/settings/discord-integration';
 import { Button } from '@/components/ui/button';
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight, Cloud } from 'lucide-react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { INTEGRATION_LOGOS } from './integration-logos';
 import { SettingsCard, SettingsRow, SettingsSection, SettingsShell } from './shared';
@@ -21,6 +23,7 @@ const Unavailable = () => <span className="text-sm text-muted-foreground">Unavai
 
 /** Only the workspace Discord webhook is active; remaining inherited account integrations are locked. */
 export default function AccountConnections() {
+   const { orgId } = useParams<{ orgId: string }>();
    const [discordOpen, setDiscordOpen] = useState(false);
    const [discordStatus, setDiscordStatus] = useState<DiscordStatus>();
 
@@ -86,15 +89,26 @@ export default function AccountConnections() {
                   <SettingsRow
                      icon={<GithubLogo className="size-4" />}
                      title="GitHub"
-                     description="GitHub account linking is not available in Flowie yet"
-                     trailing={<Unavailable />}
-                     disabled
+                     description="Connect GitHub App installations for unified read-only Reviews"
+                     trailing={
+                        <Button asChild size="xs" variant="ghost">
+                           <Link href={`/${orgId}/settings/code-and-reviews`}>
+                              Configure <ArrowUpRight className="size-3.5" />
+                           </Link>
+                        </Button>
+                     }
                   />
                   <SettingsRow
-                     title="Code review relay"
-                     description="GitHub review attribution will be available with the Code & reviews feature"
-                     trailing={<Unavailable />}
-                     disabled
+                     icon={<Cloud className="size-4" />}
+                     title="Azure DevOps"
+                     description="Connect Microsoft Entra workload identities alongside GitHub"
+                     trailing={
+                        <Button asChild size="xs" variant="ghost">
+                           <Link href={`/${orgId}/settings/code-and-reviews`}>
+                              Configure <ArrowUpRight className="size-3.5" />
+                           </Link>
+                        </Button>
+                     }
                   />
                </SettingsCard>
             </SettingsSection>

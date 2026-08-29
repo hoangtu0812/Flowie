@@ -4,7 +4,7 @@ import json
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,7 +24,14 @@ ReviewState = Literal['OPEN', 'MERGED', 'CLOSED', 'ABANDONED']
 class IssueLinkInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
-    issueId: str = Field(min_length=1)
+    issueId: str | None = Field(default=None, min_length=1)
+    issueIdentifier: str | None = Field(default=None, min_length=1, max_length=100)
+
+    @model_validator(mode='after')
+    def require_issue_reference(self) -> 'IssueLinkInput':
+        if bool(self.issueId) == bool(self.issueIdentifier):
+            raise ValueError('Provide exactly one issueId or issueIdentifier.')
+        return self
 
 
 ACCESS_JOIN = '''
@@ -402,18 +409,24 @@ async def link_issue(
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
     review = await _accessible_review(db, review_id, workspaceId, user['id'])
+    issue_filter = 'id = :issue_id' if payload.issueId else 'identifier = :issue_identifier'
     issue_result = await db.execute(
         text(
-            '''SELECT id, identifier, title, team_id FROM issues
-               WHERE id = :issue_id AND workspace_id = :workspace_id AND archived_at IS NULL'''
+            f'''SELECT id, identifier, title, team_id FROM issues
+                WHERE {issue_filter} AND workspace_id = :workspace_id AND archived_at IS NULL'''
         ),
-        {'issue_id': payload.issueId, 'workspace_id': workspaceId},
+        {
+            'issue_id': payload.issueId,
+            'issue_identifier': payload.issueIdentifier.strip().upper() if payload.issueIdentifier else None,
+            'workspace_id': workspaceId,
+        },
     )
     issue = issue_result.mappings().first()
     if not issue:
         raise ApiError(404, 'Issue not found.', 'Not Found')
     if issue['team_id'] != review['team_id']:
         raise ApiError(400, 'A Review can only link to an Issue in its mapped Flowie team.', 'Bad Request')
+    linked_at = _utcnow()
     try:
         await db.execute(
             text(
@@ -426,12 +439,12 @@ async def link_issue(
             {
                 'workspace_id': workspaceId,
                 'review_id': review_id,
-                'issue_id': payload.issueId,
+                'issue_id': issue['id'],
                 'created_by_id': user['id'],
-                'now': _utcnow(),
+                'now': linked_at,
             },
         )
-        await _audit_link(db, workspaceId, user['id'], 'review.issue-linked', review_id, payload.issueId)
+        await _audit_link(db, workspaceId, user['id'], 'review.issue-linked', review_id, issue['id'])
         await db.commit()
     except IntegrityError as error:
         await db.rollback()
@@ -443,6 +456,7 @@ async def link_issue(
             'identifier': issue['identifier'],
             'title': issue['title'],
             'source': 'MANUAL',
+            'createdAt': linked_at,
         }
     }
 

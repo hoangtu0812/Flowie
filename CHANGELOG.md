@@ -19,6 +19,12 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- The Reviews sidebar is now active and presents GitHub and Azure DevOps work
+  together on one screen with provider filters, assigned/created views,
+  revision unread markers, reviewer decisions, external-provider handoff, and
+  same-team Issue linking. Workspace Code & reviews settings now manages both
+  provider connections, repository-to-team access mapping, synchronization,
+  and provider identity mapping without exposing saved credentials.
 - Reviews now exposes one provider-neutral API for assigned, created, and
   team-visible reviews from both GitHub and Azure DevOps. It includes revision
   unread state, reviewer decisions, Flowie-to-provider identity mapping,

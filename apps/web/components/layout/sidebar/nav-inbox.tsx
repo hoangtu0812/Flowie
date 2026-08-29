@@ -27,8 +27,6 @@ const ITEM_KEYS: Record<string, SidebarItemKey> = {
    'Agent': 'agent',
 };
 
-const DISABLED_ITEMS = new Set(['Reviews']);
-
 export function NavInbox() {
    const { orgId } = useParams<{ orgId: string }>();
    const { visibility, badgeStyle, order } = useSidebarPrefsStore();
@@ -69,22 +67,14 @@ export function NavInbox() {
       <SidebarGroup className="group-data-[collapsible=icon]:hidden">
          <SidebarMenu>
             {items.map((item) => {
-               const disabled = DISABLED_ITEMS.has(item.name);
                return (
                   <SidebarMenuItem key={item.name}>
-                     {disabled ? (
-                        <SidebarMenuButton disabled tooltip={`${item.name} is coming soon`}>
+                     <SidebarMenuButton asChild>
+                        <Link href={`/${orgId}${item.url.replace(/^\/lndev-ui/, '')}`}>
                            <item.icon />
                            <span>{item.name}</span>
-                        </SidebarMenuButton>
-                     ) : (
-                        <SidebarMenuButton asChild>
-                           <Link href={`/${orgId}${item.url.replace(/^\/lndev-ui/, '')}`}>
-                              <item.icon />
-                              <span>{item.name}</span>
-                           </Link>
-                        </SidebarMenuButton>
-                     )}
+                        </Link>
+                     </SidebarMenuButton>
                      {mounted && item.name === 'Inbox' && unread > 0 && (
                         <SidebarMenuBadge className="text-muted-foreground">
                            {badgeStyle === 'count' ? (

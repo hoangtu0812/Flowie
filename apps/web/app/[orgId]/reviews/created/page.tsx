@@ -1,10 +1,10 @@
-import { DisabledFeature } from '@/components/common/disabled-feature';
+import Reviews from '@/components/common/reviews/reviews';
 import MainLayout from '@/components/layout/main-layout';
 
 export default function CreatedReviewsPage() {
    return (
       <MainLayout>
-         <DisabledFeature title="Reviews" />
+         <Reviews listTab="created" />
       </MainLayout>
    );
 }

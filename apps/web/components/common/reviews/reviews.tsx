@@ -1,49 +1,65 @@
 'use client';
 
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { cn } from '@/lib/utils';
 import {
-   createdReviews,
-   forYouReviews,
-   Review,
-   ReviewList,
-   ReviewStatus,
-} from '@/mock-data/reviews';
-import { ListFilter, SlidersHorizontal } from 'lucide-react';
+   CodeReview,
+   linkReviewIssue,
+   loadReview,
+   loadReviews,
+   markReviewViewed,
+   ReviewState,
+   ScmProvider,
+   unlinkReviewIssue,
+} from '@/lib/scm';
+import { cn } from '@/lib/utils';
+import { loadCurrentWorkspace } from '@/lib/workspaces';
+import { formatDistanceToNow } from 'date-fns';
+import {
+   ArrowUpRight,
+   CheckCircle2,
+   CircleDot,
+   GitPullRequest,
+   Link2,
+   Loader2,
+   Search,
+   Unlink,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ReactNode, useState } from 'react';
-import { ReviewDetail, ReviewSection } from './review-detail';
-import { PrIcon } from './review-shared';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 
-/** Hand-drawn empty-state sketch (paper plane over a folded sheet). */
-function EmptySketch() {
+type ReviewListTab = 'assigned' | 'created';
+
+const STATE_LABELS: Record<ReviewState, string> = {
+   OPEN: 'Open',
+   MERGED: 'Merged',
+   CLOSED: 'Closed',
+   ABANDONED: 'Abandoned',
+};
+
+function ProviderBadge({ provider }: { provider: ScmProvider }) {
    return (
-      <svg width="150" height="120" viewBox="0 0 150 120" fill="none" aria-hidden>
-         <g stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M28 78l58-22 34 30-64 16z" />
-            <path d="M28 78l30-6 28 28" />
-            <path d="M86 56l-8 40" strokeDasharray="4 4" />
-            <path d="M104 34c8-10 22-12 26-6s-4 16-14 18" />
-            <path d="M116 46c-4 2-8 2-12 0" />
-            <path d="M44 66l6-2M56 84l6-2M70 92l6-2" strokeDasharray="3 4" />
-         </g>
-      </svg>
+      <Badge variant="outline" className="px-1.5 py-0 text-[10px] font-medium">
+         {provider === 'GITHUB' ? 'GitHub' : 'Azure DevOps'}
+      </Badge>
    );
 }
 
-const GROUP_LABELS: Record<ReviewStatus, string> = {
-   open: 'Open',
-   merged: 'Merged',
-   closed: 'Closed',
-};
+function ReviewStateIcon({ state }: { state: ReviewState }) {
+   if (state === 'MERGED') return <CheckCircle2 className="size-4 text-violet-500" />;
+   if (state === 'OPEN') return <GitPullRequest className="size-4 text-emerald-500" />;
+   return <CircleDot className="size-4 text-muted-foreground" />;
+}
 
 function ReviewRow({
    review,
    orgId,
    selected,
 }: {
-   review: Review;
+   review: CodeReview;
    orgId: string;
    selected: boolean;
 }) {
@@ -51,127 +67,367 @@ function ReviewRow({
       <Link
          href={`/${orgId}/review/${review.id}`}
          className={cn(
-            'flex items-center gap-2 px-4 py-2 text-sm border-b border-border/40 transition-colors',
-            selected ? 'bg-accent/60' : 'hover:bg-sidebar/50'
+            'block border-b border-border/50 px-4 py-3 transition-colors',
+            selected ? 'bg-accent/70' : 'hover:bg-accent/35'
          )}
       >
-         <PrIcon status={review.status} />
-         <span className="flex-1 truncate">{review.title}</span>
-         <span className="text-xs text-muted-foreground shrink-0">{review.timeAgo}</span>
+         <div className="flex items-start gap-2">
+            <ReviewStateIcon state={review.state} />
+            <div className="min-w-0 flex-1">
+               <div className="flex items-center gap-1.5">
+                  {review.unread && (
+                     <span className="size-1.5 rounded-full bg-primary" aria-label="Unread" />
+                  )}
+                  <span className="truncate text-sm font-medium">{review.title}</span>
+               </div>
+               <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <ProviderBadge provider={review.provider} />
+                  <span className="truncate">{review.repositoryName}</span>
+                  {review.number && <span>#{review.number}</span>}
+                  <span className="ml-auto shrink-0">
+                     {formatDistanceToNow(new Date(review.externalUpdatedAt), { addSuffix: true })}
+                  </span>
+               </div>
+            </div>
+         </div>
       </Link>
    );
 }
 
-/** Collapsible status group: the header arrow really opens and closes the rows. */
-function ReviewGroup({
-   label,
-   count,
-   children,
+function ReviewDetail({
+   workspaceId,
+   review,
+   onChanged,
 }: {
-   label: string;
-   count: number;
-   children: ReactNode;
+   workspaceId: string;
+   review: CodeReview;
+   onChanged: (review: CodeReview) => void;
 }) {
-   const [open, setOpen] = useState(true);
+   const { orgId } = useParams<{ orgId: string }>();
+   const [issueIdentifier, setIssueIdentifier] = useState('');
+   const [message, setMessage] = useState<string>();
+   const [saving, setSaving] = useState(false);
+
+   async function linkIssue(event: FormEvent) {
+      event.preventDefault();
+      if (!issueIdentifier.trim()) return;
+      setSaving(true);
+      setMessage(undefined);
+      try {
+         const link = await linkReviewIssue(workspaceId, review.id, issueIdentifier);
+         onChanged({ ...review, issueLinks: [...review.issueLinks, link] });
+         setIssueIdentifier('');
+      } catch (error) {
+         setMessage(error instanceof Error ? error.message : 'Could not link the Issue.');
+      } finally {
+         setSaving(false);
+      }
+   }
+
+   async function unlink(issueId: string) {
+      setSaving(true);
+      setMessage(undefined);
+      try {
+         await unlinkReviewIssue(workspaceId, review.id, issueId);
+         onChanged({
+            ...review,
+            issueLinks: review.issueLinks.filter((link) => link.issueId !== issueId),
+         });
+      } catch (error) {
+         setMessage(error instanceof Error ? error.message : 'Could not unlink the Issue.');
+      } finally {
+         setSaving(false);
+      }
+   }
+
    return (
-      <div>
-         <button
-            type="button"
-            onClick={() => setOpen((value) => !value)}
-            aria-expanded={open}
-            className="w-full flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium bg-[color-mix(in_oklab,var(--accent)_30%,var(--container))] border-b border-border/40 cursor-pointer select-none"
-         >
-            {label}
-            <svg
-               width="8"
-               height="8"
-               viewBox="0 0 8 8"
-               className={cn(
-                  'text-muted-foreground transition-transform duration-200',
-                  !open && '-rotate-90'
-               )}
-               aria-hidden
-            >
-               <path d="M1 3l3 3 3-3" stroke="currentColor" strokeWidth="1.2" fill="none" />
-            </svg>
-            <span className="ml-auto text-muted-foreground font-normal">{count}</span>
-         </button>
-         <div
-            className={cn(
-               'grid transition-[grid-template-rows] duration-200 ease-out',
-               open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-            )}
-         >
-            <div className="overflow-hidden">{children}</div>
+      <div className="h-full overflow-y-auto">
+         <div className="border-b px-6 py-4">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+               <ProviderBadge provider={review.provider} />
+               <span>{review.repositoryName}</span>
+               {review.number && <span>#{review.number}</span>}
+               {review.isDraft && <Badge variant="secondary">Draft</Badge>}
+            </div>
+            <div className="mt-2 flex items-start gap-3">
+               <ReviewStateIcon state={review.state} />
+               <div className="min-w-0 flex-1">
+                  <h1 className="text-lg font-semibold leading-6">{review.title}</h1>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                     {review.authorName ?? 'Unknown author'} wants to merge{' '}
+                     <code>{review.sourceRef.replace('refs/heads/', '')}</code> into{' '}
+                     <code>{review.targetRef.replace('refs/heads/', '')}</code>
+                  </p>
+               </div>
+               <Button asChild size="sm">
+                  <a href={review.remoteUrl} target="_blank" rel="noreferrer">
+                     Open in {review.provider === 'GITHUB' ? 'GitHub' : 'Azure DevOps'}
+                     <ArrowUpRight className="size-3.5" />
+                  </a>
+               </Button>
+            </div>
+         </div>
+
+         <div className="grid gap-6 p-6 xl:grid-cols-[minmax(0,1fr)_280px]">
+            <div className="space-y-6">
+               <section className="rounded-lg border bg-container p-4">
+                  <h2 className="text-sm font-medium">Overview</h2>
+                  <p className="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">
+                     {review.description || 'No description was provided by the author.'}
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                     {review.changedFiles !== null && (
+                        <span>{review.changedFiles} files changed</span>
+                     )}
+                     {review.additions !== null && (
+                        <span className="text-emerald-600">+{review.additions}</span>
+                     )}
+                     {review.deletions !== null && (
+                        <span className="text-red-500">−{review.deletions}</span>
+                     )}
+                     <span>{review.revisions?.length ?? 1} revision(s)</span>
+                  </div>
+               </section>
+
+               <section className="rounded-lg border bg-container p-4">
+                  <h2 className="text-sm font-medium">Reviewers</h2>
+                  <div className="mt-3 space-y-2">
+                     {review.reviewers.length === 0 && (
+                        <p className="text-sm text-muted-foreground">
+                           No reviewers are currently assigned.
+                        </p>
+                     )}
+                     {review.reviewers.map((reviewer) => (
+                        <div
+                           key={reviewer.externalUserId}
+                           className="flex items-center gap-2 text-sm"
+                        >
+                           <span className="min-w-0 flex-1 truncate">
+                              {reviewer.displayName ?? reviewer.externalUserId}
+                              {reviewer.isRequired && (
+                                 <span className="ml-1 text-xs text-muted-foreground">
+                                    required
+                                 </span>
+                              )}
+                           </span>
+                           <Badge
+                              variant={reviewer.decision === 'APPROVED' ? 'secondary' : 'outline'}
+                           >
+                              {reviewer.decision.replaceAll('_', ' ').toLowerCase()}
+                           </Badge>
+                        </div>
+                     ))}
+                  </div>
+               </section>
+            </div>
+
+            <aside className="space-y-4">
+               <section className="rounded-lg border bg-container p-4">
+                  <div className="flex items-center gap-2">
+                     <Link2 className="size-4" />
+                     <h2 className="text-sm font-medium">Linked Issues</h2>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                     {review.issueLinks.map((link) => (
+                        <div
+                           key={link.issueId}
+                           className="flex items-center gap-2 rounded-md border px-2 py-1.5"
+                        >
+                           <Link
+                              href={`/${orgId}/issue/${link.identifier}`}
+                              className="min-w-0 flex-1 text-xs hover:underline"
+                           >
+                              <span className="font-medium">{link.identifier}</span>
+                              <span className="ml-1 text-muted-foreground">{link.title}</span>
+                           </Link>
+                           <button
+                              type="button"
+                              onClick={() => void unlink(link.issueId)}
+                              disabled={saving}
+                              aria-label={`Unlink ${link.identifier}`}
+                           >
+                              <Unlink className="size-3.5 text-muted-foreground" />
+                           </button>
+                        </div>
+                     ))}
+                     {review.issueLinks.length === 0 && (
+                        <p className="text-xs text-muted-foreground">No Issue linked yet.</p>
+                     )}
+                  </div>
+                  <form onSubmit={linkIssue} className="mt-3 flex gap-2">
+                     <Input
+                        value={issueIdentifier}
+                        onChange={(event) => setIssueIdentifier(event.target.value)}
+                        placeholder="Issue key, e.g. GEN-123"
+                        className="h-8 text-xs"
+                     />
+                     <Button size="xs" disabled={saving || !issueIdentifier.trim()}>
+                        Link
+                     </Button>
+                  </form>
+                  {message && <p className="mt-2 text-xs text-destructive">{message}</p>}
+               </section>
+
+               <section className="rounded-lg border bg-container p-4 text-xs text-muted-foreground">
+                  <p className="font-medium text-foreground">Read-only provider mode</p>
+                  <p className="mt-1">
+                     Comments, decisions, diffs, and merge actions remain in the provider until
+                     write permissions are enabled.
+                  </p>
+               </section>
+            </aside>
          </div>
       </div>
    );
 }
 
-interface ReviewsProps {
-   /** Which list tab is active ("/reviews" vs "/reviews/created"). */
-   listTab?: ReviewList;
-   /** Selected review (detail routes). */
-   selectedReviewId?: string;
-   section?: ReviewSection;
-}
-
-/** Reviews split view: list panel (For you / Created) + detail or empty state. */
 export default function Reviews({
-   listTab = 'for-you',
+   listTab = 'assigned',
    selectedReviewId,
-   section = 'overview',
-}: ReviewsProps) {
+}: {
+   listTab?: ReviewListTab;
+   selectedReviewId?: string;
+}) {
    const { orgId } = useParams<{ orgId: string }>();
-   const source = listTab === 'for-you' ? forYouReviews : createdReviews;
+   const [workspaceId, setWorkspaceId] = useState<string>();
+   const [reviews, setReviews] = useState<CodeReview[]>([]);
+   const [selected, setSelected] = useState<CodeReview>();
+   const [provider, setProvider] = useState<'ALL' | ScmProvider>('ALL');
+   const [search, setSearch] = useState('');
+   const [loading, setLoading] = useState(true);
+   const [error, setError] = useState<string>();
 
-   const groups = (['open', 'merged', 'closed'] as ReviewStatus[])
-      .map((status) => ({
-         label: status === 'merged' && listTab === 'for-you' ? 'Completed' : GROUP_LABELS[status],
-         items: source.filter((review) => review.status === status),
-      }))
-      .filter((group) => group.items.length > 0);
+   useEffect(() => {
+      let cancelled = false;
+      setLoading(true);
+      setError(undefined);
+      void loadCurrentWorkspace(orgId)
+         .then(async (workspace) => {
+            const records = await loadReviews(workspace.id, {
+               view: listTab,
+               provider: provider === 'ALL' ? undefined : provider,
+               search,
+            });
+            if (!cancelled) {
+               setWorkspaceId(workspace.id);
+               setReviews(records);
+            }
+         })
+         .catch((reason) => {
+            if (!cancelled)
+               setError(reason instanceof Error ? reason.message : 'Could not load reviews.');
+         })
+         .finally(() => {
+            if (!cancelled) setLoading(false);
+         });
+      return () => {
+         cancelled = true;
+      };
+   }, [listTab, orgId, provider, search]);
+
+   useEffect(() => {
+      if (!workspaceId || !selectedReviewId) {
+         setSelected(undefined);
+         return;
+      }
+      let cancelled = false;
+      setSelected(undefined);
+      void loadReview(workspaceId, selectedReviewId)
+         .then((record) => {
+            if (cancelled) return;
+            setSelected(record);
+            if (record.unread) {
+               void markReviewViewed(workspaceId, record.id)
+                  .then(() => {
+                     if (cancelled) return;
+                     setReviews((items) =>
+                        items.map((item) =>
+                           item.id === record.id ? { ...item, unread: false } : item
+                        )
+                     );
+                     setSelected((current) => (current ? { ...current, unread: false } : current));
+                  })
+                  .catch(() => undefined);
+            }
+         })
+         .catch((reason) => {
+            if (!cancelled)
+               setError(reason instanceof Error ? reason.message : 'Could not load this review.');
+         });
+      return () => {
+         cancelled = true;
+      };
+   }, [selectedReviewId, workspaceId]);
+
+   const groups = useMemo(
+      () =>
+         (['OPEN', 'MERGED', 'CLOSED', 'ABANDONED'] as ReviewState[])
+            .map((state) => ({ state, items: reviews.filter((review) => review.state === state) }))
+            .filter((group) => group.items.length > 0),
+      [reviews]
+   );
 
    return (
-      <div className="w-full h-full flex overflow-hidden">
-         <div className="w-[420px] max-w-[45%] shrink-0 border-r h-full flex flex-col bg-container">
-            <div className="flex items-center justify-between px-4 py-1.5 h-10 border-b shrink-0">
-               <div className="flex items-center gap-2">
-                  <SidebarTrigger />
-                  <span className="text-sm font-medium">Reviews</span>
-               </div>
-               <div className="flex items-center gap-2 text-muted-foreground">
-                  <ListFilter className="size-4" />
-                  <SlidersHorizontal className="size-4" />
-               </div>
+      <div className="flex h-full w-full overflow-hidden">
+         <div className="flex h-full w-[430px] max-w-[46%] shrink-0 flex-col border-r bg-container">
+            <div className="flex h-10 shrink-0 items-center gap-2 border-b px-4">
+               <SidebarTrigger />
+               <span className="text-sm font-medium">Reviews</span>
+               <span className="ml-auto text-xs text-muted-foreground">{reviews.length}</span>
             </div>
-            <div className="flex items-center gap-1.5 px-4 py-2 shrink-0">
-               <Link
-                  href={`/${orgId}/reviews`}
-                  className={cn(
-                     'px-2.5 py-1 rounded-md border text-xs font-medium transition-colors',
-                     listTab === 'for-you'
-                        ? 'bg-accent border-transparent'
-                        : 'text-muted-foreground hover:bg-accent/50'
-                  )}
-               >
-                  For you
-               </Link>
-               <Link
-                  href={`/${orgId}/reviews/created`}
-                  className={cn(
-                     'px-2.5 py-1 rounded-md border text-xs font-medium transition-colors',
-                     listTab === 'created'
-                        ? 'bg-accent border-transparent'
-                        : 'text-muted-foreground hover:bg-accent/50'
-                  )}
-               >
-                  Created
-               </Link>
+            <div className="space-y-2 border-b px-4 py-3">
+               <div className="flex flex-wrap gap-1.5">
+                  <Button
+                     asChild
+                     size="xs"
+                     variant={listTab === 'assigned' ? 'secondary' : 'ghost'}
+                  >
+                     <Link href={`/${orgId}/reviews`}>For you</Link>
+                  </Button>
+                  <Button asChild size="xs" variant={listTab === 'created' ? 'secondary' : 'ghost'}>
+                     <Link href={`/${orgId}/reviews/created`}>Created</Link>
+                  </Button>
+                  {(['ALL', 'GITHUB', 'AZURE_DEVOPS'] as const).map((value) => (
+                     <Button
+                        key={value}
+                        type="button"
+                        size="xs"
+                        variant={provider === value ? 'outline' : 'ghost'}
+                        onClick={() => setProvider(value)}
+                     >
+                        {value === 'ALL' ? 'All' : value === 'GITHUB' ? 'GitHub' : 'Azure'}
+                     </Button>
+                  ))}
+               </div>
+               <div className="relative">
+                  <Search className="absolute left-2.5 top-2 size-3.5 text-muted-foreground" />
+                  <Input
+                     value={search}
+                     onChange={(event) => setSearch(event.target.value)}
+                     placeholder="Search title, author, or repository"
+                     className="h-8 pl-8 text-xs"
+                  />
+               </div>
             </div>
             <div className="flex-1 overflow-y-auto">
+               {loading && (
+                  <div className="flex items-center justify-center gap-2 p-8 text-sm text-muted-foreground">
+                     <Loader2 className="size-4 animate-spin" /> Loading reviews…
+                  </div>
+               )}
+               {!loading && error && <p className="p-5 text-sm text-destructive">{error}</p>}
+               {!loading && !error && groups.length === 0 && (
+                  <div className="p-8 text-center text-sm text-muted-foreground">
+                     No reviews match this view. Enable a mapped repository in Code &amp; reviews
+                     settings, then sync it.
+                  </div>
+               )}
                {groups.map((group) => (
-                  <ReviewGroup key={group.label} label={group.label} count={group.items.length}>
+                  <section key={group.state}>
+                     <div className="sticky top-0 flex items-center bg-muted/60 px-4 py-1.5 text-xs font-medium backdrop-blur">
+                        {STATE_LABELS[group.state]}
+                        <span className="ml-auto text-muted-foreground">{group.items.length}</span>
+                     </div>
                      {group.items.map((review) => (
                         <ReviewRow
                            key={review.id}
@@ -180,18 +436,26 @@ export default function Reviews({
                            selected={review.id === selectedReviewId}
                         />
                      ))}
-                  </ReviewGroup>
+                  </section>
                ))}
             </div>
          </div>
 
-         <div className="flex-1 min-w-0 h-full overflow-hidden">
-            {selectedReviewId ? (
-               <ReviewDetail reviewId={selectedReviewId} section={section} />
+         <div className="h-full min-w-0 flex-1 overflow-hidden">
+            {selected && workspaceId ? (
+               <ReviewDetail
+                  workspaceId={workspaceId}
+                  review={selected}
+                  onChanged={(record) => {
+                     setSelected(record);
+                     setReviews((items) =>
+                        items.map((item) => (item.id === record.id ? record : item))
+                     );
+                  }}
+               />
             ) : (
-               <div className="h-full flex flex-col items-center justify-center gap-4 text-muted-foreground">
-                  <EmptySketch />
-                  <span className="text-sm">{source.length} reviews</span>
+               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                  {selectedReviewId ? 'Loading review…' : 'Select a review to see its details.'}
                </div>
             )}
          </div>
