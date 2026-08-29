@@ -58,7 +58,8 @@ async def process_scm_deliveries(
                 await db.execute(
                     text(
                         '''UPDATE scm_webhook_deliveries
-                           SET status = :status, processed_at = :now, last_error = NULL
+                           SET status = :status, payload = CAST('{}' AS jsonb),
+                               processed_at = :now, last_error = NULL
                            WHERE id = :id'''
                     ),
                     {'id': delivery_id, 'status': 'PROCESSED' if synchronized else 'IGNORED', 'now': now},
@@ -74,6 +75,7 @@ async def process_scm_deliveries(
                     text(
                         '''UPDATE scm_webhook_deliveries
                            SET status = 'FAILED', attempts = :attempts, last_error = :error,
+                               payload = CASE WHEN :terminal THEN CAST('{}' AS jsonb) ELSE payload END,
                                next_attempt_at = :retry_at,
                                processed_at = CASE WHEN :terminal THEN :now ELSE NULL END
                            WHERE id = :id'''

@@ -28,6 +28,8 @@ class GitHubProvider:
         self._installation_id = installation_id
         self._client = client
         self._token: str | None = None
+        self._token_expires_at: datetime | None = None
+        self._token_lock = asyncio.Lock()
 
     def _app_jwt(self) -> str:
         now = datetime.now(timezone.utc)
@@ -38,19 +40,26 @@ class GitHubProvider:
         )
 
     async def _installation_token(self, client: httpx.AsyncClient) -> str:
-        if self._token:
+        now = datetime.now(timezone.utc)
+        if self._token and self._token_expires_at and self._token_expires_at > now + timedelta(minutes=2):
             return self._token
-        response = await client.post(
-            f'https://api.github.com/app/installations/{self._installation_id}/access_tokens',
-            headers={
-                'Accept': 'application/vnd.github+json',
-                'Authorization': f'Bearer {self._app_jwt()}',
-                'X-GitHub-Api-Version': '2022-11-28',
-            },
-        )
-        response.raise_for_status()
-        self._token = str(response.json()['token'])
-        return self._token
+        async with self._token_lock:
+            now = datetime.now(timezone.utc)
+            if self._token and self._token_expires_at and self._token_expires_at > now + timedelta(minutes=2):
+                return self._token
+            response = await client.post(
+                f'https://api.github.com/app/installations/{self._installation_id}/access_tokens',
+                headers={
+                    'Accept': 'application/vnd.github+json',
+                    'Authorization': f'Bearer {self._app_jwt()}',
+                    'X-GitHub-Api-Version': '2022-11-28',
+                },
+            )
+            response.raise_for_status()
+            payload = response.json()
+            self._token = str(payload['token'])
+            self._token_expires_at = datetime.fromisoformat(str(payload['expires_at']).replace('Z', '+00:00'))
+            return self._token
 
     async def _request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
         owns_client = self._client is None

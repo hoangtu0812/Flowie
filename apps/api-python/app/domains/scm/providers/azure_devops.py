@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import quote
 
@@ -38,34 +39,44 @@ class AzureDevOpsProvider:
         self._client_secret = client_secret
         self._client = client
         self._token: str | None = None
+        self._token_expires_at: datetime | None = None
+        self._token_lock = asyncio.Lock()
 
     async def _access_token(self, client: httpx.AsyncClient) -> str:
-        if self._token:
+        now = datetime.now(timezone.utc)
+        if self._token and self._token_expires_at and self._token_expires_at > now + timedelta(minutes=2):
             return self._token
-        if self._auth_mode == 'MANAGED_IDENTITY':
-            params = {'api-version': '2018-02-01', 'resource': AZURE_DEVOPS_RESOURCE}
-            if self._client_id:
-                params['client_id'] = self._client_id
-            response = await client.get(
-                'http://169.254.169.254/metadata/identity/oauth2/token',
-                params=params,
-                headers={'Metadata': 'true'},
-            )
-        else:
-            if not self._tenant_id or not self._client_id or not self._client_secret:
-                raise ValueError('Azure DevOps service-principal credentials are incomplete.')
-            response = await client.post(
-                f'https://login.microsoftonline.com/{quote(self._tenant_id, safe="")}/oauth2/v2.0/token',
-                data={
-                    'client_id': self._client_id,
-                    'client_secret': self._client_secret,
-                    'grant_type': 'client_credentials',
-                    'scope': f'{AZURE_DEVOPS_RESOURCE}/.default',
-                },
-            )
-        response.raise_for_status()
-        self._token = str(response.json()['access_token'])
-        return self._token
+        async with self._token_lock:
+            now = datetime.now(timezone.utc)
+            if self._token and self._token_expires_at and self._token_expires_at > now + timedelta(minutes=2):
+                return self._token
+            if self._auth_mode == 'MANAGED_IDENTITY':
+                params = {'api-version': '2018-02-01', 'resource': AZURE_DEVOPS_RESOURCE}
+                if self._client_id:
+                    params['client_id'] = self._client_id
+                response = await client.get(
+                    'http://169.254.169.254/metadata/identity/oauth2/token',
+                    params=params,
+                    headers={'Metadata': 'true'},
+                )
+            else:
+                if not self._tenant_id or not self._client_id or not self._client_secret:
+                    raise ValueError('Azure DevOps service-principal credentials are incomplete.')
+                response = await client.post(
+                    f'https://login.microsoftonline.com/{quote(self._tenant_id, safe="")}/oauth2/v2.0/token',
+                    data={
+                        'client_id': self._client_id,
+                        'client_secret': self._client_secret,
+                        'grant_type': 'client_credentials',
+                        'scope': f'{AZURE_DEVOPS_RESOURCE}/.default',
+                    },
+                )
+            response.raise_for_status()
+            payload = response.json()
+            self._token = str(payload['access_token'])
+            expires_in = int(payload.get('expires_in') or 3600)
+            self._token_expires_at = now + timedelta(seconds=max(expires_in, 0))
+            return self._token
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
         owns_client = self._client is None

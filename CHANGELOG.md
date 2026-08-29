@@ -12,6 +12,11 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Changed
 
+- Reviews webhook processing now renews expiring GitHub installation and Azure
+  workload tokens during long synchronizations, uses reclaimable processing
+  leases, and clears raw provider payloads after processing or terminal
+  failure. A production runbook documents least-privilege provider setup,
+  identity and team boundaries, recovery, and the CT107 deployment checklist.
 - Page-level loading states now use the animated Flowie mark and an accessible
   indeterminate progress bar instead of a text label paired with a generic
   spinner. The shared treatment covers workspace navigation, issue, project,

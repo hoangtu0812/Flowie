@@ -4,6 +4,7 @@ import asyncio
 import base64
 import sys
 import unittest
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from hmac import new as new_hmac
 from pathlib import Path
@@ -68,12 +69,64 @@ class ScmProviderTests(unittest.TestCase):
                     app_id='1', private_key='not-used', installation_id='99', client=client
                 )
                 provider._token = 'installation-token'
+                provider._token_expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
                 repository = ProviderRepository(
                     externalRepositoryId='1', name='repo', fullName='acme/repo'
                 )
                 review = await provider.get_review(repository, '42')
                 self.assertEqual(review.latestRevisionKey, 'abc123')
                 self.assertEqual(review.reviewers[0].decision, 'APPROVED')
+
+        asyncio.run(run())
+
+    def test_github_renews_an_expiring_installation_token(self) -> None:
+        async def run() -> None:
+            requests = 0
+
+            def handler(request: httpx.Request) -> httpx.Response:
+                nonlocal requests
+                requests += 1
+                return httpx.Response(
+                    201,
+                    json={'token': 'renewed', 'expires_at': '2026-08-29T03:00:00Z'},
+                )
+
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+                provider = GitHubProvider(
+                    app_id='1', private_key='not-used', installation_id='99', client=client
+                )
+                provider._app_jwt = lambda: 'app-jwt'
+                provider._token = 'expiring'
+                provider._token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=30)
+
+                self.assertEqual(await provider._installation_token(client), 'renewed')
+                self.assertEqual(requests, 1)
+
+        asyncio.run(run())
+
+    def test_azure_renews_an_expiring_workload_token(self) -> None:
+        async def run() -> None:
+            requests = 0
+
+            def handler(request: httpx.Request) -> httpx.Response:
+                nonlocal requests
+                requests += 1
+                return httpx.Response(200, json={'access_token': 'renewed', 'expires_in': 3600})
+
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+                provider = AzureDevOpsProvider(
+                    organization='acme',
+                    auth_mode='SERVICE_PRINCIPAL',
+                    tenant_id='tenant',
+                    client_id='client',
+                    client_secret='secret',
+                    client=client,
+                )
+                provider._token = 'expiring'
+                provider._token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=30)
+
+                self.assertEqual(await provider._access_token(client), 'renewed')
+                self.assertEqual(requests, 1)
 
         asyncio.run(run())
 

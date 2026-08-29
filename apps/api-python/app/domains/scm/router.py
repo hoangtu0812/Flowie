@@ -700,7 +700,7 @@ async def _save_delivery(
             'event_type': event_type,
             'action': action,
             'status': 'PENDING' if relevant else 'IGNORED',
-            'payload': json.dumps(payload),
+            'payload': json.dumps(payload if relevant else {}),
             'payload_hash': payload_hash(raw),
             'now': _utcnow(),
         },
