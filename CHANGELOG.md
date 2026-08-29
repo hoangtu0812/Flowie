@@ -19,6 +19,12 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Reviews now has a provider-neutral persistence and API contract foundation
+  for connecting GitHub and Azure DevOps organizations to the same workspace.
+  The schema keeps repository, external review, revision, reviewer, Issue-link,
+  user-view, and webhook-delivery identities isolated by connection. This is
+  an expand-only foundation: Reviews remains unavailable until read-only
+  provider synchronization and access checks are enabled in a later change.
 - Project Issues now includes AI scheduling. It sends open issue titles,
   descriptions, estimates, parent-child structure, and the project schedule to
   the enabled workspace provider, then presents validated start, target, and

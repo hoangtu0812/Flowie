@@ -32,6 +32,56 @@ enum AgentMessageRole {
   ASSISTANT
 }
 
+enum ScmProvider {
+  GITHUB
+  AZURE_DEVOPS
+}
+
+enum ScmConnectionStatus {
+  ACTIVE
+  SUSPENDED
+  REVOKED
+  ERROR
+}
+
+enum ScmAuthMode {
+  INSTALLATION
+  SERVICE_PRINCIPAL
+  MANAGED_IDENTITY
+}
+
+enum ScmDeliveryStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+  IGNORED
+}
+
+enum CodeReviewState {
+  OPEN
+  MERGED
+  CLOSED
+  ABANDONED
+}
+
+enum CodeReviewDecision {
+  NONE
+  PENDING
+  COMMENTED
+  APPROVED
+  APPROVED_WITH_SUGGESTIONS
+  CHANGES_REQUESTED
+  WAITING_FOR_AUTHOR
+  REJECTED
+}
+
+enum CodeReviewLinkSource {
+  MANUAL
+  DETECTED
+  PROVIDER
+}
+
 enum WorkspaceMemberStatus {
   INVITED
   ACTIVE
@@ -168,6 +218,11 @@ model User {
   createdWorkspaceEmojis   WorkspaceEmoji[]         @relation("WorkspaceEmojiCreator")
   agentConversations       AgentConversation[]
   agentSkills              UserAgentSkill[]
+  createdScmConnections    ScmConnection[]          @relation("ScmConnectionCreator")
+  scmIdentities            ScmUserIdentity[]
+  codeReviewReviewerLinks  CodeReviewReviewer[]
+  codeReviewIssueLinks     CodeReviewIssueLink[]    @relation("CodeReviewIssueLinkCreator")
+  codeReviewViewStates     CodeReviewViewState[]
 
   @@map("users")
 }
@@ -339,6 +394,11 @@ model Workspace {
   agentProviders          WorkspaceAgentProvider[]
   agentTools              WorkspaceAgentTool[]
   agentConversations      AgentConversation[]
+  scmConnections          ScmConnection[]
+  scmRepositories         ScmRepository[]
+  scmIdentities           ScmUserIdentity[]
+  codeReviews             CodeReview[]
+  codeReviewIssueLinks    CodeReviewIssueLink[]
 
   @@index([organizationId])
   @@map("workspaces")
@@ -377,15 +437,15 @@ model WorkspaceAgentTool {
 }
 
 model UserAgentSkill {
-  id        String   @id @default(cuid())
-  userId    String   @map("user_id")
-  skillKey  String   @map("skill_key")
-  name      String?
-  description String?
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  skillKey     String   @map("skill_key")
+  name         String?
+  description  String?
   instructions String?
-  config    Json     @default("{}")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  config       Json     @default("{}")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -395,12 +455,12 @@ model UserAgentSkill {
 }
 
 model AgentConversation {
-  id          String         @id @default(cuid())
-  workspaceId String         @map("workspace_id")
-  userId      String         @map("user_id")
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  userId      String   @map("user_id")
   title       String
-  createdAt   DateTime       @default(now()) @map("created_at")
-  updatedAt   DateTime       @updatedAt @map("updated_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -425,6 +485,227 @@ model AgentMessage {
 
   @@index([conversationId, createdAt])
   @@map("agent_messages")
+}
+
+model ScmConnection {
+  id                String              @id @default(cuid())
+  workspaceId       String              @map("workspace_id")
+  provider          ScmProvider
+  externalAccountId String              @map("external_account_id")
+  displayName       String              @map("display_name")
+  status            ScmConnectionStatus @default(ACTIVE)
+  authMode          ScmAuthMode         @map("auth_mode")
+  settings          Json                @default("{}")
+  lastSyncedAt      DateTime?           @map("last_synced_at")
+  lastError         String?             @map("last_error")
+  createdById       String              @map("created_by_id")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  workspace    Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy    User                 @relation("ScmConnectionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  secret       ScmConnectionSecret?
+  repositories ScmRepository[]
+  identities   ScmUserIdentity[]
+  deliveries   ScmWebhookDelivery[]
+
+  @@unique([workspaceId, provider, externalAccountId])
+  @@index([workspaceId, provider, status])
+  @@map("scm_connections")
+}
+
+model ScmConnectionSecret {
+  id             String    @id @default(cuid())
+  connectionId   String    @unique @map("connection_id")
+  encryptedValue String    @map("encrypted_value")
+  keyVersion     Int       @default(1) @map("key_version")
+  expiresAt      DateTime? @map("expires_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  connection ScmConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@map("scm_connection_secrets")
+}
+
+model ScmRepository {
+  id                   String    @id @default(cuid())
+  workspaceId          String    @map("workspace_id")
+  connectionId         String    @map("connection_id")
+  teamId               String?   @map("team_id")
+  externalProjectId    String?   @map("external_project_id")
+  externalRepositoryId String    @map("external_repository_id")
+  name                 String
+  fullName             String    @map("full_name")
+  isPrivate            Boolean   @default(true) @map("is_private")
+  defaultBranch        String?   @map("default_branch")
+  enabled              Boolean   @default(false)
+  archivedAt           DateTime? @map("archived_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  workspace  Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  connection ScmConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  team       Team?         @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  reviews    CodeReview[]
+
+  @@unique([connectionId, externalRepositoryId])
+  @@index([workspaceId, teamId, enabled])
+  @@index([connectionId, archivedAt])
+  @@map("scm_repositories")
+}
+
+model ScmUserIdentity {
+  id                    String    @id @default(cuid())
+  workspaceId           String    @map("workspace_id")
+  connectionId          String    @map("connection_id")
+  userId                String    @map("user_id")
+  externalUserId        String    @map("external_user_id")
+  displayName           String?   @map("display_name")
+  email                 String?
+  accessTokenEncrypted  String?   @map("access_token_encrypted")
+  refreshTokenEncrypted String?   @map("refresh_token_encrypted")
+  tokenExpiresAt        DateTime? @map("token_expires_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  workspace  Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  connection ScmConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, userId])
+  @@unique([connectionId, externalUserId])
+  @@index([workspaceId, userId])
+  @@map("scm_user_identities")
+}
+
+model CodeReview {
+  id                String          @id @default(cuid())
+  workspaceId       String          @map("workspace_id")
+  repositoryId      String          @map("repository_id")
+  externalReviewId  String          @map("external_review_id")
+  number            Int?
+  title             String
+  description       String?
+  state             CodeReviewState
+  isDraft           Boolean         @default(false) @map("is_draft")
+  externalAuthorId  String          @map("external_author_id")
+  authorName        String?         @map("author_name")
+  sourceRef         String          @map("source_ref")
+  targetRef         String          @map("target_ref")
+  headRevision      String          @map("head_revision")
+  latestRevisionKey String          @map("latest_revision_key")
+  remoteUrl         String          @map("remote_url")
+  additions         Int?
+  deletions         Int?
+  changedFiles      Int?            @map("changed_files")
+  externalCreatedAt DateTime        @map("external_created_at")
+  externalUpdatedAt DateTime        @map("external_updated_at")
+  mergedAt          DateTime?       @map("merged_at")
+  closedAt          DateTime?       @map("closed_at")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  workspace  Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  repository ScmRepository         @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  revisions  CodeReviewRevision[]
+  reviewers  CodeReviewReviewer[]
+  issueLinks CodeReviewIssueLink[]
+  viewStates CodeReviewViewState[]
+
+  @@unique([repositoryId, externalReviewId])
+  @@index([workspaceId, state, externalUpdatedAt])
+  @@index([repositoryId, externalUpdatedAt])
+  @@map("code_reviews")
+}
+
+model CodeReviewRevision {
+  id                 String    @id @default(cuid())
+  codeReviewId       String    @map("code_review_id")
+  externalRevisionId String    @map("external_revision_id")
+  sequence           Int?
+  baseRevision       String?   @map("base_revision")
+  headRevision       String    @map("head_revision")
+  externalCreatedAt  DateTime? @map("external_created_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+
+  codeReview CodeReview @relation(fields: [codeReviewId], references: [id], onDelete: Cascade)
+
+  @@unique([codeReviewId, externalRevisionId])
+  @@index([codeReviewId, sequence])
+  @@map("code_review_revisions")
+}
+
+model CodeReviewReviewer {
+  id               String             @id @default(cuid())
+  codeReviewId     String             @map("code_review_id")
+  flowieUserId     String?            @map("flowie_user_id")
+  externalUserId   String             @map("external_user_id")
+  displayName      String?            @map("display_name")
+  reviewerKind     String             @default("USER") @map("reviewer_kind")
+  isRequired       Boolean            @default(false) @map("is_required")
+  decision         CodeReviewDecision @default(NONE)
+  providerDecision String?            @map("provider_decision")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+
+  codeReview CodeReview @relation(fields: [codeReviewId], references: [id], onDelete: Cascade)
+  flowieUser User?      @relation(fields: [flowieUserId], references: [id], onDelete: SetNull)
+
+  @@unique([codeReviewId, externalUserId])
+  @@index([flowieUserId, decision])
+  @@map("code_review_reviewers")
+}
+
+model CodeReviewIssueLink {
+  workspaceId  String               @map("workspace_id")
+  codeReviewId String               @map("code_review_id")
+  issueId      String               @map("issue_id")
+  source       CodeReviewLinkSource @default(MANUAL)
+  createdById  String               @map("created_by_id")
+  createdAt    DateTime             @default(now()) @map("created_at")
+
+  workspace  Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  codeReview CodeReview @relation(fields: [codeReviewId], references: [id], onDelete: Cascade)
+  issue      Issue      @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  createdBy  User       @relation("CodeReviewIssueLinkCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@id([codeReviewId, issueId])
+  @@index([workspaceId, issueId])
+  @@map("code_review_issue_links")
+}
+
+model CodeReviewViewState {
+  codeReviewId       String   @map("code_review_id")
+  userId             String   @map("user_id")
+  lastViewedRevision String?  @map("last_viewed_revision")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  codeReview CodeReview @relation(fields: [codeReviewId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([codeReviewId, userId])
+  @@index([userId, updatedAt])
+  @@map("code_review_view_states")
+}
+
+model ScmWebhookDelivery {
+  id                 String            @id @default(cuid())
+  connectionId       String            @map("connection_id")
+  externalDeliveryId String            @map("external_delivery_id")
+  eventType          String            @map("event_type")
+  action             String?
+  status             ScmDeliveryStatus @default(PENDING)
+  payloadHash        String            @map("payload_hash")
+  attempts           Int               @default(0)
+  lastError          String?           @map("last_error")
+  receivedAt         DateTime          @default(now()) @map("received_at")
+  processedAt        DateTime?         @map("processed_at")
+
+  connection ScmConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, externalDeliveryId])
+  @@index([status, receivedAt])
+  @@map("scm_webhook_deliveries")
 }
 
 model DiscordWebhook {
@@ -485,6 +766,7 @@ model Team {
   documentFolders      DocumentFolder[]
   slaPolicies          SlaPolicy[]
   asks                 Ask[]
+  scmRepositories      ScmRepository[]
   parentTeam           Team?            @relation("TeamHierarchy", fields: [parentTeamId], references: [id], onDelete: SetNull)
   childTeams           Team[]           @relation("TeamHierarchy")
   defaultIssueTemplate IssueTemplate?   @relation(fields: [defaultIssueTemplateId], references: [id], onDelete: SetNull)
@@ -738,8 +1020,8 @@ model Initiative {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  workspace    Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  owner        User?                @relation("InitiativeOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  workspace    Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  owner        User?                 @relation("InitiativeOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   projectLinks InitiativeProject[]
   labelLinks   InitiativeLabelLink[]
   updates      InitiativeUpdate[]
@@ -988,46 +1270,46 @@ model IssueTemplate {
 }
 
 model Issue {
-  id            String           @id @default(cuid())
-  workspaceId   String           @map("workspace_id")
-  teamId        String           @map("team_id")
-  statusId      String           @map("status_id")
-  projectId     String?          @map("project_id")
-  parentIssueId String?          @map("parent_issue_id")
-  duplicateOfId String?          @map("duplicate_of_id")
-  identifier    String
-  number        Int
-  title         String
-  description   String?
-  priority      IssuePriority    @default(NONE)
-  resolution    IssueResolution?
-  estimatedEffort Float?         @map("estimated_effort")
-  actualEffort    Float?         @map("actual_effort")
-  startDate     DateTime?        @map("start_date")
-  targetDate    DateTime?        @map("target_date")
-  dueDate       DateTime?        @map("due_date")
-  creatorId     String           @map("creator_id")
-  assigneeId    String?          @map("assignee_id")
-  completedAt   DateTime?        @map("completed_at")
-  canceledAt    DateTime?        @map("canceled_at")
-  archivedAt    DateTime?        @map("archived_at")
-  createdAt     DateTime         @default(now()) @map("created_at")
-  updatedAt     DateTime         @updatedAt @map("updated_at")
+  id              String           @id @default(cuid())
+  workspaceId     String           @map("workspace_id")
+  teamId          String           @map("team_id")
+  statusId        String           @map("status_id")
+  projectId       String?          @map("project_id")
+  parentIssueId   String?          @map("parent_issue_id")
+  duplicateOfId   String?          @map("duplicate_of_id")
+  identifier      String
+  number          Int
+  title           String
+  description     String?
+  priority        IssuePriority    @default(NONE)
+  resolution      IssueResolution?
+  estimatedEffort Float?           @map("estimated_effort")
+  actualEffort    Float?           @map("actual_effort")
+  startDate       DateTime?        @map("start_date")
+  targetDate      DateTime?        @map("target_date")
+  dueDate         DateTime?        @map("due_date")
+  creatorId       String           @map("creator_id")
+  assigneeId      String?          @map("assignee_id")
+  completedAt     DateTime?        @map("completed_at")
+  canceledAt      DateTime?        @map("canceled_at")
+  archivedAt      DateTime?        @map("archived_at")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
 
-  workspace         Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  team              Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  status            IssueStatus         @relation(fields: [statusId], references: [id], onDelete: Restrict)
-  project           Project?            @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  parentIssue       Issue?              @relation("IssueSubIssues", fields: [parentIssueId], references: [id], onDelete: SetNull)
-  subIssues         Issue[]             @relation("IssueSubIssues")
-  duplicateOf       Issue?              @relation("IssueDuplicates", fields: [duplicateOfId], references: [id], onDelete: SetNull)
-  duplicates        Issue[]             @relation("IssueDuplicates")
-  creator           User                @relation("IssueCreator", fields: [creatorId], references: [id], onDelete: Restrict)
-  assignee          User?               @relation("IssueAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  workspace         Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  team              Team                  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  status            IssueStatus           @relation(fields: [statusId], references: [id], onDelete: Restrict)
+  project           Project?              @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  parentIssue       Issue?                @relation("IssueSubIssues", fields: [parentIssueId], references: [id], onDelete: SetNull)
+  subIssues         Issue[]               @relation("IssueSubIssues")
+  duplicateOf       Issue?                @relation("IssueDuplicates", fields: [duplicateOfId], references: [id], onDelete: SetNull)
+  duplicates        Issue[]               @relation("IssueDuplicates")
+  creator           User                  @relation("IssueCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+  assignee          User?                 @relation("IssueAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   cycleLinks        IssueCycle[]
   releaseLinks      IssueRelease[]
-  outgoingRelations IssueRelation[]     @relation("IssueRelationSource")
-  incomingRelations IssueRelation[]     @relation("IssueRelationTarget")
+  outgoingRelations IssueRelation[]       @relation("IssueRelationSource")
+  incomingRelations IssueRelation[]       @relation("IssueRelationTarget")
   comments          Comment[]
   activities        Activity[]
   labelLinks        IssueLabel[]
@@ -1036,7 +1318,8 @@ model Issue {
   favorites         IssueFavorite[]
   reminders         IssueReminder[]
   customerRequests  CustomerRequest[]
-  convertedAsks     Ask[]               @relation("AskConvertedIssue")
+  convertedAsks     Ask[]                 @relation("AskConvertedIssue")
+  codeReviewLinks   CodeReviewIssueLink[]
 
   @@unique([workspaceId, identifier])
   @@unique([teamId, number])
@@ -1196,11 +1479,11 @@ model Document {
   teamId      String?   @map("team_id")
   folderId    String?   @map("folder_id")
   title       String
-    content     String    @default("")
-    icon        String    @default("📄")
-    sourceType  String    @default("markdown") @map("source_type")
-    sourceUrl   String?   @map("source_url")
-    pinned      Boolean   @default(false)
+  content     String    @default("")
+  icon        String    @default("📄")
+  sourceType  String    @default("markdown") @map("source_type")
+  sourceUrl   String?   @map("source_url")
+  pinned      Boolean   @default(false)
   position    Int       @default(0)
   createdById String    @map("created_by")
   updatedById String    @map("updated_by")
@@ -1313,9 +1596,9 @@ model Label {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  workspace  Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  group      LabelGroup?  @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  issueLinks IssueLabel[]
+  workspace       Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  group           LabelGroup?           @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  issueLinks      IssueLabel[]
   initiativeLinks InitiativeLabelLink[]
 
   @@unique([workspaceId, name])
