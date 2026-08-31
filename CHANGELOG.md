@@ -12,6 +12,9 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Changed
 
+- The Admin Panel now uses the same responsive sidebar, compact header,
+  dashboard cards, tables, spacing, theme controls, and navigation behavior as
+  the rest of the Flowie workspace instead of a separate control-center UI.
 - The login screen now offers Microsoft sign-in when Entra is configured,
   environment administrators can open the Admin Panel from the workspace
   switcher, and Microsoft-managed profiles clearly disable name and avatar
