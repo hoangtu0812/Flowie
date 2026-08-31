@@ -24,6 +24,12 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Users can now sign in with a single-tenant Microsoft Entra ID application.
+  Flowie uses the authorization-code flow with PKCE, identifies accounts by
+  immutable tenant and object IDs, synchronizes display names and profile
+  photos from Microsoft Graph, and treats those profile fields as
+  organization-managed. Platform administrator access is now sourced from
+  the case-insensitive `ADMIN_EMAIL` production setting.
 - The Reviews sidebar is now active and presents GitHub and Azure DevOps work
   together on one screen with provider filters, assigned/created views,
   revision unread markers, reviewer decisions, external-provider handoff, and

@@ -10,10 +10,11 @@ from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import jwt
+import httpx
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
@@ -22,11 +23,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.config import Settings
 from ..core.errors import ApiError
 from ..db.session import get_session
+from ..services.microsoft_identity import MicrosoftIdentityClient, MicrosoftProfile
 from ..services.registration_verification import RegistrationDeliveryError, deliver_registration_code
+from ..storage.minio import MinioStorage
 from .workflow_catalog import DEFAULT_CIRCLE_ISSUE_STATUSES
 
 router = APIRouter(prefix='/api/v1/auth', tags=['auth'])
 password_hasher = PasswordHasher()
+MICROSOFT_FLOW_COOKIE = 'flowie_microsoft_flow'
+MICROSOFT_FLOW_TTL_SECONDS = 10 * 60
 
 USER_COLUMNS = '''
     id, email, name, username, title, timezone, avatar_url, password_hash,
@@ -139,6 +144,59 @@ def _normalized_name(value: str) -> str:
     if not 2 <= len(name) <= 120:
         raise ApiError(400, 'name must be longer than or equal to 2 characters', 'Bad Request')
     return name
+
+
+def _safe_app_path(value: str | None) -> str | None:
+    if not value or not value.startswith('/') or value.startswith('//'):
+        return None
+    return value[:2048]
+
+
+def _is_environment_admin(email: str, settings: Settings) -> bool:
+    return bool(settings.admin_email and email.strip().lower() == settings.admin_email)
+
+
+def _runtime_user(row: Any, settings: Settings) -> dict[str, Any]:
+    user = dict(row)
+    user['is_platform_admin'] = _is_environment_admin(str(user['email']), settings)
+    return user
+
+
+def _microsoft_client(settings: Settings) -> MicrosoftIdentityClient:
+    return MicrosoftIdentityClient(
+        tenant_id=settings.azure_ad_tenant_id,
+        client_id=settings.azure_ad_client_id,
+        client_secret=settings.azure_ad_client_secret,
+        redirect_uri=settings.azure_ad_redirect_uri,
+    )
+
+
+def _microsoft_flow_token(
+    flow: dict[str, Any], *, next_path: str | None, timezone_name: str | None, settings: Settings
+) -> str:
+    now = datetime.now(timezone.utc)
+    stored_flow = {key: value for key, value in flow.items() if key != 'auth_uri'}
+    return jwt.encode(
+        {
+            'flow': stored_flow,
+            'next': next_path,
+            'timezone': timezone_name,
+            'iat': now,
+            'exp': now + timedelta(seconds=MICROSOFT_FLOW_TTL_SECONDS),
+        },
+        settings.auth_jwt_secret,
+        algorithm='HS256',
+    )
+
+
+def _decode_microsoft_flow(token: str, settings: Settings) -> dict[str, Any]:
+    try:
+        payload = jwt.decode(token, settings.auth_jwt_secret, algorithms=['HS256'])
+    except jwt.PyJWTError as error:
+        raise ApiError(400, 'The Microsoft sign-in request has expired.', 'Bad Request') from error
+    if not isinstance(payload.get('flow'), dict):
+        raise ApiError(400, 'The Microsoft sign-in request is invalid.', 'Bad Request')
+    return payload
 
 
 def _authenticated_user(row: Any) -> dict[str, Any]:
@@ -371,7 +429,7 @@ async def current_user(
     user = await _find_user_by_id(db, user_id)
     if not user or user['status'] != 'ACTIVE':
         raise ApiError(401, 'Your session has expired. Please sign in again.', 'Unauthorized')
-    return user
+    return _runtime_user(user, request.app.state.settings)
 
 
 @router.post('/register', status_code=202)
@@ -509,7 +567,7 @@ async def verify_registration(
             'timezone': pending['timezone'],
             'avatar_url': None,
             'password_hash': pending['password_hash'],
-            'is_platform_admin': False,
+            'is_platform_admin': _is_environment_admin(email, request.app.state.settings),
             'email_verified_at': now,
             'status': 'ACTIVE',
             'created_at': now,
@@ -553,6 +611,245 @@ async def verify_registration(
     return response
 
 
+async def _upsert_microsoft_user(
+    db: AsyncSession,
+    profile: MicrosoftProfile,
+    *,
+    timezone_name: str | None,
+    settings: Settings,
+) -> str:
+    provider_account_id = f'{profile.tenant_id.lower()}:{profile.object_id.lower()}'
+    now = _utcnow()
+    async with db.begin():
+        identity = await db.execute(
+            text(
+                '''SELECT users.id, users.email, users.name, users.username, users.title,
+                           users.timezone, users.avatar_url, users.password_hash,
+                           users.is_platform_admin, users.email_verified_at, users.status,
+                           users.created_at
+                    FROM user_identities identity
+                    JOIN users ON users.id = identity.user_id
+                    WHERE identity.provider = 'MICROSOFT'
+                      AND identity.provider_account_id = :provider_account_id
+                    FOR UPDATE OF users'''
+            ),
+            {'provider_account_id': provider_account_id},
+        )
+        user = identity.mappings().first()
+        if not user:
+            user = await _find_user_by_email(db, profile.email)
+            if user:
+                await db.execute(
+                    text(
+                        '''INSERT INTO user_identities (
+                               id, user_id, provider, provider_account_id, email, tenant_id,
+                               created_at, updated_at
+                           ) VALUES (
+                               :id, :user_id, 'MICROSOFT', :provider_account_id, :email,
+                               :tenant_id, :now, :now
+                           )'''
+                    ),
+                    {
+                        'id': _cuid(),
+                        'user_id': user['id'],
+                        'provider_account_id': provider_account_id,
+                        'email': profile.email,
+                        'tenant_id': profile.tenant_id,
+                        'now': now,
+                    },
+                )
+            else:
+                user_id = _cuid()
+                await db.execute(
+                    text(
+                        '''INSERT INTO users (
+                               id, email, name, timezone, password_hash, is_platform_admin,
+                               email_verified_at, status, created_at, updated_at, last_login_at,
+                               last_seen_at
+                           ) VALUES (
+                               :id, :email, :name, :timezone, NULL, :is_platform_admin,
+                               :now, 'ACTIVE', :now, :now, :now, :now
+                           )'''
+                    ),
+                    {
+                        'id': user_id,
+                        'email': profile.email,
+                        'name': profile.name,
+                        'timezone': timezone_name or 'UTC',
+                        'is_platform_admin': _is_environment_admin(profile.email, settings),
+                        'now': now,
+                    },
+                )
+                await db.execute(
+                    text(
+                        '''INSERT INTO user_identities (
+                               id, user_id, provider, provider_account_id, email, tenant_id,
+                               created_at, updated_at
+                           ) VALUES (
+                               :id, :user_id, 'MICROSOFT', :provider_account_id, :email,
+                               :tenant_id, :now, :now
+                           )'''
+                    ),
+                    {
+                        'id': _cuid(),
+                        'user_id': user_id,
+                        'provider_account_id': provider_account_id,
+                        'email': profile.email,
+                        'tenant_id': profile.tenant_id,
+                        'now': now,
+                    },
+                )
+                await create_workspace_bootstrap(
+                    db,
+                    user_id=user_id,
+                    organization_name=f"{profile.name}'s organization",
+                    workspace_name=f"{profile.name}'s workspace",
+                    now=now,
+                )
+                return user_id
+
+        if user['status'] != 'ACTIVE':
+            raise ApiError(403, 'This Flowie account is not active.', 'Forbidden')
+        await db.execute(
+            text(
+                '''UPDATE users SET name = :name, timezone = COALESCE(:timezone, timezone),
+                       is_platform_admin = :is_platform_admin, email_verified_at = COALESCE(email_verified_at, :now),
+                       last_login_at = :now, last_seen_at = :now, updated_at = :now
+                   WHERE id = :id'''
+            ),
+            {
+                'id': user['id'],
+                'name': profile.name,
+                'timezone': timezone_name,
+                'is_platform_admin': _is_environment_admin(str(user['email']), settings),
+                'now': now,
+            },
+        )
+        await db.execute(
+            text(
+                '''UPDATE user_identities SET email = :email, tenant_id = :tenant_id, updated_at = :now
+                   WHERE provider = 'MICROSOFT' AND provider_account_id = :provider_account_id'''
+            ),
+            {
+                'provider_account_id': provider_account_id,
+                'email': profile.email,
+                'tenant_id': profile.tenant_id,
+                'now': now,
+            },
+        )
+        return str(user['id'])
+
+
+@router.get('/providers')
+async def auth_providers(request: Request) -> dict[str, dict[str, dict[str, bool]]]:
+    return {'data': {'microsoft': {'enabled': _microsoft_client(request.app.state.settings).enabled}}}
+
+
+@router.get('/microsoft/start')
+async def microsoft_start(
+    request: Request,
+    next_path: str | None = Query(default=None, alias='next', max_length=2048),
+    timezone_name: str | None = Query(default=None, alias='timezone', max_length=100),
+) -> RedirectResponse:
+    settings = request.app.state.settings
+    client = _microsoft_client(settings)
+    try:
+        valid_timezone = _valid_timezone(timezone_name)
+        flow = await client.initiate_flow()
+    except RuntimeError as error:
+        raise ApiError(503, str(error), 'Service Unavailable') from error
+    auth_uri = flow.get('auth_uri')
+    if not isinstance(auth_uri, str):
+        raise ApiError(502, 'Microsoft sign-in could not be started.', 'Bad Gateway')
+    token = _microsoft_flow_token(
+        flow,
+        next_path=_safe_app_path(next_path),
+        timezone_name=valid_timezone,
+        settings=settings,
+    )
+    response = RedirectResponse(auth_uri, status_code=302)
+    response.set_cookie(
+        MICROSOFT_FLOW_COOKIE,
+        token,
+        max_age=MICROSOFT_FLOW_TTL_SECONDS,
+        httponly=True,
+        secure=settings.auth_cookie_secure,
+        samesite='lax',
+        path='/api/v1/auth/microsoft',
+    )
+    return response
+
+
+@router.get('/microsoft/callback')
+async def microsoft_callback(
+    request: Request, db: AsyncSession = Depends(get_session)
+) -> RedirectResponse:
+    settings = request.app.state.settings
+    flow_cookie = request.cookies.get(MICROSOFT_FLOW_COOKIE)
+    if not flow_cookie:
+        raise ApiError(400, 'The Microsoft sign-in request has expired.', 'Bad Request')
+    stored = _decode_microsoft_flow(flow_cookie, settings)
+    client = _microsoft_client(settings)
+    try:
+        profile, graph_token = await client.complete_flow(
+            stored['flow'], dict(request.query_params)
+        )
+        user_id = await _upsert_microsoft_user(
+            db,
+            profile,
+            timezone_name=stored.get('timezone'),
+            settings=settings,
+        )
+    except (RuntimeError, ValueError, httpx.HTTPError, IntegrityError) as error:
+        await db.rollback()
+        login = RedirectResponse(
+            f'{settings.app_url}/auth/login?azure_error=Microsoft+sign-in+could+not+be+completed.',
+            status_code=302,
+        )
+        login.delete_cookie(MICROSOFT_FLOW_COOKIE, path='/api/v1/auth/microsoft')
+        return login
+
+    # A transient Graph or object-storage failure must not turn identity login
+    # into an outage. A 404 is authoritative and clears the previous photo.
+    try:
+        photo = await client.download_photo(graph_token)
+        avatar_url: str | None = None
+        if photo:
+            avatar_url = f'avatars/{user_id}/microsoft-profile.{photo.extension}'
+            await MinioStorage(settings).put(
+                avatar_url, photo.body, photo.content_type
+            )
+        await db.execute(
+            text(
+                'UPDATE users SET avatar_url = :avatar_url, updated_at = :now WHERE id = :id'
+            ),
+            {'id': user_id, 'avatar_url': avatar_url, 'now': _utcnow()},
+        )
+        await db.commit()
+    except (httpx.HTTPError, ValueError, ApiError):
+        await db.rollback()
+
+    user = await _find_user_by_id(db, user_id)
+    if not user or user['status'] != 'ACTIVE':
+        raise ApiError(403, 'This Flowie account is not active.', 'Forbidden')
+    user = _runtime_user(user, settings)
+    access_token, refresh_token, data = await _create_session(db, user, request, settings)
+    await db.commit()
+    next_path = _safe_app_path(stored.get('next'))
+    if next_path:
+        destination = next_path
+    elif data['workspace']:
+        destination = f"/{data['workspace']['slug']}/teams"
+    elif user['is_platform_admin']:
+        destination = '/admin'
+    else:
+        destination = '/invitations'
+    response = RedirectResponse(f'{settings.app_url}{destination}', status_code=302)
+    response.delete_cookie(MICROSOFT_FLOW_COOKIE, path='/api/v1/auth/microsoft')
+    _set_cookies(response, access_token, refresh_token, settings)
+    return response
+
+
 @router.post('/login')
 async def login(payload: LoginInput, request: Request, db: AsyncSession = Depends(get_session)) -> JSONResponse:
     email = _normalized_email(payload.email)
@@ -568,10 +865,19 @@ async def login(payload: LoginInput, request: Request, db: AsyncSession = Depend
     if not password_matches:
         raise ApiError(401, 'Invalid email or password.', 'Unauthorized')
 
+    user = _runtime_user(user, request.app.state.settings)
     timezone_name = _valid_timezone(payload.timezone)
     await db.execute(
-        text('UPDATE users SET last_login_at = :now, last_seen_at = :now, timezone = COALESCE(:timezone, timezone), updated_at = :now WHERE id = :id'),
-        {'id': user['id'], 'now': _utcnow(), 'timezone': timezone_name},
+        text('''UPDATE users SET last_login_at = :now, last_seen_at = :now,
+                    timezone = COALESCE(:timezone, timezone),
+                    is_platform_admin = :is_platform_admin, updated_at = :now
+                WHERE id = :id'''),
+        {
+            'id': user['id'],
+            'now': _utcnow(),
+            'timezone': timezone_name,
+            'is_platform_admin': user['is_platform_admin'],
+        },
     )
     access_token, refresh_token, data = await _create_session(db, user, request, request.app.state.settings)
     await db.commit()
@@ -623,6 +929,7 @@ async def refresh(
     user = result.mappings().first()
     if not user or user['status'] != 'ACTIVE':
         raise ApiError(401, 'Your session has expired. Please sign in again.', 'Unauthorized')
+    user = _runtime_user(user, request.app.state.settings)
     await db.execute(text('UPDATE sessions SET revoked_at = :now, last_used_at = :now WHERE id = :id'), {'id': user['session_id'], 'now': now})
     access_token, new_refresh_token, data = await _create_session(db, user, request, request.app.state.settings)
     await db.commit()

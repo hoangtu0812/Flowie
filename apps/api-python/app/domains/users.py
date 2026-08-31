@@ -42,7 +42,7 @@ class ProfileUpdate(BaseModel):
     timezone: str | None = Field(default=None, max_length=100)
 
 
-def _profile(row: object) -> dict[str, object]:
+def _profile(row: object, profile_managed_by: str | None = None) -> dict[str, object]:
     stored_avatar_url = row['avatar_url']
     return {
         'id': row['id'],
@@ -53,12 +53,27 @@ def _profile(row: object) -> dict[str, object]:
         'timezone': row['timezone'],
         'avatarUrl': f'/users/{row["id"]}/avatar' if stored_avatar_url and stored_avatar_url.startswith(AVATAR_PREFIX) else stored_avatar_url,
         'createdAt': row['created_at'],
+        'isPlatformAdmin': bool(row.get('is_platform_admin', False)),
+        'profileManagedBy': profile_managed_by,
     }
 
 
+async def _profile_managed_by(db: AsyncSession, user_id: str) -> str | None:
+    result = await db.execute(
+        text(
+            """SELECT provider::text FROM user_identities
+               WHERE user_id = :user_id AND provider = 'MICROSOFT' LIMIT 1"""
+        ),
+        {'user_id': user_id},
+    )
+    return result.scalar_one_or_none()
+
+
 @router.get('/me')
-async def me(user: object = Depends(current_user)) -> dict[str, object]:
-    return {'data': _profile(user)}
+async def me(
+    user: object = Depends(current_user), db: AsyncSession = Depends(get_session)
+) -> dict[str, object]:
+    return {'data': _profile(user, await _profile_managed_by(db, user['id']))}
 
 
 @router.patch('/me')
@@ -68,8 +83,15 @@ async def update_me(
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, object]:
     values = payload.model_dump(exclude_unset=True)
+    profile_managed_by = await _profile_managed_by(db, user['id'])
     if not values:
-        return {'data': _profile(user)}
+        return {'data': _profile(user, profile_managed_by)}
+    if profile_managed_by == 'MICROSOFT' and {'name', 'avatarUrl'} & values.keys():
+        raise ApiError(
+            409,
+            'Name and profile picture are managed by Microsoft Entra ID.',
+            'Conflict',
+        )
     if 'timezone' in values and values['timezone'] is not None:
         try:
             ZoneInfo(values['timezone'])
@@ -90,7 +112,7 @@ async def update_me(
         params[field] = value
         updates.append(f'{column} = :{field}')
     if not updates:
-        return {'data': _profile(user)}
+        return {'data': _profile(user, profile_managed_by)}
     updates.append('updated_at = CURRENT_TIMESTAMP')
     try:
         result = await db.execute(
@@ -104,7 +126,7 @@ async def update_me(
     except Exception as error:
         await db.rollback()
         raise ApiError(409, 'The profile could not be updated.', 'Conflict') from error
-    return {'data': _profile(result.mappings().one())}
+    return {'data': _profile(result.mappings().one(), profile_managed_by)}
 
 
 @router.post('/me/avatar')
@@ -114,6 +136,12 @@ async def upload_avatar(
     user: object = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, object]:
+    if await _profile_managed_by(db, user['id']) == 'MICROSOFT':
+        raise ApiError(
+            409,
+            'The profile picture is managed by Microsoft Entra ID.',
+            'Conflict',
+        )
     body = await file.read(MAX_AVATAR_BYTES + 1)
     if not body:
         raise ApiError(400, 'An image is required.', 'Bad Request')

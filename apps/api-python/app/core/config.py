@@ -36,10 +36,16 @@ class Settings:
     s3_bucket: str
     s3_region: str
     database_url: str
+    app_url: str
     auth_jwt_secret: str
     auth_access_token_ttl_seconds: int
     auth_refresh_token_ttl_days: int
     auth_cookie_secure: bool
+    admin_email: str
+    azure_ad_tenant_id: str
+    azure_ad_client_id: str
+    azure_ad_client_secret: str
+    azure_ad_redirect_uri: str
     discord_bot_token: str
     discord_bot_channel_id: str
     discord_bot_guild_id: str
@@ -69,10 +75,19 @@ class Settings:
             s3_bucket=getenv('S3_BUCKET', 'flowie'),
             s3_region=getenv('S3_REGION', 'us-east-1'),
             database_url=_async_database_url(getenv('DATABASE_URL', 'postgresql://circle:circle@circle-postgres:5432/circle')),
+            app_url=getenv('APP_URL', 'http://localhost:3000').rstrip('/'),
             auth_jwt_secret=getenv('AUTH_JWT_SECRET', 'development-only-change-me'),
             auth_access_token_ttl_seconds=int(getenv('AUTH_ACCESS_TOKEN_TTL_SECONDS', '900')),
             auth_refresh_token_ttl_days=int(getenv('AUTH_REFRESH_TOKEN_TTL_DAYS', '30')),
             auth_cookie_secure=getenv('AUTH_COOKIE_SECURE', 'false').lower() == 'true',
+            admin_email=getenv('ADMIN_EMAIL', '').strip().lower(),
+            azure_ad_tenant_id=getenv('AZURE_AD_TENANT_ID', '').strip(),
+            azure_ad_client_id=getenv('AZURE_AD_CLIENT_ID', '').strip(),
+            azure_ad_client_secret=getenv('AZURE_AD_CLIENT_SECRET', '').strip(),
+            azure_ad_redirect_uri=getenv(
+                'AZURE_AD_REDIRECT_URI',
+                'http://localhost:4000/api/v1/auth/microsoft/callback',
+            ).strip(),
             discord_bot_token=getenv('DISCORD_BOT_TOKEN', '').strip(),
             discord_bot_channel_id=getenv('DISCORD_BOT_CHANNEL_ID', '').strip(),
             discord_bot_guild_id=getenv('DISCORD_BOT_GUILD_ID', '').strip(),

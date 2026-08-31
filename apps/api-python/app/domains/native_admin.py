@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Request
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,8 +18,9 @@ UserStatus = Literal['ACTIVE', 'INVITED', 'SUSPENDED', 'DISABLED']
 
 
 class UpdateAdminUserInput(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
     status: UserStatus | None = None
-    isPlatformAdmin: bool | None = None
 
 
 async def _platform_admin(user: Any) -> None:
@@ -29,13 +30,13 @@ async def _platform_admin(user: Any) -> None:
         raise ApiError(403, 'Platform administrator access is required.', 'Forbidden')
 
 
-def _admin_user(row: Any) -> dict[str, Any]:
+def _admin_user(row: Any, admin_email: str) -> dict[str, Any]:
     return {
         'id': row['id'],
         'name': row['name'],
         'email': row['email'],
         'status': row['status'],
-        'isPlatformAdmin': row['is_platform_admin'],
+        'isPlatformAdmin': bool(admin_email and row['email'].strip().lower() == admin_email),
         'createdAt': row['created_at'],
         'lastLoginAt': row['last_login_at'],
         '_count': {'memberships': row['memberships'], 'organizations': row['organizations']},
@@ -80,11 +81,18 @@ async def overview(
 
 @router.get('/users')
 async def users(
-    user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)
+    request: Request,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
 ) -> dict[str, list[dict[str, Any]]]:
     await _platform_admin(user)
     result = await db.execute(text(f'{ADMIN_USER_QUERY} ORDER BY u.created_at DESC'))
-    return {'data': [_admin_user(row) for row in result.mappings().all()]}
+    return {
+        'data': [
+            _admin_user(row, request.app.state.settings.admin_email)
+            for row in result.mappings().all()
+        ]
+    }
 
 
 @router.get('/workspaces')
@@ -163,6 +171,7 @@ async def audit_logs(
 async def update_user(
     user_id: str,
     payload: UpdateAdminUserInput,
+    request: Request,
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
@@ -174,24 +183,20 @@ async def update_user(
             'Bad Request',
         )
     target = await db.execute(
-        text('SELECT id, status, is_platform_admin FROM users WHERE id = :id'), {'id': user_id}
+        text('SELECT id, email, status, is_platform_admin FROM users WHERE id = :id'), {'id': user_id}
     )
     row = target.mappings().first()
     if not row:
         raise ApiError(404, 'User not found.', 'Not Found')
 
-    # The platform must keep at least one administrator, and an administrator
-    # cannot be locked out while still holding the role.
-    if payload.isPlatformAdmin is False and row['is_platform_admin']:
-        remaining = await db.execute(
-            text('SELECT COUNT(*)::int FROM users WHERE is_platform_admin = TRUE')
-        )
-        if remaining.scalar_one() <= 1:
-            raise ApiError(400, 'The final platform administrator cannot be demoted.', 'Bad Request')
-    if payload.status and payload.status != 'ACTIVE' and row['is_platform_admin']:
+    is_environment_admin = bool(
+        request.app.state.settings.admin_email
+        and row['email'].strip().lower() == request.app.state.settings.admin_email
+    )
+    if payload.status and payload.status != 'ACTIVE' and is_environment_admin:
         raise ApiError(
             400,
-            'Demote this platform administrator before changing their status.',
+            'The ADMIN_EMAIL account cannot be suspended or disabled.',
             'Bad Request',
         )
 
@@ -200,9 +205,6 @@ async def update_user(
     if payload.status:
         sets.append('status = :status')
         params['status'] = payload.status
-    if payload.isPlatformAdmin is not None:
-        sets.append('is_platform_admin = :is_platform_admin')
-        params['is_platform_admin'] = payload.isPlatformAdmin
     if sets:
         await db.execute(text(f"UPDATE users SET {', '.join(sets)} WHERE id = :id"), params)
     if payload.status and payload.status != 'ACTIVE':
@@ -222,11 +224,15 @@ async def update_user(
             'actor_id': user['id'],
             'entity_id': user_id,
             'metadata': json.dumps(
-                {'status': payload.status, 'isPlatformAdmin': payload.isPlatformAdmin}
+                {'status': payload.status}
             ),
             'now': now,
         },
     )
     await db.commit()
     updated = await db.execute(text(f'{ADMIN_USER_QUERY} WHERE u.id = :id'), {'id': user_id})
-    return {'data': _admin_user(updated.mappings().one())}
+    return {
+        'data': _admin_user(
+            updated.mappings().one(), request.app.state.settings.admin_email
+        )
+    }
