@@ -28,6 +28,9 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- A Microsoft Entra login runbook now documents the single-tenant app
+  registration, least-privilege Graph permission, CT107 environment values,
+  identity/profile invariants, secret rotation, and production verification.
 - Users can now sign in with a single-tenant Microsoft Entra ID application.
   Flowie uses the authorization-code flow with PKCE, identifies accounts by
   immutable tenant and object IDs, synchronizes display names and profile
