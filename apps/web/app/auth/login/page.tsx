@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { AuthCard } from '@/components/auth/auth-card';
@@ -20,6 +20,32 @@ export default function LoginPage() {
    const searchParams = useSearchParams();
    const [error, setError] = useState<string | null>(null);
    const [isSubmitting, setIsSubmitting] = useState(false);
+   const [microsoftEnabled, setMicrosoftEnabled] = useState(false);
+   const [timezone, setTimezone] = useState('UTC');
+
+   useEffect(() => {
+      setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+      const microsoftError = searchParams.get('azure_error');
+      if (microsoftError) setError(microsoftError);
+      void fetch(`${apiUrl}/auth/providers`)
+         .then(async (response) => {
+            if (!response.ok) return;
+            const payload = (await response.json()) as {
+               data?: { microsoft?: { enabled?: boolean } };
+            };
+            setMicrosoftEnabled(Boolean(payload.data?.microsoft?.enabled));
+         })
+         .catch(() => undefined);
+   }, [searchParams]);
+
+   const microsoftHref = useMemo(() => {
+      const parameters = new URLSearchParams({
+         timezone,
+      });
+      const next = searchParams.get('next');
+      if (next) parameters.set('next', next);
+      return `${apiUrl}/auth/microsoft/start?${parameters.toString()}`;
+   }, [searchParams, timezone]);
 
    async function onSubmit(event: FormEvent<HTMLFormElement>) {
       event.preventDefault();
@@ -45,9 +71,11 @@ export default function LoginPage() {
          const safeNext = next?.startsWith('/') && !next.startsWith('//') ? next : null;
          router.replace(
             safeNext ??
-               (payload.data.user.isPlatformAdmin
-                  ? '/admin'
-                  : `/${payload.data.workspace?.slug ?? 'flowie'}/teams`)
+               (payload.data.workspace
+                  ? `/${payload.data.workspace.slug}/teams`
+                  : payload.data.user.isPlatformAdmin
+                    ? '/admin'
+                    : '/invitations')
          );
       } catch (caughtError) {
          setError(caughtError instanceof Error ? caughtError.message : 'Không thể đăng nhập.');
@@ -70,6 +98,28 @@ export default function LoginPage() {
             </>
          }
       >
+         {microsoftEnabled && (
+            <>
+               <Button variant="outline" className="w-full" asChild>
+                  <a href={microsoftHref}>
+                     <span aria-hidden="true" className="grid size-4 grid-cols-2 gap-0.5">
+                        <span className="bg-[#f25022]" />
+                        <span className="bg-[#7fba00]" />
+                        <span className="bg-[#00a4ef]" />
+                        <span className="bg-[#ffb900]" />
+                     </span>
+                     Đăng nhập với Microsoft
+                  </a>
+               </Button>
+               <div className="flex items-center gap-3" aria-hidden="true">
+                  <span className="h-px flex-1 bg-border" />
+                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                     hoặc
+                  </span>
+                  <span className="h-px flex-1 bg-border" />
+               </div>
+            </>
+         )}
          <form className="space-y-4" onSubmit={onSubmit}>
             <div className="space-y-2">
                <Label htmlFor="email">Email</Label>

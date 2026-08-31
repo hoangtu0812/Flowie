@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { ChevronsUpDown } from 'lucide-react';
+import { ChevronsUpDown, ShieldCheck } from 'lucide-react';
 
 import {
    DropdownMenu,
@@ -89,6 +89,7 @@ export function OrgSwitcher() {
    const [workspaceName, setWorkspaceName] = React.useState('');
    const [creating, setCreating] = React.useState(false);
    const [workspaceVersion, setWorkspaceVersion] = React.useState(0);
+   const [isPlatformAdmin, setIsPlatformAdmin] = React.useState(false);
 
    React.useEffect(() => {
       const onWorkspaceUpdated = () => setWorkspaceVersion((version) => version + 1);
@@ -103,13 +104,24 @@ export function OrgSwitcher() {
          authenticatedFetch(
             `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'}/workspaces/invitations`
          ),
+         authenticatedFetch(
+            `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'}/users/me`
+         ),
       ])
-         .then(async ([nextMemberships, invitationsResponse]) => {
+         .then(async ([nextMemberships, invitationsResponse, profileResponse]) => {
             if (!current) return;
             setMemberships(nextMemberships);
             if (invitationsResponse.ok) {
                const invitations = (await invitationsResponse.json()) as { data: unknown[] };
                if (current) setInvitationCount(invitations.data.length);
+            }
+            if (profileResponse.ok) {
+               const profile = (await profileResponse.json()) as {
+                  data?: { isPlatformAdmin?: boolean };
+               };
+               if (current) setIsPlatformAdmin(Boolean(profile.data?.isPlatformAdmin));
+            } else if (current) {
+               setIsPlatformAdmin(false);
             }
             const matched = nextMemberships.some(
                ({ workspace }) => workspace.slug === orgId || workspace.id === orgId
@@ -215,6 +227,14 @@ export function OrgSwitcher() {
                                     Invite and manage members
                                  </Link>
                               </DropdownMenuItem>
+                              {isPlatformAdmin && (
+                                 <DropdownMenuItem asChild>
+                                    <Link href="/admin">
+                                       <ShieldCheck className="text-muted-foreground" />
+                                       Go to admin panel
+                                    </Link>
+                                 </DropdownMenuItem>
+                              )}
                            </>
                         ) : (
                            <>

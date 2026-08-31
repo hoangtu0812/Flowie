@@ -119,7 +119,7 @@ export default function AdminPage() {
          : users;
    }, [query, users]);
 
-   async function updateUser(user: User, data: Partial<Pick<User, 'status' | 'isPlatformAdmin'>>) {
+   async function updateUser(user: User, data: Pick<User, 'status'>) {
       setSavingUserId(user.id);
       setError(null);
       try {
@@ -231,7 +231,8 @@ export default function AdminPage() {
                   <div>
                      <CardTitle>Người dùng</CardTitle>
                      <CardDescription>
-                        Khóa/mở khóa tài khoản và cấp hoặc thu hồi quyền platform admin.
+                        Khóa hoặc mở khóa tài khoản. Platform admin được xác định duy nhất bởi biến
+                        môi trường ADMIN_EMAIL.
                      </CardDescription>
                   </div>
                   <Input
@@ -258,7 +259,12 @@ export default function AdminPage() {
                            return (
                               <TableRow key={user.id}>
                                  <TableCell>
-                                    <div className="font-medium">{user.name}</div>
+                                    <div className="flex items-center gap-2 font-medium">
+                                       {user.name}
+                                       {user.isPlatformAdmin && (
+                                          <Badge variant="outline">ADMIN_EMAIL</Badge>
+                                       )}
+                                    </div>
                                     <div className="text-xs text-muted-foreground">
                                        {user.email}
                                     </div>
@@ -279,22 +285,15 @@ export default function AdminPage() {
                                     <div className="flex justify-end gap-2">
                                        <Button
                                           size="sm"
-                                          variant="outline"
-                                          disabled={saving}
-                                          onClick={() =>
-                                             void updateUser(user, {
-                                                isPlatformAdmin: !user.isPlatformAdmin,
-                                             })
-                                          }
-                                       >
-                                          {user.isPlatformAdmin ? 'Thu hồi admin' : 'Cấp admin'}
-                                       </Button>
-                                       <Button
-                                          size="sm"
                                           variant={
                                              user.status === 'ACTIVE' ? 'destructive' : 'outline'
                                           }
-                                          disabled={saving}
+                                          disabled={saving || user.isPlatformAdmin}
+                                          title={
+                                             user.isPlatformAdmin
+                                                ? 'Thay đổi ADMIN_EMAIL trong môi trường triển khai để chuyển quyền quản trị.'
+                                                : undefined
+                                          }
                                           onClick={() =>
                                              void updateUser(user, {
                                                 status:

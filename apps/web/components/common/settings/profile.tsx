@@ -33,6 +33,8 @@ type ProfileData = {
    username: string | null;
    title: string | null;
    avatarUrl: string | null;
+   isPlatformAdmin: boolean;
+   profileManagedBy: 'MICROSOFT' | null;
 };
 
 function avatarColor(name: string) {
@@ -80,6 +82,7 @@ export default function Profile() {
 
    const save = async (field: 'name' | 'title' | 'username') => {
       if (!profile || saving) return;
+      if (field === 'name' && profile.profileManagedBy === 'MICROSOFT') return;
       const value = profile[field]?.trim() ?? '';
       if (field === 'name' && value.length < 2) {
          toast.error('Full name must contain at least 2 characters.');
@@ -160,14 +163,27 @@ export default function Profile() {
 
    const name = profile?.name ?? '';
    const avatar = avatarSource(profile?.avatarUrl);
+   const isMicrosoftManaged = profile?.profileManagedBy === 'MICROSOFT';
 
    return (
       <>
          <SettingsShell title="Profile">
             <SettingsSection>
                <SettingsCard>
+                  {isMicrosoftManaged && (
+                     <SettingsRow
+                        title="Profile source"
+                        description="Name and profile picture are synchronized each time you sign in."
+                        trailing={
+                           <span className="rounded-full border bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
+                              Microsoft Entra ID
+                           </span>
+                        }
+                     />
+                  )}
                   <SettingsRow
                      title="Profile picture"
+                     description={isMicrosoftManaged ? 'Managed by Microsoft Entra ID' : undefined}
                      trailing={
                         <>
                            <Input
@@ -176,13 +192,23 @@ export default function Profile() {
                               accept="image/jpeg,image/png,image/gif,image/webp"
                               className="hidden"
                               onChange={uploadAvatar}
+                              disabled={isMicrosoftManaged}
                            />
                            <button
                               type="button"
-                              onClick={() => avatarInput.current?.click()}
-                              className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                              aria-label="Upload profile picture"
-                              title="Upload profile picture"
+                              onClick={() => !isMicrosoftManaged && avatarInput.current?.click()}
+                              disabled={isMicrosoftManaged}
+                              className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
+                              aria-label={
+                                 isMicrosoftManaged
+                                    ? 'Profile picture managed by Microsoft Entra ID'
+                                    : 'Upload profile picture'
+                              }
+                              title={
+                                 isMicrosoftManaged
+                                    ? 'Managed by Microsoft Entra ID'
+                                    : 'Upload profile picture'
+                              }
                            >
                               <Avatar className="size-9">
                                  <AvatarImage src={avatar} alt={name} />
@@ -216,16 +242,17 @@ export default function Profile() {
                   />
                   <SettingsRow
                      title="Full name"
+                     description={isMicrosoftManaged ? 'Managed by Microsoft Entra ID' : undefined}
                      trailing={
                         <Input
                            value={name}
-                           disabled={!profile || saving}
+                           disabled={!profile || saving || isMicrosoftManaged}
                            onChange={(event) =>
                               setProfile((current) =>
                                  current ? { ...current, name: event.target.value } : current
                               )
                            }
-                           onBlur={() => save('name')}
+                           onBlur={() => !isMicrosoftManaged && save('name')}
                            onKeyDown={submitOnEnter}
                            className="h-8 w-44"
                         />

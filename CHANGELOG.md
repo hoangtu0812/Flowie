@@ -12,6 +12,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Changed
 
+- The login screen now offers Microsoft sign-in when Entra is configured,
+  environment administrators can open the Admin Panel from the workspace
+  switcher, and Microsoft-managed profiles clearly disable name and avatar
+  editing while keeping personal title and username fields available.
 - Reviews webhook processing now renews expiring GitHub installation and Azure
   workload tokens during long synchronizations, uses reclaimable processing
   leases, and clears raw provider payloads after processing or terminal
