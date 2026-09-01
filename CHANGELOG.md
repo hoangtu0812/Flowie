@@ -10,6 +10,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+## [0.4.0] — 2026-09-01 10:59 +07
+
 ### Changed
 
 - The Admin Panel now uses the same responsive sidebar, compact header,
