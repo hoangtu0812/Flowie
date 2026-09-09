@@ -711,12 +711,14 @@ model ScmWebhookDelivery {
 }
 
 model DiscordWebhook {
-  id          String   @id @default(cuid())
-  workspaceId String   @unique @map("workspace_id")
-  webhookUrl  String   @map("webhook_url")
-  enabled     Boolean  @default(true)
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id                 String    @id @default(cuid())
+  workspaceId        String    @unique @map("workspace_id")
+  webhookUrl         String    @map("webhook_url")
+  enabled            Boolean   @default(true)
+  dailyDigestEnabled Boolean   @default(false) @map("daily_digest_enabled")
+  dailyDigestSentAt  DateTime? @map("daily_digest_sent_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 

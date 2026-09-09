@@ -41,9 +41,12 @@ from .domains.native_projects import router as native_projects_router
 from .domains.native_releases import router as releases_router
 from .domains.labels import router as labels_router
 from .domains.teams import router as teams_router
+from .domains.team_insights import digest_router as digest_router
+from .domains.team_insights import router as team_insights_router
 from .domains.users import router as users_router
 from .domains.workspaces import router as workspaces_router
 from .jobs.reminders import reminder_loop
+from .jobs.digest import digest_loop
 from .domains.scm.router import router as scm_router
 from .domains.scm.router import webhook_router as scm_webhook_router
 from .jobs.scm_deliveries import scm_delivery_loop
@@ -59,14 +62,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.session_factory = session_factory
         reminder_stop = asyncio.Event()
         reminder_task = asyncio.create_task(reminder_loop(session_factory, reminder_stop))
+        digest_stop = asyncio.Event()
+        digest_task = asyncio.create_task(digest_loop(session_factory, digest_stop))
         scm_stop = asyncio.Event()
         scm_task = asyncio.create_task(scm_delivery_loop(session_factory, runtime, scm_stop))
         try:
             yield
         finally:
             reminder_stop.set()
+            digest_stop.set()
             scm_stop.set()
             await reminder_task
+            await digest_task
             await scm_task
             await engine.dispose()
 
@@ -110,6 +117,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(releases_router)
     app.include_router(labels_router)
     app.include_router(teams_router)
+    app.include_router(team_insights_router)
+    app.include_router(digest_router)
     app.include_router(users_router)
     app.include_router(workspaces_router)
     app.include_router(scm_router)

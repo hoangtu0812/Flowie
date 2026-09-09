@@ -10,6 +10,18 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+## [0.7.0] — 2026-09-09 23:19 +07
+
+### Added
+
+- Team workload insights: each team members page now shows a deterministic
+  load score per member (open effort, priority pressure, overdue items against
+  demonstrated velocity) with rule-based assignment suggestions for unassigned
+  issues that can be applied in one click.
+- Daily Discord digest: workspaces can opt in to a per-project progress report
+  posted every day at 08:00 (GMT+7), covering on-track, needs-attention and
+  overdue work plus recommended actions.
+
 ## [0.6.0] — 2026-09-09 19:52 +07
 
 ### Added

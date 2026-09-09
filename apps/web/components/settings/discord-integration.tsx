@@ -18,6 +18,7 @@ const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 export type DiscordStatus = {
    enabled: boolean;
+   dailyDigestEnabled: boolean;
    webhookUrlMasked: string;
    updatedAt: string;
 } | null;
@@ -39,6 +40,7 @@ export function DiscordIntegration({
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [url, setUrl] = useState('');
    const [enabled, setEnabled] = useState(true);
+   const [dailyDigestEnabled, setDailyDigestEnabled] = useState(false);
    const [message, setMessage] = useState<string>();
    const [saving, setSaving] = useState(false);
    const [configured, setConfigured] = useState(false);
@@ -51,6 +53,7 @@ export function DiscordIntegration({
             if (status) {
                setConfigured(true);
                setEnabled(status.enabled);
+               setDailyDigestEnabled(status.dailyDigestEnabled);
             }
          })
          .catch(() => setMessage('Could not load the Discord integration.'));
@@ -66,7 +69,11 @@ export function DiscordIntegration({
          {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ ...(url ? { webhookUrl: url } : {}), enabled }),
+            body: JSON.stringify({
+               ...(url ? { webhookUrl: url } : {}),
+               enabled,
+               dailyDigestEnabled,
+            }),
          }
       );
       setSaving(false);
@@ -78,6 +85,7 @@ export function DiscordIntegration({
       setConfigured(true);
       setUrl('');
       setEnabled(status.enabled);
+      setDailyDigestEnabled(status.dailyDigestEnabled);
       setMessage('Discord integration saved.');
       onSaved?.(status);
    }
@@ -128,6 +136,16 @@ export function DiscordIntegration({
                </p>
             </div>
             <Switch checked={enabled} onCheckedChange={setEnabled} />
+         </div>
+         <div className="flex items-center justify-between gap-4 rounded-md border px-3 py-2.5">
+            <div>
+               <p className="text-sm font-medium">Daily progress digest</p>
+               <p className="text-xs text-muted-foreground">
+                  Post per-project status, overdue items and recommended actions every day at 08:00
+                  (GMT+7).
+               </p>
+            </div>
+            <Switch checked={dailyDigestEnabled} onCheckedChange={setDailyDigestEnabled} />
          </div>
          {message && <p className="text-sm text-muted-foreground">{message}</p>}
          <div className="flex gap-2">

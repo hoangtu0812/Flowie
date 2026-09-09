@@ -20,6 +20,7 @@ router = APIRouter(prefix='/api/v1/integrations', tags=['integrations'])
 class DiscordWebhookInput(BaseModel):
     webhookUrl: str | None = Field(default=None, max_length=2_000)
     enabled: bool = True
+    dailyDigestEnabled: bool = False
 
 
 async def _manager_access(db: AsyncSession, workspace_id: str, user_id: str) -> None:
@@ -49,6 +50,7 @@ def _masked_webhook(value: str) -> str:
 def _status(row: Any) -> dict[str, Any]:
     return {
         'enabled': row['enabled'],
+        'dailyDigestEnabled': row['daily_digest_enabled'],
         'webhookUrlMasked': _masked_webhook(row['webhook_url']),
         'updatedAt': row['updated_at'],
     }
@@ -62,7 +64,7 @@ async def discord_status(
 ) -> dict[str, dict[str, Any] | None]:
     await _manager_access(db, workspaceId, user['id'])
     result = await db.execute(
-        text('SELECT enabled, webhook_url, updated_at FROM discord_webhooks WHERE workspace_id = :workspace_id'),
+        text('SELECT enabled, daily_digest_enabled, webhook_url, updated_at FROM discord_webhooks WHERE workspace_id = :workspace_id'),
         {'workspace_id': workspaceId},
     )
     row = result.mappings().first()
@@ -90,21 +92,22 @@ async def save_discord(
         result = await db.execute(
             text(
                 '''UPDATE discord_webhooks SET webhook_url = :webhook_url, enabled = :enabled,
+                   daily_digest_enabled = :daily_digest_enabled,
                    updated_at = :now WHERE id = :id
-                   RETURNING enabled, webhook_url, updated_at'''
+                   RETURNING enabled, daily_digest_enabled, webhook_url, updated_at'''
             ),
-            {'id': row['id'], 'webhook_url': webhook_url, 'enabled': payload.enabled, 'now': now},
+            {'id': row['id'], 'webhook_url': webhook_url, 'enabled': payload.enabled, 'daily_digest_enabled': payload.dailyDigestEnabled, 'now': now},
         )
     else:
         result = await db.execute(
             text(
-                '''INSERT INTO discord_webhooks (id, workspace_id, webhook_url, enabled, created_at, updated_at)
-                   VALUES (:id, :workspace_id, :webhook_url, :enabled, :now, :now)
-                   RETURNING enabled, webhook_url, updated_at'''
+                '''INSERT INTO discord_webhooks (id, workspace_id, webhook_url, enabled, daily_digest_enabled, created_at, updated_at)
+                   VALUES (:id, :workspace_id, :webhook_url, :enabled, :daily_digest_enabled, :now, :now)
+                   RETURNING enabled, daily_digest_enabled, webhook_url, updated_at'''
             ),
             {
                 'id': _cuid(), 'workspace_id': workspaceId, 'webhook_url': webhook_url,
-                'enabled': payload.enabled, 'now': now,
+                'enabled': payload.enabled, 'daily_digest_enabled': payload.dailyDigestEnabled, 'now': now,
             },
         )
     await db.commit()

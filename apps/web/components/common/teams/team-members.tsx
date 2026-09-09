@@ -22,12 +22,21 @@ import { useParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useLiveTeam } from './use-live-team';
+import { TeamWorkload } from './team-workload';
 
 /** Team member list and membership controls using the native Team API. */
 export default function TeamMembers() {
    const { teamId } = useParams<{ teamId: string }>();
-   const { team, workspaceMembers, loading, error, addMember, updateMember, removeMember } =
-      useLiveTeam(teamId);
+   const {
+      team,
+      workspaceId,
+      workspaceMembers,
+      loading,
+      error,
+      addMember,
+      updateMember,
+      removeMember,
+   } = useLiveTeam(teamId);
    const [dialogOpen, setDialogOpen] = useState(false);
    const [personId, setPersonId] = useState('');
    const [role, setRole] = useState<'LEAD' | 'MEMBER'>('MEMBER');
@@ -91,6 +100,7 @@ export default function TeamMembers() {
 
    return (
       <div className="w-full">
+         {workspaceId && team && <TeamWorkload workspaceId={workspaceId} teamId={team.id} />}
          <div className="flex items-center justify-between px-6 py-3">
             <span className="text-sm text-muted-foreground font-medium">Name ↓</span>
             <div className="flex items-center gap-2">
