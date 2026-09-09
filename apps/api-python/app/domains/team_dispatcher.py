@@ -12,7 +12,7 @@ announced on Discord. Dry-run mode reports what would happen without writing.
 
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -52,6 +52,15 @@ class DispatcherSettingsInput(BaseModel):
 def remaining_budget(max_actions: int, used: int) -> int:
     """Daily action budget left; never negative."""
     return max(int(max_actions) - int(used), 0)
+
+
+def as_db_date(today: str) -> date:
+    """ISO date string as a `date` object for DATE-column parameters.
+
+    asyncpg infers the parameter type from the Python value: a string bound
+    against a DATE column fails, while a `date` object encodes correctly.
+    """
+    return date.fromisoformat(today)
 
 
 def dispatch_cutoff_utc(now: datetime | None = None) -> datetime:
@@ -199,7 +208,9 @@ async def _overdue_assigned(
                  AND st.category NOT IN ('COMPLETED', 'CANCELED')
                ORDER BY i.due_date ASC LIMIT :limit"""
         ),
-        {"team_id": team_id, "today": today, "limit": MAX_NUDGES_PER_RUN},
+        # The column is DATE: bind a date object, not the ISO string used for
+        # Python-side comparisons elsewhere, or asyncpg rejects the parameter.
+        {"team_id": team_id, "today": as_db_date(today), "limit": MAX_NUDGES_PER_RUN},
     )
     return [dict(row) for row in result.mappings().all()]
 

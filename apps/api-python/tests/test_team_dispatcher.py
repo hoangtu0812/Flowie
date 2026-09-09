@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 import unittest
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.domains.team_dispatcher import (
     DispatcherSettingsInput,
+    as_db_date,
     dispatch_cutoff_utc,
     dispatcher_report_lines,
     remaining_budget,
@@ -22,6 +23,12 @@ class DispatcherBudgetTests(unittest.TestCase):
         self.assertEqual(remaining_budget(5, 2), 3)
         self.assertEqual(remaining_budget(5, 5), 0)
         self.assertEqual(remaining_budget(5, 9), 0)
+
+    def test_db_date_param_is_a_date_object(self) -> None:
+        """Regression: DATE columns need date objects, ISO strings crash asyncpg."""
+        value = as_db_date("2026-09-10")
+        self.assertIsInstance(value, date)
+        self.assertEqual(value.isoformat(), "2026-09-10")
 
     def test_settings_input_bounds(self) -> None:
         settings = DispatcherSettingsInput.model_validate({"maxActionsPerDay": 10})

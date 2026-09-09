@@ -10,6 +10,13 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+## [0.9.2] — 2026-09-10 00:35 +07
+
+### Fixed
+
+- Bind DATE columns with `date` objects instead of ISO strings, fixing the
+  dispatcher overdue query rejected by asyncpg.
+
 ## [0.9.1] — 2026-09-10 00:26 +07
 
 ### Fixed
