@@ -53,6 +53,8 @@ type DashboardIssue = {
    createdAt: string;
    completedAt: string | null;
    dueDate: string | null;
+   startDate: string | null;
+   targetDate: string | null;
    estimatedEffort: number | null;
    actualEffort: number | null;
 };
@@ -97,6 +99,37 @@ function daysInRange(from: string, to: string) {
       keys.push(dayKey(current));
    }
    return keys;
+}
+
+type EffortBucketMode = 'day' | 'week' | 'month';
+
+const displayMonth = (year: number, month: number) =>
+   new Intl.DateTimeFormat(undefined, { month: 'short', year: 'numeric' }).format(
+      new Date(year, month - 1, 1)
+   );
+
+/** Bucket granularity follows the selected span so long ranges stay readable. */
+function effortBucketMode(from: string, to: string): EffortBucketMode {
+   const span = Math.round(
+      (new Date(`${to}T00:00:00`).getTime() - new Date(`${from}T00:00:00`).getTime()) / DAY
+   );
+   if (span <= 45) return 'day';
+   if (span <= 150) return 'week';
+   return 'month';
+}
+
+function effortBucketOf(day: string, mode: EffortBucketMode) {
+   if (mode === 'day') return { key: day, label: displayDate(day), full: fullDate(day) };
+   const [year, month, date] = day.split('-').map(Number);
+   if (mode === 'month') {
+      const key = `${year}-${String(month).padStart(2, '0')}`;
+      return { key, label: displayMonth(year, month), full: displayMonth(year, month) };
+   }
+   // Weekly buckets start on Monday.
+   const current = new Date(year, month - 1, date);
+   const monday = new Date(current.getTime() - ((current.getDay() + 6) % 7) * DAY);
+   const key = dayKey(monday);
+   return { key, label: displayDate(key), full: `Week of ${fullDate(key)}` };
 }
 
 function MetricCard({
@@ -244,6 +277,35 @@ export function WorkspaceDashboard() {
          done: completed.get(day) ?? 0,
       }));
    }, [from, scopedIssues, to]);
+
+   const effortMode = useMemo(() => effortBucketMode(from, to), [from, to]);
+
+   /**
+    * Estimated workload enters on the issue start date, actual workload on the
+    * completion date. Buckets adapt to the selected span (day/week/month) and
+    * follow the same project filter as every other chart.
+    */
+   const effortTrend = useMemo(() => {
+      const buckets = new Map<string, { label: string; full: string; est: number; act: number }>();
+      for (const day of daysInRange(from, to)) {
+         const { key, label, full } = effortBucketOf(day, effortMode);
+         if (!buckets.has(key)) buckets.set(key, { label, full, est: 0, act: 0 });
+      }
+      for (const issue of scopedIssues) {
+         const estimatedAt = dateKey(issue.startDate) ?? dateKey(issue.createdAt);
+         const actualAt =
+            dateKey(issue.completedAt) ?? dateKey(issue.targetDate) ?? dateKey(issue.createdAt);
+         if (estimatedAt && inRange(estimatedAt, from, to)) {
+            const bucket = buckets.get(effortBucketOf(estimatedAt, effortMode).key);
+            if (bucket) bucket.est += issue.estimatedEffort ?? 0;
+         }
+         if (actualAt && inRange(actualAt, from, to)) {
+            const bucket = buckets.get(effortBucketOf(actualAt, effortMode).key);
+            if (bucket) bucket.act += issue.actualEffort ?? 0;
+         }
+      }
+      return [...buckets.values()];
+   }, [effortMode, from, scopedIssues, to]);
 
    const statusData = useMemo(() => {
       const groups = new Map<string, { id: string; name: string; color: string; count: number }>();
@@ -597,6 +659,88 @@ export function WorkspaceDashboard() {
                </CardContent>
             </Card>
          </div>
+
+         <Card className="gap-0 py-0 shadow-none">
+            <CardHeader className="flex-row items-center justify-between space-y-0 px-5 py-4">
+               <div>
+                  <CardTitle className="text-sm">Effort trend</CardTitle>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                     Estimated vs actual mandays per {effortMode}. Estimated by start date, actual
+                     by completion date.
+                  </p>
+               </div>
+               <div className="flex items-center gap-3 text-xs">
+                  <span className="flex items-center gap-1.5">
+                     <i className="size-2 rounded-full bg-violet-500" /> Estimated
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                     <i className="size-2 rounded-full bg-amber-500" /> Actual
+                  </span>
+                  <span className="text-muted-foreground">
+                     Est {effortTrend.reduce((total, bucket) => total + bucket.est, 0)} · Act{' '}
+                     {effortTrend.reduce((total, bucket) => total + bucket.act, 0)}
+                  </span>
+               </div>
+            </CardHeader>
+            <CardContent className="h-[280px] px-2 pb-4 sm:px-4">
+               {effortTrend.length ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                     <LineChart
+                        data={effortTrend}
+                        margin={{ top: 12, right: 16, left: -16, bottom: 0 }}
+                     >
+                        <CartesianGrid
+                           strokeDasharray="3 3"
+                           vertical={false}
+                           className="stroke-border"
+                        />
+                        <XAxis
+                           dataKey="label"
+                           minTickGap={28}
+                           tickLine={false}
+                           axisLine={false}
+                           fontSize={11}
+                        />
+                        <YAxis tickLine={false} axisLine={false} fontSize={11} />
+                        <Tooltip
+                           labelFormatter={(_, payload) => {
+                              const full = payload[0]?.payload?.full as string | undefined;
+                              return full ?? '';
+                           }}
+                           formatter={(value, name) => [`${value} mandays`, name]}
+                           contentStyle={{
+                              borderRadius: 8,
+                              borderColor: 'var(--border)',
+                              fontSize: 12,
+                           }}
+                        />
+                        <Line
+                           type="monotone"
+                           dataKey="est"
+                           name="Estimated"
+                           stroke="#8b5cf6"
+                           strokeWidth={2}
+                           dot={false}
+                           activeDot={{ r: 4 }}
+                        />
+                        <Line
+                           type="monotone"
+                           dataKey="act"
+                           name="Actual"
+                           stroke="#f59e0b"
+                           strokeWidth={2}
+                           dot={false}
+                           activeDot={{ r: 4 }}
+                        />
+                     </LineChart>
+                  </ResponsiveContainer>
+               ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                     No effort data in this range.
+                  </div>
+               )}
+            </CardContent>
+         </Card>
 
          <div className="grid gap-5 xl:grid-cols-2">
             <Card className="gap-0 py-0 shadow-none">

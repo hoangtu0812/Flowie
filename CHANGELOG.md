@@ -10,6 +10,14 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+## [0.6.0] — 2026-09-09 19:52 +07
+
+### Added
+
+- The workspace dashboard now shows an effort trend chart comparing estimated
+  and actual mandays over time, bucketed by day, week, or month depending on
+  the selected range and following the project filter.
+
 ## [0.5.0] — 2026-09-09 19:28 +07
 
 ### Added
