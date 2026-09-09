@@ -66,10 +66,11 @@ class DispatcherReportTests(unittest.TestCase):
 
 
 class DispatcherScheduleTests(unittest.TestCase):
-    def test_cutoff_is_today_0830_in_utc(self) -> None:
+    def test_cutoff_is_today_0830_naive_utc(self) -> None:
         now = datetime(2026, 9, 10, 15, 0, tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"))
         cutoff = dispatch_cutoff_utc(now.astimezone(timezone.utc))
-        self.assertEqual(cutoff, datetime(2026, 9, 10, 1, 30, tzinfo=timezone.utc))
+        self.assertEqual(cutoff, datetime(2026, 9, 10, 1, 30))
+        self.assertIsNone(cutoff.tzinfo)
 
     def test_next_run_skips_to_tomorrow_after_window(self) -> None:
         now = datetime(2026, 9, 10, 9, 0, tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"))

@@ -10,6 +10,14 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+## [0.9.1] — 2026-09-10 00:26 +07
+
+### Fixed
+
+- Dispatcher and digest cutoffs now use naive UTC datetimes matching the
+  `timestamp without time zone` columns, fixing the failed manual and
+  scheduled runs rejected by asyncpg.
+
 ## [0.9.0] — 2026-09-10 00:12 +07
 
 ### Added

@@ -55,11 +55,19 @@ def remaining_budget(max_actions: int, used: int) -> int:
 
 
 def dispatch_cutoff_utc(now: datetime | None = None) -> datetime:
-    """Start of today's dispatch window (08:30 +07) expressed in UTC."""
+    """Start of today's dispatch window (08:30 +07) as naive UTC.
+
+    Timestamp columns are `timestamp without time zone`, so the cutoff must
+    stay offset-naive like `_utcnow()` or asyncpg refuses the comparison.
+    """
     current = (now or _utcnow()).astimezone(HCM)
-    return current.replace(
-        hour=DISPATCH_HOUR, minute=DISPATCH_MINUTE, second=0, microsecond=0
-    ).astimezone(timezone.utc)
+    return (
+        current.replace(
+            hour=DISPATCH_HOUR, minute=DISPATCH_MINUTE, second=0, microsecond=0
+        )
+        .astimezone(timezone.utc)
+        .replace(tzinfo=None)
+    )
 
 
 def seconds_until_next_dispatch(now: datetime | None = None) -> float:

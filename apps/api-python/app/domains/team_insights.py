@@ -98,15 +98,19 @@ def seconds_until_next_digest(now: datetime | None = None) -> float:
 
 
 def digest_cutoff_utc(now: datetime | None = None) -> datetime:
-    """Start of today's digest window (08:00 +07) expressed in UTC.
+    """Start of today's digest window (08:00 +07) as naive UTC.
 
+    Timestamp columns are `timestamp without time zone`, so the cutoff must
+    stay offset-naive like `_utcnow()` or asyncpg refuses the comparison.
     A workspace whose digest was sent at or after this instant already
     received today's report, so restarts never double-send.
     """
     current = (now or _utcnow()).astimezone(HCM)
-    return current.replace(
-        hour=DIGEST_HOUR, minute=0, second=0, microsecond=0
-    ).astimezone(timezone.utc)
+    return (
+        current.replace(hour=DIGEST_HOUR, minute=0, second=0, microsecond=0)
+        .astimezone(timezone.utc)
+        .replace(tzinfo=None)
+    )
 
 
 async def _member_access(db: AsyncSession, workspace_id: str, user_id: str) -> None:
