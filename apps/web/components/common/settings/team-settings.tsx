@@ -26,6 +26,7 @@ import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { TeamSettingsDialog, type TeamSettingsEditKind } from './team-settings-dialog';
+import { TeamDispatcherSettings } from './team-dispatcher-settings';
 import { SettingsCard, SettingsRow, SettingsSection } from './shared';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
@@ -267,6 +268,14 @@ export default function TeamSettings({ teamId }: { teamId: string }) {
                      />
                   </SettingsCard>
                </SettingsSection>
+               {workspaceId && (
+                  <SettingsSection
+                     title="Auto dispatcher"
+                     description="Let Flowie assign unassigned work and nudge overdue owners on its own."
+                  >
+                     <TeamDispatcherSettings workspaceId={workspaceId} teamId={team.id} />
+                  </SettingsSection>
+               )}
                <SettingsSection
                   title="Team hierarchy"
                   description="Nest teams to reflect your organization."

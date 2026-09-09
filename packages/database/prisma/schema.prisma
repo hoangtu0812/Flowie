@@ -774,6 +774,7 @@ model Team {
   parentTeam           Team?            @relation("TeamHierarchy", fields: [parentTeamId], references: [id], onDelete: SetNull)
   childTeams           Team[]           @relation("TeamHierarchy")
   defaultIssueTemplate IssueTemplate?   @relation(fields: [defaultIssueTemplateId], references: [id], onDelete: SetNull)
+  dispatcherSettings   TeamDispatcherSettings?
 
   @@unique([workspaceId, identifier])
   @@index([workspaceId])
@@ -781,6 +782,23 @@ model Team {
   @@index([parentTeamId])
   @@index([defaultIssueTemplateId])
   @@map("teams")
+}
+
+model TeamDispatcherSettings {
+  teamId           String    @id @map("team_id")
+  enabled          Boolean   @default(false)
+  dryRun           Boolean   @default(true) @map("dry_run")
+  maxActionsPerDay Int       @default(5) @map("max_actions_per_day")
+  assignUnassigned Boolean   @default(true) @map("assign_unassigned")
+  nudgeOverdue     Boolean   @default(true) @map("nudge_overdue")
+  lastRunAt        DateTime? @map("last_run_at")
+  lastRunResult    Json?     @map("last_run_result")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@map("team_dispatcher_settings")
 }
 
 model Project {

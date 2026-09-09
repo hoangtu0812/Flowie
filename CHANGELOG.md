@@ -10,6 +10,15 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+## [0.9.0] — 2026-09-10 00:12 +07
+
+### Added
+
+- Auto dispatcher: each team can opt in to autonomous daily runs that assign
+  unassigned open issues within a configurable budget and send one in-app
+  nudge per overdue issue, starting in dry-run mode and reporting every run
+  to Discord with a full audit trail.
+
 ## [0.8.0] — 2026-09-09 23:56 +07
 
 ### Added
