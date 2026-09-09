@@ -30,6 +30,7 @@ type AgentIssue = {
 };
 
 type AgentProposal = {
+   kind?: 'plan';
    summary: string;
    requiresClarification: boolean;
    questions: string[];
@@ -37,11 +38,32 @@ type AgentProposal = {
    issues: AgentIssue[];
 };
 
+type AssignmentItem = {
+   issueId: string;
+   identifier: string;
+   title: string;
+   priority: string;
+   estimatedEffort: number | null;
+   labels: string[];
+   suggestedUserId: string;
+   suggestedUserName: string;
+   reason: string;
+   note: string;
+};
+
+type AssignmentProposal = {
+   kind: 'assignment';
+   teamId: string;
+   teamName: string;
+   unassignedTotal: number;
+   items: AssignmentItem[];
+};
+
 type AgentMessage = {
    id: string;
    role: 'user' | 'assistant';
    content: string;
-   proposal?: AgentProposal | null;
+   proposal?: AgentProposal | AssignmentProposal | null;
    acceptedAt?: string | null;
    appliedAt?: string | null;
    appliedResult?: { projects: Record<string, string>; issues: Record<string, string> } | null;
@@ -81,6 +103,7 @@ const EXAMPLES = [
    'Read the attached document and draft the related backlog issues.',
    'Break this delivery goal into a project plan with dates and owners to confirm.',
    'How many issues are overdue?',
+   'Who is overloaded? Suggest assignments for my team.',
 ];
 
 function MessageText({ content }: { content: string }) {
@@ -151,7 +174,12 @@ function DraftPlan({
    onAccept: () => void;
 }) {
    const proposal = message.proposal;
-   if (!proposal || (proposal.projects.length === 0 && proposal.issues.length === 0)) return null;
+   if (
+      !proposal ||
+      proposal.kind === 'assignment' ||
+      (proposal.projects.length === 0 && proposal.issues.length === 0)
+   )
+      return null;
    const accepted = Boolean(message.appliedAt);
 
    return (
@@ -254,6 +282,95 @@ function DraftPlan({
                   </div>
                </div>
             )}
+         </div>
+      </div>
+   );
+}
+
+function AssignmentPlan({
+   message,
+   applyingId,
+   appliedIds,
+   skippedIds,
+   onApply,
+   onSkip,
+}: {
+   message: AgentMessage;
+   applyingId: string | null;
+   appliedIds: Set<string>;
+   skippedIds: Set<string>;
+   onApply: (item: AssignmentItem) => void;
+   onSkip: (issueId: string) => void;
+}) {
+   const proposal = message.proposal;
+   if (!proposal || proposal.kind !== 'assignment' || proposal.items.length === 0) return null;
+   const remaining = proposal.items.filter(
+      (item) => !appliedIds.has(item.issueId) && !skippedIds.has(item.issueId)
+   );
+
+   return (
+      <div className="mt-3 rounded-lg border bg-container overflow-hidden">
+         <div className="flex items-center justify-between gap-3 border-b px-3 py-2.5">
+            <div>
+               <p className="text-sm font-medium">Suggested assignments · {proposal.teamName}</p>
+               <p className="text-xs text-muted-foreground">
+                  {remaining.length === 0
+                     ? 'All rows resolved.'
+                     : 'Nothing is assigned until you apply a row.'}
+               </p>
+            </div>
+            <span className="text-xs text-muted-foreground shrink-0">
+               {appliedIds.size}/{proposal.items.length} applied
+            </span>
+         </div>
+         <div className="p-3 space-y-2">
+            {proposal.items.map((item) => {
+               const applied = appliedIds.has(item.issueId);
+               const skipped = skippedIds.has(item.issueId);
+               return (
+                  <div
+                     key={item.issueId}
+                     className="rounded-md border px-3 py-2 text-sm flex items-center gap-3"
+                  >
+                     <div className="min-w-0 flex-1">
+                        <p className="font-medium truncate">
+                           <span className="text-muted-foreground font-normal mr-1.5">
+                              {item.identifier}
+                           </span>
+                           {item.title}
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                           → {item.suggestedUserName} · {item.note}
+                        </p>
+                     </div>
+                     {applied ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-emerald-600 shrink-0">
+                           <CheckCircle2 className="size-4" /> Applied
+                        </span>
+                     ) : skipped ? (
+                        <span className="text-xs text-muted-foreground shrink-0">Skipped</span>
+                     ) : (
+                        <div className="flex items-center gap-1.5 shrink-0">
+                           <Button size="xs" variant="ghost" onClick={() => onSkip(item.issueId)}>
+                              Skip
+                           </Button>
+                           <Button
+                              size="xs"
+                              variant="outline"
+                              disabled={applyingId === item.issueId}
+                              onClick={() => onApply(item)}
+                           >
+                              {applyingId === item.issueId ? (
+                                 <LoaderCircle className="size-3.5 animate-spin" />
+                              ) : (
+                                 'Apply'
+                              )}
+                           </Button>
+                        </div>
+                     )}
+                  </div>
+               );
+            })}
          </div>
       </div>
    );
@@ -364,6 +481,10 @@ export default function AgentChat() {
    const [pending, setPending] = useState(false);
    const [progress, setProgress] = useState<AgentProgress[]>([]);
    const [accepting, setAccepting] = useState<string | null>(null);
+   const [applyingId, setApplyingId] = useState<string | null>(null);
+   const [resolved, setResolved] = useState<
+      Record<string, { applied: string[]; skipped: string[] }>
+   >({});
    const [error, setError] = useState<string | null>(null);
    const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -550,6 +671,48 @@ export default function AgentChat() {
       }
    };
 
+   const markResolved = (messageId: string, issueId: string, kind: 'applied' | 'skipped') => {
+      setResolved((current) => ({
+         ...current,
+         [messageId]: {
+            applied: current[messageId]?.applied ?? [],
+            skipped: current[messageId]?.skipped ?? [],
+            [kind]: [...(current[messageId]?.[kind] ?? []), issueId],
+         },
+      }));
+   };
+
+   const applyAssignment = async (messageId: string, item: AssignmentItem) => {
+      if (!workspace) return;
+      setApplyingId(item.issueId);
+      setError(null);
+      try {
+         const response = await authenticatedFetch(`${api}/agent/assignments/apply`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+               workspaceId: workspace.id,
+               issueId: item.issueId,
+               assigneeId: item.suggestedUserId,
+            }),
+         });
+         const payload = (await response.json().catch(() => null)) as {
+            data?: unknown;
+            message?: string;
+         } | null;
+         if (!response.ok) throw new Error(payload?.message ?? 'Could not apply this assignment.');
+         markResolved(messageId, item.issueId, 'applied');
+      } catch (cause) {
+         setError(cause instanceof Error ? cause.message : 'Could not apply this assignment.');
+      } finally {
+         setApplyingId(null);
+      }
+   };
+
+   const skipAssignment = (messageId: string, issueId: string) => {
+      markResolved(messageId, issueId, 'skipped');
+   };
+
    if (loading && !workspace) {
       return (
          <div className="w-full h-full grid place-items-center text-sm text-muted-foreground">
@@ -606,6 +769,14 @@ export default function AgentChat() {
                                  teamNames={teamNames}
                                  accepting={accepting === message.id}
                                  onAccept={() => void accept(message.id)}
+                              />
+                              <AssignmentPlan
+                                 message={message}
+                                 applyingId={applyingId}
+                                 appliedIds={new Set(resolved[message.id]?.applied ?? [])}
+                                 skippedIds={new Set(resolved[message.id]?.skipped ?? [])}
+                                 onApply={(item) => void applyAssignment(message.id, item)}
+                                 onSkip={(issueId) => skipAssignment(message.id, issueId)}
                               />
                            </div>
                         </div>

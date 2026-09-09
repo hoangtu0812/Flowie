@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import re
 from datetime import date, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
@@ -34,10 +36,18 @@ from .native_projects import (
     create_project,
     update_project,
 )
+from .team_insights import (
+    assignment_suggestions,
+    hcm_today,
+    workload_report,
+)
 
 
 router = APIRouter(prefix='/api/v1/agent', tags=['agent'])
 ProviderName = Literal['OPENAI', 'GOOGLE']
+
+logger = logging.getLogger(__name__)
+
 MAX_SOURCE_FILE_BYTES = 10 * 1024 * 1024
 MAX_SOURCE_TEXT_CHARS = 100_000
 SUPPORTED_SOURCE_SUFFIXES = {'.md', '.markdown', '.docx', '.xlsx'}
@@ -281,6 +291,19 @@ def _is_cycle_progress_question(message: str) -> bool:
     return any(term in normalized for term in ('cycle', 'cycles', 'chu kỳ', 'chu ky', 'sprint')) and any(term in normalized for term in ('tiến độ', 'tien do', 'progress', 'hoàn thành', 'hoan thanh', 'status'))
 
 
+def _is_workload_question(message: str) -> bool:
+    normalized = message.casefold()
+    workload_terms = (
+        'workload', 'khối lượng', 'khoi luong', 'quá tải', 'qua tai', 'overloaded',
+        'capacity', 'ai đang bận', 'ai dang ban', 'ai rảnh', 'ai ranh', 'bận rộn', 'ban ron',
+        'tải công việc', 'tai cong viec',
+    )
+    creation_terms = ('create', 'draft', 'plan', 'add', 'tạo', 'lập', 'thêm', 'viết', 'xử lý')
+    return any(term in normalized for term in workload_terms) and not any(
+        term in normalized for term in creation_terms
+    )
+
+
 def _is_vietnamese(message: str) -> bool:
     normalized = message.casefold()
     vietnamese_terms = ('bạn', 'ban ', 'giúp', 'giup', 'cho tôi', 'cho toi', 'có thể', 'co the', 'làm gì', 'lam gi')
@@ -380,6 +403,145 @@ async def _issue_count_insight(db: AsyncSession, workspace_id: str, user_id: str
               AND EXISTS (SELECT 1 FROM team_members member WHERE member.team_id = issue.team_id AND member.user_id = :user_id)'''), {'workspace_id': workspace_id, 'user_id': user_id})
     row = result.mappings().one()
     return {'capability': 'issues.count', 'content': f"Bạn có quyền xem {row['total']} issue: {row['open']} chưa hoàn thành và {row['completed']} đã hoàn thành.", 'data': dict(row)}
+
+
+WORKLOAD_BAND_LABELS = {'healthy': 'ổn định', 'busy': 'bận', 'overloaded': 'quá tải', 'unknown': 'chưa rõ'}
+
+
+async def _workload_insight(db: AsyncSession, workspace_id: str, user_id: str) -> ReadOnlyInsight:
+    """Workspace-wide load overview built from the deterministic Phase-1 scores.
+
+    Numbers come from SQL via team_insights; the agent only phrases them.
+    """
+    today = hcm_today()
+    teams = await db.execute(
+        text('''SELECT team.id, team.name FROM teams team
+                WHERE team.workspace_id = :workspace_id AND team.archived_at IS NULL
+                  AND EXISTS (SELECT 1 FROM team_members member
+                              WHERE member.team_id = team.id AND member.user_id = :user_id)
+                ORDER BY team.name ASC LIMIT 20'''),
+        {'workspace_id': workspace_id, 'user_id': user_id},
+    )
+    team_rows = [dict(row) for row in teams.mappings().all()]
+    if not team_rows:
+        return {
+            'capability': 'team.workload',
+            'content': 'Bạn chưa thuộc team nào trong workspace này nên chưa có dữ liệu khối lượng công việc.',
+            'data': {'asOfDate': today, 'teams': []},
+        }
+    unassigned = await db.execute(
+        text('''SELECT issue.team_id, COUNT(*)::int AS total
+                FROM issues issue JOIN issue_statuses status ON status.id = issue.status_id
+                WHERE issue.workspace_id = :workspace_id AND issue.archived_at IS NULL
+                  AND issue.assignee_id IS NULL
+                  AND status.category NOT IN ('COMPLETED', 'CANCELED')
+                GROUP BY issue.team_id'''),
+        {'workspace_id': workspace_id},
+    )
+    unassigned_by_team = {row['team_id']: row['total'] for row in unassigned.mappings().all()}
+    summaries: list[dict[str, Any]] = []
+    for team in team_rows:
+        report = await workload_report(db, team['id'], workspace_id, today)
+        members = sorted(report['members'], key=lambda member: member['score'], reverse=True)
+        top = members[0] if members else None
+        summaries.append({
+            'teamId': team['id'], 'teamName': team['name'],
+            'memberCount': len(members), 'averageScore': report['teamAverageScore'],
+            'unassigned': unassigned_by_team.get(team['id'], 0),
+            'topLoaded': {
+                'name': top['name'], 'score': top['score'], 'band': top['band'],
+                'openCount': top['openCount'], 'overdueCount': top['overdueCount'],
+            } if top else None,
+        })
+    parts = []
+    for summary in summaries:
+        if summary['topLoaded']:
+            top = summary['topLoaded']
+            parts.append(
+                f"{summary['teamName']}: TB {summary['averageScore']}, "
+                f"tải nặng nhất {top['name']} (score {top['score']}, "
+                f"{WORKLOAD_BAND_LABELS.get(top['band'], top['band'])}, "
+                f"{top['openCount']} mở, {top['overdueCount']} trễ), "
+                f"{summary['unassigned']} chưa gán"
+            )
+        else:
+            parts.append(f"{summary['teamName']}: chưa có thành viên")
+    content = (
+        f"Khối lượng công việc tính đến {today} ({len(summaries)} team): " + '; '.join(parts) + '. '
+        'Mở trang Members của team để xem chi tiết từng người và gợi ý phân bổ.'
+    )
+    return {'capability': 'team.workload', 'content': content, 'data': {'asOfDate': today, 'teams': summaries}}
+
+
+ASSIGNMENT_LIMIT = 10
+
+
+def _is_assignment_request(message: str) -> bool:
+    normalized = message.casefold()
+    assign_terms = (
+        'phân công', 'phan cong', 'phân bổ', 'phan bo', 'gán việc', 'gan viec',
+        'giao việc', 'giao viec', 'đề xuất người', 'de xuat', 'gợi ý người', 'goi y',
+        'assign', 'auto-assign', 'auto assign', 'suggest assignee', 'recommend assignee',
+    )
+    creation_terms = ('create', 'draft', 'plan', 'add', 'tạo', 'lập', 'thêm', 'viết', 'xử lý')
+    return any(term in normalized for term in assign_terms) and not any(
+        term in normalized for term in creation_terms
+    )
+
+
+def _resolve_assignment_team(
+    message: str, teams: list[dict[str, Any]]
+) -> tuple[dict[str, Any] | None, bool]:
+    """Match a team by identifier or name; reports ambiguity instead of guessing."""
+    normalized = message.casefold()
+    matches = [
+        team for team in teams
+        if re.search(r'\b' + re.escape(team['identifier'].casefold()) + r'\b', normalized)
+        or team['name'].casefold() in normalized
+    ]
+    if len(matches) == 1:
+        return matches[0], False
+    return None, len(matches) > 1
+
+
+def _assignment_explainer_prompt(plan: dict[str, Any]) -> str:
+    return f'''You explain a deterministic task-assignment plan. Do NOT change any IDs, names, or numbers; do NOT add or remove items.
+Return exactly one JSON object: {{"notes": {{"<issueId>": "<one short sentence>"}}}}.
+Write each note in Vietnamese, at most 25 words: why this person fits (lowest current load and/or shared skill labels from past completions). When nothing stands out, write "Tai hien tai thap nhat team." Omit issues you cannot comment on.
+Deterministic plan:
+{json.dumps(plan, ensure_ascii=False)}'''
+
+
+def _parse_assignment_notes(raw: Any, valid_ids: set[str]) -> dict[str, str]:
+    """Keep only grounded notes: known issue IDs with short string values."""
+    if not isinstance(raw, dict):
+        return {}
+    notes = raw.get('notes')
+    if not isinstance(notes, dict):
+        return {}
+    return {
+        issue_id: note[:200]
+        for issue_id, note in notes.items()
+        if issue_id in valid_ids and isinstance(note, str) and note.strip()
+    }
+
+
+async def _explain_assignment(
+    provider: dict[str, str] | None, plan: dict[str, Any], valid_ids: set[str]
+) -> dict[str, str]:
+    """LLM-written rationales for a deterministic plan; never decides the plan."""
+    if provider is None:
+        return {}
+    history = [{'role': 'user', 'content': _assignment_explainer_prompt(plan)}]
+    try:
+        if provider['provider'] == 'OPENAI':
+            raw = await _call_openai(provider, 'You explain assignment plans as JSON.', history)
+        else:
+            raw = await _call_google(provider, 'You explain assignment plans as JSON.', history)
+        return _parse_assignment_notes(json.loads(raw), valid_ids)
+    except Exception as error:
+        logger.warning('Assignment explanation fell back to deterministic reasons: %s', error)
+        return {}
 
 
 async def _issue_status_insight(db: AsyncSession, workspace_id: str, user_id: str) -> ReadOnlyInsight:
@@ -645,6 +807,7 @@ async def _cycle_progress_insight(db: AsyncSession, workspace_id: str, user_id: 
 
 
 READ_ONLY_CAPABILITIES: tuple[ReadOnlyCapability, ...] = (
+    ('team.workload', _is_workload_question, _workload_insight),
     ('projects.delivery', _is_project_delivery_question, _project_delivery_insight),
     ('issues.stale', _is_stale_issue_question, _stale_issue_insight),
     ('initiatives.delivery', _is_initiative_delivery_question, _initiative_delivery_insight),
@@ -657,6 +820,7 @@ READ_ONLY_CAPABILITIES: tuple[ReadOnlyCapability, ...] = (
 )
 
 TOOL_DETAILS = {
+    'team.workload': ('Team workload', 'Summarize deterministic workload scores per team: most loaded member, average load and unassigned issues.'),
     'issues.count': ('Issue count', 'Count accessible issues, including open and completed totals.'),
     'issues.overdue': ('Overdue issues', 'Report accessible issues whose due date has passed.'),
     'issues.by_status': ('Issues by status', 'Break down accessible issues by workflow status.'),
@@ -1642,6 +1806,137 @@ async def _ignore_progress(_: AgentProgress) -> None:
     return None
 
 
+async def _persist_chat_turn(
+    db: AsyncSession,
+    *,
+    conversation_id: str,
+    conversation: Any,
+    workspace_id: str,
+    user_id: str,
+    is_new_conversation: bool,
+    user_content: str,
+    assistant_content: str,
+    progress: ProgressReporter,
+) -> dict[str, Any]:
+    await progress({'id': 'conversation.persist', 'label': 'Saving conversation', 'state': 'running', 'orb': 'shaping'})
+    data = await _persist_turn(
+        db,
+        conversation_id=conversation_id,
+        conversation=conversation,
+        workspace_id=workspace_id,
+        user_id=user_id,
+        is_new_conversation=is_new_conversation,
+        user_content=user_content,
+        assistant_content=assistant_content,
+        proposal=None,
+    )
+    await progress({'id': 'conversation.persist', 'label': 'Conversation saved', 'state': 'completed', 'orb': 'shaping'})
+    data['responseType'] = 'CHAT'
+    return data
+
+
+async def _assignment_turn(
+    request: Request,
+    db: AsyncSession,
+    *,
+    workspace_id: str,
+    message: str,
+    conversation_id: str,
+    conversation: Any,
+    is_new_conversation: bool,
+    user: Any,
+    progress: ProgressReporter,
+) -> dict[str, Any]:
+    """Deterministic assignment drafts with LLM-written rationales.
+
+    The plan (who gets what) always comes from team_insights; the provider
+    only phrases one-line notes. Nothing changes until the user applies a row.
+    """
+    await progress({'id': 'assignment.catalog', 'label': 'Loading workspace teams', 'state': 'running', 'orb': 'searching'})
+    catalog = await _workspace_catalog(db, workspace_id)
+    await progress({'id': 'assignment.catalog', 'label': 'Workspace teams ready', 'state': 'completed', 'orb': 'searching'})
+    team, ambiguous = _resolve_assignment_team(message, catalog['teams'])
+    if team is None:
+        names = ', '.join(team['name'] for team in catalog['teams'][:10]) or 'chưa có team'
+        hint = (
+            'Nhiều team khớp yêu cầu, hãy nêu rõ tên team.'
+            if ambiguous else 'Hãy nêu rõ tên team (ví dụ: "gợi ý phân công team CDS").'
+        )
+        return await _persist_chat_turn(
+            db,
+            conversation_id=conversation_id,
+            conversation=conversation,
+            workspace_id=workspace_id,
+            user_id=user['id'],
+            is_new_conversation=is_new_conversation,
+            user_content=message.strip(),
+            assistant_content=f'{hint} Các team hiện có: {names}.',
+            progress=progress,
+        )
+    await progress({'id': 'assignment.suggest', 'label': f"Scoring unassigned work in {team['name']}", 'state': 'running', 'orb': 'solving'})
+    plan = await assignment_suggestions(db, team['id'], workspace_id, hcm_today(), ASSIGNMENT_LIMIT)
+    await progress({'id': 'assignment.suggest', 'label': 'Assignment draft ready', 'state': 'completed', 'orb': 'solving'})
+    if not plan['suggestions']:
+        return await _persist_chat_turn(
+            db,
+            conversation_id=conversation_id,
+            conversation=conversation,
+            workspace_id=workspace_id,
+            user_id=user['id'],
+            is_new_conversation=is_new_conversation,
+            user_content=message.strip(),
+            assistant_content=(
+                f"Team {team['name']} không còn issue mở nào chưa gán "
+                f"(tổng {plan['unassignedTotal']} chưa gán). Không có gì để đề xuất."
+            ),
+            progress=progress,
+        )
+    await progress({'id': 'assignment.explain', 'label': 'Explaining the draft', 'state': 'running', 'orb': 'composing'})
+    try:
+        provider: dict[str, str] | None = await _configured_provider(request, db, workspace_id)
+    except ApiError:
+        provider = None
+    valid_ids = {item['issueId'] for item in plan['suggestions']}
+    notes = await _explain_assignment(provider, plan, valid_ids)
+    await progress({'id': 'assignment.explain', 'label': 'Draft explained', 'state': 'completed', 'orb': 'composing'})
+    items = [
+        {
+            'issueId': item['issueId'], 'identifier': item['identifier'], 'title': item['title'],
+            'priority': item['priority'], 'estimatedEffort': item['estimatedEffort'],
+            'labels': [label['name'] for label in item['labels']],
+            'suggestedUserId': item['suggestedUserId'], 'suggestedUserName': item['suggestedUserName'],
+            'reason': item['reason'], 'note': notes.get(item['issueId'], item['reason']),
+        }
+        for item in plan['suggestions']
+    ]
+    top = items[0]
+    summary = (
+        f"Đề xuất phân công cho team {team['name']}: {len(items)} issue "
+        f"(trong tổng {plan['unassignedTotal']} chưa gán). "
+        f"Ưu tiên {top['identifier']} → {top['suggestedUserName']}. "
+        'Xem từng dòng bên dưới và bấm Áp dụng — chưa có gì thay đổi cho đến khi bạn duyệt.'
+    )
+    proposal = {
+        'kind': 'assignment', 'teamId': team['id'], 'teamName': team['name'],
+        'unassignedTotal': plan['unassignedTotal'], 'items': items,
+    }
+    await progress({'id': 'conversation.persist', 'label': 'Saving conversation', 'state': 'running', 'orb': 'shaping'})
+    data = await _persist_turn(
+        db,
+        conversation_id=conversation_id,
+        conversation=conversation,
+        workspace_id=workspace_id,
+        user_id=user['id'],
+        is_new_conversation=is_new_conversation,
+        user_content=message.strip(),
+        assistant_content=summary,
+        proposal=proposal,
+    )
+    await progress({'id': 'conversation.persist', 'label': 'Conversation saved', 'state': 'completed', 'orb': 'shaping'})
+    data['responseType'] = 'ASSIGN_PROPOSAL'
+    return data
+
+
 async def _process_message(
     request: Request,
     workspace_id: str,
@@ -1724,6 +2019,19 @@ async def _process_message(
         await progress({'id': 'conversation.persist', 'label': 'Conversation saved', 'state': 'completed', 'orb': 'shaping'})
         data['responseType'] = 'CHAT'
         return data
+
+    if not files and _is_assignment_request(message):
+        return await _assignment_turn(
+            request,
+            db,
+            workspace_id=workspace_id,
+            message=message,
+            conversation_id=conversation_id,
+            conversation=conversation_row,
+            is_new_conversation=is_new_conversation,
+            user=user,
+            progress=progress,
+        )
 
     if not files and _is_bare_creation_request(message):
         await progress({'id': 'proposal.clarify', 'label': 'Identifying required planning details', 'state': 'running', 'orb': 'working'})
@@ -1907,3 +2215,61 @@ async def accept_proposal(message_id: str, workspaceId: str = Query(min_length=1
             VALUES (:id, :workspace_id, :actor_id, 'agent.proposal.accepted', 'agent_message', :entity_id, CAST(:metadata AS jsonb), :now)'''), {'id': _cuid(), 'workspace_id': workspaceId, 'actor_id': user['id'], 'entity_id': message_id, 'metadata': json.dumps({'projects': len(proposal.projects), 'issues': len(proposal.issues)}), 'now': _utcnow()})
     await db.commit()
     return {'data': applied_result}
+
+
+class AssignmentApplyInput(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    workspaceId: str = Field(min_length=1)
+    issueId: str = Field(min_length=1)
+    assigneeId: str = Field(min_length=1)
+
+
+@router.post('/assignments/apply')
+async def apply_assignment(payload: AssignmentApplyInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    """Apply one drafted assignment row. Stale rows are rejected, never overwritten."""
+    await _workspace_access(db, payload.workspaceId, user['id'])
+    issue = await db.execute(
+        text('''SELECT issue.id, issue.identifier, issue.assignee_id, assignee.name AS assignee_name
+                FROM issues issue
+                JOIN issue_statuses status ON status.id = issue.status_id
+                LEFT JOIN users assignee ON assignee.id = issue.assignee_id
+                WHERE issue.id = :issue_id AND issue.workspace_id = :workspace_id
+                  AND issue.archived_at IS NULL
+                  AND status.category NOT IN ('COMPLETED', 'CANCELED')'''),
+        {'issue_id': payload.issueId, 'workspace_id': payload.workspaceId},
+    )
+    row = issue.mappings().first()
+    if not row:
+        raise ApiError(404, 'This issue is no longer open for assignment.', 'Not Found')
+    if row['assignee_id'] and row['assignee_id'] != payload.assigneeId:
+        raise ApiError(
+            409,
+            f"{row['identifier']} is already assigned to {row['assignee_name']}. Refresh the proposal.",
+            'Conflict',
+        )
+    member = await db.execute(
+        text("""SELECT 1 FROM workspace_members
+                WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'"""),
+        {'workspace_id': payload.workspaceId, 'user_id': payload.assigneeId},
+    )
+    if member.scalar_one_or_none() is None:
+        raise ApiError(400, 'The suggested person is not an active workspace member.', 'Bad Request')
+    if not row['assignee_id']:
+        now = _utcnow()
+        await db.execute(
+            text('UPDATE issues SET assignee_id = :assignee_id, updated_at = :now WHERE id = :id'),
+            {'assignee_id': payload.assigneeId, 'now': now, 'id': payload.issueId},
+        )
+        await db.execute(
+            text('''INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
+                    VALUES (:id, :workspace_id, :actor_id, 'agent.assignment.applied', 'issue', :entity_id,
+                            CAST(:metadata AS jsonb), :now)'''),
+            {
+                'id': _cuid(), 'workspace_id': payload.workspaceId, 'actor_id': user['id'],
+                'entity_id': payload.issueId,
+                'metadata': json.dumps({'assigneeId': payload.assigneeId}), 'now': now,
+            },
+        )
+        await db.commit()
+    return {'data': {'applied': True, 'issueId': payload.issueId, 'assigneeId': payload.assigneeId}}

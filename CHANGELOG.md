@@ -10,6 +10,15 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+## [0.8.0] — 2026-09-09 23:56 +07
+
+### Added
+
+- Agent answers workload questions with a deterministic per-team overview
+  (most loaded member, average score, unassigned issues) and drafts
+  assignment proposals with one-line explanations; each row is applied or
+  skipped individually and nothing changes until approved.
+
 ## [0.7.1] — 2026-09-09 23:33 +07
 
 ### Added
