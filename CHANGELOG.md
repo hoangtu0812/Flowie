@@ -10,6 +10,14 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+## [0.10.0] — 2026-09-10 00:55 +07
+
+### Added
+
+- Timeline peek panels now edit in place: issue peeks change status,
+  priority, due date, assignee and labels, while project peeks change status,
+  priority, lead, members, dates and labels without leaving the timeline.
+
 ## [0.9.2] — 2026-09-10 00:35 +07
 
 ### Fixed
