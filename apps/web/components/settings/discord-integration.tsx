@@ -41,6 +41,7 @@ export function DiscordIntegration({
    const [url, setUrl] = useState('');
    const [enabled, setEnabled] = useState(true);
    const [dailyDigestEnabled, setDailyDigestEnabled] = useState(false);
+   const [running, setRunning] = useState(false);
    const [message, setMessage] = useState<string>();
    const [saving, setSaving] = useState(false);
    const [configured, setConfigured] = useState(false);
@@ -111,6 +112,33 @@ export function DiscordIntegration({
       );
    }
 
+   async function runDigest() {
+      if (!workspaceId) return;
+      setRunning(true);
+      setMessage(undefined);
+      try {
+         const response = await authenticatedFetch(
+            `${api}/digest/send?workspaceId=${workspaceId}`,
+            { method: 'POST' }
+         );
+         const payload = (await response.json().catch(() => null)) as {
+            data?: { sent?: boolean; reason?: string };
+         } | null;
+         if (response.ok && payload?.data?.sent) {
+            setMessage('Daily digest sent to Discord.');
+         } else {
+            setMessage(
+               payload?.data?.reason ??
+                  'The digest could not be sent. Check the webhook and digest setting.'
+            );
+         }
+      } catch {
+         setMessage('The digest could not be sent. Check the webhook and digest setting.');
+      } finally {
+         setRunning(false);
+      }
+   }
+
    return (
       <form className="space-y-5" onSubmit={save}>
          <div>
@@ -159,6 +187,15 @@ export function DiscordIntegration({
                disabled={!configured}
             >
                Send test
+            </Button>
+            <Button
+               type="button"
+               variant="outline"
+               onClick={() => void runDigest()}
+               disabled={!configured || running}
+               title="Build and post today's digest to Discord right away"
+            >
+               {running ? 'Running…' : 'Run digest now'}
             </Button>
          </div>
       </form>

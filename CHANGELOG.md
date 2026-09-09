@@ -10,6 +10,13 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+## [0.7.1] — 2026-09-09 23:33 +07
+
+### Added
+
+- Discord settings gained a "Run digest now" button that builds and posts
+  today's progress digest on demand instead of waiting for the 08:00 run.
+
 ## [0.7.0] — 2026-09-09 23:19 +07
 
 ### Added
