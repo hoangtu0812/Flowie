@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { AssigneeUser } from './assignee-user';
 import { ISSUE_COLUMN, issueListMinWidth } from './issue-columns';
+import { IssueDateCell, IssueEffortCell } from './issue-inline-cells';
 import { LabelBadge } from './label-badge';
 import { PrioritySelector } from './priority-selector';
 import { ProjectBadge } from './project-badge';
@@ -17,9 +18,6 @@ import { motion } from 'motion/react';
 
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { IssueContextMenu } from './issue-context-menu';
-
-const formatScheduleDate = (value: string | undefined) =>
-   value ? format(new Date(value), 'MMM dd') : '—';
 
 export function IssueLine({ issue, layoutId = false }: { issue: Issue; layoutId?: boolean }) {
    const { orgId } = useParams<{ orgId: string }>();
@@ -77,25 +75,27 @@ export function IssueLine({ issue, layoutId = false }: { issue: Issue; layoutId?
                   </div>
                )}
                {displayProperties.startDate && (
-                  <div className={cn(ISSUE_COLUMN.startDate, 'text-xs text-muted-foreground')}>
-                     {formatScheduleDate(issue.startDate)}
+                  <div className={ISSUE_COLUMN.startDate}>
+                     <IssueDateCell issueId={issue.id} value={issue.startDate} kind="start" />
                   </div>
                )}
                {displayProperties.targetDate && (
-                  <div className={cn(ISSUE_COLUMN.targetDate, 'text-xs text-muted-foreground')}>
-                     {formatScheduleDate(issue.targetDate)}
+                  <div className={ISSUE_COLUMN.targetDate}>
+                     <IssueDateCell issueId={issue.id} value={issue.targetDate} kind="target" />
                   </div>
                )}
                {displayProperties.estimatedEffort && (
-                  <div
-                     className={cn(ISSUE_COLUMN.estimatedEffort, 'text-xs text-muted-foreground')}
-                  >
-                     {issue.estimatedEffort ?? '—'}
+                  <div className={ISSUE_COLUMN.estimatedEffort}>
+                     <IssueEffortCell
+                        issueId={issue.id}
+                        value={issue.estimatedEffort}
+                        kind="estimated"
+                     />
                   </div>
                )}
                {displayProperties.actualEffort && (
-                  <div className={cn(ISSUE_COLUMN.actualEffort, 'text-xs text-muted-foreground')}>
-                     {issue.actualEffort ?? '—'}
+                  <div className={ISSUE_COLUMN.actualEffort}>
+                     <IssueEffortCell issueId={issue.id} value={issue.actualEffort} kind="actual" />
                   </div>
                )}
                {displayProperties.cycle && (
@@ -109,14 +109,8 @@ export function IssueLine({ issue, layoutId = false }: { issue: Issue; layoutId?
                   </div>
                )}
                {displayProperties.dueDate && (
-                  <div className={cn(ISSUE_COLUMN.dueDate, 'text-xs')}>
-                     {issue.dueDate ? (
-                        <span className="text-orange-400">
-                           {format(new Date(issue.dueDate), 'MMM dd')}
-                        </span>
-                     ) : (
-                        <span className="text-muted-foreground">—</span>
-                     )}
+                  <div className={ISSUE_COLUMN.dueDate}>
+                     <IssueDateCell issueId={issue.id} value={issue.dueDate} kind="due" accent />
                   </div>
                )}
                {displayProperties.assignee && (

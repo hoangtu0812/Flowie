@@ -10,6 +10,14 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+## [0.5.0] — 2026-09-09 19:28 +07
+
+### Added
+
+- The issues list now supports quick editing directly on each row for start,
+  end, due dates and estimated/actual effort, alongside the existing assignee
+  picker, without opening the issue detail panel.
+
 ## [0.4.0] — 2026-09-01 10:59 +07
 
 ### Changed
