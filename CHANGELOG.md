@@ -10,6 +10,13 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+## [0.10.1] — 2026-09-10 09:10 +07
+
+### Fixed
+
+- Peek panels no longer break the production build: removed an unused import
+  and stabilized the members memo.
+
 ## [0.10.0] — 2026-09-10 00:55 +07
 
 ### Added

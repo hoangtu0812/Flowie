@@ -4,7 +4,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
-import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import {
    CalendarDays,

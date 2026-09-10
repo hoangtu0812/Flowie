@@ -145,7 +145,10 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
       return () => window.removeEventListener('keydown', onKeyDown);
    }, [onClose]);
 
-   const members = liveProject?.members.map((member) => member.user) ?? [];
+   const members = useMemo(
+      () => liveProject?.members.map((member) => member.user) ?? [],
+      [liveProject]
+   );
    const memberIds = useMemo(() => members.map((member) => member.id), [members]);
    const labelIds = useMemo(
       () => liveProject?.labelLinks.map((link) => link.label.id) ?? [],
