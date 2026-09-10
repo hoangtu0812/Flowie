@@ -10,6 +10,14 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+## [0.12.0] — 2026-09-10 10:26 +07
+
+### Added
+
+- Daily digest and dispatcher Discord messages now link issue identifiers and
+  project names straight to the app, falling back to plain text when no
+  public URL is configured.
+
 ## [0.11.0] — 2026-09-10 09:28 +07
 
 ### Added

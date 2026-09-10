@@ -71,6 +71,23 @@ class DispatcherReportTests(unittest.TestCase):
         self.assertIn("[dry-run]", lines[0])
         self.assertTrue(any("Would assign CDS-3" in line for line in lines))
 
+    def test_report_lines_link_issues_with_base(self) -> None:
+        result = {
+            "teamName": "CDS",
+            "dryRun": False,
+            "applied": [{"identifier": "CDS-1", "suggestedUserName": "An"}],
+            "nudged": [],
+            "wouldApply": [],
+            "wouldNudge": [],
+            "skippedBudget": 0,
+        }
+        lines = dispatcher_report_lines(result, "https://x", "acme")
+        self.assertTrue(
+            any("[CDS-1](https://x/acme/issue/CDS-1)" in line for line in lines)
+        )
+        plain = dispatcher_report_lines(result)
+        self.assertTrue(any("CDS-1" in line and "](" not in line for line in plain))
+
 
 class DispatcherScheduleTests(unittest.TestCase):
     def test_cutoff_is_today_0830_naive_utc(self) -> None:

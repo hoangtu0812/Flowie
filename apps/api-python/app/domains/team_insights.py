@@ -10,6 +10,7 @@ same payloads; it must never recompute them.
 
 import logging
 from datetime import datetime, timedelta, timezone
+from os import getenv
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -41,6 +42,41 @@ DUE_SOON_DAYS = 3
 
 def hcm_today(value: datetime | None = None) -> str:
     return (value or _utcnow()).astimezone(HCM).date().isoformat()
+
+
+async def _app_links(
+    db: AsyncSession, workspace_id: str
+) -> tuple[str | None, str | None]:
+    """Base app URL and workspace slug for Discord links.
+
+    Discord rejects a whole embed when a link is not absolute, so callers
+    must fall back to plain text whenever either part is missing.
+    """
+    base = (getenv("APP_URL") or getenv("NEXT_PUBLIC_APP_URL") or "").rstrip("/")
+    result = await db.execute(
+        text("SELECT slug FROM workspaces WHERE id = :workspace_id"),
+        {"workspace_id": workspace_id},
+    )
+    return (base or None, result.scalar_one_or_none())
+
+
+def issue_link(
+    base: str | None, slug: str | None, identifier: str, title: str = ""
+) -> str:
+    """Issue identifier as a Discord markdown link, or plain text without a base."""
+    if base and slug:
+        label = f"{identifier} {title}".strip()
+        return f"[{label}]({base}/{slug}/issue/{identifier})"
+    return f"{identifier} {title}".strip()
+
+
+def project_link(
+    base: str | None, slug: str | None, project_id: str | None, name: str
+) -> str:
+    """Project name as a Discord markdown link, or plain text without a base."""
+    if base and slug and project_id:
+        return f"[{name}]({base}/{slug}/project/{project_id}/overview)"
+    return name
 
 
 def workload_score(
@@ -472,16 +508,26 @@ async def build_digest(
             -entry["open"],
         ),
     )
-    actions: list[str] = []
+    actions: list[dict[str, str]] = []
     for entry in ordered:
         for item in entry["overdue"][:5]:
             owner = item["assignee"] or "chưa gán"
             actions.append(
-                f"🔴 {item['identifier']} quá hạn từ {item['dueDate']} ({owner}) — dời due date hoặc tăng người."
+                {
+                    "icon": "🔴",
+                    "identifier": item["identifier"],
+                    "title": item["title"],
+                    "detail": f"quá hạn từ {item['dueDate']} ({owner}) — dời due date hoặc tăng người.",
+                }
             )
         for item in entry["unassigned"][:5]:
             actions.append(
-                f"🟡 {item['identifier']} chưa có người phụ trách — dùng gợi ý phân bổ của team."
+                {
+                    "icon": "🟡",
+                    "identifier": item["identifier"],
+                    "title": item["title"],
+                    "detail": "chưa có người phụ trách — dùng gợi ý phân bổ của team.",
+                }
             )
     return {
         "today": today,
@@ -492,7 +538,9 @@ async def build_digest(
     }
 
 
-def digest_embeds(digest: dict[str, Any]) -> list[dict[str, Any]]:
+def digest_embeds(
+    digest: dict[str, Any], base: str | None = None, slug: str | None = None
+) -> list[dict[str, Any]]:
     status_icon = {"on_track": "🟢", "needs_attention": "🟡", "late": "🔴"}
     status_label = {
         "on_track": "Đúng tiến độ",
@@ -506,17 +554,18 @@ def digest_embeds(digest: dict[str, Any]) -> list[dict[str, Any]]:
     ]
     for entry in digest["projects"]:
         lines.append(
-            f"{status_icon[entry['status']]} **{entry['projectName']}** — {status_label[entry['status']]}"
+            f"{status_icon[entry['status']]} **{project_link(base, slug, entry['projectId'], entry['projectName'])}** — {status_label[entry['status']]}"
             f" (mở {entry['open']}, trễ {len(entry['overdue'])}, chưa gán {len(entry['unassigned'])})"
         )
         for item in entry["overdue"][:3]:
             lines.append(
-                f"  • 🔴 {item['identifier']} {item['title'][:60]} ({item['assignee'] or 'chưa gán'}, due {item['dueDate']})"
+                f"  • 🔴 {issue_link(base, slug, item['identifier'], item['title'][:60])} ({item['assignee'] or 'chưa gán'}, due {item['dueDate']})"
             )
     if digest["actions"]:
         lines += ["", "**Khuyến nghị:**"]
         lines += [
-            f"{index + 1}. {action}" for index, action in enumerate(digest["actions"])
+            f"{index + 1}. {action['icon']} {issue_link(base, slug, action['identifier'], action['title'])} {action['detail']}"
+            for index, action in enumerate(digest["actions"])
         ]
     description = "\n".join(lines)[:4000]
     return [
@@ -538,9 +587,12 @@ async def send_digest_for_workspace(
     if not url:
         return False
     digest = await build_digest(db, workspace_id, today)
+    base, slug = await _app_links(db, workspace_id)
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            response = await client.post(url, json={"embeds": digest_embeds(digest)})
+            response = await client.post(
+                url, json={"embeds": digest_embeds(digest, base, slug)}
+            )
         if not response.is_success:
             logger.warning(
                 "Daily digest rejected by Discord for %s: %s",

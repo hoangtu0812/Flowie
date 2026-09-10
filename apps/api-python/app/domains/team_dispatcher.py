@@ -25,7 +25,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.errors import ApiError
 from ..db.session import get_session
 from .auth import _cuid, _utcnow, current_user
-from .team_insights import HCM, assignment_suggestions, hcm_today
+from .team_insights import (
+    HCM,
+    _app_links,
+    assignment_suggestions,
+    hcm_today,
+    issue_link,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -90,21 +96,29 @@ def seconds_until_next_dispatch(now: datetime | None = None) -> float:
     return max((target - current).total_seconds(), 1.0)
 
 
-def dispatcher_report_lines(result: dict[str, Any]) -> list[str]:
+def dispatcher_report_lines(
+    result: dict[str, Any], base: str | None = None, slug: str | None = None
+) -> list[str]:
     """Human-readable lines for the Discord report and tests."""
     lines = [
         f"Team {result['teamName']}" + (" [dry-run]" if result.get("dryRun") else "")
     ]
     for item in result.get("applied", []):
-        lines.append(f"Assigned {item['identifier']} to {item['suggestedUserName']}")
+        lines.append(
+            f"Assigned {issue_link(base, slug, item['identifier'], '')} to {item['suggestedUserName']}"
+        )
     for item in result.get("wouldApply", []):
         lines.append(
-            f"Would assign {item['identifier']} to {item['suggestedUserName']}"
+            f"Would assign {issue_link(base, slug, item['identifier'], '')} to {item['suggestedUserName']}"
         )
     for item in result.get("nudged", []):
-        lines.append(f"Reminded {item['assignee']} about {item['identifier']}")
+        lines.append(
+            f"Reminded {item['assignee']} about {issue_link(base, slug, item['identifier'], '')}"
+        )
     for item in result.get("wouldNudge", []):
-        lines.append(f"Would remind {item['assignee']} about {item['identifier']}")
+        lines.append(
+            f"Would remind {item['assignee']} about {issue_link(base, slug, item['identifier'], '')}"
+        )
     if result.get("skippedBudget"):
         lines.append(
             f"Held {result['skippedBudget']} assignment(s): daily budget reached"
@@ -241,7 +255,8 @@ async def _post_discord_report(
     url = webhook.scalar_one_or_none()
     if not url:
         return False
-    lines = dispatcher_report_lines(result)
+    base, slug = await _app_links(db, workspace_id)
+    lines = dispatcher_report_lines(result, base, slug)
     description = "🤖 **Auto dispatcher**\n" + "\n".join(f"• {line}" for line in lines)
     try:
         async with httpx.AsyncClient(timeout=15) as client:
