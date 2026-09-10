@@ -7,11 +7,13 @@ import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import { format, parseISO } from 'date-fns';
 import {
    CalendarDays,
+   CalendarRange,
    Check,
    ChevronRight,
    Circle,
    FolderKanban,
    Tag,
+   Timer,
    UserRound,
    X,
 } from 'lucide-react';
@@ -30,6 +32,10 @@ type PeekIssue = {
    title: string;
    description: string | null;
    dueDate: string | null;
+   startDate?: string | null;
+   targetDate?: string | null;
+   estimatedEffort?: number | null;
+   actualEffort?: number | null;
    statusId: string;
    status: { name: string; color: string };
    priority: string;
@@ -119,7 +125,16 @@ function OptionRow({
 }
 
 /** Issue peek panel with inline editing, so timeline bars need no detour. */
-export function IssuePeekPanel({ issueId, onClose }: { issueId: string; onClose: () => void }) {
+export function IssuePeekPanel({
+   issueId,
+   onClose,
+   onChanged,
+}: {
+   issueId: string;
+   onClose: () => void;
+   /** Fired after a successful save so the timeline can redraw the bar. */
+   onChanged?: () => void;
+}) {
    const { orgId } = useParams<{ orgId: string }>();
    const [issue, setIssue] = useState<PeekIssue>();
    const [statuses, setStatuses] = useState<PeekOption[]>([]);
@@ -127,6 +142,10 @@ export function IssuePeekPanel({ issueId, onClose }: { issueId: string; onClose:
    const [labels, setLabels] = useState<PeekOption[]>([]);
    const [openEditor, setOpenEditor] = useState<string | null>(null);
    const [saving, setSaving] = useState(false);
+   const [startDate, setStartDate] = useState('');
+   const [targetDate, setTargetDate] = useState('');
+   const [estEffort, setEstEffort] = useState('');
+   const [actEffort, setActEffort] = useState('');
 
    useEffect(() => {
       let active = true;
@@ -189,6 +208,7 @@ export function IssuePeekPanel({ issueId, onClose }: { issueId: string; onClose:
          }
          setIssue((prev) => (prev ? apply(prev) : prev));
          setOpenEditor(null);
+         onChanged?.();
       } catch (caught) {
          toast.error(caught instanceof Error ? caught.message : 'Could not update this issue.');
       } finally {
@@ -232,8 +252,43 @@ export function IssuePeekPanel({ issueId, onClose }: { issueId: string; onClose:
 
    const editorProps = (key: string) => ({
       open: openEditor === key && !saving,
-      onOpenChange: (open: boolean) => setOpenEditor(open ? key : null),
+      onOpenChange: (open: boolean) => {
+         if (open && key === 'schedule') {
+            setStartDate(issue?.startDate?.slice(0, 10) ?? '');
+            setTargetDate(issue?.targetDate?.slice(0, 10) ?? '');
+         }
+         if (open && key === 'effort') {
+            setEstEffort(issue?.estimatedEffort?.toString() ?? '');
+            setActEffort(issue?.actualEffort?.toString() ?? '');
+         }
+         setOpenEditor(open ? key : null);
+      },
    });
+
+   const shortDate = (value: string | null | undefined) =>
+      value ? format(parseISO(value), 'MMM d') : '—';
+
+   const saveSchedule = () =>
+      void patch({ startDate: startDate || null, targetDate: targetDate || null }, (current) => ({
+         ...current,
+         startDate: startDate || null,
+         targetDate: targetDate || null,
+      }));
+
+   const effortValue = (value: string) => {
+      const parsed = Number(value);
+      return value.trim() && Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+   };
+
+   const saveEffort = () => {
+      const estimatedEffort = effortValue(estEffort);
+      const actualEffort = effortValue(actEffort);
+      return void patch({ estimatedEffort, actualEffort }, (current) => ({
+         ...current,
+         estimatedEffort,
+         actualEffort,
+      }));
+   };
 
    return (
       <aside className="absolute top-10 right-2 bottom-2 w-[380px] max-w-[calc(100%-1rem)] z-40 overflow-y-auto rounded-xl border bg-container shadow-lg p-4">
@@ -321,6 +376,82 @@ export function IssuePeekPanel({ issueId, onClose }: { issueId: string; onClose:
                   <p className="px-1 text-xs text-muted-foreground">
                      Pick a date to save, or clear the field to remove it.
                   </p>
+               </div>
+            </EditableProperty>
+            <EditableProperty
+               icon={<CalendarRange className="size-4" />}
+               label="Schedule"
+               display={`${shortDate(issue.startDate)} → ${shortDate(issue.targetDate)}`}
+               title="Change start and end dates"
+               {...editorProps('schedule')}
+            >
+               <div className="p-1 space-y-2" onClick={(event) => event.stopPropagation()}>
+                  <label className="block text-xs font-medium text-muted-foreground">
+                     Start date
+                     <Input
+                        type="date"
+                        className="mt-1"
+                        value={startDate}
+                        onChange={(event) => setStartDate(event.target.value)}
+                     />
+                  </label>
+                  <label className="block text-xs font-medium text-muted-foreground">
+                     End date
+                     <Input
+                        type="date"
+                        className="mt-1"
+                        value={targetDate}
+                        onChange={(event) => setTargetDate(event.target.value)}
+                     />
+                  </label>
+                  <button
+                     type="button"
+                     disabled={saving}
+                     onClick={saveSchedule}
+                     className="w-full rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-60"
+                  >
+                     {saving ? 'Saving…' : 'Save dates'}
+                  </button>
+               </div>
+            </EditableProperty>
+            <EditableProperty
+               icon={<Timer className="size-4" />}
+               label="Effort"
+               display={`Est ${issue.estimatedEffort ?? '—'} · Act ${issue.actualEffort ?? '—'}`}
+               title="Change effort"
+               {...editorProps('effort')}
+            >
+               <div className="p-1 space-y-2" onClick={(event) => event.stopPropagation()}>
+                  <label className="block text-xs font-medium text-muted-foreground">
+                     Est effort (mandays)
+                     <Input
+                        type="number"
+                        min="0"
+                        step="0.25"
+                        className="mt-1"
+                        value={estEffort}
+                        onChange={(event) => setEstEffort(event.target.value)}
+                     />
+                  </label>
+                  <label className="block text-xs font-medium text-muted-foreground">
+                     Act effort (mandays)
+                     <Input
+                        type="number"
+                        min="0"
+                        step="0.25"
+                        className="mt-1"
+                        value={actEffort}
+                        onChange={(event) => setActEffort(event.target.value)}
+                     />
+                  </label>
+                  <button
+                     type="button"
+                     disabled={saving}
+                     onClick={saveEffort}
+                     className="w-full rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-60"
+                  >
+                     {saving ? 'Saving…' : 'Save effort'}
+                  </button>
                </div>
             </EditableProperty>
             <EditableProperty

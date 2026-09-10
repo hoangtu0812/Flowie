@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
+import { useProjectsData } from '@/features/projects/projects-data';
 import type { Project } from '@/types/projects';
 import { useProjectsDisplayStore } from '@/store/projects-display-store';
 import {
@@ -28,6 +29,7 @@ import {
 import { format, parseISO } from 'date-fns';
 import { ArrowLeft, ArrowRight, Check, ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { ProjectPeekPanel } from './project-peek-panel';
 import { ProjectGroup } from './projects';
 
@@ -338,10 +340,12 @@ export default function ProjectsTimeline({ groups }: ProjectsTimelineProps) {
    const [zoom, setZoom] = useState<TimelineZoom>('week');
    const [peekProjectId, setPeekProjectId] = useState<string | null>(null);
    const [peekIssueId, setPeekIssueId] = useState<string | null>(null);
+   const [peekIssueProjectId, setPeekIssueProjectId] = useState<string | null>(null);
    const [expanded, setExpanded] = useState<Set<string>>(new Set());
    const [issuesByProject, setIssuesByProject] = useState<Record<string, TimelineIssue[]>>({});
    const [loadingIssues, setLoadingIssues] = useState<Set<string>>(new Set());
    const [workspaceId, setWorkspaceId] = useState<string>();
+   const { refreshProjects } = useProjectsData();
    const scrollRef = useRef<HTMLDivElement>(null);
    const frameRef = useRef<number | null>(null);
 
@@ -434,15 +438,9 @@ export default function ProjectsTimeline({ groups }: ProjectsTimelineProps) {
    }, []);
 
    /** Issues are fetched the first time a project is opened, then kept. */
-   const toggleProject = useCallback(
+   const fetchProjectIssues = useCallback(
       async (projectId: string) => {
-         setExpanded((current) => {
-            const next = new Set(current);
-            if (next.has(projectId)) next.delete(projectId);
-            else next.add(projectId);
-            return next;
-         });
-         if (!workspaceId || issuesByProject[projectId]) return;
+         if (!workspaceId) return;
          setLoadingIssues((current) => new Set(current).add(projectId));
          try {
             const query = new URLSearchParams({ workspaceId });
@@ -462,7 +460,29 @@ export default function ProjectsTimeline({ groups }: ProjectsTimelineProps) {
             });
          }
       },
-      [issuesByProject, workspaceId]
+      [workspaceId]
+   );
+
+   const toggleProject = useCallback(
+      async (projectId: string) => {
+         setExpanded((current) => {
+            const next = new Set(current);
+            if (next.has(projectId)) next.delete(projectId);
+            else next.add(projectId);
+            return next;
+         });
+         if (!workspaceId || issuesByProject[projectId]) return;
+         await fetchProjectIssues(projectId);
+      },
+      [fetchProjectIssues, issuesByProject, workspaceId]
+   );
+
+   /** Redraw issue bars after a peek edit without collapsing the project. */
+   const refreshProjectIssues = useCallback(
+      (projectId: string | null) => {
+         if (projectId && issuesByProject[projectId]) void fetchProjectIssues(projectId);
+      },
+      [fetchProjectIssues, issuesByProject]
    );
 
    const jumpTo = useCallback(
@@ -492,10 +512,25 @@ export default function ProjectsTimeline({ groups }: ProjectsTimelineProps) {
    return (
       <div className="relative w-full h-full">
          {peekProjectId !== null && (
-            <ProjectPeekPanel projectId={peekProjectId} onClose={() => setPeekProjectId(null)} />
+            <ProjectPeekPanel
+               projectId={peekProjectId}
+               onClose={() => setPeekProjectId(null)}
+               onChanged={() =>
+                  void refreshProjects().catch(() =>
+                     toast.error('Project saved, but the timeline could not refresh.')
+                  )
+               }
+            />
          )}
          {peekIssueId !== null && (
-            <IssuePeekPanel issueId={peekIssueId} onClose={() => setPeekIssueId(null)} />
+            <IssuePeekPanel
+               issueId={peekIssueId}
+               onClose={() => {
+                  setPeekIssueId(null);
+                  setPeekIssueProjectId(null);
+               }}
+               onChanged={() => refreshProjectIssues(peekIssueProjectId)}
+            />
          )}
          {/* Floating scale controls (Linear-style) */}
          <div className="absolute top-1 right-4 z-30 flex items-center gap-1.5">
@@ -700,6 +735,7 @@ export default function ProjectsTimeline({ groups }: ProjectsTimelineProps) {
                                        monthWidth={monthWidth}
                                        onSelect={(issueId) => {
                                           setPeekProjectId(null);
+                                          setPeekIssueProjectId(project.id);
                                           setPeekIssueId((current) =>
                                              current === issueId ? null : issueId
                                           );

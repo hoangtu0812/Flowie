@@ -88,6 +88,8 @@ type ProjectData = {
    workspaceMembers: ProjectListMember[];
    createProject: (values: CreateProjectValues) => Promise<void>;
    updateProject: (projectId: string, update: ProjectListUpdate) => Promise<void>;
+   /** Refetch the project list so bars reflect edits made outside this store. */
+   refreshProjects: () => Promise<void>;
 };
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
@@ -183,13 +185,19 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
       setWorkspaceLoading(true);
       void (async () => {
          const workspace = await loadCurrentWorkspace();
-         const [projectsResponse, membersResponse, teamsResponse, templatesResponse] = await Promise.all([
-            authenticatedFetch(`${api}/projects?workspaceId=${workspace.id}`),
-            authenticatedFetch(`${api}/workspaces/${workspace.id}/members`),
-            authenticatedFetch(`${api}/teams?workspaceId=${workspace.id}`),
-            authenticatedFetch(`${api}/projects/templates?workspaceId=${workspace.id}`),
-         ]);
-         if (!projectsResponse.ok || !membersResponse.ok || !teamsResponse.ok || !templatesResponse.ok) {
+         const [projectsResponse, membersResponse, teamsResponse, templatesResponse] =
+            await Promise.all([
+               authenticatedFetch(`${api}/projects?workspaceId=${workspace.id}`),
+               authenticatedFetch(`${api}/workspaces/${workspace.id}/members`),
+               authenticatedFetch(`${api}/teams?workspaceId=${workspace.id}`),
+               authenticatedFetch(`${api}/projects/templates?workspaceId=${workspace.id}`),
+            ]);
+         if (
+            !projectsResponse.ok ||
+            !membersResponse.ok ||
+            !teamsResponse.ok ||
+            !templatesResponse.ok
+         ) {
             throw new Error('Could not load projects.');
          }
          const projectsPayload = (await projectsResponse.json()) as { data: ApiProject[] };
@@ -197,7 +205,9 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
             data: Array<{ status: string; user: ProjectListMember }>;
          };
          const teamsPayload = (await teamsResponse.json()) as { data: ApiWorkspaceTeam[] };
-         const templatesPayload = (await templatesResponse.json()) as { data: ProjectTemplateOption[] };
+         const templatesPayload = (await templatesResponse.json()) as {
+            data: ProjectTemplateOption[];
+         };
          if (!current) return;
          setWorkspaceId(workspace.id);
          setResolvedTeamId(
@@ -266,6 +276,14 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
       [workspaceId]
    );
 
+   const refreshProjects = useCallback(async () => {
+      const workspace = await loadCurrentWorkspace();
+      const response = await authenticatedFetch(`${api}/projects?workspaceId=${workspace.id}`);
+      if (!response.ok) throw new Error('Could not refresh projects.');
+      const payload = (await response.json()) as { data: ApiProject[] };
+      setAllProjects(payload.data.map(mapProject));
+   }, []);
+
    const createProject = useCallback(
       async ({ name, identifier, teamId, templateId, description }: CreateProjectValues) => {
          if (!workspaceId) throw new Error('Workspace is not ready yet.');
@@ -308,6 +326,7 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
       workspaceMembers,
       createProject,
       updateProject,
+      refreshProjects,
    };
 }
 

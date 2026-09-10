@@ -30,6 +30,8 @@ import { ProjectProgressChart } from './details/project-progress-chart';
 interface ProjectPeekPanelProps {
    projectId: string;
    onClose: () => void;
+   /** Fired after a successful save so the timeline can move the bar. */
+   onChanged?: () => void;
 }
 
 const formatDay = (iso?: string) => (iso ? format(parseISO(iso), 'MMM do') : '—');
@@ -108,7 +110,7 @@ function Card({ children, className }: { children: React.ReactNode; className?: 
  * timeline (Linear-style "peek"): header, properties, milestones and
  * progress cards stacked over the right side of the timeline.
  */
-export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) {
+export function ProjectPeekPanel({ projectId, onClose, onChanged }: ProjectPeekPanelProps) {
    const { orgId } = useParams<{ orgId: string }>();
    const {
       project: liveProject,
@@ -160,6 +162,7 @@ export function ProjectPeekPanel({ projectId, onClose }: ProjectPeekPanelProps) 
       try {
          await work();
          setOpenEditor(null);
+         onChanged?.();
       } catch (caught) {
          toast.error(caught instanceof Error ? caught.message : 'Could not save project changes.');
       } finally {

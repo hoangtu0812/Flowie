@@ -10,6 +10,16 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+## [0.11.0] — 2026-09-10 09:28 +07
+
+### Added
+
+- Timeline peek panels refresh the timeline behind them: project edits move
+  the project bar via a project-list refresh, issue edits redraw the issue
+  bar by refetching its project.
+- Issue peeks now show and edit schedule (start/end dates) and effort
+  (estimated/actual mandays) alongside the existing fields.
+
 ## [0.10.1] — 2026-09-10 09:10 +07
 
 ### Fixed
