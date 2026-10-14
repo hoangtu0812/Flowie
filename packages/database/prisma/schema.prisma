@@ -532,18 +532,18 @@ model Organization {
 }
 
 model Workspace {
-  id                     String   @id @default(cuid())
-  organizationId         String   @map("organization_id")
+  id                     String            @id @default(cuid())
+  organizationId         String            @map("organization_id")
   name                   String
-  slug                   String   @unique
+  slug                   String            @unique
   icon                   String?
   description            String?
-  timezone               String   @default("UTC")
-  projectDisplayDefaults Json?    @map("project_display_defaults")
-  issueDisplayDefaults   Json?    @map("issue_display_defaults")
-  issueInsightDefaults   Json?    @map("issue_insight_defaults")
-  createdAt              DateTime @default(now()) @map("created_at")
-  updatedAt              DateTime @updatedAt @map("updated_at")
+  timezone               String            @default("UTC")
+  projectDisplayDefaults Json?             @map("project_display_defaults")
+  issueDisplayDefaults   Json?             @map("issue_display_defaults")
+  issueInsightDefaults   Json?             @map("issue_insight_defaults")
+  createdAt              DateTime          @default(now()) @map("created_at")
+  updatedAt              DateTime          @updatedAt @map("updated_at")
 
   organization            Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   members                 WorkspaceMember[]
@@ -1909,25 +1909,45 @@ model InitiativeLabelLink {
 }
 
 model Notification {
-  id          String    @id @default(cuid())
-  workspaceId String    @map("workspace_id")
-  userId      String    @map("user_id")
-  type        String
-  entityType  String    @map("entity_type")
-  entityId    String    @map("entity_id")
-  data        Json?
-  readAt      DateTime? @map("read_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
+  snoozedUntil  DateTime?                  @map("snoozed_until")
+  emailDelivery NotificationEmailDelivery?
+  id            String                     @id @default(cuid())
+  workspaceId   String                     @map("workspace_id")
+  userId        String                     @map("user_id")
+  type          String
+  entityType    String                     @map("entity_type")
+  entityId      String                     @map("entity_id")
+  data          Json?
+  readAt        DateTime?                  @map("read_at")
+  createdAt     DateTime                   @default(now()) @map("created_at")
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt, createdAt])
   @@index([workspaceId, userId, readAt, createdAt])
+  @@index([snoozedUntil, id])
   @@map("notifications")
 }
 
+model NotificationEmailDelivery {
+  notificationId String       @id @map("notification_id")
+  attempts       Int          @default(0)
+  availableAt    DateTime     @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'::text)")) @map("available_at")
+  leaseUntil     DateTime?    @map("lease_until")
+  leaseToken     String?      @map("lease_token")
+  deliveredAt    DateTime?    @map("delivered_at")
+  failedAt       DateTime?    @map("failed_at")
+  lastErrorCode  String?      @map("last_error_code")
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@index([availableAt])
+  @@map("notification_email_deliveries")
+}
+
 model NotificationPreference {
+  emailEnabled       Boolean  @default(false) @map("email_enabled")
+  desktopEnabled     Boolean  @default(false) @map("desktop_enabled")
   workspaceId        String   @map("workspace_id")
   userId             String   @map("user_id")
   teamIssueAdded     Boolean  @default(false) @map("team_issue_added")

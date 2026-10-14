@@ -73,6 +73,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await mcp_stack.enter_async_context(app.state.mcp_server.session_manager.run())
         outbox_stop = asyncio.Event()
         outbox_task = asyncio.create_task(outbox_loop(session_factory, outbox_stop))
+        from .modules.notifications.delivery_worker import delivery_loop
+        channel_task=asyncio.create_task(delivery_loop(session_factory,runtime,outbox_stop))
         maintenance_task=asyncio.create_task(maintenance_loop(session_factory,outbox_stop))
         agent_runs_stop = asyncio.Event()
         agent_runs_task = asyncio.create_task(agent_run_dispatcher_loop(session_factory, agent_runs_stop)) if runtime.mcp_enabled and runtime.mcp_writes_enabled else None
@@ -98,6 +100,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await dispatch_task
             await scm_task
             await outbox_task
+            await channel_task
             await maintenance_task
             if agent_runs_task:
                 await agent_runs_task
@@ -149,6 +152,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(pulse_router)
     app.include_router(emojis_router)
     app.include_router(notifications_router)
+    from .modules.notifications.channels import router as channels_router
+    app.include_router(channels_router)
     app.include_router(integrations_router)
     app.include_router(views_router)
     app.include_router(native_projects_router)

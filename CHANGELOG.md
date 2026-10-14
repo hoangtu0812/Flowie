@@ -12,6 +12,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Notifications support persistent snooze with wake-up events and opt-in private email through a leased retry queue and scoped delivery status. Apply the channel/snooze and UTC-queue migrations before API startup; email requires verified recipients and configured SMTP/TLS.
+
 - Language, home view, comment shortcut and readable UI preferences synchronize
   by account with version checks across devices. Apply the account-preferences
   migration before starting the API; conflicts require an explicit reload.

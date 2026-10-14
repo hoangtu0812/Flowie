@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import asyncio
 import logging
-import smtplib
-import ssl
 from email.message import EmailMessage
 from urllib.parse import urlsplit
 from ...core.config import Settings
+from ...services.private_email import send_private_email
 
 logger = logging.getLogger(__name__)
 
@@ -33,24 +31,8 @@ async def deliver_reset(settings: Settings, email: str, token: str) -> None:
         "This link expires in 15 minutes and can be used once. If you did not request it, ignore this email."
     )
 
-    def send():
-        context = ssl.create_default_context()
-        client = (
-            smtplib.SMTP_SSL(
-                settings.smtp_host, settings.smtp_port, timeout=15, context=context
-            )
-            if settings.smtp_use_ssl
-            else smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15)
-        )
-        with client:
-            if not settings.smtp_use_ssl:
-                client.starttls(context=context)
-            if settings.smtp_username:
-                client.login(settings.smtp_username, settings.smtp_password)
-            client.send_message(message)
-
     try:
-        await asyncio.to_thread(send)
+        await send_private_email(settings, message)
     except Exception:
         # Provider exceptions can contain recipients or authentication material.
         logger.error("Password reset email delivery failed.")
