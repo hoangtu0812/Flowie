@@ -39,6 +39,9 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Issue comments now prevent duplicate submissions, retain drafts after network
+  errors and show pending/error states. Activity subscriptions use persisted
+  issue preferences, and failed activity loads offer an explicit retry.
 - Markdown document edits now flush before Done or Close, serialize pending
   saves and retain account-specific local drafts when saving fails or navigation
   interrupts editing.
