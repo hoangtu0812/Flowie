@@ -337,6 +337,141 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertEqual(error.exception.status_code, 409)
 
+    async def test_password_reset_http_does_not_disclose_accounts_and_invalidates_access_cookie(
+        self,
+    ):
+        from unittest.mock import AsyncMock, patch
+        from app.domains.auth import password_hasher
+
+        host = create_app(
+            replace(
+                self.settings,
+                smtp_host="mail.example.test",
+                smtp_from="flowie@example.test",
+            )
+        )
+        host.state.session_factory = self.factory
+        async with self.factory() as db:
+            await db.execute(
+                text("UPDATE users SET password_hash=:password WHERE id=:id"),
+                {
+                    "id": self.user["id"],
+                    "password": password_hasher.hash("Original-Password-2026!"),
+                },
+            )
+            await db.commit()
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=host), base_url="http://testserver"
+        ) as client:
+            login = await client.post(
+                "/api/v1/auth/login",
+                json={
+                    "email": self.user["email"],
+                    "password": "Original-Password-2026!",
+                },
+            )
+            self.assertEqual(login.status_code, 200, login.text)
+            with patch(
+                "app.modules.identity.api.deliver_reset", new=AsyncMock()
+            ) as delivery:
+                known = await client.post(
+                    "/api/v1/auth/password-reset/request",
+                    json={"email": self.user["email"]},
+                )
+                unknown = await client.post(
+                    "/api/v1/auth/password-reset/request",
+                    json={"email": "unknown-" + self.user["email"]},
+                )
+                self.assertEqual(known.status_code, 202)
+                self.assertEqual(known.json(), unknown.json())
+                token = delivery.call_args.args[2]
+            confirmed = await client.post(
+                "/api/v1/auth/password-reset/confirm",
+                json={"token": token, "password": "Replacement-Password-2026!"},
+            )
+            self.assertEqual(confirmed.status_code, 200, confirmed.text)
+            denied = await client.get("/api/v1/workspaces/me")
+            self.assertEqual(denied.status_code, 401)
+
+    async def test_password_reset_expires_is_single_use_and_revokes_credentials(self):
+        from app.modules.identity.password_reset import (
+            issue_reset,
+            consume_reset,
+            limit_request,
+        )
+        from app.domains.auth import password_hasher
+        from app.core.identifiers import _hash_token
+
+        async with self.factory() as db:
+            await db.execute(
+                text("UPDATE users SET password_hash=:password WHERE id=:id"),
+                {
+                    "id": self.user["id"],
+                    "password": password_hasher.hash("Original-Password-2026!"),
+                },
+            )
+            await db.commit()
+            self.assertIsNone(await issue_reset(db, "unknown@example.test"))
+            token = await issue_reset(db, self.user["email"])
+            stored = (
+                await db.execute(
+                    text(
+                        "SELECT token_hash FROM password_reset_tokens WHERE user_id=:id"
+                    ),
+                    {"id": self.user["id"]},
+                )
+            ).scalar_one()
+            self.assertEqual(stored, _hash_token(token))
+            self.assertNotEqual(stored, token)
+            await db.execute(
+                text(
+                    "UPDATE password_reset_tokens SET expires_at=:expired WHERE user_id=:id"
+                ),
+                {"expired": _utcnow() - timedelta(seconds=1), "id": self.user["id"]},
+            )
+            await db.commit()
+            with self.assertRaises(ApiError):
+                await consume_reset(db, token, "Replacement-Password-2026!")
+            await db.rollback()
+            token = await issue_reset(db, self.user["email"])
+            await consume_reset(db, token, "Replacement-Password-2026!")
+            with self.assertRaises(ApiError):
+                await consume_reset(db, token, "Another-Password-2026!")
+            await db.rollback()
+            user = (
+                (
+                    await db.execute(
+                        text(
+                            "SELECT password_hash,auth_version FROM users WHERE id=:id"
+                        ),
+                        {"id": self.user["id"]},
+                    )
+                )
+                .mappings()
+                .one()
+            )
+            self.assertTrue(
+                password_hasher.verify(
+                    user["password_hash"], "Replacement-Password-2026!"
+                )
+            )
+            self.assertEqual(user["auth_version"], 1)
+            self.assertEqual(
+                (
+                    await db.execute(
+                        text(
+                            "SELECT count(*) FROM mcp_connections WHERE user_id=:id AND revoked_at IS NULL"
+                        ),
+                        {"id": self.user["id"]},
+                    )
+                ).scalar_one(),
+                0,
+            )
+            await limit_request(db, "test-secret", "test", self.user["id"], 1)
+            with self.assertRaises(ApiError) as limited:
+                await limit_request(db, "test-secret", "test", self.user["id"], 1)
+            self.assertEqual(limited.exception.status_code, 429)
+
     async def test_web_comment_retry_is_deduplicated_after_commit(self):
         from app.modules.work_items.comments import create_comment
         from app.modules.work_items.contracts import CreateCommentInput

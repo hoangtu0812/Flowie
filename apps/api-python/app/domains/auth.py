@@ -40,7 +40,7 @@ MICROSOFT_FLOW_TTL_SECONDS = 10 * 60
 
 USER_COLUMNS = '''
     id, email, name, username, title, timezone, avatar_url, password_hash,
-    is_platform_admin, email_verified_at, status, created_at
+    is_platform_admin, email_verified_at, status, auth_version, created_at
 '''
 
 # Chromium on Windows can report the historical IANA alias `Asia/Saigon`.
@@ -393,6 +393,7 @@ async def _create_session(
     access_token = jwt.encode(
         {
             'sub': user['id'],
+            'ver': user.get('auth_version', 0),
             'email': user['email'],
             'iat': now,
             'exp': now + timedelta(seconds=settings.auth_access_token_ttl_seconds),
@@ -423,7 +424,7 @@ async def current_user(
     if not isinstance(user_id, str):
         raise ApiError(401, 'Your session has expired. Please sign in again.', 'Unauthorized')
     user = await _find_user_by_id(db, user_id)
-    if not user or user['status'] != 'ACTIVE':
+    if not user or user['status'] != 'ACTIVE' or payload.get('ver', 0) != user.get('auth_version', 0):
         raise ApiError(401, 'Your session has expired. Please sign in again.', 'Unauthorized')
     return _runtime_user(user, request.app.state.settings)
 

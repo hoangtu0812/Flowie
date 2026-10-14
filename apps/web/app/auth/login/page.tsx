@@ -143,6 +143,9 @@ export default function LoginPage() {
             <Button className="w-full" type="submit" disabled={isSubmitting}>
                {isSubmitting ? 'Đang đăng nhập…' : 'Đăng nhập'}
             </Button>
+            <Link href="/auth/forgot-password" className="text-sm underline">
+               Forgot password?
+            </Link>
          </form>
       </AuthCard>
    );

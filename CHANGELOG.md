@@ -12,6 +12,11 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Password recovery uses private SMTP delivery, hashed single-use tokens with a
+  15-minute expiry, database rate limits and identical request messages for unknown
+  accounts. Reset revokes sessions and API/MCP tokens immediately. Configure SMTP
+  and apply the auth-version migration before enabling the deployed feature.
+
 - Activity now offers author edit/delete, reply threads, searchable mentions,
   comment revision history and attachment pickers. Web comment retries reuse a
   request key to avoid duplicate posts after a lost response; apply the committed

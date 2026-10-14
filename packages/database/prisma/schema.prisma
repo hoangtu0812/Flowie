@@ -179,6 +179,7 @@ model User {
   title           String?
   timezone        String     @default("UTC")
   avatarUrl       String?    @map("avatar_url")
+  authVersion     Int        @default(0) @map("auth_version")
   passwordHash    String?    @map("password_hash")
   isPlatformAdmin Boolean    @default(false) @map("is_platform_admin")
   emailVerifiedAt DateTime?  @map("email_verified_at")
@@ -1988,4 +1989,13 @@ model WorkspaceMember {
   @@unique([workspaceId, userId])
   @@index([userId])
   @@map("workspace_members")
+}
+
+model AuthRateLimit {
+  key         String   @id
+  windowStart DateTime @map("window_start")
+  count       Int      @default(0)
+
+  @@index([windowStart])
+  @@map("auth_rate_limits")
 }

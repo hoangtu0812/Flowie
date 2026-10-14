@@ -57,6 +57,12 @@ class Settings:
     scm_github_app_id: str
     scm_github_app_private_key: str
     scm_github_webhook_secret: str
+    smtp_host: str = ''
+    smtp_port: int = 587
+    smtp_username: str = ''
+    smtp_password: str = ''
+    smtp_from: str = ''
+    smtp_use_ssl: bool = False
     mcp_enabled: bool = False
     mcp_writes_enabled: bool = False
     mcp_allowed_hosts: tuple[str, ...] = ('localhost:*', '127.0.0.1:*', '[::1]:*')
@@ -106,6 +112,12 @@ class Settings:
             scm_github_app_id=getenv('SCM_GITHUB_APP_ID', '').strip(),
             scm_github_app_private_key=getenv('SCM_GITHUB_APP_PRIVATE_KEY', '').replace('\\n', '\n').strip(),
             scm_github_webhook_secret=getenv('SCM_GITHUB_WEBHOOK_SECRET', '').strip(),
+            smtp_host=getenv('SMTP_HOST', '').strip(),
+            smtp_port=int(getenv('SMTP_PORT', '587')),
+            smtp_username=getenv('SMTP_USERNAME', '').strip(),
+            smtp_password=getenv('SMTP_PASSWORD', ''),
+            smtp_from=getenv('SMTP_FROM', '').strip(),
+            smtp_use_ssl=getenv('SMTP_USE_SSL', 'false').lower() == 'true',
             mcp_enabled=getenv('MCP_ENABLED', 'false').lower() == 'true',
             mcp_writes_enabled=getenv('MCP_WRITES_ENABLED', 'false').lower() == 'true',
             mcp_allowed_hosts=_origins(getenv('MCP_ALLOWED_HOSTS', 'localhost:*,127.0.0.1:*,[::1]:*')),
