@@ -1,6 +1,7 @@
 'use client';
 
 import { LoadingState } from '@/components/common/loading-state';
+import { QueryState } from '@/components/common/query-state';
 import { getIssueDetail } from '@/mock-data/issue-details';
 import { useIssuesStore } from '@/store/issues-store';
 import { Paperclip, SmilePlus } from 'lucide-react';
@@ -19,7 +20,7 @@ import { IssuePropertiesPanel } from './issue-properties-panel';
 export default function IssueDetails() {
    const { orgId, issueId } = useParams<{ orgId: string; issueId: string }>();
    const router = useRouter();
-   const { issues, teams, loading, loadIssues } = useIssuesStore();
+   const { issues, teams, loading, error, loadIssues } = useIssuesStore();
 
    // An issue URL can be opened without passing through a list first — a
    // refresh, an Inbox entry, a Discord link — so this screen has to fill the
@@ -53,6 +54,11 @@ export default function IssueDetails() {
       }
       if (seen.current && issues.length > 0) router.replace(listHref.current);
    }, [issue, issues.length, router]);
+
+   if (error)
+      return (
+         <QueryState title="Could not load issue" message={error} onRetry={() => loadIssues()} />
+      );
 
    if (!issue || !detail) {
       if (loading) {

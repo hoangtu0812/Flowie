@@ -29,7 +29,7 @@ export default function AllIssues({ categories }: AllIssuesProps) {
    const { viewType } = useViewStore();
    const { filters } = useFilterStore();
    const showSubIssues = useDisplaySettingsStore((state) => state.showSubIssues);
-   const { issues, statuses: workflowStatuses, loading, loadIssues } = useIssuesStore();
+   const { issues, statuses: workflowStatuses, loading, error, loadIssues } = useIssuesStore();
    const { openPanel } = useRightPanelStore();
    const params = useParams<{ teamId?: string | string[] }>();
    const teamIdentifier = Array.isArray(params.teamId) ? params.teamId[0] : params.teamId;
@@ -75,7 +75,7 @@ export default function AllIssues({ categories }: AllIssuesProps) {
       return (
          <div className="w-full h-full">
             <div className="px-6 mb-6">
-               <SearchIssues />
+               <SearchIssues issues={displayedIssues} />
             </div>
          </div>
       );
@@ -91,6 +91,8 @@ export default function AllIssues({ categories }: AllIssuesProps) {
                   totalIssues={scopedIssues}
                   statuses={statuses}
                   isViewTypeGrid={isViewTypeGrid}
+                  error={error}
+                  onRetry={() => loadIssues(teamIdentifier)}
                   loading={loading || isInitialLoad}
                />
             </div>

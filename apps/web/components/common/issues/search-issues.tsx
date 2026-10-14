@@ -1,53 +1,34 @@
 'use client';
 
-import { useIssuesStore } from '@/store/issues-store';
+import { useMemo } from 'react';
+import { VStack } from '@astryxdesign/core/Layout';
+import { Heading, Text } from '@astryxdesign/core/Text';
+import { DesignSurface } from '@/components/common/design-surface';
+import { searchIssueCollection } from '@/features/issues/search';
+import type { Issue } from '@/types/issues';
 import { useSearchStore } from '@/store/search-store';
-import { useEffect, useState } from 'react';
 import { IssueLine } from './issue-line';
+import { useIssuesStore } from '@/store/issues-store';
+import { QueryState } from '@/components/common/query-state';
+import { useParams } from 'next/navigation';
 
-export function SearchIssues() {
-   const [searchResults, setSearchResults] = useState<
-      ReturnType<typeof useIssuesStore.getState>['issues']
-   >([]);
-   const { searchIssues } = useIssuesStore();
+export function SearchIssues({ issues }: { issues: Issue[] }) {
    const { searchQuery, isSearchOpen } = useSearchStore();
-
-   useEffect(() => {
-      if (searchQuery.trim() === '') {
-         setSearchResults([]);
-         return;
-      }
-
-      const results = searchIssues(searchQuery);
-      setSearchResults(results);
-   }, [searchQuery, searchIssues]);
-
-   if (!isSearchOpen) {
-      return null;
-   }
-
+   const { error, loadIssues } = useIssuesStore();
+   const { teamId } = useParams<{ teamId?: string }>();
+   const results = useMemo(() => searchIssueCollection(issues, searchQuery), [issues, searchQuery]);
+   if (!isSearchOpen || !searchQuery.trim()) return null;
+   if (error) return <QueryState message={error} onRetry={() => loadIssues(teamId)} />;
    return (
-      <div className="w-full">
-         {searchQuery.trim() !== '' && (
-            <div>
-               {searchResults.length > 0 ? (
-                  <div className="border rounded-md mt-4">
-                     <div className="py-2 px-4 border-b bg-muted/50">
-                        <h3 className="text-sm font-medium">Results ({searchResults.length})</h3>
-                     </div>
-                     <div className="divide-y">
-                        {searchResults.map((issue) => (
-                           <IssueLine key={issue.id} issue={issue} layoutId={false} />
-                        ))}
-                     </div>
-                  </div>
-               ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                     No results found for &quot;{searchQuery}&quot;
-                  </div>
-               )}
-            </div>
-         )}
-      </div>
+      <DesignSurface>
+         <VStack gap={2} paddingBlock={4}>
+            <Heading level={2}>Results ({results.length})</Heading>
+            {results.length ? (
+               results.map((issue) => <IssueLine key={issue.id} issue={issue} layoutId={false} />)
+            ) : (
+               <Text>No results in this view for “{searchQuery}”.</Text>
+            )}
+         </VStack>
+      </DesignSurface>
    );
 }

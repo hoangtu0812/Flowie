@@ -39,6 +39,9 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Member profiles now load real workspace members and count created issues by
+  their persisted author. Issue search keeps the active view and filters;
+  failed issue loads expose Retry instead of showing a misleading empty list.
 - SLAs, releases, customer requests, Asks and emoji settings now open their
   persisted management interfaces instead of inert placeholder pages.
 - Issue comments now prevent duplicate submissions, retain drafts after network

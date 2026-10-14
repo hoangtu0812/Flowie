@@ -5,13 +5,13 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { issueCreatorIndex } from '@/mock-data/issues';
-import { User, users } from '@/mock-data/users';
+import { scopeMemberIssues } from '@/features/members/profile-scope';
+import type { User } from '@/types/users';
 import { cn } from '@/lib/utils';
 import { useIssuesStore } from '@/store/issues-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { useSearchStore } from '@/store/search-store';
-import { BarChart3, ChevronRight, PanelRight, SearchIcon, Star } from 'lucide-react';
+import { BarChart3, ChevronRight, PanelRight, SearchIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { parseAsString, useQueryState } from 'nuqs';
@@ -122,14 +122,7 @@ export default function Header({ member }: { member: User }) {
    const { issues } = useIssuesStore();
    const { openPanel, togglePanel } = useRightPanelStore();
 
-   const memberIndex = Math.max(
-      0,
-      users.findIndex((candidate) => candidate.id === member.id)
-   );
-   const count =
-      activeTab === 'created'
-         ? issues.filter((issue) => issueCreatorIndex(issue, users.length) === memberIndex).length
-         : issues.filter((issue) => issue.assignee?.id === member.id).length;
+   const count = scopeMemberIssues(issues, member.id, activeTab).length;
 
    return (
       <>
@@ -149,9 +142,6 @@ export default function Header({ member }: { member: User }) {
                      <AvatarFallback>{member.name[0]}</AvatarFallback>
                   </Avatar>
                   <span className="font-medium truncate">{member.name}</span>
-                  <Button variant="ghost" size="icon" className="size-6 text-muted-foreground">
-                     <Star className="size-3.5" />
-                  </Button>
                </div>
             </div>
             <div className="flex items-center gap-2">
@@ -177,7 +167,9 @@ export default function Header({ member }: { member: User }) {
                </Button>
                <Button
                   size="xs"
-                  variant={openPanel !== 'hidden' && openPanel !== 'insights' ? 'secondary' : 'ghost'}
+                  variant={
+                     openPanel !== 'hidden' && openPanel !== 'insights' ? 'secondary' : 'ghost'
+                  }
                   onClick={() => togglePanel('hidden')}
                   aria-label="Toggle profile panel"
                >

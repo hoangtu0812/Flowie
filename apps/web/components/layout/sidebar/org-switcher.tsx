@@ -133,7 +133,9 @@ export function OrgSwitcher() {
          })
          .catch(() => {
             if (current)
-               toast.error('Your workspace session is not available. Please sign in again.');
+               toast.error(
+                  'Could not load workspace information. Check your connection and retry.'
+               );
          })
          .finally(() => {
             if (current) setLoading(false);

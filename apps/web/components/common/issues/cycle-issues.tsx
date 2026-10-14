@@ -51,7 +51,7 @@ export default function CycleIssues({ cycleView }: CycleIssuesProps) {
       return (
          <div className="w-full h-full">
             <div className="px-6 mb-6">
-               <SearchIssues />
+               <SearchIssues issues={displayedIssues} />
             </div>
          </div>
       );

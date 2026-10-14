@@ -24,7 +24,7 @@ export default function MyIssues() {
    const { isSearchOpen, searchQuery } = useSearchStore();
    const { viewType } = useViewStore();
    const { filters } = useFilterStore();
-   const { issues, statuses, loading, loadIssues } = useIssuesStore();
+   const { issues, statuses, loading, error, loadIssues } = useIssuesStore();
    const { openPanel } = useRightPanelStore();
    const [isInitialLoad, setIsInitialLoad] = useState(true);
 
@@ -57,7 +57,7 @@ export default function MyIssues() {
       return (
          <div className="w-full h-full">
             <div className="px-6 mb-6">
-               <SearchIssues />
+               <SearchIssues issues={displayedIssues} />
             </div>
          </div>
       );
@@ -73,6 +73,8 @@ export default function MyIssues() {
                   totalIssues={scopedIssues}
                   statuses={statuses}
                   isViewTypeGrid={isViewTypeGrid}
+                  error={error}
+                  onRetry={() => loadIssues()}
                   loading={loading || isInitialLoad}
                />
             </div>

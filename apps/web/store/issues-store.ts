@@ -4,7 +4,12 @@ import { priorities, Priority } from '@/mock-data/priorities';
 import { Project } from '@/mock-data/projects';
 import { status as statusPresentation, Status, StatusCategory } from '@/mock-data/status';
 import { User } from '@/mock-data/users';
-import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
+import {
+   authenticatedFetch,
+   loadCurrentWorkspace,
+   workspaceSlugFromLocation,
+} from '@/lib/workspaces';
+import { ApiRequestError, responseData } from '@/lib/http';
 import { loadJoinedWorkspaceTeams, type WorkspaceTeam } from '@/components/common/teams/team-types';
 import { create } from 'zustand';
 import { Box } from 'lucide-react';
@@ -210,6 +215,8 @@ interface FilterOptions {
    statusType?: string[];
 }
 
+let issueLoadEpoch = 0;
+
 interface IssuesState {
    // Data
    issues: Issue[];
@@ -223,6 +230,8 @@ interface IssuesState {
    issuesByStatus: Record<string, Issue[]>;
    workspaceId?: string;
    loading: boolean;
+   error?: string;
+   loadScope?: string;
    loadIssues: (teamIdentifier?: string) => Promise<void>;
 
    //
@@ -309,7 +318,26 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
    workspaceId: undefined,
    loading: false,
    loadIssues: async (teamIdentifier?: string) => {
-      set({ loading: true });
+      const epoch = ++issueLoadEpoch;
+      const scope = `${workspaceSlugFromLocation() ?? ''}/${teamIdentifier ?? '*'}`;
+      const empty = {
+         issues: [],
+         statuses: [],
+         members: [],
+         teams: [],
+         projects: [],
+         labels: [],
+         cycles: [],
+         releases: [],
+         issuesByStatus: {},
+         workspaceId: undefined,
+      };
+      set({
+         ...(get().loadScope === scope ? {} : empty),
+         loadScope: scope,
+         loading: true,
+         error: undefined,
+      });
       try {
          const workspace = await loadCurrentWorkspace();
          const query = new URLSearchParams({ workspaceId: workspace.id });
@@ -319,43 +347,42 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
                (candidate) =>
                   candidate.id === teamIdentifier || candidate.identifier === teamIdentifier
             );
-            if (team) query.set('teamId', team.id);
+            if (!team) throw new Error('This team is not available to the current account.');
+            query.set('teamId', team.id);
          }
-         const [response, optionsResponse] = await Promise.all([
-            authenticatedFetch(`${api}/issues?${query}`),
-            authenticatedFetch(`${api}/issues/options?${query}`),
+         const [issuesPayload, options] = await Promise.all([
+            authenticatedFetch(`${api}/issues?${query}`).then((response) =>
+               responseData<NativeIssue[]>(response, 'Could not load issues.')
+            ),
+            authenticatedFetch(`${api}/issues/options?${query}`).then((response) =>
+               responseData<NativeIssueOptions>(response, 'Could not load issue options.')
+            ),
          ]);
-         if (!response.ok || !optionsResponse.ok) throw new Error('Could not load issues.');
-         const [payload, optionsPayload] = (await Promise.all([
-            response.json(),
-            optionsResponse.json(),
-         ])) as [{ data: NativeIssue[] }, { data: NativeIssueOptions }];
-         const issues = payload.data.map(asIssue);
+         if (epoch !== issueLoadEpoch) return;
+         const issues = issuesPayload.map(asIssue);
          set({
             workspaceId: workspace.id,
             issues,
-            statuses: optionsPayload.data.statuses.map(asStatus),
-            members: optionsPayload.data.members.map(asMember),
+            statuses: options.statuses.map(asStatus),
+            members: options.members.map(asMember),
             teams: joinedWorkspaceTeams.teams,
-            projects: optionsPayload.data.projects.map(asProjectOption),
-            labels: optionsPayload.data.labels,
-            cycles: optionsPayload.data.cycles ?? [],
-            releases: optionsPayload.data.releases ?? [],
+            projects: options.projects.map(asProjectOption),
+            labels: options.labels,
+            cycles: options.cycles ?? [],
+            releases: options.releases ?? [],
             issuesByStatus: groupIssuesByStatus(issues),
             loading: false,
          });
-      } catch {
+      } catch (caught) {
+         if (epoch !== issueLoadEpoch) return;
+         const lostAccess = caught instanceof ApiRequestError && [401, 403].includes(caught.status);
          set({
-            issues: [],
-            statuses: [],
-            members: [],
-            teams: [],
-            projects: [],
-            labels: [],
-            cycles: [],
-            releases: [],
-            issuesByStatus: {},
+            ...(lostAccess ? empty : {}),
             loading: false,
+            error:
+               caught instanceof Error
+                  ? caught.message
+                  : 'Could not load issues. Check the connection and retry.',
          });
       }
    },
