@@ -7,20 +7,14 @@ import { Button } from '@astryxdesign/core/Button';
 import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
 import { TextInput } from '@astryxdesign/core/TextInput';
 import { List, ListItem } from '@astryxdesign/core/List';
+import { ClientSetup } from '@/features/ai/client-setup';
+import { READ_PRESET, CODING_PRESET } from '@/features/ai/client-config';
+import { parseInstant } from '@/lib/time';
 import { mcpEndpoint } from '@/lib/mcp';
 import { useMcpSettings } from './use-mcp-settings';
 import { AgentCoordination } from './agent-coordination';
 import { AgentConfiguration } from './agent-configuration';
 
-const DEFAULT_SCOPES = [
-   'context:read',
-   'projects:read',
-   'issues:read',
-   'comments:read',
-   'documents:read',
-   'activities:read',
-   'reviews:read',
-];
 const SCOPE_LABELS: Record<string, string> = {
    'context:read': 'Read workspace and team information',
    'projects:read': 'Read projects',
@@ -42,7 +36,9 @@ export function McpSettings() {
    const [name, setName] = useState('');
    const [teamIds, setTeamIds] = useState<string[]>([]);
    const [projectIds, setProjectIds] = useState<string[]>([]);
-   const [scopes, setScopes] = useState(DEFAULT_SCOPES);
+   const [scopes, setScopes] = useState(READ_PRESET);
+   const [preset, setPreset] = useState<'read' | 'coding'>('read');
+   const [clipboardStatus, setClipboardStatus] = useState<string>();
    const [expires, setExpires] = useState('30');
    const validExpiry =
       Number.isInteger(Number(expires)) && Number(expires) >= 1 && Number(expires) <= 90;
@@ -70,6 +66,29 @@ export function McpSettings() {
                {!state.configuration.writesEnabled && (
                   <Text color="secondary">The server currently allows reading only.</Text>
                )}
+               <HStack gap={2}>
+                  <Button
+                     label="Read-only project preset"
+                     onClick={() => {
+                        setPreset('read');
+                        setScopes(READ_PRESET);
+                     }}
+                  />
+                  <Button
+                     label="Coding project preset"
+                     isDisabled={!state.configuration.writesEnabled}
+                     onClick={() => {
+                        setPreset('coding');
+                        setScopes(CODING_PRESET);
+                     }}
+                  />
+               </HStack>
+               <Text>
+                  {preset === 'read'
+                     ? 'Read project work without changing it.'
+                     : 'Permit work edits, status changes and run evidence within selected projects.'}{' '}
+                  Select at least one project before creating a connection.
+               </Text>
                <TextInput label="Connection name" value={name} onChange={setName} isRequired />
                <TextInput
                   label="Expires in days"
@@ -78,8 +97,8 @@ export function McpSettings() {
                   description="Choose 1 to 90 days."
                />
                <Text color="secondary">
-                  Select teams and projects to limit access. With no selection, your existing access
-                  applies.
+                  Select teams and projects to limit access. Select one or more projects to keep the
+                  connection bounded.
                </Text>
                <List header={<Heading level={3}>Allowed teams</Heading>}>
                   {state.resources.teams.map((team) => (
@@ -169,7 +188,8 @@ export function McpSettings() {
                         !state.configuration.enabled ||
                         name.trim().length < 2 ||
                         !scopes.length ||
-                        !validExpiry
+                        !validExpiry ||
+                        !projectIds.length
                      }
                      onClick={() =>
                         void state.create({
@@ -186,24 +206,36 @@ export function McpSettings() {
          )}
          {state.token && (
             <VStack gap={2}>
+               {clipboardStatus && <Text role="status">{clipboardStatus}</Text>}
                <Text>Copy this token into your AI client. It is shown once.</Text>
                <TextInput label="Connection token" value={state.token} isReadOnly />
                <HStack gap={2}>
                   <Button
                      label="Copy token"
-                     onClick={() => void navigator.clipboard.writeText(state.token ?? '')}
+                     clickAction={async () => {
+                        try {
+                           await navigator.clipboard.writeText(state.token ?? '');
+                           setClipboardStatus('Token copied.');
+                        } catch {
+                           setClipboardStatus('Clipboard unavailable; copy the token manually.');
+                        }
+                     }}
                   />
                   <Button label="Dismiss token" variant="ghost" onClick={state.dismissToken} />
                </HStack>
             </VStack>
          )}
+         {state.configuration && (
+            <ClientSetup
+               endpoint={mcpEndpoint(state.configuration.endpointPath)}
+               token={state.token}
+            />
+         )}
          <List hasDividers header={<Heading level={3}>Connections</Heading>}>
             {state.connections.map((connection) => {
                const inactive =
                   Boolean(connection.revokedAt) ||
-                  Date.parse(
-                     connection.expiresAt + (connection.expiresAt.endsWith('Z') ? '' : 'Z')
-                  ) < Date.now();
+                  parseInstant(connection.expiresAt).getTime() < Date.now();
                return (
                   <ListItem
                      key={connection.id}

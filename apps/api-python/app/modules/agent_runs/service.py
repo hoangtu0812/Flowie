@@ -252,7 +252,8 @@ class RunService:
         return await QueryService(self.db, self.principal, self.settings).page(
             "list_runs",
             payload,
-            f"""SELECT r.id,r.issue_id AS "issueId",i.identifier AS "issueIdentifier",i.title AS "issueTitle",r.state,r.connection_id AS "connectionId",r.created_at AS "createdAt"
+            f"""SELECT r.id,r.issue_id AS "issueId",i.identifier AS "issueIdentifier",i.title AS "issueTitle",r.state,r.connection_id AS "connectionId",r.created_at AS "createdAt",
+            EXISTS(SELECT 1 FROM mcp_connections own WHERE own.id=r.connection_id AND own.user_id=:user) AS "ownedByCurrentUser"
             FROM agent_runs r JOIN issues i ON i.id=r.issue_id WHERE {self.policy.issue_clause()}
             AND (CAST(:state AS text) IS NULL OR r.state=CAST(:state AS text))
             AND (CAST(:project AS text) IS NULL OR i.project_id=CAST(:project AS text))""",

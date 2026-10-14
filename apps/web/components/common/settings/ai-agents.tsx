@@ -1,107 +1,109 @@
 'use client';
-
-import { Switch } from '@/components/ui/switch';
-import { RiSlackFill } from '@remixicon/react';
-import { Bot, MessageCircleQuestion, Radar, RefreshCcw, Sparkles, Terminal } from 'lucide-react';
-import { SettingsCard, SettingsRow, SettingsSection, SettingsShell } from './shared';
-
-const AGENT_FEATURES = [
-   {
-      icon: <Bot className="size-4" />,
-      title: 'LNDev Agent',
-      description: 'Configure for your workspace',
-   },
-   {
-      icon: <Terminal className="size-4" />,
-      title: 'Coding sessions',
-      description: 'Assign or ask the agent to make code changes',
-   },
-   {
-      icon: <RefreshCcw className="size-4" />,
-      title: 'Loops',
-      description: 'Automated agent workflows that run on a schedule or when an issue is updated',
-   },
-   {
-      icon: <Sparkles className="size-4" />,
-      title: 'Code Intelligence',
-      beta: true,
-      description: 'Allow the agent to analyze and answer questions about your repositories',
-   },
-   {
-      icon: <Radar className="size-4" />,
-      title: 'Triage Intelligence',
-      description:
-         'Find related issues and infer properties like team, project, labels, and assignee',
-   },
-];
-
-/** Workspace "AI & Agents" settings. */
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { Button } from '@astryxdesign/core/Button';
+import { VStack } from '@astryxdesign/core/Layout';
+import { Heading, Text } from '@astryxdesign/core/Text';
+import { List, ListItem } from '@astryxdesign/core/List';
+import { DesignSurface } from '@/components/common/design-surface';
+import { QueryState } from '@/components/common/query-state';
+import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
+import { responseData } from '@/lib/http';
+import { getMcpConfiguration, type McpConfiguration } from '@/lib/mcp';
+type Providers = { providers: { provider: string; enabled: boolean; configured: boolean }[] };
 export default function AiAgents() {
+   const { orgId } = useParams<{ orgId: string }>();
+   const [data, setData] = useState<{ mcp: McpConfiguration; providers: Providers }>();
+   const [error, setError] = useState<string>();
+   const [refresh, setRefresh] = useState(0);
+   useEffect(() => {
+      let active = true;
+      setError(undefined);
+      setData(undefined);
+      void (async () => {
+         try {
+            const workspace = await loadCurrentWorkspace();
+            const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+            const [mcp, providers] = await Promise.all([
+               getMcpConfiguration(),
+               authenticatedFetch(
+                  `${api}/agent/providers?workspaceId=${encodeURIComponent(workspace.id)}`
+               ).then(responseData<Providers>),
+            ]);
+            if (active) setData({ mcp, providers });
+         } catch (reason) {
+            if (active)
+               setError(
+                  reason instanceof Error ? reason.message : 'Could not load AI capabilities.'
+               );
+         }
+      })();
+      return () => {
+         active = false;
+      };
+   }, [refresh]);
+   const configured =
+      data?.providers.providers.filter((provider) => provider.enabled && provider.configured) ?? [];
    return (
-      <SettingsShell
-         title="AI & Agents"
-         description="Flowie automation is not available in this deployment yet"
-      >
-         <SettingsSection>
-            <SettingsCard>
-               <SettingsRow
-                  title="Enable usage feedback"
-                  description="This preference will be available when Flowie automation launches."
-                  trailing={<Switch checked={false} disabled />}
-                  disabled
-               />
-            </SettingsCard>
-         </SettingsSection>
-
-         <SettingsSection
-            title="Flowie automation"
-            description="Automation, coding sessions and agent workflows are coming soon"
-         >
-            <SettingsCard>
-               {AGENT_FEATURES.map((feature) => (
-                  <SettingsRow
-                     key={feature.title}
-                     icon={feature.icon}
-                     title={
-                        <>
-                           {feature.title}
-                           {feature.beta && (
-                              <span className="text-[10px] font-medium uppercase tracking-wide border rounded px-1 py-px text-muted-foreground">
-                                 Beta
-                              </span>
-                           )}
-                        </>
+      <DesignSurface>
+         <VStack as="main" gap={4} padding={6} maxWidth={800}>
+            <Heading level={1}>AI & Agents</Heading>
+            <Text>Capabilities available in this workspace and deployment.</Text>
+            {error ? (
+               <QueryState message={error} onRetry={() => setRefresh((value) => value + 1)} />
+            ) : !data ? (
+               <Text role="status">Loading capabilities…</Text>
+            ) : (
+               <List hasDividers>
+                  <ListItem
+                     label="Flowie analysis agent"
+                     description={
+                        configured.length
+                           ? `Configured: ${configured.map((provider) => provider.provider).join(', ')}. Analyze work and write planning content.`
+                           : 'No enabled provider is configured. Configure a provider to use the workspace agent.'
                      }
-                     description={feature.description}
-                     trailing={<span>Unavailable</span>}
-                     disabled
+                     endContent={
+                        <Button
+                           label="Agent provider settings"
+                           as={Link}
+                           href={`/${orgId}/settings/agent-personalization`}
+                        />
+                     }
                   />
-               ))}
-            </SettingsCard>
-         </SettingsSection>
-
-         <SettingsSection
-            title="Agent integrations"
-            description="Agent integrations are not available yet"
-            action={<span className="text-xs text-muted-foreground opacity-60">Unavailable</span>}
-         >
-            <SettingsCard>
-               <SettingsRow
-                  icon={<RiSlackFill className="size-4" />}
-                  title="Slack"
-                  description="Will be available when Flowie automation is released."
-                  trailing={<span>Unavailable</span>}
-                  disabled
-               />
-               <SettingsRow
-                  icon={<MessageCircleQuestion className="size-4" />}
-                  title="Asks for Slack"
-                  description="Will be available when Flowie automation is released."
-                  trailing={<span>Unavailable</span>}
-                  disabled
-               />
-            </SettingsCard>
-         </SettingsSection>
-      </SettingsShell>
+                  <ListItem
+                     label="MCP project access"
+                     description={
+                        data.mcp.enabled
+                           ? `Available · ${data.mcp.writesEnabled ? 'scoped reads and writes' : 'read tools only'}. Each client needs an expiring project grant.`
+                           : 'Disabled by the deployment. Ask the administrator to enable MCP.'
+                     }
+                     endContent={
+                        <Button
+                           label="AI connection center"
+                           as={Link}
+                           href={`/${orgId}/settings/integrations`}
+                        />
+                     }
+                  />
+                  <ListItem
+                     label="External coding sessions"
+                     description="Clients claim project work and report commits, tests and review evidence through MCP. Execution requires a separately configured local runner and repository permission."
+                     endContent={
+                        <Button
+                           label="Runs and repository instructions"
+                           as={Link}
+                           href={`/${orgId}/settings/integrations`}
+                        />
+                     }
+                  />
+                  <ListItem
+                     label="Event automation"
+                     description="Workspace managers can configure label-based queues. A granted external agent must claim queued work; the Flowie API does not run repository commands."
+                  />
+               </List>
+            )}
+         </VStack>
+      </DesignSurface>
    );
 }

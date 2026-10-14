@@ -337,6 +337,35 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertEqual(error.exception.status_code, 409)
 
+    async def test_run_evidence_web_read_excludes_lease_secrets(self):
+        from app.domains.auth import current_user
+
+        run = (
+            await self.call(
+                "claim_issue",
+                issueId=self.issue["id"],
+                idempotencyKey="web-evidence-run",
+            )
+        )["data"]
+        host = create_app(self.settings)
+        host.state.session_factory = self.factory
+        host.dependency_overrides[current_user] = lambda: self.user
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=host), base_url="http://testserver"
+        ) as client:
+            response = await client.get(
+                f"/api/v1/agent-runs/runs/{run['id']}",
+                params={"workspaceId": self.workspace},
+            )
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertNotIn("leaseToken", response.json()["data"])
+            canceled = await client.post(
+                f"/api/v1/agent-runs/runs/{run['id']}/cancel",
+                params={"workspaceId": self.workspace},
+            )
+            self.assertEqual(canceled.status_code, 200, canceled.text)
+            self.assertEqual(canceled.json()["data"]["state"], "CANCELED")
+
     async def test_password_reset_http_does_not_disclose_accounts_and_invalidates_access_cookie(
         self,
     ):

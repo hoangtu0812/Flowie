@@ -12,6 +12,12 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- AI connection setup now provides project-bound read-only/coding presets,
+  token-free local client configuration, clipboard feedback and a live MCP
+  initialize/discovery/grant check while the newly issued token is available.
+  AI settings show configured capabilities, and accessible agent runs expose
+  reported evidence and cancellation for owners or workspace managers.
+
 - Password recovery uses private SMTP delivery, hashed single-use tokens with a
   15-minute expiry, database rate limits and identical request messages for unknown
   accounts. Reset revokes sessions and API/MCP tokens immediately. Configure SMTP

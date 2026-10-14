@@ -17,9 +17,17 @@ from ..mcp.domain import Principal
 from ..mcp.policy import AccessPolicy
 from .contracts import RepositoryInput, AutomationInput
 from .contracts import RunPageInput
+from .contracts import RunInput
 from .service import RunService
 
 router = APIRouter(prefix="/api/v1/agent-runs", tags=["agent-run-management"])
+
+
+@router.get('/runs/{run_id}')
+async def run_evidence(run_id: str, request: Request, workspaceId: str = Query(min_length=1), user=Depends(current_user), db=Depends(get_session)):
+    await _workspace_role(db, workspaceId, user['id'])
+    principal = Principal('', workspaceId, user, frozenset(), (), ())
+    return {'data': await RunService(db, principal, request.app.state.settings).get(RunInput(runId=run_id))}
 
 
 @router.get("/runs")
@@ -194,6 +202,10 @@ async def cancel_run(
     db=Depends(get_session),
 ):
     role = await _workspace_role(db, workspaceId, user["id"])
+    target = (await db.execute(text('SELECT issue_id FROM agent_runs WHERE id=:id AND workspace_id=:workspace'), {'id': run_id, 'workspace': workspaceId})).mappings().first()
+    if not target:
+        raise ApiError(404, 'Agent run not found.', 'Not Found')
+    await AccessPolicy(db, Principal('', workspaceId, user, frozenset(), (), ())).issue(target['issue_id'], lock=True)
     row = (
         await db.execute(
             text("""UPDATE agent_runs r SET state='CANCELED',finished_at=:now,updated_at=:now,lease_until=NULL
