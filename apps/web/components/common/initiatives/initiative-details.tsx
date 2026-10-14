@@ -1006,6 +1006,7 @@ export default function InitiativeDetails({ initiativeId }: { initiativeId: stri
       members,
       loading,
       error,
+      reload,
    } = useLiveInitiatives();
    const initiatives = useMemo(() => adaptInitiatives(liveInitiatives), [liveInitiatives]);
    const initiative = initiatives.find((item) => item.id === initiativeId);
@@ -1036,7 +1037,8 @@ export default function InitiativeDetails({ initiativeId }: { initiativeId: stri
    }
 
    if (tab === 'activity') return <Activity initiative={initiative} />;
-   if (tab === 'projects') return <ProjectsTimeline groups={timelineGroups} />;
+   if (tab === 'projects')
+      return <ProjectsTimeline groups={timelineGroups} onProjectChanged={reload} />;
    return (
       <Overview
          initiative={initiative}
