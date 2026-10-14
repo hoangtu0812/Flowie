@@ -129,3 +129,54 @@ async def archive_document(document_id: str, workspaceId: str = Query(min_length
     await db.execute(text('UPDATE documents SET archived_at = :now, updated_at = :now WHERE id = :id'), {'id': document_id, 'now': _utcnow()})
     await db.commit()
     return {'data': {'id': document_id, 'archived': True}}
+
+
+class RestoreDocumentInput(BaseModel):
+    expectedVersion: int = Field(ge=1)
+    revisionVersion: int = Field(ge=1)
+
+
+async def accessible_document(db: AsyncSession, workspace_id: str, document_id: str, user_id: str) -> dict:
+    document = await _document_by_id(db, document_id, workspace_id)
+    if not document:
+        raise ApiError(404, 'Document not found.', 'Not Found')
+    await _team_access(db, workspace_id, document['teamId'], user_id)
+    return document
+
+
+@router.get('/{document_id}')
+async def get_document(document_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict:
+    return {'data': await accessible_document(db, workspaceId, document_id, user['id'])}
+
+
+@router.get('/{document_id}/revisions')
+async def document_revisions(document_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict:
+    from ..modules.work_items.document_history import list_revisions
+    await accessible_document(db, workspaceId, document_id, user['id'])
+    return {'data': await list_revisions(db, document_id)}
+
+
+@router.get('/{document_id}/revisions/{version}')
+async def get_revision(document_id: str, version: int, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict:
+    from ..modules.work_items.document_history import revision_row
+    await accessible_document(db, workspaceId, document_id, user['id'])
+    return {'data': await revision_row(db, document_id, version)}
+
+
+@router.get('/{document_id}/diff/{version}')
+async def document_diff(document_id: str, version: int, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict:
+    from ..modules.work_items.document_history import revision_row, revision_diff
+    current = await accessible_document(db, workspaceId, document_id, user['id'])
+    before = await revision_row(db, document_id, version)
+    return {'data': await revision_diff(before, current)}
+
+
+@router.post('/{document_id}/restore')
+async def restore_document(document_id: str, payload: RestoreDocumentInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict:
+    from ..modules.work_items.document_history import revision_row
+    from ..modules.work_items.documents import update_document as operation
+    from ..db.mutations import commit_mutation
+    await accessible_document(db, workspaceId, document_id, user['id'])
+    revision = await revision_row(db, document_id, payload.revisionVersion)
+    return await commit_mutation(db, lambda: operation(document_id, UpdateDocumentInput(
+        title=revision['title'], content=revision['content'], expectedVersion=payload.expectedVersion), workspaceId, user, db))

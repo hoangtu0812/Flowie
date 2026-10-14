@@ -48,3 +48,20 @@ test('a failed save retains a dirty draft and allows an explicit retry', async (
    assert.equal(await controller.flush(), true);
    assert.equal(controller.getSnapshot().error, undefined);
 });
+
+test('conflict reconciliation keeps the draft or explicitly adopts the latest content', async () => {
+   const writes: string[] = [];
+   const controller = new AutosaveController('original', async (draft) => {
+      writes.push(draft);
+   });
+   controller.update('retained draft');
+   controller.rebase('AI revision', true);
+   assert.equal(controller.getSnapshot().draft, 'retained draft');
+   assert.equal(controller.getSnapshot().dirty, true);
+   await controller.flush();
+   assert.deepEqual(writes, ['retained draft']);
+   controller.update('another draft');
+   controller.rebase('reviewed latest', false);
+   assert.equal(controller.getSnapshot().draft, 'reviewed latest');
+   assert.equal(controller.getSnapshot().dirty, false);
+});

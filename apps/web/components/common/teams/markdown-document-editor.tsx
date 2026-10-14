@@ -12,6 +12,7 @@ import { DesignSurface } from '@/components/common/design-surface';
 import { MarkdownPreview } from '@/components/common/markdown/markdown-preview';
 import { useDocumentDraft, type DocumentDraft } from '@/features/documents/use-document-draft';
 import type { LiveDocument } from './use-live-team';
+import { DocumentHistory } from '@/features/documents/document-history';
 
 export function MarkdownDocumentEditor({
    document,
@@ -22,13 +23,22 @@ export function MarkdownDocumentEditor({
    document?: LiveDocument;
    open: boolean;
    onOpenChange: (open: boolean) => void;
-   onUpdate: (id: string, draft: DocumentDraft) => Promise<unknown>;
+   onUpdate: (
+      id: string,
+      draft: DocumentDraft & { expectedVersion: number }
+   ) => Promise<LiveDocument>;
 }) {
    const state = useDocumentDraft(document, open, onUpdate);
    const { title, content } = state.draft;
    const [mode, setMode] = useState<'view' | 'edit'>('view');
+   const [history, setHistory] = useState(false);
+   const [latest, setLatest] = useState<LiveDocument>();
+   const [compareError, setCompareError] = useState<string>();
    useEffect(() => {
       setMode('view');
+      setHistory(false);
+      setLatest(undefined);
+      setCompareError(undefined);
    }, [document?.id, open]);
    const close = async () => {
       if (await state.flush()) onOpenChange(false);
@@ -89,6 +99,10 @@ export function MarkdownDocumentEditor({
                footer={
                   <LayoutFooter>
                      <HStack justify="end" gap={2}>
+                        <Button
+                           label={history ? 'Hide history' : 'Revision history'}
+                           onClick={() => setHistory(!history)}
+                        />
                         {state.error && (
                            <Button
                               label="Retry save"
@@ -114,6 +128,62 @@ export function MarkdownDocumentEditor({
                            <Text role="status">An unsaved local draft was recovered.</Text>
                         )}
                         {state.error && <Text role="alert">{state.error}</Text>}
+                        {state.conflict && (
+                           <VStack gap={3} role="alert">
+                              <Text>
+                                 Your draft cannot overwrite a newer revision. Compare the latest
+                                 version first.
+                              </Text>
+                              <Button
+                                 label="Compare latest version"
+                                 clickAction={async () => {
+                                    try {
+                                       setLatest(await state.latest());
+                                       setCompareError(undefined);
+                                    } catch (reason) {
+                                       setCompareError(
+                                          reason instanceof Error
+                                             ? reason.message
+                                             : 'Could not load latest version.'
+                                       );
+                                    }
+                                 }}
+                              />
+                              {compareError && <Text>{compareError}</Text>}
+                              {latest && (
+                                 <VStack gap={3}>
+                                    <Text>
+                                       Latest version: v{latest.version} · {latest.title}
+                                    </Text>
+                                    <MarkdownPreview content={latest.content} />
+                                    <Text>
+                                       The retained draft remains in the editor. Review both before
+                                       choosing.
+                                    </Text>
+                                    <HStack gap={2}>
+                                       <Button
+                                          label="Use latest version"
+                                          onClick={() => void state.resolve(latest, false)}
+                                       />
+                                       <Button
+                                          label="Save retained draft over reviewed version"
+                                          clickAction={() => state.resolve(latest, true)}
+                                       />
+                                    </HStack>
+                                 </VStack>
+                              )}
+                           </VStack>
+                        )}
+                        {history && document && (
+                           <DocumentHistory
+                              id={document.id}
+                              latest={state.latest}
+                              beforeRestore={state.flush}
+                              onRestore={async (restored) => {
+                                 await state.resolve(restored, false);
+                              }}
+                           />
+                        )}
                         {mode === 'view' ? (
                            <VStack as="article" maxWidth="80ch" gap={4}>
                               <MarkdownPreview content={content} />

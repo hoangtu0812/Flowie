@@ -12,6 +12,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Web document editing now checks saved versions, retains conflicting drafts and
+  lets users compare/reconcile the latest content. Revision history and guarded
+  restore share the existing MCP history and create a new revision on restore.
+
 - An application UI/UX review now records reproducible editing, navigation,
   mobile and settings issues, with evidence, priorities and acceptance criteria
   for follow-up improvements.

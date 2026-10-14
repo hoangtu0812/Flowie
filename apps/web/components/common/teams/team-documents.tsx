@@ -67,6 +67,7 @@ export default function TeamDocuments() {
       updateFolder,
       updateDocument,
       deleteDocument,
+      reload,
    } = useLiveTeam(teamId);
    const [documentOpen, setDocumentOpen] = useState(false);
    const [folderOpen, setFolderOpen] = useState(false);
@@ -465,7 +466,12 @@ export default function TeamDocuments() {
          <MarkdownDocumentEditor
             document={editorDocument}
             open={Boolean(editorDocument)}
-            onOpenChange={(open) => !open && setEditorDocument(undefined)}
+            onOpenChange={(open) => {
+               if (!open) {
+                  setEditorDocument(undefined);
+                  reload();
+               }
+            }}
             onUpdate={async (documentId, draft) => updateDocument(documentId, draft)}
          />
          <Dialog

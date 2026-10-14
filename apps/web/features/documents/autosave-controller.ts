@@ -37,6 +37,13 @@ export class AutosaveController<T> {
       this.publish({ ...this.snapshot, draft, dirty: JSON.stringify(draft) !== this.saved });
    }
 
+   rebase(latest: T, keepDraft: boolean) {
+      if (this.pending) throw new Error('Wait for the current save to finish.');
+      this.saved = JSON.stringify(latest);
+      const draft = keepDraft ? this.snapshot.draft : latest;
+      this.publish({ draft, dirty: JSON.stringify(draft) !== this.saved, saving: false });
+   }
+
    flush = (): Promise<boolean> => {
       if (this.pending) return this.pending;
       if (!this.snapshot.dirty) return Promise.resolve(true);

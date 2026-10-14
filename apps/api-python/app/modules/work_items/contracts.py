@@ -65,6 +65,7 @@ class CreateDocumentInput(BaseModel):
 
 
 class UpdateDocumentInput(BaseModel):
+    expectedVersion: int | None = Field(default=None, ge=1)
     folderId: str | None = None
     title: str | None = Field(default=None, min_length=2, max_length=250)
     content: str | None = Field(default=None, max_length=100000)

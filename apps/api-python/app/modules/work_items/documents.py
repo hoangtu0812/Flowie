@@ -70,7 +70,7 @@ async def update_document(
         (
             await db.execute(
                 text(
-                    "SELECT * FROM documents WHERE id = :id AND workspace_id = :workspace_id AND archived_at IS NULL"
+                    "SELECT * FROM documents WHERE id = :id AND workspace_id = :workspace_id AND archived_at IS NULL FOR UPDATE"
                 ),
                 {"id": document_id, "workspace_id": workspaceId},
             )
@@ -81,7 +81,10 @@ async def update_document(
     if not current:
         raise ApiError(404, "Document not found.", "Not Found")
     await _team_access(db, workspaceId, current["team_id"], user["id"])
-    values = payload.model_dump(exclude_unset=True)
+    if payload.expectedVersion is not None and current["version"] != payload.expectedVersion:
+        raise ApiError(409, "This document changed. Compare the latest revision before saving your retained draft.", "Conflict")
+    values = payload.model_dump(exclude_unset=True, exclude={"expectedVersion"})
+    document = await _document_by_id(db, document_id, workspaceId)
     folder = (
         await _resolve_folder(db, workspaceId, current["team_id"], values["folderId"])
         if "folderId" in values and values["folderId"]
