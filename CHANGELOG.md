@@ -39,6 +39,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- SLAs, releases, customer requests, Asks and emoji settings now open their
+  persisted management interfaces instead of inert placeholder pages.
 - Issue comments now prevent duplicate submissions, retain drafts after network
   errors and show pending/error states. Activity subscriptions use persisted
   issue preferences, and failed activity loads offer an explicit retry.
