@@ -2,7 +2,8 @@
 
 - Ngày lập: 2026-10-14, múi giờ Asia/Saigon (+07).
 - Trạng thái: đã triển khai mã nguồn trên nhánh `codex/mcp-integration`; đang nghiệm thu tích hợp và chưa triển khai CT107.
-- Checkpoint chỉ nằm cục bộ. `git push` tới `https://github.com/hoangtu0812/Flowie.git` đã bị bộ xét duyệt tự động từ chối vì chưa có ủy quyền xuất mã nguồn/cấu hình tới GitHub; chờ người dùng cho phép trước khi đẩy nhánh.
+- Người dùng đã cho phép đẩy nhánh tính năng lên `https://github.com/hoangtu0812/Flowie.git`; commit `2609379` đã được đẩy và [CI](https://github.com/hoangtu0812/Flowie/actions/runs/38522306016) hoàn tất thành công. Merge vào `main` và rollout CT107 vẫn thuộc cổng nghiệm thu production.
+- Client mục tiêu đã chốt: Codex/Cursor/Claude chạy trên máy nội bộ, dùng token giới hạn quyền. SDK tham chiếu đã kiểm thử; cấu hình mẫu không thay thế nghiệm thu từng client thực tế.
 - Mục tiêu quản lý: theo dõi phạm vi, phụ thuộc, tiến độ, tiêu chí nghiệm thu và bằng chứng bàn giao.
 - Phạm vi tài liệu: MCP và các cải tiến trực tiếp phục vụ AI kết nối Flowie. Không thay thế kế hoạch của các phân hệ khác.
 - Quy tắc có hiệu lực: [AGENTS.md](../AGENTS.md) và [quy trình phát hành](release-process.md). Prisma tiếp tục sở hữu schema; CT107 là môi trường triển khai duy nhất.
@@ -19,6 +20,7 @@
 - Đã thêm verification workflow; production workflow yêu cầu job verification thành công trước khi deploy.
 - Tài liệu kỹ thuật: [kiến trúc module](mcp-architecture.md), [runbook](mcp-runbook.md).
 - Bằng chứng local: 86 test đạt, 2 test tích hợp cũ không chạy vì chưa cấu hình, 10 subtest đạt; toàn bộ 79 migration chạy trên database mới và test nâng cấp kiểm tra tài liệu cũ/revision; TypeScript và web production build đạt; UI browser không có lỗi console.
+- Bằng chứng GitHub: workflow `38522306016`, đúng SHA `26093793ef77df24041b548b2d27d288dcd7b29d`, kết quả `success`; clean migration, backend/MCP tests, web build và Compose đều đạt trên runner Ubuntu.
 - Schema diff không có sai lệch ở các bảng/cột MCP mới. Có sai lệch sẵn có ở index `users_last_seen_at_idx` và default `updated_at` của một số bảng legacy; cần quản lý riêng, không tự đổi production schema.
 
 Các mục DONE bên dưới là trạng thái phát triển đã có kiểm thử cục bộ. Bằng chứng production thuộc MCP-20 và không được suy ra từ build/test local. Các mục IN_REVIEW còn tiêu chí cần xác minh hoặc cải tiến, được liệt kê cuối checkpoint.
@@ -27,10 +29,10 @@ Các phụ thuộc triển khai trong bảng không ngăn chuẩn bị và kiể
 
 Phần còn lại để hoàn tất toàn bộ kế hoạch:
 
-1. MCP-06: OAuth nếu chọn client remote cần flow OAuth; bản hiện tại chỉ công bố scoped-token authentication.
+1. MCP-06: OAuth hoãn ngoài phạm vi client nội bộ đã chọn; chỉ triển khai khi bổ sung client cần flow OAuth. Bản hiện tại dùng scoped-token authentication.
 2. MCP-17/19: kiểm thử client desktop thực tế và cấu hình tương ứng; reference SDK và UI cục bộ đã kiểm tra.
 3. MCP-18: hạn mức tổng theo workspace/tool và exporter/dashboard vận hành; bản hiện tại có quota/rate theo connection, logs/audit và thống kê run.
-4. MCP-20: workflow trên GitHub, deployment, migration/readiness và smoke test đúng commit trên CT107.
+4. MCP-20: CI GitHub đã đạt trên commit triển khai; còn deployment, migration/readiness và smoke test đúng commit trên CT107.
 5. MCP-22/23: chọn coding agent, repository và quyền SCM, chạy một bug thật đến branch/test/PR; độc lập xác minh CI. Bản hiện tại cung cấp cấu hình và công cụ phối hợp với agent bên ngoài.
 6. MCP-24/25: kiểm thử restart/hủy/retry hết lượt trong triển khai thực tế; đo baseline vận hành trước/sau tối ưu và chi phí nếu provider hỗ trợ.
 
@@ -447,8 +449,8 @@ Tài liệu kế hoạch không phải bằng chứng đã triển khai và khô
 
 | ID | Quyết định | Đề xuất ban đầu | Trạng thái |
 | --- | --- | --- | --- |
-| D01 | Client nào được hỗ trợ đầu tiên? | SDK Python tham chiếu; desktop client do người dùng chọn để kiểm chứng tiếp | MVP đã chọn; desktop chưa chốt |
-| D02 | Kết nối nội bộ hay remote? | Streamable HTTP + scoped token cho đợt đầu; OAuth là phần tiếp theo nếu client cần | Đã triển khai scoped-token |
+| D01 | Client nào được hỗ trợ đầu tiên? | Codex/Cursor/Claude trên máy nội bộ; SDK Python là client tham chiếu | Người dùng đã chọn; nghiệm thu từng client còn mở |
+| D02 | Kết nối nội bộ hay remote? | Streamable HTTP + token giới hạn quyền; HTTPS khi truy cập API qua mạng; OAuth dành cho phạm vi mở rộng | Người dùng đã chọn; scoped-token đã triển khai |
 | D03 | Cấp quyền theo người hay bot? | Quyền người ủy quyền kèm danh tính connection riêng | Đã triển khai |
 | D04 | Mức tự động khi ghi? | Scope + binding + write switch; transition dùng workflow hiện hữu và ghi lý do; merge/deploy không được expose | Đã chọn cho MVP |
 | D05 | Phân loại bug? | Label/template trong MVP; trường có cấu trúc khi cần báo cáo riêng | Đề xuất |
@@ -465,6 +467,8 @@ Các quyết định kỹ thuật thông thường do người triển khai gi�
 | --- | --- | --- | --- | --- |
 | 2026-10-14 | PLAN | Lập kế hoạch từ đánh giá mã nguồn; toàn bộ đầu việc triển khai còn TODO ở thời điểm lập | Các nguồn tại mục 2 | Chốt M0 và giao MCP-01 |
 | 2026-10-14 | IMPLEMENT | Triển khai core MCP, shared modules, UI và agent coordination trên codex/mcp-integration | 86 tests passed, 2 optional tests skipped; 79 migrations + upgrade test; web production build + TypeScript; browser smoke | Chạy CI/client thật và cổng CT107; hoàn thiện các mục còn mở |
+| 2026-10-14 | CLIENT / PUSH | Người dùng chọn client nội bộ dùng scoped token và cho phép đẩy nhánh GitHub; đã đẩy commit 2609379 | Cấu hình mẫu trong runbook; workflow 38522306016 | Kiểm tra CI và nghiệm thu client; chưa merge hoặc triển khai CT107 |
+| 2026-10-14 | CI | Verification workflow thành công trên commit 2609379 | [Workflow 38522306016](https://github.com/hoangtu0812/Flowie/actions/runs/38522306016), SHA 26093793ef77df24041b548b2d27d288dcd7b29d | Review nhánh và nghiệm thu client trước cổng production |
 
 Mẫu cập nhật cho mỗi đầu việc:
 

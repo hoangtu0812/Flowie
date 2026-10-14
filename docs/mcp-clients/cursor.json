@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "flowie": {
+      "url": "https://api.example.internal/mcp/",
+      "headers": {
+        "Authorization": "Bearer ${env:FLOWIE_MCP_TOKEN}"
+      }
+    }
+  }
+}

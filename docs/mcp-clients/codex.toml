@@ -1,0 +1,5 @@
+[mcp_servers.flowie]
+url = "https://api.example.internal/mcp/"
+bearer_token_env_var = "FLOWIE_MCP_TOKEN"
+startup_timeout_sec = 20
+tool_timeout_sec = 45

@@ -12,6 +12,9 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Local AI client setup now includes token-free Codex, Cursor and Claude Code
+  configuration templates and a scoped-access acceptance checklist. Each client
+  still requires connection verification before being declared supported.
 - A detailed MCP implementation roadmap covering AI access to project work,
   comments and documents, with tracked milestones, acceptance criteria and
   CT107 production rollout requirements.

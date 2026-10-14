@@ -5,7 +5,9 @@
 The server provides scoped-token access over Streamable HTTP at `/mcp/`.
 Reference SDK integration tests cover `2025-11-25` and `2026-07-28`. OAuth and
 specific desktop clients are not declared supported until their own connection
-tests pass. No authorization-server metadata endpoint is advertised.
+tests pass. The selected deployment scope is local Codex/Cursor/Claude clients
+with scoped tokens; OAuth is deferred. No authorization-server metadata endpoint
+is advertised.
 
 ## Configuration
 
@@ -63,6 +65,71 @@ Example `query.json`:
 Token secrets are read from the environment, not command-line arguments. The
 client intentionally prints tool results; use it only in an appropriate local
 terminal and do not attach sensitive output to public tickets.
+
+## Local AI client configuration
+
+Use one expiring connection per client, bound to the selected project/team. Begin
+with `context:read`, `projects:read`, `issues:read`, `comments:read` and
+`documents:read`. Grant `activities:read` or `reviews:read` only if needed. Add
+write scopes separately for the intended workflow. The MCP token grants Flowie
+access; repository editing and SCM credentials belong to the coding client.
+
+Set `FLOWIE_MCP_TOKEN` in the client's process environment through a local secret
+store or a private shell session. Restart the client after changing it. Replace
+the template URL with the URL displayed by Flowie, retaining `/mcp/`. Use
+`http://localhost:4000/mcp/` only when the API actually runs on the same machine.
+
+### Codex
+
+Merge [codex.toml](mcp-clients/codex.toml) into the user's `~/.codex/config.toml`,
+or register the server through the CLI:
+
+```powershell
+codex mcp add flowie --url https://api.example.internal/mcp/ --bearer-token-env-var FLOWIE_MCP_TOKEN
+codex mcp list
+```
+
+Codex supports bearer tokens from an environment variable for Streamable HTTP.
+This configuration is shared by local Codex clients on the same host. Start a
+new session and request `flowie.get_my_access`, then an allowed issue. Listing
+configuration alone does not prove that a tool call succeeds. See
+[official OpenAI documentation](https://developers.openai.com/codex/mcp/).
+
+### Cursor
+
+Merge [cursor.json](mcp-clients/cursor.json) into `~/.cursor/mcp.json` or the
+project's `.cursor/mcp.json`. Its `Authorization` header uses
+`${env:FLOWIE_MCP_TOKEN}` interpolation. Restart Cursor and check the server's
+tools in Customize before requesting `get_my_access`. See
+[Cursor MCP documentation](https://cursor.com/docs/mcp).
+
+### Claude Code
+
+Merge [claude-code.json](mcp-clients/claude-code.json) into the project's
+`.mcp.json`. The HTTP entry requires `type: "http"`; its header uses
+`${FLOWIE_MCP_TOKEN}` interpolation. Start Claude Code with the variable set,
+approve the project MCP configuration, and inspect `/mcp` before requesting
+`get_my_access`. This template targets Claude Code; Claude Desktop requires its
+own connection verification. See
+[Claude Code MCP documentation](https://code.claude.com/docs/en/mcp).
+
+### Client acceptance record
+
+Run these checks against an isolated test workspace before using real work:
+
+| Check | Required evidence |
+| --- | --- |
+| Initialize and discover | Client/version, API commit, connection ID and visible tool names |
+| Authorized reads | `get_my_access`, project issue search, context and document read succeed |
+| Scope boundary | An issue/document outside the grant is unavailable; hidden tools cannot be called |
+| Writes, if granted | Comment/document/status mutation succeeds with current version and a unique key |
+| Replay and conflict | Identical retry creates no duplicate; stale version is rejected |
+| Revocation | The same client cannot read/call tools after token revocation |
+
+Record sanitized results with MCP-17/19. Current templates have been checked
+against official configuration documentation, but an SDK test or a template
+parse is not a desktop-client acceptance result. Do not include tokens in the
+record. Keep test artifacts inside the test workspace.
 
 ## Writing safely
 
