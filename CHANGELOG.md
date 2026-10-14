@@ -39,6 +39,9 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Markdown document edits now flush before Done or Close, serialize pending
+  saves and retain account-specific local drafts when saving fails or navigation
+  interrupts editing.
 - Workspace document listings now exclude documents belonging to teams the
   requester cannot access, including when no team filter is supplied.
 - Shared team access checks also require active workspace membership, preventing

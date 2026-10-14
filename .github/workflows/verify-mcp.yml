@@ -67,5 +67,6 @@ jobs:
       - name: Build web and verify Compose dependencies
         run: |
           pnpm --filter @circle/contracts build
+          pnpm --filter @circle/web test:unit
           pnpm --filter @circle/web build
           docker compose --profile app config --quiet

@@ -16,6 +16,7 @@ node_modules/
 
 # next.js
 .next/
+.test-build/
 /out/
 
 # production
