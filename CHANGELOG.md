@@ -64,6 +64,11 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Changed
 
+- Issue listing now returns bounded cursor pages with server-side scope, search
+  and filter matching; relationships hydrate in batches. Detail URLs can resolve
+  one issue directly. Apply the pagination index migration before deployment;
+  list clients must read pagination metadata rather than assume all issues loaded.
+
 - Browser preferences now control the home view, typography, link/cursor behavior
   and comment shortcut. English is the default, with an English/Vietnamese catalog
   for authentication and shared feedback. Help supports topic search and real

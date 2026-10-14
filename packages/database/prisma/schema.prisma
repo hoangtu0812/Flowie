@@ -1543,6 +1543,7 @@ model Issue {
   @@unique([teamId, number])
   @@index([workspaceId, teamId, statusId])
   @@index([workspaceId, issueType, severity])
+  @@index([workspaceId, archivedAt, createdAt, id])
   @@index([projectId])
   @@index([parentIssueId])
   @@index([duplicateOfId])

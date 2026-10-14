@@ -337,6 +337,68 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertEqual(error.exception.status_code, 409)
 
+    async def test_web_issue_pages_preserve_scope_filters_and_direct_lookup(self):
+        from app.domains.auth import current_user
+
+        bug = (
+            await self.call(
+                "create_issue",
+                teamId=self.team,
+                projectId=self.project,
+                statusId=self.status,
+                title="Đồng bộ tài liệu",
+                issueType="BUG",
+                severity="CRITICAL",
+                idempotencyKey="web-query-bug",
+            )
+        )["data"]
+        host = create_app(self.settings)
+        host.state.session_factory = self.factory
+        host.dependency_overrides[current_user] = lambda: self.user
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=host), base_url="http://testserver"
+        ) as client:
+            query = {
+                "workspaceId": self.workspace,
+                "projectId": self.project,
+                "limit": 1,
+            }
+            first = await client.get("/api/v1/issues", params=query)
+            self.assertEqual(first.status_code, 200, first.text)
+            self.assertEqual(first.json()["meta"]["total"], 2)
+            cursor = first.json()["meta"]["nextCursor"]
+            second = await client.get(
+                "/api/v1/issues", params={**query, "cursor": cursor}
+            )
+            self.assertNotEqual(
+                first.json()["data"][0]["id"], second.json()["data"][0]["id"]
+            )
+            changed = await client.get(
+                "/api/v1/issues",
+                params={**query, "cursor": cursor, "scope": "assigned"},
+            )
+            self.assertEqual(changed.status_code, 400)
+            result = await client.get(
+                "/api/v1/issues",
+                params={
+                    **query,
+                    "query": "dong bo tai lieu",
+                    "filters": '[{"columnId":"issueType","type":"option","operator":"is","values":["BUG"]}]',
+                },
+            )
+            self.assertEqual(result.status_code, 200, result.text)
+            self.assertEqual([row["id"] for row in result.json()["data"]], [bug["id"]])
+            lookup = await client.get(
+                "/api/v1/issues/lookup/" + bug["identifier"],
+                params={"workspaceId": self.workspace},
+            )
+            self.assertEqual(lookup.json()["data"]["id"], bug["id"])
+            report = await client.get(
+                "/api/v1/issues/bug-report", params={"workspaceId": self.workspace}
+            )
+            self.assertEqual(report.status_code, 200, report.text)
+            self.assertEqual(report.json()["data"]["total"], 1)
+
     async def test_run_evidence_web_read_excludes_lease_secrets(self):
         from app.domains.auth import current_user
 

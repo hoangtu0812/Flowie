@@ -6,15 +6,17 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from .bug_contracts import BUG_COLUMNS
 from ...core.errors import ApiError
-from ..access.projects import _team_access
+from ..access.projects import _workspace_access
+from collections import defaultdict
 
 
-async def _issue_row(
-    db: AsyncSession, issue_id: str, workspace_id: str, user_id: str
-) -> dict[str, Any]:
+async def _issue_rows(
+    db: AsyncSession, issue_ids: list[str], workspace_id: str, user_id: str
+) -> list[dict[str, Any]]:
+    if not issue_ids:
+        return []
     result = await db.execute(
-        text(
-            """SELECT i.*, t.id AS team_id_value, t.name AS team_name,
+        text("""SELECT i.*, t.id AS team_id_value, t.name AS team_name,
                       t.identifier AS team_identifier, s.id AS status_id_value,
                       s.name AS status_name, s.category AS status_category, s.color AS status_color,
                       p.id AS project_id_value, p.name AS project_name, p.identifier AS project_identifier,
@@ -31,36 +33,83 @@ async def _issue_row(
                LEFT JOIN projects p ON p.id = i.project_id
                JOIN users c ON c.id = i.creator_id
                LEFT JOIN users a ON a.id = i.assignee_id
-               WHERE i.id = :issue_id AND i.workspace_id = :workspace_id AND i.archived_at IS NULL
-               LIMIT 1"""
-        ),
-        {"issue_id": issue_id, "workspace_id": workspace_id, "user_id": user_id},
+               WHERE i.id = ANY(CAST(:issue_ids AS text[])) AND i.workspace_id = :workspace_id AND i.archived_at IS NULL
+               AND t.archived_at IS NULL
+               AND EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=i.team_id AND tm.user_id=:user_id)
+               AND EXISTS(SELECT 1 FROM workspace_members wm WHERE wm.workspace_id=i.workspace_id AND wm.user_id=:user_id AND wm.status='ACTIVE')
+"""),
+        {"issue_ids": issue_ids, "workspace_id": workspace_id, "user_id": user_id},
     )
-    row = result.mappings().first()
-    if not row:
-        raise ApiError(404, "Issue not found.", "Not Found")
-    await _team_access(db, workspace_id, row["team_id"], user_id)
+    mapped = {row["id"]: row for row in result.mappings().all()}
+    rows = [mapped[identifier] for identifier in issue_ids if identifier in mapped]
+    ids = [row["id"] for row in rows]
+    labels = (
+        (
+            await db.execute(
+                text(
+                    """SELECT il.issue_id,l.id,l.name,l.color FROM issue_labels il JOIN labels l ON l.id=il.label_id WHERE il.issue_id=ANY(CAST(:ids AS text[])) ORDER BY l.name"""
+                ),
+                {"ids": ids},
+            )
+        )
+        .mappings()
+        .all()
+    )
+    cycles = (
+        (
+            await db.execute(
+                text(
+                    "SELECT issue_id,cycle_id,created_at FROM issue_cycles WHERE issue_id=ANY(CAST(:ids AS text[])) ORDER BY created_at,cycle_id"
+                ),
+                {"ids": ids},
+            )
+        )
+        .mappings()
+        .all()
+    )
+    releases = (
+        (
+            await db.execute(
+                text(
+                    "SELECT issue_id,release_id,created_at FROM issue_releases WHERE issue_id=ANY(CAST(:ids AS text[])) ORDER BY created_at,release_id"
+                ),
+                {"ids": ids},
+            )
+        )
+        .mappings()
+        .all()
+    )
 
-    labels = await db.execute(
-        text(
-            """SELECT l.id, l.name, l.color FROM issue_labels il
-               JOIN labels l ON l.id = il.label_id
-               WHERE il.issue_id = :issue_id ORDER BY l.name"""
-        ),
-        {"issue_id": issue_id},
-    )
-    cycles = await db.execute(
-        text(
-            "SELECT cycle_id, created_at FROM issue_cycles WHERE issue_id = :issue_id ORDER BY created_at"
-        ),
-        {"issue_id": issue_id},
-    )
-    releases = await db.execute(
-        text(
-            "SELECT release_id, created_at FROM issue_releases WHERE issue_id = :issue_id ORDER BY created_at"
-        ),
-        {"issue_id": issue_id},
-    )
+    def group(items):
+        result = defaultdict(list)
+        for item in items:
+            result[item["issue_id"]].append(item)
+        return result
+
+    label_map, cycle_map, release_map = group(labels), group(cycles), group(releases)
+    return [
+        _present_issue(
+            row,
+            label_map[row["id"]],
+            cycle_map[row["id"]],
+            release_map[row["id"]],
+            user_id,
+        )
+        for row in rows
+    ]
+
+
+async def _issue_row(
+    db: AsyncSession, issue_id: str, workspace_id: str, user_id: str
+) -> dict[str, Any]:
+    await _workspace_access(db, workspace_id, user_id)
+    rows = await _issue_rows(db, [issue_id], workspace_id, user_id)
+    if not rows:
+        raise ApiError(404, "Issue not found or inaccessible.", "Not Found")
+    return rows[0]
+
+
+def _present_issue(row, labels, cycles, releases, user_id):
     return {
         "id": row["id"],
         "workspaceId": row["workspace_id"],
@@ -115,7 +164,10 @@ async def _issue_row(
             "name": row["assignee_name"],
             "avatarUrl": row["assignee_avatar_url"],
             "lastSeenAt": row.get("assignee_last_seen_at"),
-            "isOnline": bool(row.get("assignee_last_seen_at") and row["assignee_last_seen_at"] >= _utcnow() - timedelta(minutes=2)),
+            "isOnline": bool(
+                row.get("assignee_last_seen_at")
+                and row["assignee_last_seen_at"] >= _utcnow() - timedelta(minutes=2)
+            ),
         }
         if row["assignee_id_value"]
         else None,
@@ -127,15 +179,15 @@ async def _issue_row(
                     "color": label["color"],
                 }
             }
-            for label in labels.mappings().all()
+            for label in labels
         ],
         "cycleLinks": [
             {"cycleId": link["cycle_id"], "createdAt": link["created_at"]}
-            for link in cycles.mappings().all()
+            for link in cycles
         ],
         "releaseLinks": [
             {"releaseId": link["release_id"], "createdAt": link["created_at"]}
-            for link in releases.mappings().all()
+            for link in releases
         ],
         "subscribers": [{"userId": user_id}] if row["is_subscribed"] else [],
         "favorites": [{"userId": user_id}] if row["is_favorite"] else [],

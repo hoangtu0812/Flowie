@@ -14,9 +14,9 @@ from ..modules.work_items.issue_queries import _issue_row as _issue_row, _relati
 
 import json
 from datetime import datetime, timedelta, timezone
-from typing import Any, Literal
+from typing import Any, Literal, Annotated
 
-from fastapi import Depends, Query
+from fastapi import Depends, Query, Request
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -145,43 +145,40 @@ def _template(row: Any) -> dict[str, Any]:
 
 
 @router.get('')
+@public_router.get('')
 async def list_issues(
-    workspaceId: str = Query(min_length=1),
-    teamId: str | None = None,
-    categories: str | None = None,
-    scope: Literal['assigned', 'created', 'subscribed', 'activity'] | None = None,
-    user: Any = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
-) -> dict[str, list[dict[str, Any]]]:
+    workspaceId: str = Query(min_length=1), teamId: str | None = None,
+    categories: str | None = None, scope: Literal['assigned', 'created', 'subscribed', 'activity'] | None = None,
+    user: Any = Depends(current_user), db: AsyncSession = Depends(get_session), *,
+    request: Request = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+    cursor: Annotated[str | None, Query(max_length=2000)] = None,
+    projectId: str | None = None, assigneeId: str | None = None, creatorId: str | None = None,
+    cycleId: str | None = None, query: Annotated[str | None, Query(max_length=200)] = None,
+    filters: Annotated[str | None, Query(max_length=12000)] = None, includeSubIssues: bool = True,
+) -> dict:
+    from ..modules.work_items.issue_search import search_page
+    from ..core.config import Settings
     await _workspace_access(db, workspaceId, user['id'])
-    params: dict[str, Any] = {'workspace_id': workspaceId, 'user_id': user['id']}
     if teamId:
         await _team_access(db, workspaceId, teamId, user['id'])
-        team_clause = 'AND i.team_id = :team_id'
-        params['team_id'] = teamId
-    else:
-        team_clause = 'AND EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id = i.team_id AND tm.user_id = :user_id)'
-    scope_clauses = {
-        'assigned': 'AND i.assignee_id = :user_id',
-        'created': 'AND i.creator_id = :user_id',
-        'subscribed': 'AND EXISTS(SELECT 1 FROM issue_subscriptions sub WHERE sub.issue_id = i.id AND sub.user_id = :user_id)',
-        'activity': 'AND EXISTS(SELECT 1 FROM activities activity WHERE activity.issue_id = i.id AND activity.actor_id = :user_id)',
-    }
-    category_clause = ''
-    allowed_categories = set(IssueCategory.__args__)
-    requested_categories = [value for value in (categories or '').split(',') if value in allowed_categories]
-    if requested_categories:
-        category_clause = "AND s.category IN (" + ', '.join(f"'{value}'" for value in requested_categories) + ')'
-    result = await db.execute(
-        text(
-            f'''SELECT i.id FROM issues i JOIN issue_statuses s ON s.id = i.status_id
-                WHERE i.workspace_id = :workspace_id AND i.archived_at IS NULL
-                {team_clause} {category_clause} {scope_clauses.get(scope, '')}
-                ORDER BY i.updated_at DESC, i.created_at DESC'''
-        ),
-        params,
-    )
-    return {'data': [await _issue_row(db, row['id'], workspaceId, user['id']) for row in result.mappings().all()]}
+    settings = request.app.state.settings if request else Settings.from_environment()
+    return await search_page(db, workspaceId, user['id'], settings.auth_jwt_secret, {
+        'teamId': teamId, 'categories': categories, 'scope': scope, 'limit': limit, 'cursor': cursor,
+        'projectId': projectId, 'assigneeId': assigneeId, 'creatorId': creatorId, 'cycleId': cycleId,
+        'query': query, 'filters': filters, 'includeSubIssues': includeSubIssues,
+    })
+
+
+@public_router.get('/lookup/{reference}')
+async def lookup_issue(reference: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict:
+    if len(reference) > 100:
+        raise ApiError(400, 'Invalid issue reference.', 'Bad Request')
+    await _workspace_access(db, workspaceId, user['id'])
+    row = (await db.execute(text('SELECT id FROM issues WHERE workspace_id=:workspace AND (id=:reference OR identifier=:reference) AND archived_at IS NULL LIMIT 1'), {'workspace': workspaceId, 'reference': reference})).mappings().first()
+    if not row:
+        raise ApiError(404, 'Issue not found.', 'Not Found')
+    return {'data': await _issue_row(db, row['id'], workspaceId, user['id'])}
 
 
 @router.get('/options')
@@ -230,18 +227,6 @@ async def issue_options(
 # Public read contract: this is intentionally limited to the data already
 # consumed by the Circle list adapter. Every other Issue route stays on the
 # legacy facade or under /_native until it has comparable contract coverage.
-@public_router.get('')
-async def public_list_issues(
-    workspaceId: str = Query(min_length=1),
-    teamId: str | None = None,
-    categories: str | None = None,
-    scope: Literal['assigned', 'created', 'subscribed', 'activity'] | None = None,
-    user: Any = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
-) -> dict[str, list[dict[str, Any]]]:
-    return await list_issues(workspaceId, teamId, categories, scope, user, db)
-
-
 @public_router.get('/bug-report')
 async def bug_report(workspaceId: str = Query(min_length=1), teamId: str | None = None,
     projectId: str | None = None, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict:
