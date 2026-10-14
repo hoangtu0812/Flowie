@@ -16,6 +16,7 @@ from ...core.clock import _utcnow
 from .commands import CommandService
 from .connections import validate_current
 from .queries import QueryService
+from .quotas import consume_quota
 from .registry import TOOLS
 
 logger = logging.getLogger(__name__)
@@ -35,14 +36,15 @@ class ToolApplication:
             if tool.write and not self.settings.mcp_writes_enabled:
                 raise ApiError(403, "MCP writes are disabled.", "Forbidden")
             payload = tool.model.model_validate(arguments)
+            await consume_quota(self.factory, principal.workspace_id, name)
         except ApiError as error:
-            await self.failed_audit(principal, name, correlation, error)
+            await self.failed_audit(principal, name, correlation, error, started)
             raise
         except ValidationError as error:
             api_error = ApiError(
                 400, "Tool arguments do not match the input schema.", "Bad Request"
             )
-            await self.failed_audit(principal, name, correlation, api_error)
+            await self.failed_audit(principal, name, correlation, api_error, started)
             raise api_error from error
         async with self.factory() as db:
             try:
@@ -50,11 +52,18 @@ class ToolApplication:
                     await validate_current(db, principal)
                     if tool.write:
                         result = await self.mutate(
-                            db, principal, tool, payload, correlation
+                            db, principal, tool, payload, correlation, started
                         )
                     else:
                         result = await self.read(db, principal, tool, payload)
-                        await self.audit(db, principal, name, correlation, "succeeded")
+                        await self.audit(
+                            db,
+                            principal,
+                            name,
+                            correlation,
+                            "succeeded",
+                            duration_ms=int((monotonic() - started) * 1000),
+                        )
                     result = jsonable_encoder(result)
                     if (
                         len(json.dumps(result).encode())
@@ -76,7 +85,9 @@ class ToolApplication:
             except BaseException as error:
                 await db.rollback()
                 if not isinstance(error, asyncio.CancelledError):
-                    await self.failed_audit(principal, name, correlation, error)
+                    await self.failed_audit(
+                        principal, name, correlation, error, started
+                    )
                 if isinstance(error, TimeoutError):
                     raise ApiError(
                         504,
@@ -113,7 +124,7 @@ class ToolApplication:
             payload
         )
 
-    async def mutate(self, db, principal, tool, payload, correlation):
+    async def mutate(self, db, principal, tool, payload, correlation, started=None):
         await db.execute(
             text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"),
             {"key": f"requests:{principal.connection_id}"},
@@ -176,6 +187,15 @@ class ToolApplication:
                         "The cached lease is no longer valid. Start a new claim.",
                         "Conflict",
                     )
+            await self.audit(
+                db,
+                principal,
+                tool.name,
+                correlation,
+                "succeeded",
+                previous["result"]["data"].get("id"),
+                duration_ms=int((monotonic() - started) * 1000) if started else None,
+            )
             return previous["result"]
         used = (
             await db.execute(
@@ -199,7 +219,13 @@ class ToolApplication:
             "correlationId": correlation,
         }
         await self.audit(
-            db, principal, tool.name, correlation, "succeeded", result["data"].get("id")
+            db,
+            principal,
+            tool.name,
+            correlation,
+            "succeeded",
+            result["data"].get("id"),
+            duration_ms=int((monotonic() - started) * 1000) if started else None,
         )
         await db.execute(
             text("""INSERT INTO mcp_requests (connection_id,tool,key,request_hash,result)
@@ -208,7 +234,16 @@ class ToolApplication:
         )
         return result
 
-    async def audit(self, db, principal, name, correlation, outcome, entity_id=None):
+    async def audit(
+        self,
+        db,
+        principal,
+        name,
+        correlation,
+        outcome,
+        entity_id=None,
+        duration_ms=None,
+    ):
         await db.execute(
             text("""INSERT INTO audit_logs (id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at)
             VALUES (:id,:workspace,:actor,:action,'mcp-tool',:entity,CAST(:metadata AS jsonb),:now)"""),
@@ -225,12 +260,13 @@ class ToolApplication:
                         "correlationId": correlation,
                         "tool": name,
                         "outcome": outcome,
+                        "durationMs": duration_ms,
                     }
                 ),
             },
         )
 
-    async def failed_audit(self, principal, name, correlation, error):
+    async def failed_audit(self, principal, name, correlation, error, started=None):
         logger.warning(
             "MCP tool=%s connection=%s status=%s",
             name,
@@ -248,6 +284,9 @@ class ToolApplication:
                     if isinstance(error, ApiError)
                     and error.status_code in {401, 403, 404}
                     else "failed",
+                    duration_ms=int((monotonic() - started) * 1000)
+                    if started
+                    else None,
                 )
                 await db.commit()
         except Exception:

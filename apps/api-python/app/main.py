@@ -73,6 +73,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await mcp_stack.enter_async_context(app.state.mcp_server.session_manager.run())
         outbox_stop = asyncio.Event()
         outbox_task = asyncio.create_task(outbox_loop(session_factory, outbox_stop))
+        from .modules.notifications.delivery_worker import delivery_loop
+        channel_task=asyncio.create_task(delivery_loop(session_factory,runtime,outbox_stop))
         maintenance_task=asyncio.create_task(maintenance_loop(session_factory,outbox_stop))
         agent_runs_stop = asyncio.Event()
         agent_runs_task = asyncio.create_task(agent_run_dispatcher_loop(session_factory, agent_runs_stop)) if runtime.mcp_enabled and runtime.mcp_writes_enabled else None
@@ -98,6 +100,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await dispatch_task
             await scm_task
             await outbox_task
+            await channel_task
             await maintenance_task
             if agent_runs_task:
                 await agent_runs_task
@@ -108,6 +111,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = runtime
     app.include_router(mcp_management_router)
     app.include_router(agent_runs_router)
+    from .modules.agent_runs.evidence import router as operations_router
+    app.include_router(operations_router)
     if runtime.mcp_enabled:
         from .modules.mcp.transport import build_server
         server, transport = build_server(app)
@@ -123,6 +128,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_exception_handler(ApiError, api_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.include_router(auth_router)
+    from .modules.identity.preferences import router as preferences_router
+    app.include_router(preferences_router)
+    from .modules.search.api import router as search_router
+    app.include_router(search_router)
     app.include_router(password_reset_router)
     app.include_router(agent_router)
     app.include_router(admin_router)
@@ -145,6 +154,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(pulse_router)
     app.include_router(emojis_router)
     app.include_router(notifications_router)
+    from .modules.notifications.channels import router as channels_router
+    app.include_router(channels_router)
     app.include_router(integrations_router)
     app.include_router(views_router)
     app.include_router(native_projects_router)

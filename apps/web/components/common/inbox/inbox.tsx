@@ -1,4 +1,5 @@
 'use client';
+import { useLocale } from '@/features/shared/use-locale';
 
 import { useEffect, useState } from 'react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
@@ -28,11 +29,18 @@ import IssueLine from './issue-line';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { ChevronLeft } from 'lucide-react';
-import { useIssuesStore } from '@/store/issues-store';
+import { orderNotifications } from '@/features/inbox/notification-order';
+import { QueryState } from '@/components/common/query-state';
+import { LoadingState } from '@/components/common/loading-state';
 
 export default function Inbox() {
+   const { t } = useLocale();
    const {
       notifications,
+      loading,
+      includeSnoozed,
+      setIncludeSnoozed,
+      error,
       selectedNotification,
       setSelectedNotification,
       markAsRead,
@@ -43,7 +51,6 @@ export default function Inbox() {
       deleteCompletedIssues,
       getUnreadNotifications,
    } = useNotificationsStore();
-   const { loadIssues } = useIssuesStore();
 
    const isMobile = useIsMobile();
    const [showRead, setShowRead] = useState(true);
@@ -53,29 +60,13 @@ export default function Inbox() {
    const [showStatusIcon, setShowStatusIcon] = useState(true);
 
    useEffect(() => {
-      void (async () => {
-         await loadIssues();
-         await loadNotifications();
-      })();
-   }, [loadIssues, loadNotifications]);
-
-   // Filter and sort notifications based on settings
-   const filteredNotifications = notifications
-      .filter((notification) => {
-         if (!showRead && notification.read) return false;
-         // Add snoozed filter logic here when implemented
-         return true;
-      })
-      .sort((a, b) => {
-         if (showUnreadFirst) {
-            if (!a.read && b.read) return -1;
-            if (a.read && !b.read) return 1;
-         }
-         // Sort by timestamp (newest first by default)
-         return ordering === 'newest'
-            ? new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-            : new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
-      });
+      void loadNotifications();
+   }, [loadNotifications]);
+   const filteredNotifications = orderNotifications(
+      notifications.filter((notification) => showRead || !notification.read),
+      ordering === 'newest',
+      showUnreadFirst
+   );
 
    const handleDeleteAllNotifications = () => void deleteAll();
 
@@ -88,25 +79,25 @@ export default function Inbox() {
          <div className="flex items-center justify-between px-4 h-10 border-b border-border">
             <div className="flex items-center gap-2">
                <SidebarTrigger className="inline-flex lg:hidden" />
-               <h2 className="text-lg font-semibold">Inbox</h2>
+               <h2 className="text-lg font-semibold">{t('inbox')}</h2>
                <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                     <Button variant="ghost" size="xs">
+                     <Button variant="ghost" size="xs" aria-label={t('notificationActions')}>
                         <MoreHorizontal className="w-4 h-4" />
                      </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start">
                      <DropdownMenuItem onClick={handleDeleteAllNotifications}>
                         <Trash2 className="w-4 h-4 mr-2" />
-                        Delete all notifications
+                        {t('deleteAllNotifications')}
                      </DropdownMenuItem>
                      <DropdownMenuItem onClick={handleDeleteReadNotifications}>
                         <CheckCheck className="w-4 h-4 mr-2" />
-                        Delete all read notifications
+                        {t('deleteReadNotifications')}
                      </DropdownMenuItem>
                      <DropdownMenuItem onClick={handleDeleteCompletedIssues}>
                         <Archive className="w-4 h-4 mr-2" />
-                        Delete notifications for completed issues
+                        {t('deleteCompletedNotifications')}
                      </DropdownMenuItem>
                   </DropdownMenuContent>
                </DropdownMenu>
@@ -116,6 +107,7 @@ export default function Inbox() {
                <Button
                   variant="ghost"
                   size="xs"
+                  aria-label={t('markAllRead')}
                   onClick={markAllAsRead}
                   disabled={getUnreadNotifications().length === 0}
                >
@@ -123,26 +115,26 @@ export default function Inbox() {
                </Button>
                <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                     <Button variant="ghost" size="xs">
+                     <Button variant="ghost" size="xs" aria-label={t('notificationDisplay')}>
                         <SlidersHorizontal className="w-4 h-4" />
                      </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-64">
                      <DropdownMenuLabel className="flex items-center gap-2">
                         <ArrowUpDown className="w-4 h-4" />
-                        Ordering
+                        {t('ordering')}
                      </DropdownMenuLabel>
                      <DropdownMenuCheckboxItem
                         checked={ordering === 'newest'}
                         onCheckedChange={() => setOrdering('newest')}
                      >
-                        Newest
+                        {t('newest')}
                      </DropdownMenuCheckboxItem>
                      <DropdownMenuCheckboxItem
                         checked={ordering === 'oldest'}
                         onCheckedChange={() => setOrdering('oldest')}
                      >
-                        Oldest
+                        {t('oldest')}
                      </DropdownMenuCheckboxItem>
 
                      <DropdownMenuSeparator />
@@ -150,13 +142,17 @@ export default function Inbox() {
                      <div className="p-2 space-y-3">
                         <div className="flex items-center justify-between">
                            <Label htmlFor="show-snoozed" className="text-sm">
-                              Snoozing is not available yet
+                              {t('showSnoozed')}
                            </Label>
-                           <Switch id="show-snoozed" checked={false} disabled />
+                           <Switch
+                              id="show-snoozed"
+                              checked={includeSnoozed}
+                              onCheckedChange={setIncludeSnoozed}
+                           />
                         </div>
                         <div className="flex items-center justify-between">
                            <Label htmlFor="show-read" className="text-sm">
-                              Show read
+                              {t('showRead')}
                            </Label>
                            <Switch
                               id="show-read"
@@ -166,7 +162,7 @@ export default function Inbox() {
                         </div>
                         <div className="flex items-center justify-between">
                            <Label htmlFor="show-unread-first" className="text-sm">
-                              Show unread first
+                              {t('showUnreadFirst')}
                            </Label>
                            <Switch
                               id="show-unread-first"
@@ -178,7 +174,7 @@ export default function Inbox() {
 
                      <DropdownMenuSeparator />
 
-                     <DropdownMenuLabel>Display properties</DropdownMenuLabel>
+                     <DropdownMenuLabel>{t('displayProperties')}</DropdownMenuLabel>
                      <div className="p-2 space-y-3">
                         <div className="flex items-center justify-between">
                            <Label htmlFor="show-id" className="text-sm">
@@ -188,7 +184,7 @@ export default function Inbox() {
                         </div>
                         <div className="flex items-center justify-between">
                            <Label htmlFor="show-status-icon" className="text-sm">
-                              Status and icon
+                              {t('statusIcon')}
                            </Label>
                            <Switch
                               id="show-status-icon"
@@ -202,8 +198,12 @@ export default function Inbox() {
             </div>
          </div>
          <div className="w-full flex flex-col items-center justify-start overflow-y-scroll h-[calc(100%-40px)] pb-0.25">
-            {filteredNotifications.length === 0 && (
-               <p className="py-12 text-sm text-muted-foreground">No notifications to show.</p>
+            {loading && notifications.length === 0 && (
+               <LoadingState label={t('loadingNotifications')} />
+            )}
+            {error && <QueryState message={error} onRetry={loadNotifications} />}
+            {!loading && !error && filteredNotifications.length === 0 && (
+               <p className="py-12 text-sm text-muted-foreground">{t('noNotifications')}</p>
             )}
             {filteredNotifications.map((notification) => (
                <IssueLine
@@ -227,7 +227,7 @@ export default function Inbox() {
                className="flex items-center gap-1 px-4 h-10 border-b border-border text-sm text-muted-foreground hover:text-foreground shrink-0"
             >
                <ChevronLeft className="size-4" />
-               Inbox
+               {t('inbox')}
             </button>
             <div className="flex-1 min-h-0">
                <NotificationPreview notification={selectedNotification} onMarkAsRead={markAsRead} />

@@ -5,20 +5,19 @@ import { loadWorkspaceMemberships } from '@/lib/workspaces';
 import { ApiRequestError } from '@/lib/http';
 import { loadCurrentUser } from '@/features/identity/current-user';
 import { resolveWorkspaceRoot } from '@/lib/workspace-root';
-import { useUiPreferencesStore } from '@/store/ui-preferences-store';
+import { accountHome } from '@/features/identity/account-preferences';
 import { LoadingState } from '@/components/common/loading-state';
 import { QueryState } from '@/components/common/query-state';
 export default function Home() {
    const router = useRouter();
-   const { defaultHome, hasHydrated } = useUiPreferencesStore();
    const [error, setError] = useState<string>();
    const [retry, setRetry] = useState(0);
    useEffect(() => {
-      if (!hasHydrated) return;
       let active = true;
       setError(undefined);
       void Promise.all([loadCurrentUser(), loadWorkspaceMemberships()])
-         .then(([user, memberships]) => {
+         .then(async ([user, memberships]) => {
+            const defaultHome = await accountHome(user.id);
             if (!active) return;
             const destination = resolveWorkspaceRoot({
                adminAccessible: Boolean(user.isPlatformAdmin),
@@ -41,7 +40,7 @@ export default function Home() {
       return () => {
          active = false;
       };
-   }, [router, defaultHome, hasHydrated, retry]);
+   }, [router, retry]);
    return error ? (
       <QueryState message={error} onRetry={() => setRetry((value) => value + 1)} />
    ) : (

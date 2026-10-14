@@ -6,6 +6,11 @@ export type DefaultHome = 'inbox' | 'my-issues';
 export type FontSize = 'default' | 'small' | 'large';
 
 interface UiPreferencesState {
+   accountId?: string;
+   syncStatus: 'loading' | 'saved' | 'saving' | 'pending' | 'error';
+   syncError?: string;
+   syncReload: number;
+   reloadAccountPreferences: () => void;
    locale: Locale;
    commentSubmitMode: 'modifier-enter' | 'enter';
    setLocale: (locale: Locale) => void;
@@ -22,10 +27,13 @@ interface UiPreferencesState {
    setUnderlineLinks: (underlineLinks: boolean) => void;
 }
 
-/** Browser-local UI preferences that have immediate, visible app behavior. */
+/** Browser cache provides immediate preferences; PreferenceSync reconciles owned account values. */
 export const useUiPreferencesStore = create<UiPreferencesState>()(
    persist(
       (set) => ({
+         syncStatus: 'loading',
+         syncReload: 0,
+         reloadAccountPreferences: () => set((state) => ({ syncReload: state.syncReload + 1 })),
          locale: 'en',
          commentSubmitMode: 'modifier-enter',
          setLocale: (locale) => set({ locale }),
@@ -56,8 +64,11 @@ export const useUiPreferencesStore = create<UiPreferencesState>()(
             } as UiPreferencesState;
          },
          partialize: (state) => {
-            const { hasHydrated, ...preferences } = state;
+            const { hasHydrated, syncStatus, syncError, syncReload, ...preferences } = state;
             void hasHydrated;
+            void syncStatus;
+            void syncError;
+            void syncReload;
             return preferences;
          },
          onRehydrateStorage: () => (state) => state?.setHasHydrated(true),

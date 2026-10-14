@@ -7,10 +7,18 @@ import type { Issue } from '@/mock-data/issues';
 import type { IssueDetail } from '@/mock-data/issue-details';
 import { IssuePropertiesPanel } from './issue-properties-panel';
 
-export function MobileIssueProperties({ issue, detail }: { issue: Issue; detail: IssueDetail }) {
+export function MobileIssueProperties({
+   issue,
+   detail,
+   allScreens = false,
+}: {
+   issue: Issue;
+   detail: IssueDetail;
+   allScreens?: boolean;
+}) {
    const [open, setOpen] = useState(false);
    return (
-      <VStack gap={3} className="lg:hidden">
+      <VStack gap={3} className={allScreens ? undefined : 'lg:hidden'}>
          <Button
             label={open ? 'Hide properties' : 'Properties'}
             aria-expanded={open}

@@ -9,8 +9,7 @@ on:
       - 'docker-compose.yml'
       - 'pnpm-lock.yaml'
       - '.github/workflows/verify-mcp.yml'
-      - 'scripts/seed-ui-regression.py'
-      - 'scripts/ui_regression_api.py'
+      - 'scripts/**'
   push:
     branches: ['codex/**']
   workflow_dispatch:
@@ -22,7 +21,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:16
@@ -36,8 +35,10 @@ jobs:
           --health-cmd "pg_isready -U flowie_test -d flowie_mcp_test"
           --health-interval 5s --health-timeout 5s --health-retries 12
     env:
+      PYTHONPATH: apps/api-python
       DATABASE_URL: postgresql://flowie_test:test-only-password@localhost:5432/flowie_mcp_test
       MCP_TEST_DATABASE_URL: postgresql://flowie_test:test-only-password@localhost:5432/flowie_mcp_test
+      SCM_TEST_DATABASE_URL: postgresql://flowie_test:test-only-password@localhost:5432/flowie_mcp_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -66,7 +67,15 @@ jobs:
         run: |
           ruff check apps/api-python/app/modules apps/api-python/app/core/clock.py apps/api-python/app/core/dates.py apps/api-python/app/core/identifiers.py apps/api-python/app/db/mutations.py --select F
           ruff check apps/api-python/app --select F821
+          ruff check scripts/flowie_runner --select F
           python -m pytest apps/api-python/tests -q
+      - name: Install pinned storage fixture toolchain
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.8'
+          cache: false
+      - name: Verify pinned source MinIO and SMTP transports
+        run: bash scripts/verify-storage-acceptance.sh
       - name: Build web and verify Compose dependencies
         run: |
           pnpm --filter @circle/contracts build
@@ -78,7 +87,7 @@ jobs:
           FLOWIE_E2E_DATABASE_URL: postgresql://flowie_test:test-only-password@localhost:5432/flowie_mcp_test
         run: |
           python scripts/seed-ui-regression.py
-          pnpm --filter @circle/web exec playwright install --with-deps chromium
+          pnpm --filter @circle/web exec playwright install --with-deps chromium firefox webkit
           pnpm --filter @circle/web test:e2e
       - uses: actions/upload-artifact@v4
         if: failure()

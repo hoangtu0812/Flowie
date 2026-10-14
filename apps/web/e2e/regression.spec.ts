@@ -259,7 +259,7 @@ test('failed comment send retains the draft and retry posts one comment', async 
    await page.route('**/api/v1/comments', (route) => route.abort('failed'));
    await page.getByRole('button', { name: 'Comment', exact: true }).click();
    await expect(page.getByRole('textbox', { name: 'Comment', exact: true })).toHaveValue(content);
-   await expect(page.getByRole('alert').filter({ hasText: /fetch|network/i })).toBeVisible();
+   await expect(page.locator('[data-comment-composer]').getByRole('alert')).toBeVisible();
    await page.unroute('**/api/v1/comments');
    await page.getByRole('button', { name: 'Comment', exact: true }).click();
    await expect(page.getByRole('article').filter({ hasText: content })).toHaveCount(1);
@@ -428,4 +428,281 @@ test('empty cycle and failed list requests show distinct recoverable states', as
    await page.unroute('**/api/v1/issues?*');
    await page.getByRole('button', { name: 'Retry', exact: true }).click();
    await expect(page.getByText(fixture.issues[0].title, { exact: true }).first()).toBeVisible();
+});
+
+test('Inbox opens an uncached task, sends comments and exposes attachments and properties', async ({
+   page,
+   context,
+}) => {
+   const bulkRequests: string[] = [];
+   page.on('request', (request) => {
+      if (/\/api\/v1\/issues\?/.test(request.url())) bulkRequests.push(request.url());
+   });
+   await page.goto(`/${fixture.slug}/inbox`);
+   await page
+      .getByRole('button', { name: `Open notification: ${fixture.issues[0].title}`, exact: true })
+      .click();
+   await expect(
+      page.getByRole('heading', { name: fixture.issues[0].title, exact: true })
+   ).toBeVisible();
+   const content = `Inbox comment ${Date.now()}`;
+   await page.getByRole('textbox', { name: 'Comment', exact: true }).fill(content);
+   await page.getByRole('button', { name: 'Comment', exact: true }).click();
+   await expect(page.getByRole('article').filter({ hasText: content })).toBeVisible();
+   await page.getByRole('button', { name: 'Properties', exact: true }).click();
+   await expect(page.getByRole('combobox', { name: /Status:/ }).first()).toBeVisible();
+   await expect(page.getByRole('button', { name: 'Attach file', exact: true })).toBeVisible();
+   const saved = (
+      await (
+         await context.request.get(
+            `${api}/comments?workspaceId=${fixture.workspace_id}&issueId=${fixture.issues[0].id}`
+         )
+      ).json()
+   ).data;
+   expect(saved.some((item: { content: string }) => item.content === content)).toBeTruthy();
+   expect(bulkRequests).toEqual([]);
+});
+
+test('Inbox shows failed loads with Retry instead of an empty notification list', async ({
+   page,
+}) => {
+   await page.route('**/api/v1/notifications?*', (route) => route.abort('failed'));
+   await page.goto(`/${fixture.slug}/inbox`);
+   await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeVisible();
+   await expect(page.getByText('No notifications to show.', { exact: true })).toHaveCount(0);
+   await page.unroute('**/api/v1/notifications?*');
+   await page.getByRole('button', { name: 'Retry', exact: true }).click();
+   await expect(
+      page.getByRole('button', {
+         name: `Open notification: ${fixture.issues[0].title}`,
+         exact: true,
+      })
+   ).toBeVisible();
+});
+
+test('older comments and a long reply thread load in bounded pages', async ({ page, context }) => {
+   const issue = fixture.issues[1];
+   const suffix = String(Date.now());
+   let newest = '';
+   for (let index = 0; index < 31; index++) {
+      const response = await context.request.post(`${api}/comments`, {
+         data: {
+            workspaceId: fixture.workspace_id,
+            issueId: issue.id,
+            content: `Paged ${suffix} root ${index}`,
+         },
+      });
+      expect(response.ok()).toBeTruthy();
+      newest = (await response.json()).data.id;
+   }
+   for (let index = 0; index < 8; index++) {
+      const response = await context.request.post(`${api}/comments`, {
+         data: {
+            workspaceId: fixture.workspace_id,
+            issueId: issue.id,
+            parentCommentId: newest,
+            content: `Thread ${suffix} reply ${index}`,
+         },
+      });
+      expect(response.ok()).toBeTruthy();
+   }
+   await page.goto(`/${fixture.slug}/issue/${issue.identifier}`);
+   await expect(page.getByText(`Paged ${suffix} root 30`, { exact: true })).toBeVisible();
+   await expect(page.getByText(`Paged ${suffix} root 0`, { exact: true })).toHaveCount(0);
+   await page.getByRole('button', { name: 'Load older comments', exact: true }).click();
+   await expect(page.getByText(`Paged ${suffix} root 0`, { exact: true })).toBeVisible();
+   await expect(page.getByText(`Thread ${suffix} reply 0`, { exact: true })).toHaveCount(0);
+   const parent = page.getByRole('article').filter({ hasText: `Paged ${suffix} root 30` });
+   await parent
+      .locator('..')
+      .getByRole('button', { name: 'Load more replies to Regression Owner', exact: true })
+      .click();
+   await expect(page.getByText(`Thread ${suffix} reply 0`, { exact: true })).toBeVisible();
+});
+
+test('workspace search finds server records and opens a document directly', async ({ page }) => {
+   await page.goto(`/${fixture.slug}/search`);
+   await page
+      .getByLabel('Search issues, documents, projects and members')
+      .fill('Regression Markdown');
+   await page.getByRole('link', { name: fixture.documentTitle, exact: true }).click();
+   await expect(page.getByRole('dialog')).toBeVisible();
+   await expect(page).toHaveURL(new RegExp(`/documents/${fixture.documentId}`));
+});
+
+test('account preferences synchronize on a separate browser context and home navigation', async ({
+   page,
+   context,
+   browser,
+}) => {
+   const endpoint = `${api}/users/me/ui-preferences`;
+   const original = (await (await context.request.get(endpoint)).json()).data;
+   let second: Awaited<ReturnType<typeof browser.newContext>> | undefined;
+   try {
+      await page.goto(`/${fixture.slug}/settings/preferences`);
+      await expect(page.getByText('Account preferences saved.', { exact: true })).toBeVisible();
+      await page
+         .getByRole('checkbox', { name: 'Underline links', exact: true })
+         .setChecked(!original.values.underlineLinks);
+      await page.getByRole('button', { name: 'Default home view', exact: true }).click();
+      await page.getByRole('menuitem', { name: 'My issues', exact: true }).click();
+      await expect
+         .poll(
+            async () => (await (await context.request.get(endpoint)).json()).data.values.defaultHome
+         )
+         .toBe('my-issues');
+      second = await browser.newContext();
+      const device = await second.newPage();
+      await device.goto('http://localhost:3000/auth/login');
+      await device.getByLabel('Email', { exact: true }).fill(fixture.email);
+      await device.getByLabel('Password', { exact: true }).fill(fixture.password);
+      await device.getByRole('button', { name: 'Sign in', exact: true }).click();
+      await expect(device).toHaveURL(new RegExp(`/${fixture.slug}/my-issues`));
+      await device.goto(`http://localhost:3000/${fixture.slug}/settings/preferences`);
+      await expect(
+         device.getByRole('checkbox', { name: 'Underline links', exact: true })
+      ).toBeEnabled();
+      expect(
+         await device.getByRole('checkbox', { name: 'Underline links', exact: true }).isChecked()
+      ).toBe(!original.values.underlineLinks);
+   } finally {
+      await second?.close();
+      const current = (await (await context.request.get(endpoint)).json()).data;
+      await context.request.put(endpoint, {
+         data: {
+            accountId: fixture.userId,
+            expectedVersion: current.version,
+            values: original.values,
+         },
+      });
+   }
+});
+
+test('Inbox snooze persists and notification channel availability is real', async ({
+   page,
+   context,
+   browserName,
+}) => {
+   await page.goto(`/${fixture.slug}/inbox`);
+   const row = page.getByRole('button', {
+      name: `Open notification: ${fixture.issues[0].title}`,
+      exact: true,
+   });
+   await row.click();
+   await page.getByRole('button', { name: 'Snooze for one hour', exact: true }).click();
+   await expect(row).toHaveCount(0);
+   await page.reload();
+   await expect(row).toHaveCount(0);
+   await page.getByRole('button', { name: 'Notification display options', exact: true }).click();
+   await page.getByRole('switch', { name: 'Show snoozed', exact: true }).click();
+   await page.keyboard.press('Escape');
+   await row.click();
+   await expect(page.getByText(/Snoozed until/)).toBeVisible();
+   await page.getByRole('button', { name: 'Unsnooze', exact: true }).click();
+   await expect(
+      page.getByRole('button', { name: 'Snooze for one hour', exact: true })
+   ).toBeVisible();
+   await page.goto(`/${fixture.slug}/settings/notifications`);
+   await expect(
+      page.getByRole('checkbox', { name: 'Email notifications', exact: true })
+   ).toBeDisabled();
+   await expect(
+      page.getByText('Private SMTP delivery is not configured.', { exact: true })
+   ).toBeVisible();
+   if (browserName !== 'chromium') return;
+   await context.grantPermissions(['notifications'], { origin: 'http://localhost:3000' });
+   await page.getByRole('checkbox', { name: 'Desktop notifications', exact: true }).check();
+   await expect
+      .poll(
+         async () =>
+            (
+               await (
+                  await context.request.get(
+                     `${api}/notifications/channels?workspaceId=${fixture.workspace_id}`
+                  )
+               ).json()
+            ).data.desktopEnabled
+      )
+      .toBe(true);
+   await page.reload();
+   await expect(
+      page.getByRole('checkbox', { name: 'Desktop notifications', exact: true })
+   ).toBeChecked();
+});
+
+test('Vietnamese account locale applies to Inbox search and issue activity', async ({
+   page,
+   context,
+}) => {
+   const endpoint = `${api}/users/me/ui-preferences`;
+   const original = (await (await context.request.get(endpoint)).json()).data;
+   try {
+      const response = await context.request.put(endpoint, {
+         data: {
+            accountId: fixture.userId,
+            expectedVersion: original.version,
+            values: { ...original.values, locale: 'vi' },
+         },
+      });
+      expect(response.ok()).toBeTruthy();
+      await page.goto(`/${fixture.slug}/search`);
+      await expect(
+         page.getByRole('heading', { name: 'Tìm trong workspace', exact: true })
+      ).toBeVisible();
+      await page
+         .getByLabel('Tìm công việc, tài liệu, dự án và thành viên')
+         .fill('Regression Markdown');
+      await expect(
+         page.getByRole('link', { name: fixture.documentTitle, exact: true })
+      ).toBeVisible();
+      await page.goto(`/${fixture.slug}/inbox`);
+      await expect(page.getByRole('heading', { name: 'Hộp thư', exact: true })).toBeVisible();
+      await page
+         .getByRole('button', {
+            name: `Open notification: ${fixture.issues[0].title}`,
+            exact: true,
+         })
+         .click();
+      await expect(page.getByRole('heading', { name: 'Hoạt động', exact: true })).toBeVisible();
+      await expect(page.getByRole('textbox', { name: 'Bình luận', exact: true })).toBeVisible();
+   } finally {
+      const current = (await (await context.request.get(endpoint)).json()).data;
+      await context.request.put(endpoint, {
+         data: {
+            accountId: fixture.userId,
+            expectedVersion: current.version,
+            values: original.values,
+         },
+      });
+   }
+});
+
+test('AI operations budgets persist with real workspace administration', async ({
+   page,
+   context,
+}) => {
+   const endpoint = `${api}/ai-operations?workspaceId=${fixture.workspace_id}`;
+   const original = (await (await context.request.get(endpoint)).json()).data.limits;
+   try {
+      await page.goto(`/${fixture.slug}/settings/ai-operations`);
+      await expect(
+         page.getByRole('heading', { name: 'Workspace budget', exact: true })
+      ).toBeVisible();
+      await page.getByLabel('Total tool calls per minute').fill('299');
+      await page.getByLabel('Per-tool budgets (JSON)').fill('{"get_issue": 50}');
+      await page.getByRole('button', { name: 'Save budgets', exact: true }).click();
+      await expect
+         .poll(
+            async () =>
+               (await (await context.request.get(endpoint)).json()).data.limits.totalPerMinute
+         )
+         .toBe(299);
+      await page.reload();
+      await expect(page.getByLabel('Total tool calls per minute')).toHaveValue('299');
+      await expect(page.getByLabel('Per-tool budgets (JSON)')).toHaveValue(/"get_issue": 50/);
+   } finally {
+      await context.request.put(`${api}/ai-operations/limits?workspaceId=${fixture.workspace_id}`, {
+         data: original,
+      });
+   }
 });

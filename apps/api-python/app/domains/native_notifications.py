@@ -86,24 +86,26 @@ async def notification_stream(websocket: WebSocket, workspaceId: str = Query(min
 @router.get('')
 async def list_notifications(
     workspaceId: str = Query(min_length=1),
+    includeSnoozed: bool = False,
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, list[dict[str, Any]]]:
     await _access(db, workspaceId, user['id'])
     result = await db.execute(
         text(
-            '''SELECT id, workspace_id, user_id, type, entity_type, entity_id, data, read_at, created_at
+            '''SELECT id, workspace_id, user_id, type, entity_type, entity_id, data, read_at, created_at, snoozed_until
                FROM notifications
                WHERE workspace_id = :workspace_id AND user_id = :user_id
+               AND (:include_snoozed OR snoozed_until IS NULL OR snoozed_until<=:now)
                ORDER BY created_at DESC'''
         ),
-        {'workspace_id': workspaceId, 'user_id': user['id']},
+        {'workspace_id': workspaceId, 'user_id': user['id'], 'include_snoozed':includeSnoozed, 'now':_utcnow()},
     )
     return {'data': [
         {
             'id': row['id'], 'workspaceId': row['workspace_id'], 'userId': row['user_id'],
             'type': row['type'], 'entityType': row['entity_type'], 'entityId': row['entity_id'],
-            'data': row['data'] or {}, 'readAt': row['read_at'], 'createdAt': row['created_at'],
+            'data': row['data'] or {}, 'readAt': row['read_at'], 'createdAt': row['created_at'], 'snoozedUntil':row['snoozed_until'],
         }
         for row in result.mappings().all()
     ]}

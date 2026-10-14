@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.config import _async_database_url
-from app.domains.auth import _cuid, _utcnow
+from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
 from app.domains.scm.contracts import ProviderRepository, ProviderReview, ProviderReviewer, ProviderRevision
 from app.domains.scm.service import upsert_repository, upsert_review
 from app.domains.reviews import list_reviews
@@ -41,7 +41,11 @@ class ScmPersistenceIntegrationTests(unittest.TestCase):
                     )
                     owner = seed.mappings().first()
                     if not owner:
-                        self.skipTest('The integration database has no workspace member.')
+                        now, fixture_user = _utcnow(), _cuid()
+                        await db.execute(text("INSERT INTO users(id,email,name,status,created_at,updated_at) VALUES (:id,:email,'SCM fixture','ACTIVE',:now,:now)"), {'id': fixture_user, 'email': fixture_user + '@example.test', 'now': now})
+                        fixture = await create_workspace_bootstrap(db, user_id=fixture_user, organization_name='SCM fixture', workspace_name=_cuid(), now=now)
+                        team_id = (await db.execute(text('SELECT id FROM teams WHERE workspace_id=:workspace LIMIT 1'), {'workspace': fixture['workspace_id']})).scalar_one()
+                        owner = {'workspace_id': fixture['workspace_id'], 'user_id': fixture_user, 'team_id': team_id}
                     now = _utcnow()
                     connection_id = _cuid()
                     await db.execute(

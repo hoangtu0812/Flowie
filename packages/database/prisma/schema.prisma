@@ -172,22 +172,23 @@ enum CycleStatus {
 }
 
 model User {
-  id              String     @id @default(cuid())
-  email           String     @unique
+  uiPreferences   UserUiPreferences?
+  id              String             @id @default(cuid())
+  email           String             @unique
   name            String
-  username        String?    @unique
+  username        String?            @unique
   title           String?
-  timezone        String     @default("UTC")
-  avatarUrl       String?    @map("avatar_url")
-  authVersion     Int        @default(0) @map("auth_version")
-  passwordHash    String?    @map("password_hash")
-  isPlatformAdmin Boolean    @default(false) @map("is_platform_admin")
-  emailVerifiedAt DateTime?  @map("email_verified_at")
-  status          UserStatus @default(ACTIVE)
-  createdAt       DateTime   @default(now()) @map("created_at")
-  updatedAt       DateTime   @updatedAt @map("updated_at")
-  lastLoginAt     DateTime?  @map("last_login_at")
-  lastSeenAt      DateTime?  @map("last_seen_at")
+  timezone        String             @default("UTC")
+  avatarUrl       String?            @map("avatar_url")
+  authVersion     Int                @default(0) @map("auth_version")
+  passwordHash    String?            @map("password_hash")
+  isPlatformAdmin Boolean            @default(false) @map("is_platform_admin")
+  emailVerifiedAt DateTime?          @map("email_verified_at")
+  status          UserStatus         @default(ACTIVE)
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+  lastLoginAt     DateTime?          @map("last_login_at")
+  lastSeenAt      DateTime?          @map("last_seen_at")
 
   identities               UserIdentity[]
   sessions                 Session[]
@@ -240,6 +241,16 @@ model User {
 
   @@index([lastSeenAt])
   @@map("users")
+}
+
+model UserUiPreferences {
+  userId    String   @id @map("user_id")
+  values    Json     @default("{}") @map("preferences")
+  version   Int      @default(1)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_ui_preferences")
 }
 
 model Session {
@@ -521,18 +532,20 @@ model Organization {
 }
 
 model Workspace {
-  id                     String   @id @default(cuid())
-  organizationId         String   @map("organization_id")
+  aiLimits               AiWorkspaceLimit?
+  aiToolWindows          AiToolWindow[]
+  id                     String            @id @default(cuid())
+  organizationId         String            @map("organization_id")
   name                   String
-  slug                   String   @unique
+  slug                   String            @unique
   icon                   String?
   description            String?
-  timezone               String   @default("UTC")
-  projectDisplayDefaults Json?    @map("project_display_defaults")
-  issueDisplayDefaults   Json?    @map("issue_display_defaults")
-  issueInsightDefaults   Json?    @map("issue_insight_defaults")
-  createdAt              DateTime @default(now()) @map("created_at")
-  updatedAt              DateTime @updatedAt @map("updated_at")
+  timezone               String            @default("UTC")
+  projectDisplayDefaults Json?             @map("project_display_defaults")
+  issueDisplayDefaults   Json?             @map("issue_display_defaults")
+  issueInsightDefaults   Json?             @map("issue_insight_defaults")
+  createdAt              DateTime          @default(now()) @map("created_at")
+  updatedAt              DateTime          @updatedAt @map("updated_at")
 
   organization            Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   members                 WorkspaceMember[]
@@ -586,6 +599,28 @@ model Workspace {
 
   @@index([organizationId])
   @@map("workspaces")
+}
+
+model AiWorkspaceLimit {
+  workspaceId    String    @id @map("workspace_id")
+  totalPerMinute Int       @default(300) @map("total_per_minute")
+  perTool        Json      @default("{}") @map("per_tool")
+  updatedAt      DateTime  @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'::text)")) @updatedAt @map("updated_at")
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("ai_workspace_limits")
+}
+
+model AiToolWindow {
+  workspaceId String    @map("workspace_id")
+  tool        String
+  windowStart DateTime  @map("window_start")
+  used        Int       @default(0)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, tool, windowStart])
+  @@index([windowStart])
+  @@map("ai_tool_windows")
 }
 
 model WorkspaceAgentProvider {
@@ -1898,25 +1933,45 @@ model InitiativeLabelLink {
 }
 
 model Notification {
-  id          String    @id @default(cuid())
-  workspaceId String    @map("workspace_id")
-  userId      String    @map("user_id")
-  type        String
-  entityType  String    @map("entity_type")
-  entityId    String    @map("entity_id")
-  data        Json?
-  readAt      DateTime? @map("read_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
+  snoozedUntil  DateTime?                  @map("snoozed_until")
+  emailDelivery NotificationEmailDelivery?
+  id            String                     @id @default(cuid())
+  workspaceId   String                     @map("workspace_id")
+  userId        String                     @map("user_id")
+  type          String
+  entityType    String                     @map("entity_type")
+  entityId      String                     @map("entity_id")
+  data          Json?
+  readAt        DateTime?                  @map("read_at")
+  createdAt     DateTime                   @default(now()) @map("created_at")
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt, createdAt])
   @@index([workspaceId, userId, readAt, createdAt])
+  @@index([snoozedUntil, id])
   @@map("notifications")
 }
 
+model NotificationEmailDelivery {
+  notificationId String       @id @map("notification_id")
+  attempts       Int          @default(0)
+  availableAt    DateTime     @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'::text)")) @map("available_at")
+  leaseUntil     DateTime?    @map("lease_until")
+  leaseToken     String?      @map("lease_token")
+  deliveredAt    DateTime?    @map("delivered_at")
+  failedAt       DateTime?    @map("failed_at")
+  lastErrorCode  String?      @map("last_error_code")
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@index([availableAt])
+  @@map("notification_email_deliveries")
+}
+
 model NotificationPreference {
+  emailEnabled       Boolean  @default(false) @map("email_enabled")
+  desktopEnabled     Boolean  @default(false) @map("desktop_enabled")
   workspaceId        String   @map("workspace_id")
   userId             String   @map("user_id")
   teamIssueAdded     Boolean  @default(false) @map("team_issue_added")

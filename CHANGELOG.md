@@ -12,6 +12,28 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Browser regressions cover Inbox snooze, account locale and AI budgets across Chromium, Firefox and WebKit. Isolated SMTP/TLS and real MinIO signing acceptance complement UI fixtures; CI provisions its own storage and retains failure traces.
+
+- A modular local Codex runner binds work to an approved project/repository, keeps Flowie tokens out of child processes, renews leases, stops on lease loss and records locally executed test results. Inspect is read-only; publishing requires an explicit local option and existing SCM credentials.
+
+- Workspace administrators can review AI tool errors, latency and run leases, and set atomic workspace/tool minute budgets across connections. Apply the operations migration before API startup. GitHub App verification checks the current PR head and observed CI separately from agent-reported evidence; it does not complete issues or replace review.
+
+- Inbox snooze and notification channel controls persist through the API, show real SMTP availability and request desktop permission only after a user action. Inbox, workspace search and collaboration controls honor English/Vietnamese account preferences.
+
+- Notifications support persistent snooze with wake-up events and opt-in private email through a leased retry queue and scoped delivery status. Apply the channel/snooze and UTC-queue migrations before API startup; email requires verified recipients and configured SMTP/TLS.
+
+- Language, home view, comment shortcut and readable UI preferences synchronize
+  by account with version checks across devices. Apply the account-preferences
+  migration before starting the API; conflicts require an explicit reload.
+
+- Workspace search reads accessible issues, document contents, projects and
+  member names from the server with signed cursors and Vietnamese search.
+  Ctrl+K can open search, and documents have direct URLs using the shared editor.
+
+- A second implementation plan tracks Inbox fixes, exact-commit deployment,
+  bounded collaboration feeds, global search, notification delivery, account
+  preferences and local Codex/AI operations, with explicit acceptance gates.
+
 - The UI/UX implementation plan tracks all 17 fixes and six features with module
   boundaries, regression evidence, before/after images and CT107 release gates.
   SMTP delivery, real object storage and installed AI clients have explicit
@@ -76,6 +98,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Changed
 
+- Comment and activity APIs return bounded cursor pages with batched reactions
+  and files. Web loads older pages and long reply threads on demand; concurrent
+  page responses preserve newly posted comments and newer edits.
+
 - Web issue views now load server-filtered cursor pages, retain query scope on
   retry/mutation and offer Load more with visible loaded/total counts. Detail
   reads one issue by key; account identity partitions issue snapshots.
@@ -96,6 +122,21 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
   notification delivery, so retries do not duplicate saved mutations.
 
 ### Fixed
+
+- Storage acceptance builds pinned official MinIO source and runs a loopback
+  fixture on clean CI runners without depending on unavailable public community
+  images. Production's cached-image policy remains intact.
+
+- Notification channel toggles respond immediately while saving, roll back on failure and preserve the user gesture required to request browser permission.
+
+- Inbox opens the current issue by ID, with shared Markdown, properties,
+  comments and attachments even when the issue is outside the cached page.
+  Notification ordering uses original instants; failed loads keep their scoped
+  snapshot and offer Retry, with accessible keyboard selection.
+
+- Production checks out the exact commit verified by its workflow and rejects
+  dirty tracked source before deployment. Later merges can no longer change the
+  revision selected by an earlier queued deployment; readiness also checks SHA.
 
 - Browser checks now wait for persisted comment rows and completed theme menu
   transitions; regressions also cover recovery of locally backed-up document

@@ -49,6 +49,9 @@ export default function AiAgents() {
       <DesignSurface>
          <VStack as="main" gap={4} padding={6} maxWidth={800}>
             <Heading level={1}>AI & Agents</Heading>
+            <Link href={`/${orgId}/settings/ai-operations`}>
+               AI operations (workspace administrators)
+            </Link>
             <Text>Capabilities available in this workspace and deployment.</Text>
             {error ? (
                <QueryState message={error} onRetry={() => setRefresh((value) => value + 1)} />
