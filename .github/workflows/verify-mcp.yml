@@ -1,0 +1,71 @@
+name: Verify MCP and application contracts
+
+on:
+  pull_request:
+    paths:
+      - 'apps/api-python/**'
+      - 'apps/web/**'
+      - 'packages/**'
+      - 'docker-compose.yml'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/verify-mcp.yml'
+  push:
+    branches: ['codex/**']
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: flowie_test
+          POSTGRES_PASSWORD: test-only-password
+          POSTGRES_DB: flowie_mcp_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U flowie_test -d flowie_mcp_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DATABASE_URL: postgresql://flowie_test:test-only-password@localhost:5432/flowie_mcp_test
+      MCP_TEST_DATABASE_URL: postgresql://flowie_test:test-only-password@localhost:5432/flowie_mcp_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: apps/api-python/requirements.txt
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '9.15.9'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+      - name: Install dependencies
+        run: |
+          python -m pip install -r apps/api-python/requirements.txt pytest==9.1.1 ruff==0.15.4
+          pnpm install --frozen-lockfile
+      - name: Validate and migrate a clean database
+        run: |
+          pnpm --filter @circle/database exec prisma validate --schema prisma/schema.prisma
+          pnpm --filter @circle/database exec prisma migrate deploy --schema prisma/schema.prisma
+          pnpm --filter @circle/database exec prisma generate --schema prisma/schema.prisma
+      - name: Verify backend and MCP integration
+        run: |
+          ruff check apps/api-python/app/modules apps/api-python/app/core/clock.py apps/api-python/app/core/dates.py apps/api-python/app/core/identifiers.py apps/api-python/app/db/mutations.py --select F
+          ruff check apps/api-python/app --select F821
+          python -m pytest apps/api-python/tests -q
+      - name: Build web and verify Compose dependencies
+        run: |
+          pnpm --filter @circle/contracts build
+          pnpm --filter @circle/web build
+          docker compose --profile app config --quiet

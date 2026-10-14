@@ -1,0 +1,1 @@
+"""Transactional notification delivery."""

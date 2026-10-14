@@ -13,7 +13,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  verify:
+    uses: ./.github/workflows/verify-mcp.yml
+
   deploy:
+    needs: verify
     name: Build and deploy to CT107
     runs-on: [self-hosted, flowie-production]
     # The host downloads Python wheels at a few kB/s, so a cold build can run

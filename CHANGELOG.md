@@ -10,6 +10,36 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+### Added
+
+- A detailed MCP implementation roadmap covering AI access to project work,
+  comments and documents, with tracked milestones, acceptance criteria and
+  CT107 production rollout requirements.
+- AI clients can connect through scoped, expiring MCP credentials to read project
+  work, write issues/comments/documents, restore document revisions and report
+  agent-run evidence. MCP and its write tools remain disabled by default; both
+  committed Prisma migrations must complete before the API and worker start.
+- Workspace managers can configure repository instructions and label-based queues
+  for external coding agents, monitor runs and cancel work. Queued work requires
+  an external agent to claim it; the production API does not execute repository
+  commands or create pull requests.
+
+### Changed
+
+- Production deployment now requires backend/MCP integration checks, clean-database
+  migrations and the web build to pass in CI before CT107 deployment begins.
+- Issue/comment/document writes detect stale MCP versions and stage durable
+  notification delivery, so retries do not duplicate saved mutations.
+
+### Fixed
+
+- Workspace document listings now exclude documents belonging to teams the
+  requester cannot access, including when no team filter is supplied.
+- Shared team access checks also require active workspace membership, preventing
+  writes through lingering team memberships after workspace access is removed.
+- Team membership updates and removals now use the request's database session
+  instead of failing before the membership change can be saved.
+
 ## [0.12.0] — 2026-09-10 10:26 +07
 
 ### Added
