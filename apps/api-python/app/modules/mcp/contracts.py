@@ -161,6 +161,8 @@ class TransitionIssueTool(VersionInput, IssueInput):
 
 
 class AddCommentTool(WriteInput, IssueInput):
+    parentCommentId: str | None = None
+    mentionIds: list[str] = Field(default_factory=list, max_length=100)
     content: str = Field(min_length=1, max_length=20000)
 
 

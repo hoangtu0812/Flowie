@@ -44,11 +44,14 @@ class UpdateIssueInput(BugUpdateFields):
 
 
 class CommentInput(BaseModel):
+    expectedVersion: int | None = Field(default=None, ge=1)
+    mentionIds: list[str] | None = Field(default=None, max_length=100)
     content: str | None = Field(default=None, min_length=1, max_length=20_000)
     body: dict[str, Any] | None = None
 
 
 class CreateCommentInput(CommentInput):
+    parentCommentId: str | None = Field(default=None, min_length=1)
     workspaceId: str = Field(min_length=1)
     issueId: str = Field(min_length=1)
 

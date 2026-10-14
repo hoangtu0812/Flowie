@@ -337,6 +337,64 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertEqual(error.exception.status_code, 409)
 
+    async def test_comment_replies_mentions_and_revision_history(self):
+        parent = (
+            await self.call(
+                "add_comment",
+                issueId=self.issue["id"],
+                content="Parent",
+                mentionIds=[self.user["id"]],
+                idempotencyKey="comment-parent-key",
+            )
+        )["data"]
+        reply = (
+            await self.call(
+                "add_comment",
+                issueId=self.issue["id"],
+                content="Reply",
+                parentCommentId=parent["id"],
+                idempotencyKey="comment-reply-key",
+            )
+        )["data"]
+        self.assertEqual(reply["parentCommentId"], parent["id"])
+        with self.assertRaises(ApiError):
+            await self.call(
+                "add_comment",
+                issueId=self.issue["id"],
+                content="Invalid nested reply",
+                parentCommentId=reply["id"],
+                idempotencyKey="comment-nested-key",
+            )
+        with self.assertRaises(ApiError):
+            await self.call(
+                "add_comment",
+                issueId=self.issue["id"],
+                content="Invalid mention",
+                mentionIds=["not-a-member"],
+                idempotencyKey="comment-mention-key",
+            )
+        await self.call(
+            "update_comment",
+            commentId=parent["id"],
+            content="Parent edited",
+            expectedVersion=parent["version"],
+            idempotencyKey="comment-edit-history",
+        )
+        async with self.factory() as db:
+            revisions = (
+                (
+                    await db.execute(
+                        text(
+                            "SELECT content FROM comment_revisions WHERE comment_id=:id ORDER BY version"
+                        ),
+                        {"id": parent["id"]},
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            self.assertEqual(revisions, ["Parent", "Parent edited"])
+
     async def test_structured_bugs_share_web_and_mcp_contracts(self):
         created = await self.call(
             "create_issue",

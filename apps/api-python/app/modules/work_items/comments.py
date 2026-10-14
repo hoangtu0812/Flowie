@@ -7,6 +7,7 @@ from ...core.errors import ApiError
 from ...core.identifiers import _cuid
 from ...core.clock import _utcnow
 from ...modules.notifications.outbox import stage_notifications
+from .comment_mentions import validate_mentions
 from .contracts import CommentInput, CreateCommentInput
 from ..access.projects import _workspace_access
 from .issue_queries import _issue_row
@@ -26,16 +27,22 @@ async def create_comment(
     await _workspace_access(db, payload.workspaceId, user["id"])
     issue = await _issue_row(db, payload.issueId, payload.workspaceId, user["id"])
     content, body = _comment_input(payload)
+    mention_ids = await validate_mentions(db, issue, payload.mentionIds or [])
+    if payload.parentCommentId:
+        parent = await _comment(db, payload.parentCommentId, payload.workspaceId, user['id'])
+        if parent['issueId'] != payload.issueId or parent['parentCommentId']:
+            raise ApiError(400, 'Replies must reference a top-level comment on this issue.', 'Bad Request')
     comment_id, now = _cuid(), _utcnow()
     await db.execute(
         text(
-            """INSERT INTO comments (id, issue_id, author_id, content, body, created_at, updated_at)
-               VALUES (:id, :issue_id, :author_id, :content, CAST(:body AS jsonb), :now, :now)"""
+            """INSERT INTO comments (id, issue_id, author_id, parent_comment_id, mention_ids, content, body, created_at, updated_at)
+               VALUES (:id, :issue_id, :author_id, :parent, CAST(:mentions AS jsonb), :content, CAST(:body AS jsonb), :now, :now)"""
         ),
         {
             "id": comment_id,
             "issue_id": payload.issueId,
             "author_id": user["id"],
+            "parent": payload.parentCommentId, "mentions": json.dumps(mention_ids),
             "content": content,
             "body": json.dumps(body),
             "now": now,
@@ -67,7 +74,12 @@ async def create_comment(
         entity_label=issue["identifier"],
         body=content,
     )
-    await stage_notifications(db, batch, workspace_id=payload.workspaceId)
+    mention_batch = await create_notification_batch(db, workspace_id=payload.workspaceId,
+        recipient_ids=set(mention_ids), actor=user, event_type='issue.comment_mention',
+        entity_type='issue', entity_id=payload.issueId, title=issue['title'],
+        message='mentioned you in a comment', entity_path=f"/issue/{issue['identifier']}",
+        entity_label=issue['identifier'], body=content, discord=False)
+    await stage_notifications(db, batch, mention_batch, workspace_id=payload.workspaceId)
     return {"data": await _comment(db, comment_id, payload.workspaceId, user["id"])}
 
 
@@ -78,16 +90,22 @@ async def update_comment(
     user: Any,
     db: AsyncSession,
 ) -> dict[str, dict[str, Any]]:
+    await db.execute(text('SELECT id FROM comments WHERE id=:id FOR UPDATE'), {'id': comment_id})
     current = await _comment(db, comment_id, workspaceId, user["id"])
+    if payload.expectedVersion is not None and current['version'] != payload.expectedVersion:
+        raise ApiError(409, 'This comment changed. Reload before editing; your draft is retained.', 'Conflict')
     if current["authorId"] != user["id"]:
         raise ApiError(403, "Only the comment author can edit it.", "Forbidden")
     content, body = _comment_input(payload)
+    issue = await _issue_row(db, current['issueId'], workspaceId, user['id'])
+    mention_ids = await validate_mentions(db, issue, payload.mentionIds if payload.mentionIds is not None else current['mentionIds'])
     await db.execute(
         text(
-            "UPDATE comments SET content = :content, body = CAST(:body AS jsonb), updated_at = :now WHERE id = :comment_id"
+            "UPDATE comments SET content = :content, body = CAST(:body AS jsonb), mention_ids = CAST(:mentions AS jsonb), updated_at = :now WHERE id = :comment_id"
         ),
         {
             "comment_id": comment_id,
+            "mentions": json.dumps(mention_ids),
             "content": content,
             "body": json.dumps(body),
             "now": _utcnow(),

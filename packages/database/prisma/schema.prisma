@@ -1725,22 +1725,42 @@ model Document {
 }
 
 model Comment {
-  version   Int       @default(1)
-  id        String    @id @default(cuid())
-  issueId   String    @map("issue_id")
-  authorId  String    @map("author_id")
-  content   String
-  body      Json?
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
+  version         Int       @default(1)
+  id              String    @id @default(cuid())
+  issueId         String    @map("issue_id")
+  authorId        String    @map("author_id")
+  parentCommentId String?   @map("parent_comment_id")
+  mentionIds      Json      @default("[]") @map("mention_ids")
+  content         String
+  body            Json?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
 
-  issue     Issue             @relation(fields: [issueId], references: [id], onDelete: Cascade)
-  author    User              @relation(fields: [authorId], references: [id], onDelete: Restrict)
-  reactions CommentReaction[]
+  issue         Issue             @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  author        User              @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  reactions     CommentReaction[]
+  parentComment Comment?          @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: SetNull)
+  replies       Comment[]         @relation("CommentReplies")
+  revisions     CommentRevision[]
 
   @@index([issueId, createdAt])
+  @@index([parentCommentId])
   @@map("comments")
+}
+
+model CommentRevision {
+  id         String   @id @default(cuid())
+  commentId  String   @map("comment_id")
+  version    Int
+  content    String
+  body       Json?
+  mentionIds Json     @default("[]") @map("mention_ids")
+  createdAt  DateTime @default(now()) @map("created_at")
+  comment    Comment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, version])
+  @@map("comment_revisions")
 }
 
 model CommentReaction {

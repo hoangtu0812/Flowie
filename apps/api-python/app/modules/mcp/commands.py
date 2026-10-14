@@ -152,7 +152,7 @@ class CommandService:
                     CreateCommentInput(
                         workspaceId=workspace,
                         issueId=self.target["id"],
-                        content=payload.content,
+                        content=payload.content, parentCommentId=payload.parentCommentId, mentionIds=payload.mentionIds,
                     ),
                     actor,
                     self.db,
@@ -162,7 +162,7 @@ class CommandService:
             return (
                 await comments.update_comment(
                     payload.commentId,
-                    CommentInput(content=payload.content),
+                    CommentInput(content=payload.content, expectedVersion=payload.expectedVersion),
                     workspace,
                     actor,
                     self.db,

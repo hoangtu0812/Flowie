@@ -217,7 +217,7 @@ class QueryService:
             "list_comments",
             payload,
             """SELECT c.id,c.issue_id AS "issueId",c.author_id AS "authorId",
-            c.content,c.version,c.created_at AS "createdAt",c.updated_at AS "updatedAt"
+            c.content,c.version,c.parent_comment_id AS "parentCommentId",c.mention_ids AS "mentionIds",c.created_at AS "createdAt",c.updated_at AS "updatedAt"
             FROM comments c WHERE c.issue_id=:issue AND c.deleted_at IS NULL""",
             {"issue": issue["id"]},
             time_field="createdAt",

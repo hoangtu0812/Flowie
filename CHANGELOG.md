@@ -12,6 +12,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Comment contracts now support one-level replies and access-checked mentions,
+  preserve edit revisions and reject stale author edits. Mention notifications
+  are staged durably. The comment history/thread Prisma migration is required.
+
 - Users can file and edit structured bugs from the issue UI, and filter issue
   views by type and severity. An access-scoped server report groups all bugs by
   severity/status; bug details remain separate from task priority.
