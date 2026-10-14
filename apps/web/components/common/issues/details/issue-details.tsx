@@ -1,24 +1,16 @@
 'use client';
 
-import { BugDetails } from '@/features/issues/bug-details';
+import { IssueContent } from '@/features/issues/issue-content';
 import { LoadingState } from '@/components/common/loading-state';
 import { QueryState } from '@/components/common/query-state';
 import type { IssueDetail } from '@/mock-data/issue-details';
 import { DesignSurface } from '@/components/common/design-surface';
-import { HStack, VStack } from '@astryxdesign/core/Layout';
+import { VStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
-import { IssueReactions } from './issue-reactions';
-import { IssueRelations } from './issue-relations';
-import { IssueAttachments } from './issue-attachments';
-import { MobileIssueProperties } from './mobile-issue-properties';
 import { useIssuesStore } from '@/store/issues-store';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityFeed } from './activity-feed';
-import { IssueDescription } from './issue-description';
-import { IssueSubIssues } from './issue-sub-issues';
-import { IssuePropertiesPanel } from './issue-properties-panel';
 
 /**
  * Issue detail page: rich description, sub-issues, activity feed and a
@@ -78,26 +70,7 @@ export default function IssueDetails() {
 
    return (
       <DesignSurface>
-         <HStack height="100%" gap={0} align="stretch">
-            <VStack width="100%" isScrollable>
-               <VStack maxWidth="90ch" padding={6} gap={4}>
-                  <Heading level={1}>{issue.title}</Heading>
-                  <MobileIssueProperties issue={issue} detail={detail} />
-                  <IssueDescription issue={issue} />
-                  <BugDetails issue={issue} />
-                  <IssueReactions issueId={issue.id} />
-                  <IssueAttachments issueId={issue.id} />
-                  {issue.teamId && (
-                     <IssueSubIssues issueId={issue.id} teamId={issue.teamId} orgId={orgId ?? ''} />
-                  )}
-                  <IssueRelations issueId={issue.id} orgId={orgId ?? ''} />
-                  <ActivityFeed issueId={issue.id} />
-               </VStack>
-            </VStack>
-            <VStack as="aside" width={320} isScrollable padding={5} className="hidden lg:flex">
-               <IssuePropertiesPanel issue={issue} detail={detail} />
-            </VStack>
-         </HStack>
+         <IssueContent issue={issue} orgId={orgId ?? ''} />
       </DesignSurface>
    );
 }

@@ -1,131 +1,31 @@
-import { Issue } from '@/mock-data/issues';
 import { User } from '@/mock-data/users';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import { useIssuesStore } from '@/store/issues-store';
 import { toast } from 'sonner';
+import { ApiRequestError, responseData } from '@/lib/http';
+import { loadCurrentUser } from '@/features/identity/current-user';
+import {
+   notificationType,
+   readableTime,
+   contentFor,
+   fallbackUser,
+   entityFallback,
+   type InboxItem,
+   type NativeNotification,
+} from '@/features/inbox/notification-data';
+export type { InboxItem, NotificationType } from '@/features/inbox/notification-data';
+import type { NotificationType } from '@/features/inbox/notification-data';
+let notificationLoadEpoch = 0;
 import { create } from 'zustand';
-import { CircleDot } from 'lucide-react';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
-
-export type NotificationType =
-   | 'comment'
-   | 'mention'
-   | 'assignment'
-   | 'status'
-   | 'reopened'
-   | 'closed'
-   | 'edited'
-   | 'created'
-   | 'upload'
-   | 'reminder';
-
-/** Presentation shape retained for the unchanged Circle Inbox markup. */
-export interface InboxItem extends Issue {
-   content: string;
-   type: NotificationType;
-   user: User;
-   timestamp: string;
-   read: boolean;
-   entityType?: string;
-   entityPath?: string;
-   notificationCreatedAt?: string;
-}
-
-type NativeNotification = {
-   id: string;
-   type: string;
-   entityType: string;
-   entityId: string;
-   data?: Record<string, unknown>;
-   readAt?: string | null;
-   createdAt: string;
-};
-
-function notificationType(value: string): NotificationType {
-   if (value.includes('comment')) return 'comment';
-   if (value.includes('mention')) return 'mention';
-   if (value.includes('assignment')) return 'assignment';
-   if (value.includes('status')) return 'status';
-   if (value.includes('reopen')) return 'reopened';
-   if (value.includes('close') || value.includes('complete')) return 'closed';
-   if (value.includes('edit') || value.includes('update')) return 'edited';
-   if (value.includes('upload') || value.includes('attachment')) return 'upload';
-   if (value.includes('reminder')) return 'reminder';
-   return 'created';
-}
-
-function readableTime(value: string): string {
-   const timestamp = new Date(value);
-   if (Number.isNaN(timestamp.getTime())) return '';
-   const minutes = Math.floor((Date.now() - timestamp.getTime()) / 60_000);
-   if (minutes < 1) return 'now';
-   if (minutes < 60) return `${minutes}m`;
-   if (minutes < 24 * 60) return `${Math.floor(minutes / 60)}h`;
-   if (minutes < 24 * 60 * 7) return `${Math.floor(minutes / (24 * 60))}d`;
-   return timestamp.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-function contentFor(notification: NativeNotification): string {
-   const data = notification.data ?? {};
-   if (typeof data.message === 'string') return data.message;
-   if (notification.type === 'issue.reminder') return 'reminded you about this issue';
-   if (typeof data.title === 'string')
-      return `${notification.type.replaceAll('.', ' ')}: ${data.title}`;
-   return notification.type.replaceAll('.', ' ');
-}
-
-function fallbackUser(): User {
-   return {
-      id: 'system',
-      name: 'Flowie',
-      avatarUrl: '',
-      email: '',
-      status: 'offline',
-      role: 'Member',
-      joinedDate: '',
-      teamIds: [],
-      timezone: 'UTC',
-   };
-}
-
-function entityFallback(notification: NativeNotification): Issue {
-   const title =
-      typeof notification.data?.title === 'string'
-         ? notification.data.title
-         : notification.entityType === 'project'
-           ? 'Project update'
-           : 'Flowie notification';
-   return {
-      id: notification.entityId,
-      identifier: notification.entityType === 'project' ? 'PROJECT' : 'FLOWIE',
-      title,
-      description: '',
-      status: {
-         id: 'notification',
-         name: 'Notification',
-         category: 'started',
-         color: '#6b7280',
-         icon: CircleDot,
-      } as Issue['status'],
-      assignee: null,
-      priority: {
-         id: 'no-priority',
-         name: 'No priority',
-         icon: CircleDot,
-         color: 'currentColor',
-      } as Issue['priority'],
-      labels: [],
-      createdAt: notification.createdAt,
-      cycleId: '',
-      rank: '',
-   };
-}
 
 interface NotificationsState {
    notifications: InboxItem[];
    selectedNotification: InboxItem | undefined;
    loading: boolean;
+   error?: string;
+   scope?: string;
    loadNotifications: () => Promise<void>;
    connectRealtime: (workspaceId: string) => () => void;
    setSelectedNotification: (notification: InboxItem | undefined) => void;
@@ -145,7 +45,9 @@ interface NotificationsState {
 
 export const useNotificationsStore = create<NotificationsState>((set, get) => {
    const request = async (path: string, init?: RequestInit) => {
-      const workspace = await loadCurrentWorkspace();
+      const [workspace, user] = await Promise.all([loadCurrentWorkspace(), loadCurrentUser()]);
+      const scope = `${user.id}/${workspace.id}`;
+      if (get().scope !== scope) throw new Error('Reload notifications before changing them.');
       const separator = path.includes('?') ? '&' : '?';
       const response = await authenticatedFetch(
          `${api}/notifications${path}${separator}workspaceId=${encodeURIComponent(workspace.id)}`,
@@ -155,6 +57,7 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => {
          const body = (await response.json().catch(() => null)) as { message?: string } | null;
          throw new Error(body?.message ?? 'Could not update notifications.');
       }
+      if (get().scope !== scope) throw new Error('Notification scope changed. Reload this view.');
       return response;
    };
 
@@ -175,35 +78,45 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => {
       selectedNotification: undefined,
       loading: false,
       loadNotifications: async () => {
-         set({ loading: true });
+         const epoch = ++notificationLoadEpoch;
+         set({ loading: true, error: undefined });
          try {
-            const [response, profileResponse] = await Promise.all([
-               request(''),
+            const [workspace, profileResponse] = await Promise.all([
+               loadCurrentWorkspace(),
                authenticatedFetch(`${api}/users/me`),
             ]);
-            const payload = (await response.json()) as { data: NativeNotification[] };
-            const profile = profileResponse.ok
-               ? ((await profileResponse.json()) as { data?: Partial<User> }).data
-               : undefined;
-            const actor = { ...fallbackUser(), ...profile } as User;
+            const profile = await responseData<User>(profileResponse);
+            if (epoch !== notificationLoadEpoch) return;
+            const scope = `${profile.id}/${workspace.id}`;
+            if (get().scope !== scope)
+               set({ notifications: [], selectedNotification: undefined, scope });
+            const native = await responseData<NativeNotification[]>(
+               await authenticatedFetch(
+                  `${api}/notifications?${new URLSearchParams({ workspaceId: workspace.id })}`
+               )
+            );
+            if (epoch !== notificationLoadEpoch || get().scope !== scope) return;
             const issuesById = new Map(
                useIssuesStore.getState().issues.map((issue) => [issue.id, issue])
             );
-            const notifications = payload.data.map((notification) => {
+            const notifications = native.map((notification) => {
                const issue =
+                  useIssuesStore.getState().accountId === profile.id &&
+                  useIssuesStore.getState().workspaceId === workspace.id &&
                   notification.entityType === 'issue'
                      ? issuesById.get(notification.entityId)
                      : undefined;
-               const dataActor = notification.data?.actor as Partial<User> | undefined;
+               const actor = notification.data?.actor as Partial<User> | undefined;
                return {
                   ...(issue ?? entityFallback(notification)),
                   id: notification.id,
                   content: contentFor(notification),
                   type: notificationType(notification.type),
-                  user: dataActor?.id ? ({ ...actor, ...dataActor } as User) : actor,
+                  user: { ...fallbackUser(), ...actor } as User,
                   timestamp: readableTime(notification.createdAt),
                   notificationCreatedAt: notification.createdAt,
                   entityType: notification.entityType,
+                  entityId: notification.entityId,
                   entityPath:
                      typeof notification.data?.entityPath === 'string'
                         ? notification.data.entityPath
@@ -211,10 +124,23 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => {
                   read: Boolean(notification.readAt),
                };
             });
-            set({ notifications, loading: false });
+            const selectedId = get().selectedNotification?.id;
+            set({
+               notifications,
+               selectedNotification: notifications.find((item) => item.id === selectedId),
+               loading: false,
+            });
          } catch (error) {
-            set({ notifications: [], selectedNotification: undefined, loading: false });
-            toast.error(error instanceof Error ? error.message : 'Could not load notifications.');
+            if (epoch !== notificationLoadEpoch) return;
+            const lostAccess =
+               error instanceof ApiRequestError && [401, 403].includes(error.status);
+            set({
+               ...(lostAccess
+                  ? { notifications: [], selectedNotification: undefined, scope: undefined }
+                  : {}),
+               loading: false,
+               error: error instanceof Error ? error.message : 'Could not load notifications.',
+            });
          }
       },
       connectRealtime: (workspaceId) => {

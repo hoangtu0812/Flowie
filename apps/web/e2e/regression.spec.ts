@@ -429,3 +429,53 @@ test('empty cycle and failed list requests show distinct recoverable states', as
    await page.getByRole('button', { name: 'Retry', exact: true }).click();
    await expect(page.getByText(fixture.issues[0].title, { exact: true }).first()).toBeVisible();
 });
+
+test('Inbox opens an uncached task, sends comments and exposes attachments and properties', async ({
+   page,
+   context,
+}) => {
+   const bulkRequests: string[] = [];
+   page.on('request', (request) => {
+      if (/\/api\/v1\/issues\?/.test(request.url())) bulkRequests.push(request.url());
+   });
+   await page.goto(`/${fixture.slug}/inbox`);
+   await page
+      .getByRole('button', { name: `Open notification: ${fixture.issues[0].title}`, exact: true })
+      .click();
+   await expect(
+      page.getByRole('heading', { name: fixture.issues[0].title, exact: true })
+   ).toBeVisible();
+   const content = `Inbox comment ${Date.now()}`;
+   await page.getByRole('textbox', { name: 'Comment', exact: true }).fill(content);
+   await page.getByRole('button', { name: 'Comment', exact: true }).click();
+   await expect(page.getByRole('article').filter({ hasText: content })).toBeVisible();
+   await page.getByRole('button', { name: 'Properties', exact: true }).click();
+   await expect(page.getByRole('combobox', { name: /Status:/ }).first()).toBeVisible();
+   await expect(page.getByRole('button', { name: 'Attach file', exact: true })).toBeVisible();
+   const saved = (
+      await (
+         await context.request.get(
+            `${api}/comments?workspaceId=${fixture.workspace_id}&issueId=${fixture.issues[0].id}`
+         )
+      ).json()
+   ).data;
+   expect(saved.some((item: { content: string }) => item.content === content)).toBeTruthy();
+   expect(bulkRequests).toEqual([]);
+});
+
+test('Inbox shows failed loads with Retry instead of an empty notification list', async ({
+   page,
+}) => {
+   await page.route('**/api/v1/notifications?*', (route) => route.abort('failed'));
+   await page.goto(`/${fixture.slug}/inbox`);
+   await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeVisible();
+   await expect(page.getByText('No notifications to show.', { exact: true })).toHaveCount(0);
+   await page.unroute('**/api/v1/notifications?*');
+   await page.getByRole('button', { name: 'Retry', exact: true }).click();
+   await expect(
+      page.getByRole('button', {
+         name: `Open notification: ${fixture.issues[0].title}`,
+         exact: true,
+      })
+   ).toBeVisible();
+});

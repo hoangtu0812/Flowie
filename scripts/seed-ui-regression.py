@@ -41,6 +41,10 @@ async def main():
                 issue = (await create_issue(CreateIssueInput(workspaceId=seed['workspace_id'], teamId=seed['team_id'], projectId=project, title=title, statusId=status, assigneeId=user['id'] if assigned else None), user, db))['data']
                 issues.append(issue)
             document = (await create_document(CreateDocumentInput(workspaceId=seed['workspace_id'], teamId=seed['team_id'], folderId=folder, title='Regression Markdown notes', content='# Regression\n\n```python\nprint("safe")\n```\n\n| Status | Count |\n| --- | --- |\n| Open | 2 |\n\n1. Reproduce\n2. Verify\n\n- [x] Fixture ready\n\n<script>alert(1)</script>\n[Unsafe](javascript:alert(1))'), user, db))['data']
+            await db.execute(text("INSERT INTO notifications(id,workspace_id,user_id,type,entity_type,entity_id,data,created_at) VALUES (:id,:workspace,:user,'issue.assignment','issue',:issue,CAST(:data AS jsonb),:now)"), {
+                'id': _cuid(), 'workspace': seed['workspace_id'], 'user': user['id'], 'issue': issues[0]['id'], 'now': now,
+                'data': json.dumps({'title': issues[0]['title'], 'entityPath': '/issue/' + issues[0]['identifier'], 'actor': {'id': user['id'], 'name': user['name']}}),
+            })
             await db.commit()
             output = {**seed, 'userId': user['id'], 'email': user['email'], 'password': password,
                 'projectId': project, 'documentId': document['id'], 'documentTitle': document['title'],

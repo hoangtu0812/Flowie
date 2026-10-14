@@ -26,6 +26,16 @@ export default function IssueLine({
    return (
       <motion.div
          {...(layoutId && { layoutId: `notification-line-${notification.id}` })}
+         role="button"
+         tabIndex={0}
+         aria-label={`Open notification: ${notification.title}`}
+         aria-pressed={isSelected}
+         onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+               event.preventDefault();
+               onClick?.();
+            }
+         }}
          onClick={onClick}
          className="w-full px-0.75 py-0.25"
       >

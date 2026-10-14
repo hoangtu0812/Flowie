@@ -101,6 +101,11 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Inbox opens the current issue by ID, with shared Markdown, properties,
+  comments and attachments even when the issue is outside the cached page.
+  Notification ordering uses original instants; failed loads keep their scoped
+  snapshot and offer Retry, with accessible keyboard selection.
+
 - Production checks out the exact commit verified by its workflow and rejects
   dirty tracked source before deployment. Later merges can no longer change the
   revision selected by an earlier queued deployment; readiness also checks SHA.

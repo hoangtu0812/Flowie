@@ -28,11 +28,15 @@ import IssueLine from './issue-line';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { ChevronLeft } from 'lucide-react';
-import { useIssuesStore } from '@/store/issues-store';
+import { orderNotifications } from '@/features/inbox/notification-order';
+import { QueryState } from '@/components/common/query-state';
+import { LoadingState } from '@/components/common/loading-state';
 
 export default function Inbox() {
    const {
       notifications,
+      loading,
+      error,
       selectedNotification,
       setSelectedNotification,
       markAsRead,
@@ -43,7 +47,6 @@ export default function Inbox() {
       deleteCompletedIssues,
       getUnreadNotifications,
    } = useNotificationsStore();
-   const { loadIssues } = useIssuesStore();
 
    const isMobile = useIsMobile();
    const [showRead, setShowRead] = useState(true);
@@ -53,29 +56,13 @@ export default function Inbox() {
    const [showStatusIcon, setShowStatusIcon] = useState(true);
 
    useEffect(() => {
-      void (async () => {
-         await loadIssues();
-         await loadNotifications();
-      })();
-   }, [loadIssues, loadNotifications]);
-
-   // Filter and sort notifications based on settings
-   const filteredNotifications = notifications
-      .filter((notification) => {
-         if (!showRead && notification.read) return false;
-         // Add snoozed filter logic here when implemented
-         return true;
-      })
-      .sort((a, b) => {
-         if (showUnreadFirst) {
-            if (!a.read && b.read) return -1;
-            if (a.read && !b.read) return 1;
-         }
-         // Sort by timestamp (newest first by default)
-         return ordering === 'newest'
-            ? new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-            : new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
-      });
+      void loadNotifications();
+   }, [loadNotifications]);
+   const filteredNotifications = orderNotifications(
+      notifications.filter((notification) => showRead || !notification.read),
+      ordering === 'newest',
+      showUnreadFirst
+   );
 
    const handleDeleteAllNotifications = () => void deleteAll();
 
@@ -91,7 +78,7 @@ export default function Inbox() {
                <h2 className="text-lg font-semibold">Inbox</h2>
                <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                     <Button variant="ghost" size="xs">
+                     <Button variant="ghost" size="xs" aria-label="Notification actions">
                         <MoreHorizontal className="w-4 h-4" />
                      </Button>
                   </DropdownMenuTrigger>
@@ -116,6 +103,7 @@ export default function Inbox() {
                <Button
                   variant="ghost"
                   size="xs"
+                  aria-label="Mark all notifications as read"
                   onClick={markAllAsRead}
                   disabled={getUnreadNotifications().length === 0}
                >
@@ -123,7 +111,7 @@ export default function Inbox() {
                </Button>
                <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                     <Button variant="ghost" size="xs">
+                     <Button variant="ghost" size="xs" aria-label="Notification display options">
                         <SlidersHorizontal className="w-4 h-4" />
                      </Button>
                   </DropdownMenuTrigger>
@@ -202,7 +190,11 @@ export default function Inbox() {
             </div>
          </div>
          <div className="w-full flex flex-col items-center justify-start overflow-y-scroll h-[calc(100%-40px)] pb-0.25">
-            {filteredNotifications.length === 0 && (
+            {loading && notifications.length === 0 && (
+               <LoadingState label="Loading notifications…" />
+            )}
+            {error && <QueryState message={error} onRetry={loadNotifications} />}
+            {!loading && !error && filteredNotifications.length === 0 && (
                <p className="py-12 text-sm text-muted-foreground">No notifications to show.</p>
             )}
             {filteredNotifications.map((notification) => (
