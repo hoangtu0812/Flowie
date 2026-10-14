@@ -101,6 +101,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Production checks out the exact commit verified by its workflow and rejects
+  dirty tracked source before deployment. Later merges can no longer change the
+  revision selected by an earlier queued deployment; readiness also checks SHA.
+
 - Browser checks now wait for persisted comment rows and completed theme menu
   transitions; regressions also cover recovery of locally backed-up document
   drafts and accessibility in both light and dark appearance.

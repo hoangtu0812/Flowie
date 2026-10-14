@@ -26,39 +26,22 @@ jobs:
     timeout-minutes: 120
 
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - name: Update source and deploy
         shell: bash
         env:
           # Cache mounts in the image builds need BuildKit explicitly enabled.
           DOCKER_BUILDKIT: '1'
           COMPOSE_DOCKER_CLI_BUILD: '1'
+          FLOWIE_DEPLOY_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
 
+          bash "$GITHUB_WORKSPACE/scripts/checkout-production.sh" /opt/flowie "$FLOWIE_DEPLOY_SHA"
           cd /opt/flowie
-
-          # One network operation, retried. `git pull` used to contact GitHub a
-          # second time for a ref the fetch had already brought down, and this
-          # host's link to GitHub is slow enough that the extra round trip is
-          # what failed the release. The low-speed guard makes a stalled
-          # transfer give up in a minute instead of hanging for five.
-          fetched=0
-          for attempt in 1 2 3; do
-            if git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=60 fetch --prune origin main; then
-              fetched=1
-              break
-            fi
-            echo "Fetch attempt ${attempt} failed; retrying in 15s."
-            sleep 15
-          done
-          if [ "${fetched}" -ne 1 ]; then
-            echo 'Could not reach GitHub; leaving the running deployment untouched.'
-            exit 1
-          fi
-
-          git checkout main
-          # Local only: the commit is already in the object store.
-          git merge --ff-only FETCH_HEAD
 
           # A registry read that times out is not a broken release. Retry the
           # build before failing the deploy, since every attempt resumes from
@@ -85,8 +68,11 @@ jobs:
 
       - name: Verify API readiness
         shell: bash
+        env:
+          FLOWIE_DEPLOY_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
+          test "$(git -C /opt/flowie rev-parse HEAD)" = "$FLOWIE_DEPLOY_SHA"
 
           for attempt in {1..24}; do
             if curl -fsS http://localhost:4000/readyz; then
