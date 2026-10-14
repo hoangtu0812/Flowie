@@ -58,6 +58,7 @@ export function AssigneeUser({ user, issueId }: AssigneeUserProps) {
       <DropdownMenu open={open} onOpenChange={setOpen}>
          <DropdownMenuTrigger asChild>
             <button
+               aria-label={`Assignee: ${user?.name ?? 'Unassigned'}`}
                className="relative w-fit focus:outline-none disabled:opacity-60"
                disabled={saving}
                onClick={(event) => event.stopPropagation()}

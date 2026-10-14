@@ -49,6 +49,7 @@ export function PrioritySelector({ priority, issueId }: PrioritySelectorProps) {
          <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
                <Button
+                  aria-label={`Priority: ${priority.name}`}
                   id={id}
                   className="size-7 flex items-center justify-center"
                   size="icon"

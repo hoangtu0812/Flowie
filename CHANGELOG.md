@@ -85,6 +85,11 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- CSS reset layers now preserve existing utility-based layouts, preventing
+  overlapping toolbar text and missing Markdown list/border styles. Issue
+  property pickers have explicit names; preference toggles update immediately
+  while saving and roll back on failure.
+
 - The root and successful password sign-in now honor the stored home preference;
   a temporary workspace failure offers Retry instead of sending users to sign-in.
   Root navigation tests run in the same Node 20-compatible unit suite as other

@@ -530,7 +530,10 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
          ]);
          if (epoch !== issueLoadEpoch) return;
          const issue = asIssue(native);
-         const issues = [issue];
+         const cached = get().issues;
+         const issues = cached.some((item) => item.id === issue.id)
+            ? cached.map((item) => (item.id === issue.id ? issue : item))
+            : [...cached, issue];
          set({
             issues,
             issuesByStatus: groupIssuesByStatus(issues),

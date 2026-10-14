@@ -50,10 +50,22 @@ export function MarkdownPreview({ content }: { content: string }) {
                   </VStack>
                ),
                th: ({ children }) => (
-                  <th className="border border-border p-2 text-left">{children}</th>
+                  <th scope="col" className="border border-border p-2 text-left">
+                     {children}
+                  </th>
                ),
                td: ({ children }) => <td className="border border-border p-2">{children}</td>,
+               input: ({ checked }) => (
+                  <input
+                     type="checkbox"
+                     checked={checked}
+                     disabled
+                     readOnly
+                     aria-label={checked ? 'Completed task list item' : 'Incomplete task list item'}
+                  />
+               ),
                img: ({ src, alt }) => (
+                  // eslint-disable-next-line @next/next/no-img-element -- Private URLs require browser credentials and have no intrinsic size metadata.
                   <img src={src} alt={alt ?? ''} loading="lazy" className="max-w-full rounded" />
                ),
             }}

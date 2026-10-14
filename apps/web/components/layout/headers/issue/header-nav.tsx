@@ -170,6 +170,7 @@ export default function HeaderNav() {
                variant="ghost"
                size="icon"
                className="size-6"
+               aria-label="Previous issue"
                disabled={!previousIssue}
                asChild={!!previousIssue}
             >
@@ -188,6 +189,7 @@ export default function HeaderNav() {
                variant="ghost"
                size="icon"
                className="size-6"
+               aria-label="Next issue"
                disabled={!nextIssue}
                asChild={!!nextIssue}
             >

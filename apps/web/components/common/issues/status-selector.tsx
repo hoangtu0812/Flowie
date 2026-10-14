@@ -52,6 +52,7 @@ export function StatusSelector({ status, issueId }: StatusSelectorProps) {
          <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
                <Button
+                  aria-label={`Status: ${status.name}`}
                   id={id}
                   className="size-7 flex items-center justify-center"
                   size="icon"

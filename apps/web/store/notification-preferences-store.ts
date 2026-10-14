@@ -58,7 +58,7 @@ export const useNotificationPreferencesStore = create<State>((set, get) => ({
       const { workspaceId, preferences, saving, loading } = get();
       if (!workspaceId || saving || loading) return;
       const requestEpoch = epoch;
-      set({ saving: true, error: null });
+      set({ saving: true, error: null, preferences: { ...preferences, [key]: enabled } });
       try {
          const updated = await responseData<NotificationPreferences>(
             await authenticatedFetch(
@@ -73,7 +73,10 @@ export const useNotificationPreferencesStore = create<State>((set, get) => ({
          if (requestEpoch === epoch) set({ preferences: updated });
       } catch (error) {
          if (requestEpoch === epoch)
-            set({ error: error instanceof Error ? error.message : 'Could not save preferences.' });
+            set({
+               preferences,
+               error: error instanceof Error ? error.message : 'Could not save preferences.',
+            });
       } finally {
          if (requestEpoch === epoch) set({ saving: false });
       }

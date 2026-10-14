@@ -20,6 +20,7 @@ export function IssueDescription({ issue }: { issue: Issue }) {
    const [error, setError] = useState<string>();
    const gate = useRef(new SubmissionGate());
    const modifier = useModifierKey();
+   const identity = useRef(issue.id);
    const { onPaste, uploading } = useImagePaste({
       workspaceId,
       entityType: 'issue',
@@ -28,10 +29,13 @@ export function IssueDescription({ issue }: { issue: Issue }) {
       onChange: setDraft,
    });
    useEffect(() => {
-      setDraft(issue.description);
-      setEditing(false);
-      setError(undefined);
-   }, [issue.id]);
+      if (identity.current !== issue.id) {
+         identity.current = issue.id;
+         setDraft(issue.description);
+         setEditing(false);
+         setError(undefined);
+      }
+   }, [issue.id, issue.description]);
    useEffect(() => {
       if (!editing) setDraft(issue.description);
    }, [issue.description, editing]);

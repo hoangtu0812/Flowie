@@ -1,3 +1,6 @@
+/* Reset layers must precede utility layers in the mixed component stack. */
+@layer reset, theme, base, astryx-base, astryx-theme, components, utilities;
+
 @import 'tailwindcss';
 
 @plugin "tailwindcss-animate";
