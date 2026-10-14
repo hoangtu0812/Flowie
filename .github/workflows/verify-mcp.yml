@@ -69,18 +69,13 @@ jobs:
           ruff check apps/api-python/app --select F821
           ruff check scripts/flowie_runner --select F
           python -m pytest apps/api-python/tests -q
-      - name: Verify isolated real object storage
-        env:
-          S3_TEST_ENDPOINT: http://127.0.0.1:9000
-        run: |
-          docker pull minio/minio:latest
-          docker compose up -d minio
-          for attempt in $(seq 1 30); do
-            if curl --fail --silent "$S3_TEST_ENDPOINT/minio/health/ready"; then break; fi
-            if [ "$attempt" -eq 30 ]; then exit 1; fi
-            sleep 2
-          done
-          python -m pytest apps/api-python/tests/test_infrastructure_acceptance.py -q
+      - name: Install pinned storage fixture toolchain
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.8'
+          cache: false
+      - name: Verify pinned source MinIO and SMTP transports
+        run: bash scripts/verify-storage-acceptance.sh
       - name: Build web and verify Compose dependencies
         run: |
           pnpm --filter @circle/contracts build

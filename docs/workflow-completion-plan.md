@@ -96,5 +96,8 @@ Không còn TODO về mã trong 10 nhóm. Các bước cần token/bug thực, C
 ### Checkpoint publish và CI
 
 - Người dùng đã cho phép publish nhánh, tạo PR nháp và sửa CI trên cùng nhánh. Bản đầu `3d0c572` (12 commit) được đẩy và gắn PR #3 vào chat.
-- Hai workflow push/PR đầu tiên đã đạt migration/schema và backend, rồi lỗi khi dựng MinIO: `docker compose pull` tuân theo `pull_policy: never`, khiến runner sạch không có image. CI đã đổi sang `docker pull minio/minio:latest` trước Compose. Cấu hình production giữ nguyên.
+- Hai workflow push/PR đầu tiên đã đạt migration/schema và backend (121 pass, 1 storage skip, 10 subtest), rồi lỗi khi dựng MinIO: `docker compose pull` tuân theo `pull_policy: never`, khiến runner sạch không có image. Pull tường minh từ Docker Hub và Quay chính thức cũng không được cấp quyền ở thời điểm kiểm tra.
+- Fixture CI nay compile source MinIO chính thức, khóa SHA `9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a` ([release source](https://github.com/minio/minio/tree/9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a), [hướng dẫn source build](https://github.com/minio/minio#install-from-source)), Go 1.24.8 và CGO disabled; chạy server trên loopback, chỉ dùng credential tổng hợp, dừng sau test. Cấu hình/storage production giữ nguyên. Không lấy image mirror bên thứ ba.
 - Trạng thái CI hiện tại lấy từ checks của PR; dòng production trước đợt 2 ở bảng trên là checkpoint trước publish. Nhánh đợt 2 chưa được merge/deploy; chưa chạy AI trên bug thật.
+
+- Build source bằng Go 1.24.8 tại máy local đã đạt; chạy lại binary này với fixture loopback19090: 3/3 storage/SMTP test pass. Script CI được kiểm tra cú pháp và từ chối chạy ngoài CI.

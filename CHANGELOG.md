@@ -123,8 +123,9 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
-- Clean CI runners explicitly download the isolated MinIO test image before
-  starting Compose; production's cached-image policy remains intact.
+- Storage acceptance builds pinned official MinIO source and runs a loopback
+  fixture on clean CI runners without depending on unavailable public community
+  images. Production's cached-image policy remains intact.
 
 - Notification channel toggles respond immediately while saving, roll back on failure and preserve the user gesture required to request browser permission.
 
