@@ -111,6 +111,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = runtime
     app.include_router(mcp_management_router)
     app.include_router(agent_runs_router)
+    from .modules.agent_runs.evidence import router as operations_router
+    app.include_router(operations_router)
     if runtime.mcp_enabled:
         from .modules.mcp.transport import build_server
         server, transport = build_server(app)

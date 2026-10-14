@@ -532,6 +532,8 @@ model Organization {
 }
 
 model Workspace {
+  aiLimits               AiWorkspaceLimit?
+  aiToolWindows          AiToolWindow[]
   id                     String            @id @default(cuid())
   organizationId         String            @map("organization_id")
   name                   String
@@ -597,6 +599,28 @@ model Workspace {
 
   @@index([organizationId])
   @@map("workspaces")
+}
+
+model AiWorkspaceLimit {
+  workspaceId    String    @id @map("workspace_id")
+  totalPerMinute Int       @default(300) @map("total_per_minute")
+  perTool        Json      @default("{}") @map("per_tool")
+  updatedAt      DateTime  @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'::text)")) @updatedAt @map("updated_at")
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("ai_workspace_limits")
+}
+
+model AiToolWindow {
+  workspaceId String    @map("workspace_id")
+  tool        String
+  windowStart DateTime  @map("window_start")
+  used        Int       @default(0)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, tool, windowStart])
+  @@index([windowStart])
+  @@map("ai_tool_windows")
 }
 
 model WorkspaceAgentProvider {
