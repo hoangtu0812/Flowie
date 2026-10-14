@@ -6,6 +6,11 @@
 - Kết quả: **17 đầu việc cải tiến hiện hữu: 8 P1, 9 P2; thêm 6 đề xuất chức năng**.
 - Trạng thái các đầu việc: `OPEN`; báo cáo này ghi nhận phát hiện, chưa sửa ứng dụng.
 
+> Checkpoint sau triển khai: toàn bộ 17 lỗi và 6 đề xuất đã có mã nguồn trên
+> `codex/ui-ux-improvements`. Trạng thái review, bằng chứng kiểm thử và cổng CT107
+> được quản lý trong [kế hoạch nghiệm thu](ui-ux-improvement-plan.md). Các phát
+> hiện/ảnh bên dưới giữ nguyên để đối chiếu trước–sau; không phải trạng thái hiện tại.
+
 ## 1. Phạm vi và mức độ bằng chứng
 
 Production được kiểm tra ở màn hình đăng nhập. Phiên trình duyệt rà soát không

@@ -12,6 +12,11 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- The UI/UX implementation plan tracks all 17 fixes and six features with module
+  boundaries, regression evidence, before/after images and CT107 release gates.
+  SMTP delivery, real object storage and installed AI clients have explicit
+  acceptance steps before being declared operational in production.
+
 - Isolated browser regressions cover autosave, revision reconciliation/restore,
   comment editing/replies and retry, notification persistence, bug forms, file
   attachments, mobile properties, settings, Help/AI setup and accessibility. CI
