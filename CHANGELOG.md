@@ -85,6 +85,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Prisma now records the defaults and presence index already installed by the
+  committed migrations, including UTC comment revision timestamps. Schema checks
+  no longer propose dropping existing defaults or the presence index.
+
 - Cycle views distinguish an empty schedule from a failed request and offer retry.
   Switching issues no longer applies an earlier attachment response to the new
   task. Failed document saves can close only after explicitly confirming a local

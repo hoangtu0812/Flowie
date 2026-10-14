@@ -238,6 +238,7 @@ model User {
   codeReviewIssueLinks     CodeReviewIssueLink[]    @relation("CodeReviewIssueLinkCreator")
   codeReviewViewStates     CodeReviewViewState[]
 
+  @@index([lastSeenAt])
   @@map("users")
 }
 
@@ -977,7 +978,7 @@ model TeamDispatcherSettings {
   lastRunAt        DateTime? @map("last_run_at")
   lastRunResult    Json?     @map("last_run_result")
   createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at")
 
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
@@ -1185,7 +1186,7 @@ model ProjectStatus {
   color       String
   position    Int      @default(0)
   createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
@@ -1303,7 +1304,7 @@ model Release {
   createdById String    @map("created_by")
   archivedAt  DateTime? @map("archived_at")
   createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
 
   workspace    Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdBy    User             @relation("ReleaseCreator", fields: [createdById], references: [id], onDelete: Restrict)
@@ -1355,7 +1356,7 @@ model CustomerRequest {
   createdById String    @map("created_by")
   archivedAt  DateTime? @map("archived_at")
   createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project   Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
@@ -1380,7 +1381,7 @@ model SlaPolicy {
   createdById     String         @map("created_by")
   archivedAt      DateTime?      @map("archived_at")
   createdAt       DateTime       @default(now()) @map("created_at")
-  updatedAt       DateTime       @updatedAt @map("updated_at")
+  updatedAt       DateTime       @default(now()) @updatedAt @map("updated_at")
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   team      Team?     @relation(fields: [teamId], references: [id], onDelete: SetNull)
@@ -1404,7 +1405,7 @@ model Ask {
   convertedIssueId String?       @map("converted_issue_id")
   archivedAt       DateTime?     @map("archived_at")
   createdAt        DateTime      @default(now()) @map("created_at")
-  updatedAt        DateTime      @updatedAt @map("updated_at")
+  updatedAt        DateTime      @default(now()) @updatedAt @map("updated_at")
 
   workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   team           Team      @relation(fields: [teamId], references: [id], onDelete: Restrict)
@@ -1466,7 +1467,7 @@ model IssueTemplate {
   labelIds         String[]      @default([]) @map("label_ids")
   createdById      String        @map("created_by")
   createdAt        DateTime      @default(now()) @map("created_at")
-  updatedAt        DateTime      @updatedAt @map("updated_at")
+  updatedAt        DateTime      @default(now()) @updatedAt @map("updated_at")
 
   workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdBy       User      @relation("IssueTemplateCreator", fields: [createdById], references: [id], onDelete: Restrict)
@@ -1603,7 +1604,7 @@ model IssueReminder {
   remindAt    DateTime  @map("remind_at")
   deliveredAt DateTime? @map("delivered_at")
   createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
 
   issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1760,7 +1761,7 @@ model CommentRevision {
   content    String
   body       Json?
   mentionIds Json     @default("[]") @map("mention_ids")
-  createdAt  DateTime @default(now()) @map("created_at")
+  createdAt  DateTime @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'::text)")) @map("created_at")
   comment    Comment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
 
   @@unique([commentId, version])
@@ -1962,7 +1963,7 @@ model WorkspaceEmoji {
   createdById String    @map("created_by")
   archivedAt  DateTime? @map("archived_at")
   createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at")
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdBy User      @relation("WorkspaceEmojiCreator", fields: [createdById], references: [id], onDelete: Restrict)
