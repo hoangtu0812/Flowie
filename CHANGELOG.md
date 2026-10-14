@@ -85,6 +85,11 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- The root and successful password sign-in now honor the stored home preference;
+  a temporary workspace failure offers Retry instead of sending users to sign-in.
+  Root navigation tests run in the same Node 20-compatible unit suite as other
+  regression checks.
+
 - Document and issue previews now render CommonMark/GFM code blocks, tables and
   ordered/task lists without raw HTML. Description editing has a named field,
   guarded saves and platform-aware shortcuts; mobile browser zoom is enabled.

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
+import { useUiPreferencesStore } from '@/store/ui-preferences-store';
 import { useLocale } from '@/features/shared/use-locale';
 import { VStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
@@ -76,7 +77,7 @@ export default function LoginPage() {
          router.replace(
             safeNext ??
                (payload.data.workspace
-                  ? `/${payload.data.workspace.slug}/teams`
+                  ? `/${payload.data.workspace.slug}/${useUiPreferencesStore.getState().defaultHome}`
                   : payload.data.user.isPlatformAdmin
                     ? '/admin'
                     : '/invitations')

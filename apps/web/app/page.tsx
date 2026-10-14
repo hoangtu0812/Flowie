@@ -1,29 +1,50 @@
 'use client';
-
-import { loadWorkspaceMemberships } from '@/lib/workspaces';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
-
-/**
- * The root URL carries no workspace, so it resolves the signed-in user's own
- * workspace instead of pointing at a fixed one. Unauthenticated visitors never
- * reach this component — the middleware sends them to the login page first.
- */
+import { loadWorkspaceMemberships } from '@/lib/workspaces';
+import { ApiRequestError } from '@/lib/http';
+import { loadCurrentUser } from '@/features/identity/current-user';
+import { resolveWorkspaceRoot } from '@/lib/workspace-root';
+import { useUiPreferencesStore } from '@/store/ui-preferences-store';
+import { LoadingState } from '@/components/common/loading-state';
+import { QueryState } from '@/components/common/query-state';
 export default function Home() {
    const router = useRouter();
-
+   const { defaultHome, hasHydrated } = useUiPreferencesStore();
+   const [error, setError] = useState<string>();
+   const [retry, setRetry] = useState(0);
    useEffect(() => {
-      void loadWorkspaceMemberships()
-         .then((memberships) => {
-            const workspace = memberships[0]?.workspace;
-            router.replace(workspace ? `/${workspace.slug}/teams` : '/auth/login');
+      if (!hasHydrated) return;
+      let active = true;
+      setError(undefined);
+      void Promise.all([loadCurrentUser(), loadWorkspaceMemberships()])
+         .then(([user, memberships]) => {
+            if (!active) return;
+            const destination = resolveWorkspaceRoot({
+               adminAccessible: Boolean(user.isPlatformAdmin),
+               workspacesAccessible: true,
+               workspaceSlug: memberships[0]?.workspace.slug,
+               invitationCount: 0,
+               defaultHome,
+            });
+            router.replace(destination ?? '/invitations');
          })
-         .catch(() => router.replace('/auth/login'));
-   }, [router]);
-
-   return (
-      <div className="h-dvh grid place-items-center text-sm text-muted-foreground">
-         Opening your workspace…
-      </div>
+         .catch((reason) => {
+            if (!active) return;
+            if (reason instanceof ApiRequestError && reason.status === 401)
+               router.replace('/auth/login');
+            else
+               setError(
+                  reason instanceof Error ? reason.message : 'Could not open your workspace.'
+               );
+         });
+      return () => {
+         active = false;
+      };
+   }, [router, defaultHome, hasHydrated, retry]);
+   return error ? (
+      <QueryState message={error} onRetry={() => setRetry((value) => value + 1)} />
+   ) : (
+      <LoadingState label="Opening your workspace…" />
    );
 }
