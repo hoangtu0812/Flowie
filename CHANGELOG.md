@@ -39,6 +39,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Inbox notification preferences now save to the workspace preference API, show
+  failures and survive reload. Integration configuration opens its settings;
+  unsupported snoozing is clearly disabled.
+
 - Issue properties are now available on narrow screens, file attachment and
   reaction controls perform real actions, and project badges open the selected
   project. Issue assignees use current presence instead of a fixed offline state.
