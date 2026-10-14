@@ -12,6 +12,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- A second implementation plan tracks Inbox fixes, exact-commit deployment,
+  bounded collaboration feeds, global search, notification delivery, account
+  preferences and local Codex/AI operations, with explicit acceptance gates.
+
 - The UI/UX implementation plan tracks all 17 fixes and six features with module
   boundaries, regression evidence, before/after images and CT107 release gates.
   SMTP delivery, real object storage and installed AI clients have explicit
