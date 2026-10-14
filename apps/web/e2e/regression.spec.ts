@@ -529,3 +529,51 @@ test('workspace search finds server records and opens a document directly', asyn
    await expect(page.getByRole('dialog')).toBeVisible();
    await expect(page).toHaveURL(new RegExp(`/documents/${fixture.documentId}`));
 });
+
+test('account preferences synchronize on a separate browser context and home navigation', async ({
+   page,
+   context,
+   browser,
+}) => {
+   const endpoint = `${api}/users/me/ui-preferences`;
+   const original = (await (await context.request.get(endpoint)).json()).data;
+   let second: Awaited<ReturnType<typeof browser.newContext>> | undefined;
+   try {
+      await page.goto(`/${fixture.slug}/settings/preferences`);
+      await expect(page.getByText('Account preferences saved.', { exact: true })).toBeVisible();
+      await page
+         .getByRole('checkbox', { name: 'Underline links', exact: true })
+         .setChecked(!original.values.underlineLinks);
+      await page.getByRole('button', { name: 'Default home view', exact: true }).click();
+      await page.getByRole('menuitem', { name: 'My issues', exact: true }).click();
+      await expect
+         .poll(
+            async () => (await (await context.request.get(endpoint)).json()).data.values.defaultHome
+         )
+         .toBe('my-issues');
+      second = await browser.newContext();
+      const device = await second.newPage();
+      await device.goto('http://localhost:3000/auth/login');
+      await device.getByLabel('Email', { exact: true }).fill(fixture.email);
+      await device.getByLabel('Password', { exact: true }).fill(fixture.password);
+      await device.getByRole('button', { name: 'Sign in', exact: true }).click();
+      await expect(device).toHaveURL(new RegExp(`/${fixture.slug}/my-issues`));
+      await device.goto(`http://localhost:3000/${fixture.slug}/settings/preferences`);
+      await expect(
+         device.getByRole('checkbox', { name: 'Underline links', exact: true })
+      ).toBeEnabled();
+      expect(
+         await device.getByRole('checkbox', { name: 'Underline links', exact: true }).isChecked()
+      ).toBe(!original.values.underlineLinks);
+   } finally {
+      await second?.close();
+      const current = (await (await context.request.get(endpoint)).json()).data;
+      await context.request.put(endpoint, {
+         data: {
+            accountId: fixture.userId,
+            expectedVersion: current.version,
+            values: original.values,
+         },
+      });
+   }
+});

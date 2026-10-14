@@ -172,22 +172,23 @@ enum CycleStatus {
 }
 
 model User {
-  id              String     @id @default(cuid())
-  email           String     @unique
+  uiPreferences   UserUiPreferences?
+  id              String             @id @default(cuid())
+  email           String             @unique
   name            String
-  username        String?    @unique
+  username        String?            @unique
   title           String?
-  timezone        String     @default("UTC")
-  avatarUrl       String?    @map("avatar_url")
-  authVersion     Int        @default(0) @map("auth_version")
-  passwordHash    String?    @map("password_hash")
-  isPlatformAdmin Boolean    @default(false) @map("is_platform_admin")
-  emailVerifiedAt DateTime?  @map("email_verified_at")
-  status          UserStatus @default(ACTIVE)
-  createdAt       DateTime   @default(now()) @map("created_at")
-  updatedAt       DateTime   @updatedAt @map("updated_at")
-  lastLoginAt     DateTime?  @map("last_login_at")
-  lastSeenAt      DateTime?  @map("last_seen_at")
+  timezone        String             @default("UTC")
+  avatarUrl       String?            @map("avatar_url")
+  authVersion     Int                @default(0) @map("auth_version")
+  passwordHash    String?            @map("password_hash")
+  isPlatformAdmin Boolean            @default(false) @map("is_platform_admin")
+  emailVerifiedAt DateTime?          @map("email_verified_at")
+  status          UserStatus         @default(ACTIVE)
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+  lastLoginAt     DateTime?          @map("last_login_at")
+  lastSeenAt      DateTime?          @map("last_seen_at")
 
   identities               UserIdentity[]
   sessions                 Session[]
@@ -240,6 +241,16 @@ model User {
 
   @@index([lastSeenAt])
   @@map("users")
+}
+
+model UserUiPreferences {
+  userId    String   @id @map("user_id")
+  values    Json     @default("{}") @map("preferences")
+  version   Int      @default(1)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_ui_preferences")
 }
 
 model Session {

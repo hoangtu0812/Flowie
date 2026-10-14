@@ -12,6 +12,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Language, home view, comment shortcut and readable UI preferences synchronize
+  by account with version checks across devices. Apply the account-preferences
+  migration before starting the API; conflicts require an explicit reload.
+
 - Workspace search reads accessible issues, document contents, projects and
   member names from the server with signed cursors and Vietnamese search.
   Ctrl+K can open search, and documents have direct URLs using the shared editor.

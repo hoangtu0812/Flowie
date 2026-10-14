@@ -17,7 +17,7 @@
 | WF-05 | P2 | Codex local runner và quy trình một bug tới PR | Project/bug và scoped token do người dùng cấu hình | Dry-run/context/run lease/evidence/cancel; chạy thật chỉ khi có task, repo và quyền SCM; không gửi token vào prompt/log | TODO |
 | WF-06 | P2 | Tìm kiếm toàn workspace theo quyền | Shared query/ACL | Tìm issue/document/project/member phía server, có limit/cursor, Ctrl+K dẫn đến entity đúng | IN_REVIEW |
 | WF-07 | P2 | Snooze, kênh thông báo và delivery status | Prisma migration, worker, SMTP/browser permission | Snooze lưu DB và thức lại; email có retry/outbox; desktop chỉ xin quyền khi người dùng chọn; trạng thái phản ánh config thật | TODO |
-| WF-08 | P2 | Preferences theo tài khoản và locale | Identity API, migration | Đồng bộ qua reload/thiết bị, account isolation và version conflict; mở rộng chuỗi Inbox/search/activity en/vi | TODO |
+| WF-08 | P2 | Preferences theo tài khoản và locale | Identity API, migration | Đồng bộ qua reload/thiết bị, account isolation và version conflict; mở rộng chuỗi Inbox/search/activity en/vi | IN_PROGRESS |
 | WF-09 | P2 | AI operations: quota workspace/tool, lỗi/latency/run, CI evidence | MCP/agent runs, SCM | Manager-only overview; quota atomic; phân biệt evidence agent báo cáo với evidence bên ngoài đã xác minh | TODO |
 | WF-10 | P2 | E2E Inbox, tải lớn, Firefox/WebKit và acceptance hạ tầng | WF-01–09 | Hồi quy API/DB thật, browser matrix, test MinIO/SMTP integration có điều kiện; ghi riêng phần chưa có config | TODO |
 
@@ -55,3 +55,5 @@ Checkpoint local WF-02/03: TypeScript/build pass, 16 unit và 16 E2E pass; Inbox
 Checkpoint WF-04: batch/cursor test DB pass (query count bằng nhau ở page 2/30 root); 17 unit, 17 E2E và web build pass; backend hồi quy trước test mới 103 pass, 2 skipped.
 
 Checkpoint WF-06: Unicode/multi-entity/private-team/cursor DB test và E2E search → document trực tiếp pass; web build pass.
+
+Checkpoint WF-08: migration account preferences áp dụng trên DB thử; account/version test và E2E hai browser context/home navigation pass; build pass. Chuỗi locale bổ sung tiếp trong cùng đợt.
