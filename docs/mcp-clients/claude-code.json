@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "flowie": {
+      "type": "http",
+      "url": "https://api.example.internal/mcp/",
+      "headers": {
+        "Authorization": "Bearer ${FLOWIE_MCP_TOKEN}"
+      }
+    }
+  }
+}

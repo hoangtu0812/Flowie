@@ -10,3 +10,5 @@ python-multipart==0.0.20
 mammoth==1.10.0
 cryptography==50.0.1
 langgraph==1.2.11
+mcp==2.3.0
+sse-starlette==3.0.3

@@ -57,6 +57,13 @@ class Settings:
     scm_github_app_id: str
     scm_github_app_private_key: str
     scm_github_webhook_secret: str
+    mcp_enabled: bool = False
+    mcp_writes_enabled: bool = False
+    mcp_allowed_hosts: tuple[str, ...] = ('localhost:*', '127.0.0.1:*', '[::1]:*')
+    mcp_rate_limit: int = 60
+    mcp_tool_timeout_seconds: int = 30
+    mcp_max_result_bytes: int = 262144
+    mcp_max_idempotency_keys: int = 10000
 
     @classmethod
     def from_environment(cls) -> 'Settings':
@@ -99,4 +106,11 @@ class Settings:
             scm_github_app_id=getenv('SCM_GITHUB_APP_ID', '').strip(),
             scm_github_app_private_key=getenv('SCM_GITHUB_APP_PRIVATE_KEY', '').replace('\\n', '\n').strip(),
             scm_github_webhook_secret=getenv('SCM_GITHUB_WEBHOOK_SECRET', '').strip(),
+            mcp_enabled=getenv('MCP_ENABLED', 'false').lower() == 'true',
+            mcp_writes_enabled=getenv('MCP_WRITES_ENABLED', 'false').lower() == 'true',
+            mcp_allowed_hosts=_origins(getenv('MCP_ALLOWED_HOSTS', 'localhost:*,127.0.0.1:*,[::1]:*')),
+            mcp_rate_limit=max(1, min(10000, int(getenv('MCP_RATE_LIMIT', '60')))),
+            mcp_tool_timeout_seconds=max(1, min(120, int(getenv('MCP_TOOL_TIMEOUT_SECONDS', '30')))),
+            mcp_max_result_bytes=max(1024, min(1048576, int(getenv('MCP_MAX_RESULT_BYTES', '262144')))),
+            mcp_max_idempotency_keys=max(100,min(100000,int(getenv('MCP_MAX_IDEMPOTENCY_KEYS','10000')))),
         )

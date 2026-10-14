@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 import asyncio
 
 from fastapi import FastAPI, Request
@@ -53,6 +53,11 @@ from .domains.scm.router import router as scm_router
 from .domains.scm.router import webhook_router as scm_webhook_router
 from .jobs.scm_deliveries import scm_delivery_loop
 from .domains.reviews import router as reviews_router
+from .modules.mcp.api import router as mcp_management_router
+from .modules.notifications.outbox import outbox_loop
+from .modules.agent_runs.api import router as agent_runs_router
+from .modules.agent_runs.dispatcher import dispatcher_loop as agent_run_dispatcher_loop
+from .modules.mcp.maintenance import maintenance_loop
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -62,6 +67,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         session_factory, engine = create_session_factory(runtime)
         app.state.session_factory = session_factory
+        mcp_stack = AsyncExitStack()
+        if runtime.mcp_enabled:
+            await mcp_stack.enter_async_context(app.state.mcp_server.session_manager.run())
+        outbox_stop = asyncio.Event()
+        outbox_task = asyncio.create_task(outbox_loop(session_factory, outbox_stop))
+        maintenance_task=asyncio.create_task(maintenance_loop(session_factory,outbox_stop))
+        agent_runs_stop = asyncio.Event()
+        agent_runs_task = asyncio.create_task(agent_run_dispatcher_loop(session_factory, agent_runs_stop)) if runtime.mcp_enabled and runtime.mcp_writes_enabled else None
         reminder_stop = asyncio.Event()
         reminder_task = asyncio.create_task(reminder_loop(session_factory, reminder_stop))
         digest_stop = asyncio.Event()
@@ -73,6 +86,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             yield
         finally:
+            outbox_stop.set()
+            agent_runs_stop.set()
             reminder_stop.set()
             digest_stop.set()
             dispatch_stop.set()
@@ -81,10 +96,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await digest_task
             await dispatch_task
             await scm_task
+            await outbox_task
+            await maintenance_task
+            if agent_runs_task:
+                await agent_runs_task
+            await mcp_stack.aclose()
             await engine.dispose()
 
     app = FastAPI(title='Flowie Python API', version='0.1.0', lifespan=lifespan)
     app.state.settings = runtime
+    app.include_router(mcp_management_router)
+    app.include_router(agent_runs_router)
+    if runtime.mcp_enabled:
+        from .modules.mcp.transport import build_server
+        server, transport = build_server(app)
+        app.state.mcp_server = server
+        app.mount('/mcp', transport)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(runtime.cors_origins),

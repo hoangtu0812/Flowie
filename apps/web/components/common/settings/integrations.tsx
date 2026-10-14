@@ -9,10 +9,10 @@ import { Button } from '@/components/ui/button';
 import { ArrowUpRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { INTEGRATION_LOGOS } from './integration-logos';
+import { McpSettings } from '@/components/settings/mcp/mcp-settings';
 
 const DiscordLogo = INTEGRATION_LOGOS.discord;
 
-/** The public integration catalog is intentionally limited to the one supported Flowie integration. */
 export default function Integrations() {
    const [dialogOpen, setDialogOpen] = useState(false);
    const [status, setStatus] = useState<DiscordStatus>();
@@ -30,7 +30,7 @@ export default function Integrations() {
                <div className="flex flex-col gap-1">
                   <h1 className="text-2xl font-medium">Integrations</h1>
                   <p className="text-sm text-muted-foreground">
-                     Connect Discord to deliver Flowie workspace notifications.
+                     Connect Discord notifications and authorize AI access to project work.
                   </p>
                </div>
 
@@ -52,6 +52,7 @@ export default function Integrations() {
                      </Button>
                   </div>
                </section>
+               <McpSettings />
             </div>
          </div>
          <DiscordIntegrationDialog

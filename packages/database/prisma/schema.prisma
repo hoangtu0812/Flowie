@@ -179,6 +179,7 @@ model User {
   identities               UserIdentity[]
   sessions                 Session[]
   personalApiKeys          PersonalApiKey[]
+  mcpConnections           McpConnection[]
   passwordResetTokens      PasswordResetToken[]
   emailVerificationTokens  EmailVerificationToken[]
   memberships              WorkspaceMember[]
@@ -261,6 +262,168 @@ model PersonalApiKey {
   @@index([userId, revokedAt, createdAt])
   @@index([expiresAt])
   @@map("personal_api_keys")
+}
+
+model ProjectRepository {
+  id            String    @id @default(cuid())
+  workspaceId   String    @map("workspace_id")
+  projectId     String    @map("project_id")
+  name          String
+  repositoryUrl String    @map("repository_url")
+  baseBranch    String    @map("base_branch")
+  testCommands  Json      @default("[]") @map("test_commands")
+  instructions  String    @default("")
+  createdAt     DateTime  @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'::text)")) @map("created_at")
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([projectId, repositoryUrl])
+  @@map("project_repositories")
+}
+
+model AgentRun {
+  id           String        @id @default(cuid())
+  workspaceId  String        @map("workspace_id")
+  issueId      String        @map("issue_id")
+  connectionId String        @map("connection_id")
+  state        String        @default("PENDING")
+  fencingToken Int           @default(0) @map("fencing_token")
+  leaseToken   String?       @map("lease_token")
+  leaseUntil   DateTime?     @map("lease_until")
+  startedAt    DateTime?     @map("started_at")
+  finishedAt   DateTime?     @map("finished_at")
+  result       Json?
+  createdAt    DateTime      @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'::text)")) @map("created_at")
+  updatedAt    DateTime      @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'::text)")) @map("updated_at")
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  issue        Issue         @relation(fields: [issueId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  connection   McpConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([workspaceId, state, createdAt])
+  @@map("agent_runs")
+}
+
+model AgentAutomation {
+  id           String        @id @default(cuid())
+  workspaceId  String        @map("workspace_id")
+  connectionId String        @map("connection_id")
+  projectId    String        @map("project_id")
+  labelId      String        @map("label_id")
+  name         String
+  enabled      Boolean       @default(false)
+  dailyLimit   Int           @default(5) @map("daily_limit")
+  createdAt    DateTime      @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'::text)")) @map("created_at")
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  connection   McpConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  label        Label         @relation(fields: [labelId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([workspaceId])
+  @@map("agent_automations")
+}
+
+model AgentIssueEvent {
+  id          BigInt    @id @default(autoincrement())
+  workspaceId String    @map("workspace_id")
+  issueId     String    @map("issue_id")
+  createdAt   DateTime  @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'::text)")) @map("created_at")
+  processedAt DateTime? @map("processed_at")
+  attempts    Int       @default(0)
+  availableAt DateTime  @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'::text)")) @map("available_at")
+  failedAt    DateTime? @map("failed_at")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  issue       Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("agent_issue_events")
+}
+
+model McpConnection {
+  id          String            @id @default(cuid())
+  workspaceId String            @map("workspace_id")
+  userId      String            @map("user_id")
+  name        String
+  prefix      String
+  tokenHash   String            @unique @map("token_hash")
+  scopes      String[]
+  teamIds     String[]          @default([]) @map("team_ids")
+  projectIds  String[]          @default([]) @map("project_ids")
+  expiresAt   DateTime          @map("expires_at")
+  revokedAt   DateTime?         @map("revoked_at")
+  lastUsedAt  DateTime?         @map("last_used_at")
+  rateWindow  DateTime?         @map("rate_window")
+  rateCount   Int               @default(0) @map("rate_count")
+  createdAt   DateTime          @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'::text)")) @map("created_at")
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  workspace   Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  requests    McpRequest[]
+  runs        AgentRun[]
+  automations AgentAutomation[]
+
+  @@index([workspaceId, userId])
+  @@map("mcp_connections")
+}
+
+model McpRequest {
+  connectionId String        @map("connection_id")
+  tool         String
+  key          String
+  requestHash  String        @map("request_hash")
+  result       Json
+  createdAt    DateTime      @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'::text)")) @map("created_at")
+  connection   McpConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([connectionId, tool, key])
+  @@index([createdAt])
+  @@map("mcp_requests")
+}
+
+model DocumentRevision {
+  id         String   @id
+  documentId String   @map("document_id")
+  version    Int
+  title      String
+  content    String
+  actorId    String   @map("actor_id")
+  createdAt  DateTime @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'::text)")) @map("created_at")
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([documentId, version])
+  @@map("document_revisions")
+}
+
+model DocumentLink {
+  id          String    @id @default(cuid())
+  documentId  String    @map("document_id")
+  workspaceId String    @map("workspace_id")
+  projectId   String?   @map("project_id")
+  issueId     String?   @map("issue_id")
+  createdAt   DateTime  @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'::text)")) @map("created_at")
+  document    Document  @relation(fields: [documentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  project     Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  issue       Issue?    @relation(fields: [issueId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([documentId, projectId])
+  @@unique([documentId, issueId])
+  @@index([workspaceId, projectId])
+  @@index([workspaceId, issueId])
+  @@map("document_links")
+}
+
+model NotificationOutbox {
+  workspaceId String    @map("workspace_id")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id          String    @id @default(cuid())
+  payload     Json
+  attempts    Int       @default(0)
+  availableAt DateTime  @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'::text)")) @map("available_at")
+  leaseUntil  DateTime? @map("lease_until")
+  leaseToken  String?   @map("lease_token")
+  deliveredAt DateTime? @map("delivered_at")
+  failedAt    DateTime? @map("failed_at")
+  createdAt   DateTime  @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'::text)")) @map("created_at")
+
+  @@map("notification_outbox")
 }
 
 model PasswordResetToken {
@@ -399,6 +562,13 @@ model Workspace {
   scmIdentities           ScmUserIdentity[]
   codeReviews             CodeReview[]
   codeReviewIssueLinks    CodeReviewIssueLink[]
+  mcpConnections          McpConnection[]
+  documentLinks           DocumentLink[]
+  agentRuns               AgentRun[]
+  agentAutomations        AgentAutomation[]
+  projectRepositories     ProjectRepository[]
+  agentIssueEvents        AgentIssueEvent[]
+  notificationOutbox      NotificationOutbox[]
 
   @@index([organizationId])
   @@map("workspaces")
@@ -760,20 +930,20 @@ model Team {
   createdAt              DateTime       @default(now()) @map("created_at")
   updatedAt              DateTime       @updatedAt @map("updated_at")
 
-  workspace            Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace            Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   members              TeamMember[]
   projects             Project[]
   issues               Issue[]
-  issueSequence        Int              @default(0) @map("issue_sequence")
+  issueSequence        Int                     @default(0) @map("issue_sequence")
   cycles               Cycle[]
   documents            Document[]
   documentFolders      DocumentFolder[]
   slaPolicies          SlaPolicy[]
   asks                 Ask[]
   scmRepositories      ScmRepository[]
-  parentTeam           Team?            @relation("TeamHierarchy", fields: [parentTeamId], references: [id], onDelete: SetNull)
-  childTeams           Team[]           @relation("TeamHierarchy")
-  defaultIssueTemplate IssueTemplate?   @relation(fields: [defaultIssueTemplateId], references: [id], onDelete: SetNull)
+  parentTeam           Team?                   @relation("TeamHierarchy", fields: [parentTeamId], references: [id], onDelete: SetNull)
+  childTeams           Team[]                  @relation("TeamHierarchy")
+  defaultIssueTemplate IssueTemplate?          @relation(fields: [defaultIssueTemplateId], references: [id], onDelete: SetNull)
   dispatcherSettings   TeamDispatcherSettings?
 
   @@unique([workspaceId, identifier])
@@ -802,22 +972,25 @@ model TeamDispatcherSettings {
 }
 
 model Project {
-  id          String      @id @default(cuid())
-  workspaceId String      @map("workspace_id")
-  teamId      String?     @map("team_id")
-  name        String
-  identifier  String
-  description String?
-  type        ProjectType @default(GENERAL)
-  status      String      @default("planned")
-  priority    String      @default("none")
-  health      String      @default("no-update")
-  leadId      String?     @map("lead_id")
-  startDate   DateTime?   @map("start_date")
-  targetDate  DateTime?   @map("target_date")
-  archivedAt  DateTime?   @map("archived_at")
-  createdAt   DateTime    @default(now()) @map("created_at")
-  updatedAt   DateTime    @updatedAt @map("updated_at")
+  repositories     ProjectRepository[]
+  agentAutomations AgentAutomation[]
+  documentLinks    DocumentLink[]
+  id               String              @id @default(cuid())
+  workspaceId      String              @map("workspace_id")
+  teamId           String?             @map("team_id")
+  name             String
+  identifier       String
+  description      String?
+  type             ProjectType         @default(GENERAL)
+  status           String              @default("planned")
+  priority         String              @default("none")
+  health           String              @default("no-update")
+  leadId           String?             @map("lead_id")
+  startDate        DateTime?           @map("start_date")
+  targetDate       DateTime?           @map("target_date")
+  archivedAt       DateTime?           @map("archived_at")
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt @map("updated_at")
 
   workspace         Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   team              Team?                     @relation(fields: [teamId], references: [id], onDelete: SetNull)
@@ -1292,31 +1465,35 @@ model IssueTemplate {
 }
 
 model Issue {
-  id              String           @id @default(cuid())
-  workspaceId     String           @map("workspace_id")
-  teamId          String           @map("team_id")
-  statusId        String           @map("status_id")
-  projectId       String?          @map("project_id")
-  parentIssueId   String?          @map("parent_issue_id")
-  duplicateOfId   String?          @map("duplicate_of_id")
+  agentRuns       AgentRun[]
+  agentEvents     AgentIssueEvent[]
+  documentLinks   DocumentLink[]
+  id              String            @id @default(cuid())
+  workspaceId     String            @map("workspace_id")
+  teamId          String            @map("team_id")
+  statusId        String            @map("status_id")
+  projectId       String?           @map("project_id")
+  parentIssueId   String?           @map("parent_issue_id")
+  duplicateOfId   String?           @map("duplicate_of_id")
   identifier      String
   number          Int
+  version         Int               @default(1)
   title           String
   description     String?
-  priority        IssuePriority    @default(NONE)
+  priority        IssuePriority     @default(NONE)
   resolution      IssueResolution?
-  estimatedEffort Float?           @map("estimated_effort")
-  actualEffort    Float?           @map("actual_effort")
-  startDate       DateTime?        @map("start_date")
-  targetDate      DateTime?        @map("target_date")
-  dueDate         DateTime?        @map("due_date")
-  creatorId       String           @map("creator_id")
-  assigneeId      String?          @map("assignee_id")
-  completedAt     DateTime?        @map("completed_at")
-  canceledAt      DateTime?        @map("canceled_at")
-  archivedAt      DateTime?        @map("archived_at")
-  createdAt       DateTime         @default(now()) @map("created_at")
-  updatedAt       DateTime         @updatedAt @map("updated_at")
+  estimatedEffort Float?            @map("estimated_effort")
+  actualEffort    Float?            @map("actual_effort")
+  startDate       DateTime?         @map("start_date")
+  targetDate      DateTime?         @map("target_date")
+  dueDate         DateTime?         @map("due_date")
+  creatorId       String            @map("creator_id")
+  assigneeId      String?           @map("assignee_id")
+  completedAt     DateTime?         @map("completed_at")
+  canceledAt      DateTime?         @map("canceled_at")
+  archivedAt      DateTime?         @map("archived_at")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
 
   workspace         Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   team              Team                  @relation(fields: [teamId], references: [id], onDelete: Cascade)
@@ -1502,6 +1679,7 @@ model Document {
   folderId    String?   @map("folder_id")
   title       String
   content     String    @default("")
+  version     Int       @default(1)
   icon        String    @default("📄")
   sourceType  String    @default("markdown") @map("source_type")
   sourceUrl   String?   @map("source_url")
@@ -1513,12 +1691,14 @@ model Document {
   updatedAt   DateTime  @updatedAt @map("updated_at")
   archivedAt  DateTime? @map("archived_at")
 
-  workspace  Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  team       Team?           @relation(fields: [teamId], references: [id], onDelete: SetNull)
-  folder     DocumentFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  createdBy  User            @relation("DocumentCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy  User            @relation("DocumentUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+  workspace  Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  team       Team?              @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  folder     DocumentFolder?    @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  createdBy  User               @relation("DocumentCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy  User               @relation("DocumentUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
   cycleLinks CycleDocument[]
+  revisions  DocumentRevision[]
+  links      DocumentLink[]
 
   @@index([workspaceId, teamId])
   @@index([folderId, pinned, position])
@@ -1526,6 +1706,7 @@ model Document {
 }
 
 model Comment {
+  version   Int       @default(1)
   id        String    @id @default(cuid())
   issueId   String    @map("issue_id")
   authorId  String    @map("author_id")
@@ -1609,14 +1790,15 @@ model ProjectLabelLink {
 }
 
 model Label {
-  id          String   @id @default(cuid())
-  workspaceId String   @map("workspace_id")
-  groupId     String?  @map("group_id")
-  name        String
-  color       String
-  description String?
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  agentAutomations AgentAutomation[]
+  id               String            @id @default(cuid())
+  workspaceId      String            @map("workspace_id")
+  groupId          String?           @map("group_id")
+  name             String
+  color            String
+  description      String?
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
 
   workspace       Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   group           LabelGroup?           @relation(fields: [groupId], references: [id], onDelete: SetNull)

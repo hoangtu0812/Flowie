@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from ..core.identifiers import _cuid as _cuid, _hash_token as _hash_token
+
+from ..core.clock import _utcnow as _utcnow
+
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 from hmac import compare_digest
@@ -71,19 +75,10 @@ class CreateApiKeyInput(BaseModel):
     expiresAt: str | None = Field(default=None, max_length=64)
 
 
-def _utcnow() -> datetime:
-    # Prisma maps these columns to PostgreSQL `timestamp without time zone`.
-    # Keep Python values UTC-naive so asyncpg does not mix offset-aware values
-    # with the existing schema.
-    return datetime.utcnow()
 
 
-def _cuid() -> str:
-    return f'c{token_urlsafe(18).replace("-", "a").replace("_", "b").lower()}'
 
 
-def _hash_token(token: str) -> str:
-    return sha256(token.encode('utf-8')).hexdigest()
 
 
 def _registration_code() -> str:

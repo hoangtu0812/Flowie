@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..modules.access.membership import _workspace_role as _workspace_role, _manager as _manager
+
 from datetime import timedelta
 import json
 import re
@@ -68,17 +70,8 @@ def _team(row: Any) -> dict[str, Any]:
     }
 
 
-async def _workspace_role(db: AsyncSession, workspace_id: str, user_id: str) -> str:
-    result = await db.execute(text("SELECT role FROM workspace_members WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'"), {'workspace_id': workspace_id, 'user_id': user_id})
-    role = result.scalar_one_or_none()
-    if not role:
-        raise ApiError(403, 'You do not have access to this workspace.', 'Forbidden')
-    return role
 
 
-async def _manager(db: AsyncSession, workspace_id: str, user_id: str) -> None:
-    if await _workspace_role(db, workspace_id, user_id) not in {'OWNER', 'ADMIN'}:
-        raise ApiError(403, 'Workspace administrator access is required.', 'Forbidden')
 
 
 async def _team_row(db: AsyncSession, team_id: str, workspace_id: str, *, include_archived: bool = False) -> Any | None:
@@ -308,7 +301,7 @@ async def leave_team(team_id: str, workspaceId: str = Query(min_length=1), user:
     return {'data': {'teamId': team_id, 'userId': user['id'], 'removed': True}}
 
 
-async def _change_member(team_id: str, target_id: str, workspace_id: str, actor_id: str, *, role: str | None) -> dict[str, Any]:
+async def _change_member(team_id: str, target_id: str, workspace_id: str, actor_id: str, *, role: str | None, db: AsyncSession) -> dict[str, Any]:
     await _manager(db, workspace_id, actor_id)
     if not await _team_row(db, team_id, workspace_id): raise ApiError(404, 'Team not found.', 'Not Found')
     if role:
@@ -323,9 +316,9 @@ async def _change_member(team_id: str, target_id: str, workspace_id: str, actor_
 
 @router.patch('/{team_id}/members/{user_id}')
 async def update_member(team_id: str, user_id: str, payload: TeamMemberRoleInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    return {'data': await _change_member(team_id, user_id, workspaceId, user['id'], role=payload.role)}
+    return {'data': await _change_member(team_id, user_id, workspaceId, user['id'], role=payload.role, db=db)}
 
 
 @router.delete('/{team_id}/members/{user_id}')
 async def remove_member(team_id: str, user_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    return {'data': await _change_member(team_id, user_id, workspaceId, user['id'], role=None)}
+    return {'data': await _change_member(team_id, user_id, workspaceId, user['id'], role=None, db=db)}

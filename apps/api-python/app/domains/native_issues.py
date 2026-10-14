@@ -1,5 +1,15 @@
 from __future__ import annotations
 
+from ..modules.work_items.issue_relations import _relation_kind as _relation_kind
+
+from ..modules.work_items.issue_relations import _add_issue_relation as _add_issue_relation
+
+from ..modules.work_items.issue_activity import _write_activity as _write_activity, _transition as _transition
+
+from ..modules.work_items.issue_rules import _validate_schedule_dates as _validate_schedule_dates, _ensure_circle_issue_statuses as _ensure_circle_issue_statuses, _validate_references as _validate_references, _validate_release_ids as _validate_release_ids, _validate_template_references as _validate_template_references
+
+from ..modules.work_items.issue_queries import _issue_row as _issue_row, _relation_summary as _relation_summary, _template_row as _template_row, _status_name as _status_name, _person_name as _person_name, _project_name as _project_name
+
 import json
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
@@ -9,6 +19,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..modules.work_items.contracts import CreateIssueInput, UpdateIssueInput
 from ..core.errors import ApiError
 from ..db.session import get_session
 from ..services.notification_events import (
@@ -33,43 +44,10 @@ IssuePriority = Literal['NONE', 'LOW', 'MEDIUM', 'HIGH', 'URGENT']
 IssueCategory = Literal['TRIAGE', 'BACKLOG', 'UNSTARTED', 'STARTED', 'COMPLETED', 'CANCELED']
 
 
-def _validate_schedule_dates(start_date: datetime | None, target_date: datetime | None) -> None:
-    if start_date and target_date and target_date < start_date:
-        raise ApiError(400, 'Target end date cannot be earlier than the start date.', 'Bad Request')
 
 
-class CreateIssueInput(BaseModel):
-    workspaceId: str = Field(min_length=1)
-    teamId: str = Field(min_length=1)
-    title: str = Field(min_length=2, max_length=500)
-    description: str | None = Field(default=None, max_length=10_000)
-    statusId: str | None = None
-    projectId: str | None = None
-    parentIssueId: str | None = None
-    assigneeId: str | None = None
-    priority: IssuePriority = 'NONE'
-    startDate: str | None = None
-    targetDate: str | None = None
-    dueDate: str | None = None
-    labelIds: list[str] | None = Field(default=None, max_length=100)
-    estimatedEffort: float | None = Field(default=None, ge=0)
-    actualEffort: float | None = Field(default=None, ge=0)
 
 
-class UpdateIssueInput(BaseModel):
-    title: str | None = Field(default=None, min_length=2, max_length=500)
-    description: str | None = Field(default=None, max_length=10_000)
-    statusId: str | None = None
-    projectId: str | None = None
-    assigneeId: str | None = None
-    priority: IssuePriority | None = None
-    startDate: str | None = None
-    targetDate: str | None = None
-    dueDate: str | None = None
-    labelIds: list[str] | None = Field(default=None, max_length=100)
-    releaseIds: list[str] | None = Field(default=None, max_length=100)
-    estimatedEffort: float | None = Field(default=None, ge=0)
-    actualEffort: float | None = Field(default=None, ge=0)
 
 
 class IssueReactionInput(BaseModel):
@@ -134,255 +112,14 @@ class UpdateIssueTemplateInput(BaseModel):
     labelIds: list[str] | None = Field(default=None, max_length=100)
 
 
-async def _ensure_circle_issue_statuses(db: AsyncSession, workspace_id: str) -> None:
-    """Bring pre-P6 workspaces onto the unchanged Circle workflow catalog."""
-    now = _utcnow()
-    for position, (name, category, color) in enumerate(DEFAULT_CIRCLE_ISSUE_STATUSES):
-        existing = await db.execute(
-            text(
-                '''SELECT id FROM issue_statuses
-                   WHERE workspace_id = :workspace_id AND team_id IS NULL
-                     AND lower(name) = lower(:name)
-                   ORDER BY created_at ASC LIMIT 1'''
-            ),
-            {'workspace_id': workspace_id, 'name': name},
-        )
-        status_id = existing.scalar_one_or_none()
-        if status_id:
-            await db.execute(
-                text(
-                    '''UPDATE issue_statuses
-                       SET name = :name, category = :category, color = :color,
-                           position = :position, updated_at = :now
-                       WHERE id = :id'''
-                ),
-                {
-                    'id': status_id,
-                    'name': name,
-                    'category': category,
-                    'color': color,
-                    'position': position,
-                    'now': now,
-                },
-            )
-            continue
-        await db.execute(
-            text(
-                '''INSERT INTO issue_statuses
-                   (id, workspace_id, name, category, color, position, created_at, updated_at)
-                   VALUES (:id, :workspace_id, :name, :category, :color, :position, :now, :now)'''
-            ),
-            {
-                'id': _cuid(),
-                'workspace_id': workspace_id,
-                'name': name,
-                'category': category,
-                'color': color,
-                'position': position,
-                'now': now,
-            },
-        )
 
 
-async def _issue_row(
-    db: AsyncSession, issue_id: str, workspace_id: str, user_id: str
-) -> dict[str, Any]:
-    result = await db.execute(
-        text(
-            '''SELECT i.*, t.id AS team_id_value, t.name AS team_name,
-                      t.identifier AS team_identifier, s.id AS status_id_value,
-                      s.name AS status_name, s.category AS status_category, s.color AS status_color,
-                      p.id AS project_id_value, p.name AS project_name, p.identifier AS project_identifier,
-                      c.id AS creator_id_value, c.name AS creator_name, c.avatar_url AS creator_avatar_url,
-                      a.id AS assignee_id_value, a.name AS assignee_name, a.avatar_url AS assignee_avatar_url,
-                      EXISTS(SELECT 1 FROM issue_subscriptions sub WHERE sub.issue_id = i.id AND sub.user_id = :user_id) AS is_subscribed,
-                      EXISTS(SELECT 1 FROM issue_favorites favorite WHERE favorite.issue_id = i.id AND favorite.user_id = :user_id) AS is_favorite,
-                      (SELECT remind_at FROM issue_reminders reminder
-                       WHERE reminder.issue_id = i.id AND reminder.user_id = :user_id AND reminder.delivered_at IS NULL
-                       ORDER BY reminder.updated_at DESC LIMIT 1) AS reminder_at
-               FROM issues i
-               JOIN teams t ON t.id = i.team_id
-               JOIN issue_statuses s ON s.id = i.status_id
-               LEFT JOIN projects p ON p.id = i.project_id
-               JOIN users c ON c.id = i.creator_id
-               LEFT JOIN users a ON a.id = i.assignee_id
-               WHERE i.id = :issue_id AND i.workspace_id = :workspace_id AND i.archived_at IS NULL
-               LIMIT 1'''
-        ),
-        {'issue_id': issue_id, 'workspace_id': workspace_id, 'user_id': user_id},
-    )
-    row = result.mappings().first()
-    if not row:
-        raise ApiError(404, 'Issue not found.', 'Not Found')
-    await _team_access(db, workspace_id, row['team_id'], user_id)
-
-    labels = await db.execute(
-        text(
-            '''SELECT l.id, l.name, l.color FROM issue_labels il
-               JOIN labels l ON l.id = il.label_id
-               WHERE il.issue_id = :issue_id ORDER BY l.name'''
-        ),
-        {'issue_id': issue_id},
-    )
-    cycles = await db.execute(
-        text('SELECT cycle_id, created_at FROM issue_cycles WHERE issue_id = :issue_id ORDER BY created_at'),
-        {'issue_id': issue_id},
-    )
-    releases = await db.execute(
-        text('SELECT release_id, created_at FROM issue_releases WHERE issue_id = :issue_id ORDER BY created_at'),
-        {'issue_id': issue_id},
-    )
-    return {
-        'id': row['id'],
-        'workspaceId': row['workspace_id'],
-        'teamId': row['team_id'],
-        'statusId': row['status_id'],
-        'projectId': row['project_id'],
-        'parentIssueId': row['parent_issue_id'],
-        'duplicateOfId': row['duplicate_of_id'],
-        'identifier': row['identifier'],
-        'number': row['number'],
-        'title': row['title'],
-        'description': row['description'],
-        'priority': row['priority'],
-        'resolution': row['resolution'],
-        'estimatedEffort': row['estimated_effort'],
-        'actualEffort': row['actual_effort'],
-        'startDate': row['start_date'],
-        'targetDate': row['target_date'],
-        'dueDate': row['due_date'],
-        'completedAt': row['completed_at'],
-        'canceledAt': row['canceled_at'],
-        'archivedAt': row['archived_at'],
-        'createdAt': row['created_at'],
-        'updatedAt': row['updated_at'],
-        'team': {'id': row['team_id_value'], 'name': row['team_name'], 'identifier': row['team_identifier']},
-        'status': {'id': row['status_id_value'], 'name': row['status_name'], 'category': row['status_category'], 'color': row['status_color']},
-        'project': {'id': row['project_id_value'], 'name': row['project_name'], 'identifier': row['project_identifier']} if row['project_id_value'] else None,
-        'creator': {'id': row['creator_id_value'], 'name': row['creator_name'], 'avatarUrl': row['creator_avatar_url']},
-        'assignee': {'id': row['assignee_id_value'], 'name': row['assignee_name'], 'avatarUrl': row['assignee_avatar_url']} if row['assignee_id_value'] else None,
-        'labelLinks': [{'label': {'id': label['id'], 'name': label['name'], 'color': label['color']}} for label in labels.mappings().all()],
-        'cycleLinks': [{'cycleId': link['cycle_id'], 'createdAt': link['created_at']} for link in cycles.mappings().all()],
-        'releaseLinks': [{'releaseId': link['release_id'], 'createdAt': link['created_at']} for link in releases.mappings().all()],
-        'subscribers': [{'userId': user_id}] if row['is_subscribed'] else [],
-        'favorites': [{'userId': user_id}] if row['is_favorite'] else [],
-        'reminderAt': row['reminder_at'],
-    }
 
 
-async def _validate_references(
-    db: AsyncSession,
-    workspace_id: str,
-    team_id: str,
-    values: dict[str, Any],
-    *,
-    creating: bool,
-) -> str | None:
-    status_id = values.get('statusId')
-    if status_id:
-        status = await db.execute(
-            text(
-                '''SELECT id, category FROM issue_statuses
-                   WHERE id = :status_id AND workspace_id = :workspace_id
-                     AND (team_id IS NULL OR team_id = :team_id) LIMIT 1'''
-            ),
-            {'status_id': status_id, 'workspace_id': workspace_id, 'team_id': team_id},
-        )
-    elif creating:
-        status = await db.execute(
-            text(
-                '''SELECT id, category FROM issue_statuses
-                   WHERE workspace_id = :workspace_id AND category = 'UNSTARTED'
-                     AND (team_id IS NULL OR team_id = :team_id)
-                   ORDER BY position ASC LIMIT 1'''
-            ),
-            {'workspace_id': workspace_id, 'team_id': team_id},
-        )
-    else:
-        return None
-    row = status.mappings().first()
-    if not row:
-        raise ApiError(404, 'A valid issue status is required.', 'Not Found')
-    values['statusId'] = row['id']
-
-    project_id = values.get('projectId')
-    if project_id:
-        project = await db.execute(
-            text(
-                '''SELECT 1 FROM projects WHERE id = :project_id AND workspace_id = :workspace_id
-                   AND archived_at IS NULL AND (team_id IS NULL OR team_id = :team_id)'''
-            ),
-            {'project_id': project_id, 'workspace_id': workspace_id, 'team_id': team_id},
-        )
-        if project.scalar_one_or_none() is None:
-            raise ApiError(404, 'Project not found for this team.', 'Not Found')
-
-    assignee_id = values.get('assigneeId')
-    if assignee_id:
-        assignee = await db.execute(
-            text(
-                '''SELECT 1 FROM workspace_members WHERE workspace_id = :workspace_id
-                   AND user_id = :user_id AND status = 'ACTIVE' LIMIT 1'''
-            ),
-            {'workspace_id': workspace_id, 'user_id': assignee_id},
-        )
-        if assignee.scalar_one_or_none() is None:
-            raise ApiError(404, 'Assignee is not a workspace member.', 'Not Found')
-
-    label_ids = values.get('labelIds')
-    if label_ids is not None:
-        unique_ids = list(dict.fromkeys(label_ids))
-        if unique_ids:
-            labels = await db.execute(
-                text('SELECT id FROM labels WHERE workspace_id = :workspace_id AND id = ANY(:label_ids)'),
-                {'workspace_id': workspace_id, 'label_ids': unique_ids},
-            )
-            if len(labels.mappings().all()) != len(unique_ids):
-                raise ApiError(404, 'One or more labels were not found.', 'Not Found')
-        values['labelIds'] = unique_ids
-    return row['category']
 
 
-async def _validate_release_ids(
-    db: AsyncSession, workspace_id: str, release_ids: list[str] | None
-) -> list[str]:
-    unique_ids = list(dict.fromkeys(release_ids or []))
-    if not unique_ids:
-        return unique_ids
-    releases = await db.execute(
-        text(
-            '''SELECT id FROM releases WHERE workspace_id = :workspace_id
-               AND archived_at IS NULL AND id = ANY(:release_ids)'''
-        ),
-        {'workspace_id': workspace_id, 'release_ids': unique_ids},
-    )
-    if len(releases.mappings().all()) != len(unique_ids):
-        raise ApiError(404, 'One or more releases were not found.', 'Not Found')
-    return unique_ids
 
 
-async def _validate_template_references(
-    db: AsyncSession, workspace_id: str, values: dict[str, Any]
-) -> None:
-    if values.get('statusId'):
-        status = await db.execute(text('SELECT 1 FROM issue_statuses WHERE id = :id AND workspace_id = :workspace_id'), {'id': values['statusId'], 'workspace_id': workspace_id})
-        if status.scalar_one_or_none() is None:
-            raise ApiError(404, 'Issue status not found.', 'Not Found')
-    if values.get('projectId'):
-        project = await db.execute(text('SELECT 1 FROM projects WHERE id = :id AND workspace_id = :workspace_id AND archived_at IS NULL'), {'id': values['projectId'], 'workspace_id': workspace_id})
-        if project.scalar_one_or_none() is None:
-            raise ApiError(404, 'Project not found.', 'Not Found')
-    if values.get('assigneeId'):
-        member = await db.execute(text("SELECT 1 FROM workspace_members WHERE workspace_id = :workspace_id AND user_id = :id AND status = 'ACTIVE'"), {'id': values['assigneeId'], 'workspace_id': workspace_id})
-        if member.scalar_one_or_none() is None:
-            raise ApiError(404, 'Assignee is not a workspace member.', 'Not Found')
-    if 'labelIds' in values:
-        label_ids = list(dict.fromkeys(values['labelIds'] or []))
-        if label_ids:
-            labels = await db.execute(text('SELECT id FROM labels WHERE workspace_id = :workspace_id AND id = ANY(:ids)'), {'workspace_id': workspace_id, 'ids': label_ids})
-            if len(labels.mappings().all()) != len(label_ids):
-                raise ApiError(404, 'One or more labels were not found.', 'Not Found')
-        values['labelIds'] = label_ids
 
 
 def _template(row: Any) -> dict[str, Any]:
@@ -398,43 +135,10 @@ def _template(row: Any) -> dict[str, Any]:
     }
 
 
-async def _write_activity(
-    db: AsyncSession, workspace_id: str, issue_id: str, user_id: str, action: str, data: dict[str, Any]
-) -> None:
-    await db.execute(
-        text(
-            '''INSERT INTO activities (id, workspace_id, issue_id, actor_id, type, data, created_at)
-               VALUES (:id, :workspace_id, :issue_id, :actor_id, :action, CAST(:data AS jsonb), :now)'''
-        ),
-        {
-            'id': _cuid(),
-            'workspace_id': workspace_id,
-            'issue_id': issue_id,
-            'actor_id': user_id,
-            'action': action,
-            'data': json.dumps(data),
-            'now': _utcnow(),
-        },
-    )
 
 
-def _relation_kind(relation_type: str, source_issue_id: str, perspective_issue_id: str) -> str:
-    if relation_type == 'RELATED':
-        return 'RELATED'
-    return 'BLOCKS' if source_issue_id == perspective_issue_id else 'BLOCKED_BY'
 
 
-async def _relation_summary(
-    db: AsyncSession, issue_id: str, workspace_id: str, user_id: str
-) -> dict[str, Any]:
-    issue = await _issue_row(db, issue_id, workspace_id, user_id)
-    return {
-        'id': issue['id'],
-        'identifier': issue['identifier'],
-        'title': issue['title'],
-        'status': issue['status'],
-        'team': issue['team'],
-    }
 
 
 @router.get('')
@@ -551,107 +255,10 @@ async def create_issue(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _workspace_access(db, payload.workspaceId, user['id'])
-    await _team_access(db, payload.workspaceId, payload.teamId, user['id'])
-    values = payload.model_dump()
-    category = await _validate_references(db, payload.workspaceId, payload.teamId, values, creating=True)
-    _validate_schedule_dates(_date(values.get('startDate')), _date(values.get('targetDate')))
-    if not values.get('dueDate'):
-        values['dueDate'] = await resolve_deadline(db, payload.workspaceId, payload.teamId, values['priority'])
-    if values.get('parentIssueId'):
-        parent = await db.execute(
-            text('''SELECT 1 FROM issues WHERE id = :issue_id AND workspace_id = :workspace_id
-                    AND team_id = :team_id AND archived_at IS NULL'''),
-            {'issue_id': values['parentIssueId'], 'workspace_id': payload.workspaceId, 'team_id': payload.teamId},
-        )
-        if parent.scalar_one_or_none() is None:
-            raise ApiError(404, 'Parent issue was not found for this team.', 'Not Found')
-    team = await db.execute(
-        text('''UPDATE teams SET issue_sequence = issue_sequence + 1, updated_at = :now
-                WHERE id = :team_id AND workspace_id = :workspace_id
-                RETURNING identifier, issue_sequence'''),
-        {'team_id': payload.teamId, 'workspace_id': payload.workspaceId, 'now': _utcnow()},
-    )
-    sequence = team.mappings().first()
-    if not sequence:
-        raise ApiError(404, 'Team not found.', 'Not Found')
-    issue_id, now = _cuid(), _utcnow()
-    completed_at = now if category == 'COMPLETED' else None
-    canceled_at = now if category == 'CANCELED' else None
-    await db.execute(
-        text(
-            '''INSERT INTO issues (id, workspace_id, team_id, status_id, project_id, parent_issue_id,
-               identifier, number, title, description, priority, estimated_effort, actual_effort, start_date, target_date, due_date, creator_id,
-               assignee_id, completed_at, canceled_at, created_at, updated_at)
-               VALUES (:id, :workspace_id, :team_id, :status_id, :project_id, :parent_issue_id,
-               :identifier, :number, :title, :description, :priority, :estimated_effort, :actual_effort, :start_date, :target_date, :due_date, :creator_id,
-               :assignee_id, :completed_at, :canceled_at, :now, :now)'''
-        ),
-        {
-            'id': issue_id, 'workspace_id': payload.workspaceId, 'team_id': payload.teamId,
-            'status_id': values['statusId'], 'project_id': values.get('projectId'),
-            'parent_issue_id': values.get('parentIssueId'),
-            'identifier': f"{sequence['identifier']}-{sequence['issue_sequence']}",
-            'number': sequence['issue_sequence'], 'title': payload.title.strip(),
-            'description': values.get('description'), 'priority': values['priority'],
-            'estimated_effort': values.get('estimatedEffort'), 'actual_effort': values.get('actualEffort'),
-            'start_date': _date(values.get('startDate')),
-            'target_date': _date(values.get('targetDate')), 'due_date': _date(values.get('dueDate')),
-            'creator_id': user['id'], 'assignee_id': values.get('assigneeId'),
-            'completed_at': completed_at, 'canceled_at': canceled_at, 'now': now,
-        },
-    )
-    for label_id in values.get('labelIds') or []:
-        await db.execute(text('INSERT INTO issue_labels (issue_id, label_id) VALUES (:issue_id, :label_id)'), {'issue_id': issue_id, 'label_id': label_id})
-    for subscriber_id in {user['id'], values.get('assigneeId')} - {None}:
-        await db.execute(text('INSERT INTO issue_subscriptions (issue_id, user_id) VALUES (:issue_id, :user_id) ON CONFLICT DO NOTHING'), {'issue_id': issue_id, 'user_id': subscriber_id})
-    await _write_activity(db, payload.workspaceId, issue_id, user['id'], 'issue.created', {'title': payload.title.strip(), 'identifier': f"{sequence['identifier']}-{sequence['issue_sequence']}"})
-    if values.get('parentIssueId'):
-        await _write_activity(db, payload.workspaceId, values['parentIssueId'], user['id'], 'issue.subissue_created', {
-            'issueId': issue_id,
-            'identifier': f"{sequence['identifier']}-{sequence['issue_sequence']}",
-            'title': payload.title.strip(),
-        })
-    created_details = [
-        ('Team', sequence['identifier']),
-        ('Status', await _status_name(db, values['statusId']) or ''),
-        ('Priority', (values.get('priority') or 'NONE').title()),
-    ]
-    assignee_name = await _person_name(db, values.get('assigneeId'))
-    if assignee_name:
-        created_details.append(('Assignee', assignee_name))
-    created_batch = await create_notification_batch(
-        db,
-        workspace_id=payload.workspaceId,
-        recipient_ids=await team_recipient_ids(db, payload.teamId),
-        actor=user,
-        event_type='issue.created',
-        entity_type='issue',
-        entity_id=issue_id,
-        title=payload.title.strip(),
-        message='created a new issue',
-        entity_path=f"/issue/{sequence['identifier']}-{sequence['issue_sequence']}",
-        entity_label=f"{sequence['identifier']}-{sequence['issue_sequence']}",
-        details=created_details,
-        body=values.get('description'),
-    )
-    assignment_batch = await create_notification_batch(
-        db,
-        workspace_id=payload.workspaceId,
-        recipient_ids={values['assigneeId']} if values.get('assigneeId') else set(),
-        actor=user,
-        event_type='issue.assignment',
-        entity_type='issue',
-        entity_id=issue_id,
-        title=payload.title.strip(),
-        message='assigned you to an issue',
-        entity_path=f"/issue/{sequence['identifier']}-{sequence['issue_sequence']}",
-        entity_label=f"{sequence['identifier']}-{sequence['issue_sequence']}",
-        discord=False,
-    )
-    await db.commit()
-    await publish_notification_batches(created_batch, assignment_batch)
-    return {'data': await _issue_row(db, issue_id, payload.workspaceId, user['id'])}
+    from ..modules.work_items.issues import create_issue as operation
+    from ..db.mutations import commit_mutation
+
+    return await commit_mutation(db, lambda: operation(payload=payload, user=user, db=db))
 
 
 @public_router.post('')
@@ -664,19 +271,6 @@ async def public_create_issue(
     return await create_issue(payload, user, db)
 
 
-async def _template_row(db: AsyncSession, template_id: str, workspace_id: str) -> Any | None:
-    result = await db.execute(
-        text(
-            '''SELECT template.*, creator.id AS creator_id, creator.name AS creator_name,
-                      creator.avatar_url AS creator_avatar_url
-               FROM issue_templates template
-               JOIN users creator ON creator.id = template.created_by
-               WHERE template.id = :template_id AND template.workspace_id = :workspace_id
-               LIMIT 1'''
-        ),
-        {'template_id': template_id, 'workspace_id': workspace_id},
-    )
-    return result.mappings().first()
 
 
 @router.get('/templates')
@@ -865,105 +459,6 @@ async def list_issue_relations(
     return {'data': data}
 
 
-async def _add_issue_relation(
-    db: AsyncSession,
-    issue_id: str,
-    workspace_id: str,
-    related_issue_id: str,
-    relation_type: str,
-    user_id: str,
-) -> dict[str, Any]:
-    issue = await _issue_row(db, issue_id, workspace_id, user_id)
-    related = await _issue_row(db, related_issue_id, workspace_id, user_id)
-    if issue['id'] == related['id']:
-        raise ApiError(400, 'An issue cannot be related to itself.', 'Bad Request')
-
-    source_issue_id, target_issue_id = (
-        sorted((issue['id'], related['id']))
-        if relation_type == 'RELATED'
-        else (related['id'], issue['id'])
-    )
-    existing = await db.execute(
-        text(
-            '''SELECT issue_id, related_issue_id, type FROM issue_relations
-               WHERE workspace_id = :workspace_id
-                 AND ((issue_id = :issue_id AND related_issue_id = :related_issue_id)
-                   OR (issue_id = :related_issue_id AND related_issue_id = :issue_id))
-               LIMIT 1'''
-        ),
-        {
-            'workspace_id': workspace_id,
-            'issue_id': issue['id'],
-            'related_issue_id': related['id'],
-        },
-    )
-    previous = existing.mappings().first()
-    if previous and (
-        previous['type'] == relation_type
-        and previous['issue_id'] == source_issue_id
-        and previous['related_issue_id'] == target_issue_id
-    ):
-        return {
-            'workspaceId': workspace_id,
-            'issueId': previous['issue_id'],
-            'relatedIssueId': previous['related_issue_id'],
-            'type': previous['type'],
-        }
-
-    if previous:
-        await db.execute(
-            text(
-                '''UPDATE issue_relations
-                   SET issue_id = :source_issue_id, related_issue_id = :target_issue_id,
-                       type = :relation_type, created_by = :user_id, created_at = :now
-                   WHERE issue_id = :previous_issue_id AND related_issue_id = :previous_related_issue_id'''
-            ),
-            {
-                'source_issue_id': source_issue_id,
-                'target_issue_id': target_issue_id,
-                'relation_type': relation_type,
-                'user_id': user_id,
-                'now': _utcnow(),
-                'previous_issue_id': previous['issue_id'],
-                'previous_related_issue_id': previous['related_issue_id'],
-            },
-        )
-    else:
-        await db.execute(
-            text(
-                '''INSERT INTO issue_relations
-                   (workspace_id, issue_id, related_issue_id, type, created_at, created_by)
-                   VALUES (:workspace_id, :issue_id, :related_issue_id, :relation_type, :now, :user_id)'''
-            ),
-            {
-                'workspace_id': workspace_id,
-                'issue_id': source_issue_id,
-                'related_issue_id': target_issue_id,
-                'relation_type': relation_type,
-                'now': _utcnow(),
-                'user_id': user_id,
-            },
-        )
-
-    await _write_activity(db, workspace_id, issue['id'], user_id, 'issue.related', {
-        'relatedIssueId': related['id'],
-        'relatedIdentifier': related['identifier'],
-        'relationType': relation_type,
-        'relationKind': _relation_kind(relation_type, source_issue_id, issue['id']),
-    })
-    await _write_activity(db, workspace_id, related['id'], user_id, 'issue.related', {
-        'relatedIssueId': issue['id'],
-        'relatedIdentifier': issue['identifier'],
-        'relationType': relation_type,
-        'relationKind': _relation_kind(relation_type, source_issue_id, related['id']),
-    })
-    await db.commit()
-    return {
-        'workspaceId': workspace_id,
-        'issueId': source_issue_id,
-        'relatedIssueId': target_issue_id,
-        'type': relation_type,
-    }
 
 
 @router.post('/{issue_id}/relations')
@@ -1288,34 +783,12 @@ async def get_issue(
     return {'data': await _issue_row(db, issue_id, workspaceId, user['id'])}
 
 
-async def _status_name(db: AsyncSession, status_id: str | None) -> str | None:
-    if not status_id:
-        return None
-    result = await db.execute(text('SELECT name FROM issue_statuses WHERE id = :id'), {'id': status_id})
-    return result.scalar_one_or_none()
 
 
-async def _person_name(db: AsyncSession, user_id: str | None) -> str | None:
-    if not user_id:
-        return None
-    result = await db.execute(text('SELECT name FROM users WHERE id = :id'), {'id': user_id})
-    return result.scalar_one_or_none()
 
 
-async def _project_name(db: AsyncSession, project_id: str | None) -> str | None:
-    if not project_id:
-        return None
-    result = await db.execute(text('SELECT name FROM projects WHERE id = :id'), {'id': project_id})
-    return result.scalar_one_or_none()
 
 
-def _transition(before: Any, after: Any) -> str:
-    """Render a change as ``Todo → In Progress``.
-
-    The pair is the point: the new value on its own does not say what happened.
-    """
-
-    return f'{before or "—"} → {after or "—"}'
 
 
 @router.patch('/{issue_id}')
@@ -1326,157 +799,10 @@ async def update_issue(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    issue = await _issue_row(db, issue_id, workspaceId, user['id'])
-    values = payload.model_dump(exclude_unset=True)
-    previous_status_id = issue['statusId']
-    previous_assignee_id = issue['assignee']['id'] if issue.get('assignee') else None
-    if 'statusId' in values and values['statusId'] is None:
-        raise ApiError(400, 'statusId cannot be empty.', 'Bad Request')
-    _validate_schedule_dates(
-        _date(values['startDate']) if 'startDate' in values else issue.get('startDate'),
-        _date(values['targetDate']) if 'targetDate' in values else issue.get('targetDate'),
-    )
-    category = await _validate_references(db, workspaceId, issue['teamId'], values, creating=False)
-    if 'releaseIds' in values:
-        values['releaseIds'] = await _validate_release_ids(db, workspaceId, values['releaseIds'])
-    columns = {
-        'title': 'title', 'description': 'description', 'statusId': 'status_id', 'projectId': 'project_id',
-        'assigneeId': 'assignee_id', 'priority': 'priority',
-        'estimatedEffort': 'estimated_effort', 'actualEffort': 'actual_effort',
-        'startDate': 'start_date', 'targetDate': 'target_date', 'dueDate': 'due_date',
-    }
-    sets, params = [], {'issue_id': issue_id, 'now': _utcnow()}
-    for field, column in columns.items():
-        if field in values:
-            params[field] = _date(values[field]) if field in {'startDate', 'targetDate', 'dueDate'} else values[field]
-            if field == 'title' and isinstance(params[field], str):
-                params[field] = params[field].strip()
-            sets.append(f'{column} = :{field}')
-    if category:
-        sets.extend(['completed_at = :completed_at', 'canceled_at = :canceled_at'])
-        params['completed_at'] = _utcnow() if category == 'COMPLETED' else None
-        params['canceled_at'] = _utcnow() if category == 'CANCELED' else None
-    if sets:
-        await db.execute(text(f"UPDATE issues SET {', '.join(sets)}, updated_at = :now WHERE id = :issue_id"), params)
-    if 'labelIds' in values:
-        await db.execute(text('DELETE FROM issue_labels WHERE issue_id = :issue_id'), {'issue_id': issue_id})
-        for label_id in values['labelIds'] or []:
-            await db.execute(text('INSERT INTO issue_labels (issue_id, label_id) VALUES (:issue_id, :label_id)'), {'issue_id': issue_id, 'label_id': label_id})
-    if 'releaseIds' in values:
-        await db.execute(text('DELETE FROM issue_releases WHERE issue_id = :issue_id'), {'issue_id': issue_id})
-        for release_id in values['releaseIds']:
-            await db.execute(
-                text('INSERT INTO issue_releases (issue_id, release_id) VALUES (:issue_id, :release_id)'),
-                {'issue_id': issue_id, 'release_id': release_id},
-            )
-    if values.get('assigneeId'):
-        await db.execute(text('INSERT INTO issue_subscriptions (issue_id, user_id) VALUES (:issue_id, :user_id) ON CONFLICT DO NOTHING'), {'issue_id': issue_id, 'user_id': values['assigneeId']})
-    await _write_activity(db, workspaceId, issue_id, user['id'], 'issue.updated', {'fields': list(values)})
-    recipients = await issue_recipient_ids(db, issue_id, previous_assignee_id)
-    entity_path, entity_label = f"/issue/{issue['identifier']}", issue['identifier']
-    status_changed = bool(values.get('statusId')) and values['statusId'] != previous_status_id
-    assignee_changed = 'assigneeId' in values and values['assigneeId'] != previous_assignee_id
-    assignee_transition = (
-        _transition(
-            issue['assignee']['name'] if issue.get('assignee') else None,
-            await _person_name(db, values.get('assigneeId')),
-        )
-        if assignee_changed
-        else None
-    )
+    from ..modules.work_items.issues import update_issue as operation
+    from ..db.mutations import commit_mutation
 
-    # What actually moved, so a reader sees the change and not just the field
-    # name. One save produces one notification: a status change carries the
-    # rest of the edit with it.
-    changes: list[tuple[str, str]] = []
-    if status_changed:
-        changes.append(
-            ('Status', _transition(issue['status']['name'], await _status_name(db, values['statusId'])))
-        )
-    if assignee_transition:
-        changes.append(('Assignee', assignee_transition))
-    if 'title' in values and values['title'] != issue['title']:
-        changes.append(('Title', _transition(issue['title'], values['title'])))
-    if 'priority' in values and values['priority'] != issue['priority']:
-        changes.append(('Priority', _transition(issue['priority'], values['priority'])))
-    if 'projectId' in values and values['projectId'] != issue['projectId']:
-        changes.append(
-            (
-                'Project',
-                _transition(
-                    issue['project']['name'] if issue.get('project') else None,
-                    await _project_name(db, values['projectId']),
-                ),
-            )
-        )
-    if 'startDate' in values:
-        before = issue['startDate'].date().isoformat() if issue.get('startDate') else None
-        after = _date(values['startDate'])
-        after_text = after.date().isoformat() if after else None
-        if before != after_text:
-            changes.append(('Start date', _transition(before, after_text)))
-    if 'targetDate' in values:
-        before = issue['targetDate'].date().isoformat() if issue.get('targetDate') else None
-        after = _date(values['targetDate'])
-        after_text = after.date().isoformat() if after else None
-        if before != after_text:
-            changes.append(('Target end date', _transition(before, after_text)))
-    if 'dueDate' in values:
-        before = issue['dueDate'].date().isoformat() if issue.get('dueDate') else None
-        after = _date(values['dueDate'])
-        after_text = after.date().isoformat() if after else None
-        if before != after_text:
-            changes.append(('Due date', _transition(before, after_text)))
-    if 'estimatedEffort' in values and values['estimatedEffort'] != issue['estimatedEffort']:
-        changes.append(('Estimated effort', _transition(issue['estimatedEffort'], values['estimatedEffort'])))
-    if 'actualEffort' in values and values['actualEffort'] != issue['actualEffort']:
-        changes.append(('Actual effort', _transition(issue['actualEffort'], values['actualEffort'])))
-    if 'description' in values and values['description'] != issue['description']:
-        changes.append(('Description', 'updated'))
-
-    # An event is only reported when it happened: the batch used to be built
-    # regardless and still reached Discord, so renaming an issue announced a
-    # status change that never took place.
-    change_batch = (
-        await create_notification_batch(
-            db,
-            workspace_id=workspaceId,
-            recipient_ids=recipients,
-            actor=user,
-            event_type='issue.status_changed' if status_changed else 'issue.updated',
-            entity_type='issue',
-            entity_id=issue_id,
-            title=issue['title'],
-            message='changed the status of an issue' if status_changed else 'updated an issue',
-            entity_path=entity_path,
-            entity_label=entity_label,
-            details=changes,
-        )
-        if changes
-        else None
-    )
-    assignment_batch = (
-        await create_notification_batch(
-            db,
-            workspace_id=workspaceId,
-            recipient_ids={values['assigneeId']} if values.get('assigneeId') else set(),
-            actor=user,
-            event_type='issue.assignment',
-            entity_type='issue',
-            entity_id=issue_id,
-            title=issue['title'],
-            message='assigned you to an issue',
-            entity_path=entity_path,
-            entity_label=entity_label,
-            details=[('Assignee', assignee_transition or '')],
-            discord=False,
-        )
-        if assignee_changed and values.get('assigneeId')
-        else None
-    )
-    await db.commit()
-    await publish_notification_batches(change_batch, assignment_batch)
-    return {'data': await _issue_row(db, issue_id, workspaceId, user['id'])}
+    return await commit_mutation(db, lambda: operation(issue_id=issue_id, payload=payload, workspaceId=workspaceId, user=user, db=db))
 
 
 @router.delete('/{issue_id}')
