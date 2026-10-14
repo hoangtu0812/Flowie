@@ -105,7 +105,7 @@ test('comment submit is single and author edits/replies survive reload', async (
    await page.getByRole('textbox', { name: 'Comment', exact: true }).fill(content);
    await page.getByRole('textbox', { name: 'Comment', exact: true }).press('Control+Enter');
    await page.getByRole('textbox', { name: 'Comment', exact: true }).press('Control+Enter');
-   await expect(page.getByText(content, { exact: true })).toHaveCount(1);
+   await expect(page.getByRole('article').filter({ hasText: content })).toHaveCount(1);
    const response = await context.request.get(
       `${api}/comments?workspaceId=${fixture.workspace_id}&issueId=${issue.id}`
    );
@@ -118,10 +118,12 @@ test('comment submit is single and author edits/replies survive reload', async (
    await row.getByRole('button', { name: 'Edit comment', exact: true }).click();
    await row.getByRole('textbox', { name: 'Edit comment', exact: true }).fill(content + ' edited');
    await row.getByRole('button', { name: 'Save comment', exact: true }).click();
+   await expect(row.getByRole('textbox', { name: 'Edit comment', exact: true })).toHaveCount(0);
    await expect(row).toContainText('edited');
    await row.getByRole('button', { name: 'Reply', exact: true }).click();
    await page.getByRole('textbox', { name: 'Comment', exact: true }).fill(content + ' reply');
    await page.getByRole('button', { name: 'Comment', exact: true }).click();
+   await expect(page.getByRole('article').filter({ hasText: content + ' reply' })).toBeVisible();
    await page.reload();
    await expect(page.getByText(content + ' edited', { exact: true })).toBeVisible();
    await expect(page.getByText(content + ' reply', { exact: true })).toBeVisible();
@@ -188,6 +190,16 @@ test('settings routes expose persisted actions and recovery availability', async
 test('authentication and new preference forms have no serious accessibility violations', async ({
    page,
 }) => {
+   await page.goto('/auth/login');
+   await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+   const loginReport = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+      .analyze();
+   expect(
+      loginReport.violations.filter((violation) =>
+         ['serious', 'critical'].includes(violation.impact ?? '')
+      )
+   ).toEqual([]);
    await page.goto(`/${fixture.slug}/settings/preferences`);
    await expect(page.getByRole('heading', { name: 'Preferences', exact: true })).toBeVisible();
    const report = await new AxeBuilder({ page })
@@ -198,6 +210,42 @@ test('authentication and new preference forms have no serious accessibility viol
          ['serious', 'critical'].includes(violation.impact ?? '')
       )
    ).toEqual([]);
+   await page.getByRole('button', { name: 'Toggle theme', exact: true }).click();
+   await page.getByRole('menuitem', { name: 'Light', exact: true }).click();
+   await page.getByRole('menuitem', { name: 'Pure Light', exact: true }).click();
+   await expect(page.locator('[data-slot="dropdown-menu-content"]')).toHaveCount(0);
+   await expect(page.locator('html')).not.toHaveClass(/dark/);
+   const lightReport = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+      .analyze();
+   expect(
+      lightReport.violations.filter((violation) =>
+         ['serious', 'critical'].includes(violation.impact ?? '')
+      )
+   ).toEqual([]);
+});
+
+test('failed document save can keep a verified local draft and recover after reload', async ({
+   page,
+}) => {
+   await page.goto(`/${fixture.slug}/team/GEN/documents`);
+   await openDocument(page);
+   const dialog = page.getByRole('dialog');
+   await dialog.getByRole('button', { name: 'Edit', exact: true }).click();
+   const content = `Retained offline document ${Date.now()}`;
+   await page.route('**/api/v1/documents/*?*', (route) =>
+      route.request().method() === 'PATCH' ? route.abort('failed') : route.continue()
+   );
+   await dialog.getByLabel('Markdown content').fill(content);
+   await dialog.getByRole('button', { name: 'Done', exact: true }).click();
+   await expect(dialog).toContainText('Save failed');
+   await dialog.getByRole('button', { name: 'Close and keep local draft', exact: true }).click();
+   await expect(page.getByRole('dialog')).toHaveCount(0);
+   await page.unroute('**/api/v1/documents/*?*');
+   await page.reload();
+   await openDocument(page);
+   await expect(page.getByRole('dialog').getByText(content, { exact: true })).toBeVisible();
+   await expect(page.getByRole('dialog')).toContainText('All changes saved.');
 });
 
 test('failed comment send retains the draft and retry posts one comment', async ({
@@ -214,7 +262,7 @@ test('failed comment send retains the draft and retry posts one comment', async 
    await expect(page.getByRole('alert').filter({ hasText: /fetch|network/i })).toBeVisible();
    await page.unroute('**/api/v1/comments');
    await page.getByRole('button', { name: 'Comment', exact: true }).click();
-   await expect(page.getByText(content, { exact: true })).toHaveCount(1);
+   await expect(page.getByRole('article').filter({ hasText: content })).toHaveCount(1);
    const saved = (
       await (
          await context.request.get(

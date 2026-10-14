@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { loadCurrentWorkspace } from '@/lib/workspaces';
 import { SubmissionGate } from '@/features/shared/submission-gate';
 import {
@@ -23,8 +23,9 @@ export function useIssueActivity(issueId: string) {
    const [error, setError] = useState<string>();
    const [submitError, setSubmitError] = useState<string>();
    const gate = useRef(new SubmissionGate());
-   const current = useRef(issueId);
-   current.current = issueId;
+   const scope = useMemo(() => ({ issueId }), [issueId]);
+   const current = useRef(scope);
+   current.current = scope;
    const [reload, setReload] = useState(0);
 
    useEffect(() => {
@@ -35,6 +36,8 @@ export function useIssueActivity(issueId: string) {
       setMentionIds([]);
       request.current = undefined;
       setSubmitError(undefined);
+      setSending(false);
+      gate.current = new SubmissionGate();
    }, [issueId]);
 
    useEffect(() => {
@@ -86,7 +89,7 @@ export function useIssueActivity(issueId: string) {
                   mentionIds,
                   clientRequestKey: request.current.key,
                });
-               if (current.current === issueId) {
+               if (current.current === scope) {
                   request.current = undefined;
                   setReplyTo(undefined);
                   setMentionIds([]);
@@ -94,17 +97,17 @@ export function useIssueActivity(issueId: string) {
                   setDraft((latest) => (latest === draft ? '' : latest));
                }
             } catch (caught) {
-               if (current.current === issueId)
+               if (current.current === scope)
                   setSubmitError(
                      caught instanceof Error
                         ? caught.message
                         : 'Could not post comment. Your draft is retained.'
                   );
             } finally {
-               setSending(false);
+               if (current.current === scope) setSending(false);
             }
          }),
-      [draft, issueId, workspaceId, replyTo, mentionIds]
+      [draft, issueId, workspaceId, replyTo, mentionIds, scope]
    );
 
    return {

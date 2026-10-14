@@ -92,6 +92,16 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Browser checks now wait for persisted comment rows and completed theme menu
+  transitions; regressions also cover recovery of locally backed-up document
+  drafts and accessibility in both light and dark appearance.
+
+- Switching tasks during description saves or pasted-image uploads no longer
+  changes the new task's draft or upload state. Repeated image paste is serialized
+  per task, including when returning to an earlier task before a response arrives.
+  The comment composer waits for its authorized activity context before accepting
+  input; pending comment responses also stay bound to their original task.
+
 - Document updates reject explicit null values for required saved fields with a
   validation response, while empty content and clearing nullable links remain
   supported. Invalid patches no longer reach database constraint failures.

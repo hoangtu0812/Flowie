@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { authenticatedFetch } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
 import { uploadAttachment, type Attachment } from '@/lib/attachments';
@@ -10,7 +10,7 @@ export function useIssueAttachments(workspaceId: string | undefined, issueId: st
    const [attachments, setAttachments] = useState<Attachment[]>([]);
    const [uploading, setUploading] = useState(false);
    const [error, setError] = useState<string>();
-   const scope = `${workspaceId}:${issueId}`;
+   const scope = useMemo(() => ({ workspaceId, issueId }), [workspaceId, issueId]);
    const scopeRef = useRef(scope);
    scopeRef.current = scope;
    const gate = useRef(new SubmissionGate());

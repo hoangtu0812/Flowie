@@ -200,7 +200,7 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
                   onPaste={onPaste}
                   rows={3}
                   placeholder="Leave a comment..."
-                  isDisabled={state.sending}
+                  isDisabled={state.sending || !state.workspaceId}
                />
                {state.submitError && <Text role="alert">{state.submitError}</Text>}
                <HStack justify="between" gap={2}>

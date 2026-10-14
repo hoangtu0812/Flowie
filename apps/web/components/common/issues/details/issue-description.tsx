@@ -7,7 +7,7 @@ import { MarkdownPreview } from '@/components/common/markdown/markdown-preview';
 import { useImagePaste } from '@/hooks/use-image-paste';
 import { Issue } from '@/mock-data/issues';
 import { useIssuesStore } from '@/store/issues-store';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useModifierKey } from '@/features/shared/use-modifier-key';
 import { SubmissionGate } from '@/features/shared/submission-gate';
 
@@ -21,6 +21,9 @@ export function IssueDescription({ issue }: { issue: Issue }) {
    const gate = useRef(new SubmissionGate());
    const modifier = useModifierKey();
    const identity = useRef(issue.id);
+   const scope = useMemo(() => ({ id: issue.id }), [issue.id]);
+   const currentScope = useRef(scope);
+   currentScope.current = scope;
    const { onPaste, uploading } = useImagePaste({
       workspaceId,
       entityType: 'issue',
@@ -34,6 +37,8 @@ export function IssueDescription({ issue }: { issue: Issue }) {
          setDraft(issue.description);
          setEditing(false);
          setError(undefined);
+         setSaving(false);
+         gate.current = new SubmissionGate();
       }
    }, [issue.id, issue.description]);
    useEffect(() => {
@@ -46,11 +51,12 @@ export function IssueDescription({ issue }: { issue: Issue }) {
          setError(undefined);
          try {
             if (draft !== issue.description) await update(issue.id, draft);
-            setEditing(false);
+            if (currentScope.current === scope) setEditing(false);
          } catch (reason) {
-            setError(reason instanceof Error ? reason.message : 'Could not save description.');
+            if (currentScope.current === scope)
+               setError(reason instanceof Error ? reason.message : 'Could not save description.');
          } finally {
-            setSaving(false);
+            if (currentScope.current === scope) setSaving(false);
          }
       });
    return (
