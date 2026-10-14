@@ -11,7 +11,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
-import { useProjectsData } from '@/features/projects/projects-data';
 import type { Project } from '@/types/projects';
 import { useProjectsDisplayStore } from '@/store/projects-display-store';
 import {
@@ -35,6 +34,7 @@ import { ProjectGroup } from './projects';
 
 interface ProjectsTimelineProps {
    groups: ProjectGroup[];
+   onProjectChanged: () => void | Promise<void>;
 }
 
 const barBounds = (project: Project, monthWidth: number) => {
@@ -333,7 +333,7 @@ function TimelineBar({
  * numbers and bar contents follow the Display options; the scale dropdown
  * (Year / Quarter / Month / Week, with Y/Q/M/W shortcuts) changes the zoom.
  */
-export default function ProjectsTimeline({ groups }: ProjectsTimelineProps) {
+export default function ProjectsTimeline({ groups, onProjectChanged }: ProjectsTimelineProps) {
    const { showProjectList, showWeekNumbers, displayProperties } = useProjectsDisplayStore();
    const [todayIso, setTodayIso] = useState<string | null>(null);
    const [viewport, setViewport] = useState<Viewport | null>(null);
@@ -345,7 +345,6 @@ export default function ProjectsTimeline({ groups }: ProjectsTimelineProps) {
    const [issuesByProject, setIssuesByProject] = useState<Record<string, TimelineIssue[]>>({});
    const [loadingIssues, setLoadingIssues] = useState<Set<string>>(new Set());
    const [workspaceId, setWorkspaceId] = useState<string>();
-   const { refreshProjects } = useProjectsData();
    const scrollRef = useRef<HTMLDivElement>(null);
    const frameRef = useRef<number | null>(null);
 
@@ -516,9 +515,9 @@ export default function ProjectsTimeline({ groups }: ProjectsTimelineProps) {
                projectId={peekProjectId}
                onClose={() => setPeekProjectId(null)}
                onChanged={() =>
-                  void refreshProjects().catch(() =>
-                     toast.error('Project saved, but the timeline could not refresh.')
-                  )
+                  void Promise.resolve()
+                     .then(onProjectChanged)
+                     .catch(() => toast.error('Project saved, but the timeline could not refresh.'))
                }
             />
          )}

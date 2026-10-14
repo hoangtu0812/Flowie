@@ -123,6 +123,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Initiative Projects tabs open without a client-side exception, including
+  direct links and reloads. Shared timelines refresh the owning page after
+  project edits, keeping initiative and workspace project dates current.
+
 - Storage acceptance builds pinned official MinIO source and runs a loopback
   fixture on clean CI runners without depending on unavailable public community
   images. Production's cached-image policy remains intact.

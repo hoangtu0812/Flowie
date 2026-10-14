@@ -41,7 +41,7 @@ const CLOSED_CATEGORIES = new Set(['completed', 'canceled']);
  * options, views, insights) is scoped to that team's projects.
  */
 export default function Projects({ teamId }: { teamId?: string }) {
-   const { allProjects, resolvedTeamId, teamGroups } = useProjectsData();
+   const { allProjects, resolvedTeamId, teamGroups, refreshProjects } = useProjectsData();
    const { filters } = useProjectsFilterStore();
    const { viewTypes, grouping, ordering, closedProjects, showEmptyGroups } =
       useProjectsDisplayStore();
@@ -139,7 +139,9 @@ export default function Projects({ teamId }: { teamId?: string }) {
 
          <div className="flex-1 min-h-0 w-full flex overflow-hidden">
             <div className="flex-1 min-w-0 h-full overflow-hidden">
-               {viewType === 'timeline' && <ProjectsTimeline groups={groups} />}
+               {viewType === 'timeline' && (
+                  <ProjectsTimeline groups={groups} onProjectChanged={refreshProjects} />
+               )}
                {viewType === 'board' && <ProjectsBoard groups={groups} />}
                {viewType === 'list' && <ProjectsList groups={groups} />}
             </div>
