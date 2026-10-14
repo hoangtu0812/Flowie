@@ -12,6 +12,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Users can file and edit structured bugs from the issue UI, and filter issue
+  views by type and severity. An access-scoped server report groups all bugs by
+  severity/status; bug details remain separate from task priority.
+
 - Issue and MCP contracts now support Task/Bug type, severity, environment,
   reproduction steps and expected/actual results. Existing issues remain Tasks;
   the structured-bug Prisma migration must run before the updated API starts.

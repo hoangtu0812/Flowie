@@ -242,6 +242,13 @@ async def public_list_issues(
     return await list_issues(workspaceId, teamId, categories, scope, user, db)
 
 
+@public_router.get('/bug-report')
+async def bug_report(workspaceId: str = Query(min_length=1), teamId: str | None = None,
+    projectId: str | None = None, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict:
+    from ..modules.work_items.bug_reports import report
+    return {'data': await report(db, workspaceId, user['id'], teamId, projectId)}
+
+
 @public_router.get('/options')
 async def public_issue_options(
     workspaceId: str = Query(min_length=1),

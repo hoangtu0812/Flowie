@@ -1,5 +1,6 @@
 'use client';
 
+import { BugDetails } from '@/features/issues/bug-details';
 import { LoadingState } from '@/components/common/loading-state';
 import { QueryState } from '@/components/common/query-state';
 import type { IssueDetail } from '@/mock-data/issue-details';
@@ -93,6 +94,7 @@ export default function IssueDetails() {
                   <Heading level={1}>{issue.title}</Heading>
                   <MobileIssueProperties issue={issue} detail={detail} />
                   <IssueDescription issue={issue} />
+                  <BugDetails issue={issue} />
                   <IssueReactions issueId={issue.id} />
                   <IssueAttachments issueId={issue.id} />
                   {issue.teamId && (

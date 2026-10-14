@@ -1,3 +1,4 @@
+import type { BugFields } from '@/features/issues/bug-fields';
 import { groupIssuesByStatus, Issue } from '@/mock-data/issues';
 import { LabelInterface } from '@/mock-data/labels';
 import { priorities, Priority } from '@/mock-data/priorities';
@@ -18,7 +19,7 @@ import { toast } from 'sonner';
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 declare module '@/mock-data/issues' {
-   interface Issue {
+   interface Issue extends BugFields {
       /** Personal state persisted for the current signed-in user. */
       isSubscribed?: boolean;
       isFavorite?: boolean;
@@ -30,7 +31,7 @@ declare module '@/mock-data/issues' {
    }
 }
 
-type NativeIssue = {
+type NativeIssue = BugFields & {
    id: string;
    teamId: string;
    parentIssueId?: string | null;
@@ -99,7 +100,7 @@ type NativeIssueOptions = {
    }>;
 };
 
-type CreateIssuePayload = {
+type CreateIssuePayload = BugFields & {
    teamId: string;
    title: string;
    description?: string;
@@ -170,6 +171,12 @@ function asIssue(native: NativeIssue): Issue {
         }
       : null;
    return {
+      issueType: native.issueType ?? 'TASK',
+      severity: native.severity,
+      environment: native.environment,
+      reproductionSteps: native.reproductionSteps,
+      expectedResult: native.expectedResult,
+      actualResult: native.actualResult,
       id: native.id,
       teamId: native.teamId,
       parentIssueId: native.parentIssueId ?? undefined,
@@ -295,6 +302,7 @@ interface IssuesState {
 
    // Advanced issue actions
    createIssue: (payload: CreateIssuePayload) => Promise<Issue>;
+   updateIssueBug: (issueId: string, fields: BugFields) => Promise<Issue>;
    updateIssueTitle: (issueId: string, title: string) => Promise<Issue>;
    updateIssueDescription: (issueId: string, description: string) => Promise<Issue>;
    moveIssue: (issueId: string, teamId: string) => Promise<Issue>;
@@ -883,6 +891,29 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
       return issue;
    },
 
+   updateIssueBug: async (issueId, fields) => {
+      const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
+      const { issueType, severity, environment, reproductionSteps, expectedResult, actualResult } =
+         fields;
+      const response = await authenticatedFetch(
+         `${api}/issues/${issueId}?${new URLSearchParams({ workspaceId })}`,
+         {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+               issueType,
+               severity,
+               environment,
+               reproductionSteps,
+               expectedResult,
+               actualResult,
+            }),
+         }
+      );
+      const issue = asIssue(await responseData<NativeIssue>(response));
+      get().updateIssue(issueId, issue);
+      return issue;
+   },
    updateIssueTitle: async (issueId, title) => {
       const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
       const response = await authenticatedFetch(

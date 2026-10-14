@@ -162,6 +162,30 @@ export const issueFilterColumns = [
       .icon(RefreshCcw)
       .options(cycleOptions)
       .build(),
+   dtf
+      .option()
+      .id('issueType')
+      .accessor((issue: Issue) => issue.issueType ?? 'TASK')
+      .displayName('Issue type')
+      .icon(CircleDashed)
+      .options([
+         { value: 'TASK', label: 'Task' },
+         { value: 'BUG', label: 'Bug' },
+      ])
+      .build(),
+   dtf
+      .option()
+      .id('severity')
+      .accessor((issue: Issue) => issue.severity ?? 'NONE')
+      .displayName('Severity')
+      .icon(BarChart3)
+      .options(
+         ['NONE', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map((value) => ({
+            value,
+            label: value === 'NONE' ? 'Unspecified' : value,
+         }))
+      )
+      .build(),
 ] as const;
 
 const columnById = new Map<string, (typeof issueFilterColumns)[number]>(

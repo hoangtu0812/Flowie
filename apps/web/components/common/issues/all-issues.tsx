@@ -1,5 +1,7 @@
 'use client';
 
+import { BugReport } from '@/features/issues/bug-report';
+import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Issue } from '@/mock-data/issues';
 import { Status, StatusCategory } from '@/mock-data/status';
 import { useDisplaySettingsStore } from '@/store/display-settings-store';
@@ -73,19 +75,20 @@ export default function AllIssues({ categories }: AllIssuesProps) {
 
    if (isSearching) {
       return (
-         <div className="w-full h-full">
-            <div className="px-6 mb-6">
+         <HStack width="100%" height="100%">
+            <VStack padding={6}>
                <SearchIssues issues={displayedIssues} />
-            </div>
-         </div>
+            </VStack>
+         </HStack>
       );
    }
 
    return (
-      <div className="w-full h-full flex flex-col overflow-hidden">
+      <VStack width="100%" height="100%" className="overflow-hidden">
          <IssueFilterBar />
-         <div className="flex-1 min-h-0 w-full flex overflow-hidden">
-            <div className="flex-1 min-w-0 h-full overflow-hidden">
+         <BugReport teamReference={teamIdentifier} />
+         <HStack gap={0} className="flex-1 min-h-0 w-full overflow-hidden">
+            <VStack className="flex-1 min-w-0 h-full overflow-hidden">
                <GroupedIssuesView
                   issues={displayedIssues}
                   totalIssues={scopedIssues}
@@ -95,14 +98,18 @@ export default function AllIssues({ categories }: AllIssuesProps) {
                   onRetry={() => loadIssues(teamIdentifier)}
                   loading={loading || isInitialLoad}
                />
-            </div>
+            </VStack>
 
             {openPanel === 'insights' && (
-               <aside className="hidden lg:flex w-[420px] shrink-0 border-l h-full overflow-hidden bg-container">
+               <VStack
+                  as="aside"
+                  width={420}
+                  className="hidden lg:flex shrink-0 border-l h-full overflow-hidden bg-container"
+               >
                   <InsightsPanel issues={displayedIssues} />
-               </aside>
+               </VStack>
             )}
-         </div>
-      </div>
+         </HStack>
+      </VStack>
    );
 }
