@@ -250,6 +250,17 @@ export function CommandPalette() {
                {input}
                <CommandList className="max-h-96">
                   <CommandEmpty>No results found.</CommandEmpty>
+                  {route === 'root' && (
+                     <CommandGroup heading="Workspace search">
+                        <CommandItem
+                           value={`Search workspace ${query}`}
+                           onSelect={() => go(`/search?q=${encodeURIComponent(query)}`)}
+                        >
+                           <FileText /> Search workspace for{' '}
+                           {query || 'issues, documents, projects and members'}
+                        </CommandItem>
+                     </CommandGroup>
+                  )}
 
                   {route === 'root' && issue && (
                      <>

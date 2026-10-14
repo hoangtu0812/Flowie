@@ -123,6 +123,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_exception_handler(ApiError, api_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     app.include_router(auth_router)
+    from .modules.search.api import router as search_router
+    app.include_router(search_router)
     app.include_router(password_reset_router)
     app.include_router(agent_router)
     app.include_router(admin_router)

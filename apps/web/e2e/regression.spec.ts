@@ -519,3 +519,13 @@ test('older comments and a long reply thread load in bounded pages', async ({ pa
       .click();
    await expect(page.getByText(`Thread ${suffix} reply 0`, { exact: true })).toBeVisible();
 });
+
+test('workspace search finds server records and opens a document directly', async ({ page }) => {
+   await page.goto(`/${fixture.slug}/search`);
+   await page
+      .getByLabel('Search issues, documents, projects and members')
+      .fill('Regression Markdown');
+   await page.getByRole('link', { name: fixture.documentTitle, exact: true }).click();
+   await expect(page.getByRole('dialog')).toBeVisible();
+   await expect(page).toHaveURL(new RegExp(`/documents/${fixture.documentId}`));
+});

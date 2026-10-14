@@ -12,6 +12,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Workspace search reads accessible issues, document contents, projects and
+  member names from the server with signed cursors and Vietnamese search.
+  Ctrl+K can open search, and documents have direct URLs using the shared editor.
+
 - A second implementation plan tracks Inbox fixes, exact-commit deployment,
   bounded collaboration feeds, global search, notification delivery, account
   preferences and local Codex/AI operations, with explicit acceptance gates.
