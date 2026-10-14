@@ -259,7 +259,7 @@ test('failed comment send retains the draft and retry posts one comment', async 
    await page.route('**/api/v1/comments', (route) => route.abort('failed'));
    await page.getByRole('button', { name: 'Comment', exact: true }).click();
    await expect(page.getByRole('textbox', { name: 'Comment', exact: true })).toHaveValue(content);
-   await expect(page.getByRole('alert').filter({ hasText: /fetch|network/i })).toBeVisible();
+   await expect(page.locator('[data-comment-composer]').getByRole('alert')).toBeVisible();
    await page.unroute('**/api/v1/comments');
    await page.getByRole('button', { name: 'Comment', exact: true }).click();
    await expect(page.getByRole('article').filter({ hasText: content })).toHaveCount(1);
@@ -574,6 +574,135 @@ test('account preferences synchronize on a separate browser context and home nav
             expectedVersion: current.version,
             values: original.values,
          },
+      });
+   }
+});
+
+test('Inbox snooze persists and notification channel availability is real', async ({
+   page,
+   context,
+   browserName,
+}) => {
+   await page.goto(`/${fixture.slug}/inbox`);
+   const row = page.getByRole('button', {
+      name: `Open notification: ${fixture.issues[0].title}`,
+      exact: true,
+   });
+   await row.click();
+   await page.getByRole('button', { name: 'Snooze for one hour', exact: true }).click();
+   await expect(row).toHaveCount(0);
+   await page.reload();
+   await expect(row).toHaveCount(0);
+   await page.getByRole('button', { name: 'Notification display options', exact: true }).click();
+   await page.getByRole('switch', { name: 'Show snoozed', exact: true }).click();
+   await page.keyboard.press('Escape');
+   await row.click();
+   await expect(page.getByText(/Snoozed until/)).toBeVisible();
+   await page.getByRole('button', { name: 'Unsnooze', exact: true }).click();
+   await expect(
+      page.getByRole('button', { name: 'Snooze for one hour', exact: true })
+   ).toBeVisible();
+   await page.goto(`/${fixture.slug}/settings/notifications`);
+   await expect(
+      page.getByRole('checkbox', { name: 'Email notifications', exact: true })
+   ).toBeDisabled();
+   await expect(
+      page.getByText('Private SMTP delivery is not configured.', { exact: true })
+   ).toBeVisible();
+   if (browserName !== 'chromium') return;
+   await context.grantPermissions(['notifications'], { origin: 'http://localhost:3000' });
+   await page.getByRole('checkbox', { name: 'Desktop notifications', exact: true }).check();
+   await expect
+      .poll(
+         async () =>
+            (
+               await (
+                  await context.request.get(
+                     `${api}/notifications/channels?workspaceId=${fixture.workspace_id}`
+                  )
+               ).json()
+            ).data.desktopEnabled
+      )
+      .toBe(true);
+   await page.reload();
+   await expect(
+      page.getByRole('checkbox', { name: 'Desktop notifications', exact: true })
+   ).toBeChecked();
+});
+
+test('Vietnamese account locale applies to Inbox search and issue activity', async ({
+   page,
+   context,
+}) => {
+   const endpoint = `${api}/users/me/ui-preferences`;
+   const original = (await (await context.request.get(endpoint)).json()).data;
+   try {
+      const response = await context.request.put(endpoint, {
+         data: {
+            accountId: fixture.userId,
+            expectedVersion: original.version,
+            values: { ...original.values, locale: 'vi' },
+         },
+      });
+      expect(response.ok()).toBeTruthy();
+      await page.goto(`/${fixture.slug}/search`);
+      await expect(
+         page.getByRole('heading', { name: 'Tìm trong workspace', exact: true })
+      ).toBeVisible();
+      await page
+         .getByLabel('Tìm công việc, tài liệu, dự án và thành viên')
+         .fill('Regression Markdown');
+      await expect(
+         page.getByRole('link', { name: fixture.documentTitle, exact: true })
+      ).toBeVisible();
+      await page.goto(`/${fixture.slug}/inbox`);
+      await expect(page.getByRole('heading', { name: 'Hộp thư', exact: true })).toBeVisible();
+      await page
+         .getByRole('button', {
+            name: `Open notification: ${fixture.issues[0].title}`,
+            exact: true,
+         })
+         .click();
+      await expect(page.getByRole('heading', { name: 'Hoạt động', exact: true })).toBeVisible();
+      await expect(page.getByRole('textbox', { name: 'Bình luận', exact: true })).toBeVisible();
+   } finally {
+      const current = (await (await context.request.get(endpoint)).json()).data;
+      await context.request.put(endpoint, {
+         data: {
+            accountId: fixture.userId,
+            expectedVersion: current.version,
+            values: original.values,
+         },
+      });
+   }
+});
+
+test('AI operations budgets persist with real workspace administration', async ({
+   page,
+   context,
+}) => {
+   const endpoint = `${api}/ai-operations?workspaceId=${fixture.workspace_id}`;
+   const original = (await (await context.request.get(endpoint)).json()).data.limits;
+   try {
+      await page.goto(`/${fixture.slug}/settings/ai-operations`);
+      await expect(
+         page.getByRole('heading', { name: 'Workspace budget', exact: true })
+      ).toBeVisible();
+      await page.getByLabel('Total tool calls per minute').fill('299');
+      await page.getByLabel('Per-tool budgets (JSON)').fill('{"get_issue": 50}');
+      await page.getByRole('button', { name: 'Save budgets', exact: true }).click();
+      await expect
+         .poll(
+            async () =>
+               (await (await context.request.get(endpoint)).json()).data.limits.totalPerMinute
+         )
+         .toBe(299);
+      await page.reload();
+      await expect(page.getByLabel('Total tool calls per minute')).toHaveValue('299');
+      await expect(page.getByLabel('Per-tool budgets (JSON)')).toHaveValue(/"get_issue": 50/);
+   } finally {
+      await context.request.put(`${api}/ai-operations/limits?workspaceId=${fixture.workspace_id}`, {
+         data: original,
       });
    }
 });
