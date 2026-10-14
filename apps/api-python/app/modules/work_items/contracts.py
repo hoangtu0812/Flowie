@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .bug_contracts import BugCreateFields, BugUpdateFields
 
@@ -80,3 +80,10 @@ class UpdateDocumentInput(BaseModel):
     sourceUrl: str | None = Field(default=None, max_length=2048)
     pinned: bool | None = None
     position: int | None = Field(default=None, ge=0)
+
+    @field_validator('title', 'content', 'sourceType', 'pinned', 'position')
+    @classmethod
+    def reject_explicit_null(cls, value):
+        if value is None:
+            raise ValueError('Omit unchanged document fields instead of sending null.')
+        return value

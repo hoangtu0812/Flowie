@@ -92,6 +92,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Document updates reject explicit null values for required saved fields with a
+  validation response, while empty content and clearing nullable links remain
+  supported. Invalid patches no longer reach database constraint failures.
+
 - Prisma now records the defaults and presence index already installed by the
   committed migrations, including UTC comment revision timestamps. Schema checks
   no longer propose dropping existing defaults or the presence index.
