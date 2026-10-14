@@ -85,6 +85,11 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Cycle views distinguish an empty schedule from a failed request and offer retry.
+  Switching issues no longer applies an earlier attachment response to the new
+  task. Failed document saves can close only after explicitly confirming a local
+  draft backup; clean or still-loading readers can close immediately.
+
 - CSS reset layers now preserve existing utility-based layouts, preventing
   overlapping toolbar text and missing Markdown list/border styles. Issue
   property pickers have explicit names; preference toggles update immediately

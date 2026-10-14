@@ -41,7 +41,7 @@ export function MarkdownDocumentEditor({
       setCompareError(undefined);
    }, [document?.id, open]);
    const close = async () => {
-      if (await state.flush()) onOpenChange(false);
+      if (!state.dirty || (await state.flush())) onOpenChange(false);
    };
    const status = !state.ready
       ? 'Loading document…'
@@ -112,12 +112,20 @@ export function MarkdownDocumentEditor({
                               isLoading={state.saving}
                            />
                         )}
-                        <Button
-                           label="Close"
-                           clickAction={close}
-                           isDisabled={!state.ready}
-                           isLoading={state.saving}
-                        />
+                        {(state.error || state.conflict) && state.dirty && (
+                           <Button
+                              label="Close and keep local draft"
+                              isDisabled={state.saving}
+                              onClick={() => {
+                                 if (state.keepLocally()) onOpenChange(false);
+                                 else
+                                    setCompareError(
+                                       'Browser storage is unavailable. Keep this editor open and copy your draft before leaving.'
+                                    );
+                              }}
+                           />
+                        )}
+                        <Button label="Close" clickAction={close} isLoading={state.saving} />
                      </HStack>
                   </LayoutFooter>
                }
@@ -128,6 +136,9 @@ export function MarkdownDocumentEditor({
                            <Text role="status">An unsaved local draft was recovered.</Text>
                         )}
                         {state.error && <Text role="alert">{state.error}</Text>}
+                        {compareError && !state.conflict && (
+                           <Text role="alert">{compareError}</Text>
+                        )}
                         {state.conflict && (
                            <VStack gap={3} role="alert">
                               <Text>

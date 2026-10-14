@@ -48,11 +48,15 @@ export function useLiveCycle(cycleView: LiveCycleView) {
    const [team, setTeam] = useState<WorkspaceTeam>();
    const [cycle, setCycle] = useState<Cycle>();
    const [loading, setLoading] = useState(true);
+   const [error, setError] = useState<string>();
+   const [refresh, setRefresh] = useState(0);
 
    useEffect(() => {
       let active = true;
       void (async () => {
          setLoading(true);
+         setError(undefined);
+         setCycle(undefined);
          try {
             const { workspaceId, teams } = await loadJoinedWorkspaceTeams();
             const currentTeam = teams.find(
@@ -70,8 +74,9 @@ export function useLiveCycle(cycleView: LiveCycleView) {
                setTeam(currentTeam);
                setCycle(payload.data[0] ? mapCycle(payload.data[0], currentTeam) : undefined);
             }
-         } catch {
+         } catch (reason) {
             if (active) {
+               setError(reason instanceof Error ? reason.message : 'Could not load cycle.');
                setTeam(undefined);
                setCycle(undefined);
             }
@@ -82,7 +87,7 @@ export function useLiveCycle(cycleView: LiveCycleView) {
       return () => {
          active = false;
       };
-   }, [cycleView, teamId]);
+   }, [cycleView, teamId, refresh]);
 
-   return { team, cycle, loading };
+   return { team, cycle, loading, error, retry: () => setRefresh((value) => value + 1) };
 }

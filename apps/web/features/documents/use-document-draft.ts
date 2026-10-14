@@ -138,6 +138,20 @@ export function useDocumentDraft(
          if (keepDraft) await controller.flush();
       },
       ready: Boolean(controller && accountId),
+      keepLocally: () => {
+         if (!controller || !session) return false;
+         try {
+            const value = JSON.stringify({
+               ...controller.getSnapshot().draft,
+               version: session.version.current,
+            });
+            const key = `flowie:document-draft:${session.accountId}:${session.documentId}`;
+            localStorage.setItem(key, value);
+            return localStorage.getItem(key) === value;
+         } catch {
+            return false;
+         }
+      },
       update: (draft: DocumentDraft) => controller?.update(draft),
       flush: () =>
          conflict ? Promise.resolve(false) : (controller?.flush() ?? Promise.resolve(false)),
