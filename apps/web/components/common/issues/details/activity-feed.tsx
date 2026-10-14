@@ -5,6 +5,7 @@ import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { TextArea } from '@astryxdesign/core/TextArea';
 import { DesignSurface } from '@/components/common/design-surface';
+import { useUiPreferencesStore } from '@/store/ui-preferences-store';
 import { CommentRow } from '@/features/issues/comment-row';
 import { CommentMentions } from '@/features/issues/comment-mentions';
 import { useIssueActivity } from '@/features/issues/use-issue-activity';
@@ -87,6 +88,7 @@ function EventRow({ item }: { item: Extract<ActivityItem, { kind: 'event' }> }) 
 
 export function ActivityFeed({ issueId }: { issueId: string }) {
    const state = useIssueActivity(issueId);
+   const submitMode = useUiPreferencesStore((store) => store.commentSubmitMode);
    const { onPaste, uploading } = useImagePaste({
       workspaceId: state.workspaceId,
       entityType: 'issue',
@@ -106,8 +108,11 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
             paddingBlock={4}
             onKeyDown={(event) => {
                if (
+                  event.target instanceof HTMLElement &&
+                  Boolean(event.target.closest('[data-comment-composer]')) &&
+                  !event.nativeEvent.isComposing &&
                   event.key === 'Enter' &&
-                  (event.ctrlKey || event.metaKey) &&
+                  (submitMode === 'enter' ? !event.shiftKey : event.ctrlKey || event.metaKey) &&
                   !uploading &&
                   !state.sending
                ) {
@@ -187,29 +192,31 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
                   disabled={state.sending}
                />
             )}
-            <TextArea
-               label="Comment"
-               value={state.draft}
-               onChange={state.setDraft}
-               onPaste={onPaste}
-               rows={3}
-               placeholder="Leave a comment..."
-               isDisabled={state.sending}
-            />
-            {state.submitError && <Text role="alert">{state.submitError}</Text>}
-            <HStack justify="between" gap={2}>
-               <Text type="supporting">
-                  {uploading ? 'Uploading image…' : 'Paste a screenshot to attach it'}
-               </Text>
-               <Button
+            <VStack data-comment-composer gap={2}>
+               <TextArea
                   label="Comment"
-                  size="sm"
-                  variant="primary"
-                  clickAction={state.submit}
-                  isLoading={state.sending}
-                  isDisabled={!state.draft.trim() || !state.workspaceId || uploading}
+                  value={state.draft}
+                  onChange={state.setDraft}
+                  onPaste={onPaste}
+                  rows={3}
+                  placeholder="Leave a comment..."
+                  isDisabled={state.sending}
                />
-            </HStack>
+               {state.submitError && <Text role="alert">{state.submitError}</Text>}
+               <HStack justify="between" gap={2}>
+                  <Text type="supporting">
+                     {uploading ? 'Uploading image…' : 'Paste a screenshot to attach it'}
+                  </Text>
+                  <Button
+                     label="Comment"
+                     size="sm"
+                     variant="primary"
+                     clickAction={state.submit}
+                     isLoading={state.sending}
+                     isDisabled={!state.draft.trim() || !state.workspaceId || uploading}
+                  />
+               </HStack>
+            </VStack>
          </VStack>
       </DesignSurface>
    );

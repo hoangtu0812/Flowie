@@ -64,6 +64,11 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Changed
 
+- Browser preferences now control the home view, typography, link/cursor behavior
+  and comment shortcut. English is the default, with an English/Vietnamese catalog
+  for authentication and shared feedback. Help supports topic search and real
+  platform shortcuts; missing pages show an explicit recovery screen.
+
 - Production deployment now requires backend/MCP integration checks, clean-database
   migrations and the web build to pass in CI before CT107 deployment begins.
 - Issue/comment/document writes detect stale MCP versions and stage durable

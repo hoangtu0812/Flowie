@@ -135,7 +135,9 @@ export function SelectMenu({
    value: controlledValue,
    onChange,
    disabled,
+   label,
 }: {
+   label?: string;
    options: string[];
    defaultValue?: string;
    /** Optional controlled value (e.g. wired to next-themes). */
@@ -148,6 +150,7 @@ export function SelectMenu({
    return (
       <DropdownMenu>
          <DropdownMenuTrigger
+            aria-label={label}
             disabled={disabled}
             className={cn(
                'h-8 px-3 rounded-md border bg-container text-sm inline-flex items-center gap-1.5 hover:bg-accent transition-colors outline-none',

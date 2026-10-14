@@ -1,102 +1,115 @@
 'use client';
-
-import { CustomizeSidebarDialog } from '@/components/layout/sidebar/customize-sidebar-dialog';
-import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
 import { useState } from 'react';
-import { SelectMenu, SettingsCard, SettingsRow, SettingsSection, SettingsShell } from './shared';
+import { CustomizeSidebarDialog } from '@/components/layout/sidebar/customize-sidebar-dialog';
+import { Button } from '@astryxdesign/core/Button';
+import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
+import { VStack } from '@astryxdesign/core/Layout';
+import { Heading, Text } from '@astryxdesign/core/Text';
+import { List, ListItem } from '@astryxdesign/core/List';
+import { DesignSurface } from '@/components/common/design-surface';
+import { useUiPreferencesStore } from '@/store/ui-preferences-store';
+import { useModifierKey } from '@/features/shared/use-modifier-key';
+import { useLocale } from '@/features/shared/use-locale';
+import { SelectMenu } from './shared';
 import { ThemePreferences } from './theme-preferences';
-
-/** Personal "Preferences" settings (general, theme, automations). */
 export default function Preferences() {
+   const state = useUiPreferencesStore();
+   const { t } = useLocale();
+   const modifier = useModifierKey();
    const [customizeOpen, setCustomizeOpen] = useState(false);
    return (
-      <SettingsShell title="Preferences">
-         <SettingsSection title="General">
-            <SettingsCard>
-               <SettingsRow
-                  title="Default home view"
-                  description="Select which view to display when launching the app"
-                  trailing={<SelectMenu options={['Agent (default)', 'Inbox', 'My issues']} />}
-               />
-               <SettingsRow
-                  title="Display names"
-                  description="Select how names are displayed in the interface"
-                  trailing={<SelectMenu options={['Username', 'Full name']} />}
-               />
-               <SettingsRow
-                  title="First day of the week"
-                  description="Used for date pickers"
-                  trailing={<SelectMenu options={['Monday', 'Sunday', 'Saturday']} />}
-               />
-               <SettingsRow
-                  title="Convert text emoticons into emojis"
-                  description="Strings like :) will be converted to 🙂"
-                  trailing={<Switch defaultChecked />}
-               />
-               <SettingsRow
-                  title="Send comments on..."
-                  description="Choose which key press is used to submit comments"
-                  trailing={<SelectMenu options={['⌘+Enter', 'Enter']} />}
-               />
-            </SettingsCard>
-         </SettingsSection>
-
-         <SettingsSection title="Interface and theme">
-            <SettingsCard>
-               <SettingsRow
-                  title="App sidebar"
-                  description="Customize sidebar item visibility, ordering, and badge style"
-                  trailing={
-                     <Button size="xs" variant="ghost" onClick={() => setCustomizeOpen(true)}>
-                        Customize
-                     </Button>
+      <DesignSurface>
+         <VStack as="main" padding={6} gap={6} maxWidth={800}>
+            <Heading level={1}>{t('preferences')}</Heading>
+            <Text>These preferences apply immediately and are saved in this browser.</Text>
+            <List hasDividers>
+               <ListItem
+                  label={t('language')}
+                  description="Authentication and shared messages. Other screens currently use English."
+                  endContent={
+                     <SelectMenu
+                        label="Language"
+                        options={['English', 'Tiếng Việt']}
+                        value={state.locale === 'vi' ? 'Tiếng Việt' : 'English'}
+                        onChange={(value) => state.setLocale(value === 'Tiếng Việt' ? 'vi' : 'en')}
+                     />
                   }
                />
-               <SettingsRow
-                  title="Font size"
-                  description="Adjust the size of text across the app"
-                  trailing={<SelectMenu options={['Default', 'Small', 'Large']} />}
+               <ListItem
+                  label="Default home view"
+                  endContent={
+                     <SelectMenu
+                        label="Default home view"
+                        options={['Inbox', 'My issues']}
+                        value={state.defaultHome === 'inbox' ? 'Inbox' : 'My issues'}
+                        onChange={(value) =>
+                           state.setDefaultHome(value === 'Inbox' ? 'inbox' : 'my-issues')
+                        }
+                     />
+                  }
                />
-               <SettingsRow
-                  title="Use pointer cursors"
-                  description="Change the cursor to a pointer when hovering over any interactive elements"
-                  trailing={<Switch defaultChecked />}
+               <ListItem
+                  label="Send comments with"
+                  endContent={
+                     <SelectMenu
+                        label="Comment submission shortcut"
+                        options={[`${modifier}+Enter`, 'Enter (Shift+Enter for a new line)']}
+                        value={
+                           state.commentSubmitMode === 'enter'
+                              ? 'Enter (Shift+Enter for a new line)'
+                              : `${modifier}+Enter`
+                        }
+                        onChange={(value) =>
+                           state.setCommentSubmitMode(
+                              value.startsWith('Enter') ? 'enter' : 'modifier-enter'
+                           )
+                        }
+                     />
+                  }
                />
-               <SettingsRow
-                  title="Underline links"
-                  description="Always underline links in text content"
-                  trailing={<Switch />}
+               <ListItem
+                  label="Font size"
+                  endContent={
+                     <SelectMenu
+                        label="Font size"
+                        options={['Default', 'Small', 'Large']}
+                        value={
+                           { default: 'Default', small: 'Small', large: 'Large' }[state.fontSize]
+                        }
+                        onChange={(value) =>
+                           state.setFontSize(
+                              value === 'Small' ? 'small' : value === 'Large' ? 'large' : 'default'
+                           )
+                        }
+                     />
+                  }
                />
-            </SettingsCard>
+               <ListItem
+                  label="App sidebar"
+                  endContent={
+                     <Button label="Customize sidebar" onClick={() => setCustomizeOpen(true)} />
+                  }
+               />
+            </List>
+            <CheckboxInput
+               label="Use pointer cursors"
+               value={state.pointerCursors}
+               onChange={state.setPointerCursors}
+            />
+            <CheckboxInput
+               label="Underline links"
+               value={state.underlineLinks}
+               onChange={state.setUnderlineLinks}
+            />
             <ThemePreferences />
-         </SettingsSection>
-
-         <SettingsSection title="Desktop application">
-            <SettingsCard>
-               <SettingsRow
-                  title="Open in desktop app"
-                  description="Automatically open links in desktop app when possible"
-                  trailing={<Switch />}
-               />
-            </SettingsCard>
-         </SettingsSection>
-
-         <SettingsSection title="Automations and workflows">
-            <SettingsCard>
-               <SettingsRow
-                  title="Auto-assign to self"
-                  description="When creating new issues, always assign them to yourself by default"
-                  trailing={<Switch defaultChecked />}
-               />
-               <SettingsRow
-                  title="On move to started status, assign to yourself"
-                  description="When you move an unassigned issue to started, it will be automatically assigned to you"
-                  trailing={<Switch defaultChecked />}
-               />
-            </SettingsCard>
-         </SettingsSection>
-         <CustomizeSidebarDialog open={customizeOpen} onOpenChange={setCustomizeOpen} />
-      </SettingsShell>
+            <Heading level={2}>Unsupported preferences</Heading>
+            <Text>
+               Display-name format, week-start overrides, emoticon conversion, desktop deep links
+               and automatic self-assignment are not implemented. No setting is saved for these
+               features.
+            </Text>
+            <CustomizeSidebarDialog open={customizeOpen} onOpenChange={setCustomizeOpen} />
+         </VStack>
+      </DesignSurface>
    );
 }

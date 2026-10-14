@@ -1,0 +1,45 @@
+export type Locale = 'en' | 'vi';
+const catalog = {
+   registerFailed: ['Could not create the account.', 'Không thể tạo tài khoản.'],
+   verifyFailed: ['Could not verify the code.', 'Không thể xác thực mã.'],
+   verifyRegistration: ['Verify registration', 'Xác thực đăng ký'],
+   newWorkspace: ['Create a workspace', 'Tạo workspace mới'],
+   registrationIntro: [
+      'Start managing work with your team.',
+      'Bắt đầu quản lý công việc cùng đội ngũ của bạn.',
+   ],
+   registrationCodeHelp: [
+      'Enter the 6-digit code supplied by your administrator from the Flowie Register Discord channel for',
+      'Nhập mã 6 chữ số do quản trị viên cung cấp từ kênh Discord Flowie Register cho',
+   ],
+   useOtherDetails: ['Use different registration details', 'Dùng thông tin đăng ký khác'],
+   verificationCode: ['Verification code', 'Mã xác thực'],
+   codeExpiry: ['The code is valid for 10 minutes.', 'Mã có hiệu lực trong 10 phút.'],
+   verifying: ['Verifying…', 'Đang xác thực…'],
+   verifyAndCreate: ['Verify and create account', 'Xác thực và tạo tài khoản'],
+   sendingCode: ['Sending verification code…', 'Đang gửi mã xác thực…'],
+   continue: ['Continue', 'Tiếp tục'],
+   welcome: ['Welcome back', 'Chào mừng trở lại'],
+   signInDescription: ['Sign in to continue with Flowie.', 'Đăng nhập để tiếp tục với Flowie.'],
+   signIn: ['Sign in', 'Đăng nhập'],
+   signingIn: ['Signing in…', 'Đang đăng nhập…'],
+   password: ['Password', 'Mật khẩu'],
+   noAccount: ['No account yet?', 'Chưa có tài khoản?'],
+   createAccount: ['Create account', 'Tạo tài khoản'],
+   microsoft: ['Sign in with Microsoft', 'Đăng nhập với Microsoft'],
+   or: ['or', 'hoặc'],
+   signInFailed: ['Could not sign in.', 'Không thể đăng nhập.'],
+   forgotPassword: ['Forgot password?', 'Quên mật khẩu?'],
+   name: ['Full name', 'Họ và tên'],
+   confirmPassword: ['Confirm password', 'Xác nhận mật khẩu'],
+   passwordMismatch: ['Passwords do not match.', 'Mật khẩu xác nhận chưa khớp.'],
+   registerDescription: ['Create your Flowie account.', 'Tạo tài khoản Flowie của bạn.'],
+   hasAccount: ['Already have an account?', 'Đã có tài khoản?'],
+   retry: ['Retry', 'Thử lại'],
+   loadFailed: ['Could not load data', 'Không thể tải dữ liệu'],
+   preferences: ['Preferences', 'Tùy chọn'],
+   language: ['Language', 'Ngôn ngữ'],
+} as const;
+export type MessageKey = keyof typeof catalog;
+export const translate = (locale: Locale, key: MessageKey) => catalog[key][locale === 'vi' ? 1 : 0];
+export const localeTag = (locale: Locale) => (locale === 'vi' ? 'vi-VN' : 'en-US');

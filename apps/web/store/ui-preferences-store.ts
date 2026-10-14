@@ -1,3 +1,4 @@
+import type { Locale } from '@/features/shared/locale';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
@@ -5,6 +6,10 @@ export type DefaultHome = 'inbox' | 'my-issues';
 export type FontSize = 'default' | 'small' | 'large';
 
 interface UiPreferencesState {
+   locale: Locale;
+   commentSubmitMode: 'modifier-enter' | 'enter';
+   setLocale: (locale: Locale) => void;
+   setCommentSubmitMode: (mode: 'modifier-enter' | 'enter') => void;
    defaultHome: DefaultHome;
    fontSize: FontSize;
    pointerCursors: boolean;
@@ -21,6 +26,10 @@ interface UiPreferencesState {
 export const useUiPreferencesStore = create<UiPreferencesState>()(
    persist(
       (set) => ({
+         locale: 'en',
+         commentSubmitMode: 'modifier-enter',
+         setLocale: (locale) => set({ locale }),
+         setCommentSubmitMode: (commentSubmitMode) => set({ commentSubmitMode }),
          defaultHome: 'inbox',
          fontSize: 'default',
          pointerCursors: true,
@@ -34,11 +43,14 @@ export const useUiPreferencesStore = create<UiPreferencesState>()(
       }),
       {
          name: 'ui-preferences',
-         version: 1,
+         version: 2,
          migrate: (persisted) => {
             const preferences = persisted as Partial<UiPreferencesState> | undefined;
             return {
                ...preferences,
+               locale: preferences?.locale === 'vi' ? 'vi' : 'en',
+               commentSubmitMode:
+                  preferences?.commentSubmitMode === 'enter' ? 'enter' : 'modifier-enter',
                defaultHome:
                   preferences?.defaultHome === 'my-issues' ? 'my-issues' : ('inbox' as const),
             } as UiPreferencesState;
