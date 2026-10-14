@@ -27,7 +27,7 @@ interface UiPreferencesState {
    setUnderlineLinks: (underlineLinks: boolean) => void;
 }
 
-/** Browser-local UI preferences that have immediate, visible app behavior. */
+/** Browser cache provides immediate preferences; PreferenceSync reconciles owned account values. */
 export const useUiPreferencesStore = create<UiPreferencesState>()(
    persist(
       (set) => ({

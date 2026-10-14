@@ -67,9 +67,8 @@ export function ChannelSettings() {
          if (!workspace || !state) return;
          setSaving(true);
          setError(undefined);
+         setState({ ...state, emailEnabled, desktopEnabled });
          try {
-            if ((await loadCurrentWorkspace()).id !== workspace)
-               throw new Error('Workspace changed. Reload notification settings.');
             if (desktopEnabled) {
                if (!('Notification' in window))
                   throw new Error('Desktop notifications are not supported by this browser.');
@@ -80,6 +79,8 @@ export function ChannelSettings() {
                if (permission !== 'granted')
                   throw new Error('Desktop notification permission was not granted.');
             }
+            if ((await loadCurrentWorkspace()).id !== workspace)
+               throw new Error('Workspace changed. Reload notification settings.');
             await responseData(
                await authenticatedFetch(
                   `${api}/notifications/channels?${new URLSearchParams({ workspaceId: workspace })}`,
@@ -92,6 +93,7 @@ export function ChannelSettings() {
             );
             setState({ ...state, emailEnabled, desktopEnabled });
          } catch (reason) {
+            setState(state);
             setError(
                reason instanceof Error ? reason.message : 'Could not save notification settings.'
             );
