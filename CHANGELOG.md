@@ -39,6 +39,9 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Issue properties are now available on narrow screens, file attachment and
+  reaction controls perform real actions, and project badges open the selected
+  project. Issue assignees use current presence instead of a fixed offline state.
 - API timestamps now carry their UTC offset, and document/activity/member
   displays interpret legacy UTC timestamps consistently instead of showing
   newly created records as hours old.

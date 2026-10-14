@@ -1,5 +1,7 @@
 from __future__ import annotations
 from typing import Any
+from datetime import timedelta
+from ...core.clock import _utcnow
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from ...core.errors import ApiError
@@ -16,7 +18,7 @@ async def _issue_row(
                       s.name AS status_name, s.category AS status_category, s.color AS status_color,
                       p.id AS project_id_value, p.name AS project_name, p.identifier AS project_identifier,
                       c.id AS creator_id_value, c.name AS creator_name, c.avatar_url AS creator_avatar_url,
-                      a.id AS assignee_id_value, a.name AS assignee_name, a.avatar_url AS assignee_avatar_url,
+                      a.id AS assignee_id_value, a.name AS assignee_name, a.avatar_url AS assignee_avatar_url, a.last_seen_at AS assignee_last_seen_at,
                       EXISTS(SELECT 1 FROM issue_subscriptions sub WHERE sub.issue_id = i.id AND sub.user_id = :user_id) AS is_subscribed,
                       EXISTS(SELECT 1 FROM issue_favorites favorite WHERE favorite.issue_id = i.id AND favorite.user_id = :user_id) AS is_favorite,
                       (SELECT remind_at FROM issue_reminders reminder
@@ -110,6 +112,8 @@ async def _issue_row(
             "id": row["assignee_id_value"],
             "name": row["assignee_name"],
             "avatarUrl": row["assignee_avatar_url"],
+            "lastSeenAt": row.get("assignee_last_seen_at"),
+            "isOnline": bool(row.get("assignee_last_seen_at") and row["assignee_last_seen_at"] >= _utcnow() - timedelta(minutes=2)),
         }
         if row["assignee_id_value"]
         else None,

@@ -47,7 +47,13 @@ type NativeIssue = {
    updatedAt: string;
    status: { id: string; name: string; color: string; category: string };
    creator?: { id: string; name: string; avatarUrl?: string | null };
-   assignee?: { id: string; name: string; avatarUrl?: string | null } | null;
+   assignee?: {
+      id: string;
+      name: string;
+      avatarUrl?: string | null;
+      isOnline?: boolean;
+      lastSeenAt?: string | null;
+   } | null;
    project?: { id: string; name: string } | null;
    labelLinks?: { label: LabelInterface }[];
    cycleLinks?: { cycleId: string }[];
@@ -67,7 +73,14 @@ type NativeIssueStatus = {
 type NativeIssueOptions = {
    statuses: NativeIssueStatus[];
    projects: Array<{ id: string; name: string }>;
-   members: Array<{ id: string; name: string; email: string; avatarUrl?: string | null }>;
+   members: Array<{
+      id: string;
+      name: string;
+      email: string;
+      avatarUrl?: string | null;
+      isOnline?: boolean;
+      lastSeenAt?: string | null;
+   }>;
    labels: LabelInterface[];
    cycles: Array<{
       id: string;
@@ -149,7 +162,7 @@ function asIssue(native: NativeIssue): Issue {
            name: native.assignee.name,
            avatarUrl: native.assignee.avatarUrl ?? '',
            email: '',
-           status: 'offline' as const,
+           status: native.assignee.isOnline ? ('online' as const) : ('offline' as const),
            role: 'Member' as const,
            joinedDate: '',
            teamIds: [],
@@ -193,7 +206,7 @@ function asMember(native: NativeIssueOptions['members'][number]): User {
       name: native.name,
       avatarUrl: native.avatarUrl ?? '',
       email: native.email,
-      status: 'offline',
+      status: native.isOnline ? 'online' : 'offline',
       role: 'Member',
       joinedDate: '',
       teamIds: [],

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import timedelta
+
 from ..modules.work_items.issue_relations import _relation_kind as _relation_kind
 
 from ..modules.work_items.issue_relations import _add_issue_relation as _add_issue_relation
@@ -201,7 +203,7 @@ async def issue_options(
     ), await db.execute(
         text(f'''SELECT id, name, identifier, status, priority, health, start_date, target_date, lead_id, team_id FROM projects WHERE workspace_id = :workspace_id AND archived_at IS NULL {team_filter} ORDER BY name'''), params
     ), await db.execute(
-        text('''SELECT u.id, u.name, u.email, u.avatar_url FROM workspace_members wm JOIN users u ON u.id = wm.user_id WHERE wm.workspace_id = :workspace_id AND wm.status = 'ACTIVE' ORDER BY u.name'''), {'workspace_id': workspaceId}
+        text('''SELECT u.id, u.name, u.email, u.avatar_url, u.last_seen_at FROM workspace_members wm JOIN users u ON u.id = wm.user_id WHERE wm.workspace_id = :workspace_id AND wm.status = 'ACTIVE' ORDER BY u.name'''), {'workspace_id': workspaceId}
     ), await db.execute(
         text('SELECT id, name, color FROM labels WHERE workspace_id = :workspace_id ORDER BY name'), {'workspace_id': workspaceId}
     ), await db.execute(
@@ -218,7 +220,7 @@ async def issue_options(
     return {'data': {
         'statuses': [{'id': row['id'], 'name': row['name'], 'category': row['category'], 'color': row['color'], 'position': row['position']} for row in statuses.mappings().all()],
         'projects': [{'id': row['id'], 'name': row['name'], 'identifier': row['identifier'], 'status': row['status'], 'priority': row['priority'], 'health': row['health'], 'startDate': row['start_date'], 'targetDate': row['target_date'], 'leadId': row['lead_id'], 'teamId': row['team_id']} for row in projects.mappings().all()],
-        'members': [{'id': row['id'], 'name': row['name'], 'email': row['email'], 'avatarUrl': row['avatar_url']} for row in members.mappings().all()],
+        'members': [{'id': row['id'], 'name': row['name'], 'email': row['email'], 'avatarUrl': row['avatar_url'], 'lastSeenAt': row['last_seen_at'], 'isOnline': bool(row['last_seen_at'] and row['last_seen_at'] >= _utcnow() - timedelta(minutes=2))} for row in members.mappings().all()],
         'labels': [dict(row) for row in labels.mappings().all()],
         'cycles': [{'id': row['id'], 'teamId': row['team_id'], 'name': row['name'], 'status': row['status'], 'startDate': row['start_date'], 'endDate': row['end_date']} for row in cycles.mappings().all()],
         'releases': [{'id': row['id'], 'name': row['name'], 'version': row['version'], 'status': row['status'], 'targetDate': row['target_date']} for row in releases.mappings().all()],
