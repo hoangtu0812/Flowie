@@ -85,10 +85,16 @@ Các module đã có mã và kiểm thử. `IN_REVIEW` nghĩa là đạt cổng 
 
 | Việc | Owner | Điều kiện / hành động tiếp theo |
 | --- | --- | --- |
-| Publish nhánh và PR nháp của đợt 2 | Người dùng | Cho phép đúng nhánh/head sau khi xem code và bằng chứng. Quyền trước đó chỉ cho nhánh UI/UX cũ. |
-| CI Linux trên commit mới | CI, sau publish | Clean migrate/schema diff, Ruff, build/unit, SMTP/MinIO, 66 browser E2E. Nếu lỗi phải sửa trên nhánh trước merge. |
+| Publish nhánh và PR nháp của đợt 2 | Người dùng / Codex | Đã được cho phép và thực hiện: [PR nháp #3](https://github.com/hoangtu0812/Flowie/pull/3), nhánh `codex/workflow-completion`. Các bản sửa CI được cập nhật trên cùng nhánh. |
+| CI Linux trên commit mới | CI | Theo dõi [checks của PR #3](https://github.com/hoangtu0812/Flowie/pull/3/checks): clean migrate/schema diff, Ruff, build/unit, SMTP/MinIO, 66 browser E2E. Nếu lỗi phải sửa trên nhánh trước merge. |
 | Bug thật → Codex local → PR | Người dùng chọn bug; runner thực thi | Cung cấp project/issue và cấu hình token/repo/test/SCM ở máy. Theo `docs/local-codex-runner.md`; chưa có dữ liệu nên chưa khởi chạy AI. |
 | Email/desktop và storage CT107 | Quản trị vận hành | Smoke có quyền trên môi trường đang chạy; kiểm tra queue/status bằng recipient fixture đã duyệt. Không dùng thành công local để xác nhận mailbox thật. |
 | Merge/deploy/release | Reviewer và quản trị production | Review/CI đạt; merge được cho phép; verify workflow đúng SHA, migrations/readiness. Version/tag/release theo AGENTS.md. |
 
-Không còn TODO về mã trong 10 nhóm. Các bước cần token/bug thực, GitHub publish và CT107 còn mở theo bảng; không đổi chúng thành DONE vì đã có fixture.
+Không còn TODO về mã trong 10 nhóm. Các bước cần token/bug thực, CI và CT107 còn mở theo bảng; không đổi chúng thành DONE vì đã có fixture.
+
+### Checkpoint publish và CI
+
+- Người dùng đã cho phép publish nhánh, tạo PR nháp và sửa CI trên cùng nhánh. Bản đầu `3d0c572` (12 commit) được đẩy và gắn PR #3 vào chat.
+- Hai workflow push/PR đầu tiên đã đạt migration/schema và backend, rồi lỗi khi dựng MinIO: `docker compose pull` tuân theo `pull_policy: never`, khiến runner sạch không có image. CI đã đổi sang `docker pull minio/minio:latest` trước Compose. Cấu hình production giữ nguyên.
+- Trạng thái CI hiện tại lấy từ checks của PR; dòng production trước đợt 2 ở bảng trên là checkpoint trước publish. Nhánh đợt 2 chưa được merge/deploy; chưa chạy AI trên bug thật.

@@ -73,7 +73,7 @@ jobs:
         env:
           S3_TEST_ENDPOINT: http://127.0.0.1:9000
         run: |
-          docker compose pull minio
+          docker pull minio/minio:latest
           docker compose up -d minio
           for attempt in $(seq 1 30); do
             if curl --fail --silent "$S3_TEST_ENDPOINT/minio/health/ready"; then break; fi

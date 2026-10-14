@@ -123,6 +123,9 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Clean CI runners explicitly download the isolated MinIO test image before
+  starting Compose; production's cached-image policy remains intact.
+
 - Notification channel toggles respond immediately while saving, roll back on failure and preserve the user gesture required to request browser permission.
 
 - Inbox opens the current issue by ID, with shared Markdown, properties,
