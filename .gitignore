@@ -49,6 +49,11 @@ __pycache__/
 .pytest_cache/
 .venv/
 
+# UI regression artifacts
+apps/web/.e2e-fixture.json
+apps/web/test-results/
+apps/web/playwright-report/
+
 /photos
 
 # editors

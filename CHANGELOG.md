@@ -12,6 +12,13 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Isolated browser regressions cover autosave, revision reconciliation/restore,
+  comment editing/replies and retry, notification persistence, bug forms, file
+  attachments, mobile properties, settings, Help/AI setup and accessibility. CI
+  verifies Prisma schema drift and applies real migrations; the UI harness uses
+  synthetic accounts and separate storage, with failure traces retained for seven
+  days.
+
 - AI connection setup now provides project-bound read-only/coding presets,
   token-free local client configuration, clipboard feedback and a live MCP
   initialize/discovery/grant check while the newly issued token is available.
