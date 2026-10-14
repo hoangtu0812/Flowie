@@ -1,5 +1,7 @@
 'use client';
 
+import { useIssueQuery } from '@/features/issues/use-issue-query';
+import { IssuePagination } from '@/features/issues/issue-pagination';
 import { GroupedIssuesView } from '@/components/common/issues/grouped-issues-view';
 import { InsightsPanel } from '@/components/common/issues/insights-panel';
 import ProjectsList from '@/components/common/projects/projects-list';
@@ -7,7 +9,7 @@ import { ProjectGroup } from '@/components/common/projects/projects';
 import { useProjectsData } from '@/features/projects/projects-data';
 import { useIssuesStore } from '@/store/issues-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { LiveView, useLiveViews } from './use-live-views';
 
 const filterValues = (filters: Record<string, unknown>, key: string) =>
@@ -15,10 +17,29 @@ const filterValues = (filters: Record<string, unknown>, key: string) =>
 
 function IssueViewBody({ view }: { view: LiveView }) {
    const { openPanel } = useRightPanelStore();
-   const { issues, statuses, loadIssues } = useIssuesStore();
-   useEffect(() => {
-      void loadIssues();
-   }, [loadIssues]);
+   const { issues, statuses, error } = useIssuesStore();
+   const queryFilters = [];
+   for (const [key, columnId, type, operator] of [
+      ['statusIds', 'status', 'option', 'is any of'],
+      ['priorityIds', 'priority', 'option', 'is any of'],
+      ['labelIds', 'labels', 'multiOption', 'include any of'],
+   ]) {
+      const values = filterValues(view.filters, key);
+      if (values.length) queryFilters.push({ columnId, type, operator, values });
+   }
+   if (view.filters.unassigned === true)
+      queryFilters.push({
+         columnId: 'assignee',
+         type: 'option',
+         operator: 'is',
+         values: ['unassigned'],
+      });
+   if (view.filters.hasProject === true)
+      queryFilters.push({ columnId: 'project', type: 'option', operator: 'is not', values: [''] });
+   const queryState = useIssueQuery(
+      typeof view.filters.teamId === 'string' ? view.filters.teamId : undefined,
+      { categories: filterValues(view.filters, 'statusCategories'), filters: queryFilters }
+   );
    const filtered = useMemo(() => {
       const categories = filterValues(view.filters, 'statusCategories');
       const statusIds = filterValues(view.filters, 'statusIds');
@@ -38,6 +59,7 @@ function IssueViewBody({ view }: { view: LiveView }) {
    }, [issues, view]);
    return (
       <div className="w-full h-full flex flex-col overflow-hidden">
+         <IssuePagination />
          <div className="flex-1 min-h-0 w-full flex overflow-hidden">
             <div className="flex-1 min-w-0 h-full overflow-hidden">
                <GroupedIssuesView
@@ -45,6 +67,9 @@ function IssueViewBody({ view }: { view: LiveView }) {
                   totalIssues={filtered}
                   statuses={statuses}
                   isViewTypeGrid={false}
+                  loading={queryState.loading}
+                  error={error}
+                  onRetry={queryState.retry}
                />
             </div>
             {openPanel === 'insights' && (

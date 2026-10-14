@@ -64,6 +64,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Changed
 
+- Web issue views now load server-filtered cursor pages, retain query scope on
+  retry/mutation and offer Load more with visible loaded/total counts. Detail
+  reads one issue by key; account identity partitions issue snapshots.
+
 - Issue listing now returns bounded cursor pages with server-side scope, search
   and filter matching; relationships hydrate in batches. Detail URLs can resolve
   one issue directly. Apply the pagination index migration before deployment;

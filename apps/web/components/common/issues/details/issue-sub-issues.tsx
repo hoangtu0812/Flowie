@@ -67,7 +67,7 @@ export function IssueSubIssues({
    teamId: string;
    orgId: string;
 }) {
-   const { workspaceId, loadIssues } = useIssuesStore();
+   const { workspaceId, retryIssues } = useIssuesStore();
    const [subIssues, setSubIssues] = useState<SubIssue[]>([]);
    const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
    const [dialogOpen, setDialogOpen] = useState(false);
@@ -116,7 +116,7 @@ export function IssueSubIssues({
             } | null;
             throw new Error(payload?.message ?? 'Could not create sub-issue.');
          }
-         await Promise.all([load(), loadIssues()]);
+         await Promise.all([load(), retryIssues()]);
          setDialogOpen(false);
          setTitle('');
          setDescription('');

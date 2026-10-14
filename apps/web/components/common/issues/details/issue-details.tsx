@@ -13,7 +13,7 @@ import { IssueAttachments } from './issue-attachments';
 import { MobileIssueProperties } from './mobile-issue-properties';
 import { useIssuesStore } from '@/store/issues-store';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityFeed } from './activity-feed';
 import { IssueDescription } from './issue-description';
@@ -26,8 +26,7 @@ import { IssuePropertiesPanel } from './issue-properties-panel';
  */
 export default function IssueDetails() {
    const { orgId, issueId } = useParams<{ orgId: string; issueId: string }>();
-   const router = useRouter();
-   const { issues, teams, loading, error, loadIssues } = useIssuesStore();
+   const { issues, teams, loading, error, loadIssue } = useIssuesStore();
 
    const [initialLoad, setInitialLoad] = useState(true);
 
@@ -36,8 +35,8 @@ export default function IssueDetails() {
    // store itself instead of assuming someone else already did.
    useEffect(() => {
       setInitialLoad(true);
-      void loadIssues().finally(() => setInitialLoad(false));
-   }, [loadIssues, orgId]);
+      void loadIssue(issueId).finally(() => setInitialLoad(false));
+   }, [loadIssue, orgId, issueId]);
 
    const issue = useMemo(
       () => issues.find((candidate) => candidate.identifier === issueId),
@@ -50,27 +49,18 @@ export default function IssueDetails() {
    );
 
    const team = teams.find((candidate) => candidate.id === issue?.teamId);
-   const listHref = useRef(`/${orgId ?? 'lndev-ui'}/my-issues`);
+   const listHref = useRef(`/${orgId ?? ''}/my-issues`);
    useEffect(() => {
       if (team) listHref.current = `/${orgId}/team/${team.identifier}/all`;
    }, [orgId, team]);
 
-   // Deleting the issue drops it from the store. Leaving a "not found" page
-   // behind reads as a failure, so return to the list it was opened from —
-   // but only while the rest of the list is intact, otherwise a failed reload
-   // would navigate away on its own.
-   const seen = useRef(false);
-   useEffect(() => {
-      if (issue) {
-         seen.current = true;
-         return;
-      }
-      if (seen.current && issues.length > 0) router.replace(listHref.current);
-   }, [issue, issues.length, router]);
-
    if (error)
       return (
-         <QueryState title="Could not load issue" message={error} onRetry={() => loadIssues()} />
+         <QueryState
+            title="Could not load issue"
+            message={error}
+            onRetry={() => loadIssue(issueId)}
+         />
       );
 
    if (!issue || !detail) {

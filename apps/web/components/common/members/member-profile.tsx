@@ -1,6 +1,8 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useIssueQuery } from '@/features/issues/use-issue-query';
+import { IssuePagination } from '@/features/issues/issue-pagination';
+import { useMemo } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { parseAsString, useQueryState } from 'nuqs';
@@ -29,15 +31,16 @@ export default function MemberProfile({
    profile: MemberProfileData;
 }) {
    const { orgId } = useParams<{ orgId: string }>();
-   const { issues, statuses, loading, error, loadIssues } = useIssuesStore();
+   const { issues, statuses, error } = useIssuesStore();
    const { filters } = useFilterStore();
    const [tab] = useQueryState('tab', parseAsString.withDefault('assigned'));
    const { isSearchOpen, searchQuery } = useSearchStore();
    const { viewType } = useViewStore();
    const { openPanel } = useRightPanelStore();
-   useEffect(() => {
-      void loadIssues();
-   }, [loadIssues]);
+   const queryState = useIssueQuery(
+      undefined,
+      tab === 'created' ? { creatorId: member.id } : { assigneeId: member.id }
+   );
    const scoped = useMemo(
       () => scopeMemberIssues(issues, member.id, tab),
       [issues, member.id, tab]
@@ -46,6 +49,7 @@ export default function MemberProfile({
    return (
       <VStack height="100%" gap={0}>
          <IssueFilterBar />
+         <IssuePagination />
          <HStack height="100%" gap={0} align="stretch">
             <VStack width="100%" isScrollable>
                {isSearchOpen && searchQuery.trim() ? (
@@ -56,9 +60,9 @@ export default function MemberProfile({
                      totalIssues={scoped}
                      statuses={statuses}
                      isViewTypeGrid={viewType === 'grid'}
-                     loading={loading}
+                     loading={queryState.loading}
                      error={error}
-                     onRetry={loadIssues}
+                     onRetry={queryState.retry}
                   />
                )}
             </VStack>

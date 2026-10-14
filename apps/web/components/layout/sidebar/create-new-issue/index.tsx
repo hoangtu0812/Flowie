@@ -72,7 +72,7 @@ const normalise = (value: string) => value.trim().toLowerCase();
 export function CreateNewIssue() {
    const [createMore, setCreateMore] = useState<boolean>(false);
    const { isOpen, defaultStatus, openModal, closeModal } = useCreateIssueStore();
-   const { issues, loadIssues } = useIssuesStore();
+   const { issues, retryIssues } = useIssuesStore();
    const params = useParams<{ teamId?: string | string[]; projectId?: string | string[] }>();
    const teamIdentifier = Array.isArray(params.teamId) ? params.teamId[0] : params.teamId;
    const projectIdFromRoute = Array.isArray(params.projectId)
@@ -238,7 +238,7 @@ export function CreateNewIssue() {
             } | null;
             throw new Error(payload?.message ?? 'Could not create issue.');
          }
-         await loadIssues(context.team.identifier);
+         await retryIssues();
          toast.success('Issue created');
          if (!createMore) closeModal();
          setAddIssueForm(createDefaultData());

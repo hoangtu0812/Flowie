@@ -1,5 +1,7 @@
 'use client';
 
+import { useIssueQuery } from '@/features/issues/use-issue-query';
+import { IssuePagination } from '@/features/issues/issue-pagination';
 import { BugReport } from '@/features/issues/bug-report';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Issue } from '@/mock-data/issues';
@@ -13,7 +15,7 @@ import { useRightPanelStore } from '@/store/right-panel-store';
 import { useSearchStore } from '@/store/search-store';
 import { useViewStore } from '@/store/view-store';
 import { useParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { GroupedIssuesView } from './grouped-issues-view';
 import { InsightsPanel } from './insights-panel';
 import { SearchIssues } from './search-issues';
@@ -31,24 +33,14 @@ export default function AllIssues({ categories }: AllIssuesProps) {
    const { viewType } = useViewStore();
    const { filters } = useFilterStore();
    const showSubIssues = useDisplaySettingsStore((state) => state.showSubIssues);
-   const { issues, statuses: workflowStatuses, loading, error, loadIssues } = useIssuesStore();
+   const { issues, statuses: workflowStatuses, error } = useIssuesStore();
    const { openPanel } = useRightPanelStore();
    const params = useParams<{ teamId?: string | string[] }>();
    const teamIdentifier = Array.isArray(params.teamId) ? params.teamId[0] : params.teamId;
-   const [isInitialLoad, setIsInitialLoad] = useState(true);
+   const queryState = useIssueQuery(teamIdentifier, { categories });
 
    const isSearching = isSearchOpen && searchQuery.trim() !== '';
    const isViewTypeGrid = viewType === 'grid';
-
-   useEffect(() => {
-      let active = true;
-      void loadIssues(teamIdentifier).finally(() => {
-         if (active) setIsInitialLoad(false);
-      });
-      return () => {
-         active = false;
-      };
-   }, [loadIssues, teamIdentifier]);
 
    const statuses = useMemo<Status[]>(() => {
       const liveStatuses = workflowStatuses.length
@@ -86,6 +78,7 @@ export default function AllIssues({ categories }: AllIssuesProps) {
    return (
       <VStack width="100%" height="100%" className="overflow-hidden">
          <IssueFilterBar />
+         <IssuePagination />
          <BugReport teamReference={teamIdentifier} />
          <HStack gap={0} className="flex-1 min-h-0 w-full overflow-hidden">
             <VStack className="flex-1 min-w-0 h-full overflow-hidden">
@@ -95,8 +88,8 @@ export default function AllIssues({ categories }: AllIssuesProps) {
                   statuses={statuses}
                   isViewTypeGrid={isViewTypeGrid}
                   error={error}
-                  onRetry={() => loadIssues(teamIdentifier)}
-                  loading={loading || isInitialLoad}
+                  onRetry={queryState.retry}
+                  loading={queryState.loading}
                />
             </VStack>
 

@@ -9,18 +9,20 @@ import type { Issue } from '@/types/issues';
 import { useSearchStore } from '@/store/search-store';
 import { IssueLine } from './issue-line';
 import { useIssuesStore } from '@/store/issues-store';
+import { IssuePagination } from '@/features/issues/issue-pagination';
+import { LoadingState } from '@/components/common/loading-state';
 import { QueryState } from '@/components/common/query-state';
-import { useParams } from 'next/navigation';
 
 export function SearchIssues({ issues }: { issues: Issue[] }) {
    const { searchQuery, isSearchOpen } = useSearchStore();
-   const { error, loadIssues } = useIssuesStore();
-   const { teamId } = useParams<{ teamId?: string }>();
+   const { error, retryIssues, loading } = useIssuesStore();
    const results = useMemo(() => searchIssueCollection(issues, searchQuery), [issues, searchQuery]);
    if (!isSearchOpen || !searchQuery.trim()) return null;
-   if (error) return <QueryState message={error} onRetry={() => loadIssues(teamId)} />;
+   if (loading) return <LoadingState label="Searching issues…" />;
+   if (error) return <QueryState message={error} onRetry={retryIssues} />;
    return (
       <DesignSurface>
+         <IssuePagination />
          <VStack gap={2} paddingBlock={4}>
             <Heading level={2}>Results ({results.length})</Heading>
             {results.length ? (

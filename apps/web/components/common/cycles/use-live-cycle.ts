@@ -3,7 +3,6 @@
 import { loadJoinedWorkspaceTeams, WorkspaceTeam } from '@/components/common/teams/team-types';
 import { authenticatedFetch } from '@/lib/workspaces';
 import { Cycle } from '@/types/cycles';
-import { useIssuesStore } from '@/store/issues-store';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
@@ -46,7 +45,6 @@ const mapCycle = (cycle: ApiCycle, team: WorkspaceTeam): Cycle => {
 /** Loads the active/upcoming cycle and the matching real issue collection. */
 export function useLiveCycle(cycleView: LiveCycleView) {
    const { teamId } = useParams<{ teamId: string }>();
-   const { loadIssues } = useIssuesStore();
    const [team, setTeam] = useState<WorkspaceTeam>();
    const [cycle, setCycle] = useState<Cycle>();
    const [loading, setLoading] = useState(true);
@@ -62,7 +60,6 @@ export function useLiveCycle(cycleView: LiveCycleView) {
                   item.id === teamId || item.identifier.toLowerCase() === teamId.toLowerCase()
             );
             if (!currentTeam) throw new Error('Team not found.');
-            await loadIssues(currentTeam.identifier);
             const status = cycleView === 'active' ? 'ACTIVE' : 'UPCOMING';
             const response = await authenticatedFetch(
                `${api}/cycles?${new URLSearchParams({ workspaceId, teamId: currentTeam.id, status }).toString()}`
@@ -85,7 +82,7 @@ export function useLiveCycle(cycleView: LiveCycleView) {
       return () => {
          active = false;
       };
-   }, [cycleView, loadIssues, teamId]);
+   }, [cycleView, teamId]);
 
    return { team, cycle, loading };
 }

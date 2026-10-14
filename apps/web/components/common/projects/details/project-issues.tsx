@@ -1,5 +1,8 @@
 'use client';
 
+import { useIssueQuery } from '@/features/issues/use-issue-query';
+import { IssuePagination } from '@/features/issues/issue-pagination';
+import { QueryState } from '@/components/common/query-state';
 import { LoadingState } from '@/components/common/loading-state';
 import { GroupedIssuesView } from '@/components/common/issues/grouped-issues-view';
 import { applyIssueFilters } from '@/components/common/issues/issue-filter-columns';
@@ -7,8 +10,8 @@ import { IssueFilterBar } from '@/components/common/issues/issue-filter-bar';
 import { useFilterStore } from '@/store/filter-store';
 import { useDisplaySettingsStore } from '@/store/display-settings-store';
 import { useIssuesStore } from '@/store/issues-store';
-import { useEffect, useMemo } from 'react';
-import { toIssueUi, toProjectDetailUi, toProjectUi } from './project-detail-ui-adapter';
+import { useMemo } from 'react';
+import { toProjectDetailUi, toProjectUi } from './project-detail-ui-adapter';
 import { ProjectSidePanel } from './project-side-panel';
 import { useLiveProjectData } from './use-live-project';
 import { AiScheduleDialog } from './ai-schedule-dialog';
@@ -19,7 +22,9 @@ interface ProjectIssuesProps {
 
 /** Project "Issues" tab: the project's issues grouped by status. */
 export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
-   void projectId;
+   const queryState = useIssueQuery(undefined, { projectId });
+   const queryIssues = useIssuesStore((state) => state.issues);
+   const queryError = useIssuesStore((state) => state.error);
    const {
       project: liveProject,
       issues: liveIssues,
@@ -31,12 +36,6 @@ export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
    } = useLiveProjectData();
    const { filters } = useFilterStore();
    const showSubIssues = useDisplaySettingsStore((state) => state.showSubIssues);
-   // Rows here share the issue components, whose assignee picker and cycle
-   // names read the issues store; nothing else on this route populates it.
-   const loadIssues = useIssuesStore((state) => state.loadIssues);
-   useEffect(() => {
-      void loadIssues();
-   }, [loadIssues]);
    const project = useMemo(
       () => (liveProject ? toProjectUi(liveProject, liveIssues) : null),
       [liveProject, liveIssues]
@@ -48,11 +47,12 @@ export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
    const issues = useMemo(
       () =>
          project
-            ? liveIssues
-                 .filter((issue) => showSubIssues || !issue.parentIssueId)
-                 .map((issue) => toIssueUi(issue, project))
+            ? queryIssues.filter(
+                 (issue) =>
+                    issue.project?.id === projectId && (showSubIssues || !issue.parentIssueId)
+              )
             : [],
-      [liveIssues, project, showSubIssues]
+      [queryIssues, project, projectId, showSubIssues]
    );
 
    // Filters (filter bar + click-to-filter from the insights panel) apply
@@ -65,15 +65,12 @@ export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
 
    if (loading) return <LoadingState label="Loading project…" />;
    if (error || !project || !detail)
-      return (
-         <div className="h-full grid place-items-center text-sm text-destructive">
-            {error ?? 'Project not found.'}
-         </div>
-      );
+      return <QueryState message={error ?? 'Project unavailable.'} />;
 
    return (
       <div className="w-full h-full flex flex-col overflow-hidden">
          <IssueFilterBar />
+         <IssuePagination />
          <div className="h-10 shrink-0 border-b px-6 flex items-center justify-end">
             <AiScheduleDialog />
          </div>
@@ -84,6 +81,9 @@ export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
                   totalIssues={issues}
                   statuses={statuses}
                   isViewTypeGrid={false}
+                  loading={queryState.loading}
+                  error={queryError}
+                  onRetry={queryState.retry}
                />
             </div>
             <ProjectSidePanel

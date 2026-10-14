@@ -1,7 +1,7 @@
 'use client';
 
 import { Issue } from '@/mock-data/issues';
-import { authenticatedFetch } from '@/lib/workspaces';
+import { loadCurrentUser } from '@/features/identity/current-user';
 import { parseAsStringLiteral, useQueryState } from 'nuqs';
 import { useEffect, useState } from 'react';
 
@@ -20,19 +20,14 @@ export function useMyIssuesTab() {
    return useQueryState('tab', parseAsStringLiteral(MY_ISSUES_TABS).withDefault('assigned'));
 }
 
-const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
-
 /** Current account identity comes from the durable session, never fixture users. */
 export function useCurrentUserId(): string | undefined {
    const [userId, setUserId] = useState<string>();
 
    useEffect(() => {
       let mounted = true;
-      void authenticatedFetch(`${api}/users/me`)
-         .then(async (response) => {
-            if (!response.ok) return undefined;
-            return ((await response.json()) as { data?: { id?: string } }).data?.id;
-         })
+      void loadCurrentUser()
+         .then((user) => user.id)
          .then((id) => {
             if (mounted) setUserId(id);
          })

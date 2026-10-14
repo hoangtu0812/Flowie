@@ -252,7 +252,7 @@ export function useLiveProject(projectId: string) {
    useEffect(
       () =>
          useIssuesStore.subscribe((state, previous) => {
-            if (state.issues !== previous.issues) reload();
+            if (state.issueMutationEpoch !== previous.issueMutationEpoch) reload();
          }),
       [reload]
    );

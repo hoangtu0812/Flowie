@@ -1,5 +1,7 @@
 'use client';
 
+import { useIssueQuery } from '@/features/issues/use-issue-query';
+import { IssuePagination } from '@/features/issues/issue-pagination';
 import { CycleDetailsPanel } from '@/components/common/cycles/cycle-details-panel';
 import { LoadingState } from '@/components/common/loading-state';
 import { useLiveCycle } from '@/components/common/cycles/use-live-cycle';
@@ -30,9 +32,10 @@ export default function CycleIssues({ cycleView }: CycleIssuesProps) {
    const { isSearchOpen, searchQuery } = useSearchStore();
    const { viewType } = useViewStore();
    const { filters } = useFilterStore();
-   const { issues, statuses } = useIssuesStore();
+   const { issues, statuses, error } = useIssuesStore();
    const { openPanel } = useRightPanelStore();
    const { cycle, loading } = useLiveCycle(cycleView);
+   const queryState = useIssueQuery(undefined, { cycleId: cycle?.id }, Boolean(cycle));
 
    const isSearching = isSearchOpen && searchQuery.trim() !== '';
    const isViewTypeGrid = viewType === 'grid';
@@ -62,6 +65,7 @@ export default function CycleIssues({ cycleView }: CycleIssuesProps) {
    return (
       <div className="w-full h-full flex flex-col overflow-hidden">
          <IssueFilterBar />
+         <IssuePagination />
          <div className="flex-1 min-h-0 w-full flex overflow-hidden">
             <div className="flex-1 min-w-0 h-full overflow-hidden">
                <GroupedIssuesView
@@ -69,6 +73,9 @@ export default function CycleIssues({ cycleView }: CycleIssuesProps) {
                   totalIssues={cycleIssues}
                   statuses={statuses}
                   isViewTypeGrid={isViewTypeGrid}
+                  loading={queryState.loading}
+                  error={error}
+                  onRetry={queryState.retry}
                />
             </div>
 
