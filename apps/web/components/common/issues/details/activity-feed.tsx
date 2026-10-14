@@ -1,15 +1,16 @@
 'use client';
 
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { TextArea } from '@astryxdesign/core/TextArea';
 import { DesignSurface } from '@/components/common/design-surface';
+import { CommentRow } from '@/features/issues/comment-row';
+import { CommentMentions } from '@/features/issues/comment-mentions';
 import { useIssueActivity } from '@/features/issues/use-issue-activity';
 import { useIssuesStore } from '@/store/issues-store';
 import { useImagePaste } from '@/hooks/use-image-paste';
-import { ActivityItem, ContentBlock } from '@/mock-data/issue-details';
+import { ActivityItem } from '@/mock-data/issue-details';
 import { User } from '@/mock-data/users';
 import {
    Ban,
@@ -23,7 +24,6 @@ import {
 } from 'lucide-react';
 import { ReactNode } from 'react';
 import { relativeTime } from '@/lib/time';
-import { ContentBlocks } from './content-blocks';
 
 type Actor = { id: string; name: string; avatarUrl?: string | null } | null;
 type NativeActivity = {
@@ -33,14 +33,6 @@ type NativeActivity = {
    createdAt: string;
    actor: Actor;
 };
-type NativeComment = {
-   id: string;
-   content: string;
-   createdAt: string;
-   author: NonNullable<Actor>;
-   reactions: Array<{ emoji: string; count: number; reacted: boolean }>;
-};
-
 const EVENT_ICONS: Record<string, ReactNode> = {
    created: <PenLine className="size-3.5" />,
    status: <CircleDot className="size-3.5" />,
@@ -81,15 +73,6 @@ const activityItem = (activity: NativeActivity): ActivityItem => ({
    timeAgo: timeAgo(activity.createdAt),
 });
 
-const commentItem = (comment: NativeComment): ActivityItem => ({
-   kind: 'comment',
-   id: comment.id,
-   actor: asUser(comment.author),
-   timeAgo: timeAgo(comment.createdAt),
-   body: [{ type: 'paragraph', text: comment.content }] as ContentBlock[],
-   reactions: comment.reactions.map(({ emoji, count }) => ({ emoji, count })),
-});
-
 function EventRow({ item }: { item: Extract<ActivityItem, { kind: 'event' }> }) {
    return (
       <HStack gap={2} paddingBlock={2}>
@@ -99,27 +82,6 @@ function EventRow({ item }: { item: Extract<ActivityItem, { kind: 'event' }> }) 
          </Text>
          <Text type="supporting">{item.timeAgo}</Text>
       </HStack>
-   );
-}
-
-function CommentRow({ item }: { item: Extract<ActivityItem, { kind: 'comment' }> }) {
-   return (
-      <VStack gap={2} paddingBlock={3}>
-         <HStack gap={2}>
-            <Avatar>
-               <AvatarImage src={item.actor.avatarUrl} alt={item.actor.name} />
-               <AvatarFallback>{item.actor.name[0]}</AvatarFallback>
-            </Avatar>
-            <Text weight="medium">{item.actor.name}</Text>
-            <Text type="supporting">{item.timeAgo}</Text>
-         </HStack>
-         <ContentBlocks blocks={item.body} />
-         {item.reactions?.map((reaction) => (
-            <Text type="supporting" key={reaction.emoji}>
-               {reaction.emoji} {reaction.count}
-            </Text>
-         ))}
-      </VStack>
    );
 }
 
@@ -136,7 +98,7 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
       store.issues.find((candidate) => candidate.id === issueId)
    );
    const updateSubscription = useIssuesStore((store) => store.updateIssueSubscription);
-   const items = [...state.activities.map(activityItem), ...state.comments.map(commentItem)];
+   const items = state.activities.map(activityItem);
    return (
       <DesignSurface>
          <VStack
@@ -173,12 +135,57 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
                   <Button label="Retry activity" onClick={state.retry} />
                </VStack>
             )}
-            {items.map((item) =>
-               item.kind === 'event' ? (
-                  <EventRow key={item.id} item={item} />
-               ) : (
-                  <CommentRow key={item.id} item={item} />
-               )
+            {items.map((item) => (
+               <EventRow key={item.id} item={item as Extract<ActivityItem, { kind: 'event' }>} />
+            ))}
+            {state.workspaceId &&
+               state.comments
+                  .filter(
+                     (comment) =>
+                        !comment.parentCommentId ||
+                        !state.comments.some((parent) => parent.id === comment.parentCommentId)
+                  )
+                  .map((comment) => (
+                     <VStack key={comment.id} gap={2}>
+                        {comment.parentCommentId && (
+                           <Text type="supporting">Reply to a deleted comment</Text>
+                        )}
+                        <CommentRow
+                           comment={comment}
+                           workspaceId={state.workspaceId!}
+                           onChange={state.changeComment}
+                           onDelete={() => state.deleteComment(comment.id)}
+                           onReply={() => state.setReplyTo(comment)}
+                        />
+                        {state.comments
+                           .filter((reply) => reply.parentCommentId === comment.id)
+                           .map((reply) => (
+                              <VStack key={reply.id} paddingInlineStart={4}>
+                                 <CommentRow
+                                    comment={reply}
+                                    workspaceId={state.workspaceId!}
+                                    onChange={state.changeComment}
+                                    onDelete={() => state.deleteComment(reply.id)}
+                                    onReply={() => state.setReplyTo(comment)}
+                                 />
+                              </VStack>
+                           ))}
+                     </VStack>
+                  ))}
+            {state.replyTo && (
+               <HStack gap={2}>
+                  <Text>Replying to {state.replyTo.author.name}</Text>
+                  <Button label="Cancel reply" onClick={() => state.setReplyTo(undefined)} />
+               </HStack>
+            )}
+            {state.workspaceId && (
+               <CommentMentions
+                  workspaceId={state.workspaceId}
+                  issueId={issueId}
+                  selected={state.mentionIds}
+                  onChange={state.setMentionIds}
+                  disabled={state.sending}
+               />
             )}
             <TextArea
                label="Comment"

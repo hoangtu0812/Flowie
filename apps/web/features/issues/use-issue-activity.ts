@@ -16,6 +16,9 @@ export function useIssueActivity(issueId: string) {
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [draft, setDraft] = useState('');
    const [loading, setLoading] = useState(true);
+   const [replyTo, setReplyTo] = useState<IssueComment>();
+   const [mentionIds, setMentionIds] = useState<string[]>([]);
+   const request = useRef<{ signature: string; key: string } | undefined>(undefined);
    const [sending, setSending] = useState(false);
    const [error, setError] = useState<string>();
    const [submitError, setSubmitError] = useState<string>();
@@ -28,6 +31,9 @@ export function useIssueActivity(issueId: string) {
       setActivities([]);
       setComments([]);
       setDraft('');
+      setReplyTo(undefined);
+      setMentionIds([]);
+      request.current = undefined;
       setSubmitError(undefined);
    }, [issueId]);
 
@@ -67,8 +73,23 @@ export function useIssueActivity(issueId: string) {
             setSending(true);
             setSubmitError(undefined);
             try {
-               const comment = await postIssueComment(workspaceId, issueId, content);
+               const signature = JSON.stringify({
+                  issueId,
+                  content,
+                  parent: replyTo?.id,
+                  mentionIds,
+               });
+               if (request.current?.signature !== signature)
+                  request.current = { signature, key: crypto.randomUUID() };
+               const comment = await postIssueComment(workspaceId, issueId, content, {
+                  parentCommentId: replyTo?.id,
+                  mentionIds,
+                  clientRequestKey: request.current.key,
+               });
                if (current.current === issueId) {
+                  request.current = undefined;
+                  setReplyTo(undefined);
+                  setMentionIds([]);
                   setComments((previous) => [...previous, comment]);
                   setDraft((latest) => (latest === draft ? '' : latest));
                }
@@ -83,11 +104,18 @@ export function useIssueActivity(issueId: string) {
                setSending(false);
             }
          }),
-      [draft, issueId, workspaceId]
+      [draft, issueId, workspaceId, replyTo, mentionIds]
    );
 
    return {
       activities,
+      replyTo,
+      setReplyTo,
+      mentionIds,
+      setMentionIds,
+      changeComment: (comment: IssueComment) =>
+         setComments((items) => items.map((item) => (item.id === comment.id ? comment : item))),
+      deleteComment: (id: string) => setComments((items) => items.filter((item) => item.id !== id)),
       comments,
       workspaceId,
       draft,

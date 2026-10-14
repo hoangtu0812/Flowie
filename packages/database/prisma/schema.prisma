@@ -1725,17 +1725,18 @@ model Document {
 }
 
 model Comment {
-  version         Int       @default(1)
-  id              String    @id @default(cuid())
-  issueId         String    @map("issue_id")
-  authorId        String    @map("author_id")
-  parentCommentId String?   @map("parent_comment_id")
-  mentionIds      Json      @default("[]") @map("mention_ids")
-  content         String
-  body            Json?
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-  deletedAt       DateTime? @map("deleted_at")
+  clientRequestKey String?   @map("client_request_key")
+  version          Int       @default(1)
+  id               String    @id @default(cuid())
+  issueId          String    @map("issue_id")
+  authorId         String    @map("author_id")
+  parentCommentId  String?   @map("parent_comment_id")
+  mentionIds       Json      @default("[]") @map("mention_ids")
+  content          String
+  body             Json?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  deletedAt        DateTime? @map("deleted_at")
 
   issue         Issue             @relation(fields: [issueId], references: [id], onDelete: Cascade)
   author        User              @relation(fields: [authorId], references: [id], onDelete: Restrict)
@@ -1744,6 +1745,7 @@ model Comment {
   replies       Comment[]         @relation("CommentReplies")
   revisions     CommentRevision[]
 
+  @@unique([authorId, clientRequestKey])
   @@index([issueId, createdAt])
   @@index([parentCommentId])
   @@map("comments")

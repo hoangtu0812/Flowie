@@ -32,16 +32,26 @@ async def create_comment(
         parent = await _comment(db, payload.parentCommentId, payload.workspaceId, user['id'])
         if parent['issueId'] != payload.issueId or parent['parentCommentId']:
             raise ApiError(400, 'Replies must reference a top-level comment on this issue.', 'Bad Request')
+    if payload.clientRequestKey:
+        await db.execute(text('SELECT pg_advisory_xact_lock(hashtextextended(:key,0))'),
+            {'key': user['id'] + ':' + payload.clientRequestKey})
+        previous = (await db.execute(text('SELECT * FROM comments WHERE author_id=:author AND client_request_key=:key'),
+            {'author': user['id'], 'key': payload.clientRequestKey})).mappings().first()
+        if previous:
+            if previous['issue_id'] != payload.issueId or previous['content'] != content or previous['body'] != body or previous['parent_comment_id'] != payload.parentCommentId or previous['mention_ids'] != mention_ids or previous['deleted_at']:
+                raise ApiError(409, 'The comment request key was already used for different content.', 'Conflict')
+            return {'data': await _comment(db, previous['id'], payload.workspaceId, user['id'])}
     comment_id, now = _cuid(), _utcnow()
     await db.execute(
         text(
-            """INSERT INTO comments (id, issue_id, author_id, parent_comment_id, mention_ids, content, body, created_at, updated_at)
-               VALUES (:id, :issue_id, :author_id, :parent, CAST(:mentions AS jsonb), :content, CAST(:body AS jsonb), :now, :now)"""
+            """INSERT INTO comments (id, issue_id, author_id, client_request_key, parent_comment_id, mention_ids, content, body, created_at, updated_at)
+               VALUES (:id, :issue_id, :author_id, :request_key, :parent, CAST(:mentions AS jsonb), :content, CAST(:body AS jsonb), :now, :now)"""
         ),
         {
             "id": comment_id,
             "issue_id": payload.issueId,
             "author_id": user["id"],
+            "request_key": payload.clientRequestKey,
             "parent": payload.parentCommentId, "mentions": json.dumps(mention_ids),
             "content": content,
             "body": json.dumps(body),

@@ -51,6 +51,7 @@ class CommentInput(BaseModel):
 
 
 class CreateCommentInput(CommentInput):
+    clientRequestKey: str | None = Field(default=None, min_length=8, max_length=128)
     parentCommentId: str | None = Field(default=None, min_length=1)
     workspaceId: str = Field(min_length=1)
     issueId: str = Field(min_length=1)

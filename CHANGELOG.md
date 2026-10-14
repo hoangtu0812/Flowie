@@ -12,6 +12,11 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Activity now offers author edit/delete, reply threads, searchable mentions,
+  comment revision history and attachment pickers. Web comment retries reuse a
+  request key to avoid duplicate posts after a lost response; apply the committed
+  deduplication migration before starting the updated API.
+
 - Comment contracts now support one-level replies and access-checked mentions,
   preserve edit revisions and reject stale author edits. Mention notifications
   are staged durably. The comment history/thread Prisma migration is required.

@@ -337,6 +337,39 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertEqual(error.exception.status_code, 409)
 
+    async def test_web_comment_retry_is_deduplicated_after_commit(self):
+        from app.modules.work_items.comments import create_comment
+        from app.modules.work_items.contracts import CreateCommentInput
+        from app.db.mutations import commit_mutation
+
+        payload = CreateCommentInput(
+            workspaceId=self.workspace,
+            issueId=self.issue["id"],
+            content="Web retry",
+            clientRequestKey="web-retry-test-key",
+        )
+
+        async def submit():
+            async with self.factory() as db:
+                return await commit_mutation(
+                    db, lambda: create_comment(payload, self.user, db)
+                )
+
+        first, second = await asyncio.gather(submit(), submit())
+        self.assertEqual(first["data"]["id"], second["data"]["id"])
+        async with self.factory() as db:
+            self.assertEqual(
+                (
+                    await db.execute(
+                        text(
+                            "SELECT count(*) FROM comments WHERE issue_id=:id AND content=:content"
+                        ),
+                        {"id": self.issue["id"], "content": "Web retry"},
+                    )
+                ).scalar_one(),
+                1,
+            )
+
     async def test_comment_replies_mentions_and_revision_history(self):
         parent = (
             await self.call(

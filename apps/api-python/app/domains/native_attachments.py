@@ -44,11 +44,15 @@ async def _entity_team_id(db: AsyncSession, workspace_id: str, entity_type: Enti
     return row['team_id']
 
 
-async def _authorize_entity(db: AsyncSession, workspace_id: str, entity_type: EntityType, entity_id: str, user_id: str) -> None:
+async def _authorize_entity(db: AsyncSession, workspace_id: str, entity_type: EntityType, entity_id: str, user_id: str, *, writing: bool = False) -> None:
     await _workspace_access(db, workspace_id, user_id)
     team_id = await _entity_team_id(db, workspace_id, entity_type, entity_id)
     if team_id:
         await _team_access(db, workspace_id, team_id, user_id)
+    if writing and entity_type == 'comment':
+        author = (await db.execute(text('SELECT author_id FROM comments WHERE id=:id'), {'id': entity_id})).scalar_one()
+        if author != user_id:
+            raise ApiError(403, 'Only the comment author can attach files to it.', 'Forbidden')
 
 
 def _present(row: Any) -> dict[str, Any]:
@@ -66,7 +70,7 @@ async def list_attachments(workspaceId: str = Query(min_length=1), entityType: E
 @router.post('')
 @public_router.post('')
 async def create_attachment(request: Request, workspaceId: str = Form(), entityType: EntityType = Form(), entityId: str = Form(), file: UploadFile = File(), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _authorize_entity(db, workspaceId, entityType, entityId, user['id'])
+    await _authorize_entity(db, workspaceId, entityType, entityId, user['id'], writing=True)
     body = await file.read(MAX_ATTACHMENT_BYTES + 1)
     if not body:
         raise ApiError(400, 'A file is required.', 'Bad Request')
