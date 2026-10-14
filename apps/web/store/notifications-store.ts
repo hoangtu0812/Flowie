@@ -3,6 +3,7 @@ import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import { useIssuesStore } from '@/store/issues-store';
 import { toast } from 'sonner';
 import { ApiRequestError, responseData } from '@/lib/http';
+import { showDesktopNotification } from '@/features/notifications/desktop';
 import { loadCurrentUser } from '@/features/identity/current-user';
 import {
    notificationType,
@@ -23,6 +24,9 @@ const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 interface NotificationsState {
    notifications: InboxItem[];
    selectedNotification: InboxItem | undefined;
+   includeSnoozed: boolean;
+   setIncludeSnoozed: (enabled: boolean) => void;
+   snooze: (id: string, minutes: number | null) => Promise<void>;
    loading: boolean;
    error?: string;
    scope?: string;
@@ -76,6 +80,19 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => {
    return {
       notifications: [],
       selectedNotification: undefined,
+      includeSnoozed: false,
+      setIncludeSnoozed: (includeSnoozed) => {
+         set({ includeSnoozed });
+         void get().loadNotifications();
+      },
+      snooze: async (id, minutes) => {
+         await request(`/${id}/snooze`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ minutes }),
+         });
+         await get().loadNotifications();
+      },
       loading: false,
       loadNotifications: async () => {
          const epoch = ++notificationLoadEpoch;
@@ -92,7 +109,7 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => {
                set({ notifications: [], selectedNotification: undefined, scope });
             const native = await responseData<NativeNotification[]>(
                await authenticatedFetch(
-                  `${api}/notifications?${new URLSearchParams({ workspaceId: workspace.id })}`
+                  `${api}/notifications?${new URLSearchParams({ workspaceId: workspace.id, includeSnoozed: String(get().includeSnoozed) })}`
                )
             );
             if (epoch !== notificationLoadEpoch || get().scope !== scope) return;
@@ -115,6 +132,7 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => {
                   user: { ...fallbackUser(), ...actor } as User,
                   timestamp: readableTime(notification.createdAt),
                   notificationCreatedAt: notification.createdAt,
+                  snoozedUntil: notification.snoozedUntil,
                   entityType: notification.entityType,
                   entityId: notification.entityId,
                   entityPath:
@@ -150,6 +168,7 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => {
          let reconnectTimer: number | undefined;
          let heartbeatTimer: number | undefined;
          let attempt = 0;
+         let connected = false;
 
          const connect = () => {
             const stream = new URL(`${api}/notifications/stream`);
@@ -158,6 +177,8 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => {
             socket = new WebSocket(stream);
             socket.onopen = () => {
                attempt = 0;
+               if (connected) void get().loadNotifications();
+               connected = true;
                heartbeatTimer = window.setInterval(() => {
                   if (socket?.readyState === WebSocket.OPEN) socket.send('ping');
                }, 25_000);
@@ -165,8 +186,15 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => {
             socket.onmessage = (event) => {
                if (event.data === 'pong') return;
                try {
-                  const payload = JSON.parse(event.data) as { type?: string };
-                  if (payload.type === 'notification.created') void get().loadNotifications();
+                  const payload = JSON.parse(event.data) as {
+                     type?: string;
+                     notification?: { id: string; userId: string; readAt?: string | null };
+                  };
+                  if (payload.type === 'notification.created') {
+                     void get().loadNotifications();
+                     if (payload.notification)
+                        void showDesktopNotification(workspaceId, payload.notification);
+                  }
                } catch {
                   // Ignore malformed data; the durable REST list remains the source of truth.
                }

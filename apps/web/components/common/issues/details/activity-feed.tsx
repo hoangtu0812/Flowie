@@ -1,4 +1,5 @@
 'use client';
+import { useLocale } from '@/features/shared/use-locale';
 
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
@@ -87,6 +88,7 @@ function EventRow({ item }: { item: Extract<ActivityItem, { kind: 'event' }> }) 
 }
 
 export function ActivityFeed({ issueId }: { issueId: string }) {
+   const { t } = useLocale();
    const state = useIssueActivity(issueId);
    const submitMode = useUiPreferencesStore((store) => store.commentSubmitMode);
    const { onPaste, uploading } = useImagePaste({
@@ -122,9 +124,9 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
             }}
          >
             <HStack justify="between" gap={2}>
-               <Heading level={2}>Activity</Heading>
+               <Heading level={2}>{t('activity')}</Heading>
                <Button
-                  label={issue?.isSubscribed ? 'Unsubscribe' : 'Subscribe'}
+                  label={issue?.isSubscribed ? t('unsubscribe') : t('subscribe')}
                   size="sm"
                   variant="ghost"
                   isDisabled={!issue}
@@ -133,11 +135,11 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
                   }}
                />
             </HStack>
-            {state.loading && <Text role="status">Loading activity…</Text>}
+            {state.loading && <Text role="status">{t('loadingActivity')}</Text>}
             {state.error && (
                <VStack gap={2}>
                   <Text role="alert">{state.error}</Text>
-                  <Button label="Retry activity" onClick={state.retry} />
+                  <Button label={t('retryActivity')} onClick={state.retry} />
                </VStack>
             )}
             {items.map((item) => (
@@ -145,7 +147,7 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
             ))}
             {state.activityCursor && (
                <Button
-                  label="Load older activity"
+                  label={t('olderActivity')}
                   isLoading={state.paging}
                   clickAction={() => state.loadMore('activities')}
                />
@@ -160,7 +162,7 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
                   .map((comment) => (
                      <VStack key={comment.id} gap={2}>
                         {comment.parentCommentId && (
-                           <Text type="supporting">Reply to a deleted comment</Text>
+                           <Text type="supporting">{t('deletedCommentReply')}</Text>
                         )}
                         <CommentRow
                            comment={comment}
@@ -186,7 +188,7 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
                            state.comments.filter((item) => item.parentCommentId === comment.id)
                               .length && (
                            <Button
-                              label={`Load more replies to ${comment.author.name}`}
+                              label={`${t('moreReplies')} ${comment.author.name}`}
                               isLoading={state.paging}
                               clickAction={() => state.loadMore('comments', comment.id)}
                            />
@@ -195,15 +197,17 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
                   ))}
             {state.commentCursor && (
                <Button
-                  label="Load older comments"
+                  label={t('olderComments')}
                   isLoading={state.paging}
                   clickAction={() => state.loadMore('comments')}
                />
             )}
             {state.replyTo && (
                <HStack gap={2}>
-                  <Text>Replying to {state.replyTo.author.name}</Text>
-                  <Button label="Cancel reply" onClick={() => state.setReplyTo(undefined)} />
+                  <Text>
+                     {t('replyingTo')} {state.replyTo.author.name}
+                  </Text>
+                  <Button label={t('cancelReply')} onClick={() => state.setReplyTo(undefined)} />
                </HStack>
             )}
             {state.workspaceId && (
@@ -217,21 +221,21 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
             )}
             <VStack data-comment-composer gap={2}>
                <TextArea
-                  label="Comment"
+                  label={t('comment')}
                   value={state.draft}
                   onChange={state.setDraft}
                   onPaste={onPaste}
                   rows={3}
-                  placeholder="Leave a comment..."
+                  placeholder={t('commentPlaceholder')}
                   isDisabled={state.sending || !state.workspaceId}
                />
                {state.submitError && <Text role="alert">{state.submitError}</Text>}
                <HStack justify="between" gap={2}>
                   <Text type="supporting">
-                     {uploading ? 'Uploading image…' : 'Paste a screenshot to attach it'}
+                     {uploading ? t('uploadingImage') : t('pasteScreenshot')}
                   </Text>
                   <Button
-                     label="Comment"
+                     label={t('comment')}
                      size="sm"
                      variant="primary"
                      clickAction={state.submit}

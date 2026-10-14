@@ -26,6 +26,7 @@ export interface InboxItem extends Issue {
    entityId: string;
    entityPath?: string;
    notificationCreatedAt?: string;
+   snoozedUntil?: string | null;
 }
 
 export type NativeNotification = {
@@ -35,6 +36,7 @@ export type NativeNotification = {
    entityId: string;
    data?: Record<string, unknown>;
    readAt?: string | null;
+   snoozedUntil?: string | null;
    createdAt: string;
 };
 

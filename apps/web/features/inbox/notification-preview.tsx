@@ -1,4 +1,5 @@
 'use client';
+import { useLocale } from '@/features/shared/use-locale';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -11,6 +12,7 @@ import { QueryState } from '@/components/common/query-state';
 import { LoadingState } from '@/components/common/loading-state';
 import { IssueContent } from '@/features/issues/issue-content';
 import { useIssuesStore } from '@/store/issues-store';
+import { useNotificationsStore } from '@/store/notifications-store';
 import type { InboxItem } from '@/store/notifications-store';
 
 export function NotificationPreview({
@@ -20,8 +22,11 @@ export function NotificationPreview({
    notification?: InboxItem;
    onMarkAsRead?: (id: string) => unknown;
 }) {
+   const { t, tag } = useLocale();
    const { orgId } = useParams<{ orgId: string }>();
    const { loadIssue, issues, error } = useIssuesStore();
+   const snooze = useNotificationsStore((state) => state.snooze);
+   const [actionError, setActionError] = useState<string>();
    const [pending, setPending] = useState(false);
    const reference = notification?.entityType === 'issue' ? notification.entityId : undefined;
    useEffect(() => {
@@ -42,32 +47,54 @@ export function NotificationPreview({
       <DesignSurface>
          <VStack height="100%" gap={0}>
             {!notification ? (
-               <EmptyState
-                  title="Select a notification"
-                  description="Choose an item to read its context and take action."
-               />
+               <EmptyState title={t('selectNotification')} description={t('notificationHelp')} />
             ) : (
                <>
                   <HStack padding={3} gap={3} justify="between">
                      <Text>
                         {notification.user.name} · {notification.timestamp}
                      </Text>
-                     <HStack gap={2}>
+                     <HStack gap={2} wrap="wrap">
+                        <Button
+                           label={notification.snoozedUntil ? t('unsnooze') : t('snoozeHour')}
+                           clickAction={async () => {
+                              try {
+                                 await snooze(
+                                    notification.id,
+                                    notification.snoozedUntil ? null : 60
+                                 );
+                                 setActionError(undefined);
+                              } catch (reason) {
+                                 setActionError(
+                                    reason instanceof Error
+                                       ? reason.message
+                                       : 'Could not snooze notification.'
+                                 );
+                              }
+                           }}
+                        />
                         {!notification.read && onMarkAsRead && (
                            <Button
-                              label="Mark as read"
+                              label={t('markRead')}
                               onClick={() => {
                                  void onMarkAsRead(notification.id);
                               }}
                            />
                         )}
-                        {safePath && <Link href={`/${orgId}${safePath}`}>Open</Link>}
+                        {safePath && <Link href={`/${orgId}${safePath}`}>{t('open')}</Link>}
                      </HStack>
                   </HStack>
+                  {actionError && <Text role="alert">{actionError}</Text>}
+                  {notification.snoozedUntil && (
+                     <Text>
+                        {t('snoozedUntil')}{' '}
+                        {new Date(notification.snoozedUntil).toLocaleString(tag)}
+                     </Text>
+                  )}
                   <Text>{notification.content}</Text>
                   {reference ? (
                      pending ? (
-                        <LoadingState label="Loading issue…" />
+                        <LoadingState label={t('loadingIssue')} />
                      ) : error ? (
                         <QueryState message={error} onRetry={() => loadIssue(reference)} />
                      ) : issue ? (
@@ -76,10 +103,7 @@ export function NotificationPreview({
                         <QueryState message="The issue is unavailable or outside your access." />
                      )
                   ) : (
-                     <EmptyState
-                        title={notification.title}
-                        description="Open the linked item to view its current details."
-                     />
+                     <EmptyState title={notification.title} description={t('openLinkedItem')} />
                   )}
                </>
             )}

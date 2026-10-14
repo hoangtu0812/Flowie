@@ -1,4 +1,5 @@
 'use client';
+import { useLocale } from '@/features/shared/use-locale';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@astryxdesign/core/Button';
@@ -12,6 +13,7 @@ import { useParams } from 'next/navigation';
 type SearchItem = { kind: string; id: string; title: string; subtitle: string; path: string };
 
 export function WorkspaceSearch({ initialQuery = '' }: { initialQuery?: string }) {
+   const { t } = useLocale();
    const { orgId } = useParams<{ orgId: string }>();
    const [query, setQuery] = useState(initialQuery),
       [kind, setKind] = useState('');
@@ -82,23 +84,21 @@ export function WorkspaceSearch({ initialQuery = '' }: { initialQuery?: string }
    return (
       <DesignSurface>
          <VStack gap={4} padding={6} isScrollable height="100%">
-            <Heading level={1}>Search workspace</Heading>
-            <TextInput
-               label="Search issues, documents, projects and members"
-               value={query}
-               onChange={setQuery}
-            />
+            <Heading level={1}>{t('searchWorkspace')}</Heading>
+            <TextInput label={t('searchLabel')} value={query} onChange={setQuery} />
             <HStack gap={2} wrap="wrap">
                {['', 'issue', 'document', 'project', 'member'].map((value) => (
                   <Button
                      key={value}
-                     label={value || 'All'}
+                     label={t(
+                        value ? (value as 'issue' | 'document' | 'project' | 'member') : 'all'
+                     )}
                      aria-pressed={kind === value}
                      onClick={() => setKind(value)}
                   />
                ))}
             </HStack>
-            {loading && <Text role="status">Searching…</Text>}
+            {loading && <Text role="status">{t('searching')}</Text>}
             {error && (
                <>
                   <Text role="alert">{error}</Text>
@@ -106,19 +106,19 @@ export function WorkspaceSearch({ initialQuery = '' }: { initialQuery?: string }
                </>
             )}
             {!loading && !error && query.trim() && items.length === 0 && (
-               <Text>No accessible results.</Text>
+               <Text>{t('noSearchResults')}</Text>
             )}
             {items.map((item) => (
                <VStack key={`${item.kind}:${item.id}`} gap={1}>
                   <Link href={`/${orgId}${item.path}`}>{item.title}</Link>
                   <Text type="supporting">
-                     {item.kind} · {item.subtitle}
+                     {t(item.kind as 'issue' | 'document' | 'project' | 'member')} · {item.subtitle}
                   </Text>
                </VStack>
             ))}
             {cursor && (
                <Button
-                  label="Load more results"
+                  label={t('moreSearchResults')}
                   isLoading={loading}
                   onClick={() => {
                      if (!busy.current) void load(cursor);
