@@ -22,6 +22,7 @@ import {
    Unlock,
 } from 'lucide-react';
 import { ReactNode } from 'react';
+import { relativeTime } from '@/lib/time';
 import { ContentBlocks } from './content-blocks';
 
 type Actor = { id: string; name: string; avatarUrl?: string | null } | null;
@@ -64,15 +65,7 @@ const asUser = (actor: Actor): User => ({
    timezone: 'UTC',
 });
 
-const timeAgo = (value: string) => {
-   const elapsed = Math.max(0, Date.now() - new Date(value).getTime());
-   const minutes = Math.floor(elapsed / 60_000);
-   if (minutes < 1) return 'just now';
-   if (minutes < 60) return `${minutes}m ago`;
-   const hours = Math.floor(minutes / 60);
-   if (hours < 24) return `${hours}h ago`;
-   return `${Math.floor(hours / 24)}d ago`;
-};
+const timeAgo = relativeTime;
 
 const eventText = (type: string) => {
    const [, action = type] = type.split('.', 2);

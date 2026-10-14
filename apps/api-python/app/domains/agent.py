@@ -16,7 +16,8 @@ from zoneinfo import ZoneInfo
 import httpx
 import mammoth
 from cryptography.fernet import Fernet, InvalidToken
-from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
+from fastapi import Depends, File, Form, Query, Request, UploadFile
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from fastapi.responses import StreamingResponse
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, ConfigDict, Field, ValidationError

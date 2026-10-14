@@ -6,7 +6,8 @@ from re import sub
 from secrets import token_urlsafe
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
+from fastapi import Depends, File, Form, Query, Request, UploadFile
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession

@@ -4,7 +4,8 @@ import json
 import re
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import Depends, Query, Request
+from ...core.utc_responses import UtcAPIRouter as APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text

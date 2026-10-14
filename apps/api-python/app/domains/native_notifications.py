@@ -4,7 +4,8 @@ import json
 from typing import Any
 
 import jwt
-from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from fastapi import Depends, Query, WebSocket, WebSocketDisconnect
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession

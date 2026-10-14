@@ -39,6 +39,9 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- API timestamps now carry their UTC offset, and document/activity/member
+  displays interpret legacy UTC timestamps consistently instead of showing
+  newly created records as hours old.
 - Member profiles now load real workspace members and count created issues by
   their persisted author. Issue search keeps the active view and filters;
   failed issue loads expose Retry instead of showing a misleading empty list.

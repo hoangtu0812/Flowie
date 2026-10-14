@@ -5,7 +5,8 @@ from mimetypes import guess_type
 from secrets import token_urlsafe
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
+from fastapi import Depends, File, Query, Request, UploadFile
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text

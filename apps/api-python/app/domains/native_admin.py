@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import Depends, Request
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession

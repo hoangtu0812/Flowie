@@ -17,7 +17,8 @@ import jwt
 import httpx
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import Depends, Query, Request
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text

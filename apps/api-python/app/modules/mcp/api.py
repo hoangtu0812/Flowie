@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import Depends, Query, Request
+from ...core.utc_responses import UtcAPIRouter as APIRouter
 from sqlalchemy import text
 
 from ...db.session import get_session

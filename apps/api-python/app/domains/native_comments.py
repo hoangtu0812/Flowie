@@ -5,7 +5,8 @@ from ..modules.work_items.comment_repository import _text_from_body as _text_fro
 import json
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import Depends, Query
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession

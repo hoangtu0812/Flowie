@@ -1,5 +1,7 @@
 'use client';
 
+import { parseInstant } from '@/lib/time';
+
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
    DropdownMenu,
@@ -12,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { useMembersData } from '@/features/members/members-data';
 import { cn } from '@/lib/utils';
 import type { User } from '@/types/users';
-import { format, formatDistanceToNowStrict, isValid, parseISO } from 'date-fns';
+import { format, formatDistanceToNowStrict, isValid } from 'date-fns';
 import { MoreHorizontal, SquareUser } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -31,13 +33,15 @@ const displayNameOf = (user: User) =>
 
 /** Linear-style joined date: current year → "Mar 17", otherwise "Oct 2023". */
 const joinedLabel = (iso: string) => {
-   const date = parseISO(iso);
-   return date.getFullYear() === 2026 ? format(date, 'MMM d') : format(date, 'MMM yyyy');
+   const date = parseInstant(iso);
+   return date.getFullYear() === new Date().getFullYear()
+      ? format(date, 'MMM d')
+      : format(date, 'MMM yyyy');
 };
 
 const lastSeenLabel = (lastSeenAt?: string | null) => {
    if (!lastSeenAt) return 'Never';
-   const date = parseISO(lastSeenAt);
+   const date = parseInstant(lastSeenAt);
    return isValid(date) ? formatDistanceToNowStrict(date, { addSuffix: true }) : 'Unknown';
 };
 
