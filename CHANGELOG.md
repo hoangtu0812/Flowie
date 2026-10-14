@@ -12,6 +12,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- A modular local Codex runner binds work to an approved project/repository, keeps Flowie tokens out of child processes, renews leases, stops on lease loss and records locally executed test results. Inspect is read-only; publishing requires an explicit local option and existing SCM credentials.
+
 - Workspace administrators can review AI tool errors, latency and run leases, and set atomic workspace/tool minute budgets across connections. Apply the operations migration before API startup. GitHub App verification checks the current PR head and observed CI separately from agent-reported evidence; it does not complete issues or replace review.
 
 - Inbox snooze and notification channel controls persist through the API, show real SMTP availability and request desktop permission only after a user action. Inbox, workspace search and collaboration controls honor English/Vietnamese account preferences.
