@@ -43,6 +43,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Document and issue previews now render CommonMark/GFM code blocks, tables and
+  ordered/task lists without raw HTML. Description editing has a named field,
+  guarded saves and platform-aware shortcuts; mobile browser zoom is enabled.
+
 - Inbox notification preferences now save to the workspace preference API, show
   failures and survive reload. Integration configuration opens its settings;
   unsupported snoozing is clearly disabled.

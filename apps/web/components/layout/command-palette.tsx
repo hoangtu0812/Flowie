@@ -41,6 +41,7 @@ import {
 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useModifierKey } from '@/features/shared/use-modifier-key';
 import { toast } from 'sonner';
 
 type PaletteRoute =
@@ -67,6 +68,7 @@ const formatCycleDateRange = (cycle: { startDate?: string | null; endDate?: stri
 
 /** Small keyboard hint chips on the right of a command row. */
 function Keys({ keys }: { keys: string[] }) {
+   const modifier = useModifierKey();
    return (
       <span className="ml-auto flex items-center gap-1">
          {keys.map((key, index) => (
@@ -74,7 +76,7 @@ function Keys({ keys }: { keys: string[] }) {
                key={index}
                className="min-w-5 h-5 px-1 inline-flex items-center justify-center rounded border bg-muted/50 text-[11px] text-muted-foreground font-sans"
             >
-               {key}
+               {key === '⌘' ? modifier : key === '⌥' && modifier === 'Ctrl' ? 'Alt' : key}
             </kbd>
          ))}
       </span>
