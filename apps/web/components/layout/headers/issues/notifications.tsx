@@ -1,96 +1,69 @@
 'use client';
-
 import { Bell } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { useParams } from 'next/navigation';
+import Link from 'next/link';
+import { Button as Trigger } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Checkbox } from '@/components/ui/checkbox';
-import { useState } from 'react';
-import { RiSlackLine } from '@remixicon/react';
+import { Button } from '@astryxdesign/core/Button';
+import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
+import { VStack } from '@astryxdesign/core/Layout';
+import { Heading, Text } from '@astryxdesign/core/Text';
+import { DesignSurface } from '@/components/common/design-surface';
+import {
+   useNotificationPreferencesStore,
+   type NotificationPreferences,
+} from '@/store/notification-preferences-store';
 
+const options: { key: keyof NotificationPreferences; label: string }[] = [
+   { key: 'teamIssueAdded', label: 'An issue is added to the team' },
+   { key: 'issueCompleted', label: 'An issue is completed or canceled' },
+   { key: 'issueAddedToTriage', label: 'An issue is added to triage' },
+];
 export default function Notifications() {
-   const [notifications, setNotifications] = useState({
-      teamIssueAdded: false,
-      issueCompleted: false,
-      issueAddedToTriage: false,
-   });
-
-   const handleCheckboxChange = (key: keyof typeof notifications) => {
-      setNotifications((prev) => ({
-         ...prev,
-         [key]: !prev[key],
-      }));
-   };
-
+   const state = useNotificationPreferencesStore();
+   const { orgId } = useParams<{ orgId: string }>();
    return (
-      <Popover>
+      <Popover
+         onOpenChange={(open) => {
+            if (open) void state.loadPreferences();
+         }}
+      >
          <PopoverTrigger asChild>
-            <Button
-               variant="ghost"
-               size="icon"
-               className="h-8 w-8 relative"
-               aria-label="Notifications"
-            >
-               <Bell className="h-4 w-4" />
-            </Button>
+            <Trigger variant="ghost" size="icon" aria-label="Notification preferences">
+               <Bell className="size-4" />
+            </Trigger>
          </PopoverTrigger>
          <PopoverContent className="w-80 p-0" align="end">
-            <div className="px-4 pt-3 pb-3">
-               <h3 className="text-sm font-medium mb-3">Inbox notifications</h3>
-
-               <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                     <label
-                        htmlFor="team-issue-added"
-                        className="text-xs text-muted-foreground cursor-pointer flex-1"
-                     >
-                        An issue is added to the team
-                     </label>
-                     <Checkbox
-                        id="team-issue-added"
-                        checked={notifications.teamIssueAdded}
-                        onCheckedChange={() => handleCheckboxChange('teamIssueAdded')}
+            <DesignSurface>
+               <VStack padding={4} gap={3}>
+                  <Heading level={3}>Inbox notifications</Heading>
+                  {state.loading && <Text role="status">Loading preferences…</Text>}
+                  {options.map(({ key, label }) => (
+                     <CheckboxInput
+                        key={key}
+                        label={label}
+                        value={state.preferences[key]}
+                        isDisabled={state.loading || state.saving || !state.workspaceId}
+                        onChange={(enabled) => void state.updatePreference(key, enabled)}
                      />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                     <label
-                        htmlFor="issue-completed"
-                        className="text-xs text-muted-foreground cursor-pointer flex-1"
-                     >
-                        An issue is marked completed or canceled
-                     </label>
-                     <Checkbox
-                        id="issue-completed"
-                        checked={notifications.issueCompleted}
-                        onCheckedChange={() => handleCheckboxChange('issueCompleted')}
-                     />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                     <label
-                        htmlFor="issue-triage"
-                        className="text-xs text-muted-foreground cursor-pointer flex-1"
-                     >
-                        An issue is added to the triage queue
-                     </label>
-                     <Checkbox
-                        id="issue-triage"
-                        checked={notifications.issueAddedToTriage}
-                        onCheckedChange={() => handleCheckboxChange('issueAddedToTriage')}
-                     />
-                  </div>
-               </div>
-            </div>
-
-            <div className="border-t py-2 px-4 flex items-center justify-between">
-               <div className="flex items-center gap-2">
-                  <RiSlackLine className="size-4" />
-                  <span className="text-xs font-medium">Slack notifications</span>
-               </div>
-               <Button size="xs" variant="outline">
-                  Configure
-               </Button>
-            </div>
+                  ))}
+                  {state.saving && <Text role="status">Saving…</Text>}
+                  {state.error && (
+                     <>
+                        <Text role="alert">{state.error}</Text>
+                        <Button
+                           label="Reload preferences"
+                           onClick={() => void state.loadPreferences()}
+                        />
+                     </>
+                  )}
+                  <Button
+                     label="Configure integrations"
+                     as={Link}
+                     href={`/${orgId}/settings/integrations`}
+                  />
+               </VStack>
+            </DesignSurface>
          </PopoverContent>
       </Popover>
    );

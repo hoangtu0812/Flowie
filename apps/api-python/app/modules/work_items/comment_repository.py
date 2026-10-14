@@ -72,6 +72,8 @@ async def _comment(
     return {
         "id": row["id"],
         "issueId": row["issue_id"],
+        "parentCommentId": row["parent_comment_id"],
+        "mentionIds": row["mention_ids"],
         "authorId": row["author_id"],
         "content": row["content"],
         "body": body,

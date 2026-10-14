@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Any
-from fastapi import APIRouter, Depends, Query
+from fastapi import Depends, Query
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..db.session import get_session

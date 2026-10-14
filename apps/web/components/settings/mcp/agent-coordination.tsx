@@ -7,6 +7,7 @@ import { Button } from '@astryxdesign/core/Button';
 import { List, ListItem } from '@astryxdesign/core/List';
 import {
    loadAgentRuns,
+   loadRunEvidence,
    loadAgentRunSummary,
    loadAgentAutomations,
    cancelAgentRun,
@@ -28,6 +29,7 @@ export function AgentCoordination({
    const [automations, setAutomations] = useState<AgentAutomation[]>([]);
    const [error, setError] = useState<string>();
    const [busy, setBusy] = useState(false);
+   const [evidence, setEvidence] = useState<Awaited<ReturnType<typeof loadRunEvidence>>>();
 
    const refresh = useCallback(async () => {
       const [nextRuns, nextSummary, nextAutomations] = await Promise.all([
@@ -92,18 +94,52 @@ export function AgentCoordination({
                   label={`${run.issueIdentifier} · ${run.issueTitle}`}
                   description={run.state.replaceAll('_', ' ')}
                   endContent={
-                     canManage && ['PENDING', 'RUNNING'].includes(run.state) ? (
+                     <HStack gap={2}>
                         <Button
-                           label="Cancel run"
+                           label="View evidence"
                            size="sm"
-                           isDisabled={busy}
-                           onClick={() => void perform(() => cancelAgentRun(workspaceId, run.id))}
+                           clickAction={async () => {
+                              try {
+                                 setError(undefined);
+                                 setEvidence(await loadRunEvidence(workspaceId, run.id));
+                              } catch (reason) {
+                                 setError(
+                                    reason instanceof Error
+                                       ? reason.message
+                                       : 'Could not load evidence.'
+                                 );
+                              }
+                           }}
                         />
-                     ) : undefined
+                        {(canManage || run.ownedByCurrentUser) &&
+                        ['PENDING', 'RUNNING'].includes(run.state) ? (
+                           <Button
+                              label="Cancel run"
+                              size="sm"
+                              isDisabled={busy}
+                              onClick={() =>
+                                 void perform(() => cancelAgentRun(workspaceId, run.id))
+                              }
+                           />
+                        ) : undefined}
+                     </HStack>
                   }
                />
             ))}
          </List>
+         {evidence && (
+            <VStack gap={2}>
+               <Heading level={4}>Run evidence · {evidence.state}</Heading>
+               <pre className="overflow-auto rounded bg-muted p-3">
+                  <code>
+                     {evidence.result
+                        ? JSON.stringify(evidence.result, null, 2)
+                        : 'The agent has not reported a result yet.'}
+                  </code>
+               </pre>
+               <Button label="Close evidence" onClick={() => setEvidence(undefined)} />
+            </VStack>
+         )}
          {!runs.length && <Text color="secondary">No coding agent runs yet.</Text>}
          {canManage && (
             <List hasDividers header={<Heading level={4}>Event automations</Heading>}>

@@ -1,3 +1,4 @@
+import { BugFieldsForm, emptyBug, type BugFields } from '@/features/issues/bug-fields';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTrigger } from '@/components/ui/dialog';
 import {
@@ -71,7 +72,7 @@ const normalise = (value: string) => value.trim().toLowerCase();
 export function CreateNewIssue() {
    const [createMore, setCreateMore] = useState<boolean>(false);
    const { isOpen, defaultStatus, openModal, closeModal } = useCreateIssueStore();
-   const { issues, loadIssues } = useIssuesStore();
+   const { issues, retryIssues } = useIssuesStore();
    const params = useParams<{ teamId?: string | string[]; projectId?: string | string[] }>();
    const teamIdentifier = Array.isArray(params.teamId) ? params.teamId[0] : params.teamId;
    const projectIdFromRoute = Array.isArray(params.projectId)
@@ -79,6 +80,7 @@ export function CreateNewIssue() {
       : params.projectId;
    const [context, setContext] = useState<IssueContext>();
    const [creating, setCreating] = useState(false);
+   const [bug, setBug] = useState<BugFields>(emptyBug);
 
    const createDefaultData = useCallback(() => {
       return {
@@ -218,6 +220,7 @@ export function CreateNewIssue() {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
+               ...bug,
                workspaceId: context.workspaceId,
                teamId: context.team.id,
                title: addIssueForm.title.trim(),
@@ -235,10 +238,11 @@ export function CreateNewIssue() {
             } | null;
             throw new Error(payload?.message ?? 'Could not create issue.');
          }
-         await loadIssues(context.team.identifier);
+         await retryIssues();
          toast.success('Issue created');
          if (!createMore) closeModal();
          setAddIssueForm(createDefaultData());
+         setBug(emptyBug);
       } catch (error) {
          toast.error(error instanceof Error ? error.message : 'Could not create issue.');
       } finally {
@@ -255,11 +259,16 @@ export function CreateNewIssue() {
          }}
       >
          <DialogTrigger asChild>
-            <Button className="size-8 shrink-0" variant="secondary" size="icon">
+            <Button
+               aria-label="Create issue"
+               className="size-8 shrink-0"
+               variant="secondary"
+               size="icon"
+            >
                <RiEditLine />
             </Button>
          </DialogTrigger>
-         <DialogContent className="w-full sm:max-w-[750px] p-0 shadow-xl top-[30%]">
+         <DialogContent className="w-full sm:max-w-3xl p-0 shadow-xl max-h-svh overflow-y-auto">
             <DialogHeader>
                <DialogTitle>
                   <div className="flex items-center px-4 pt-4 gap-2">
@@ -289,8 +298,10 @@ export function CreateNewIssue() {
             </DialogHeader>
 
             <div className="px-4 pb-0 space-y-3 w-full">
+               <BugFieldsForm value={bug} onChange={setBug} disabled={creating} />
                <Input
                   className="border-none w-full shadow-none outline-none text-2xl font-medium px-0 h-auto focus-visible:ring-0 overflow-hidden text-ellipsis whitespace-normal break-words"
+                  aria-label="Issue title"
                   placeholder="Issue title"
                   value={addIssueForm.title}
                   disabled={creating}
@@ -299,6 +310,7 @@ export function CreateNewIssue() {
 
                <Textarea
                   className="border-none w-full shadow-none outline-none resize-none px-0 min-h-16 focus-visible:ring-0 break-words whitespace-normal overflow-wrap"
+                  aria-label="Issue description"
                   placeholder="Add description..."
                   value={addIssueForm.description}
                   disabled={creating}

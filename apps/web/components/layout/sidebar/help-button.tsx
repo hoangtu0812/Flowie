@@ -1,109 +1,136 @@
 'use client';
-
-import * as React from 'react';
-import { ExternalLink, HelpCircle, Keyboard, Search } from 'lucide-react';
-
-import {
-   DropdownMenu,
-   DropdownMenuContent,
-   DropdownMenuItem,
-   DropdownMenuLabel,
-   DropdownMenuSeparator,
-   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { APP_HIGHLIGHTS, CHANGELOG_URL, releaseLabel } from '@/lib/release';
+import { useEffect, useState } from 'react';
+import { HelpCircle } from 'lucide-react';
 import Link from 'next/link';
-import { RiGithubFill, RiGlobalLine, RiRocket2Fill } from '@remixicon/react';
-
+import { useParams } from 'next/navigation';
+import { Button } from '@astryxdesign/core/Button';
+import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
+import { VStack } from '@astryxdesign/core/Layout';
+import { Heading, Text } from '@astryxdesign/core/Text';
+import { TextInput } from '@astryxdesign/core/TextInput';
+import { List, ListItem } from '@astryxdesign/core/List';
+import { DesignSurface } from '@/components/common/design-surface';
+import { useModifierKey } from '@/features/shared/use-modifier-key';
+import { CHANGELOG_URL, releaseLabel } from '@/lib/release';
+const TOPICS = [
+   {
+      title: 'Document editing and history',
+      text: 'Done and Close wait for the latest save. Conflicts retain your draft; compare and reconcile before retrying. Revision history can restore reviewed content.',
+      path: '/teams',
+   },
+   {
+      title: 'Tasks and structured bugs',
+      text: 'Choose Task or Bug when creating an issue. Bug fields include severity, environment and reproduction details. Issue filters support type/severity.',
+      path: '/my-issues',
+   },
+   {
+      title: 'AI client connection',
+      text: 'Create a project grant in Integrations, copy the client configuration and set the token in your local environment. Verify discovery and scope before using real work.',
+      path: '/settings/integrations',
+   },
+   {
+      title: 'Comment collaboration',
+      text: 'Reply to a top-level comment, select members to notify, edit your own comments and inspect revision history. Attachments are available on saved comments.',
+      path: '/my-issues',
+   },
+   {
+      title: 'Password recovery',
+      text: 'Request a private email reset link. Recovery requires configured SMTP; a reset revokes old sessions and API/MCP tokens.',
+      path: '/auth/forgot-password',
+      global: true,
+   },
+   {
+      title: 'Interface preferences',
+      text: 'Choose locale, font size and comment submission keys. Preferences are stored in this browser.',
+      path: '/settings/preferences',
+   },
+];
 export function HelpButton() {
+   const [open, setOpen] = useState(false);
+   const [search, setSearch] = useState('');
+   const { orgId } = useParams<{ orgId: string }>();
+   const modifier = useModifierKey();
+   useEffect(() => {
+      const handler = (event: KeyboardEvent) => {
+         if (
+            (event.ctrlKey || event.metaKey) &&
+            event.key === '/' &&
+            !(
+               event.target instanceof HTMLElement &&
+               event.target.closest('input,textarea,[contenteditable=true]')
+            )
+         ) {
+            event.preventDefault();
+            setOpen((value) => !value);
+         }
+      };
+      window.addEventListener('keydown', handler);
+      return () => window.removeEventListener('keydown', handler);
+   }, []);
+   const topics = TOPICS.filter((topic) =>
+      `${topic.title} ${topic.text}`.toLowerCase().includes(search.toLowerCase())
+   );
    return (
-      <DropdownMenu>
-         <DropdownMenuTrigger asChild>
-            <Button size="icon" variant="outline">
-               <HelpCircle className="size-4" />
-            </Button>
-         </DropdownMenuTrigger>
-         <DropdownMenuContent align="end" className="w-60">
-            <div className="p-2">
-               <div className="relative">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input type="search" placeholder="Search for help..." className="pl-8" />
-               </div>
-            </div>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>Shortcuts</DropdownMenuLabel>
-            <DropdownMenuItem>
-               <Keyboard className="mr-2 h-4 w-4" />
-               <span>Keyboard shortcuts</span>
-               <span className="ml-auto text-xs text-muted-foreground">⌘/</span>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>Flowie links</DropdownMenuLabel>
-            <DropdownMenuItem asChild>
-               <Link href="https://hoangtu.io.vn" target="_blank">
-                  <RiGlobalLine className="mr-2 h-4 w-4" />
-                  <span>Hoang Tu</span>
-                  <ExternalLink className="ml-auto h-3 w-3 text-muted-foreground" />
+      <DesignSurface>
+         <Button
+            label="Help and keyboard shortcuts"
+            isIconOnly
+            icon={<HelpCircle />}
+            variant="ghost"
+            onClick={() => setOpen(true)}
+         />
+         <Dialog isOpen={open} onOpenChange={setOpen} purpose="info" padding={4}>
+            <VStack gap={4}>
+               <DialogHeader title="Flowie help" onOpenChange={setOpen} />
+               <TextInput label="Search help topics" value={search} onChange={setSearch} />
+               <List hasDividers>
+                  {topics.map((topic) => (
+                     <ListItem
+                        key={topic.title}
+                        label={topic.title}
+                        description={topic.text}
+                        endContent={
+                           <Button
+                              label={`Open ${topic.title}`}
+                              as={Link}
+                              href={topic.global ? topic.path : `/${orgId}${topic.path}`}
+                              onClick={() => setOpen(false)}
+                           />
+                        }
+                     />
+                  ))}
+               </List>
+               {!topics.length && <Text>No help topics match this search.</Text>}
+               <Heading level={2}>Keyboard shortcuts</Heading>
+               <List>
+                  <ListItem label={`${modifier}+K`} description="Open the command palette" />
+                  <ListItem label={`${modifier}+B`} description="Toggle the sidebar" />
+                  <ListItem label={`${modifier}+/`} description="Open Help outside text inputs" />
+                  <ListItem
+                     label={`${modifier}+Enter`}
+                     description="Save an issue description; submit comments with the default preference"
+                  />
+                  <ListItem
+                     label="Shift+Enter"
+                     description="Insert a new line with Enter comment submission enabled"
+                  />
+                  <ListItem
+                     label="Escape"
+                     description="Close a dialog or cancel description editing"
+                  />
+               </List>
+               <Link href={CHANGELOG_URL} target="_blank" rel="noreferrer">
+                  Flowie {releaseLabel()} · Changelog
                </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-               <Link href="https://flowie.loopstudio.io.vn" target="_blank">
-                  <RiRocket2Fill className="mr-2 h-4 w-4" />
-                  <span>Flowie</span>
-                  <ExternalLink className="ml-auto h-3 w-3 text-muted-foreground" />
-               </Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-               <Link href="https://github.com/hoangtu0812/Flowie/issues" target="_blank">
-                  <RiGithubFill className="mr-2 h-4 w-4" />
-                  <span>Report an issue</span>
-               </Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>What&apos;s new</DropdownMenuLabel>
-            {/* Straight from the top release section of CHANGELOG.md. */}
-            {APP_HIGHLIGHTS.map((highlight) => (
-               <DropdownMenuItem key={highlight} asChild>
-                  <Link href={CHANGELOG_URL} target="_blank" className="flex items-start">
-                     <div className="mr-2 mt-1.5 flex h-4 w-1.5 shrink-0 items-start justify-center">
-                        <div className="h-1.5 w-1.5 rounded-full bg-blue-500"></div>
-                     </div>
-                     <span className="line-clamp-2 whitespace-normal">{highlight}</span>
-                  </Link>
-               </DropdownMenuItem>
-            ))}
-            <DropdownMenuItem asChild>
                <Link
-                  href="https://github.com/hoangtu0812/Flowie"
+                  href="https://github.com/hoangtu0812/Flowie/issues"
                   target="_blank"
-                  className="flex items-center"
+                  rel="noreferrer"
                >
-                  <div className="mr-2 flex h-4 w-4 items-center justify-center">
-                     <div className="h-1.5 w-1.5 rounded-full bg-transparent"></div>
-                  </div>
-                  <span>GitHub</span>
-                  <ExternalLink className="ml-2 h-3 w-3 text-muted-foreground" />
+                  Report an issue
                </Link>
-            </DropdownMenuItem>
-            {releaseLabel() && (
-               <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                     <Link
-                        href={CHANGELOG_URL}
-                        target="_blank"
-                        className="flex items-center text-xs text-muted-foreground"
-                     >
-                        <span>Flowie {releaseLabel()}</span>
-                        <ExternalLink className="ml-auto h-3 w-3" />
-                     </Link>
-                  </DropdownMenuItem>
-               </>
-            )}
-         </DropdownMenuContent>
-      </DropdownMenu>
+            </VStack>
+         </Dialog>
+      </DesignSurface>
    );
 }

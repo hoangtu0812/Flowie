@@ -11,6 +11,7 @@ export type AgentAutomation = {
 };
 export type AgentRun = {
    id: string;
+   ownedByCurrentUser: boolean;
    issueId: string;
    issueIdentifier: string;
    issueTitle: string;
@@ -33,6 +34,11 @@ async function request<T>(workspaceId: string, path: string, init?: RequestInit)
 export async function loadAgentRuns(workspaceId: string) {
    return request<{ items: AgentRun[]; nextCursor: string | null }>(workspaceId, 'runs');
 }
+export const loadRunEvidence = (workspaceId: string, runId: string) =>
+   request<{ id: string; state: string; result: unknown }>(
+      workspaceId,
+      `runs/${encodeURIComponent(runId)}`
+   );
 
 export async function loadAgentRunSummary(workspaceId: string) {
    return request<AgentRunSummary[]>(workspaceId, 'summary');

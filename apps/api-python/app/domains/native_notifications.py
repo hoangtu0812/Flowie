@@ -4,7 +4,8 @@ import json
 from typing import Any
 
 import jwt
-from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from fastapi import Depends, Query, WebSocket, WebSocketDisconnect
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -57,7 +58,7 @@ async def notification_stream(websocket: WebSocket, workspaceId: str = Query(min
     factory = websocket.app.state.session_factory
     async with factory() as db:
         user = await db.execute(
-            text("SELECT id FROM users WHERE id = :id AND status = 'ACTIVE'"), {'id': user_id}
+            text("SELECT id FROM users WHERE id = :id AND status = 'ACTIVE' AND auth_version=:version"), {'id': user_id, 'version': payload.get('ver', 0)}
         )
         if user.scalar_one_or_none() is None:
             await websocket.close(code=4401)

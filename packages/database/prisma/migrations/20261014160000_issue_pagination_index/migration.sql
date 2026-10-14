@@ -1,0 +1,1 @@
+CREATE INDEX issues_workspace_id_archived_at_created_at_id_idx ON issues(workspace_id,archived_at,created_at,id);

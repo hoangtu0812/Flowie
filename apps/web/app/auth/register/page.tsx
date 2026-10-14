@@ -4,6 +4,9 @@ import Link from 'next/link';
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
+import { useLocale } from '@/features/shared/use-locale';
+import { VStack } from '@astryxdesign/core/Layout';
+import { Text } from '@astryxdesign/core/Text';
 import { AuthCard } from '@/components/auth/auth-card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +23,7 @@ type VerificationPayload = {
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 export default function RegisterPage() {
+   const { t } = useLocale();
    const router = useRouter();
    const [error, setError] = useState<string | null>(null);
    const [isSubmitting, setIsSubmitting] = useState(false);
@@ -39,7 +43,7 @@ export default function RegisterPage() {
       const password = String(formData.get('password') ?? '');
       const confirmPassword = String(formData.get('confirmPassword') ?? '');
       if (password !== confirmPassword) {
-         setError('Mật khẩu xác nhận chưa khớp.');
+         setError(t('passwordMismatch'));
          return;
       }
 
@@ -63,7 +67,7 @@ export default function RegisterPage() {
          const payload = (await response.json()) as VerificationPayload;
          setVerificationEmail(payload.data.email);
       } catch (caughtError) {
-         setError(caughtError instanceof Error ? caughtError.message : 'Không thể tạo tài khoản.');
+         setError(caughtError instanceof Error ? caughtError.message : t('registerFailed'));
       } finally {
          setIsSubmitting(false);
       }
@@ -82,7 +86,7 @@ export default function RegisterPage() {
             body: JSON.stringify({ email: verificationEmail, code: verificationCode }),
          });
          if (!response.ok) {
-            throw new Error((await responseError(response)) ?? 'Không thể xác thực mã.');
+            throw new Error((await responseError(response)) ?? t('verifyFailed'));
          }
          const payload = (await response.json()) as AuthPayload;
          router.replace(
@@ -91,7 +95,7 @@ export default function RegisterPage() {
                : `/${payload.data.workspace?.slug ?? 'flowie'}/teams`
          );
       } catch (caughtError) {
-         setError(caughtError instanceof Error ? caughtError.message : 'Không thể xác thực mã.');
+         setError(caughtError instanceof Error ? caughtError.message : t('verifyFailed'));
       } finally {
          setIsSubmitting(false);
       }
@@ -99,11 +103,11 @@ export default function RegisterPage() {
 
    return (
       <AuthCard
-         title={verificationEmail ? 'Xác thực đăng ký' : 'Tạo workspace mới'}
+         title={verificationEmail ? t('verifyRegistration') : t('newWorkspace')}
          description={
             verificationEmail
-               ? `Nhập mã 6 chữ số do quản trị viên cung cấp từ kênh Discord Flowie Register cho ${verificationEmail}.`
-               : 'Bắt đầu quản lý công việc cùng đội ngũ của bạn.'
+               ? `${t('registrationCodeHelp')} ${verificationEmail}.`
+               : t('registrationIntro')
          }
          loading={isSubmitting}
          footer={
@@ -117,13 +121,13 @@ export default function RegisterPage() {
                      setError(null);
                   }}
                >
-                  Dùng thông tin đăng ký khác
+                  {t('useOtherDetails')}
                </button>
             ) : (
                <>
-                  Đã có tài khoản?{' '}
+                  {t('hasAccount')}{' '}
                   <Link href="/auth/login" className="font-medium text-foreground underline">
-                     Đăng nhập
+                     {t('signIn')}
                   </Link>
                </>
             )
@@ -131,8 +135,8 @@ export default function RegisterPage() {
       >
          {verificationEmail ? (
             <form className="space-y-4" onSubmit={verifyCode}>
-               <div className="space-y-2">
-                  <Label htmlFor="verification-code">Mã xác thực</Label>
+               <VStack gap={2}>
+                  <Label htmlFor="verification-code">{t('verificationCode')}</Label>
                   <Input
                      id="verification-code"
                      value={verificationCode}
@@ -146,25 +150,21 @@ export default function RegisterPage() {
                      required
                      autoFocus
                   />
-                  <p className="text-sm text-muted-foreground">Mã có hiệu lực trong 10 phút.</p>
-               </div>
-               {error && (
-                  <p role="alert" className="text-sm text-destructive">
-                     {error}
-                  </p>
-               )}
+                  <Text type="supporting">{t('codeExpiry')}</Text>
+               </VStack>
+               {error && <Text role="alert">{error}</Text>}
                <Button
                   className="w-full"
                   type="submit"
                   disabled={isSubmitting || verificationCode.length !== 6}
                >
-                  {isSubmitting ? 'Đang xác thực…' : 'Xác thực và tạo tài khoản'}
+                  {isSubmitting ? t('verifying') : t('verifyAndCreate')}
                </Button>
             </form>
          ) : (
             <form className="space-y-4" onSubmit={onSubmit}>
-               <div className="space-y-2">
-                  <Label htmlFor="name">Họ và tên</Label>
+               <VStack gap={2}>
+                  <Label htmlFor="name">{t('name')}</Label>
                   <Input
                      id="name"
                      name="name"
@@ -173,13 +173,13 @@ export default function RegisterPage() {
                      minLength={2}
                      maxLength={120}
                   />
-               </div>
-               <div className="space-y-2">
+               </VStack>
+               <VStack gap={2}>
                   <Label htmlFor="email">Email</Label>
                   <Input id="email" name="email" type="email" autoComplete="email" required />
-               </div>
-               <div className="space-y-2">
-                  <Label htmlFor="password">Mật khẩu</Label>
+               </VStack>
+               <VStack gap={2}>
+                  <Label htmlFor="password">{t('password')}</Label>
                   <Input
                      id="password"
                      name="password"
@@ -188,9 +188,9 @@ export default function RegisterPage() {
                      required
                      minLength={12}
                   />
-               </div>
-               <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">Xác nhận mật khẩu</Label>
+               </VStack>
+               <VStack gap={2}>
+                  <Label htmlFor="confirmPassword">{t('confirmPassword')}</Label>
                   <Input
                      id="confirmPassword"
                      name="confirmPassword"
@@ -199,14 +199,10 @@ export default function RegisterPage() {
                      required
                      minLength={12}
                   />
-               </div>
-               {error && (
-                  <p role="alert" className="text-sm text-destructive">
-                     {error}
-                  </p>
-               )}
+               </VStack>
+               {error && <Text role="alert">{error}</Text>}
                <Button className="w-full" type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? 'Đang gửi mã xác thực…' : 'Tiếp tục'}
+                  {isSubmitting ? t('sendingCode') : t('continue')}
                </Button>
             </form>
          )}

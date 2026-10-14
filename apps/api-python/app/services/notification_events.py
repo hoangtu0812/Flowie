@@ -60,6 +60,17 @@ class NotificationHub:
         await websocket.accept()
         self._connections[(workspace_id, user_id)].add(websocket)
 
+    async def close_user(self, user_id: str) -> None:
+        for (workspace, member), sockets in tuple(self._connections.items()):
+            if member != user_id:
+                continue
+            for socket in tuple(sockets):
+                self.disconnect(workspace, member, socket)
+                try:
+                    await socket.close(code=4401)
+                except Exception:
+                    pass
+
     def disconnect(self, workspace_id: str, user_id: str, websocket: WebSocket) -> None:
         key = (workspace_id, user_id)
         self._connections[key].discard(websocket)

@@ -31,7 +31,7 @@ import {
    SelectTrigger,
    SelectValue,
 } from '@/components/ui/select';
-import { formatDistanceToNowStrict, parseISO } from 'date-fns';
+import { relativeTime } from '@/lib/time';
 import {
    ChevronRight,
    Download,
@@ -51,14 +51,7 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { type LiveDocument, useLiveTeam } from './use-live-team';
 
-const timeAgo = (date: string) =>
-   formatDistanceToNowStrict(parseISO(date), { addSuffix: true })
-      .replace(' minutes', 'min')
-      .replace(' hours', 'h')
-      .replace(' days', 'd')
-      .replace(' weeks', 'w')
-      .replace(' months', 'mo')
-      .replace(' years', 'y');
+const timeAgo = relativeTime;
 
 /** Documents tab backed by FastAPI/PostgreSQL, retaining Circle’s grouped list layout. */
 export default function TeamDocuments() {
@@ -74,6 +67,7 @@ export default function TeamDocuments() {
       updateFolder,
       updateDocument,
       deleteDocument,
+      reload,
    } = useLiveTeam(teamId);
    const [documentOpen, setDocumentOpen] = useState(false);
    const [folderOpen, setFolderOpen] = useState(false);
@@ -472,7 +466,12 @@ export default function TeamDocuments() {
          <MarkdownDocumentEditor
             document={editorDocument}
             open={Boolean(editorDocument)}
-            onOpenChange={(open) => !open && setEditorDocument(undefined)}
+            onOpenChange={(open) => {
+               if (!open) {
+                  setEditorDocument(undefined);
+                  reload();
+               }
+            }}
             onUpdate={async (documentId, draft) => updateDocument(documentId, draft)}
          />
          <Dialog

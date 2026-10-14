@@ -5,7 +5,8 @@ from ..modules.work_items.comment_repository import _text_from_body as _text_fro
 import json
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import Depends, Query
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,6 +38,21 @@ public_router = APIRouter(prefix='/api/v1/comments', tags=['comments'])
 class ToggleReactionInput(BaseModel):
     workspaceId: str = Field(min_length=1)
     emoji: str = Field(min_length=1, max_length=32)
+
+
+@public_router.get('/mentions')
+async def mention_members(workspaceId: str = Query(min_length=1), issueId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict:
+    from ..modules.work_items.comment_mentions import mention_options
+    issue = await _issue_row(db, issueId, workspaceId, user['id'])
+    return {'data': await mention_options(db, issue)}
+
+
+@public_router.get('/{comment_id}/revisions')
+async def comment_revisions(comment_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict:
+    await _comment(db, comment_id, workspaceId, user['id'])
+    rows = (await db.execute(text('''SELECT version,content,mention_ids AS "mentionIds",created_at AS "createdAt"
+        FROM comment_revisions WHERE comment_id=:id ORDER BY version DESC LIMIT 100'''), {'id': comment_id})).mappings()
+    return {'data': [dict(row) for row in rows]}
 
 
 

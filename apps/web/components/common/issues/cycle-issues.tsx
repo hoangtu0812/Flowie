@@ -1,7 +1,12 @@
 'use client';
 
+import { useIssueQuery } from '@/features/issues/use-issue-query';
+import { IssuePagination } from '@/features/issues/issue-pagination';
 import { CycleDetailsPanel } from '@/components/common/cycles/cycle-details-panel';
 import { LoadingState } from '@/components/common/loading-state';
+import { QueryState } from '@/components/common/query-state';
+import { EmptyState } from '@astryxdesign/core/EmptyState';
+import { DesignSurface } from '@/components/common/design-surface';
 import { useLiveCycle } from '@/components/common/cycles/use-live-cycle';
 import { useFilterStore } from '@/store/filter-store';
 import { useIssuesStore } from '@/store/issues-store';
@@ -30,9 +35,10 @@ export default function CycleIssues({ cycleView }: CycleIssuesProps) {
    const { isSearchOpen, searchQuery } = useSearchStore();
    const { viewType } = useViewStore();
    const { filters } = useFilterStore();
-   const { issues, statuses } = useIssuesStore();
+   const { issues, statuses, error } = useIssuesStore();
    const { openPanel } = useRightPanelStore();
-   const { cycle, loading } = useLiveCycle(cycleView);
+   const { cycle, loading, error: cycleError, retry: retryCycle } = useLiveCycle(cycleView);
+   const queryState = useIssueQuery(undefined, { cycleId: cycle?.id }, Boolean(cycle));
 
    const isSearching = isSearchOpen && searchQuery.trim() !== '';
    const isViewTypeGrid = viewType === 'grid';
@@ -47,21 +53,32 @@ export default function CycleIssues({ cycleView }: CycleIssuesProps) {
       [cycleIssues, filters]
    );
 
+   if (loading) return <LoadingState label="Loading cycle…" />;
+   if (cycleError) return <QueryState message={cycleError} onRetry={retryCycle} />;
+   if (!cycle)
+      return (
+         <DesignSurface>
+            <EmptyState
+               title={`No ${cycleView} cycle`}
+               description="Create or schedule a cycle from the team's Cycles page."
+            />
+         </DesignSurface>
+      );
+
    if (isSearching) {
       return (
          <div className="w-full h-full">
             <div className="px-6 mb-6">
-               <SearchIssues />
+               <SearchIssues issues={displayedIssues} />
             </div>
          </div>
       );
    }
 
-   if (loading) return <LoadingState label="Loading cycle…" />;
-
    return (
       <div className="w-full h-full flex flex-col overflow-hidden">
          <IssueFilterBar />
+         <IssuePagination />
          <div className="flex-1 min-h-0 w-full flex overflow-hidden">
             <div className="flex-1 min-w-0 h-full overflow-hidden">
                <GroupedIssuesView
@@ -69,6 +86,9 @@ export default function CycleIssues({ cycleView }: CycleIssuesProps) {
                   totalIssues={cycleIssues}
                   statuses={statuses}
                   isViewTypeGrid={isViewTypeGrid}
+                  loading={queryState.loading}
+                  error={error}
+                  onRetry={queryState.retry}
                />
             </div>
 

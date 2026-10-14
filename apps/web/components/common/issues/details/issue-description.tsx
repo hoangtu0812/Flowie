@@ -1,25 +1,29 @@
 'use client';
-
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@astryxdesign/core/Button';
+import { TextArea } from '@astryxdesign/core/TextArea';
+import { HStack, VStack } from '@astryxdesign/core/Layout';
+import { Text } from '@astryxdesign/core/Text';
+import { MarkdownPreview } from '@/components/common/markdown/markdown-preview';
 import { useImagePaste } from '@/hooks/use-image-paste';
 import { Issue } from '@/mock-data/issues';
 import { useIssuesStore } from '@/store/issues-store';
-import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
-import { InlineText } from './content-blocks';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useModifierKey } from '@/features/shared/use-modifier-key';
+import { SubmissionGate } from '@/features/shared/submission-gate';
 
-/**
- * The stored issue description, rendered as written and editable in place.
- * Text is kept verbatim — the API stores one plain string, so line breaks and
- * the markdown for pasted images are the only structure there is to preserve.
- */
 export function IssueDescription({ issue }: { issue: Issue }) {
-   const updateIssueDescription = useIssuesStore((state) => state.updateIssueDescription);
+   const update = useIssuesStore((state) => state.updateIssueDescription);
    const workspaceId = useIssuesStore((state) => state.workspaceId);
    const [editing, setEditing] = useState(false);
    const [draft, setDraft] = useState(issue.description);
    const [saving, setSaving] = useState(false);
+   const [error, setError] = useState<string>();
+   const gate = useRef(new SubmissionGate());
+   const modifier = useModifierKey();
+   const identity = useRef(issue.id);
+   const scope = useMemo(() => ({ id: issue.id }), [issue.id]);
+   const currentScope = useRef(scope);
+   currentScope.current = scope;
    const { onPaste, uploading } = useImagePaste({
       workspaceId,
       entityType: 'issue',
@@ -27,83 +31,93 @@ export function IssueDescription({ issue }: { issue: Issue }) {
       value: draft,
       onChange: setDraft,
    });
-
    useEffect(() => {
-      setDraft(issue.description);
-   }, [issue.id, issue.description]);
-
-   const save = async () => {
-      if (draft === issue.description) {
+      if (identity.current !== issue.id) {
+         identity.current = issue.id;
+         setDraft(issue.description);
          setEditing(false);
-         return;
-      }
-      setSaving(true);
-      try {
-         await updateIssueDescription(issue.id, draft.trim());
-         setEditing(false);
-      } catch (caught) {
-         toast.error(
-            caught instanceof Error ? caught.message : 'Could not update the description.'
-         );
-      } finally {
+         setError(undefined);
          setSaving(false);
+         gate.current = new SubmissionGate();
       }
-   };
-
-   if (editing) {
-      return (
-         <div className="mt-6 space-y-2">
-            <Textarea
-               value={draft}
-               onChange={(event) => setDraft(event.target.value)}
-               onPaste={onPaste}
-               onKeyDown={(event) => {
-                  if (event.key === 'Escape') {
-                     setDraft(issue.description);
-                     setEditing(false);
-                  }
-                  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) void save();
-               }}
-               rows={10}
-               placeholder="Describe the issue…"
-               autoFocus
-            />
-            <div className="flex items-center gap-2">
-               <Button size="sm" onClick={() => void save()} disabled={saving}>
-                  {saving ? 'Saving…' : 'Save'}
-               </Button>
-               <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={saving}
-                  onClick={() => {
-                     setDraft(issue.description);
-                     setEditing(false);
-                  }}
-               >
-                  Cancel
-               </Button>
-               <span className="text-xs text-muted-foreground">
+   }, [issue.id, issue.description]);
+   useEffect(() => {
+      if (!editing) setDraft(issue.description);
+   }, [issue.description, editing]);
+   const save = () =>
+      gate.current.run(async () => {
+         if (uploading) return;
+         setSaving(true);
+         setError(undefined);
+         try {
+            if (draft !== issue.description) await update(issue.id, draft);
+            if (currentScope.current === scope) setEditing(false);
+         } catch (reason) {
+            if (currentScope.current === scope)
+               setError(reason instanceof Error ? reason.message : 'Could not save description.');
+         } finally {
+            if (currentScope.current === scope) setSaving(false);
+         }
+      });
+   return (
+      <VStack
+         gap={3}
+         paddingBlock={4}
+         onKeyDown={(event) => {
+            if (!editing || event.nativeEvent.isComposing || saving) return;
+            if (event.key === 'Escape') {
+               setDraft(issue.description);
+               setEditing(false);
+            }
+            if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+               event.preventDefault();
+               void save();
+            }
+         }}
+      >
+         {editing ? (
+            <>
+               <TextArea
+                  label="Issue description"
+                  value={draft}
+                  onChange={setDraft}
+                  onPaste={onPaste}
+                  rows={10}
+                  isDisabled={saving}
+               />
+               {error && <Text role="alert">{error}</Text>}
+               <HStack gap={2}>
+                  <Button
+                     label="Save description"
+                     clickAction={save}
+                     isLoading={saving}
+                     isDisabled={uploading}
+                  />
+                  <Button
+                     label="Cancel editing"
+                     onClick={() => {
+                        setDraft(issue.description);
+                        setEditing(false);
+                     }}
+                     isDisabled={saving}
+                  />
+               </HStack>
+               <Text type="supporting">
                   {uploading
                      ? 'Uploading image…'
-                     : '⌘↵ to save · Esc to cancel · paste to add an image'}
-               </span>
-            </div>
-         </div>
-      );
-   }
-
-   return (
-      <button
-         type="button"
-         className="mt-6 block w-full text-left text-sm leading-relaxed whitespace-pre-wrap rounded-md -mx-2 px-2 py-1 hover:bg-sidebar/50 transition-colors"
-         onClick={() => setEditing(true)}
-      >
-         {issue.description.trim() ? (
-            <InlineText text={issue.description} />
+                     : `${modifier}+Enter to save · Esc to cancel · paste to add an image`}
+               </Text>
+            </>
          ) : (
-            <span className="text-muted-foreground">Add description…</span>
+            <>
+               {issue.description.trim() ? (
+                  <MarkdownPreview content={issue.description} />
+               ) : (
+                  <Text type="supporting">No description yet.</Text>
+               )}
+               <Button label="Edit description" variant="ghost" onClick={() => setEditing(true)} />
+            </>
          )}
-      </button>
+      </VStack>
    );
 }

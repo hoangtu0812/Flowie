@@ -3,7 +3,6 @@
 import { loadJoinedWorkspaceTeams, WorkspaceTeam } from '@/components/common/teams/team-types';
 import { authenticatedFetch } from '@/lib/workspaces';
 import { Cycle } from '@/types/cycles';
-import { useIssuesStore } from '@/store/issues-store';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
@@ -46,15 +45,18 @@ const mapCycle = (cycle: ApiCycle, team: WorkspaceTeam): Cycle => {
 /** Loads the active/upcoming cycle and the matching real issue collection. */
 export function useLiveCycle(cycleView: LiveCycleView) {
    const { teamId } = useParams<{ teamId: string }>();
-   const { loadIssues } = useIssuesStore();
    const [team, setTeam] = useState<WorkspaceTeam>();
    const [cycle, setCycle] = useState<Cycle>();
    const [loading, setLoading] = useState(true);
+   const [error, setError] = useState<string>();
+   const [refresh, setRefresh] = useState(0);
 
    useEffect(() => {
       let active = true;
       void (async () => {
          setLoading(true);
+         setError(undefined);
+         setCycle(undefined);
          try {
             const { workspaceId, teams } = await loadJoinedWorkspaceTeams();
             const currentTeam = teams.find(
@@ -62,7 +64,6 @@ export function useLiveCycle(cycleView: LiveCycleView) {
                   item.id === teamId || item.identifier.toLowerCase() === teamId.toLowerCase()
             );
             if (!currentTeam) throw new Error('Team not found.');
-            await loadIssues(currentTeam.identifier);
             const status = cycleView === 'active' ? 'ACTIVE' : 'UPCOMING';
             const response = await authenticatedFetch(
                `${api}/cycles?${new URLSearchParams({ workspaceId, teamId: currentTeam.id, status }).toString()}`
@@ -73,8 +74,9 @@ export function useLiveCycle(cycleView: LiveCycleView) {
                setTeam(currentTeam);
                setCycle(payload.data[0] ? mapCycle(payload.data[0], currentTeam) : undefined);
             }
-         } catch {
+         } catch (reason) {
             if (active) {
+               setError(reason instanceof Error ? reason.message : 'Could not load cycle.');
                setTeam(undefined);
                setCycle(undefined);
             }
@@ -85,7 +87,7 @@ export function useLiveCycle(cycleView: LiveCycleView) {
       return () => {
          active = false;
       };
-   }, [cycleView, loadIssues, teamId]);
+   }, [cycleView, teamId, refresh]);
 
-   return { team, cycle, loading };
+   return { team, cycle, loading, error, retry: () => setRefresh((value) => value + 1) };
 }

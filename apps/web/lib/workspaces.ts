@@ -1,4 +1,5 @@
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+import { responseData } from './http';
 
 /**
  * Refresh tokens are single-use: `/auth/refresh` revokes the session it was
@@ -51,8 +52,7 @@ export type WorkspaceMembership = {
 
 export async function loadWorkspaceMemberships(): Promise<WorkspaceMembership[]> {
    const response = await authenticatedFetch(`${api}/workspaces/me`);
-   if (!response.ok) throw new Error('Could not load workspaces.');
-   return ((await response.json()) as { data: WorkspaceMembership[] }).data;
+   return responseData<WorkspaceMembership[]>(response, 'Could not load workspaces.');
 }
 
 export async function createWorkspace(name: string): Promise<WorkspaceSummary> {

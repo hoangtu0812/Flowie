@@ -1,7 +1,10 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { Toaster } from '@/components/ui/sonner';
 import './globals.css';
+import '@astryxdesign/core/reset.css';
+import '@astryxdesign/core/astryx.css';
+import '@astryxdesign/theme-neutral/theme.css';
 
 const geistSans = Geist({
    variable: '--font-geist-sans',
@@ -14,6 +17,8 @@ const geistMono = Geist_Mono({
 });
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+
+export const viewport: Viewport = { width: 'device-width', initialScale: 1 };
 
 export const metadata: Metadata = {
    title: {
@@ -55,6 +60,7 @@ export const metadata: Metadata = {
    keywords: ['flowie', 'project management', 'team collaboration', 'fastapi', 'next.js'],
 };
 
+import { UiPreferencesApplier } from '@/components/layout/ui-preferences-applier';
 import { RouteProgress } from '@/components/layout/route-progress';
 import { ThemeProvider } from '@/components/layout/theme-provider';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
@@ -66,15 +72,13 @@ export default function RootLayout({
 }>) {
    return (
       <html lang="en" suppressHydrationWarning>
-         <head>
-            <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-         </head>
          <body
             className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background`}
             suppressHydrationWarning
          >
             <NuqsAdapter>
                <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+                  <UiPreferencesApplier />
                   <RouteProgress />
                   {children}
                   <Toaster />

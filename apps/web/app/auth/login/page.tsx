@@ -4,6 +4,10 @@ import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
+import { useUiPreferencesStore } from '@/store/ui-preferences-store';
+import { useLocale } from '@/features/shared/use-locale';
+import { VStack } from '@astryxdesign/core/Layout';
+import { Text } from '@astryxdesign/core/Text';
 import { AuthCard } from '@/components/auth/auth-card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +20,7 @@ type AuthPayload = {
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 export default function LoginPage() {
+   const { t } = useLocale();
    const router = useRouter();
    const searchParams = useSearchParams();
    const [error, setError] = useState<string | null>(null);
@@ -72,13 +77,13 @@ export default function LoginPage() {
          router.replace(
             safeNext ??
                (payload.data.workspace
-                  ? `/${payload.data.workspace.slug}/teams`
+                  ? `/${payload.data.workspace.slug}/${useUiPreferencesStore.getState().defaultHome}`
                   : payload.data.user.isPlatformAdmin
                     ? '/admin'
                     : '/invitations')
          );
       } catch (caughtError) {
-         setError(caughtError instanceof Error ? caughtError.message : 'Không thể đăng nhập.');
+         setError(caughtError instanceof Error ? caughtError.message : t('signInFailed'));
       } finally {
          setIsSubmitting(false);
       }
@@ -86,14 +91,14 @@ export default function LoginPage() {
 
    return (
       <AuthCard
-         title="Chào mừng trở lại"
-         description="Đăng nhập để tiếp tục với Flowie."
+         title={t('welcome')}
+         description={t('signInDescription')}
          loading={isSubmitting}
          footer={
             <>
-               Chưa có tài khoản?{' '}
+               {t('noAccount')}{' '}
                <Link href="/auth/register" className="font-medium text-foreground underline">
-                  Tạo tài khoản
+                  {t('createAccount')}
                </Link>
             </>
          }
@@ -101,32 +106,18 @@ export default function LoginPage() {
          {microsoftEnabled && (
             <>
                <Button variant="outline" className="w-full" asChild>
-                  <a href={microsoftHref}>
-                     <span aria-hidden="true" className="grid size-4 grid-cols-2 gap-0.5">
-                        <span className="bg-[#f25022]" />
-                        <span className="bg-[#7fba00]" />
-                        <span className="bg-[#00a4ef]" />
-                        <span className="bg-[#ffb900]" />
-                     </span>
-                     Đăng nhập với Microsoft
-                  </a>
+                  <a href={microsoftHref}>{t('microsoft')}</a>
                </Button>
-               <div className="flex items-center gap-3" aria-hidden="true">
-                  <span className="h-px flex-1 bg-border" />
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                     hoặc
-                  </span>
-                  <span className="h-px flex-1 bg-border" />
-               </div>
+               <Text>{t('or')}</Text>
             </>
          )}
          <form className="space-y-4" onSubmit={onSubmit}>
-            <div className="space-y-2">
+            <VStack gap={2}>
                <Label htmlFor="email">Email</Label>
                <Input id="email" name="email" type="email" autoComplete="email" required />
-            </div>
-            <div className="space-y-2">
-               <Label htmlFor="password">Mật khẩu</Label>
+            </VStack>
+            <VStack gap={2}>
+               <Label htmlFor="password">{t('password')}</Label>
                <Input
                   id="password"
                   name="password"
@@ -134,15 +125,14 @@ export default function LoginPage() {
                   autoComplete="current-password"
                   required
                />
-            </div>
-            {error && (
-               <p role="alert" className="text-sm text-destructive">
-                  {error}
-               </p>
-            )}
+            </VStack>
+            {error && <Text role="alert">{error}</Text>}
             <Button className="w-full" type="submit" disabled={isSubmitting}>
-               {isSubmitting ? 'Đang đăng nhập…' : 'Đăng nhập'}
+               {isSubmitting ? t('signingIn') : t('signIn')}
             </Button>
+            <Link href="/auth/forgot-password" className="text-sm underline">
+               {t('forgotPassword')}
+            </Link>
          </form>
       </AuthCard>
    );

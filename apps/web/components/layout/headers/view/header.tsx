@@ -7,7 +7,7 @@ import { useIssuesStore } from '@/store/issues-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { BarChart3, Box, Layers, MoreHorizontal, Star } from 'lucide-react';
 import { useParams } from 'next/navigation';
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useLiveViews } from '@/components/common/views/use-live-views';
 
 const values = (filters: Record<string, unknown>, key: string) =>
@@ -16,12 +16,9 @@ const values = (filters: Record<string, unknown>, key: string) =>
 export default function Header() {
    const { viewId } = useParams<{ viewId: string }>();
    const { views, loading } = useLiveViews();
-   const { issues, loadIssues } = useIssuesStore();
+   const { issues } = useIssuesStore();
    const { allProjects } = useProjectsData();
    const { openPanel, togglePanel } = useRightPanelStore();
-   useEffect(() => {
-      void loadIssues();
-   }, [loadIssues]);
    const view = views.find((candidate) => candidate.id === viewId);
    const count = useMemo(() => {
       if (!view) return 0;

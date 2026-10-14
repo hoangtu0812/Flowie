@@ -160,6 +160,8 @@ class QueryService:
     async def issues(self, payload) -> dict:
         params, filters = {}, []
         for field, column in {
+            "issueType": "issue_type",
+            "severity": "severity",
             "projectId": "project_id",
             "teamId": "team_id",
             "statusId": "status_id",
@@ -201,7 +203,7 @@ class QueryService:
         return await self.page(
             "search_issues",
             payload,
-            f"""SELECT i.id,i.identifier,i.title,i.priority,
+            f"""SELECT i.id,i.identifier,i.title,i.priority,i.issue_type AS "issueType",i.severity,
             i.project_id AS "projectId",i.team_id AS "teamId",i.assignee_id AS "assigneeId",
             i.status_id AS "statusId",s.name AS "statusName",s.category,i.version,
             i.due_date AS "dueDate",i.updated_at AS "updatedAt"
@@ -215,7 +217,7 @@ class QueryService:
             "list_comments",
             payload,
             """SELECT c.id,c.issue_id AS "issueId",c.author_id AS "authorId",
-            c.content,c.version,c.created_at AS "createdAt",c.updated_at AS "updatedAt"
+            c.content,c.version,c.parent_comment_id AS "parentCommentId",c.mention_ids AS "mentionIds",c.created_at AS "createdAt",c.updated_at AS "updatedAt"
             FROM comments c WHERE c.issue_id=:issue AND c.deleted_at IS NULL""",
             {"issue": issue["id"]},
             time_field="createdAt",
@@ -324,32 +326,13 @@ class QueryService:
         }
 
     async def revisions(self, payload) -> dict:
+        from ..work_items.document_history import list_revisions
         await self.policy.document(payload.documentId)
-        rows = (
-            await self.db.execute(
-                text("""SELECT version,title,actor_id AS "actorId",created_at AS "createdAt"
-            FROM document_revisions WHERE document_id=:id ORDER BY version DESC LIMIT 100"""),
-                {"id": payload.documentId},
-            )
-        ).mappings()
-        return {"items": [dict(row) for row in rows], "limit": 100}
+        return await list_revisions(self.db, payload.documentId)
 
     async def revision_row(self, document_id: str, version: int) -> dict:
-        row = (
-            (
-                await self.db.execute(
-                    text(
-                        "SELECT version,title,content,actor_id FROM document_revisions WHERE document_id=:id AND version=:version"
-                    ),
-                    {"id": document_id, "version": version},
-                )
-            )
-            .mappings()
-            .first()
-        )
-        if not row:
-            raise ApiError(404, "Document revision not found.", "Not Found")
-        return dict(row)
+        from ..work_items.document_history import revision_row
+        return await revision_row(self.db, document_id, version)
 
     async def revision(self, payload) -> dict:
         await self.policy.document(payload.documentId)
@@ -364,54 +347,11 @@ class QueryService:
         }
 
     async def diff(self, payload) -> dict:
-        import asyncio
-        from difflib import unified_diff
-        from itertools import islice
-
+        from ..work_items.document_history import revision_diff
         current = await self.policy.document(payload.documentId)
         before = await self.revision_row(payload.documentId, payload.fromVersion)
-        after = (
-            await self.revision_row(payload.documentId, payload.toVersion)
-            if payload.toVersion
-            else current
-        )
-        left, right = (
-            before["content"].splitlines(keepends=True),
-            after["content"].splitlines(keepends=True),
-        )
-        if (
-            len(left) > 2000
-            or len(right) > 2000
-            or len(before["content"]) > 100000
-            or len(after["content"]) > 100000
-        ):
-            raise ApiError(
-                413,
-                "Read document and revision text pages to compare this large document.",
-                "Payload Too Large",
-            )
-        lines = await asyncio.to_thread(
-            lambda: list(
-                islice(
-                    unified_diff(
-                        left,
-                        right,
-                        fromfile=f"revision-{before['version']}",
-                        tofile=f"revision-{after['version']}",
-                    ),
-                    payload.maxLines + 1,
-                )
-            )
-        )
-        result = "".join(lines[: payload.maxLines])
-        return {
-            "fromVersion": before["version"],
-            "toVersion": after["version"],
-            "fromTitle": before["title"],
-            "toTitle": after["title"],
-            "diff": result[:20000],
-            "truncated": len(lines) > payload.maxLines or len(result) > 20000,
-        }
+        after = await self.revision_row(payload.documentId, payload.toVersion) if payload.toVersion else current
+        return await revision_diff(before, after, payload.maxLines)
 
     async def options(self, payload) -> dict:
         await self.policy.team(payload.teamId)

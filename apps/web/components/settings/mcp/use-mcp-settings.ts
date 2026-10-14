@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { SubmissionGate } from '@/features/shared/submission-gate';
 import { loadCurrentWorkspaceMembership } from '@/lib/workspaces';
 import {
    createMcpConnection,
@@ -17,6 +18,7 @@ import {
 } from '@/lib/mcp';
 
 export function useMcpSettings() {
+   const gate = useRef(new SubmissionGate());
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [configuration, setConfiguration] = useState<McpConfiguration>();
    const [connections, setConnections] = useState<McpConnection[]>([]);
@@ -66,16 +68,18 @@ export function useMcpSettings() {
       };
    }, [refresh]);
 
-   async function perform(operation: () => Promise<void>) {
-      setBusy(true);
-      setError(undefined);
-      try {
-         await operation();
-      } catch (cause) {
-         setError(cause instanceof Error ? cause.message : 'The operation failed.');
-      } finally {
-         setBusy(false);
-      }
+   function perform(operation: () => Promise<void>) {
+      return gate.current.run(async () => {
+         setBusy(true);
+         setError(undefined);
+         try {
+            await operation();
+         } catch (cause) {
+            setError(cause instanceof Error ? cause.message : 'The operation failed.');
+         } finally {
+            setBusy(false);
+         }
+      });
    }
 
    async function create(draft: ConnectionDraft) {

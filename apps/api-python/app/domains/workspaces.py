@@ -4,7 +4,8 @@ import json
 from datetime import timedelta
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import Depends
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError

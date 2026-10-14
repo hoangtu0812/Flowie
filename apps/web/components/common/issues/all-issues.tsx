@@ -1,5 +1,9 @@
 'use client';
 
+import { useIssueQuery } from '@/features/issues/use-issue-query';
+import { IssuePagination } from '@/features/issues/issue-pagination';
+import { BugReport } from '@/features/issues/bug-report';
+import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Issue } from '@/mock-data/issues';
 import { Status, StatusCategory } from '@/mock-data/status';
 import { useDisplaySettingsStore } from '@/store/display-settings-store';
@@ -11,7 +15,7 @@ import { useRightPanelStore } from '@/store/right-panel-store';
 import { useSearchStore } from '@/store/search-store';
 import { useViewStore } from '@/store/view-store';
 import { useParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { GroupedIssuesView } from './grouped-issues-view';
 import { InsightsPanel } from './insights-panel';
 import { SearchIssues } from './search-issues';
@@ -29,24 +33,14 @@ export default function AllIssues({ categories }: AllIssuesProps) {
    const { viewType } = useViewStore();
    const { filters } = useFilterStore();
    const showSubIssues = useDisplaySettingsStore((state) => state.showSubIssues);
-   const { issues, statuses: workflowStatuses, loading, loadIssues } = useIssuesStore();
+   const { issues, statuses: workflowStatuses, error } = useIssuesStore();
    const { openPanel } = useRightPanelStore();
    const params = useParams<{ teamId?: string | string[] }>();
    const teamIdentifier = Array.isArray(params.teamId) ? params.teamId[0] : params.teamId;
-   const [isInitialLoad, setIsInitialLoad] = useState(true);
+   const queryState = useIssueQuery(teamIdentifier, { categories });
 
    const isSearching = isSearchOpen && searchQuery.trim() !== '';
    const isViewTypeGrid = viewType === 'grid';
-
-   useEffect(() => {
-      let active = true;
-      void loadIssues(teamIdentifier).finally(() => {
-         if (active) setIsInitialLoad(false);
-      });
-      return () => {
-         active = false;
-      };
-   }, [loadIssues, teamIdentifier]);
 
    const statuses = useMemo<Status[]>(() => {
       const liveStatuses = workflowStatuses.length
@@ -73,34 +67,42 @@ export default function AllIssues({ categories }: AllIssuesProps) {
 
    if (isSearching) {
       return (
-         <div className="w-full h-full">
-            <div className="px-6 mb-6">
-               <SearchIssues />
-            </div>
-         </div>
+         <HStack width="100%" height="100%">
+            <VStack padding={6}>
+               <SearchIssues issues={displayedIssues} />
+            </VStack>
+         </HStack>
       );
    }
 
    return (
-      <div className="w-full h-full flex flex-col overflow-hidden">
+      <VStack width="100%" height="100%" className="overflow-hidden">
          <IssueFilterBar />
-         <div className="flex-1 min-h-0 w-full flex overflow-hidden">
-            <div className="flex-1 min-w-0 h-full overflow-hidden">
+         <IssuePagination />
+         <BugReport teamReference={teamIdentifier} />
+         <HStack gap={0} className="flex-1 min-h-0 w-full overflow-hidden">
+            <VStack className="flex-1 min-w-0 h-full overflow-hidden">
                <GroupedIssuesView
                   issues={displayedIssues}
                   totalIssues={scopedIssues}
                   statuses={statuses}
                   isViewTypeGrid={isViewTypeGrid}
-                  loading={loading || isInitialLoad}
+                  error={error}
+                  onRetry={queryState.retry}
+                  loading={queryState.loading}
                />
-            </div>
+            </VStack>
 
             {openPanel === 'insights' && (
-               <aside className="hidden lg:flex w-[420px] shrink-0 border-l h-full overflow-hidden bg-container">
+               <VStack
+                  as="aside"
+                  width={420}
+                  className="hidden lg:flex shrink-0 border-l h-full overflow-hidden bg-container"
+               >
                   <InsightsPanel issues={displayedIssues} />
-               </aside>
+               </VStack>
             )}
-         </div>
-      </div>
+         </HStack>
+      </VStack>
    );
 }

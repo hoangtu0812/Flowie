@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from .bug_contracts import BugCreateFields, BugUpdateFields
 
 IssuePriority = Literal["NONE", "LOW", "MEDIUM", "HIGH", "URGENT"]
 
 
-class CreateIssueInput(BaseModel):
+class CreateIssueInput(BugCreateFields):
     workspaceId: str = Field(min_length=1)
     teamId: str = Field(min_length=1)
     title: str = Field(min_length=2, max_length=500)
@@ -25,7 +27,7 @@ class CreateIssueInput(BaseModel):
     actualEffort: float | None = Field(default=None, ge=0)
 
 
-class UpdateIssueInput(BaseModel):
+class UpdateIssueInput(BugUpdateFields):
     title: str | None = Field(default=None, min_length=2, max_length=500)
     description: str | None = Field(default=None, max_length=10_000)
     statusId: str | None = None
@@ -42,11 +44,15 @@ class UpdateIssueInput(BaseModel):
 
 
 class CommentInput(BaseModel):
+    expectedVersion: int | None = Field(default=None, ge=1)
+    mentionIds: list[str] | None = Field(default=None, max_length=100)
     content: str | None = Field(default=None, min_length=1, max_length=20_000)
     body: dict[str, Any] | None = None
 
 
 class CreateCommentInput(CommentInput):
+    clientRequestKey: str | None = Field(default=None, min_length=8, max_length=128)
+    parentCommentId: str | None = Field(default=None, min_length=1)
     workspaceId: str = Field(min_length=1)
     issueId: str = Field(min_length=1)
 
@@ -65,6 +71,7 @@ class CreateDocumentInput(BaseModel):
 
 
 class UpdateDocumentInput(BaseModel):
+    expectedVersion: int | None = Field(default=None, ge=1)
     folderId: str | None = None
     title: str | None = Field(default=None, min_length=2, max_length=250)
     content: str | None = Field(default=None, max_length=100000)
@@ -73,3 +80,10 @@ class UpdateDocumentInput(BaseModel):
     sourceUrl: str | None = Field(default=None, max_length=2048)
     pinned: bool | None = None
     position: int | None = Field(default=None, ge=0)
+
+    @field_validator('title', 'content', 'sourceType', 'pinned', 'position')
+    @classmethod
+    def reject_explicit_null(cls, value):
+        if value is None:
+            raise ValueError('Omit unchanged document fields instead of sending null.')
+        return value

@@ -1,5 +1,7 @@
 'use client';
 
+import { useIssueQuery } from '@/features/issues/use-issue-query';
+import { IssuePagination } from '@/features/issues/issue-pagination';
 import { applyIssueFilters } from '@/components/common/issues/issue-filter-columns';
 import { IssueFilterBar } from '@/components/common/issues/issue-filter-bar';
 import { GroupedIssuesView } from '@/components/common/issues/grouped-issues-view';
@@ -11,7 +13,7 @@ import { useIssuesStore } from '@/store/issues-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { useSearchStore } from '@/store/search-store';
 import { useViewStore } from '@/store/view-store';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { scopeMyIssues, useCurrentUserId, useMyIssuesTab } from './use-my-issues';
 
 /**
@@ -24,27 +26,17 @@ export default function MyIssues() {
    const { isSearchOpen, searchQuery } = useSearchStore();
    const { viewType } = useViewStore();
    const { filters } = useFilterStore();
-   const { issues, statuses, loading, loadIssues } = useIssuesStore();
+   const { issues, statuses, error } = useIssuesStore();
    const { openPanel } = useRightPanelStore();
-   const [isInitialLoad, setIsInitialLoad] = useState(true);
+   const queryState = useIssueQuery(undefined, { scope: tab });
 
    const isSearching = isSearchOpen && searchQuery.trim() !== '';
    const isViewTypeGrid = viewType === 'grid';
 
    const currentUserId = useCurrentUserId();
 
-   useEffect(() => {
-      let active = true;
-      void loadIssues().finally(() => {
-         if (active) setIsInitialLoad(false);
-      });
-      return () => {
-         active = false;
-      };
-   }, [loadIssues]);
-
    const scopedIssues = useMemo(
-      () => scopeMyIssues(issues, tab, currentUserId),
+      () => (tab === 'activity' ? issues : scopeMyIssues(issues, tab, currentUserId)),
       [issues, tab, currentUserId]
    );
 
@@ -57,7 +49,7 @@ export default function MyIssues() {
       return (
          <div className="w-full h-full">
             <div className="px-6 mb-6">
-               <SearchIssues />
+               <SearchIssues issues={displayedIssues} />
             </div>
          </div>
       );
@@ -66,6 +58,7 @@ export default function MyIssues() {
    return (
       <div className="w-full h-full flex flex-col overflow-hidden">
          <IssueFilterBar />
+         <IssuePagination />
          <div className="flex-1 min-h-0 w-full flex overflow-hidden">
             <div className="flex-1 min-w-0 h-full overflow-hidden">
                <GroupedIssuesView
@@ -73,7 +66,9 @@ export default function MyIssues() {
                   totalIssues={scopedIssues}
                   statuses={statuses}
                   isViewTypeGrid={isViewTypeGrid}
-                  loading={loading || isInitialLoad}
+                  error={error}
+                  onRetry={queryState.retry}
+                  loading={queryState.loading}
                />
             </div>
 

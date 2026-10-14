@@ -317,6 +317,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 self.principal, "add_comment", {**args, "content": "Different"}
             )
         self.assertEqual(error.exception.status_code, 409)
+
         comment = first["data"]
         update = await self.call(
             "update_comment",
@@ -335,6 +336,356 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 idempotencyKey="comment-stale-key",
             )
         self.assertEqual(error.exception.status_code, 409)
+
+    async def test_web_issue_pages_preserve_scope_filters_and_direct_lookup(self):
+        from app.domains.auth import current_user
+
+        bug = (
+            await self.call(
+                "create_issue",
+                teamId=self.team,
+                projectId=self.project,
+                statusId=self.status,
+                title="Đồng bộ tài liệu",
+                issueType="BUG",
+                severity="CRITICAL",
+                idempotencyKey="web-query-bug",
+            )
+        )["data"]
+        host = create_app(self.settings)
+        host.state.session_factory = self.factory
+        host.dependency_overrides[current_user] = lambda: self.user
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=host), base_url="http://testserver"
+        ) as client:
+            query = {
+                "workspaceId": self.workspace,
+                "projectId": self.project,
+                "limit": 1,
+            }
+            first = await client.get("/api/v1/issues", params=query)
+            self.assertEqual(first.status_code, 200, first.text)
+            self.assertEqual(first.json()["meta"]["total"], 2)
+            cursor = first.json()["meta"]["nextCursor"]
+            second = await client.get(
+                "/api/v1/issues", params={**query, "cursor": cursor}
+            )
+            self.assertNotEqual(
+                first.json()["data"][0]["id"], second.json()["data"][0]["id"]
+            )
+            changed = await client.get(
+                "/api/v1/issues",
+                params={**query, "cursor": cursor, "scope": "assigned"},
+            )
+            self.assertEqual(changed.status_code, 400)
+            result = await client.get(
+                "/api/v1/issues",
+                params={
+                    **query,
+                    "query": "dong bo tai lieu",
+                    "filters": '[{"columnId":"issueType","type":"option","operator":"is","values":["BUG"]}]',
+                },
+            )
+            self.assertEqual(result.status_code, 200, result.text)
+            self.assertEqual([row["id"] for row in result.json()["data"]], [bug["id"]])
+            lookup = await client.get(
+                "/api/v1/issues/lookup/" + bug["identifier"],
+                params={"workspaceId": self.workspace},
+            )
+            self.assertEqual(lookup.json()["data"]["id"], bug["id"])
+            report = await client.get(
+                "/api/v1/issues/bug-report", params={"workspaceId": self.workspace}
+            )
+            self.assertEqual(report.status_code, 200, report.text)
+            self.assertEqual(report.json()["data"]["total"], 1)
+
+    async def test_run_evidence_web_read_excludes_lease_secrets(self):
+        from app.domains.auth import current_user
+
+        run = (
+            await self.call(
+                "claim_issue",
+                issueId=self.issue["id"],
+                idempotencyKey="web-evidence-run",
+            )
+        )["data"]
+        host = create_app(self.settings)
+        host.state.session_factory = self.factory
+        host.dependency_overrides[current_user] = lambda: self.user
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=host), base_url="http://testserver"
+        ) as client:
+            response = await client.get(
+                f"/api/v1/agent-runs/runs/{run['id']}",
+                params={"workspaceId": self.workspace},
+            )
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertNotIn("leaseToken", response.json()["data"])
+            canceled = await client.post(
+                f"/api/v1/agent-runs/runs/{run['id']}/cancel",
+                params={"workspaceId": self.workspace},
+            )
+            self.assertEqual(canceled.status_code, 200, canceled.text)
+            self.assertEqual(canceled.json()["data"]["state"], "CANCELED")
+
+    async def test_password_reset_http_does_not_disclose_accounts_and_invalidates_access_cookie(
+        self,
+    ):
+        from unittest.mock import AsyncMock, patch
+        from app.domains.auth import password_hasher
+
+        host = create_app(
+            replace(
+                self.settings,
+                smtp_host="mail.example.test",
+                smtp_from="flowie@example.test",
+            )
+        )
+        host.state.session_factory = self.factory
+        async with self.factory() as db:
+            await db.execute(
+                text("UPDATE users SET password_hash=:password WHERE id=:id"),
+                {
+                    "id": self.user["id"],
+                    "password": password_hasher.hash("Original-Password-2026!"),
+                },
+            )
+            await db.commit()
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=host), base_url="http://testserver"
+        ) as client:
+            login = await client.post(
+                "/api/v1/auth/login",
+                json={
+                    "email": self.user["email"],
+                    "password": "Original-Password-2026!",
+                },
+            )
+            self.assertEqual(login.status_code, 200, login.text)
+            with patch(
+                "app.modules.identity.api.deliver_reset", new=AsyncMock()
+            ) as delivery:
+                known = await client.post(
+                    "/api/v1/auth/password-reset/request",
+                    json={"email": self.user["email"]},
+                )
+                unknown = await client.post(
+                    "/api/v1/auth/password-reset/request",
+                    json={"email": "unknown-" + self.user["email"]},
+                )
+                self.assertEqual(known.status_code, 202)
+                self.assertEqual(known.json(), unknown.json())
+                token = delivery.call_args.args[2]
+            confirmed = await client.post(
+                "/api/v1/auth/password-reset/confirm",
+                json={"token": token, "password": "Replacement-Password-2026!"},
+            )
+            self.assertEqual(confirmed.status_code, 200, confirmed.text)
+            denied = await client.get("/api/v1/workspaces/me")
+            self.assertEqual(denied.status_code, 401)
+
+    async def test_password_reset_expires_is_single_use_and_revokes_credentials(self):
+        from app.modules.identity.password_reset import (
+            issue_reset,
+            consume_reset,
+            limit_request,
+        )
+        from app.domains.auth import password_hasher
+        from app.core.identifiers import _hash_token
+
+        async with self.factory() as db:
+            await db.execute(
+                text("UPDATE users SET password_hash=:password WHERE id=:id"),
+                {
+                    "id": self.user["id"],
+                    "password": password_hasher.hash("Original-Password-2026!"),
+                },
+            )
+            await db.commit()
+            self.assertIsNone(await issue_reset(db, "unknown@example.test"))
+            token = await issue_reset(db, self.user["email"])
+            stored = (
+                await db.execute(
+                    text(
+                        "SELECT token_hash FROM password_reset_tokens WHERE user_id=:id"
+                    ),
+                    {"id": self.user["id"]},
+                )
+            ).scalar_one()
+            self.assertEqual(stored, _hash_token(token))
+            self.assertNotEqual(stored, token)
+            await db.execute(
+                text(
+                    "UPDATE password_reset_tokens SET expires_at=:expired WHERE user_id=:id"
+                ),
+                {"expired": _utcnow() - timedelta(seconds=1), "id": self.user["id"]},
+            )
+            await db.commit()
+            with self.assertRaises(ApiError):
+                await consume_reset(db, token, "Replacement-Password-2026!")
+            await db.rollback()
+            token = await issue_reset(db, self.user["email"])
+            await consume_reset(db, token, "Replacement-Password-2026!")
+            with self.assertRaises(ApiError):
+                await consume_reset(db, token, "Another-Password-2026!")
+            await db.rollback()
+            user = (
+                (
+                    await db.execute(
+                        text(
+                            "SELECT password_hash,auth_version FROM users WHERE id=:id"
+                        ),
+                        {"id": self.user["id"]},
+                    )
+                )
+                .mappings()
+                .one()
+            )
+            self.assertTrue(
+                password_hasher.verify(
+                    user["password_hash"], "Replacement-Password-2026!"
+                )
+            )
+            self.assertEqual(user["auth_version"], 1)
+            self.assertEqual(
+                (
+                    await db.execute(
+                        text(
+                            "SELECT count(*) FROM mcp_connections WHERE user_id=:id AND revoked_at IS NULL"
+                        ),
+                        {"id": self.user["id"]},
+                    )
+                ).scalar_one(),
+                0,
+            )
+            await limit_request(db, "test-secret", "test", self.user["id"], 1)
+            with self.assertRaises(ApiError) as limited:
+                await limit_request(db, "test-secret", "test", self.user["id"], 1)
+            self.assertEqual(limited.exception.status_code, 429)
+
+    async def test_web_comment_retry_is_deduplicated_after_commit(self):
+        from app.modules.work_items.comments import create_comment
+        from app.modules.work_items.contracts import CreateCommentInput
+        from app.db.mutations import commit_mutation
+
+        payload = CreateCommentInput(
+            workspaceId=self.workspace,
+            issueId=self.issue["id"],
+            content="Web retry",
+            clientRequestKey="web-retry-test-key",
+        )
+
+        async def submit():
+            async with self.factory() as db:
+                return await commit_mutation(
+                    db, lambda: create_comment(payload, self.user, db)
+                )
+
+        first, second = await asyncio.gather(submit(), submit())
+        self.assertEqual(first["data"]["id"], second["data"]["id"])
+        async with self.factory() as db:
+            self.assertEqual(
+                (
+                    await db.execute(
+                        text(
+                            "SELECT count(*) FROM comments WHERE issue_id=:id AND content=:content"
+                        ),
+                        {"id": self.issue["id"], "content": "Web retry"},
+                    )
+                ).scalar_one(),
+                1,
+            )
+
+    async def test_comment_replies_mentions_and_revision_history(self):
+        parent = (
+            await self.call(
+                "add_comment",
+                issueId=self.issue["id"],
+                content="Parent",
+                mentionIds=[self.user["id"]],
+                idempotencyKey="comment-parent-key",
+            )
+        )["data"]
+        reply = (
+            await self.call(
+                "add_comment",
+                issueId=self.issue["id"],
+                content="Reply",
+                parentCommentId=parent["id"],
+                idempotencyKey="comment-reply-key",
+            )
+        )["data"]
+        self.assertEqual(reply["parentCommentId"], parent["id"])
+        with self.assertRaises(ApiError):
+            await self.call(
+                "add_comment",
+                issueId=self.issue["id"],
+                content="Invalid nested reply",
+                parentCommentId=reply["id"],
+                idempotencyKey="comment-nested-key",
+            )
+        with self.assertRaises(ApiError):
+            await self.call(
+                "add_comment",
+                issueId=self.issue["id"],
+                content="Invalid mention",
+                mentionIds=["not-a-member"],
+                idempotencyKey="comment-mention-key",
+            )
+        await self.call(
+            "update_comment",
+            commentId=parent["id"],
+            content="Parent edited",
+            expectedVersion=parent["version"],
+            idempotencyKey="comment-edit-history",
+        )
+        async with self.factory() as db:
+            revisions = (
+                (
+                    await db.execute(
+                        text(
+                            "SELECT content FROM comment_revisions WHERE comment_id=:id ORDER BY version"
+                        ),
+                        {"id": parent["id"]},
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            self.assertEqual(revisions, ["Parent", "Parent edited"])
+
+    async def test_structured_bugs_share_web_and_mcp_contracts(self):
+        created = await self.call(
+            "create_issue",
+            teamId=self.team,
+            projectId=self.project,
+            statusId=self.status,
+            title="Structured bug",
+            issueType="BUG",
+            severity="CRITICAL",
+            environment="Windows / Chrome",
+            reproductionSteps="Open the editor",
+            expectedResult="Save succeeds",
+            actualResult="Draft is lost",
+            idempotencyKey="structured-bug-create",
+        )
+        bug = created["data"]
+        self.assertEqual(bug["issueType"], "BUG")
+        self.assertEqual(bug["severity"], "CRITICAL")
+        results = await self.call("search_issues", issueType="BUG", severity="CRITICAL")
+        self.assertEqual([row["id"] for row in results["items"]], [bug["id"]])
+        updated = await self.call(
+            "update_issue",
+            issueId=bug["id"],
+            expectedVersion=bug["version"],
+            reproductionSteps="Open and close the editor",
+            idempotencyKey="structured-bug-edit",
+        )
+        self.assertEqual(
+            updated["data"]["reproductionSteps"], "Open and close the editor"
+        )
+        legacy = await self.call("get_issue", issueId=self.issue["id"])
+        self.assertEqual(legacy["issueType"], "TASK")
 
     async def test_issue_mutations_and_pagination(self):
         created = await self.call(

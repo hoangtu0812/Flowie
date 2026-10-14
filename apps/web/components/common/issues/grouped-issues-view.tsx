@@ -15,6 +15,7 @@ import { GroupIssues, IssueGroupDescriptor } from './group-issues';
 import { CustomDragLayer } from './issue-grid';
 import { IssuesListHeader } from './issues-list-header';
 import { LoadingState } from '@/components/common/loading-state';
+import { QueryState } from '@/components/common/query-state';
 import { issueListMinWidth } from './issue-columns';
 
 interface GroupedIssuesViewProps {
@@ -27,6 +28,8 @@ interface GroupedIssuesViewProps {
    isViewTypeGrid: boolean;
    /** Prevents the empty state from rendering while the scoped issue request is pending. */
    loading?: boolean;
+   error?: string;
+   onRetry?: () => unknown;
 }
 
 interface GroupEntry {
@@ -134,6 +137,8 @@ export const GroupedIssuesView: FC<GroupedIssuesViewProps> = ({
    statuses,
    isViewTypeGrid,
    loading = false,
+   error,
+   onRetry,
 }) => {
    const { grouping, ordering, completedIssues, showEmptyGroups, displayProperties } =
       useDisplaySettingsStore();
@@ -253,6 +258,8 @@ export const GroupedIssuesView: FC<GroupedIssuesViewProps> = ({
 
    const hiddenCount = Math.max(0, totalIssues.length - issues.length);
    const showFooter = hasActiveFilters && hiddenCount > 0;
+
+   if (error) return <QueryState title="Could not load issues" message={error} onRetry={onRetry} />;
 
    /* ------------------------------- Board ------------------------------- */
    if (isViewTypeGrid) {

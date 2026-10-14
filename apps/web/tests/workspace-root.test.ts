@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { resolveWorkspaceRoot } from '../lib/workspace-root.ts';
+import { resolveWorkspaceRoot } from '../lib/workspace-root';
 
 const base = {
    adminAccessible: false,
    workspacesAccessible: true,
    invitationCount: 0,
-   defaultHome: 'inbox',
+   defaultHome: 'inbox' as const,
 };
 
 test('keeps the existing root destinations in priority order', () => {

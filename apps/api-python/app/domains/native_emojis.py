@@ -5,7 +5,8 @@ import re
 from secrets import token_urlsafe
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
+from fastapi import Depends, File, Form, Query, Request, UploadFile
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from fastapi.responses import Response
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError

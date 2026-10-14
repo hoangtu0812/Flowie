@@ -12,6 +12,53 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- The UI/UX implementation plan tracks all 17 fixes and six features with module
+  boundaries, regression evidence, before/after images and CT107 release gates.
+  SMTP delivery, real object storage and installed AI clients have explicit
+  acceptance steps before being declared operational in production.
+
+- Isolated browser regressions cover autosave, revision reconciliation/restore,
+  comment editing/replies and retry, notification persistence, bug forms, file
+  attachments, mobile properties, settings, Help/AI setup and accessibility. CI
+  verifies Prisma schema drift and applies real migrations; the UI harness uses
+  synthetic accounts and separate storage, with failure traces retained for seven
+  days.
+
+- AI connection setup now provides project-bound read-only/coding presets,
+  token-free local client configuration, clipboard feedback and a live MCP
+  initialize/discovery/grant check while the newly issued token is available.
+  AI settings show configured capabilities, and accessible agent runs expose
+  reported evidence and cancellation for owners or workspace managers.
+
+- Password recovery uses private SMTP delivery, hashed single-use tokens with a
+  15-minute expiry, database rate limits and identical request messages for unknown
+  accounts. Reset revokes sessions and API/MCP tokens immediately. Configure SMTP
+  and apply the auth-version migration before enabling the deployed feature.
+
+- Activity now offers author edit/delete, reply threads, searchable mentions,
+  comment revision history and attachment pickers. Web comment retries reuse a
+  request key to avoid duplicate posts after a lost response; apply the committed
+  deduplication migration before starting the updated API.
+
+- Comment contracts now support one-level replies and access-checked mentions,
+  preserve edit revisions and reject stale author edits. Mention notifications
+  are staged durably. The comment history/thread Prisma migration is required.
+
+- Users can file and edit structured bugs from the issue UI, and filter issue
+  views by type and severity. An access-scoped server report groups all bugs by
+  severity/status; bug details remain separate from task priority.
+
+- Issue and MCP contracts now support Task/Bug type, severity, environment,
+  reproduction steps and expected/actual results. Existing issues remain Tasks;
+  the structured-bug Prisma migration must run before the updated API starts.
+
+- Web document editing now checks saved versions, retains conflicting drafts and
+  lets users compare/reconcile the latest content. Revision history and guarded
+  restore share the existing MCP history and create a new revision on restore.
+
+- An application UI/UX review now records reproducible editing, navigation,
+  mobile and settings issues, with evidence, priorities and acceptance criteria
+  for follow-up improvements.
 - Local AI client setup now includes token-free Codex, Cursor and Claude Code
   configuration templates and a scoped-access acceptance checklist. Each client
   still requires connection verification before being declared supported.
@@ -29,6 +76,20 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Changed
 
+- Web issue views now load server-filtered cursor pages, retain query scope on
+  retry/mutation and offer Load more with visible loaded/total counts. Detail
+  reads one issue by key; account identity partitions issue snapshots.
+
+- Issue listing now returns bounded cursor pages with server-side scope, search
+  and filter matching; relationships hydrate in batches. Detail URLs can resolve
+  one issue directly. Apply the pagination index migration before deployment;
+  list clients must read pagination metadata rather than assume all issues loaded.
+
+- Browser preferences now control the home view, typography, link/cursor behavior
+  and comment shortcut. English is the default, with an English/Vietnamese catalog
+  for authentication and shared feedback. Help supports topic search and real
+  platform shortcuts; missing pages show an explicit recovery screen.
+
 - Production deployment now requires backend/MCP integration checks, clean-database
   migrations and the web build to pass in CI before CT107 deployment begins.
 - Issue/comment/document writes detect stale MCP versions and stage durable
@@ -36,6 +97,64 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Browser checks now wait for persisted comment rows and completed theme menu
+  transitions; regressions also cover recovery of locally backed-up document
+  drafts and accessibility in both light and dark appearance.
+
+- Switching tasks during description saves or pasted-image uploads no longer
+  changes the new task's draft or upload state. Repeated image paste is serialized
+  per task, including when returning to an earlier task before a response arrives.
+  The comment composer waits for its authorized activity context before accepting
+  input; pending comment responses also stay bound to their original task.
+
+- Document updates reject explicit null values for required saved fields with a
+  validation response, while empty content and clearing nullable links remain
+  supported. Invalid patches no longer reach database constraint failures.
+
+- Prisma now records the defaults and presence index already installed by the
+  committed migrations, including UTC comment revision timestamps. Schema checks
+  no longer propose dropping existing defaults or the presence index.
+
+- Cycle views distinguish an empty schedule from a failed request and offer retry.
+  Switching issues no longer applies an earlier attachment response to the new
+  task. Failed document saves can close only after explicitly confirming a local
+  draft backup; clean or still-loading readers can close immediately.
+
+- CSS reset layers now preserve existing utility-based layouts, preventing
+  overlapping toolbar text and missing Markdown list/border styles. Issue
+  property pickers have explicit names; preference toggles update immediately
+  while saving and roll back on failure.
+
+- The root and successful password sign-in now honor the stored home preference;
+  a temporary workspace failure offers Retry instead of sending users to sign-in.
+  Root navigation tests run in the same Node 20-compatible unit suite as other
+  regression checks.
+
+- Document and issue previews now render CommonMark/GFM code blocks, tables and
+  ordered/task lists without raw HTML. Description editing has a named field,
+  guarded saves and platform-aware shortcuts; mobile browser zoom is enabled.
+
+- Inbox notification preferences now save to the workspace preference API, show
+  failures and survive reload. Integration configuration opens its settings;
+  unsupported snoozing is clearly disabled.
+
+- Issue properties are now available on narrow screens, file attachment and
+  reaction controls perform real actions, and project badges open the selected
+  project. Issue assignees use current presence instead of a fixed offline state.
+- API timestamps now carry their UTC offset, and document/activity/member
+  displays interpret legacy UTC timestamps consistently instead of showing
+  newly created records as hours old.
+- Member profiles now load real workspace members and count created issues by
+  their persisted author. Issue search keeps the active view and filters;
+  failed issue loads expose Retry instead of showing a misleading empty list.
+- SLAs, releases, customer requests, Asks and emoji settings now open their
+  persisted management interfaces instead of inert placeholder pages.
+- Issue comments now prevent duplicate submissions, retain drafts after network
+  errors and show pending/error states. Activity subscriptions use persisted
+  issue preferences, and failed activity loads offer an explicit retry.
+- Markdown document edits now flush before Done or Close, serialize pending
+  saves and retain account-specific local drafts when saving fails or navigation
+  interrupts editing.
 - Workspace document listings now exclude documents belonging to teams the
   requester cannot access, including when no team filter is supplied.
 - Shared team access checks also require active workspace membership, preventing

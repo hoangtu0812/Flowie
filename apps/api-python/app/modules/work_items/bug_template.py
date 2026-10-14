@@ -31,5 +31,7 @@ BUG_TEMPLATE = {
 - [ ] The reproduction no longer fails.
 - [ ] Regression tests pass.
 """,
+    "issueType": "BUG",
+    "structuredFields": ["severity", "environment", "reproductionSteps", "expectedResult", "actualResult"],
     "classification": "Choose an existing bug label from list_issue_options; do not invent a label ID.",
 }

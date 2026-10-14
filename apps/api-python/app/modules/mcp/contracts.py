@@ -5,6 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator, field_validator
 
+from ..work_items.bug_contracts import BugCreateFields, BugUpdateFields, IssueType, BugSeverity
 from .domain import ALL_SCOPES, READ_SCOPES
 
 
@@ -52,6 +53,8 @@ class PageInput(StrictInput):
 
 
 class SearchIssuesInput(PageInput):
+    issueType: IssueType | None = None
+    severity: BugSeverity | None = None
     projectId: str | None = Field(default=None, min_length=1)
     teamId: str | None = Field(default=None, min_length=1)
     query: str | None = Field(default=None, max_length=200)
@@ -122,7 +125,7 @@ class VersionInput(WriteInput):
     expectedVersion: int = Field(ge=1)
 
 
-class CreateIssueTool(WriteInput):
+class CreateIssueTool(WriteInput, BugCreateFields):
     teamId: str = Field(min_length=1)
     projectId: str | None = None
     parentIssueId: str | None = None
@@ -135,7 +138,7 @@ class CreateIssueTool(WriteInput):
     labelIds: list[str] = Field(default_factory=list, max_length=100)
 
 
-class UpdateIssueTool(VersionInput, IssueInput):
+class UpdateIssueTool(VersionInput, IssueInput, BugUpdateFields):
     title: str | None = Field(default=None, min_length=2, max_length=500)
     description: str | None = Field(default=None, max_length=10000)
     projectId: str | None = None
@@ -158,6 +161,8 @@ class TransitionIssueTool(VersionInput, IssueInput):
 
 
 class AddCommentTool(WriteInput, IssueInput):
+    parentCommentId: str | None = None
+    mentionIds: list[str] = Field(default_factory=list, max_length=100)
     content: str = Field(min_length=1, max_length=20000)
 
 

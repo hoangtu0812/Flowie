@@ -6,6 +6,7 @@ from ...core.errors import ApiError
 from ...core.identifiers import _cuid
 from ...core.clock import _utcnow
 from ...modules.notifications.outbox import stage_notifications
+from .bug_contracts import BUG_COLUMNS
 from .contracts import CreateIssueInput, UpdateIssueInput
 from ...core.dates import _date
 from ..access.projects import _team_access, _workspace_access
@@ -75,13 +76,14 @@ async def create_issue(
     await db.execute(
         text(
             """INSERT INTO issues (id, workspace_id, team_id, status_id, project_id, parent_issue_id,
-               identifier, number, title, description, priority, estimated_effort, actual_effort, start_date, target_date, due_date, creator_id,
+               identifier, number, issue_type, severity, environment, reproduction_steps, expected_result, actual_result, title, description, priority, estimated_effort, actual_effort, start_date, target_date, due_date, creator_id,
                assignee_id, completed_at, canceled_at, created_at, updated_at)
                VALUES (:id, :workspace_id, :team_id, :status_id, :project_id, :parent_issue_id,
-               :identifier, :number, :title, :description, :priority, :estimated_effort, :actual_effort, :start_date, :target_date, :due_date, :creator_id,
+               :identifier, :number, :issueType, :severity, :environment, :reproductionSteps, :expectedResult, :actualResult, :title, :description, :priority, :estimated_effort, :actual_effort, :start_date, :target_date, :due_date, :creator_id,
                :assignee_id, :completed_at, :canceled_at, :now, :now)"""
         ),
         {
+            **{field: values.get(field) for field in BUG_COLUMNS},
             "id": issue_id,
             "workspace_id": payload.workspaceId,
             "team_id": payload.teamId,
@@ -213,6 +215,7 @@ async def update_issue(
             db, workspaceId, values["releaseIds"]
         )
     columns = {
+        **BUG_COLUMNS,
         "title": "title",
         "description": "description",
         "statusId": "status_id",

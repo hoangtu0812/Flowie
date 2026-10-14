@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
+import { responseData } from '@/lib/http';
 
 export type LiveTeamMember = {
    role: string;
@@ -37,6 +38,7 @@ export type LiveTeam = {
 
 export type LiveDocument = {
    id: string;
+   version: number;
    folderId: string | null;
    title: string;
    content: string;
@@ -312,7 +314,10 @@ export function useLiveTeam(teamReference: string) {
    );
 
    const updateDocument = useCallback(
-      async (documentId: string, input: { title?: string; content?: string; icon?: string }) => {
+      async (
+         documentId: string,
+         input: { title?: string; content?: string; icon?: string; expectedVersion?: number }
+      ) => {
          const context = requireContext();
          const response = await authenticatedFetch(
             `${api}/documents/${documentId}?${new URLSearchParams({ workspaceId: context.workspaceId })}`,
@@ -322,8 +327,7 @@ export function useLiveTeam(teamReference: string) {
                body: JSON.stringify(input),
             }
          );
-         if (!response.ok) throw new Error('Could not save document.');
-         const document = ((await response.json()) as { data: LiveDocument }).data;
+         const document = await responseData<LiveDocument>(response, 'Could not save document.');
          // Do not reload the whole team while an editor is open: that remounts the
          // modal and makes autosave appear as a page refresh on every keystroke.
          setDocuments((current) =>

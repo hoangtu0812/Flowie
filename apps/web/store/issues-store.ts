@@ -1,10 +1,22 @@
+import { loadCurrentUser } from '@/features/identity/current-user';
+import {
+   issueQueryParams,
+   type IssueQuery,
+   type PageMetadata,
+} from '@/features/issues/issue-query';
+import type { BugFields } from '@/features/issues/bug-fields';
 import { groupIssuesByStatus, Issue } from '@/mock-data/issues';
 import { LabelInterface } from '@/mock-data/labels';
 import { priorities, Priority } from '@/mock-data/priorities';
 import { Project } from '@/mock-data/projects';
 import { status as statusPresentation, Status, StatusCategory } from '@/mock-data/status';
 import { User } from '@/mock-data/users';
-import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
+import {
+   authenticatedFetch,
+   loadCurrentWorkspace,
+   workspaceSlugFromLocation,
+} from '@/lib/workspaces';
+import { ApiRequestError, responseData, responseEnvelope } from '@/lib/http';
 import { loadJoinedWorkspaceTeams, type WorkspaceTeam } from '@/components/common/teams/team-types';
 import { create } from 'zustand';
 import { Box } from 'lucide-react';
@@ -13,7 +25,7 @@ import { toast } from 'sonner';
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 declare module '@/mock-data/issues' {
-   interface Issue {
+   interface Issue extends BugFields {
       /** Personal state persisted for the current signed-in user. */
       isSubscribed?: boolean;
       isFavorite?: boolean;
@@ -25,7 +37,7 @@ declare module '@/mock-data/issues' {
    }
 }
 
-type NativeIssue = {
+type NativeIssue = BugFields & {
    id: string;
    teamId: string;
    parentIssueId?: string | null;
@@ -42,7 +54,13 @@ type NativeIssue = {
    updatedAt: string;
    status: { id: string; name: string; color: string; category: string };
    creator?: { id: string; name: string; avatarUrl?: string | null };
-   assignee?: { id: string; name: string; avatarUrl?: string | null } | null;
+   assignee?: {
+      id: string;
+      name: string;
+      avatarUrl?: string | null;
+      isOnline?: boolean;
+      lastSeenAt?: string | null;
+   } | null;
    project?: { id: string; name: string } | null;
    labelLinks?: { label: LabelInterface }[];
    cycleLinks?: { cycleId: string }[];
@@ -62,7 +80,14 @@ type NativeIssueStatus = {
 type NativeIssueOptions = {
    statuses: NativeIssueStatus[];
    projects: Array<{ id: string; name: string }>;
-   members: Array<{ id: string; name: string; email: string; avatarUrl?: string | null }>;
+   members: Array<{
+      id: string;
+      name: string;
+      email: string;
+      avatarUrl?: string | null;
+      isOnline?: boolean;
+      lastSeenAt?: string | null;
+   }>;
    labels: LabelInterface[];
    cycles: Array<{
       id: string;
@@ -81,7 +106,7 @@ type NativeIssueOptions = {
    }>;
 };
 
-type CreateIssuePayload = {
+type CreateIssuePayload = BugFields & {
    teamId: string;
    title: string;
    description?: string;
@@ -144,7 +169,7 @@ function asIssue(native: NativeIssue): Issue {
            name: native.assignee.name,
            avatarUrl: native.assignee.avatarUrl ?? '',
            email: '',
-           status: 'offline' as const,
+           status: native.assignee.isOnline ? ('online' as const) : ('offline' as const),
            role: 'Member' as const,
            joinedDate: '',
            teamIds: [],
@@ -152,6 +177,12 @@ function asIssue(native: NativeIssue): Issue {
         }
       : null;
    return {
+      issueType: native.issueType ?? 'TASK',
+      severity: native.severity,
+      environment: native.environment,
+      reproductionSteps: native.reproductionSteps,
+      expectedResult: native.expectedResult,
+      actualResult: native.actualResult,
       id: native.id,
       teamId: native.teamId,
       parentIssueId: native.parentIssueId ?? undefined,
@@ -188,7 +219,7 @@ function asMember(native: NativeIssueOptions['members'][number]): User {
       name: native.name,
       avatarUrl: native.avatarUrl ?? '',
       email: native.email,
-      status: 'offline',
+      status: native.isOnline ? 'online' : 'offline',
       role: 'Member',
       joinedDate: '',
       teamIds: [],
@@ -210,6 +241,8 @@ interface FilterOptions {
    statusType?: string[];
 }
 
+let issueLoadEpoch = 0;
+
 interface IssuesState {
    // Data
    issues: Issue[];
@@ -223,7 +256,21 @@ interface IssuesState {
    issuesByStatus: Record<string, Issue[]>;
    workspaceId?: string;
    loading: boolean;
-   loadIssues: (teamIdentifier?: string) => Promise<void>;
+   error?: string;
+   loadScope?: string;
+   issueMutationEpoch: number;
+   detailReference?: string;
+   lastQuery?: IssueQuery;
+   lastTeamReference?: string;
+   retryIssues: () => Promise<void>;
+   accountId?: string;
+   page?: PageMetadata;
+   pageQuery?: string;
+   pageError?: string;
+   loadingMore: boolean;
+   loadMore: () => Promise<void>;
+   loadIssue: (reference: string) => Promise<void>;
+   loadIssues: (teamIdentifier?: string, options?: IssueQuery) => Promise<void>;
 
    //
    getAllIssues: () => Issue[];
@@ -273,6 +320,7 @@ interface IssuesState {
 
    // Advanced issue actions
    createIssue: (payload: CreateIssuePayload) => Promise<Issue>;
+   updateIssueBug: (issueId: string, fields: BugFields) => Promise<Issue>;
    updateIssueTitle: (issueId: string, title: string) => Promise<Issue>;
    updateIssueDescription: (issueId: string, description: string) => Promise<Issue>;
    moveIssue: (issueId: string, teamId: string) => Promise<Issue>;
@@ -308,55 +356,207 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
    issuesByStatus: {},
    workspaceId: undefined,
    loading: false,
-   loadIssues: async (teamIdentifier?: string) => {
-      set({ loading: true });
+   issueMutationEpoch: 0,
+   retryIssues: () => {
+      const state = get();
+      return state.detailReference
+         ? state.loadIssue(state.detailReference)
+         : state.loadIssues(state.lastTeamReference, state.lastQuery);
+   },
+   loadingMore: false,
+   loadIssues: async (teamIdentifier?: string, queryOptions: IssueQuery = {}) => {
+      const epoch = ++issueLoadEpoch;
+      set({
+         lastQuery: queryOptions,
+         lastTeamReference: teamIdentifier,
+         detailReference: undefined,
+      });
+      const queryScope = `${workspaceSlugFromLocation() ?? ''}/${teamIdentifier ?? '*'}/${JSON.stringify(queryOptions)}`;
+      const scope = `${get().accountId ?? ''}/${queryScope}`;
+      const empty = {
+         issues: [],
+         statuses: [],
+         members: [],
+         teams: [],
+         projects: [],
+         labels: [],
+         cycles: [],
+         releases: [],
+         issuesByStatus: {},
+         workspaceId: undefined,
+         page: undefined,
+         pageQuery: undefined,
+         pageError: undefined,
+         loadingMore: false,
+      };
+      set({
+         ...(get().loadScope === scope ? {} : empty),
+         loadScope: scope,
+         loading: true,
+         error: undefined,
+      });
       try {
-         const workspace = await loadCurrentWorkspace();
-         const query = new URLSearchParams({ workspaceId: workspace.id });
+         const [workspace, account] = await Promise.all([
+            loadCurrentWorkspace(),
+            loadCurrentUser(),
+         ]);
+         if (epoch !== issueLoadEpoch) return;
+         const actualScope = `${account.id}/${queryScope}`;
+         if (get().loadScope !== actualScope)
+            set({ ...empty, accountId: account.id, loadScope: actualScope, loading: true });
+         const query = issueQueryParams(queryOptions);
+         query.set('workspaceId', workspace.id);
          const joinedWorkspaceTeams = await loadJoinedWorkspaceTeams();
          if (teamIdentifier) {
             const team = joinedWorkspaceTeams.teams.find(
                (candidate) =>
                   candidate.id === teamIdentifier || candidate.identifier === teamIdentifier
             );
-            if (team) query.set('teamId', team.id);
+            if (!team) throw new Error('This team is not available to the current account.');
+            query.set('teamId', team.id);
          }
-         const [response, optionsResponse] = await Promise.all([
-            authenticatedFetch(`${api}/issues?${query}`),
-            authenticatedFetch(`${api}/issues/options?${query}`),
+         const [issuesPayload, options] = await Promise.all([
+            authenticatedFetch(`${api}/issues?${query}`).then((response) =>
+               responseEnvelope<NativeIssue[], PageMetadata>(response, 'Could not load issues.')
+            ),
+            authenticatedFetch(`${api}/issues/options?${query}`).then((response) =>
+               responseData<NativeIssueOptions>(response, 'Could not load issue options.')
+            ),
          ]);
-         if (!response.ok || !optionsResponse.ok) throw new Error('Could not load issues.');
-         const [payload, optionsPayload] = (await Promise.all([
-            response.json(),
-            optionsResponse.json(),
-         ])) as [{ data: NativeIssue[] }, { data: NativeIssueOptions }];
-         const issues = payload.data.map(asIssue);
+         if (epoch !== issueLoadEpoch) return;
+         const issues = issuesPayload.data.map(asIssue);
          set({
             workspaceId: workspace.id,
+            page: issuesPayload.meta,
+            pageQuery: query.toString(),
+            pageError: undefined,
             issues,
-            statuses: optionsPayload.data.statuses.map(asStatus),
-            members: optionsPayload.data.members.map(asMember),
+            statuses: options.statuses.map(asStatus),
+            members: options.members.map(asMember),
             teams: joinedWorkspaceTeams.teams,
-            projects: optionsPayload.data.projects.map(asProjectOption),
-            labels: optionsPayload.data.labels,
-            cycles: optionsPayload.data.cycles ?? [],
-            releases: optionsPayload.data.releases ?? [],
+            projects: options.projects.map(asProjectOption),
+            labels: options.labels,
+            cycles: options.cycles ?? [],
+            releases: options.releases ?? [],
             issuesByStatus: groupIssuesByStatus(issues),
             loading: false,
          });
-      } catch {
+      } catch (caught) {
+         if (epoch !== issueLoadEpoch) return;
+         const lostAccess = caught instanceof ApiRequestError && [401, 403].includes(caught.status);
          set({
-            issues: [],
-            statuses: [],
-            members: [],
-            teams: [],
-            projects: [],
-            labels: [],
-            cycles: [],
-            releases: [],
-            issuesByStatus: {},
+            ...(lostAccess ? empty : {}),
+            loading: false,
+            error:
+               caught instanceof Error
+                  ? caught.message
+                  : 'Could not load issues. Check the connection and retry.',
+         });
+      }
+   },
+
+   loadMore: async () => {
+      const state = get();
+      if (state.loading || state.loadingMore || !state.page?.nextCursor || !state.pageQuery) return;
+      const epoch = issueLoadEpoch;
+      set({ loadingMore: true, pageError: undefined });
+      try {
+         const query = new URLSearchParams(state.pageQuery);
+         query.set('cursor', state.page.nextCursor);
+         const payload = await responseEnvelope<NativeIssue[], PageMetadata>(
+            await authenticatedFetch(`${api}/issues?${query}`)
+         );
+         if (epoch !== issueLoadEpoch) return;
+         const existing = new Map(get().issues.map((issue) => [issue.id, issue]));
+         payload.data.map(asIssue).forEach((issue) => existing.set(issue.id, issue));
+         const issues = [...existing.values()];
+         set({
+            issues,
+            issuesByStatus: groupIssuesByStatus(issues),
+            page: payload.meta,
+            loadingMore: false,
+         });
+      } catch (reason) {
+         if (epoch === issueLoadEpoch) {
+            const message =
+               reason instanceof Error ? reason.message : 'Could not load more issues.';
+            if (reason instanceof ApiRequestError && [401, 403].includes(reason.status))
+               set({
+                  issues: [],
+                  issuesByStatus: {},
+                  page: undefined,
+                  statuses: [],
+                  members: [],
+                  projects: [],
+                  teams: [],
+                  cycles: [],
+                  labels: [],
+                  releases: [],
+                  error: message,
+                  loadingMore: false,
+               });
+            else set({ loadingMore: false, pageError: message });
+         }
+      }
+   },
+   loadIssue: async (reference) => {
+      const epoch = ++issueLoadEpoch;
+      set({ detailReference: reference });
+      set({
+         loading: true,
+         error: undefined,
+         page: undefined,
+         pageQuery: undefined,
+         loadingMore: false,
+      });
+      try {
+         const [workspace, account] = await Promise.all([
+            loadCurrentWorkspace(),
+            loadCurrentUser(),
+         ]);
+         if (epoch !== issueLoadEpoch) return;
+         if (get().accountId !== account.id || get().workspaceId !== workspace.id)
+            set({ issues: [], issuesByStatus: {} });
+         const native = await responseData<NativeIssue>(
+            await authenticatedFetch(
+               `${api}/issues/lookup/${encodeURIComponent(reference)}?${new URLSearchParams({ workspaceId: workspace.id })}`
+            )
+         );
+         const [options, joined] = await Promise.all([
+            authenticatedFetch(
+               `${api}/issues/options?${new URLSearchParams({ workspaceId: workspace.id, teamId: native.teamId })}`
+            ).then(responseData<NativeIssueOptions>),
+            loadJoinedWorkspaceTeams(),
+         ]);
+         if (epoch !== issueLoadEpoch) return;
+         const issue = asIssue(native);
+         const cached = get().issues;
+         const issues = cached.some((item) => item.id === issue.id)
+            ? cached.map((item) => (item.id === issue.id ? issue : item))
+            : [...cached, issue];
+         set({
+            issues,
+            issuesByStatus: groupIssuesByStatus(issues),
+            workspaceId: workspace.id,
+            accountId: account.id,
+            loadScope: `${account.id}/${workspace.slug}/detail/${reference}`,
+            teams: joined.teams,
+            statuses: options.statuses.map(asStatus),
+            members: options.members.map(asMember),
+            projects: options.projects.map(asProjectOption),
+            labels: options.labels,
+            cycles: options.cycles,
+            releases: options.releases,
             loading: false,
          });
+      } catch (reason) {
+         if (epoch === issueLoadEpoch)
+            set({
+               loading: false,
+               issues: [],
+               issuesByStatus: {},
+               error: reason instanceof Error ? reason.message : 'Could not load issue.',
+            });
       }
    },
 
@@ -368,6 +568,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
       set((state) => {
          const newIssues = [...state.issues, issue];
          return {
+            issueMutationEpoch: state.issueMutationEpoch + 1,
             issues: newIssues,
             issuesByStatus: groupIssuesByStatus(newIssues),
          };
@@ -381,6 +582,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
          );
 
          return {
+            issueMutationEpoch: state.issueMutationEpoch + 1,
             issues: newIssues,
             issuesByStatus: groupIssuesByStatus(newIssues),
          };
@@ -391,6 +593,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
       set((state) => {
          const newIssues = state.issues.filter((issue) => issue.id !== id);
          return {
+            issueMutationEpoch: state.issueMutationEpoch + 1,
             issues: newIssues,
             issuesByStatus: groupIssuesByStatus(newIssues),
          };
@@ -843,6 +1046,29 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
       return issue;
    },
 
+   updateIssueBug: async (issueId, fields) => {
+      const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
+      const { issueType, severity, environment, reproductionSteps, expectedResult, actualResult } =
+         fields;
+      const response = await authenticatedFetch(
+         `${api}/issues/${issueId}?${new URLSearchParams({ workspaceId })}`,
+         {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+               issueType,
+               severity,
+               environment,
+               reproductionSteps,
+               expectedResult,
+               actualResult,
+            }),
+         }
+      );
+      const issue = asIssue(await responseData<NativeIssue>(response));
+      get().updateIssue(issueId, issue);
+      return issue;
+   },
    updateIssueTitle: async (issueId, title) => {
       const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
       const response = await authenticatedFetch(
