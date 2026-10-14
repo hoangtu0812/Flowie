@@ -160,6 +160,8 @@ class QueryService:
     async def issues(self, payload) -> dict:
         params, filters = {}, []
         for field, column in {
+            "issueType": "issue_type",
+            "severity": "severity",
             "projectId": "project_id",
             "teamId": "team_id",
             "statusId": "status_id",
@@ -201,7 +203,7 @@ class QueryService:
         return await self.page(
             "search_issues",
             payload,
-            f"""SELECT i.id,i.identifier,i.title,i.priority,
+            f"""SELECT i.id,i.identifier,i.title,i.priority,i.issue_type AS "issueType",i.severity,
             i.project_id AS "projectId",i.team_id AS "teamId",i.assignee_id AS "assigneeId",
             i.status_id AS "statusId",s.name AS "statusName",s.category,i.version,
             i.due_date AS "dueDate",i.updated_at AS "updatedAt"

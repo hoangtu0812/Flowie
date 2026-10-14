@@ -113,6 +113,18 @@ enum IssueStatusCategory {
   CANCELED
 }
 
+enum IssueType {
+  TASK
+  BUG
+}
+
+enum BugSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
 enum IssuePriority {
   NONE
   LOW
@@ -1465,35 +1477,41 @@ model IssueTemplate {
 }
 
 model Issue {
-  agentRuns       AgentRun[]
-  agentEvents     AgentIssueEvent[]
-  documentLinks   DocumentLink[]
-  id              String            @id @default(cuid())
-  workspaceId     String            @map("workspace_id")
-  teamId          String            @map("team_id")
-  statusId        String            @map("status_id")
-  projectId       String?           @map("project_id")
-  parentIssueId   String?           @map("parent_issue_id")
-  duplicateOfId   String?           @map("duplicate_of_id")
-  identifier      String
-  number          Int
-  version         Int               @default(1)
-  title           String
-  description     String?
-  priority        IssuePriority     @default(NONE)
-  resolution      IssueResolution?
-  estimatedEffort Float?            @map("estimated_effort")
-  actualEffort    Float?            @map("actual_effort")
-  startDate       DateTime?         @map("start_date")
-  targetDate      DateTime?         @map("target_date")
-  dueDate         DateTime?         @map("due_date")
-  creatorId       String            @map("creator_id")
-  assigneeId      String?           @map("assignee_id")
-  completedAt     DateTime?         @map("completed_at")
-  canceledAt      DateTime?         @map("canceled_at")
-  archivedAt      DateTime?         @map("archived_at")
-  createdAt       DateTime          @default(now()) @map("created_at")
-  updatedAt       DateTime          @updatedAt @map("updated_at")
+  agentRuns         AgentRun[]
+  agentEvents       AgentIssueEvent[]
+  documentLinks     DocumentLink[]
+  id                String            @id @default(cuid())
+  workspaceId       String            @map("workspace_id")
+  teamId            String            @map("team_id")
+  statusId          String            @map("status_id")
+  projectId         String?           @map("project_id")
+  parentIssueId     String?           @map("parent_issue_id")
+  duplicateOfId     String?           @map("duplicate_of_id")
+  identifier        String
+  number            Int
+  version           Int               @default(1)
+  issueType         IssueType         @default(TASK) @map("issue_type")
+  severity          BugSeverity?
+  environment       String?
+  reproductionSteps String?           @map("reproduction_steps")
+  expectedResult    String?           @map("expected_result")
+  actualResult      String?           @map("actual_result")
+  title             String
+  description       String?
+  priority          IssuePriority     @default(NONE)
+  resolution        IssueResolution?
+  estimatedEffort   Float?            @map("estimated_effort")
+  actualEffort      Float?            @map("actual_effort")
+  startDate         DateTime?         @map("start_date")
+  targetDate        DateTime?         @map("target_date")
+  dueDate           DateTime?         @map("due_date")
+  creatorId         String            @map("creator_id")
+  assigneeId        String?           @map("assignee_id")
+  completedAt       DateTime?         @map("completed_at")
+  canceledAt        DateTime?         @map("canceled_at")
+  archivedAt        DateTime?         @map("archived_at")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
 
   workspace         Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   team              Team                  @relation(fields: [teamId], references: [id], onDelete: Cascade)
@@ -1523,6 +1541,7 @@ model Issue {
   @@unique([workspaceId, identifier])
   @@unique([teamId, number])
   @@index([workspaceId, teamId, statusId])
+  @@index([workspaceId, issueType, severity])
   @@index([projectId])
   @@index([parentIssueId])
   @@index([duplicateOfId])

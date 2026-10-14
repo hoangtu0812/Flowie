@@ -4,6 +4,7 @@ from datetime import timedelta
 from ...core.clock import _utcnow
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from .bug_contracts import BUG_COLUMNS
 from ...core.errors import ApiError
 from ..access.projects import _team_access
 
@@ -73,6 +74,7 @@ async def _issue_row(
         "title": row["title"],
         "description": row["description"],
         "priority": row["priority"],
+        **{field: row[column] for field, column in BUG_COLUMNS.items()},
         "resolution": row["resolution"],
         "estimatedEffort": row["estimated_effort"],
         "actualEffort": row["actual_effort"],

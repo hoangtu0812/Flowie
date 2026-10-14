@@ -317,6 +317,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 self.principal, "add_comment", {**args, "content": "Different"}
             )
         self.assertEqual(error.exception.status_code, 409)
+
         comment = first["data"]
         update = await self.call(
             "update_comment",
@@ -335,6 +336,39 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 idempotencyKey="comment-stale-key",
             )
         self.assertEqual(error.exception.status_code, 409)
+
+    async def test_structured_bugs_share_web_and_mcp_contracts(self):
+        created = await self.call(
+            "create_issue",
+            teamId=self.team,
+            projectId=self.project,
+            statusId=self.status,
+            title="Structured bug",
+            issueType="BUG",
+            severity="CRITICAL",
+            environment="Windows / Chrome",
+            reproductionSteps="Open the editor",
+            expectedResult="Save succeeds",
+            actualResult="Draft is lost",
+            idempotencyKey="structured-bug-create",
+        )
+        bug = created["data"]
+        self.assertEqual(bug["issueType"], "BUG")
+        self.assertEqual(bug["severity"], "CRITICAL")
+        results = await self.call("search_issues", issueType="BUG", severity="CRITICAL")
+        self.assertEqual([row["id"] for row in results["items"]], [bug["id"]])
+        updated = await self.call(
+            "update_issue",
+            issueId=bug["id"],
+            expectedVersion=bug["version"],
+            reproductionSteps="Open and close the editor",
+            idempotencyKey="structured-bug-edit",
+        )
+        self.assertEqual(
+            updated["data"]["reproductionSteps"], "Open and close the editor"
+        )
+        legacy = await self.call("get_issue", issueId=self.issue["id"])
+        self.assertEqual(legacy["issueType"], "TASK")
 
     async def test_issue_mutations_and_pagination(self):
         created = await self.call(

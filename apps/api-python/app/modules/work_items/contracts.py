@@ -4,10 +4,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from .bug_contracts import BugCreateFields, BugUpdateFields
+
 IssuePriority = Literal["NONE", "LOW", "MEDIUM", "HIGH", "URGENT"]
 
 
-class CreateIssueInput(BaseModel):
+class CreateIssueInput(BugCreateFields):
     workspaceId: str = Field(min_length=1)
     teamId: str = Field(min_length=1)
     title: str = Field(min_length=2, max_length=500)
@@ -25,7 +27,7 @@ class CreateIssueInput(BaseModel):
     actualEffort: float | None = Field(default=None, ge=0)
 
 
-class UpdateIssueInput(BaseModel):
+class UpdateIssueInput(BugUpdateFields):
     title: str | None = Field(default=None, min_length=2, max_length=500)
     description: str | None = Field(default=None, max_length=10_000)
     statusId: str | None = None

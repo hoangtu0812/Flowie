@@ -12,6 +12,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Issue and MCP contracts now support Task/Bug type, severity, environment,
+  reproduction steps and expected/actual results. Existing issues remain Tasks;
+  the structured-bug Prisma migration must run before the updated API starts.
+
 - Web document editing now checks saved versions, retains conflicting drafts and
   lets users compare/reconcile the latest content. Revision history and guarded
   restore share the existing MCP history and create a new revision on restore.
