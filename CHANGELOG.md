@@ -12,6 +12,9 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- An application UI/UX review now records reproducible editing, navigation,
+  mobile and settings issues, with evidence, priorities and acceptance criteria
+  for follow-up improvements.
 - Local AI client setup now includes token-free Codex, Cursor and Claude Code
   configuration templates and a scoped-access acceptance checklist. Each client
   still requires connection verification before being declared supported.
