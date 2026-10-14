@@ -1,5 +1,5 @@
 import { authenticatedFetch } from '@/lib/workspaces';
-import { responseData } from '@/lib/http';
+import { responseData, responseEnvelope } from '@/lib/http';
 import type { Attachment } from '@/lib/attachments';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
@@ -15,6 +15,7 @@ export type IssueComment = {
    id: string;
    issueId: string;
    version: number;
+   replyCount?: number;
    authorId: string;
    parentCommentId: string | null;
    mentionIds: string[];
@@ -36,13 +37,31 @@ async function data<T>(response: Response): Promise<T> {
    return payload.data;
 }
 
+export type FeedMeta = { limit: number; nextCursor: string | null };
+export async function loadFeedPage<T>(
+   workspaceId: string,
+   issueId: string,
+   kind: 'comments' | 'activities',
+   cursor?: string,
+   parentCommentId?: string
+) {
+   const query = new URLSearchParams({ workspaceId, issueId, limit: '30' });
+   if (kind === 'comments') query.set('threaded', 'true');
+   if (cursor) query.set('cursor', cursor);
+   if (parentCommentId) query.set('parentCommentId', parentCommentId);
+   return responseEnvelope<T[], FeedMeta>(await authenticatedFetch(`${api}/${kind}?${query}`));
+}
 export async function loadIssueActivity(workspaceId: string, issueId: string) {
-   const query = new URLSearchParams({ workspaceId, issueId });
    const [activities, comments] = await Promise.all([
-      authenticatedFetch(`${api}/activities?${query}`).then(data<IssueActivity[]>),
-      authenticatedFetch(`${api}/comments?${query}`).then(data<IssueComment[]>),
+      loadFeedPage<IssueActivity>(workspaceId, issueId, 'activities'),
+      loadFeedPage<IssueComment>(workspaceId, issueId, 'comments'),
    ]);
-   return { activities: activities.filter((item) => item.type !== 'comment.created'), comments };
+   return {
+      activities: activities.data.filter((item) => item.type !== 'comment.created'),
+      comments: comments.data,
+      activityCursor: activities.meta?.nextCursor,
+      commentCursor: comments.meta?.nextCursor,
+   };
 }
 
 export async function postIssueComment(

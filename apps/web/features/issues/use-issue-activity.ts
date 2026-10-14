@@ -5,10 +5,12 @@ import { loadCurrentWorkspace } from '@/lib/workspaces';
 import { SubmissionGate } from '@/features/shared/submission-gate';
 import {
    loadIssueActivity,
+   loadFeedPage,
    postIssueComment,
    type IssueActivity,
    type IssueComment,
 } from './comments-api';
+import { mergeFeed } from './feed-merge';
 
 export function useIssueActivity(issueId: string) {
    const [activities, setActivities] = useState<IssueActivity[]>([]);
@@ -27,6 +29,11 @@ export function useIssueActivity(issueId: string) {
    const current = useRef(scope);
    current.current = scope;
    const [reload, setReload] = useState(0);
+   const [activityCursor, setActivityCursor] = useState<string | null>();
+   const [commentCursor, setCommentCursor] = useState<string | null>();
+   const [paging, setPaging] = useState(false);
+   const pageGate = useRef(new SubmissionGate());
+   const replyCursors = useRef<Record<string, string | null>>({});
 
    useEffect(() => {
       setActivities([]);
@@ -38,6 +45,11 @@ export function useIssueActivity(issueId: string) {
       setSubmitError(undefined);
       setSending(false);
       gate.current = new SubmissionGate();
+      pageGate.current = new SubmissionGate();
+      replyCursors.current = {};
+      setActivityCursor(undefined);
+      setCommentCursor(undefined);
+      setPaging(false);
    }, [issueId]);
 
    useEffect(() => {
@@ -50,8 +62,10 @@ export function useIssueActivity(issueId: string) {
             const result = await loadIssueActivity(workspace.id, issueId);
             if (active) {
                setWorkspaceId(workspace.id);
-               setActivities(result.activities);
-               setComments(result.comments);
+               setActivities((items) => mergeFeed(items, result.activities));
+               setComments((items) => mergeFeed(items, result.comments));
+               setActivityCursor(result.activityCursor);
+               setCommentCursor(result.commentCursor);
             }
          })
          .catch((caught: unknown) => {
@@ -93,7 +107,23 @@ export function useIssueActivity(issueId: string) {
                   request.current = undefined;
                   setReplyTo(undefined);
                   setMentionIds([]);
-                  setComments((previous) => [...previous, comment]);
+                  setComments((previous) =>
+                     mergeFeed(
+                        previous.map((item) =>
+                           item.id === comment.parentCommentId
+                              ? {
+                                   ...item,
+                                   replyCount:
+                                      (item.replyCount ??
+                                         previous.filter(
+                                            (child) => child.parentCommentId === item.id
+                                         ).length) + 1,
+                                }
+                              : item
+                        ),
+                        [comment]
+                     )
+                  );
                   setDraft((latest) => (latest === draft ? '' : latest));
                }
             } catch (caught) {
@@ -110,6 +140,56 @@ export function useIssueActivity(issueId: string) {
       [draft, issueId, workspaceId, replyTo, mentionIds, scope]
    );
 
+   const loadMore = (kind: 'comments' | 'activities', parentId?: string) =>
+      pageGate.current.run(async () => {
+         if (!workspaceId) return;
+         const cursor = parentId
+            ? replyCursors.current[parentId]
+            : kind === 'comments'
+              ? commentCursor
+              : activityCursor;
+         if (cursor === null || (!parentId && !cursor)) return;
+         setPaging(true);
+         setError(undefined);
+         try {
+            if (kind === 'comments') {
+               const page = await loadFeedPage<IssueComment>(
+                  workspaceId,
+                  issueId,
+                  kind,
+                  cursor ?? undefined,
+                  parentId
+               );
+               if (current.current !== scope) return;
+               setComments((items) => mergeFeed(items, page.data));
+               if (parentId) replyCursors.current[parentId] = page.meta?.nextCursor ?? null;
+               else setCommentCursor(page.meta?.nextCursor);
+            } else {
+               const page = await loadFeedPage<IssueActivity>(
+                  workspaceId,
+                  issueId,
+                  kind,
+                  cursor ?? undefined
+               );
+               if (current.current !== scope) return;
+               setActivities((items) =>
+                  mergeFeed(
+                     items,
+                     page.data.filter((item) => item.type !== 'comment.created')
+                  )
+               );
+               setActivityCursor(page.meta?.nextCursor);
+            }
+         } catch (reason) {
+            if (current.current === scope)
+               setError(
+                  reason instanceof Error ? reason.message : 'Could not load older activity.'
+               );
+         } finally {
+            if (current.current === scope) setPaging(false);
+         }
+      });
+
    return {
       activities,
       replyTo,
@@ -118,7 +198,17 @@ export function useIssueActivity(issueId: string) {
       setMentionIds,
       changeComment: (comment: IssueComment) =>
          setComments((items) => items.map((item) => (item.id === comment.id ? comment : item))),
-      deleteComment: (id: string) => setComments((items) => items.filter((item) => item.id !== id)),
+      deleteComment: (id: string) =>
+         setComments((items) => {
+            const deleted = items.find((item) => item.id === id);
+            return items
+               .filter((item) => item.id !== id)
+               .map((item) =>
+                  item.id === deleted?.parentCommentId
+                     ? { ...item, replyCount: Math.max(0, (item.replyCount ?? 1) - 1) }
+                     : item
+               );
+         }),
       comments,
       workspaceId,
       draft,
@@ -128,6 +218,10 @@ export function useIssueActivity(issueId: string) {
       error,
       submitError,
       submit,
+      activityCursor,
+      commentCursor,
+      paging,
+      loadMore,
       retry: () => setReload((value) => value + 1),
    };
 }

@@ -80,6 +80,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Changed
 
+- Comment and activity APIs return bounded cursor pages with batched reactions
+  and files. Web loads older pages and long reply threads on demand; concurrent
+  page responses preserve newly posted comments and newer edits.
+
 - Web issue views now load server-filtered cursor pages, retain query scope on
   retry/mutation and offer Load more with visible loaded/total counts. Detail
   reads one issue by key; account identity partitions issue snapshots.

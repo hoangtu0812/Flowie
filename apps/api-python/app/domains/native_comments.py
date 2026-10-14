@@ -3,9 +3,9 @@ from __future__ import annotations
 from ..modules.work_items.comment_repository import _text_from_body as _text_from_body, _comment_input as _comment_input, _comment as _comment, _reaction_summary as _reaction_summary
 
 import json
-from typing import Any
+from typing import Any, Annotated
 
-from fastapi import Depends, Query
+from fastapi import Depends, Query, Request
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -66,18 +66,19 @@ async def comment_revisions(comment_id: str, workspaceId: str = Query(min_length
 @router.get('')
 @public_router.get('')
 async def list_comments(
-    workspaceId: str = Query(min_length=1),
-    issueId: str = Query(min_length=1),
-    user: Any = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
-) -> dict[str, list[dict[str, Any]]]:
-    await _workspace_access(db, workspaceId, user['id'])
-    await _issue_row(db, issueId, workspaceId, user['id'])
-    result = await db.execute(
-        text('SELECT id FROM comments WHERE issue_id = :issue_id AND deleted_at IS NULL ORDER BY created_at'),
-        {'issue_id': issueId},
-    )
-    return {'data': [await _comment(db, row['id'], workspaceId, user['id']) for row in result.mappings().all()]}
+    workspaceId: str = Query(min_length=1), issueId: str = Query(min_length=1),
+    user: Any = Depends(current_user), db: AsyncSession = Depends(get_session), *,
+    request: Request = None,
+    limit: Annotated[int, Query(ge=1,le=100)] = 50,
+    cursor: Annotated[str | None, Query(max_length=2000)] = None,
+    threaded: bool = False,
+    parentCommentId: Annotated[str | None, Query(min_length=1,max_length=100)] = None,
+) -> dict:
+    from ..modules.work_items.collaboration_feed import comment_page
+    from ..core.config import Settings
+    settings = request.app.state.settings if request else Settings.from_environment()
+    return await comment_page(db, workspaceId, issueId, user['id'], settings.auth_jwt_secret,
+        limit=limit,cursor=cursor,threaded=threaded,parent_id=parentCommentId)
 
 
 @router.post('')

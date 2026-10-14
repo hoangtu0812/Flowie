@@ -479,3 +479,43 @@ test('Inbox shows failed loads with Retry instead of an empty notification list'
       })
    ).toBeVisible();
 });
+
+test('older comments and a long reply thread load in bounded pages', async ({ page, context }) => {
+   const issue = fixture.issues[1];
+   const suffix = String(Date.now());
+   let newest = '';
+   for (let index = 0; index < 31; index++) {
+      const response = await context.request.post(`${api}/comments`, {
+         data: {
+            workspaceId: fixture.workspace_id,
+            issueId: issue.id,
+            content: `Paged ${suffix} root ${index}`,
+         },
+      });
+      expect(response.ok()).toBeTruthy();
+      newest = (await response.json()).data.id;
+   }
+   for (let index = 0; index < 8; index++) {
+      const response = await context.request.post(`${api}/comments`, {
+         data: {
+            workspaceId: fixture.workspace_id,
+            issueId: issue.id,
+            parentCommentId: newest,
+            content: `Thread ${suffix} reply ${index}`,
+         },
+      });
+      expect(response.ok()).toBeTruthy();
+   }
+   await page.goto(`/${fixture.slug}/issue/${issue.identifier}`);
+   await expect(page.getByText(`Paged ${suffix} root 30`, { exact: true })).toBeVisible();
+   await expect(page.getByText(`Paged ${suffix} root 0`, { exact: true })).toHaveCount(0);
+   await page.getByRole('button', { name: 'Load older comments', exact: true }).click();
+   await expect(page.getByText(`Paged ${suffix} root 0`, { exact: true })).toBeVisible();
+   await expect(page.getByText(`Thread ${suffix} reply 0`, { exact: true })).toHaveCount(0);
+   const parent = page.getByRole('article').filter({ hasText: `Paged ${suffix} root 30` });
+   await parent
+      .locator('..')
+      .getByRole('button', { name: 'Load more replies to Regression Owner', exact: true })
+      .click();
+   await expect(page.getByText(`Thread ${suffix} reply 0`, { exact: true })).toBeVisible();
+});

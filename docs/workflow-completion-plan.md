@@ -13,7 +13,7 @@
 | WF-01 | P1 | Deployment khóa SHA đã verify; đối chiếu source và readiness | Workflow main | Không lấy commit mới hơn CI; fail khi source dirty hoặc SHA không hợp lệ; giữ migrate → api/worker | IN_REVIEW |
 | WF-02 | P1 | Inbox preview dùng issue thật, GFM, activity/comment và attachment chung | Shared issue modules | Issue ngoài page đầu vẫn mở đúng; gửi/upload thật, lỗi giữ draft; mobile có Properties | IN_REVIEW |
 | WF-03 | P1 | Inbox sort/error/retry và cache theo account/workspace | Notification module | Sort theo instant gốc; lỗi không giả empty; không áp dụng response cũ sau đổi scope | IN_REVIEW |
-| WF-04 | P2 | Batch và cursor comment/activity, tải thread có giới hạn | Core cursor, ACL | Query count không tăng theo số comment trong page; cursor bind issue/actor; comment mới không mất sau refresh | TODO |
+| WF-04 | P2 | Batch và cursor comment/activity, tải thread có giới hạn | Core cursor, ACL | Query count không tăng theo số comment trong page; cursor bind issue/actor; comment mới không mất sau refresh | IN_REVIEW |
 | WF-05 | P2 | Codex local runner và quy trình một bug tới PR | Project/bug và scoped token do người dùng cấu hình | Dry-run/context/run lease/evidence/cancel; chạy thật chỉ khi có task, repo và quyền SCM; không gửi token vào prompt/log | TODO |
 | WF-06 | P2 | Tìm kiếm toàn workspace theo quyền | Shared query/ACL | Tìm issue/document/project/member phía server, có limit/cursor, Ctrl+K dẫn đến entity đúng | TODO |
 | WF-07 | P2 | Snooze, kênh thông báo và delivery status | Prisma migration, worker, SMTP/browser permission | Snooze lưu DB và thức lại; email có retry/outbox; desktop chỉ xin quyền khi người dùng chọn; trạng thái phản ánh config thật | TODO |
@@ -51,3 +51,5 @@
 Ghi từng ID: module/commit, số kiểm thử, kết quả UI, migration/config mới, giới hạn còn lại và owner nghiệm thu production. Các mục phụ thuộc dữ liệu hoặc quyền ngoài phiên phải giữ WAITING_ACCEPTANCE, không tự ghi DONE.
 
 Checkpoint local WF-02/03: TypeScript/build pass, 16 unit và 16 E2E pass; Inbox đã có fixture notification và kiểm tra gửi comment/Retry/task không cache.
+
+Checkpoint WF-04: batch/cursor test DB pass (query count bằng nhau ở page 2/30 root); 17 unit, 17 E2E và web build pass; backend hồi quy trước test mới 103 pass, 2 skipped.

@@ -143,6 +143,13 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
             {items.map((item) => (
                <EventRow key={item.id} item={item as Extract<ActivityItem, { kind: 'event' }>} />
             ))}
+            {state.activityCursor && (
+               <Button
+                  label="Load older activity"
+                  isLoading={state.paging}
+                  clickAction={() => state.loadMore('activities')}
+               />
+            )}
             {state.workspaceId &&
                state.comments
                   .filter(
@@ -175,8 +182,24 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
                                  />
                               </VStack>
                            ))}
+                        {(comment.replyCount ?? 0) >
+                           state.comments.filter((item) => item.parentCommentId === comment.id)
+                              .length && (
+                           <Button
+                              label={`Load more replies to ${comment.author.name}`}
+                              isLoading={state.paging}
+                              clickAction={() => state.loadMore('comments', comment.id)}
+                           />
+                        )}
                      </VStack>
                   ))}
+            {state.commentCursor && (
+               <Button
+                  label="Load older comments"
+                  isLoading={state.paging}
+                  clickAction={() => state.loadMore('comments')}
+               />
+            )}
             {state.replyTo && (
                <HStack gap={2}>
                   <Text>Replying to {state.replyTo.author.name}</Text>
