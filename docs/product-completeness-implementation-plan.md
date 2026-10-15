@@ -16,7 +16,7 @@ Phạm vi đã được yêu cầu: toàn bộ AUD-01–12 và NEXT-01–09 tron
 | AUD-08 | Dependency probes, request ID/build identity, scrubbed error report, job heartbeat/lag | LOCAL_VERIFIED |
 | AUD-09 | Backup/restore tooling và rehearsal đã kiểm tra; đích S3 độc lập, credential và CT107 inventory chưa cấu hình | WAITING_CONFIGURATION |
 | AUD-10 | Đã thêm role/revocation, >100 rows, view/error/workflow/operations; tiếp tục mở rộng theo feature | IN_PROGRESS |
-| AUD-11 | Codex bug thật → PR; người dùng cho phép tự chọn project/bug, đang chuẩn bị nghiệm thu | IN_PROGRESS |
+| AUD-11 | Đã chạy Codex thật + MCP local cho bug locale Archived; CLI hiệu lực read-only, run FAILED không có code; cần cấu hình quyền/production login | WAITING_CONFIGURATION |
 | AUD-12 | Cập nhật bằng chứng kế hoạch cũ, build identity/release checklist; release thực sau deploy verified | TODO |
 | NEXT-01 | Bulk preview/execute có version/ACL/idempotency và explicit all-results selection | LOCAL_VERIFIED |
 | NEXT-02 | Recurring schedules/timezone, lease/idempotency, pause/run history và UI | TODO |
@@ -97,3 +97,13 @@ team/project/parent, updatedAt và quyền hiện tại; nội dung/relation đ�
 document ghi actor/version; project restore không tự phục hồi task. Archive
 project bị chặn nếu cascade gồm task ngoài quyền. DB regressions và 6/6 E2E
 trên ba engine đạt, bao gồm dialog ở 390px. Build/lint/types pass. Không có purge.
+
+AUD-11 thử thật: project `c6wyb59dubbg2x0tucgipjshe`, bug `GEN-9`
+(`clbbtlagt7isgjovxqj3bjwrb`) trên API loopback với source thật `e305db7`.
+MCP inspect không claim; run `c1jlsc2cb5of2l2chpalc2sga` claim được, gọi Codex CLI
+0.154.0 thật (default model gpt-6-astra), nhưng CLI hiệu lực read-only dù truyền
+workspace-write. Không có diff/commit/PR, run được ghi FAILED và connection
+`ckpsau4xafwzl658m4gjozydz` đã revoke. Ba test local chạy trên source không đổi
+không được xem là bằng chứng sửa bug. Checkout và log thử nằm trong `.venv`,
+không đưa credential vào Git. Hai probe thật xác nhận model gọi được nhưng
+không có quyền ghi. CT107 chưa nghiệm thu: browser đang ở login và chưa có token.
