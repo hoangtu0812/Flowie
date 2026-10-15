@@ -2,6 +2,10 @@
 
 ## Decision and production gate
 
+The proposed default provider and cost/configuration assumptions are recorded in
+[the off-site destination decision](offsite-backup-decision.md). It remains a
+proposal until an independently owned account/bucket and recovery checks exist.
+
 Use restic 0.19.1 with an HTTPS S3-compatible bucket in an account independent
 of CT107. An existing NAS is suitable only if it is on a different host/storage
 failure domain and has an additional off-site copy. No destination, account or
