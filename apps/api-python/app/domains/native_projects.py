@@ -779,12 +779,11 @@ async def update_project(project_id: str, payload: UpdateProjectInput, workspace
 
 
 @router.delete('/{project_id}')
-async def archive_project(project_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _project(db, project_id, workspaceId, user['id']); now = _utcnow()
-    await db.execute(text('UPDATE issues SET archived_at = :now, updated_at = :now WHERE project_id = :project_id AND workspace_id = :workspace_id AND archived_at IS NULL'), {'project_id': project_id, 'workspace_id': workspaceId, 'now': now})
-    await db.execute(text('UPDATE projects SET archived_at = :now, updated_at = :now WHERE id = :project_id AND workspace_id = :workspace_id'), {'project_id': project_id, 'workspace_id': workspaceId, 'now': now})
+async def archive_project(project_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict:
+    from ..modules.archive.service import archive_project as operation
+    result=await operation(db,workspaceId,user,project_id)
     await db.commit()
-    return {'data': {'id': project_id, 'archivedAt': now}}
+    return {'data':result}
 
 
 @router.get('/{project_id}/activity')

@@ -149,6 +149,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(workflow_router)
     from .modules.work_items.bulk_api import router as bulk_router
     app.include_router(bulk_router)
+    from .modules.archive.api import router as archive_router
+    app.include_router(archive_router)
     from .modules.operations.api import router as operations_admin_router
     app.include_router(operations_admin_router)
     app.include_router(native_initiatives_router)

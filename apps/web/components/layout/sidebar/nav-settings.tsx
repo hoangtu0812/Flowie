@@ -54,6 +54,7 @@ export const settingsNav: SettingsNavGroup[] = [
          { name: 'General', url: '/settings/workspace', icon: Settings },
          { name: 'Code & reviews', url: '/settings/code-and-reviews', icon: Code },
          { name: 'Operations', url: '/settings/operations', icon: Target },
+         { name: 'Archived records', url: '/settings/archive', icon: FileText },
       ],
    },
    {

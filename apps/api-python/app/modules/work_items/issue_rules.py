@@ -113,7 +113,7 @@ async def _validate_references(
         project = await db.execute(
             text(
                 """SELECT 1 FROM projects WHERE id = :project_id AND workspace_id = :workspace_id
-                   AND archived_at IS NULL AND (team_id IS NULL OR team_id = :team_id)"""
+                   AND archived_at IS NULL AND (team_id IS NULL OR team_id = :team_id) FOR SHARE"""
             ),
             {
                 "project_id": project_id,

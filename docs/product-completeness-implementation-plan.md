@@ -21,7 +21,7 @@ Phạm vi đã được yêu cầu: toàn bộ AUD-01–12 và NEXT-01–09 tron
 | NEXT-01 | Bulk preview/execute có version/ACL/idempotency và explicit all-results selection | LOCAL_VERIFIED |
 | NEXT-02 | Recurring schedules/timezone, lease/idempotency, pause/run history và UI | TODO |
 | NEXT-03 | Business calendar, SLA pause/resume/escalation, policy revision và reports | TODO |
-| NEXT-04 | Archived center/restore theo quyền, retention; không purge object khi chưa có policy/backup | TODO |
+| NEXT-04 | Archived center cho task/project/document/initiative; restore preview/version/dependency/audit; giữ dữ liệu, không purge | LOCAL_VERIFIED |
 | NEXT-05 | CSV mapping/preview/validation/dedup, filtered scoped export và document export | TODO |
 | NEXT-06 | Server reporting trên actual status history: flow, aging, WIP, reopen, workload | TODO |
 | NEXT-07 | MFA/IdP policy, per-session revoke, credential inventory và login audit | TODO |
@@ -91,3 +91,9 @@ project updates không lọt qua summary/detail/history. 9/9 portfolio recovery,
 paging/history E2E trên ba engine. Full UI: 94/96 lần đầu; 2 Saved View WebKit
 đạt khi chạy lại sau khi đợi request của document cũ hoàn tất (không bỏ qua
 exception). Web production build và 17 unit pass; backend toàn bộ pass.
+
+NEXT-04: API/service/repository và UI Archived riêng module. Restore kiểm tra
+team/project/parent, updatedAt và quyền hiện tại; nội dung/relation được giữ,
+document ghi actor/version; project restore không tự phục hồi task. Archive
+project bị chặn nếu cascade gồm task ngoài quyền. DB regressions và 6/6 E2E
+trên ba engine đạt, bao gồm dialog ở 390px. Build/lint/types pass. Không có purge.

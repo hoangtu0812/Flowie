@@ -7,7 +7,7 @@ import type { PageMetadata } from '@/features/issues/issue-query';
 export function usePagedResource<T extends { id: string }>(url?: string, revision?: string) {
    const [items, setItems] = useState<T[]>([]);
    const [page, setPage] = useState<PageMetadata>();
-   const [loading, setLoading] = useState(false);
+   const [loading, setLoading] = useState(!!url);
    const [error, setError] = useState<string>();
    const [refresh, setRefresh] = useState(0);
    const generation = useRef(0);
