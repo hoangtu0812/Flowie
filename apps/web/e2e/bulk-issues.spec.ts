@@ -16,8 +16,13 @@ test('bulk changes preview without mutation, execute and resume after reload', a
    await page.goto('/auth/login');
    await page.getByLabel('Email', { exact: true }).fill(fixture.email);
    await page.getByLabel('Password', { exact: true }).fill(fixture.password);
+   const workspaceReady = page.waitForResponse(
+      (response) => response.url().startsWith(`${api}/teams?`) && response.ok()
+   );
    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
    await expect(page).toHaveURL(new RegExp(`/${fixture.slug}/`));
+   await workspaceReady;
+   await page.waitForLoadState('networkidle');
    const query = new URLSearchParams({ workspaceId: fixture.workspace_id, limit: '100' });
    const before = (await (await context.request.get(`${api}/issues?${query}`)).json()).data as {
       id: string;
@@ -26,7 +31,8 @@ test('bulk changes preview without mutation, execute and resume after reload', a
    expect(before.length).toBeGreaterThan(0);
    try {
       await page.goto(`/${fixture.slug}/team/GEN/all`);
-      await page.getByRole('button', { name: 'Bulk changes', exact: true }).click();
+      await page.getByRole('button', { name: 'Issue actions', exact: true }).click();
+      await page.getByRole('menuitem', { name: 'Bulk changes', exact: true }).click();
       await page.getByRole('combobox', { name: 'Selection scope', exact: true }).click();
       await page.getByRole('option', { name: 'All matching filtered issues', exact: true }).click();
       await page
@@ -52,7 +58,8 @@ test('bulk changes preview without mutation, execute and resume after reload', a
       }[];
       expect(changed.every((row) => row.priority === 'URGENT')).toBeTruthy();
       await page.reload();
-      await page.getByRole('button', { name: 'Bulk changes', exact: true }).click();
+      await page.getByRole('button', { name: 'Issue actions', exact: true }).click();
+      await page.getByRole('menuitem', { name: 'Bulk changes', exact: true }).click();
       await page.getByRole('combobox', { name: 'Recent operations', exact: true }).click();
       await page.getByRole('option').filter({ hasText: 'DONE' }).first().click();
       await expect(page.getByRole('status').filter({ hasText: 'DONE' })).toBeVisible();
