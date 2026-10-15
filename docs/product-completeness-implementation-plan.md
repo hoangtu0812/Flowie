@@ -24,7 +24,7 @@ Phạm vi đã được yêu cầu: toàn bộ AUD-01–12 và NEXT-01–09 tron
 | NEXT-04 | Archived center cho task/project/document/initiative; restore preview/version/dependency/audit; giữ dữ liệu, không purge | LOCAL_VERIFIED |
 | NEXT-05 | CSV mapping/preview/validation/dedup, worker/resume/cancel; filtered scoped issue CSV và document/attachment ZIP | LOCAL_VERIFIED |
 | NEXT-06 | Server reporting/flow/aging/WIP/reopen/workload và dashboard theo lịch sử thực | LOCAL_VERIFIED |
-| NEXT-07 | MFA/IdP policy, per-session revoke, credential inventory và login audit | TODO |
+| NEXT-07 | Session binding/revoke, paged history/credential inventory đã local verified; MFA đang triển khai | IN_PROGRESS |
 | NEXT-08 | Workspace audit cursor/filter/export theo current ACL; source Web/AI/SYSTEM/UNKNOWN; admin UI | LOCAL_VERIFIED |
 | NEXT-09 | Locale core workflows, week start/timezone, optional self-assignment, keyboard/mobile | TODO |
 
@@ -178,3 +178,14 @@ history và DST day bounds đạt. Full backend 158 passed, 2 optional skips,
 10 subtests; web build/types và 17 unit pass. Reporting + SLA/Ask/request settings
 6/6 E2E trên ba engine đạt, có drilldown, empty/retry, mobile bounds và ảnh đã xem.
 Chưa deploy; dashboard dùng migration lifecycle đã commit, không cần DDL bổ sung.
+
+Nền NEXT-07: JWT gắn sid/purpose/issuer/audience, refresh giữ device ID và proof
+time, revoke/logout chặn JWT còn hạn; account→session locks chặn refresh replay.
+Idle socket revalidate, cookie cũ upgrade và proof cũ không được backdate/freshen
+đã test. Inventory/history 107+ mục, current owner, mất workspace vẫn revoke token,
+ẩn metadata/hash và legacy issuance 410 đạt; regression MCP/notification 33 tests
++10 subtests và upgrade test đạt. Full backend 159 passed, 1 Operations failure
+do >100 heartbeat cũ; đã sửa độc lập (d0f2763), regression 120 stopped rows pass.
+Security tabs/device revoke còn hạn/credential revoke/history/retry: 3/3 engine
+đạt, ảnh mobile và bounds đã kiểm tra; build/types pass. 100 migrations/schema
+diff/generate/validate đạt. Chưa deploy, chưa có MFA enrollment ở checkpoint này.
