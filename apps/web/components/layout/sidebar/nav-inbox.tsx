@@ -1,4 +1,6 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/navigation/messages.vi';
 
 import {
    SidebarGroup,
@@ -28,6 +30,7 @@ const ITEM_KEYS: Record<string, SidebarItemKey> = {
 };
 
 export function NavInbox() {
+   const tx = useMessages(messages);
    const { orgId } = useParams<{ orgId: string }>();
    const { visibility, badgeStyle, order } = useSidebarPrefsStore();
    const { getUnreadCount, loadNotifications, connectRealtime } = useNotificationsStore();
@@ -68,11 +71,11 @@ export function NavInbox() {
          <SidebarMenu>
             {items.map((item) => {
                return (
-                  <SidebarMenuItem key={item.name}>
+                  <SidebarMenuItem key={tx(item.name)}>
                      <SidebarMenuButton asChild>
                         <Link href={`/${orgId}${item.url.replace(/^\/lndev-ui/, '')}`}>
                            <item.icon />
-                           <span>{item.name}</span>
+                           <span>{tx(item.name)}</span>
                         </Link>
                      </SidebarMenuButton>
                      {mounted && item.name === 'Inbox' && unread > 0 && (

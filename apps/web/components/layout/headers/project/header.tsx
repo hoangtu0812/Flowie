@@ -1,4 +1,6 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/navigation/messages.vi';
 
 import { Button } from '@/components/ui/button';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -55,6 +57,8 @@ function ProjectTabs({ projectId }: { projectId: string }) {
 }
 
 function PanelToggles() {
+   const tx = useMessages(messages);
+
    const { openPanel, togglePanel } = useRightPanelStore();
 
    return (
@@ -63,7 +67,7 @@ function PanelToggles() {
             size="xs"
             variant={openPanel === 'insights' ? 'secondary' : 'ghost'}
             onClick={() => togglePanel('insights')}
-            aria-label="Toggle insights panel"
+            aria-label={tx('Toggle insights panel')}
          >
             <BarChart3 className="size-4" />
          </Button>
@@ -71,7 +75,7 @@ function PanelToggles() {
             size="xs"
             variant={openPanel === 'hidden' ? 'ghost' : 'secondary'}
             onClick={() => togglePanel('hidden')}
-            aria-label="Toggle side panel"
+            aria-label={tx('Toggle side panel')}
          >
             <PanelRight className="size-4" />
          </Button>
@@ -80,6 +84,8 @@ function PanelToggles() {
 }
 
 export default function Header({ projectId }: { projectId: string }) {
+   const tx = useMessages(messages);
+
    const { orgId } = useParams<{ orgId: string }>();
    const { project, toggleFavorite } = useLiveProjectData();
    const favorited = Boolean(project?.favorites.length);
@@ -97,9 +103,9 @@ export default function Header({ projectId }: { projectId: string }) {
    const copyProjectLink = async () => {
       try {
          await navigator.clipboard.writeText(window.location.href);
-         toast.success('Project link copied.');
+         toast.success(tx('Project link copied.'));
       } catch {
-         toast.error('Could not copy the project link.');
+         toast.error(tx('Could not copy the project link.'));
       }
    };
 
@@ -113,7 +119,7 @@ export default function Header({ projectId }: { projectId: string }) {
                      href={`/${orgId}/projects`}
                      className="text-muted-foreground hover:text-foreground transition-colors"
                   >
-                     Projects
+                     {tx('Projects')}
                   </Link>
                   <ChevronRight className="size-3.5 text-muted-foreground shrink-0" />
                   <span className="inline-flex size-5 bg-muted/50 items-center justify-center rounded shrink-0">
@@ -126,7 +132,9 @@ export default function Header({ projectId }: { projectId: string }) {
                      className="size-6 text-muted-foreground"
                      onClick={() => void onToggleFavorite()}
                      aria-label={
-                        favorited ? 'Remove project from favorites' : 'Add project to favorites'
+                        favorited
+                           ? tx('Remove project from favorites')
+                           : tx('Add project to favorites')
                      }
                   >
                      <Star
@@ -141,7 +149,7 @@ export default function Header({ projectId }: { projectId: string }) {
                   size="icon"
                   className="size-7 text-muted-foreground"
                   onClick={() => void copyProjectLink()}
-                  aria-label="Copy project link"
+                  aria-label={tx('Copy project link')}
                >
                   <Link2 className="size-4" />
                </Button>

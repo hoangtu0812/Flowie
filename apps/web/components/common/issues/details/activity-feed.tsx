@@ -66,13 +66,13 @@ const eventText = (type: string) => {
    return action.replaceAll('_', ' ');
 };
 
-const activityItem = (activity: NativeActivity): ActivityItem => ({
+const activityItem = (activity: NativeActivity, locale = 'en'): ActivityItem => ({
    kind: 'event',
    id: activity.id,
    actor: asUser(activity.actor),
    event: activity.type.split('.', 1)[0] === 'issue' ? eventText(activity.type) : activity.type,
    text: eventText(activity.type),
-   timeAgo: timeAgo(activity.createdAt),
+   timeAgo: timeAgo(activity.createdAt, Date.now(), locale),
 });
 
 function EventRow({ item }: { item: Extract<ActivityItem, { kind: 'event' }> }) {
@@ -88,7 +88,7 @@ function EventRow({ item }: { item: Extract<ActivityItem, { kind: 'event' }> }) 
 }
 
 export function ActivityFeed({ issueId }: { issueId: string }) {
-   const { t } = useLocale();
+   const { t, locale } = useLocale();
    const state = useIssueActivity(issueId);
    const submitMode = useUiPreferencesStore((store) => store.commentSubmitMode);
    const { onPaste, uploading } = useImagePaste({
@@ -102,7 +102,7 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
       store.issues.find((candidate) => candidate.id === issueId)
    );
    const updateSubscription = useIssuesStore((store) => store.updateIssueSubscription);
-   const items = state.activities.map(activityItem);
+   const items = state.activities.map((activity) => activityItem(activity, locale));
    return (
       <DesignSurface>
          <VStack

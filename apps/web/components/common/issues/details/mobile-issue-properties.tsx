@@ -1,4 +1,6 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/issues/messages.vi';
 
 import { useState } from 'react';
 import { Button } from '@astryxdesign/core/Button';
@@ -16,11 +18,13 @@ export function MobileIssueProperties({
    detail: IssueDetail;
    allScreens?: boolean;
 }) {
+   const tx = useMessages(messages);
+
    const [open, setOpen] = useState(false);
    return (
       <VStack gap={3} className={allScreens ? undefined : 'lg:hidden'}>
          <Button
-            label={open ? 'Hide properties' : 'Properties'}
+            label={open ? tx('Hide properties') : tx('Properties')}
             aria-expanded={open}
             onClick={() => setOpen((value) => !value)}
          />

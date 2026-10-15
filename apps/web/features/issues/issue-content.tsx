@@ -30,7 +30,7 @@ export function IssueContent({
                <Heading level={compact ? 2 : 1}>{issue.title}</Heading>
                <MobileIssueProperties issue={issue} detail={detail} allScreens={compact} />
                <IssueDescription issue={issue} />
-               <BugDetails issue={issue} />
+               <BugDetails key={issue.id} issue={issue} />
                <IssueSlaPanel issue={issue} />
                <IssueReactions issueId={issue.id} />
                <IssueAttachments issueId={issue.id} />

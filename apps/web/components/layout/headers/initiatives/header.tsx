@@ -1,7 +1,15 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/navigation/messages.vi';
 
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+   Dialog,
+   DialogContent,
+   DialogFooter,
+   DialogHeader,
+   DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
@@ -11,6 +19,8 @@ import { useState } from 'react';
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 export default function Header() {
+   const tx = useMessages(messages);
+
    const [open, setOpen] = useState(false);
    const [name, setName] = useState('');
    const [saving, setSaving] = useState(false);
@@ -46,23 +56,44 @@ export default function Header() {
          <div className="w-full flex justify-between items-center border-b py-1.5 px-6 h-10">
             <div className="flex items-center gap-2">
                <SidebarTrigger />
-               <span className="text-sm font-medium">Initiatives</span>
+               <span className="text-sm font-medium">{tx('Initiatives')}</span>
             </div>
-            <Button size="xs" variant="ghost" onClick={() => { setError(undefined); setOpen(true); }}>
+            <Button
+               size="xs"
+               variant="ghost"
+               onClick={() => {
+                  setError(undefined);
+                  setOpen(true);
+               }}
+            >
                <Plus className="size-4" />
             </Button>
          </div>
          <Dialog open={open} onOpenChange={(visible) => !saving && setOpen(visible)}>
             <DialogContent>
-               <DialogHeader><DialogTitle>New initiative</DialogTitle></DialogHeader>
+               <DialogHeader>
+                  <DialogTitle>{tx('New initiative')}</DialogTitle>
+               </DialogHeader>
                <div className="space-y-2">
-                  <label htmlFor="initiative-name" className="text-sm font-medium">Name</label>
-                  <Input id="initiative-name" value={name} onChange={(event) => setName(event.target.value)} minLength={2} autoFocus />
+                  <label htmlFor="initiative-name" className="text-sm font-medium">
+                     {tx('Name')}
+                  </label>
+                  <Input
+                     id="initiative-name"
+                     value={name}
+                     onChange={(event) => setName(event.target.value)}
+                     minLength={2}
+                     autoFocus
+                  />
                   {error && <p className="text-sm text-destructive">{error}</p>}
                </div>
                <DialogFooter>
-                  <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
-                  <Button onClick={() => void create()} disabled={saving || name.trim().length < 2}>{saving ? 'Creating…' : 'Create initiative'}</Button>
+                  <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>
+                     {tx('Cancel')}
+                  </Button>
+                  <Button onClick={() => void create()} disabled={saving || name.trim().length < 2}>
+                     {saving ? tx('Creating…') : tx('Create initiative')}
+                  </Button>
                </DialogFooter>
             </DialogContent>
          </Dialog>

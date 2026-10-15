@@ -1,4 +1,6 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/navigation/messages.vi';
 
 import { Button } from '@/components/ui/button';
 import { IssueFilterTrigger } from '@/components/common/issues/issue-filter-trigger';
@@ -7,6 +9,8 @@ import { BarChart3 } from 'lucide-react';
 import { DisplayOptions } from '../display-options';
 
 export default function HeaderOptions() {
+   const tx = useMessages(messages);
+
    const { openPanel, togglePanel } = useRightPanelStore();
 
    return (
@@ -18,7 +22,7 @@ export default function HeaderOptions() {
                size="xs"
                variant={openPanel === 'insights' ? 'secondary' : 'ghost'}
                onClick={() => togglePanel('insights')}
-               aria-label="Toggle insights panel"
+               aria-label={tx('Toggle insights panel')}
             >
                <BarChart3 className="size-4" />
             </Button>

@@ -1,4 +1,8 @@
 'use client';
+import { useEnumLabel } from '@/features/shared/enum-labels';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/issues/messages.vi';
+
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@astryxdesign/core/Button';
 import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
@@ -46,6 +50,9 @@ export function BulkIssueActions() {
 }
 
 function BulkEditor({ workspace, query }: { workspace: string; query: string }) {
+   const tx = useMessages(messages);
+   const enumLabel = useEnumLabel();
+
    const { issues, statuses, members, projects, labels, cycles, retryIssues } = useIssuesStore();
    const alive = useRef(true);
    const requestKey = useRef('');
@@ -101,7 +108,10 @@ function BulkEditor({ workspace, query }: { workspace: string; query: string }) 
    }, [operation]);
    const options =
       field === 'priority'
-         ? ['NONE', 'LOW', 'MEDIUM', 'HIGH', 'URGENT'].map((value) => ({ value, label: value }))
+         ? ['NONE', 'LOW', 'MEDIUM', 'HIGH', 'URGENT'].map((value) => ({
+              value,
+              label: enumLabel(value),
+           }))
          : (field === 'statusId'
               ? statuses
               : field === 'assigneeId'
@@ -111,7 +121,7 @@ function BulkEditor({ workspace, query }: { workspace: string; query: string }) 
                   : cycles
            ).map((row) => ({ value: row.id, label: row.name }));
    if (['assigneeId', 'projectId', 'cycleId'].includes(field))
-      options.unshift({ value: '__clear__', label: 'Clear value' });
+      options.unshift({ value: '__clear__', label: tx('Clear value') });
    const resetPreview = () => {
       setOperation(undefined);
       requestKey.current = '';
@@ -134,7 +144,8 @@ function BulkEditor({ workspace, query }: { workspace: string; query: string }) 
                items: issues
                   .filter((row) => selected.includes(row.id))
                   .map((row) => {
-                     if (!row.version) throw new Error('Reload issues before making bulk changes.');
+                     if (!row.version)
+                        throw new Error(tx('Reload issues before making bulk changes.'));
                      return { id: row.id, version: row.version };
                   }),
                changes: {
@@ -158,30 +169,31 @@ function BulkEditor({ workspace, query }: { workspace: string; query: string }) 
          if (command === 'cancel') void retryIssues();
       } catch (reason) {
          if (alive.current)
-            setError(reason instanceof Error ? reason.message : 'Bulk operation failed.');
+            setError(reason instanceof Error ? reason.message : tx('Bulk operation failed.'));
       } finally {
          if (alive.current) setBusy(false);
       }
    };
    return (
       <>
-         <Button label="Bulk changes" size="sm" onClick={() => setOpen(true)} />
+         <Button label={tx('Bulk changes')} size="sm" onClick={() => setOpen(true)} />
          <Dialog isOpen={open} onOpenChange={setOpen} purpose="form" padding={5}>
             <VStack gap={4}>
-               <DialogHeader title="Bulk issue changes" onOpenChange={setOpen} />
+               <DialogHeader title={tx('Bulk issue changes')} onOpenChange={setOpen} />
                <Text>
-                  Preview up to 1000 issues. Each issue is checked again for access and conflicting
-                  edits before applying.
+                  {tx(
+                     'Preview up to 1000 issues. Each issue is checked again for access and conflicting edits before applying.'
+                  )}
                </Text>
                {error && <Text role="alert">{error}</Text>}
                {!operation && (
                   <>
                      <Selector
-                        label="Selection scope"
+                        label={tx('Selection scope')}
                         value={selection}
                         options={[
-                           { value: 'selected', label: 'Selected loaded issues' },
-                           { value: 'all_matching', label: 'All matching filtered issues' },
+                           { value: 'selected', label: tx('Selected loaded issues') },
+                           { value: 'all_matching', label: tx('All matching filtered issues') },
                         ]}
                         onChange={(next) => {
                            resetPreview();
@@ -191,7 +203,7 @@ function BulkEditor({ workspace, query }: { workspace: string; query: string }) 
                      />
                      {selection === 'selected' ? (
                         <MultiSelector
-                           label="Selected issues"
+                           label={tx('Selected issues')}
                            options={issues.map((row) => ({
                               value: row.id,
                               label: `${row.identifier} ${row.title}`,
@@ -203,11 +215,11 @@ function BulkEditor({ workspace, query }: { workspace: string; query: string }) 
                            }}
                            hasSearch
                            hasSelectAll
-                           selectAllLabel="Select all loaded issues"
+                           selectAllLabel={tx('Select all loaded issues')}
                         />
                      ) : (
                         <CheckboxInput
-                           label="Include all matching issues, including unloaded pages"
+                           label={tx('Include all matching issues, including unloaded pages')}
                            value={confirm}
                            onChange={(next) => {
                               resetPreview();
@@ -216,11 +228,11 @@ function BulkEditor({ workspace, query }: { workspace: string; query: string }) 
                         />
                      )}
                      <Selector
-                        label="Change field"
+                        label={tx('Change field')}
                         value={field}
                         options={fields.map((value, index) => ({
                            value,
-                           label: fieldLabels[index],
+                           label: tx(fieldLabels[index] as keyof typeof messages),
                         }))}
                         onChange={(next) => {
                            resetPreview();
@@ -230,7 +242,7 @@ function BulkEditor({ workspace, query }: { workspace: string; query: string }) 
                      />
                      {field === 'labelIds' ? (
                         <MultiSelector
-                           label="Replacement labels"
+                           label={tx('Replacement labels')}
                            value={labelIds}
                            options={labels.map((row) => ({ value: row.id, label: row.name }))}
                            onChange={(next) => {
@@ -238,11 +250,11 @@ function BulkEditor({ workspace, query }: { workspace: string; query: string }) 
                               setLabelIds(next);
                            }}
                            hasSearch
-                           description="An empty selection removes all labels."
+                           description={tx('An empty selection removes all labels.')}
                         />
                      ) : (
                         <Selector
-                           label="New value"
+                           label={tx('New value')}
                            value={value}
                            options={options}
                            onChange={(next) => {
@@ -252,7 +264,7 @@ function BulkEditor({ workspace, query }: { workspace: string; query: string }) 
                         />
                      )}
                      <Button
-                        label="Preview changes"
+                        label={tx('Preview changes')}
                         isLoading={busy}
                         isDisabled={
                            (field !== 'labelIds' && !value) ||
@@ -288,23 +300,23 @@ function BulkEditor({ workspace, query }: { workspace: string; query: string }) 
                                       .map(
                                          (id) =>
                                             labels.find((row) => row.id === id)?.name ??
-                                            'Unavailable label'
+                                            tx('Unavailable label')
                                       )
-                                      .join(', ') || 'No labels'
+                                      .join(', ') || tx('No labels')
                                  : next === null
-                                   ? 'Clear value'
+                                   ? tx('Clear value')
                                    : key === 'priority'
                                      ? String(next)
                                      : (choices.find((row) => row.id === next)?.name ??
-                                       'Unavailable value');
+                                       tx('Unavailable value'));
                               return `${fieldLabels[fields.indexOf(key)] ?? key}: ${display}`;
                            })
                            .join(' · ')}
                      </Text>
                      {!!operation.unavailableSelected && (
                         <Text>
-                           {operation.unavailableSelected} selected issues are unavailable and
-                           excluded.
+                           {operation.unavailableSelected}{' '}
+                           {tx('selected issues are unavailable and excluded.')}
                         </Text>
                      )}
                      <List hasDividers>
@@ -314,7 +326,7 @@ function BulkEditor({ workspace, query }: { workspace: string; query: string }) 
                               label={row.identifier}
                               description={
                                  row.stale
-                                    ? 'Changed since selection; will be skipped'
+                                    ? tx('Changed since selection; will be skipped')
                                     : (row.error_code ?? row.state)
                               }
                            />
@@ -322,39 +334,42 @@ function BulkEditor({ workspace, query }: { workspace: string; query: string }) 
                      </List>
                      {operation.items.length > visibleResults && (
                         <Button
-                           label={`Show more results (${visibleResults} of ${operation.items.length})`}
+                           label={tx('Show more results ({value0} of {value1})', {
+                              value0: visibleResults,
+                              value1: operation.items.length,
+                           })}
                            onClick={() => setVisibleResults((count) => count + 100)}
                         />
                      )}
                      <HStack gap={3} wrap="wrap">
                         {operation.state === 'PREVIEW' && (
                            <Button
-                              label="Apply previewed changes"
+                              label={tx('Apply previewed changes')}
                               isLoading={busy}
                               onClick={() => void act('execute')}
                            />
                         )}
                         {['PREVIEW', 'QUEUED', 'RUNNING'].includes(operation.state) && (
                            <Button
-                              label="Cancel operation"
+                              label={tx('Cancel operation')}
                               isDisabled={busy}
                               onClick={() => void act('cancel')}
                            />
                         )}
                         <Button
-                           label="Refresh result"
+                           label={tx('Refresh result')}
                            isDisabled={busy}
                            onClick={() => void act('reload')}
                         />
                         {!running(operation.state) && (
-                           <Button label="New bulk change" onClick={resetPreview} />
+                           <Button label={tx('New bulk change')} onClick={resetPreview} />
                         )}
                      </HStack>
                   </>
                )}
                {!!recent.length && (
                   <Selector
-                     label="Recent operations"
+                     label={tx('Recent operations')}
                      value={operation?.id ?? ''}
                      options={recent.map((row) => ({
                         value: row.id,

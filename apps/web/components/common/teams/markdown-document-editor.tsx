@@ -1,4 +1,6 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/documents/messages.vi';
 
 import { useEffect, useState } from 'react';
 import { Button } from '@astryxdesign/core/Button';
@@ -28,6 +30,8 @@ export function MarkdownDocumentEditor({
       draft: DocumentDraft & { expectedVersion: number }
    ) => Promise<LiveDocument>;
 }) {
+   const tx = useMessages(messages);
+
    const state = useDocumentDraft(document, open, onUpdate);
    const { title, content } = state.draft;
    const [mode, setMode] = useState<'view' | 'edit'>('view');
@@ -44,14 +48,14 @@ export function MarkdownDocumentEditor({
       if (!state.dirty || (await state.flush())) onOpenChange(false);
    };
    const status = !state.ready
-      ? 'Loading document…'
+      ? tx('Loading document…')
       : state.saving
-        ? 'Saving…'
+        ? tx('Saving…')
         : state.error
-          ? 'Save failed — your draft is retained.'
+          ? tx('Save failed — your draft is retained.')
           : state.dirty
-            ? 'Unsaved changes…'
-            : 'All changes saved.';
+            ? tx('Unsaved changes…')
+            : tx('All changes saved.');
 
    return (
       <DesignSurface>
@@ -71,21 +75,21 @@ export function MarkdownDocumentEditor({
                   <DialogHeader
                      title={
                         mode === 'edit'
-                           ? 'Edit Markdown document'
-                           : title || document?.title || 'Markdown document'
+                           ? tx('Edit Markdown document')
+                           : title || document?.title || tx('Markdown document')
                      }
                      subtitle={status}
                      onOpenChange={() => void close()}
                      endContent={
                         mode === 'view' ? (
                            <Button
-                              label="Edit"
+                              label={tx('Edit')}
                               isDisabled={!state.ready}
                               onClick={() => setMode('edit')}
                            />
                         ) : (
                            <Button
-                              label="Done"
+                              label={tx('Done')}
                               isLoading={state.saving}
                               isDisabled={!state.ready}
                               clickAction={async () => {
@@ -100,12 +104,12 @@ export function MarkdownDocumentEditor({
                   <LayoutFooter>
                      <HStack justify="end" gap={2}>
                         <Button
-                           label={history ? 'Hide history' : 'Revision history'}
+                           label={history ? tx('Hide history') : tx('Revision history')}
                            onClick={() => setHistory(!history)}
                         />
                         {state.error && (
                            <Button
-                              label="Retry save"
+                              label={tx('Retry save')}
                               clickAction={async () => {
                                  await state.flush();
                               }}
@@ -114,26 +118,28 @@ export function MarkdownDocumentEditor({
                         )}
                         {(state.error || state.conflict) && state.dirty && (
                            <Button
-                              label="Close and keep local draft"
+                              label={tx('Close and keep local draft')}
                               isDisabled={state.saving}
                               onClick={() => {
                                  if (state.keepLocally()) onOpenChange(false);
                                  else
                                     setCompareError(
-                                       'Browser storage is unavailable. Keep this editor open and copy your draft before leaving.'
+                                       tx(
+                                          'Browser storage is unavailable. Keep this editor open and copy your draft before leaving.'
+                                       )
                                     );
                               }}
                            />
                         )}
-                        <Button label="Close" clickAction={close} isLoading={state.saving} />
+                        <Button label={tx('Close')} clickAction={close} isLoading={state.saving} />
                      </HStack>
                   </LayoutFooter>
                }
                content={
-                  <LayoutContent label="Document content">
+                  <LayoutContent label={tx('Document content')}>
                      <VStack gap={4}>
                         {state.recovered && (
-                           <Text role="status">An unsaved local draft was recovered.</Text>
+                           <Text role="status">{tx('An unsaved local draft was recovered.')}</Text>
                         )}
                         {state.error && <Text role="alert">{state.error}</Text>}
                         {compareError && !state.conflict && (
@@ -142,11 +148,12 @@ export function MarkdownDocumentEditor({
                         {state.conflict && (
                            <VStack gap={3} role="alert">
                               <Text>
-                                 Your draft cannot overwrite a newer revision. Compare the latest
-                                 version first.
+                                 {tx(
+                                    'Your draft cannot overwrite a newer revision. Compare the latest version first.'
+                                 )}
                               </Text>
                               <Button
-                                 label="Compare latest version"
+                                 label={tx('Compare latest version')}
                                  clickAction={async () => {
                                     try {
                                        setLatest(await state.latest());
@@ -155,7 +162,7 @@ export function MarkdownDocumentEditor({
                                        setCompareError(
                                           reason instanceof Error
                                              ? reason.message
-                                             : 'Could not load latest version.'
+                                             : tx('Could not load latest version.')
                                        );
                                     }
                                  }}
@@ -164,20 +171,22 @@ export function MarkdownDocumentEditor({
                               {latest && (
                                  <VStack gap={3}>
                                     <Text>
-                                       Latest version: v{latest.version} · {latest.title}
+                                       {tx('Latest version: v')}
+                                       {latest.version} · {latest.title}
                                     </Text>
                                     <MarkdownPreview content={latest.content} />
                                     <Text>
-                                       The retained draft remains in the editor. Review both before
-                                       choosing.
+                                       {tx(
+                                          'The retained draft remains in the editor. Review both before choosing.'
+                                       )}
                                     </Text>
                                     <HStack gap={2}>
                                        <Button
-                                          label="Use latest version"
+                                          label={tx('Use latest version')}
                                           onClick={() => void state.resolve(latest, false)}
                                        />
                                        <Button
-                                          label="Save retained draft over reviewed version"
+                                          label={tx('Save retained draft over reviewed version')}
                                           clickAction={() => state.resolve(latest, true)}
                                        />
                                     </HStack>
@@ -203,13 +212,13 @@ export function MarkdownDocumentEditor({
                            <Grid columns={{ minWidth: 320, max: 2, repeat: 'fit' }} gap={6}>
                               <VStack gap={3}>
                                  <TextInput
-                                    label="Document title"
+                                    label={tx('Document title')}
                                     value={title}
                                     onChange={(value) => state.update({ title: value, content })}
                                     isRequired
                                  />
                                  <TextArea
-                                    label="Markdown content"
+                                    label={tx('Markdown content')}
                                     value={content}
                                     onChange={(value) => state.update({ title, content: value })}
                                     rows={18}
@@ -217,7 +226,7 @@ export function MarkdownDocumentEditor({
                                  />
                               </VStack>
                               <VStack as="article" gap={4}>
-                                 <Text type="label">Preview</Text>
+                                 <Text type="label">{tx('Preview')}</Text>
                                  <MarkdownPreview content={content} />
                               </VStack>
                            </Grid>

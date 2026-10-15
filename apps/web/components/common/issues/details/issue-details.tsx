@@ -1,4 +1,6 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/issues/messages.vi';
 
 import { IssueContent } from '@/features/issues/issue-content';
 import { LoadingState } from '@/components/common/loading-state';
@@ -17,6 +19,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
  * properties sidebar — Linear-style.
  */
 export default function IssueDetails() {
+   const tx = useMessages(messages);
+
    const { orgId, issueId } = useParams<{ orgId: string; issueId: string }>();
    const { issues, teams, loading, error, loadIssue } = useIssuesStore();
 
@@ -49,20 +53,22 @@ export default function IssueDetails() {
    if (error)
       return (
          <QueryState
-            title="Could not load issue"
+            title={tx('Could not load issue')}
             message={error}
             onRetry={() => loadIssue(issueId)}
          />
       );
 
    if (!issue || !detail) {
-      if (loading || initialLoad) return <LoadingState label="Loading issue…" />;
+      if (loading || initialLoad) return <LoadingState label={tx('Loading issue…')} />;
       return (
          <DesignSurface>
             <VStack gap={3} padding={6}>
-               <Heading level={1}>Issue unavailable</Heading>
-               <Text>Issue {issueId} was not found or is outside your access.</Text>
-               <Link href={listHref.current}>Back to issues</Link>
+               <Heading level={1}>{tx('Issue unavailable')}</Heading>
+               <Text>
+                  {tx('Issue')} {issueId} {tx('was not found or is outside your access.')}
+               </Text>
+               <Link href={listHref.current}>{tx('Back to issues')}</Link>
             </VStack>
          </DesignSurface>
       );

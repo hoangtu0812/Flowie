@@ -1,4 +1,6 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/navigation/messages.vi';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,6 +48,8 @@ function IssueViewTabs() {
 }
 
 export default function HeaderNav() {
+   const tx = useMessages(messages);
+
    const { isSearchOpen, toggleSearch, closeSearch, setSearchQuery, searchQuery } =
       useSearchStore();
    const searchInputRef = useRef<HTMLInputElement>(null);
@@ -110,7 +114,7 @@ export default function HeaderNav() {
                            }
                         }
                      }}
-                     placeholder="Search issues..."
+                     placeholder={tx('Search issues...')}
                      className="pl-8 h-7 text-sm"
                      onKeyDown={(e) => {
                         if (e.key === 'Escape') {
@@ -130,7 +134,7 @@ export default function HeaderNav() {
                      size="icon"
                      onClick={toggleSearch}
                      className="h-8 w-8"
-                     aria-label="Search"
+                     aria-label={tx('Search')}
                   >
                      <SearchIcon className="h-4 w-4" />
                   </Button>

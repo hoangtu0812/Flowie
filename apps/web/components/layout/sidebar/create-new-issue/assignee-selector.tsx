@@ -1,4 +1,6 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/issues/messages.vi';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -29,6 +31,8 @@ export function AssigneeSelector({
    users: availableUsers = users,
    teamIdentifier = 'CORE',
 }: AssigneeSelectorProps) {
+   const tx = useMessages(messages);
+
    const id = useId();
    const [open, setOpen] = useState<boolean>(false);
    const [value, setValue] = useState<string | null>(assignee?.id || null);
@@ -63,7 +67,7 @@ export function AssigneeSelector({
                   size="xs"
                   variant="secondary"
                   role="combobox"
-                  aria-label="Assignee"
+                  aria-label={tx('Assignee')}
                   aria-expanded={open}
                >
                   {value ? (
@@ -86,7 +90,9 @@ export function AssigneeSelector({
                      <UserCircle className="size-5" />
                   )}
                   <span>
-                     {value ? availableUsers.find((user) => user.id === value)?.name : 'Unassigned'}
+                     {value
+                        ? availableUsers.find((user) => user.id === value)?.name
+                        : tx('Unassigned')}
                   </span>
                </Button>
             </PopoverTrigger>
@@ -95,9 +101,9 @@ export function AssigneeSelector({
                align="start"
             >
                <Command>
-                  <CommandInput placeholder="Assign to..." />
+                  <CommandInput placeholder={tx('Assign to...')} />
                   <CommandList>
-                     <CommandEmpty>No users found.</CommandEmpty>
+                     <CommandEmpty>{tx('No users found.')}</CommandEmpty>
                      <CommandGroup>
                         <CommandItem
                            value="unassigned"
@@ -106,7 +112,7 @@ export function AssigneeSelector({
                         >
                            <div className="flex items-center gap-2">
                               <UserCircle className="size-5" />
-                              Unassigned
+                              {tx('Unassigned')}
                            </div>
                            {value === null && <CheckIcon size={16} className="ml-auto" />}
                            <span className="text-muted-foreground text-xs">

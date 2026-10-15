@@ -1,4 +1,6 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/navigation/messages.vi';
 
 import {
    Box,
@@ -55,6 +57,7 @@ const WORKSPACE_NAV: WorkspaceNavItem[] = [
 ];
 
 export function NavWorkspace() {
+   const tx = useMessages(messages);
    const { orgId } = useParams<{ orgId: string }>();
    const { visibility, order } = useSidebarPrefsStore();
    const [customizeOpen, setCustomizeOpen] = useState(false);
@@ -79,14 +82,14 @@ export function NavWorkspace() {
 
    return (
       <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-         <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+         <SidebarGroupLabel>{tx('Workspace')}</SidebarGroupLabel>
          <SidebarMenu>
             {items.map((item) => (
                <SidebarMenuItem key={item.key}>
                   <SidebarMenuButton asChild>
                      <Link href={`/${orgId}${item.url}`}>
                         <item.icon />
-                        <span>{item.name}</span>
+                        <span>{tx(item.name)}</span>
                      </Link>
                   </SidebarMenuButton>
                </SidebarMenuItem>
@@ -97,7 +100,7 @@ export function NavWorkspace() {
                      <SidebarMenuButton asChild>
                         <span>
                            <MoreHorizontal />
-                           <span>More</span>
+                           <span>{tx('More')}</span>
                         </span>
                      </SidebarMenuButton>
                   </DropdownMenuTrigger>
@@ -106,7 +109,7 @@ export function NavWorkspace() {
                         <DropdownMenuItem key={item.key} asChild>
                            <Link href={`/${orgId}${item.url}`}>
                               <item.icon className="text-muted-foreground" />
-                              <span>{item.name}</span>
+                              <span>{tx(item.name)}</span>
                            </Link>
                         </DropdownMenuItem>
                      ))}

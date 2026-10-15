@@ -1,4 +1,6 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/navigation/messages.vi';
 
 import {
    SidebarGroup,
@@ -106,6 +108,7 @@ export const settingsNav: SettingsNavGroup[] = [
 ];
 
 export function NavSettings() {
+   const tx = useMessages(messages);
    const { orgId } = useParams<{ orgId: string }>();
    const pathname = usePathname();
    const [adminScope, setAdminScope] = useState('');
@@ -126,8 +129,8 @@ export function NavSettings() {
    return (
       <>
          {settingsNav.map((group) => (
-            <SidebarGroup key={group.label} className="group-data-[collapsible=icon]:hidden">
-               <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+            <SidebarGroup key={tx(group.label)} className="group-data-[collapsible=icon]:hidden">
+               <SidebarGroupLabel>{tx(group.label)}</SidebarGroupLabel>
                <SidebarMenu>
                   {group.items
                      .filter(
@@ -139,11 +142,11 @@ export function NavSettings() {
                         const href = `/${orgId}${item.url}`;
                         const isActive = pathname === href;
                         return (
-                           <SidebarMenuItem key={`${group.label}-${item.name}`}>
+                           <SidebarMenuItem key={`${tx(group.label)}-${tx(item.name)}`}>
                               <SidebarMenuButton asChild isActive={isActive}>
                                  <Link href={href}>
                                     <item.icon className="size-4" />
-                                    <span>{item.name}</span>
+                                    <span>{tx(item.name)}</span>
                                  </Link>
                               </SidebarMenuButton>
                            </SidebarMenuItem>

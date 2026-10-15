@@ -1,4 +1,7 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/issues/messages.vi';
+
 import { Button } from '@astryxdesign/core/Button';
 import { TextArea } from '@astryxdesign/core/TextArea';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
@@ -12,6 +15,8 @@ import { useModifierKey } from '@/features/shared/use-modifier-key';
 import { SubmissionGate } from '@/features/shared/submission-gate';
 
 export function IssueDescription({ issue }: { issue: Issue }) {
+   const tx = useMessages(messages);
+
    const update = useIssuesStore((state) => state.updateIssueDescription);
    const workspaceId = useIssuesStore((state) => state.workspaceId);
    const [editing, setEditing] = useState(false);
@@ -54,7 +59,9 @@ export function IssueDescription({ issue }: { issue: Issue }) {
             if (currentScope.current === scope) setEditing(false);
          } catch (reason) {
             if (currentScope.current === scope)
-               setError(reason instanceof Error ? reason.message : 'Could not save description.');
+               setError(
+                  reason instanceof Error ? reason.message : tx('Could not save description.')
+               );
          } finally {
             if (currentScope.current === scope) setSaving(false);
          }
@@ -78,7 +85,7 @@ export function IssueDescription({ issue }: { issue: Issue }) {
          {editing ? (
             <>
                <TextArea
-                  label="Issue description"
+                  label={tx('Issue description')}
                   value={draft}
                   onChange={setDraft}
                   onPaste={onPaste}
@@ -88,13 +95,13 @@ export function IssueDescription({ issue }: { issue: Issue }) {
                {error && <Text role="alert">{error}</Text>}
                <HStack gap={2}>
                   <Button
-                     label="Save description"
+                     label={tx('Save description')}
                      clickAction={save}
                      isLoading={saving}
                      isDisabled={uploading}
                   />
                   <Button
-                     label="Cancel editing"
+                     label={tx('Cancel editing')}
                      onClick={() => {
                         setDraft(issue.description);
                         setEditing(false);
@@ -104,7 +111,7 @@ export function IssueDescription({ issue }: { issue: Issue }) {
                </HStack>
                <Text type="supporting">
                   {uploading
-                     ? 'Uploading image…'
+                     ? tx('Uploading image…')
                      : `${modifier}+Enter to save · Esc to cancel · paste to add an image`}
                </Text>
             </>
@@ -113,9 +120,13 @@ export function IssueDescription({ issue }: { issue: Issue }) {
                {issue.description.trim() ? (
                   <MarkdownPreview content={issue.description} />
                ) : (
-                  <Text type="supporting">No description yet.</Text>
+                  <Text type="supporting">{tx('No description yet.')}</Text>
                )}
-               <Button label="Edit description" variant="ghost" onClick={() => setEditing(true)} />
+               <Button
+                  label={tx('Edit description')}
+                  variant="ghost"
+                  onClick={() => setEditing(true)}
+               />
             </>
          )}
       </VStack>
