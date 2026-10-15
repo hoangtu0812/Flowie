@@ -104,4 +104,4 @@ def enrollment_image(email, secret):
             }
         )
     )
-    return uri, segno.make_qr(uri).svg_data_uri(scale=5)
+    return uri, segno.make_qr(uri).svg_data_uri(scale=5, light="white", dark="black")

@@ -224,6 +224,7 @@ async def verify_mfa():
                 "/api/v1/auth/mfa/verify", json={"code": proof.code}
             )
             assert replay.status_code == 401
+            assert "no-store" in replay.headers["cache-control"]
             raw = client.cookies.get(COOKIE)
             async with factory() as db:
                 from app.core.identifiers import _hash_token
@@ -245,6 +246,13 @@ async def verify_mfa():
                 and COOKIE not in client.cookies
             )
             assert (await client.get("/api/v1/users/me")).status_code == 200
+            async with factory() as db:
+                assert (
+                    await db.execute(
+                        text("SELECT last_login_at FROM users WHERE id=:id"),
+                        {"id": identifier},
+                    )
+                ).scalar_one() is not None
             assert (await client.get("/api/v1/account-security/mfa")).json()["data"][
                 "recoveryRemaining"
             ] == 9

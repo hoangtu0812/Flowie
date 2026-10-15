@@ -129,5 +129,9 @@ async def finish_login(db, raw, code, kind, request, settings):
         authenticated_at=challenge["authenticated_at"],
         mfa_verified_at=now,
     )
+    await db.execute(
+        text("UPDATE users SET last_login_at=:now,last_seen_at=:now WHERE id=:user"),
+        {"user": owner, "now": now},
+    )
     await record_event(db, owner, "MFA_VERIFIED", kind, request)
     return user, tokens, challenge["next_path"]
