@@ -51,6 +51,9 @@ class ToolApplication:
                 async with asyncio.timeout(self.settings.mcp_tool_timeout_seconds):
                     await validate_current(db, principal)
                     if tool.write:
+                        from ..work_items.lifecycle import actor_context
+                        db.info['lifecycle_source']='AI'
+                        await actor_context(db,principal.user['id'],source='AI')
                         result = await self.mutate(
                             db, principal, tool, payload, correlation, started
                         )

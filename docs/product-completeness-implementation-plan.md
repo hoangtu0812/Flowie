@@ -23,7 +23,7 @@ Phạm vi đã được yêu cầu: toàn bộ AUD-01–12 và NEXT-01–09 tron
 | NEXT-03 | Business calendar, SLA pause/resume/escalation, policy revision và reports | TODO |
 | NEXT-04 | Archived center cho task/project/document/initiative; restore preview/version/dependency/audit; giữ dữ liệu, không purge | LOCAL_VERIFIED |
 | NEXT-05 | CSV mapping/preview/validation/dedup, worker/resume/cancel; filtered scoped issue CSV và document/attachment ZIP | LOCAL_VERIFIED |
-| NEXT-06 | Server reporting trên actual status history: flow, aging, WIP, reopen, workload | TODO |
+| NEXT-06 | Đã có nền lifecycle event transaction + baseline rõ ràng; server reporting/flow/aging/WIP/reopen/workload tiếp tục | IN_PROGRESS |
 | NEXT-07 | MFA/IdP policy, per-session revoke, credential inventory và login audit | TODO |
 | NEXT-08 | Workspace audit cursor/filter/export theo current ACL; source Web/AI/SYSTEM/UNKNOWN; admin UI | LOCAL_VERIFIED |
 | NEXT-09 | Locale core workflows, week start/timezone, optional self-assignment, keyboard/mobile | TODO |
@@ -137,3 +137,11 @@ UI tạo bug thật, sửa mẫu, pause, reload/history: 3/3 engine đạt; đã
 bị khuất trong ListItem và kiểm tra bounds từng nút tại 390px bằng ảnh + E2E.
 Full backend 147 passed, 2 optional skips, 10 subtests; web build/lint/generate pass.
 Migration và index riêng do Prisma quản lý; không cấu hình lịch production.
+
+Nền NEXT-03/06: migration lifecycle capture mọi writer vào cùng transaction;
+CREATED/CHANGED tách BASELINE của issue cũ tại thời điểm quan sát. Đã sửa việc
+gửi lại cùng status làm reset completed/canceled timestamp. Nguồn/actor dùng
+transaction-local context, writer chưa gắn nguồn là UNKNOWN; SLA-managed due
+được đánh dấu riêng. 36 focused tests + 10 subtests và 2 upgrade/history tests
+đạt; test upgrade chạy đúng thứ tự migration, chứng minh baseline không backdate.
+94 migrations và Prisma diff đạt. Chưa có SLA consumer/reporting UI ở checkpoint này.

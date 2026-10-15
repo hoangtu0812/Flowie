@@ -94,7 +94,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 ).glob("*/migration.sql")
             )
             for path in migrations:
-                if path.parent.name.startswith("20261014"):
+                if path.parent.name >= "20261014":
                     continue
                 await connection.execute(path.read_text(encoding="utf-8"))
             await connection.execute(
@@ -109,8 +109,17 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             await connection.execute(
                 "INSERT INTO documents (id,workspace_id,title,content,created_by,updated_by,created_at,updated_at) VALUES ('document','workspace','Existing','Original text','user','user',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"
             )
+            await connection.execute(
+                "INSERT INTO teams(id,workspace_id,name,identifier,created_at,updated_at) VALUES ('team','workspace','Upgrade','UPGRADE',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"
+            )
+            await connection.execute(
+                "INSERT INTO issue_statuses(id,workspace_id,name,category,color,created_at,updated_at) VALUES ('status','workspace','Existing status','STARTED','gray',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"
+            )
+            await connection.execute(
+                "INSERT INTO issues(id,workspace_id,team_id,status_id,identifier,number,title,priority,creator_id,created_at,updated_at) VALUES ('issue','workspace','team','status','UPGRADE-1',1,'Existing task','NONE','user',CURRENT_TIMESTAMP-INTERVAL '30 days',CURRENT_TIMESTAMP)"
+            )
             for path in migrations:
-                if path.parent.name.startswith("20261014"):
+                if path.parent.name >= "20261014":
                     await connection.execute(path.read_text(encoding="utf-8"))
             self.assertEqual(
                 await connection.fetchval(
@@ -118,6 +127,14 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 ),
                 1,
             )
+            baseline = await connection.fetchrow(
+                "SELECT e.kind,e.from_category,e.source,e.sla_processed_at,e.occurred_at>i.created_at AS observed_later FROM issue_lifecycle_events e JOIN issues i ON i.id=e.issue_id WHERE e.issue_id='issue'"
+            )
+            self.assertEqual(baseline["kind"], "BASELINE")
+            self.assertIsNone(baseline["from_category"])
+            self.assertEqual(baseline["source"], "UNKNOWN")
+            self.assertIsNotNone(baseline["sla_processed_at"])
+            self.assertTrue(baseline["observed_later"])
             self.assertEqual(
                 await connection.fetchval(
                     "SELECT content FROM document_revisions WHERE document_id='document' AND version=1"

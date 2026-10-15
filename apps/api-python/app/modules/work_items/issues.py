@@ -23,6 +23,7 @@ from .issue_rules import (
 )
 from .issue_queries import _issue_row, _status_name, _person_name, _project_name
 from .issue_activity import _write_activity, _transition
+from .lifecycle import actor_context
 
 
 async def create_issue(
@@ -32,6 +33,7 @@ async def create_issue(
 ) -> dict[str, dict[str, Any]]:
     await _workspace_access(db, payload.workspaceId, user["id"])
     await _team_access(db, payload.workspaceId, payload.teamId, user["id"])
+    await actor_context(db, user["id"])
     values = payload.model_dump()
     category = await _validate_references(
         db, payload.workspaceId, payload.teamId, values, creating=True
@@ -196,6 +198,7 @@ async def update_issue(
     db: AsyncSession,
 ) -> dict[str, dict[str, Any]]:
     issue = await _issue_row(db, issue_id, workspaceId, user["id"])
+    await actor_context(db, user["id"])
     values = payload.model_dump(exclude_unset=True)
     previous_status_id = issue["statusId"]
     previous_assignee_id = issue["assignee"]["id"] if issue.get("assignee") else None
@@ -239,7 +242,7 @@ async def update_issue(
             if field == "title" and isinstance(params[field], str):
                 params[field] = params[field].strip()
             sets.append(f"{column} = :{field}")
-    if category:
+    if category and values.get("statusId") != previous_status_id:
         sets.extend(["completed_at = :completed_at", "canceled_at = :canceled_at"])
         params["completed_at"] = _utcnow() if category == "COMPLETED" else None
         params["canceled_at"] = _utcnow() if category == "CANCELED" else None

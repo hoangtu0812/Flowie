@@ -172,27 +172,28 @@ enum CycleStatus {
 }
 
 model User {
-  bulkOperations     BulkOperation[]
-  issueImports       IssueImportBatch[]
-  recurringSchedules RecurringSchedule[]
-  clientErrorEvents  ClientErrorEvent[]
-  uiPreferences      UserUiPreferences?
-  id                 String              @id @default(cuid())
-  email              String              @unique
-  name               String
-  username           String?             @unique
-  title              String?
-  timezone           String              @default("UTC")
-  avatarUrl          String?             @map("avatar_url")
-  authVersion        Int                 @default(0) @map("auth_version")
-  passwordHash       String?             @map("password_hash")
-  isPlatformAdmin    Boolean             @default(false) @map("is_platform_admin")
-  emailVerifiedAt    DateTime?           @map("email_verified_at")
-  status             UserStatus          @default(ACTIVE)
-  createdAt          DateTime            @default(now()) @map("created_at")
-  updatedAt          DateTime            @updatedAt @map("updated_at")
-  lastLoginAt        DateTime?           @map("last_login_at")
-  lastSeenAt         DateTime?           @map("last_seen_at")
+  bulkOperations       BulkOperation[]
+  issueImports         IssueImportBatch[]
+  recurringSchedules   RecurringSchedule[]
+  issueLifecycleEvents IssueLifecycleEvent[]
+  clientErrorEvents    ClientErrorEvent[]
+  uiPreferences        UserUiPreferences?
+  id                   String                @id @default(cuid())
+  email                String                @unique
+  name                 String
+  username             String?               @unique
+  title                String?
+  timezone             String                @default("UTC")
+  avatarUrl            String?               @map("avatar_url")
+  authVersion          Int                   @default(0) @map("auth_version")
+  passwordHash         String?               @map("password_hash")
+  isPlatformAdmin      Boolean               @default(false) @map("is_platform_admin")
+  emailVerifiedAt      DateTime?             @map("email_verified_at")
+  status               UserStatus            @default(ACTIVE)
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+  lastLoginAt          DateTime?             @map("last_login_at")
+  lastSeenAt           DateTime?             @map("last_seen_at")
 
   identities               UserIdentity[]
   sessions                 Session[]
@@ -539,22 +540,23 @@ model Workspace {
   bulkOperations         BulkOperation[]
   issueImports           IssueImportBatch[]
   recurringSchedules     RecurringSchedule[]
+  issueLifecycleEvents   IssueLifecycleEvent[]
   issueImportKeys        IssueImportKey[]
   clientErrorEvents      ClientErrorEvent[]
   aiLimits               AiWorkspaceLimit?
   aiToolWindows          AiToolWindow[]
-  id                     String              @id @default(cuid())
-  organizationId         String              @map("organization_id")
+  id                     String                @id @default(cuid())
+  organizationId         String                @map("organization_id")
   name                   String
-  slug                   String              @unique
+  slug                   String                @unique
   icon                   String?
   description            String?
-  timezone               String              @default("UTC")
-  projectDisplayDefaults Json?               @map("project_display_defaults")
-  issueDisplayDefaults   Json?               @map("issue_display_defaults")
-  issueInsightDefaults   Json?               @map("issue_insight_defaults")
-  createdAt              DateTime            @default(now()) @map("created_at")
-  updatedAt              DateTime            @updatedAt @map("updated_at")
+  timezone               String                @default("UTC")
+  projectDisplayDefaults Json?                 @map("project_display_defaults")
+  issueDisplayDefaults   Json?                 @map("issue_display_defaults")
+  issueInsightDefaults   Json?                 @map("issue_insight_defaults")
+  createdAt              DateTime              @default(now()) @map("created_at")
+  updatedAt              DateTime              @updatedAt @map("updated_at")
 
   organization            Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   members                 WorkspaceMember[]
@@ -1587,6 +1589,7 @@ model Issue {
   codeReviewLinks   CodeReviewIssueLink[]
   importKeys        IssueImportKey[]
   recurringRuns     RecurringRun[]
+  lifecycleEvents   IssueLifecycleEvent[]
 
   @@unique([workspaceId, identifier])
   @@unique([teamId, number])
@@ -2226,4 +2229,36 @@ model RecurringRun {
   @@index([scheduleId, createdAt, id])
   @@index([scheduleId, state, createdAt])
   @@map("recurring_runs")
+}
+
+model IssueLifecycleEvent {
+  id             String    @id @default(cuid())
+  issueId        String    @map("issue_id")
+  workspaceId    String    @map("workspace_id")
+  issueVersion   Int       @map("issue_version")
+  kind           String
+  actorId        String?   @map("actor_id")
+  source         String    @default("UNKNOWN")
+  fromStatusId   String?   @map("from_status_id")
+  toStatusId     String    @map("to_status_id")
+  fromCategory   String?   @map("from_category")
+  toCategory     String    @map("to_category")
+  fromTeamId     String?   @map("from_team_id")
+  toTeamId       String    @map("to_team_id")
+  fromDueDate    DateTime? @map("from_due_date")
+  toDueDate      DateTime? @map("to_due_date")
+  fromArchivedAt DateTime? @map("from_archived_at")
+  toArchivedAt   DateTime? @map("to_archived_at")
+  managedDue     Boolean   @default(false) @map("managed_due")
+  occurredAt     DateTime  @default(now()) @map("occurred_at")
+  slaProcessedAt DateTime? @map("sla_processed_at")
+  issue          Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actor          User?     @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@unique([issueId, issueVersion])
+  @@index([workspaceId, occurredAt])
+  @@index([issueId, occurredAt, issueVersion])
+  @@index([slaProcessedAt, occurredAt])
+  @@map("issue_lifecycle_events")
 }
