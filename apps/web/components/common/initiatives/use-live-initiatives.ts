@@ -2,7 +2,7 @@
 import { portfolioFetch } from '@/features/projects/portfolio-fetch';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
+import { authenticatedFetch, loadCurrentWorkspaceMembership } from '@/lib/workspaces';
 import { useParams } from 'next/navigation';
 import { responseData, responseEnvelope } from '@/lib/http';
 import type { PageMetadata } from '@/features/issues/issue-query';
@@ -70,6 +70,7 @@ const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 export function useLiveInitiatives() {
    const { orgId, initiativeId } = useParams<{ orgId: string; initiativeId?: string }>();
    const [workspaceId, setWorkspaceId] = useState<string>();
+   const [canManage, setCanManage] = useState(false);
    const [initiatives, setInitiatives] = useState<LiveInitiative[]>([]);
    const [projects, setProjects] = useState<LiveWorkspaceProject[]>([]);
    const [members, setMembers] = useState<LiveWorkspaceMember[]>([]);
@@ -89,6 +90,7 @@ export function useLiveInitiatives() {
       setPageError(undefined);
       setLoadingMore(false);
       setWorkspaceId(undefined);
+      setCanManage(false);
       setInitiatives([]);
       setProjects([]);
       setMembers([]);
@@ -97,7 +99,8 @@ export function useLiveInitiatives() {
          setLoading(true);
          setError(undefined);
          try {
-            const currentWorkspaceId = (await loadCurrentWorkspace(orgId)).id;
+            const membership = await loadCurrentWorkspaceMembership(orgId);
+            const currentWorkspaceId = membership.workspace.id;
             const [initiativeResponse, projectResponse, membersResponse, labelsResponse] =
                await Promise.all([
                   authenticatedFetch(
@@ -134,6 +137,7 @@ export function useLiveInitiatives() {
                .data;
             if (current) {
                setWorkspaceId(currentWorkspaceId);
+               setCanManage(membership.role === 'OWNER' || membership.role === 'ADMIN');
                setPage(firstPage.meta);
                setInitiatives(data);
                setProjects(projectData);
@@ -181,7 +185,27 @@ export function useLiveInitiatives() {
          if (request === generation.current) setLoadingMore(false);
       }
    };
+   const recordUpdate = (initiativeId: string, update: LiveInitiative['updates'][number]) => {
+      // Keep Overview current without unmounting the Activity composer after a successful post.
+      setInitiatives((previous) =>
+         previous.map((initiative) =>
+            initiative.id === initiativeId
+               ? {
+                    ...initiative,
+                    health: update.health,
+                    updatedAt: update.createdAt,
+                    updates: [
+                       update,
+                       ...initiative.updates.filter((row) => row.id !== update.id),
+                    ].slice(0, 100),
+                 }
+               : initiative
+         )
+      );
+   };
    return {
+      canManage,
+      recordUpdate,
       workspaceId,
       initiatives,
       projects,

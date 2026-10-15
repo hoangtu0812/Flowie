@@ -2,7 +2,7 @@
 
 import ProjectsTimeline from '@/components/common/projects/projects-timeline';
 import { RecoveryScreen } from '@/features/shared/recovery-screen';
-import { InitiativeHistory } from '@/features/projects/initiative-history';
+import { InitiativeActivity } from '@/features/initiatives/activity/initiative-activity';
 import { LoadingState } from '@/components/common/loading-state';
 import { IconPicker } from '@/components/common/icon-picker';
 import { ProjectGroup } from '@/components/common/projects/projects';
@@ -224,6 +224,7 @@ function Overview({
    labels: LiveWorkspaceLabel[];
    members: LiveWorkspaceMember[];
 }) {
+   const [, setTab] = useQueryState('tab', parseAsStringLiteral(TABS).withDefault('overview'));
    const completed = countCompletedProjects(initiative);
    const total = getInitiativeProjects(initiative).length;
    const [action, setAction] = useState<InitiativeDetailAction>(null);
@@ -589,7 +590,11 @@ function Overview({
                <div className="flex flex-col gap-3">
                   <div className="flex items-center justify-between">
                      <span className="text-sm font-medium">Activity</span>
-                     <button className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+                     <button
+                        type="button"
+                        onClick={() => void setTab('activity')}
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                     >
                         See all
                      </button>
                   </div>
@@ -969,6 +974,8 @@ export default function InitiativeDetails({ initiativeId }: { initiativeId: stri
    const [tab] = useQueryState('tab', parseAsStringLiteral(TABS).withDefault('overview'));
    const {
       workspaceId,
+      canManage,
+      recordUpdate,
       initiatives: liveInitiatives,
       projects,
       labels,
@@ -1009,7 +1016,15 @@ export default function InitiativeDetails({ initiativeId }: { initiativeId: stri
       );
 
    if (tab === 'activity' && workspaceId)
-      return <InitiativeHistory workspace={workspaceId} id={initiative.id} />;
+      return (
+         <InitiativeActivity
+            key={`${workspaceId}:${initiative.id}`}
+            workspace={workspaceId}
+            initiative={initiative}
+            canPost={canManage}
+            onPosted={(update) => recordUpdate(initiative.id, update)}
+         />
+      );
    if (tab === 'projects')
       return <ProjectsTimeline groups={timelineGroups} onProjectChanged={reload} />;
    return (
