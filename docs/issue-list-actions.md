@@ -18,7 +18,11 @@ current access as before. Export failures use a recoverable notification.
 have their own pagination owner. Parents must not add pagination or command
 strips above these views. A footer appears only for another page or a page
 error; completed lists start directly below the toolbar and applied filters.
-The header count uses server totals; partial loading remains explicit.
+The team issue header and pagination use server totals; partial loading remains
+explicit. Cycle menus stay hidden while the cycle is unresolved, unavailable
+or absent, so commands cannot target the previously loaded list. After a
+report or bulk dialog closes, keyboard focus returns to the persistent menu
+trigger because its original menu item is no longer mounted.
 
 Browser coverage in `issue-toolbar.spec.ts` checks keyboard focus restoration,
 report error/retry and team scope, mobile menu bounds, project entry points,
