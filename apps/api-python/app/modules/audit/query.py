@@ -50,6 +50,7 @@ def visible_entities():
             WHERE t.id=ev.metadata->>'teamId' AND t.workspace_id=:workspace AND tm.user_id=:user))))
         OR (ev.entity_type='mcp-tool' AND (ev.entity_id IS NULL OR {issue} OR {project_exists} OR {document} OR {comment} OR {agent}))
         OR (ev.entity_type='agent-run-management' AND {agent})
+        OR (ev.entity_type='recurring-schedule' AND EXISTS(SELECT 1 FROM recurring_schedules rs JOIN teams t ON t.id=rs.team_id JOIN team_members tm ON tm.team_id=t.id WHERE rs.id=ev.entity_id AND rs.workspace_id=:workspace AND tm.user_id=:user))
         OR (ev.entity_type IN ('workspace','workspace-member','invitation','label','project-label','project-status','release','mcp-connection','ai-budget'))
     ) AND (ev.entity_type<>'initiative' OR NOT(ev.metadata ? 'projectId') OR
         EXISTS(SELECT 1 FROM projects p WHERE p.id=ev.metadata->>'projectId' AND {project}))"""

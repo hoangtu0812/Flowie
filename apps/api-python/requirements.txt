@@ -12,3 +12,4 @@ cryptography==50.0.1
 langgraph==1.2.11
 mcp==2.3.0
 sse-starlette==3.0.3
+tzdata==2026.2

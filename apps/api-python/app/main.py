@@ -83,6 +83,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         bulk_task=tracked('bulk-issues',bulk_loop(session_factory,outbox_stop),outbox_stop)
         from .modules.data_exchange.import_worker import import_loop
         import_task=tracked('issue-import',import_loop(session_factory,outbox_stop),outbox_stop)
+        from .modules.recurring.worker import recurring_loop
+        recurring_task=tracked('recurring-issues',recurring_loop(session_factory,outbox_stop),outbox_stop)
         agent_runs_stop = asyncio.Event()
         agent_runs_task = tracked('agent-dispatcher',agent_run_dispatcher_loop(session_factory, agent_runs_stop),agent_runs_stop) if runtime.mcp_enabled and runtime.mcp_writes_enabled else None
         reminder_stop = asyncio.Event()
@@ -102,7 +104,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             digest_stop.set()
             dispatch_stop.set()
             scm_stop.set()
-            await asyncio.gather(*[task for task in [reminder_task,digest_task,dispatch_task,scm_task,outbox_task,channel_task,maintenance_task,agent_runs_task,bulk_task,import_task] if task],return_exceptions=True)
+            await asyncio.gather(*[task for task in [reminder_task,digest_task,dispatch_task,scm_task,outbox_task,channel_task,maintenance_task,agent_runs_task,bulk_task,import_task,recurring_task] if task],return_exceptions=True)
             await mcp_stack.aclose()
             await engine.dispose()
 
@@ -157,6 +159,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(audit_router)
     from .modules.data_exchange.api import router as data_exchange_router
     app.include_router(data_exchange_router)
+    from .modules.recurring.api import router as recurring_router
+    app.include_router(recurring_router)
     from .modules.operations.api import router as operations_admin_router
     app.include_router(operations_admin_router)
     app.include_router(native_initiatives_router)

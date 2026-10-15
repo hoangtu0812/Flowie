@@ -172,26 +172,27 @@ enum CycleStatus {
 }
 
 model User {
-  bulkOperations    BulkOperation[]
-  issueImports      IssueImportBatch[]
-  clientErrorEvents ClientErrorEvent[]
-  uiPreferences     UserUiPreferences?
-  id                String             @id @default(cuid())
-  email             String             @unique
-  name              String
-  username          String?            @unique
-  title             String?
-  timezone          String             @default("UTC")
-  avatarUrl         String?            @map("avatar_url")
-  authVersion       Int                @default(0) @map("auth_version")
-  passwordHash      String?            @map("password_hash")
-  isPlatformAdmin   Boolean            @default(false) @map("is_platform_admin")
-  emailVerifiedAt   DateTime?          @map("email_verified_at")
-  status            UserStatus         @default(ACTIVE)
-  createdAt         DateTime           @default(now()) @map("created_at")
-  updatedAt         DateTime           @updatedAt @map("updated_at")
-  lastLoginAt       DateTime?          @map("last_login_at")
-  lastSeenAt        DateTime?          @map("last_seen_at")
+  bulkOperations     BulkOperation[]
+  issueImports       IssueImportBatch[]
+  recurringSchedules RecurringSchedule[]
+  clientErrorEvents  ClientErrorEvent[]
+  uiPreferences      UserUiPreferences?
+  id                 String              @id @default(cuid())
+  email              String              @unique
+  name               String
+  username           String?             @unique
+  title              String?
+  timezone           String              @default("UTC")
+  avatarUrl          String?             @map("avatar_url")
+  authVersion        Int                 @default(0) @map("auth_version")
+  passwordHash       String?             @map("password_hash")
+  isPlatformAdmin    Boolean             @default(false) @map("is_platform_admin")
+  emailVerifiedAt    DateTime?           @map("email_verified_at")
+  status             UserStatus          @default(ACTIVE)
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+  lastLoginAt        DateTime?           @map("last_login_at")
+  lastSeenAt         DateTime?           @map("last_seen_at")
 
   identities               UserIdentity[]
   sessions                 Session[]
@@ -537,22 +538,23 @@ model Organization {
 model Workspace {
   bulkOperations         BulkOperation[]
   issueImports           IssueImportBatch[]
+  recurringSchedules     RecurringSchedule[]
   issueImportKeys        IssueImportKey[]
   clientErrorEvents      ClientErrorEvent[]
   aiLimits               AiWorkspaceLimit?
   aiToolWindows          AiToolWindow[]
-  id                     String             @id @default(cuid())
-  organizationId         String             @map("organization_id")
+  id                     String              @id @default(cuid())
+  organizationId         String              @map("organization_id")
   name                   String
-  slug                   String             @unique
+  slug                   String              @unique
   icon                   String?
   description            String?
-  timezone               String             @default("UTC")
-  projectDisplayDefaults Json?              @map("project_display_defaults")
-  issueDisplayDefaults   Json?              @map("issue_display_defaults")
-  issueInsightDefaults   Json?              @map("issue_insight_defaults")
-  createdAt              DateTime           @default(now()) @map("created_at")
-  updatedAt              DateTime           @updatedAt @map("updated_at")
+  timezone               String              @default("UTC")
+  projectDisplayDefaults Json?               @map("project_display_defaults")
+  issueDisplayDefaults   Json?               @map("issue_display_defaults")
+  issueInsightDefaults   Json?               @map("issue_insight_defaults")
+  createdAt              DateTime            @default(now()) @map("created_at")
+  updatedAt              DateTime            @updatedAt @map("updated_at")
 
   organization            Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   members                 WorkspaceMember[]
@@ -1002,6 +1004,7 @@ model Team {
   defaultIssueTemplate IssueTemplate?          @relation(fields: [defaultIssueTemplateId], references: [id], onDelete: SetNull)
   dispatcherSettings   TeamDispatcherSettings?
   issueImports         IssueImportBatch[]
+  recurringSchedules   RecurringSchedule[]
 
   @@unique([workspaceId, identifier])
   @@index([workspaceId])
@@ -1583,6 +1586,7 @@ model Issue {
   convertedAsks     Ask[]                 @relation("AskConvertedIssue")
   codeReviewLinks   CodeReviewIssueLink[]
   importKeys        IssueImportKey[]
+  recurringRuns     RecurringRun[]
 
   @@unique([workspaceId, identifier])
   @@unique([teamId, number])
@@ -2175,4 +2179,51 @@ model IssueImportKey {
 
   @@id([workspaceId, sourceKey, externalId])
   @@map("issue_import_keys")
+}
+
+model RecurringSchedule {
+  id                  String         @id @default(cuid())
+  workspaceId         String         @map("workspace_id")
+  teamId              String         @map("team_id")
+  createdBy           String         @map("created_by")
+  requestKey          String         @map("request_key")
+  fingerprint         String
+  name                String
+  rule                Json
+  template            Json
+  dueAfterMinutes     Int?           @map("due_after_minutes")
+  active              Boolean        @default(true)
+  version             Int            @default(1)
+  nextRunAt           DateTime       @map("next_run_at")
+  consecutiveFailures Int            @default(0) @map("consecutive_failures")
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @map("updated_at")
+  workspace           Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  team                Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  creator             User           @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  runs                RecurringRun[]
+
+  @@unique([createdBy, requestKey])
+  @@index([active, nextRunAt])
+  @@index([workspaceId, teamId, createdAt])
+  @@map("recurring_schedules")
+}
+
+model RecurringRun {
+  id            String            @id @default(cuid())
+  scheduleId    String            @map("schedule_id")
+  occurrenceKey String            @map("occurrence_key")
+  scheduledFor  DateTime          @map("scheduled_for")
+  state         String
+  snapshot      Json
+  issueId       String?           @map("issue_id")
+  errorCode     String?           @map("error_code")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  schedule      RecurringSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  issue         Issue?            @relation(fields: [issueId], references: [id], onDelete: SetNull)
+
+  @@unique([scheduleId, occurrenceKey])
+  @@index([scheduleId, createdAt, id])
+  @@index([scheduleId, state, createdAt])
+  @@map("recurring_runs")
 }

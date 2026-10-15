@@ -19,7 +19,7 @@ Phạm vi đã được yêu cầu: toàn bộ AUD-01–12 và NEXT-01–09 tron
 | AUD-11 | Đã chạy Codex thật + MCP local cho bug locale Archived; CLI hiệu lực read-only, run FAILED không có code; cần cấu hình quyền/production login | WAITING_CONFIGURATION |
 | AUD-12 | Cập nhật bằng chứng kế hoạch cũ, build identity/release checklist; release thực sau deploy verified | TODO |
 | NEXT-01 | Bulk preview/execute có version/ACL/idempotency và explicit all-results selection | LOCAL_VERIFIED |
-| NEXT-02 | Recurring schedules/timezone, lease/idempotency, pause/run history và UI | TODO |
+| NEXT-02 | Recurring schedules/timezone, transaction lock/idempotency, pause/run history và UI | LOCAL_VERIFIED |
 | NEXT-03 | Business calendar, SLA pause/resume/escalation, policy revision và reports | TODO |
 | NEXT-04 | Archived center cho task/project/document/initiative; restore preview/version/dependency/audit; giữ dữ liệu, không purge | LOCAL_VERIFIED |
 | NEXT-05 | CSV mapping/preview/validation/dedup, worker/resume/cancel; filtered scoped issue CSV và document/attachment ZIP | LOCAL_VERIFIED |
@@ -127,3 +127,13 @@ DB cũ giữ nguyên evidence AI. Web build/generate pass. Chưa deploy.
 
 Checkpoint sau NEXT-05: toàn bộ backend 145 passed, 2 optional storage/rehearsal
 skipped, 10 subtests. Storage/backup acceptance thật đã có bằng chứng riêng ở AUD-08/09.
+
+NEXT-02: lịch daily/weekly/monthly theo IANA, preview 5 lần, DST fold/gap và
+cuối tháng/leap year/date-line skip có test. Row lock + occurrence key và
+issue/history/next due commit cùng transaction; run-now replay, concurrent worker,
+restart/stale due, rollback, cancel queued, reference đổi, member/manager và revoke
+đã kiểm tra. 107 history records phân trang đủ; ba lỗi liên tiếp tự pause.
+UI tạo bug thật, sửa mẫu, pause, reload/history: 3/3 engine đạt; đã sửa tên/nút
+bị khuất trong ListItem và kiểm tra bounds từng nút tại 390px bằng ảnh + E2E.
+Full backend 147 passed, 2 optional skips, 10 subtests; web build/lint/generate pass.
+Migration và index riêng do Prisma quản lý; không cấu hình lịch production.

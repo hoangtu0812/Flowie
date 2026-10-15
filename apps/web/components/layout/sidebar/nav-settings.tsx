@@ -74,6 +74,7 @@ export const settingsNav: SettingsNavGroup[] = [
       label: 'Issues',
       items: [
          { name: 'Statuses', url: '/settings/issue-statuses', icon: Target },
+         { name: 'Recurring schedules', url: '/settings/recurring', icon: Zap },
          { name: 'Labels', url: '/settings/issue-labels', icon: Tag },
          { name: 'Templates', url: '/settings/issue-templates', icon: FileText },
          { name: 'SLAs', url: '/settings/slas', icon: Flame },
