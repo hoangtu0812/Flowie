@@ -1,4 +1,5 @@
 from __future__ import annotations
+from ..core.audit_context import audit_source
 from ..modules.access.project_scope import project_read_scope
 
 
@@ -88,7 +89,7 @@ async def _audit(
         ),
         {
             'id': _cuid(), 'workspace_id': workspace_id, 'actor_id': actor_id, 'action': action,
-            'entity_id': initiative_id, 'metadata': json.dumps(metadata or {}), 'now': _utcnow(),
+            'entity_id': initiative_id, 'metadata': json.dumps({**(metadata or {}),'source':audit_source.get()}), 'now': _utcnow(),
         },
     )
 

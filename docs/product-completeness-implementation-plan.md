@@ -25,7 +25,7 @@ Phạm vi đã được yêu cầu: toàn bộ AUD-01–12 và NEXT-01–09 tron
 | NEXT-05 | CSV mapping/preview/validation/dedup, filtered scoped export và document export | TODO |
 | NEXT-06 | Server reporting trên actual status history: flow, aging, WIP, reopen, workload | TODO |
 | NEXT-07 | MFA/IdP policy, per-session revoke, credential inventory và login audit | TODO |
-| NEXT-08 | Workspace audit cursor/filter/export và admin UI | TODO |
+| NEXT-08 | Workspace audit cursor/filter/export theo current ACL; source Web/AI/SYSTEM/UNKNOWN; admin UI | LOCAL_VERIFIED |
 | NEXT-09 | Locale core workflows, week start/timezone, optional self-assignment, keyboard/mobile | TODO |
 
 ## Thứ tự commit và kiến trúc
@@ -107,3 +107,10 @@ workspace-write. Không có diff/commit/PR, run được ghi FAILED và connecti
 không được xem là bằng chứng sửa bug. Checkout và log thử nằm trong `.venv`,
 không đưa credential vào Git. Hai probe thật xác nhận model gọi được nhưng
 không có quyền ghi. CT107 chưa nghiệm thu: browser đang ở login và chưa có token.
+
+NEXT-08: audit union có cursor và lọc actor/entity/source/UTC, current ACL kể cả
+archived, metadata allowlist và export cùng scope. Test 125 sự kiện được đọc /
+125 riêng tư, grant/revoke, cursor binding, nguồn không giả mạo và CSV đạt;
+MCP/source contracts 35 passed, 10 subtests; document/archive/audit 12 passed.
+Audit recovery/filter/load-more/CSV thật 3/3 engine; web production build pass.
+Scope lịch sử không chứng minh được bị loại, legacy source là UNKNOWN. Chưa deploy.

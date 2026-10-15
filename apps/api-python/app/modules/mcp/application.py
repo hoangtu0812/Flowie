@@ -257,6 +257,7 @@ class ToolApplication:
                 "metadata": json.dumps(
                     {
                         "connectionId": principal.connection_id,
+                        "source":"AI",
                         "correlationId": correlation,
                         "tool": name,
                         "outcome": outcome,

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import json
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -7,6 +8,7 @@ from sqlalchemy import text
 from ...core.clock import _utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import _cuid
+from ...core.audit_context import audit_source
 from ..access.projects import _workspace_access, _workspace_manager, _team_access
 
 Category = Literal['TRIAGE', 'BACKLOG', 'UNSTARTED', 'STARTED', 'COMPLETED', 'CANCELED']
@@ -81,7 +83,9 @@ async def mutate_status(db, workspace, user, values=None, *, identifier=None, ex
             identifier = _cuid()
             await db.execute(text('''INSERT INTO issue_statuses(id,workspace_id,name,category,color,position,created_at,updated_at)
                 VALUES (:id,:workspace,:name,:category,:color,:position,:now,:now)'''), {**values,'id':identifier,'workspace':workspace,'now':now})
-    await db.execute(text('''INSERT INTO audit_logs(id,workspace_id,actor_id,action,entity_type,entity_id,created_at)
-        VALUES (:audit,:workspace,:user,:action,'issue-status',:id,:now)'''), {'audit':_cuid(),'workspace':workspace,'user':user['id'],
-        'action':'issue-status.deleted' if remove else 'issue-status.saved','id':identifier,'now':now})
+    team=previous['team_id'] if previous else None
+    await db.execute(text('''INSERT INTO audit_logs(id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at)
+        VALUES (:audit,:workspace,:user,:action,'issue-status',:id,CAST(:metadata AS jsonb),:now)'''), {'audit':_cuid(),'workspace':workspace,'user':user['id'],
+        'action':'issue-status.deleted' if remove else 'issue-status.saved','id':identifier,'now':now,
+        'metadata':json.dumps({'source':audit_source.get(),'scope':'TEAM' if team else 'WORKSPACE','teamId':team})})
     return identifier

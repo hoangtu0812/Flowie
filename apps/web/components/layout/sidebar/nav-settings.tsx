@@ -54,6 +54,7 @@ export const settingsNav: SettingsNavGroup[] = [
          { name: 'General', url: '/settings/workspace', icon: Settings },
          { name: 'Code & reviews', url: '/settings/code-and-reviews', icon: Code },
          { name: 'Operations', url: '/settings/operations', icon: Target },
+         { name: 'Audit log', url: '/settings/audit', icon: FileText },
          { name: 'Archived records', url: '/settings/archive', icon: FileText },
       ],
    },
@@ -127,7 +128,11 @@ export function NavSettings() {
                <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
                <SidebarMenu>
                   {group.items
-                     .filter((item) => item.url !== '/settings/operations' || adminScope === orgId)
+                     .filter(
+                        (item) =>
+                           !['/settings/operations', '/settings/audit'].includes(item.url) ||
+                           adminScope === orgId
+                     )
                      .map((item) => {
                         const href = `/${orgId}${item.url}`;
                         const isActive = pathname === href;

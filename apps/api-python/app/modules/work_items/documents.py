@@ -6,6 +6,7 @@ from ...core.errors import ApiError
 from ...core.identifiers import _cuid
 from ...core.clock import _utcnow
 from .contracts import CreateDocumentInput, UpdateDocumentInput
+from ..audit.write import record_change
 from .document_repository import (
     _team_access,
     _resolve_folder,
@@ -51,6 +52,9 @@ async def create_document(
             "now": now,
         },
     )
+    await record_change(
+        db, payload.workspaceId, user["id"], "document.created", "document", document_id
+    )
     document = await _document_by_id(db, document_id, payload.workspaceId)
     if not document:
         raise ApiError(
@@ -81,8 +85,15 @@ async def update_document(
     if not current:
         raise ApiError(404, "Document not found.", "Not Found")
     await _team_access(db, workspaceId, current["team_id"], user["id"])
-    if payload.expectedVersion is not None and current["version"] != payload.expectedVersion:
-        raise ApiError(409, "This document changed. Compare the latest revision before saving your retained draft.", "Conflict")
+    if (
+        payload.expectedVersion is not None
+        and current["version"] != payload.expectedVersion
+    ):
+        raise ApiError(
+            409,
+            "This document changed. Compare the latest revision before saving your retained draft.",
+            "Conflict",
+        )
     values = payload.model_dump(exclude_unset=True, exclude={"expectedVersion"})
     document = await _document_by_id(db, document_id, workspaceId)
     folder = (
@@ -127,6 +138,43 @@ async def update_document(
             params,
         )
         document = await _document_by_id(db, document_id, workspaceId)
+        await record_change(
+            db,
+            workspaceId,
+            user["id"],
+            "document.updated",
+            "document",
+            document_id,
+            fields=values,
+        )
     if not document:
         raise ApiError(404, "Document not found.", "Not Found")
     return {"data": document}
+
+
+async def archive_document(document_id, workspaceId, user, db):
+    current = (
+        (
+            await db.execute(
+                text(
+                    "SELECT team_id FROM documents WHERE id=:id AND workspace_id=:workspace AND archived_at IS NULL FOR UPDATE"
+                ),
+                {"id": document_id, "workspace": workspaceId},
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if not current:
+        raise ApiError(404, "Document not found.", "Not Found")
+    await _team_access(db, workspaceId, current["team_id"], user["id"])
+    await db.execute(
+        text(
+            "UPDATE documents SET archived_at=:now,updated_at=:now,updated_by=:actor WHERE id=:id"
+        ),
+        {"id": document_id, "actor": user["id"], "now": _utcnow()},
+    )
+    await record_change(
+        db, workspaceId, user["id"], "document.archived", "document", document_id
+    )
+    return {"data": {"id": document_id, "archived": True}}
