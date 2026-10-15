@@ -1,6 +1,7 @@
-# Account security implementation — in progress
+# Account security implementation decisions
 
-NEXT-07 remains in progress until its API, browser and upgrade gates pass. No
+See `browser-session-security.md` and `account-mfa.md` for the implemented contracts.
+NEXT-07 remains in progress until its browser and final regression gates pass. No
 production MFA policy, key or account enrollment has been changed.
 
 ## Session and credential decisions

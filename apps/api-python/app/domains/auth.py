@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import jwt
 import httpx
 from argon2 import PasswordHasher
-from argon2.exceptions import InvalidHashError, VerificationError
+from ..core.passwords import compatible_hash as _compatible_argon2_hash, verify_password
 from fastapi import Depends, Query, Request
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from fastapi.responses import JSONResponse, RedirectResponse, Response
@@ -53,6 +53,7 @@ class LoginInput(BaseModel):
     email: str = Field(max_length=320)
     password: str = Field(min_length=1, max_length=128)
     timezone: str | None = Field(default=None, max_length=100)
+    next: str | None = Field(default=None, max_length=2048)
 
 
 class RefreshInput(BaseModel):
@@ -90,17 +91,6 @@ def _request_fingerprint(request: Request, secret: str) -> str | None:
     if not request.client:
         return None
     return sha256(f'{secret}:{request.client.host}'.encode('utf-8')).hexdigest()
-
-
-def _compatible_argon2_hash(value: str) -> str:
-    """Normalize a legacy Node argon2 parameter order for argon2-cffi.
-
-    The existing Node package emitted ``m,p,t`` while argon2-cffi only accepts
-    the standard ``m,t,p`` order.  The encoded parameters and hash bytes are
-    unchanged, so old accounts can continue signing in without a reset.
-    """
-
-    return re.sub(r'm=(\d+),p=(\d+),t=(\d+)', r'm=\1,t=\3,p=\2', value, count=1)
 
 
 def _normalized_email(value: str) -> str:
@@ -143,7 +133,7 @@ def _normalized_name(value: str) -> str:
 
 
 def _safe_app_path(value: str | None) -> str | None:
-    if not value or not value.startswith('/') or value.startswith('//'):
+    if not value or not value.startswith('/') or value.startswith('//') or '\\' in value or any(ord(char) < 32 for char in value):
         return None
     return value[:2048]
 
@@ -358,10 +348,10 @@ def _clear_cookies(response: Response, settings: Settings) -> None:
 
 
 async def _create_session(
-    db: AsyncSession, user: Any, request: Request, settings: Settings, *, method: str = 'PASSWORD'
+    db: AsyncSession, user: Any, request: Request, settings: Settings, *, method: str = 'PASSWORD', authenticated_at=None
 ) -> tuple[str, str, dict[str, Any]]:
     from ..modules.identity.security.sessions import create_session
-    access, refresh = await create_session(db, user, request, settings, method=method)
+    access, refresh = await create_session(db, user, request, settings, method=method, authenticated_at=authenticated_at)
     workspace = await _first_workspace(db, user['id'])
     return access, refresh, {'user': _authenticated_user(user), 'workspace': workspace}
 
@@ -695,12 +685,13 @@ async def microsoft_start(
     request: Request,
     next_path: str | None = Query(default=None, alias='next', max_length=2048),
     timezone_name: str | None = Query(default=None, alias='timezone', max_length=100),
+    reauth: bool = False,
 ) -> RedirectResponse:
     settings = request.app.state.settings
     client = _microsoft_client(settings)
     try:
         valid_timezone = _valid_timezone(timezone_name)
-        flow = await client.initiate_flow()
+        flow = await client.initiate_flow(reauthenticate=True) if reauth else await client.initiate_flow()
     except RuntimeError as error:
         raise ApiError(503, str(error), 'Service Unavailable') from error
     auth_uri = flow.get('auth_uri')
@@ -778,7 +769,16 @@ async def microsoft_callback(
     if not user or user['status'] != 'ACTIVE':
         raise ApiError(403, 'This Flowie account is not active.', 'Forbidden')
     user = _runtime_user(user, settings)
-    access_token, refresh_token, data = await _create_session(db, user, request, settings, method='MICROSOFT')
+    from ..modules.identity.security.mfa.login import begin_login, challenge_cookie
+    challenge = await begin_login(db, user, request, method='MICROSOFT', authenticated_at=profile.authenticated_at, next_path=_safe_app_path(stored.get('next')))
+    if challenge:
+        await db.commit()
+        response = RedirectResponse(f'{settings.app_url}/auth/mfa', status_code=302)
+        response.delete_cookie(MICROSOFT_FLOW_COOKIE, path='/api/v1/auth/microsoft')
+        _clear_cookies(response, settings)
+        challenge_cookie(response, challenge, settings)
+        return response
+    access_token, refresh_token, data = await _create_session(db, user, request, settings, method='MICROSOFT', authenticated_at=profile.authenticated_at)
     await db.commit()
     next_path = _safe_app_path(stored.get('next'))
     if next_path:
@@ -808,18 +808,22 @@ async def login(payload: LoginInput, request: Request, db: AsyncSession = Depend
         await record_event(db, user['id'] if user else None, 'LOGIN_FAILED', 'PASSWORD', request)
         await db.commit()
         raise ApiError(401, 'Invalid email or password.', 'Unauthorized')
-    try:
-        password_matches = password_hasher.verify(
-            _compatible_argon2_hash(user['password_hash']), payload.password
-        )
-    except (InvalidHashError, VerificationError):
-        password_matches = False
+    import asyncio
+    password_matches = await asyncio.to_thread(verify_password, user['password_hash'], payload.password)
     if not password_matches:
         await record_event(db, user['id'], 'LOGIN_FAILED', 'PASSWORD', request)
         await db.commit()
         raise ApiError(401, 'Invalid email or password.', 'Unauthorized')
 
     user = _runtime_user(user, request.app.state.settings)
+    from ..modules.identity.security.mfa.login import begin_login, challenge_cookie
+    challenge = await begin_login(db, user, request, method='PASSWORD', next_path=_safe_app_path(payload.next))
+    if challenge:
+        await db.commit()
+        response = JSONResponse({'data': {'mfaRequired': True}})
+        _clear_cookies(response, settings)
+        challenge_cookie(response, challenge, settings)
+        return response
     timezone_name = _valid_timezone(payload.timezone)
     await db.execute(
         text('''UPDATE users SET last_login_at = :now, last_seen_at = :now,

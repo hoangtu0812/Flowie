@@ -60,8 +60,12 @@ async def active_identity(db, claims):
     row = (
         (
             await db.execute(
-                text("""SELECT u.*,s.id AS session_id,s.auth_method AS session_auth_method,s.authenticated_at AS session_authenticated_at FROM sessions s JOIN users u ON u.id=s.user_id
-        WHERE s.id=:session AND s.user_id=:user AND s.revoked_at IS NULL AND s.expires_at>:now AND u.status='ACTIVE' AND u.auth_version=:version"""),
+                text(
+                    """SELECT u.*,s.id AS session_id,s.auth_method AS session_auth_method,s.authenticated_at AS session_authenticated_at FROM sessions s JOIN users u ON u.id=s.user_id
+        LEFT JOIN account_mfa m ON m.user_id=u.id
+        WHERE s.id=:session AND s.user_id=:user AND s.revoked_at IS NULL AND s.expires_at>:now AND u.status='ACTIVE' AND u.auth_version=:version
+        AND (m.enabled_at IS NULL OR s.mfa_verified_at>=m.enabled_at)"""
+                ),
                 {
                     "session": claims["sid"],
                     "user": claims["sub"],
@@ -92,15 +96,33 @@ async def lock_account(db, identifier):
 
 
 async def create_session(
-    db, user, request, settings, *, method="PASSWORD", authenticated_at=None
+    db,
+    user,
+    request,
+    settings,
+    *,
+    method="PASSWORD",
+    authenticated_at=None,
+    mfa_verified_at=None
 ):
     actual = await lock_account(db, user["id"])
     if actual["auth_version"] != user.get("auth_version", 0):
         raise expired()
+    from .mfa.repository import factor
+
+    configured = await factor(db, user["id"])
+    if (
+        configured
+        and configured["enabled_at"]
+        and (mfa_verified_at is None or mfa_verified_at < configured["enabled_at"])
+    ):
+        raise expired()
     identifier, refresh, now = _cuid(), token_urlsafe(48), _utcnow()
     await db.execute(
-        text("""INSERT INTO sessions(id,user_id,refresh_token_hash,ip_address,user_agent,expires_at,created_at,last_used_at,authenticated_at,auth_method)
-        VALUES (:id,:user,:hash,:ip,:agent,:expires,:now,:now,:authenticated,:method)"""),
+        text(
+            """INSERT INTO sessions(id,user_id,refresh_token_hash,ip_address,user_agent,expires_at,created_at,last_used_at,authenticated_at,auth_method,mfa_verified_at)
+        VALUES (:id,:user,:hash,:ip,:agent,:expires,:now,:now,:authenticated,:method,:mfa)"""
+        ),
         {
             "id": identifier,
             "user": user["id"],
@@ -109,6 +131,7 @@ async def create_session(
             "expires": now + timedelta(days=settings.auth_refresh_token_ttl_days),
             "now": now,
             "method": method,
+            "mfa": mfa_verified_at,
             "authenticated": authenticated_at
             or (now if method in {"PASSWORD", "REGISTRATION"} else None),
         },
@@ -141,6 +164,18 @@ async def rotate_session(db, refresh, request, settings):
         .first()
     )
     if row is None:
+        raise expired()
+    from .mfa.repository import factor
+
+    configured = await factor(db, owner)
+    if (
+        configured
+        and configured["enabled_at"]
+        and (
+            row["mfa_verified_at"] is None
+            or row["mfa_verified_at"] < configured["enabled_at"]
+        )
+    ):
         raise expired()
     replacement = token_urlsafe(48)
     await db.execute(

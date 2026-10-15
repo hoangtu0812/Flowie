@@ -200,6 +200,8 @@ model User {
   identities               UserIdentity[]
   sessions                 Session[]
   securityEvents           AccountSecurityEvent[]
+  mfa                      AccountMfa?
+  mfaChallenges            MfaChallenge[]
   personalApiKeys          PersonalApiKey[]
   mcpConnections           McpConnection[]
   passwordResetTokens      PasswordResetToken[]
@@ -273,6 +275,7 @@ model Session {
   lastUsedAt       DateTime  @default(now()) @map("last_used_at")
   authenticatedAt  DateTime? @map("authenticated_at")
   authMethod       String    @default("LEGACY") @map("auth_method")
+  mfaVerifiedAt    DateTime? @map("mfa_verified_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -295,6 +298,37 @@ model AccountSecurityEvent {
   @@index([userId, createdAt, id])
   @@index([createdAt])
   @@map("account_security_events")
+}
+
+model AccountMfa {
+  userId          String    @id @map("user_id")
+  secretCipher    String    @map("secret_cipher")
+  enabledAt       DateTime? @map("enabled_at")
+  pendingUntil    DateTime? @map("pending_until")
+  lastCounter     BigInt?   @map("last_counter")
+  recoveryHashes  Json      @default("[]") @map("recovery_hashes")
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("account_mfa")
+}
+
+model MfaChallenge {
+  id              String    @id @default(cuid())
+  userId          String    @map("user_id")
+  tokenHash       String    @unique @map("token_hash")
+  authVersion     Int       @map("auth_version")
+  authMethod      String    @map("auth_method")
+  authenticatedAt DateTime? @map("authenticated_at")
+  nextPath        String?   @map("next_path")
+  attempts        Int       @default(0)
+  expiresAt       DateTime  @map("expires_at")
+  consumedAt      DateTime? @map("consumed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("mfa_challenges")
 }
 
 model PersonalApiKey {

@@ -72,6 +72,7 @@ class Settings:
     mcp_max_idempotency_keys: int = 10000
     auth_login_account_limit: int = 20
     auth_login_ip_limit: int = 300
+    auth_mfa_encryption_keys: str = ''
 
     @classmethod
     def from_environment(cls) -> 'Settings':
@@ -92,6 +93,7 @@ class Settings:
             database_url=_async_database_url(getenv('DATABASE_URL', 'postgresql://circle:circle@circle-postgres:5432/circle')),
             app_url=getenv('APP_URL', 'http://localhost:3000').rstrip('/'),
             auth_jwt_secret=getenv('AUTH_JWT_SECRET', 'development-only-change-me'),
+            auth_mfa_encryption_keys=getenv('AUTH_MFA_ENCRYPTION_KEYS', ''),
             auth_login_account_limit=max(1,int(getenv('AUTH_LOGIN_ACCOUNT_LIMIT','20'))),
             auth_login_ip_limit=max(1,int(getenv('AUTH_LOGIN_IP_LIMIT','300'))),
             auth_access_token_ttl_seconds=int(getenv('AUTH_ACCESS_TOKEN_TTL_SECONDS', '900')),

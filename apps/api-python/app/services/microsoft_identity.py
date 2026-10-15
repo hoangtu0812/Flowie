@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -17,6 +18,7 @@ class MicrosoftProfile:
     tenant_id: str
     email: str
     name: str
+    authenticated_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,13 +57,14 @@ class MicrosoftIdentityClient:
             client_credential=self.client_secret,
         )
 
-    async def initiate_flow(self) -> dict[str, Any]:
+    async def initiate_flow(self, *, reauthenticate=False) -> dict[str, Any]:
         if not self.enabled:
             raise RuntimeError('Microsoft Entra sign-in is not configured.')
 
         def initiate() -> dict[str, Any]:
             return self._application().initiate_auth_code_flow(
-                scopes=GRAPH_SCOPES, redirect_uri=self.redirect_uri
+                scopes=GRAPH_SCOPES, redirect_uri=self.redirect_uri,
+                **({'prompt': 'login', 'max_age': 0} if reauthenticate else {}),
             )
 
         return await asyncio.to_thread(initiate)
@@ -102,7 +105,8 @@ class MicrosoftIdentityClient:
         name = str(graph.get('displayName') or claims.get('name') or '').strip()
         if '@' not in email or not 2 <= len(name) <= 120:
             raise ValueError('Microsoft did not return a usable name and email address.')
-        return MicrosoftProfile(object_id, tenant_id, email, name), access_token
+        proof = authentication_instant(claims.get('auth_time'))
+        return MicrosoftProfile(object_id, tenant_id, email, name, proof), access_token
 
     async def download_photo(self, access_token: str) -> MicrosoftPhoto | None:
         async with httpx.AsyncClient(timeout=15) as client:
@@ -121,3 +125,13 @@ class MicrosoftIdentityClient:
         if body.startswith(b'\x89PNG\r\n\x1a\n'):
             return MicrosoftPhoto(body, 'image/png', 'png')
         raise ValueError('Microsoft returned an unsupported profile picture format.')
+
+
+def authentication_instant(value):
+    # Token issuance/acquisition time is not evidence of fresh user authentication.
+    if type(value) is not int or not 0 <= value <= datetime.now(timezone.utc).timestamp() + 60:
+        return None
+    try:
+        return datetime.fromtimestamp(value, timezone.utc).replace(tzinfo=None)
+    except (OverflowError, OSError, ValueError):
+        return None
