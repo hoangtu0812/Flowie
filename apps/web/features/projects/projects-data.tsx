@@ -7,8 +7,19 @@ import { status as circleStatuses } from '@/mock-data/status';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import type { Project } from '@/types/projects';
 import { FolderKanban } from 'lucide-react';
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react';
-import { toast } from 'sonner';
+import {
+   createContext,
+   type ReactNode,
+   useCallback,
+   useContext,
+   useEffect,
+   useRef,
+   useState,
+} from 'react';
+import { responseEnvelope } from '@/lib/http';
+import type { PageMetadata } from '@/features/issues/issue-query';
+import { useParams } from 'next/navigation';
+import { RecoveryScreen } from '@/features/shared/recovery-screen';
 
 type ApiProject = {
    id: string;
@@ -24,6 +35,7 @@ type ApiProject = {
    lead: { id: string; name: string; avatarUrl: string | null } | null;
    labelLinks: Array<{ label: { id: string; name: string; color: string } }>;
    issues: Array<{ id: string; status: { category: string } }>;
+   issueSummary?: { total: number; completed?: number };
    _count: { issues: number };
    favorites?: Array<{ userId: string }>;
 };
@@ -81,6 +93,11 @@ export type ProjectTemplateOption = {
 type ProjectData = {
    workspaceId?: string;
    workspaceLoading: boolean;
+   error?: string;
+   pageError?: string;
+   projectPage?: PageMetadata;
+   loadingMore: boolean;
+   loadMoreProjects: () => Promise<void>;
    resolvedTeamId?: string;
    allProjects: Array<Project & { issueCount: number }>;
    teamGroups: Array<{ id: string; name: string; icon?: string }>;
@@ -117,7 +134,12 @@ const mapStatus = (value: string): Status => {
 };
 
 const mapProject = (project: ApiProject): Project & { issueCount: number } => {
-   const completed = project.issues.filter((issue) => issue.status.category === 'COMPLETED').length;
+   const completed =
+      project.issueSummary?.completed ??
+      project.issues?.filter((issue) => issue.status.category.toLowerCase() === 'completed')
+         .length ??
+      0;
+   const total = project.issueSummary?.total ?? project.issues?.length ?? 0;
    const priority =
       priorities.find(
          (item) => item.id === (project.priority === 'none' ? 'no-priority' : project.priority)
@@ -129,9 +151,7 @@ const mapProject = (project: ApiProject): Project & { issueCount: number } => {
       name: project.name,
       status: mapStatus(project.status),
       icon: FolderKanban,
-      percentComplete: project.issues.length
-         ? Math.round((completed / project.issues.length) * 100)
-         : 0,
+      percentComplete: total ? Math.round((completed / total) * 100) : 0,
       startDate: project.startDate ?? project.createdAt,
       targetDate: project.targetDate ?? undefined,
       // The presentation type requires a lead today. This is a neutral local
@@ -170,6 +190,10 @@ const mapProject = (project: ApiProject): Project & { issueCount: number } => {
 };
 
 function useProjectsDataSource(teamIdentifier?: string): ProjectData {
+   const { orgId } = useParams<{ orgId: string }>();
+   const [error, setError] = useState<string>();
+   const [pageError, setPageError] = useState<string>();
+   const [refreshKey, setRefreshKey] = useState(0);
    const [allProjects, setAllProjects] = useState<Array<Project & { issueCount: number }>>([]);
    const [teamGroups, setTeamGroups] = useState<Array<{ id: string; name: string; icon?: string }>>(
       []
@@ -180,69 +204,100 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
    const [workspaceMembers, setWorkspaceMembers] = useState<ProjectListMember[]>([]);
    const [projectTemplates, setProjectTemplates] = useState<ProjectTemplateOption[]>([]);
 
+   const [projectPage, setProjectPage] = useState<PageMetadata>();
+   const [loadingMore, setLoadingMore] = useState(false);
+   const alive = useRef(true);
+   const generation = useRef(0);
    useEffect(() => {
-      let current = true;
+      alive.current = true;
+      return () => {
+         alive.current = false;
+         generation.current++;
+      };
+   }, []);
+   useEffect(() => {
+      const request = ++generation.current;
+      const current = () => alive.current && request === generation.current;
       setWorkspaceLoading(true);
+      setError(undefined);
+      setPageError(undefined);
       void (async () => {
-         const workspace = await loadCurrentWorkspace();
-         const [projectsResponse, membersResponse, teamsResponse, templatesResponse] =
-            await Promise.all([
-               authenticatedFetch(`${api}/projects?workspaceId=${workspace.id}`),
-               authenticatedFetch(`${api}/workspaces/${workspace.id}/members`),
-               authenticatedFetch(`${api}/teams?workspaceId=${workspace.id}`),
-               authenticatedFetch(`${api}/projects/templates?workspaceId=${workspace.id}`),
-            ]);
-         if (
-            !projectsResponse.ok ||
-            !membersResponse.ok ||
-            !teamsResponse.ok ||
-            !templatesResponse.ok
-         ) {
-            throw new Error('Could not load projects.');
-         }
-         const projectsPayload = (await projectsResponse.json()) as { data: ApiProject[] };
-         const membersPayload = (await membersResponse.json()) as {
-            data: Array<{ status: string; user: ProjectListMember }>;
-         };
-         const teamsPayload = (await teamsResponse.json()) as { data: ApiWorkspaceTeam[] };
-         const templatesPayload = (await templatesResponse.json()) as {
-            data: ProjectTemplateOption[];
-         };
-         if (!current) return;
+         const workspace = await loadCurrentWorkspace(orgId);
+         const [membersResponse, teamsResponse, templatesResponse] = await Promise.all([
+            authenticatedFetch(`${api}/workspaces/${workspace.id}/members`),
+            authenticatedFetch(`${api}/teams?workspaceId=${workspace.id}`),
+            authenticatedFetch(`${api}/projects/templates?workspaceId=${workspace.id}`),
+         ]);
+         if (!membersResponse.ok || !teamsResponse.ok || !templatesResponse.ok)
+            throw new Error('Could not load project options.');
+         const members = (await membersResponse.json()).data as Array<{
+            status: string;
+            user: ProjectListMember;
+         }>;
+         const teams = (await teamsResponse.json()).data as ApiWorkspaceTeam[];
+         const templates = (await templatesResponse.json()).data as ProjectTemplateOption[];
+         const team = teamIdentifier
+            ? teams.find((row) => row.id === teamIdentifier || row.identifier === teamIdentifier)
+                 ?.id
+            : undefined;
+         if (teamIdentifier && !team) throw new Error('This team is unavailable.');
+         const query = new URLSearchParams({ workspaceId: workspace.id, limit: '100' });
+         if (team) query.set('teamId', team);
+         const page = await responseEnvelope<ApiProject[], PageMetadata>(
+            await authenticatedFetch(`${api}/projects?${query}`)
+         );
+         if (!current()) return;
          setWorkspaceId(workspace.id);
-         setResolvedTeamId(
-            teamIdentifier
-               ? teamsPayload.data.find(
-                    (team) => team.id === teamIdentifier || team.identifier === teamIdentifier
-                 )?.id
-               : undefined
-         );
+         setResolvedTeamId(team);
          setWorkspaceMembers(
-            membersPayload.data
-               .filter((member) => member.status === 'ACTIVE')
-               .map((member) => member.user)
+            members.filter((row) => row.status === 'ACTIVE').map((row) => row.user)
          );
-         setAllProjects(projectsPayload.data.map(mapProject));
-         setProjectTemplates(templatesPayload.data);
+         setProjectTemplates(templates);
          setTeamGroups(
-            teamsPayload.data.map((team) => ({
-               id: team.id,
-               name: team.name,
-               icon: team.icon ?? undefined,
-            }))
+            teams.map((row) => ({ id: row.id, name: row.name, icon: row.icon ?? undefined }))
          );
+         setAllProjects(page.data.map(mapProject));
+         setProjectPage(page.meta);
       })()
-         .catch((error: unknown) => {
-            if (current)
-               toast.error(error instanceof Error ? error.message : 'Could not load projects.');
+         .catch((reason: unknown) => {
+            if (current())
+               setError(reason instanceof Error ? reason.message : 'Could not load projects.');
          })
          .finally(() => {
-            if (current) setWorkspaceLoading(false);
+            if (current()) setWorkspaceLoading(false);
          });
-      return () => {
-         current = false;
-      };
-   }, [teamIdentifier]);
+   }, [teamIdentifier, orgId, refreshKey]);
+   const loadMoreProjects = useCallback(async () => {
+      if (!workspaceId || !projectPage?.nextCursor || loadingMore) return;
+      const request = generation.current;
+      setLoadingMore(true);
+      setPageError(undefined);
+      try {
+         const query = new URLSearchParams({
+            workspaceId,
+            limit: '100',
+            cursor: projectPage.nextCursor,
+         });
+         if (resolvedTeamId) query.set('teamId', resolvedTeamId);
+         const page = await responseEnvelope<ApiProject[], PageMetadata>(
+            await authenticatedFetch(`${api}/projects?${query}`)
+         );
+         if (!alive.current || generation.current !== request) return;
+         setAllProjects((previous) => [
+            ...new Map(
+               [...previous, ...page.data.map(mapProject)].map((row) => [row.id, row])
+            ).values(),
+         ]);
+         setProjectPage(page.meta);
+      } catch (reason) {
+         if (alive.current && generation.current === request)
+            setPageError(
+               reason instanceof Error ? reason.message : 'Could not load more projects.'
+            );
+      } finally {
+         if (alive.current && generation.current === request) setLoadingMore(false);
+      }
+   }, [workspaceId, projectPage, resolvedTeamId, loadingMore]);
 
    const updateProject = useCallback(
       async (projectId: string, update: ProjectListUpdate) => {
@@ -267,6 +322,7 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
             );
          }
          const payload = (await response.json()) as { data: ApiProject };
+         if (!alive.current) return;
          setAllProjects((projects) =>
             projects.map((project) =>
                project.id === projectId ? mapProject(payload.data) : project
@@ -277,11 +333,7 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
    );
 
    const refreshProjects = useCallback(async () => {
-      const workspace = await loadCurrentWorkspace();
-      const response = await authenticatedFetch(`${api}/projects?workspaceId=${workspace.id}`);
-      if (!response.ok) throw new Error('Could not refresh projects.');
-      const payload = (await response.json()) as { data: ApiProject[] };
-      setAllProjects(payload.data.map(mapProject));
+      setRefreshKey((value) => value + 1);
    }, []);
 
    const createProject = useCallback(
@@ -311,14 +363,23 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
             );
          }
          const payload = (await response.json()) as { data: ApiProject };
-         setAllProjects((projects) => [mapProject(payload.data), ...projects]);
+         if (!alive.current) return;
+         if (!resolvedTeamId || payload.data.teamId === resolvedTeamId) {
+            setAllProjects((projects) => [mapProject(payload.data), ...projects]);
+            setProjectPage((page) => (page ? { ...page, total: page.total + 1 } : page));
+         }
       },
-      [workspaceId]
+      [workspaceId, resolvedTeamId]
    );
 
    return {
       workspaceId,
       workspaceLoading,
+      error,
+      pageError,
+      projectPage,
+      loadingMore,
+      loadMoreProjects,
       resolvedTeamId,
       allProjects,
       teamGroups,
@@ -337,7 +398,30 @@ export function ProjectsDataProvider({
    teamIdentifier?: string;
    children: ReactNode;
 }) {
+   const { orgId } = useParams<{ orgId: string }>();
+   return (
+      <ProjectsDataScope key={`${orgId}:${teamIdentifier}`} teamIdentifier={teamIdentifier}>
+         {children}
+      </ProjectsDataScope>
+   );
+}
+
+function ProjectsDataScope({
+   teamIdentifier,
+   children,
+}: {
+   teamIdentifier?: string;
+   children: ReactNode;
+}) {
    const value = useProjectsDataSource(teamIdentifier);
+   if (value.error)
+      return (
+         <RecoveryScreen
+            title="Could not load projects"
+            message={value.error}
+            retry={() => void value.refreshProjects()}
+         />
+      );
    return <ProjectsDataContext.Provider value={value}>{children}</ProjectsDataContext.Provider>;
 }
 

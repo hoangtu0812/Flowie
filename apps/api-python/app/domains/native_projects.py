@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-from ..modules.access.project_scope import project_read_scope
 
 from ..modules.access.projects import _workspace_access as _workspace_access, _workspace_manager as _workspace_manager, _team_access as _team_access
 
 from ..core.dates import _date as _date
 
 import json
-from datetime import datetime, timezone
-from typing import Any, Literal
+from datetime import datetime
+from typing import Any, Literal, Annotated
 from urllib.parse import urlparse
 
-from fastapi import Depends, Query
+from fastapi import Depends, Query, Request
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -637,28 +636,30 @@ async def _project(db: AsyncSession, project_id: str, workspace_id: str, user_id
     labels = await db.execute(text('''SELECT l.* FROM project_label_links pl JOIN project_labels l ON l.id = pl.label_id WHERE pl.project_id = :project_id ORDER BY l.name'''), {'project_id': project_id})
     resources = await db.execute(text('''SELECT r.*, u.id AS creator_id_value, u.name AS creator_name, u.avatar_url AS creator_avatar_url FROM project_resources r JOIN users u ON u.id = r.created_by WHERE r.project_id = :project_id ORDER BY r.created_at'''), {'project_id': project_id})
     initiatives = await db.execute(text('''SELECT ip.initiative_id, ip.project_id, ip.created_at, i.id, i.name FROM initiative_projects ip JOIN initiatives i ON i.id = ip.initiative_id WHERE ip.project_id = :project_id'''), {'project_id': project_id})
-    issues = await db.execute(text('''SELECT i.id, i.identifier, i.title, i.priority, i.updated_at, s.id AS status_id_value, s.name AS status_name, s.category AS status_category, s.color AS status_color, a.id AS assignee_id_value, a.name AS assignee_name, a.avatar_url AS assignee_avatar_url FROM issues i JOIN issue_statuses s ON s.id = i.status_id LEFT JOIN users a ON a.id = i.assignee_id WHERE i.project_id = :project_id AND i.archived_at IS NULL ORDER BY i.updated_at DESC'''), {'project_id': project_id})
+    issues = await db.execute(text('''SELECT i.id, i.identifier, i.title, i.priority, i.updated_at, s.id AS status_id_value, s.name AS status_name, s.category AS status_category, s.color AS status_color, a.id AS assignee_id_value, a.name AS assignee_name, a.avatar_url AS assignee_avatar_url FROM issues i JOIN issue_statuses s ON s.id = i.status_id LEFT JOIN users a ON a.id = i.assignee_id WHERE i.project_id = :project_id AND i.archived_at IS NULL AND EXISTS(SELECT 1 FROM team_members tm JOIN teams scoped_team ON scoped_team.id=tm.team_id WHERE tm.team_id=i.team_id AND tm.user_id=:user_id AND scoped_team.archived_at IS NULL) ORDER BY i.updated_at DESC'''), {'project_id': project_id,'user_id':user_id})
+    issue_records=issues.mappings().all()
     return {
         'id': row['id'], 'workspaceId': row['workspace_id'], 'teamId': row['team_id'], 'name': row['name'], 'identifier': row['identifier'], 'description': row['description'], 'type': row['type'], 'status': row['status'], 'priority': row['priority'], 'health': row['health'], 'leadId': row['lead_id'], 'startDate': row['start_date'], 'targetDate': row['target_date'], 'archivedAt': row['archived_at'], 'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
         'team': team,
         'lead': {'id': row['lead_id_value'], 'name': row['lead_name'], 'avatarUrl': row['lead_avatar_url']} if row['lead_id_value'] else None,
-        '_count': {'issues': row['issue_count']}, 'labelLinks': [{'label': {'id': label['id'], 'workspaceId': label['workspace_id'], 'name': label['name'], 'color': label['color'], 'description': label['description'], 'createdAt': label['created_at'], 'updatedAt': label['updated_at']}} for label in labels.mappings().all()],
+        '_count': {'issues': len(issue_records)}, 'labelLinks': [{'label': {'id': label['id'], 'workspaceId': label['workspace_id'], 'name': label['name'], 'color': label['color'], 'description': label['description'], 'createdAt': label['created_at'], 'updatedAt': label['updated_at']}} for label in labels.mappings().all()],
         'members': await _members(db, project_id),
-        'issues': [{'id': issue['id'], 'status': {'category': issue['status_category']}, 'assignee': {'id': issue['assignee_id_value'], 'name': issue['assignee_name'], 'avatarUrl': issue['assignee_avatar_url']} if issue['assignee_id_value'] else None} for issue in issues.mappings().all()],
+        'issues': [{'id': issue['id'], 'status': {'category': issue['status_category']}, 'assignee': {'id': issue['assignee_id_value'], 'name': issue['assignee_name'], 'avatarUrl': issue['assignee_avatar_url']} if issue['assignee_id_value'] else None} for issue in issue_records],
         'initiativeLinks': [{'initiativeId': link['initiative_id'], 'projectId': link['project_id'], 'createdAt': link['created_at'], 'initiative': {'id': link['id'], 'name': link['name']}} for link in initiatives.mappings().all()],
         'resources': [{'id': resource['id'], 'workspaceId': resource['workspace_id'], 'projectId': resource['project_id'], 'createdById': resource['created_by'], 'label': resource['label'], 'url': resource['url'], 'createdAt': resource['created_at'], 'updatedAt': resource['updated_at'], 'createdBy': {'id': resource['creator_id_value'], 'name': resource['creator_name'], 'avatarUrl': resource['creator_avatar_url']}} for resource in resources.mappings().all()],
     } | ({'favorites': [{'userId': user_id}] if row['is_favorite'] else []} if include_favorites else {})
 
 
 @router.get('')
-async def list_projects(workspaceId: str = Query(min_length=1), teamId: str | None = None, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
+async def list_projects(workspaceId: str = Query(min_length=1), teamId: str | None = None, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session), *,
+    request: Request = None, limit: Annotated[int, Query(ge=1,le=100)] = 100, cursor: Annotated[str | None, Query(max_length=2000)] = None) -> dict:
+    from ..modules.portfolio.projects import project_page
+    from ..core.config import Settings
     await _workspace_access(db, workspaceId, user['id'])
     if teamId:
         await _team_access(db, workspaceId, teamId, user['id'])
-        result = await db.execute(text(f'SELECT p.id FROM projects p WHERE {project_read_scope(workspace="workspace_id", user="user_id")} AND p.team_id=:team_id ORDER BY p.created_at DESC,p.id DESC'), {'workspace_id': workspaceId, 'user_id': user['id'], 'team_id': teamId})
-    else:
-        result = await db.execute(text(f'SELECT p.id FROM projects p WHERE {project_read_scope(workspace="workspace_id", user="user_id")} ORDER BY p.created_at DESC,p.id DESC'), {'workspace_id': workspaceId, 'user_id': user['id']})
-    return {'data': [await _project(db, row['id'], workspaceId, user['id']) for row in result.mappings().all()]}
+    settings = request.app.state.settings if request else Settings.from_environment()
+    return await project_page(db,workspaceId,user['id'],settings.auth_jwt_secret,team=teamId,limit=limit,cursor=cursor)
 
 
 @router.post('')
@@ -686,8 +687,12 @@ async def create_project(payload: CreateProjectInput, user: Any = Depends(curren
 
 
 @public_router.get('/updates')
-async def workspace_updates_public(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
-    return await _workspace_updates(workspaceId, user, db)
+async def workspace_updates_public(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session), *,
+    request: Request = None, limit: Annotated[int, Query(ge=1,le=100)] = 50, cursor: Annotated[str | None, Query(max_length=2000)] = None) -> dict:
+    from ..modules.portfolio.history import history_page
+    from ..core.config import Settings
+    settings=request.app.state.settings if request else Settings.from_environment()
+    return await history_page(db,workspaceId,user['id'],settings.auth_jwt_secret,'project_updates',limit=limit,cursor=cursor)
 
 
 @router.get('/{project_id}')
@@ -793,7 +798,7 @@ async def project_issues(project_id: str, workspaceId: str = Query(min_length=1)
     return {'data': (await _project(db, project_id, workspaceId, user['id']))['issues']}
 
 
-async def _project_issue_rows(db: AsyncSession, project_id: str, workspace_id: str) -> list[dict[str, Any]]:
+async def _project_issue_rows(db: AsyncSession, project_id: str, workspace_id: str, user_id: str) -> list[dict[str, Any]]:
     """Every issue of a project with the relations the Project screens render.
 
     Labels and cycles are fetched once for the whole page rather than per
@@ -814,9 +819,10 @@ async def _project_issue_rows(db: AsyncSession, project_id: str, workspace_id: s
                JOIN users c ON c.id = i.creator_id
                LEFT JOIN users a ON a.id = i.assignee_id
                WHERE i.project_id = :project_id AND i.workspace_id = :workspace_id AND i.archived_at IS NULL
+               AND t.archived_at IS NULL AND EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=i.team_id AND tm.user_id=:user_id)
                ORDER BY i.updated_at DESC"""
         ),
-        {'project_id': project_id, 'workspace_id': workspace_id},
+        {'project_id': project_id, 'workspace_id': workspace_id,'user_id':user_id},
     )
     rows = result.mappings().all()
     if not rows:
@@ -1034,23 +1040,20 @@ def _project_update(row: Any, *, include_project: bool = False) -> dict[str, Any
     return value
 
 
-async def _workspace_updates(workspaceId: str, user: Any, db: AsyncSession) -> dict[str, list[dict[str, Any]]]:
-    await _workspace_access(db, workspaceId, user['id'])
-    rows = await db.execute(text('''SELECT pu.*, p.id AS project_id_value, p.name AS project_name, p.identifier AS project_identifier,
-                                     u.id AS author_id_value, u.name AS author_name, u.avatar_url AS author_avatar_url
-                              FROM project_updates pu JOIN projects p ON p.id = pu.project_id
-                              JOIN users u ON u.id = pu.author_id
-                              WHERE pu.workspace_id = :workspace_id AND p.archived_at IS NULL
-                              ORDER BY pu.created_at DESC LIMIT 100'''), {'workspace_id': workspaceId})
-    return {'data': [_project_update(row, include_project=True) for row in rows.mappings().all()]}
+async def _workspace_updates(workspaceId: str, user: Any, db: AsyncSession) -> dict:
+    from ..modules.portfolio.history import history_page
+    from ..core.config import Settings
+    return await history_page(db,workspaceId,user['id'],Settings.from_environment().auth_jwt_secret,'project_updates')
 
 
 @router.get('/{project_id}/updates')
 @public_router.get('/{project_id}/updates')
-async def list_updates(project_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
-    await _project(db, project_id, workspaceId, user['id'])
-    result = await db.execute(text('''SELECT pu.*, u.id AS author_id_value, u.name AS author_name, u.avatar_url AS author_avatar_url FROM project_updates pu JOIN users u ON u.id = pu.author_id WHERE pu.project_id = :project_id AND pu.workspace_id = :workspace_id ORDER BY pu.created_at DESC LIMIT 25'''), {'project_id': project_id, 'workspace_id': workspaceId})
-    return {'data': [_project_update(row) for row in result.mappings().all()]}
+async def list_updates(project_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session), *,
+    request: Request = None, limit: Annotated[int, Query(ge=1,le=100)] = 50, cursor: Annotated[str | None, Query(max_length=2000)] = None) -> dict:
+    from ..modules.portfolio.history import history_page
+    from ..core.config import Settings
+    settings=request.app.state.settings if request else Settings.from_environment()
+    return await history_page(db,workspaceId,user['id'],settings.auth_jwt_secret,'project_updates',project_id,limit=limit,cursor=cursor)
 
 
 @router.post('/{project_id}/updates')
@@ -1109,8 +1112,9 @@ def _public_project_id(project_suffix: str) -> str:
 
 
 @public_router.get('')
-async def public_list_projects(workspaceId: str = Query(min_length=1), teamId: str | None = None, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
-    return await list_projects(workspaceId, teamId, user, db)
+async def public_list_projects(workspaceId: str = Query(min_length=1), teamId: str | None = None, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session), *,
+    request: Request = None, limit: Annotated[int, Query(ge=1,le=100)] = 100, cursor: Annotated[str | None, Query(max_length=2000)] = None) -> dict:
+    return await list_projects(workspaceId,teamId,user,db,request=request,limit=limit,cursor=cursor)
 
 
 @public_router.post('')
@@ -1144,7 +1148,7 @@ async def public_project_issues(project_suffix: str, workspaceId: str = Query(mi
     # Access is decided exactly as the single-project read decides it.
     await _workspace_access(db, workspaceId, user['id'])
     await _project(db, project_id, workspaceId, user['id'])
-    return {'data': await _project_issue_rows(db, project_id, workspaceId)}
+    return {'data': await _project_issue_rows(db, project_id, workspaceId, user['id'])}
 
 
 @public_router.get('/c{project_suffix}/custom-fields')

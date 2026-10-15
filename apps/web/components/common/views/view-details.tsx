@@ -1,4 +1,5 @@
 'use client';
+import { ProjectPagination } from '@/features/projects/project-pagination';
 
 import { useIssueQuery } from '@/features/issues/use-issue-query';
 import { IssuePagination } from '@/features/issues/issue-pagination';
@@ -102,7 +103,12 @@ function ProjectViewBody({ view }: { view: LiveView }) {
       }
       return [...byStatus.values()];
    }, [allProjects, view]);
-   return <ProjectsList groups={groups} />;
+   return (
+      <>
+         <ProjectPagination />
+         <ProjectsList groups={groups} />
+      </>
+   );
 }
 
 /** Saved view detail backed by persisted view filters and live issue/project data. */

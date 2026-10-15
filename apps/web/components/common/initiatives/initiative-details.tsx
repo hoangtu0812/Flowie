@@ -1,6 +1,8 @@
 'use client';
 
 import ProjectsTimeline from '@/components/common/projects/projects-timeline';
+import { RecoveryScreen } from '@/features/shared/recovery-screen';
+import { InitiativeHistory } from '@/features/projects/initiative-history';
 import { LoadingState } from '@/components/common/loading-state';
 import { IconPicker } from '@/components/common/icon-picker';
 import { ProjectGroup } from '@/components/common/projects/projects';
@@ -37,7 +39,6 @@ import {
    CalendarRange,
    ChevronDown,
    FilePenLine,
-   FileText,
    FolderKanban,
    Plus,
    Tag,
@@ -961,38 +962,6 @@ function Overview({
 
 /* ------------------------------- activity tab ----------------------------- */
 
-function Activity({ initiative }: { initiative: Initiative }) {
-   const events = initiative.updates.map((update) => ({
-      id: update.id,
-      label: `${update.author.name} posted an update`,
-      body: update.body,
-      date: formatTarget(update.createdAt),
-   }));
-   return (
-      <div className="max-w-2xl mx-auto px-8 py-10 flex flex-col gap-4 w-full">
-         <h2 className="text-lg font-medium">Activity</h2>
-         <div className="flex flex-col">
-            {events.map((event) => (
-               <div
-                  key={event.id}
-                  className="flex items-start gap-3 py-3 border-b border-border/50 text-sm"
-               >
-                  <FileText className="size-4 text-muted-foreground shrink-0 mt-0.5" />
-                  <span className="flex-1 flex flex-col gap-1">
-                     <span>{event.label}</span>
-                     <span className="text-muted-foreground whitespace-pre-wrap">{event.body}</span>
-                  </span>
-                  <span className="text-xs text-muted-foreground">{event.date}</span>
-               </div>
-            ))}
-            {events.length === 0 && (
-               <p className="py-8 text-sm text-muted-foreground">No activity yet.</p>
-            )}
-         </div>
-      </div>
-   );
-}
-
 /* ---------------------------------- export -------------------------------- */
 
 /** Initiative detail page: Overview / Activity / Projects tabs. */
@@ -1028,15 +997,19 @@ export default function InitiativeDetails({ initiativeId }: { initiativeId: stri
 
    if (loading) return <LoadingState label="Loading initiative…" />;
 
-   if (!initiative || error) {
+   if (error)
+      return <RecoveryScreen title="Could not load initiative" message={error} retry={reload} />;
+   if (!initiative)
       return (
-         <div className="w-full h-full flex items-center justify-center text-sm text-muted-foreground">
-            Initiative not found
-         </div>
+         <RecoveryScreen
+            title="Initiative not found"
+            message="This initiative was removed or is outside your access."
+            retry={reload}
+         />
       );
-   }
 
-   if (tab === 'activity') return <Activity initiative={initiative} />;
+   if (tab === 'activity' && workspaceId)
+      return <InitiativeHistory workspace={workspaceId} id={initiative.id} />;
    if (tab === 'projects')
       return <ProjectsTimeline groups={timelineGroups} onProjectChanged={reload} />;
    return (

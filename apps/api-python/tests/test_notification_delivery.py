@@ -183,7 +183,7 @@ async def verify_delivery():
                 text(
                     "UPDATE notification_email_deliveries SET available_at=:now WHERE notification_id=:id"
                 ),
-                {"id": notification, "now": _utcnow()},
+                {"id": notification, "now": _utcnow() - timedelta(seconds=1)},
             )
             await db.commit()
         results = await asyncio.gather(

@@ -1,4 +1,5 @@
 'use client';
+import { portfolioFetch } from '@/features/projects/portfolio-fetch';
 
 import { loadCurrentWorkspaceTeams } from '@/components/common/teams/team-types';
 import { authenticatedFetch } from '@/lib/workspaces';
@@ -75,7 +76,7 @@ export default function ReleasesSettings() {
          const query = new URLSearchParams({ workspaceId: id });
          const [releaseResponse, projectResponse] = await Promise.all([
             authenticatedFetch(`${api}/releases?${query}`),
-            authenticatedFetch(`${api}/projects?${query}`),
+            portfolioFetch(`${api}/projects?${query}`),
          ]);
          if (!releaseResponse.ok || !projectResponse.ok) {
             throw new Error('Could not load releases.');

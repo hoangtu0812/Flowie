@@ -1,4 +1,5 @@
 'use client';
+import { portfolioFetch } from '@/features/projects/portfolio-fetch';
 
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/common/loading-state';
@@ -192,7 +193,7 @@ export function WorkspaceDashboard() {
          const query = new URLSearchParams({ workspaceId: workspace.id });
          const [issuesResponse, projectsResponse] = await Promise.all([
             authenticatedFetch(`${api}/issues?${query}`),
-            authenticatedFetch(`${api}/projects?${query}`),
+            portfolioFetch(`${api}/projects?${query}`),
          ]);
          if (!issuesResponse.ok || !projectsResponse.ok) {
             throw new Error('Could not load workspace analytics.');

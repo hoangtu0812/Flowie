@@ -1,4 +1,7 @@
 'use client';
+import { usePagedResource } from '@/features/shared/use-paged-resource';
+import { ResourcePagination } from '@/features/shared/resource-pagination';
+import type { LiveProjectUpdate } from './use-live-project';
 
 import { LoadingState } from '@/components/common/loading-state';
 import { ContentBlocks } from '@/components/common/issues/details/content-blocks';
@@ -81,6 +84,10 @@ export default function ProjectActivity({ projectId }: ProjectActivityProps) {
       loading,
       error,
    } = useLiveProjectData();
+   const history = usePagedResource<LiveProjectUpdate>(
+      workspaceId ? `${api}/projects/${projectId}/updates?workspaceId=${workspaceId}` : undefined,
+      liveUpdates[0]?.id
+   );
    const [mode, setMode] = useState<'comment' | 'update'>('update');
    const [health, setHealth] = useState<ProjectUpdateHealth>('on-track');
    const [text, setText] = useState('');
@@ -92,8 +99,8 @@ export default function ProjectActivity({ projectId }: ProjectActivityProps) {
    );
    const detail = useMemo(
       () =>
-         liveProject ? toProjectDetailUi(liveProject, milestones, liveUpdates, activities) : null,
-      [activities, liveProject, liveUpdates, milestones]
+         liveProject ? toProjectDetailUi(liveProject, milestones, history.items, activities) : null,
+      [activities, liveProject, history.items, milestones]
    );
    const issues = useMemo(
       () => (project ? liveIssues.map((issue) => toIssueUi(issue, project)) : []),
@@ -297,6 +304,11 @@ export default function ProjectActivity({ projectId }: ProjectActivityProps) {
                   </div>
                </div>
 
+               <ResourcePagination
+                  count={history.items.length}
+                  {...history}
+                  label="project updates"
+               />
                {/* Timeline */}
                {updatesByMonth.length === 0 ? (
                   <p className="mt-10 text-sm text-muted-foreground text-center">

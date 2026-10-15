@@ -11,6 +11,9 @@ import {
    useState,
 } from 'react';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
+import { portfolioFetch } from '@/features/projects/portfolio-fetch';
+import { useParams } from 'next/navigation';
+import { RecoveryScreen } from '@/features/shared/recovery-screen';
 import { useIssuesStore } from '@/store/issues-store';
 
 export type LiveProject = {
@@ -131,6 +134,7 @@ const LiveProjectContext = createContext<LiveProjectData | null>(null);
 
 /** Shared live data source for the three unchanged Project detail tabs. */
 export function useLiveProject(projectId: string) {
+   const { orgId } = useParams<{ orgId: string }>();
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [project, setProject] = useState<LiveProject>();
    const [issues, setIssues] = useState<LiveProjectIssue[]>([]);
@@ -155,7 +159,7 @@ export function useLiveProject(projectId: string) {
          if (!loadedOnce.current) setLoading(true);
          setError(undefined);
          try {
-            const workspaceId = (await loadCurrentWorkspace()).id;
+            const workspaceId = (await loadCurrentWorkspace(orgId)).id;
             const query = new URLSearchParams({ workspaceId });
             // Every Project detail tab needs all of these, so the page fails as a
             // whole. Keep the label next to the URL: a failing request has to name
@@ -175,7 +179,9 @@ export function useLiveProject(projectId: string) {
                ['teams', `${api}/teams?${query}`],
             ];
             const responses = await Promise.all(
-               endpoints.map(([, url]) => authenticatedFetch(url))
+               endpoints.map(([kind, url]) =>
+                  kind === 'initiatives' ? portfolioFetch(url) : authenticatedFetch(url)
+               )
             );
             const failed = responses.findIndex((response) => !response.ok);
             if (failed !== -1) {
@@ -242,7 +248,7 @@ export function useLiveProject(projectId: string) {
       return () => {
          current = false;
       };
-   }, [projectId, refreshKey]);
+   }, [orgId, projectId, refreshKey]);
 
    const reload = useCallback(() => setRefreshKey((value) => value + 1), []);
 
@@ -560,7 +566,18 @@ export function LiveProjectProvider({
    projectId: string;
    children: ReactNode;
 }) {
+   const { orgId } = useParams<{ orgId: string }>();
+   return createElement(LiveProjectScope, { key: `${orgId}:${projectId}`, projectId }, children);
+}
+
+function LiveProjectScope({ projectId, children }: { projectId: string; children?: ReactNode }) {
    const value = useLiveProject(projectId);
+   if (value.error)
+      return createElement(RecoveryScreen, {
+         title: 'Could not load project',
+         message: value.error,
+         retry: value.reload,
+      });
    return createElement(LiveProjectContext.Provider, { value }, children);
 }
 

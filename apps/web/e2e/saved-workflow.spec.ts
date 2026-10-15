@@ -53,6 +53,8 @@ for (const entityType of ['issue', 'project'])
       page,
       context,
    }) => {
+      // Settle the prior document before observing errors: WebKit reports cancelled old fetches as page errors during navigation.
+      await page.waitForLoadState('networkidle');
       const errors: string[] = [];
       page.on('pageerror', (error) => errors.push(error.message));
       const response = await context.request.post(`${api}/views`, {
@@ -85,6 +87,7 @@ for (const entityType of ['issue', 'project'])
             const project = (await result.json()).data;
             await expect(page.getByText(project.name, { exact: true }).first()).toBeVisible();
          }
+         await page.waitForLoadState('networkidle');
          await page.reload();
          await expect(
             page.getByText(`Saved regression ${entityType}`, { exact: true })

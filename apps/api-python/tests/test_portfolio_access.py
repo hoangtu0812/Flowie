@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
-from app.domains.native_projects import public_list_projects, public_get_project
+from app.domains.native_projects import public_list_projects, public_get_project,public_project_issues
 from app.domains.native_initiatives import list_initiatives, initiative_activity
 from app.domains.native_issues import issue_options
 from app.modules.search.service import search
@@ -37,6 +37,8 @@ async def verify_scope(role):
             for project, project_team in [(hidden,team),(visible,None)]:
                 await db.execute(text("INSERT INTO projects(id,workspace_id,team_id,name,identifier,created_at,updated_at) VALUES (:id,:workspace,:team,:name,:identifier,:now,:now)"), {'id':project,'workspace':workspace,'team':project_team,'name':'Scope restricted project' if project_team else 'Scope accessible project','identifier':project,'now':now})
             await db.execute(text("INSERT INTO initiatives(id,workspace_id,name,created_at,updated_at) VALUES (:id,:workspace,'Scope initiative',:now,:now)"), {'id':initiative,'workspace':workspace,'now':now})
+            status=(await db.execute(text("SELECT id FROM issue_statuses WHERE workspace_id=:workspace LIMIT 1"),{'workspace':workspace})).scalar_one()
+            await db.execute(text("INSERT INTO issues(id,workspace_id,team_id,project_id,status_id,identifier,number,title,creator_id,created_at,updated_at) VALUES (:id,:workspace,:team,:project,:status,'SECRET-1',1,'Hidden team issue',:user,:now,:now)"),{'id':_cuid(),'workspace':workspace,'team':team,'project':visible,'status':status,'user':owner['id'],'now':now})
             for project in [hidden, visible]:
                 await db.execute(text('INSERT INTO initiative_projects(initiative_id,project_id,created_at) VALUES (:initiative,:project,:now)'), {'initiative':initiative,'project':project,'now':now})
                 await db.execute(text("INSERT INTO audit_logs(id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at) VALUES (:id,:workspace,:actor,'initiative.project.linked','initiative',:initiative,CAST(:metadata AS jsonb),:now)"), {'id':_cuid(),'workspace':workspace,'actor':owner['id'],'initiative':initiative,'metadata':json.dumps({'projectId':project,'projectName':'Scope project'}),'now':now})
@@ -44,6 +46,12 @@ async def verify_scope(role):
             async def assert_visible(expected):
                 projects = await public_list_projects(workspace,None,member,db)
                 assert {p['id'] for p in projects['data']} == expected
+                summary=next(p for p in projects['data'] if p['id']==visible)
+                expected_issues=1 if hidden in expected else 0
+                assert summary['issueSummary']['total']==expected_issues
+                detail=(await public_get_project(visible[1:],workspace,member,db))['data']
+                assert detail['_count']['issues']==len(detail['issues'])==expected_issues
+                assert len((await public_project_issues(visible[1:],workspace,member,db))['data'])==expected_issues
                 initiatives = await list_initiatives(workspace,member,db)
                 item = next(i for i in initiatives['data'] if i['id']==initiative)
                 assert {link['project']['id'] for link in item['projectLinks']} == expected

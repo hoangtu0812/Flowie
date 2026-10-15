@@ -11,8 +11,8 @@ Phạm vi đã được yêu cầu: toàn bộ AUD-01–12 và NEXT-01–09 tron
 | AUD-01/02 | Shared project access policy; list/initiative không rò metadata và không fail toàn list; test member/admin/revocation | LOCAL_VERIFIED |
 | AUD-03/04 | Saved View provider; route quản lý status; URL/reload/permission E2E | LOCAL_VERIFIED |
 | AUD-05 | Shared issue query scope và aggregate server; >100 rows, ACL, Load more invariance | LOCAL_VERIFIED |
-| AUD-06 | Error boundaries và Saved View Retry đã có; còn chuẩn hóa recovery các trang legacy khác | IN_PROGRESS |
-| AUD-07 | Batched portfolio list, cursor/history và load-more UI; bounded queries | TODO |
+| AUD-06 | Error boundaries, Saved View, Projects và Initiative Retry; trạng thái lỗi tách khỏi not found | LOCAL_VERIFIED |
+| AUD-07 | Batched portfolio list, cursor/update history và load-more UI; aggregate theo quyền đọc | LOCAL_VERIFIED |
 | AUD-08 | Dependency probes, request ID/build identity, scrubbed error report, job heartbeat/lag | LOCAL_VERIFIED |
 | AUD-09 | Backup/restore tooling và rehearsal đã kiểm tra; đích S3 độc lập, credential và CT107 inventory chưa cấu hình | WAITING_CONFIGURATION |
 | AUD-10 | Đã thêm role/revocation, >100 rows, view/error/workflow/operations; tiếp tục mở rộng theo feature | IN_PROGRESS |
@@ -83,3 +83,11 @@ restore đích mới và stale-backup status; deployment dùng chung flock. Ki�
 3 ca guard/rollback và 1 rehearsal thật (restic 0.19.1 checksum verified, S3 trên
 MinIO thử, PostgreSQL custom dump → DB mới, physical MinIO → server mới, hash
 attachment và mật khẩu sai). Chưa có đích off-host thật và chưa bật timer CT107.
+
+AUD-06/07: portfolio page 100/55 trên 155 project, 100/25 trên 125 initiative;
+project list tối đa 5 query, initiative list tối đa 7 query; 115 update đọc hết
+qua cursor không trùng/mất. Task của team riêng trong shared project và private
+project updates không lọt qua summary/detail/history. 9/9 portfolio recovery,
+paging/history E2E trên ba engine. Full UI: 94/96 lần đầu; 2 Saved View WebKit
+đạt khi chạy lại sau khi đợi request của document cũ hoàn tất (không bỏ qua
+exception). Web production build và 17 unit pass; backend toàn bộ pass.
