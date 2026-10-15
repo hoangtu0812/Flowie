@@ -36,3 +36,18 @@ never moves to the previous day because of timezone conversion. Feature language
 catalogs interpolate user content as values; user titles, names, descriptions,
 comments, persisted status names and external error diagnostics remain original.
 Browser and server regression results are recorded in the implementation tracker.
+
+English/Vietnamese coverage includes task/bug details and creation, comments,
+document editing/history, primary navigation, archive/recovery, CSV/ZIP exchange,
+recurring schedules, SLA controls, workflow reports and account security/MFA.
+Catalogs live beside their feature modules; shared interpolation preserves named
+values and Astryx receives the account locale for built-in field/control labels.
+This does not imply every legacy settings label or technical server diagnostic
+has a translation. Saved custom workflow names and user-authored content remain
+unchanged when switching language.
+
+Calendar preferences use JavaScript weekday numbering (Sunday 0). Report queries
+convert to the API's Monday-0 convention; Saturday is 6 in preferences and 5 in
+report grouping. Relative Vietnamese times distinguish future from past, and
+missing/invalid instants display an explicit empty marker rather than inventing
+a date. Per-report timezone overrides and recurring rule timezones remain explicit.

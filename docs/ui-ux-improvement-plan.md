@@ -1,9 +1,11 @@
 # Flowie — Kế hoạch và nghiệm thu cải tiến ứng dụng
 
+> Cập nhật trạng thái 2026-10-15: code của kế hoạch này đã merge và workflow CT107 đã thành công. Các checkpoint và bảng IN_REVIEW bên dưới giữ lịch sử phát triển; xem [bằng chứng hiện hành](release-evidence-2026-10-15.md). Nghiệm thu AI thật, mailbox và off-host backup vẫn được theo dõi riêng, không tự chuyển DONE.
+
 - Phạm vi được người dùng chốt: sửa 17 mục UX và thực hiện 6 đề xuất chức năng.
 - Nhánh: `codex/ui-ux-improvements`, bắt đầu từ `68a7f32` trên `main`.
-- Trạng thái: **IN_REVIEW — đã triển khai mã nguồn và kiểm thử cục bộ**.
-- Chưa phát hành các thay đổi trong tài liệu này lên CT107.
+- Trạng thái code: **MERGED / DEPLOY_WORKFLOW_VERIFIED** — PR 2, merge `6a231be`, workflow `38555900872` success.
+- Code đã qua workflow CT107; các điều kiện nghiệm thu ngoài hệ thống ở mục 6 vẫn cần xác minh riêng.
 - Báo cáo gốc: [audit ngày 14/10/2026](application-ui-ux-review-2026-10-14.md).
 - Quy tắc: mỗi commit có CHANGELOG; Prisma sở hữu schema; production chỉ có CT107.
 

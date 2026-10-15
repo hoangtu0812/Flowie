@@ -14,10 +14,10 @@ Phạm vi đã được yêu cầu: toàn bộ AUD-01–12 và NEXT-01–09 tron
 | AUD-06 | Error boundaries, Saved View, Projects và Initiative Retry; trạng thái lỗi tách khỏi not found | LOCAL_VERIFIED |
 | AUD-07 | Batched portfolio list, cursor/update history và load-more UI; aggregate theo quyền đọc | LOCAL_VERIFIED |
 | AUD-08 | Dependency probes, request ID/build identity, scrubbed error report, job heartbeat/lag | LOCAL_VERIFIED |
-| AUD-09 | Backup/restore tooling và rehearsal đã kiểm tra; đích S3 độc lập, credential và CT107 inventory chưa cấu hình | WAITING_CONFIGURATION |
-| AUD-10 | Đã thêm role/revocation, >100 rows, view/error/workflow/operations; tiếp tục mở rộng theo feature | IN_PROGRESS |
+| AUD-09 | Backup/restore tooling và rehearsal đã kiểm tra; đã đề xuất B2/S3, còn account/bucket/key, CT107 inventory và restore ngoài máy chủ | WAITING_CONFIGURATION |
+| AUD-10 | Ma trận route/role/revocation, dữ liệu lớn, recovery và các feature mới trên ba engine; bằng chứng chi tiết bên dưới | LOCAL_VERIFIED |
 | AUD-11 | Đã chạy Codex thật + MCP local cho bug locale Archived; CLI hiệu lực read-only, run FAILED không có code; cần cấu hình quyền/production login | WAITING_CONFIGURATION |
-| AUD-12 | Cập nhật bằng chứng kế hoạch cũ, build identity/release checklist; release thực sau deploy verified | TODO |
+| AUD-12 | Đối chiếu PR/workflow/SHA kế hoạch cũ và checklist release đã ghi; release nhánh mới chờ CI/deploy xác minh | LOCAL_VERIFIED |
 | NEXT-01 | Bulk preview/execute có version/ACL/idempotency và explicit all-results selection | LOCAL_VERIFIED |
 | NEXT-02 | Recurring schedules/timezone, transaction lock/idempotency, pause/run history và UI | LOCAL_VERIFIED |
 | NEXT-03 | Business calendar, SLA pause/resume/escalation, policy revision và reports | LOCAL_VERIFIED |
@@ -26,7 +26,7 @@ Phạm vi đã được yêu cầu: toàn bộ AUD-01–12 và NEXT-01–09 tron
 | NEXT-06 | Server reporting/flow/aging/WIP/reopen/workload và dashboard theo lịch sử thực | LOCAL_VERIFIED |
 | NEXT-07 | Session binding/revoke, paged history/credential inventory và TOTP/recovery MFA cho password/Microsoft | LOCAL_VERIFIED |
 | NEXT-08 | Workspace audit cursor/filter/export theo current ACL; source Web/AI/SYSTEM/UNKNOWN; admin UI | LOCAL_VERIFIED |
-| NEXT-09 | Locale core workflows, week start/timezone, optional self-assignment, keyboard/mobile | IN_PROGRESS |
+| NEXT-09 | Locale theo module cho luồng chính, week start/timezone, optional self-assignment, keyboard/mobile | LOCAL_VERIFIED |
 
 ## Thứ tự commit và kiến trúc
 
@@ -208,3 +208,49 @@ sung tên truy cập bộ chọn assignee/nút tạo theo nhóm. API partial-wri
 và client cũ đạt; 20 web unit và production build pass. Hai luồng preference/
 đồng bộ thiết bị 6/6 E2E ba engine đạt, ảnh 390px đã kiểm tra. Locale theo module
 vẫn đang bổ sung ở checkpoint này; chưa deploy.
+
+## Checkpoint bàn giao cuối — 2026-10-15
+
+NEXT-09: catalogs Anh/Việt đặt cạnh từng feature cho task/bug, comment, tài liệu,
+navigation, archive, import/export, recurring, SLA, reports và account security/MFA.
+Astryx dùng locale tài khoản cho nhãn trường bắt buộc/control; nội dung người dùng
+không bị dịch. Date-only không lệch ngày, relative time phân biệt tương lai/quá khứ,
+timezone và quy ước thứ trong tuần được kiểm tra. Không tuyên bố toàn bộ nhãn
+settings cũ hoặc thông báo kỹ thuật từ server đã Việt hóa. Xem
+[phạm vi preferences/locale](account-time-preferences.md).
+
+AUD-10: ma trận 132 ca trên Chromium/Firefox/WebKit có 125 passed ở lần chạy toàn
+bộ. Bảy lỗi còn lại gồm sáu selector theo nhãn mới và một WebKit chuyển trang trước
+workspace hydration; không bỏ qua pageerror. Chín ca thuộc ba file liên quan chạy
+lại đều passed, bao gồm cả bảy ca đã lỗi. Kiểm tra ảnh mobile còn phát hiện trạng
+thái MFA hiển thị cũ ngay sau enable; đã cập nhật cùng kết quả mutation, build lại
+và chạy riêng toàn luồng MFA ba engine: 3/3 passed. Ảnh 390px của tài liệu tiếng
+Việt, lịch định kỳ và MFA đã xem trực tiếp. Đây là các lần chạy có phạm vi rõ,
+không phải tuyên bố một lần chạy cuối 132/132 hoặc đã smoke production.
+
+Cổng local cuối: backend 165 passed, 2 optional storage/rehearsal skips và 10
+subtests; web 23 unit passed, production build/lint/types passed; worker build và
+Compose app config passed. Prisma 101 migrations trên DB synthetic, schema diff
+không drift; từ base main có 13 migration bổ sung. Backend không thay đổi sau
+lần kiểm tra toàn bộ cuối. Các kiểm tra MinIO/SMTP và rehearsal restic có bằng
+chứng riêng ở trên; các ca skip không được tính thành pass.
+
+AUD-09: đã đề xuất [Backblaze B2/S3](offsite-backup-decision.md), retention 7 daily /
+4 weekly / 6 monthly và template credential ngoài Git. Chưa mua/provision tài
+khoản/bucket, chưa kiểm kê backup CT107, chưa bật timer hoặc restore off-host thật.
+
+AUD-12: [hồ sơ release](release-evidence-2026-10-15.md) đã đối chiếu PR 1–4 và
+workflow đúng merge SHA qua GitHub API chỉ đọc; kế hoạch cũ ghi rõ checkpoint lịch
+sử. Build identity và checklist version/deploy/migration/readiness/tag đã có.
+LOCAL_VERIFIED của mục này là tài liệu/quy trình; release mới chưa thực hiện.
+
+AUD-11 giữ WAITING_CONFIGURATION: đã tự chọn GEN-9 và chạy CLI thật; quyền hiệu
+lực read-only khiến run FAILED, không có diff/commit/PR. Không tính bản sửa locale
+do triển khai trực tiếp thành AI acceptance. Cần Codex có quyền ghi và kết nối
+Flowie thực để nghiệm thu tiếp; token thử đã revoke.
+
+Nhánh mới chưa push, chưa có PR/CI nhánh và chưa merge/deploy CT107. Trước phát
+hành phải review đúng head, xác minh nâng cấp migration và điều kiện backup,
+storage/MFA key ngoài Git. API, worker và Web phải nâng cấp cùng contract; Compose
+`migrate` hoàn tất trước API/worker. Không tạo tag trước khi đúng release commit
+đã deploy và xác minh thành công.

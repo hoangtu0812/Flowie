@@ -1,6 +1,7 @@
 # Flowie — Rà soát mức độ hoàn thiện sản phẩm
 
 - Ngày: 2026-10-15 (+07).
+- Đây là baseline trước triển khai. Trạng thái thực hiện hiện tại nằm trong [tracker](product-completeness-implementation-plan.md); đối chiếu code đã merge và workflow nằm trong [hồ sơ release](release-evidence-2026-10-15.md).
 - Baseline: `main`, `f3ae6aec83123948c02dd2841a5e6872f5fdd4e7`.
 - Phạm vi: mã Web/API/worker, schema Prisma, E2E, workflow và tài liệu hiện có.
 - Đây là báo cáo đánh giá, chưa phải đợt triển khai. Không thay đổi mã ứng dụng hoặc dữ liệu production.

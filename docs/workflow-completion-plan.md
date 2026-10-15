@@ -1,9 +1,11 @@
 # Flowie — Kế hoạch hoàn thiện luồng công việc, đợt 2
 
+> Cập nhật trạng thái 2026-10-15: code của kế hoạch này đã merge và workflow CT107 đã thành công. Các checkpoint và bảng IN_REVIEW bên dưới giữ lịch sử phát triển; xem [bằng chứng hiện hành](release-evidence-2026-10-15.md). Nghiệm thu AI thật, mailbox và off-host backup vẫn được theo dõi riêng, không tự chuyển DONE.
+
 - Ngày: 2026-10-14 (+07). Nhánh: `codex/workflow-completion`, base `6a231be`.
 - Phạm vi: bốn nhóm lỗi còn sót và sáu nhóm cải tiến đã được người dùng yêu cầu thực hiện.
 - Client nghiệm thu: Codex trên máy nội bộ; người dùng sẽ chỉ định project/bug.
-- Trạng thái code local: READY_FOR_REVIEW. Không coi build/test local là nghiệm thu CT107.
+- Trạng thái code: MERGED / DEPLOY_WORKFLOW_VERIFIED — PR 3, merge `98b502d`, workflow `38593586650` success. Các bảng local giữ checkpoint lịch sử; nghiệm thu AI/mailbox vẫn riêng.
 - Mỗi commit cập nhật CHANGELOG; backend chia theo module; Web dùng Astryx và shared features.
 
 ## Quản lý phạm vi và nghiệm thu
