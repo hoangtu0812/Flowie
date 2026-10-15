@@ -79,6 +79,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         from .modules.notifications.delivery_worker import delivery_loop
         channel_task=tracked('notification-channels',delivery_loop(session_factory,runtime,outbox_stop),outbox_stop)
         maintenance_task=tracked('maintenance',maintenance_loop(session_factory,outbox_stop),outbox_stop)
+        from .modules.work_items.bulk_worker import bulk_loop
+        bulk_task=tracked('bulk-issues',bulk_loop(session_factory,outbox_stop),outbox_stop)
         agent_runs_stop = asyncio.Event()
         agent_runs_task = tracked('agent-dispatcher',agent_run_dispatcher_loop(session_factory, agent_runs_stop),agent_runs_stop) if runtime.mcp_enabled and runtime.mcp_writes_enabled else None
         reminder_stop = asyncio.Event()
@@ -98,7 +100,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             digest_stop.set()
             dispatch_stop.set()
             scm_stop.set()
-            await asyncio.gather(*[task for task in [reminder_task,digest_task,dispatch_task,scm_task,outbox_task,channel_task,maintenance_task,agent_runs_task] if task],return_exceptions=True)
+            await asyncio.gather(*[task for task in [reminder_task,digest_task,dispatch_task,scm_task,outbox_task,channel_task,maintenance_task,agent_runs_task,bulk_task] if task],return_exceptions=True)
             await mcp_stack.aclose()
             await engine.dispose()
 
@@ -145,6 +147,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(issues_router)
     from .modules.work_items.workflow_api import router as workflow_router
     app.include_router(workflow_router)
+    from .modules.work_items.bulk_api import router as bulk_router
+    app.include_router(bulk_router)
     from .modules.operations.api import router as operations_admin_router
     app.include_router(operations_admin_router)
     app.include_router(native_initiatives_router)

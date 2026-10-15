@@ -4,6 +4,7 @@ import { HStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
 import { DesignSurface } from '@/components/common/design-surface';
 import { useIssuesStore } from '@/store/issues-store';
+import { BulkIssueActions } from './bulk-issue-actions';
 export function IssuePagination() {
    const { issues, page, loading, loadingMore, loadMore, pageError } = useIssuesStore();
    if (!page) return null;
@@ -11,10 +12,11 @@ export function IssuePagination() {
       <DesignSurface>
          <HStack gap={3} justify="between" padding={3} wrap="wrap">
             <Text type="supporting">
-               {issues.length} of {page.total} matching issues loaded. Counts and insights describe
-               loaded rows.
+               {issues.length} of {page.total} matching issues loaded. Insights cover all matching
+               issues.
             </Text>
             {pageError && <Text role="alert">{pageError}</Text>}
+            <BulkIssueActions />
             {page.nextCursor && (
                <Button
                   label={pageError ? 'Retry more issues' : 'Load more issues'}

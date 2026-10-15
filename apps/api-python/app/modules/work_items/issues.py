@@ -243,12 +243,10 @@ async def update_issue(
         sets.extend(["completed_at = :completed_at", "canceled_at = :canceled_at"])
         params["completed_at"] = _utcnow() if category == "COMPLETED" else None
         params["canceled_at"] = _utcnow() if category == "CANCELED" else None
-    if values and not sets:
-        sets.append("updated_at = :now")
-    if sets:
+    if values:
         await db.execute(
             text(
-                f"UPDATE issues SET {', '.join(sets)}, updated_at = :now WHERE id = :issue_id"
+                f"UPDATE issues SET {', '.join([*sets, 'updated_at = :now'])} WHERE id = :issue_id"
             ),
             params,
         )

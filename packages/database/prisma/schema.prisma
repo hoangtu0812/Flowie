@@ -172,6 +172,7 @@ enum CycleStatus {
 }
 
 model User {
+  bulkOperations    BulkOperation[]
   clientErrorEvents ClientErrorEvent[]
   uiPreferences     UserUiPreferences?
   id                String             @id @default(cuid())
@@ -533,6 +534,7 @@ model Organization {
 }
 
 model Workspace {
+  bulkOperations         BulkOperation[]
   clientErrorEvents      ClientErrorEvent[]
   aiLimits               AiWorkspaceLimit?
   aiToolWindows          AiToolWindow[]
@@ -2087,4 +2089,36 @@ model ClientErrorEvent {
 
   @@index([workspaceId, createdAt])
   @@map("client_error_events")
+}
+
+model BulkOperation {
+  id          String              @id @default(cuid())
+  workspaceId String              @map("workspace_id")
+  actorId     String              @map("actor_id")
+  requestKey  String              @map("request_key")
+  fingerprint String
+  changes     Json
+  state       String              @default("PREVIEW")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  expiresAt   DateTime            @map("expires_at")
+  workspace   Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actor       User                @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  items       BulkOperationItem[]
+
+  @@unique([actorId, requestKey])
+  @@index([state, createdAt])
+  @@map("bulk_operations")
+}
+
+model BulkOperationItem {
+  operationId     String        @map("operation_id")
+  issueId         String        @map("issue_id")
+  expectedVersion Int           @map("expected_version")
+  identifier      String
+  state           String        @default("PENDING")
+  errorCode       String?       @map("error_code")
+  operation       BulkOperation @relation(fields: [operationId], references: [id], onDelete: Cascade)
+
+  @@id([operationId, issueId])
+  @@map("bulk_operation_items")
 }

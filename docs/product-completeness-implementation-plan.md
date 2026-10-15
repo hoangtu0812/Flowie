@@ -16,9 +16,9 @@ Phạm vi đã được yêu cầu: toàn bộ AUD-01–12 và NEXT-01–09 tron
 | AUD-08 | Dependency probes, request ID/build identity, scrubbed error report, job heartbeat/lag | LOCAL_VERIFIED |
 | AUD-09 | Backup/restore tooling và rehearsal; off-host destination và CT107 inventory cần cấu hình thật | TODO |
 | AUD-10 | Đã thêm role/revocation, >100 rows, view/error/workflow/operations; tiếp tục mở rộng theo feature | IN_PROGRESS |
-| AUD-11 | Codex bug thật → PR; người dùng đã chọn client và sẽ chỉ định project/bug | WAITING_INPUT |
+| AUD-11 | Codex bug thật → PR; người dùng cho phép tự chọn project/bug, đang chuẩn bị nghiệm thu | IN_PROGRESS |
 | AUD-12 | Cập nhật bằng chứng kế hoạch cũ, build identity/release checklist; release thực sau deploy verified | TODO |
-| NEXT-01 | Bulk preview/execute có version/ACL/idempotency và explicit all-results selection | TODO |
+| NEXT-01 | Bulk preview/execute có version/ACL/idempotency và explicit all-results selection | LOCAL_VERIFIED |
 | NEXT-02 | Recurring schedules/timezone, lease/idempotency, pause/run history và UI | TODO |
 | NEXT-03 | Business calendar, SLA pause/resume/escalation, policy revision và reports | TODO |
 | NEXT-04 | Archived center/restore theo quyền, retention; không purge object khi chưa có policy/backup | TODO |
@@ -70,3 +70,9 @@ AUD-08: 89 migrations và schema diff pass trên DB thử; backend full 131 pass
 credential sai) + SMTP/TLS: 3 passed. Web build, 17 unit và worker build pass;
 Operations/report contract E2E 3/3 trên ba engine. Runbook nêu bucket phải được
 provision và phân biệt liveness, readiness, heartbeat và progress. Chưa deploy.
+
+NEXT-01: preview không đổi task, all-results giới hạn 1000, retry cùng key,
+stale version, quyền bị thu hồi, hủy, concurrent workers và rollback side effect
+đã kiểm tra DB. Bulk UI preview/apply/reload/resume: 3/3 engine. Backend 133 passed,
+1 optional storage skip, 10 subtests; production web build pass. Migration thứ 90
+đã áp dụng trên DB thử và schema diff không có thay đổi. Chưa deploy.

@@ -26,6 +26,7 @@ const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 declare module '@/mock-data/issues' {
    interface Issue extends BugFields {
+      version?: number;
       /** Personal state persisted for the current signed-in user. */
       isSubscribed?: boolean;
       isFavorite?: boolean;
@@ -39,6 +40,7 @@ declare module '@/mock-data/issues' {
 
 type NativeIssue = BugFields & {
    id: string;
+   version: number;
    teamId: string;
    parentIssueId?: string | null;
    identifier: string;
@@ -185,6 +187,7 @@ function asIssue(native: NativeIssue): Issue {
       actualResult: native.actualResult,
       id: native.id,
       teamId: native.teamId,
+      version: native.version,
       parentIssueId: native.parentIssueId ?? undefined,
       creatorId: native.creator?.id,
       identifier: native.identifier,

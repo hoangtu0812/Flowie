@@ -81,6 +81,7 @@ async def _validate_references(
     *,
     creating: bool,
 ) -> str | None:
+    row = None
     status_id = values.get("statusId")
     if status_id:
         status = await db.execute(
@@ -101,12 +102,11 @@ async def _validate_references(
             ),
             {"workspace_id": workspace_id, "team_id": team_id},
         )
-    else:
-        return None
-    row = status.mappings().first()
-    if not row:
-        raise ApiError(404, "A valid issue status is required.", "Not Found")
-    values["statusId"] = row["id"]
+    if status_id or creating:
+        row = status.mappings().first()
+        if not row:
+            raise ApiError(404, "A valid issue status is required.", "Not Found")
+        values["statusId"] = row["id"]
 
     project_id = values.get("projectId")
     if project_id:
@@ -149,7 +149,7 @@ async def _validate_references(
             if len(labels.mappings().all()) != len(unique_ids):
                 raise ApiError(404, "One or more labels were not found.", "Not Found")
         values["labelIds"] = unique_ids
-    return row["category"]
+    return row["category"] if row else None
 
 
 async def _validate_release_ids(
