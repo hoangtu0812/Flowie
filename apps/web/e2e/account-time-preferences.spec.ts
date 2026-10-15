@@ -63,7 +63,7 @@ test('timezone and week start persist and optional self-assignment respects clea
       await page.waitForLoadState('networkidle');
       await page.goto(`/${fixture.slug}/dashboard`);
       const report = (await reportRequest).postDataJSON();
-      expect(report.weekStart).toBe(6);
+      expect(report.weekStart).toBe(5);
       await page.waitForLoadState('networkidle');
       await page.goto(`/${fixture.slug}/team/GEN/all`);
       for (const clear of [true, false]) {

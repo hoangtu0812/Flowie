@@ -1,4 +1,7 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/reporting/messages.vi';
+
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Button } from '@astryxdesign/core/Button';
@@ -15,15 +18,18 @@ import { ReportTrend } from './report-trend';
 import { DayChanges, ReportBreakdowns } from './report-breakdowns';
 import { recentQuery, type ReportQuery } from './types';
 import { useAccountTime } from '@/features/shared/account-time';
+import { reportWeekStart } from '@/features/shared/date-format';
 
 export function WorkspaceDashboard() {
+   const tx = useMessages(messages);
+
    const accountTime = useAccountTime();
    const { orgId } = useParams<{ orgId: string }>();
    const scope = useWorkspaceTeams(orgId);
    if (scope.error)
       return (
          <RecoveryScreen
-            title="Workspace analytics unavailable"
+            title={tx('Workspace analytics unavailable')}
             message={scope.error}
             retry={scope.reload}
          />
@@ -32,7 +38,7 @@ export function WorkspaceDashboard() {
       return (
          <DesignSurface>
             <VStack padding={6}>
-               <Text>Loading workspace analytics…</Text>
+               <Text>{tx('Loading workspace analytics…')}</Text>
             </VStack>
          </DesignSurface>
       );
@@ -56,20 +62,23 @@ function Dashboard({
    org: string;
    teams: { id: string; name: string }[];
 }) {
+   const tx = useMessages(messages);
+
    const accountTime = useAccountTime();
    const [query, setQuery] = useState<ReportQuery>(() => ({
          ...recentQuery(30, accountTime.timezone),
-         weekStart: accountTime.weekStart,
+         weekStart: reportWeekStart(accountTime.weekStart),
       })),
       [day, setDay] = useState<string>();
    const body = JSON.stringify(query);
    const report = useWorkflowReport(workspace, body);
    return (
       <VStack gap={6} padding={6} width="100%" className="h-full overflow-auto">
-         <Heading level={1}>Workspace analytics</Heading>
+         <Heading level={1}>{tx('Workspace analytics')}</Heading>
          <Text>
-            Server-calculated reports cover all current matches. Historical values use captured
-            lifecycle events; missing history is shown explicitly.
+            {tx(
+               'Server-calculated reports cover all current matches. Historical values use captured lifecycle events; missing history is shown explicitly.'
+            )}
          </Text>
          <ReportFilters
             workspace={workspace}
@@ -81,15 +90,24 @@ function Dashboard({
             }}
          />
          <Button
-            label="Refresh workspace analytics"
+            label={tx('Refresh workspace analytics')}
             onClick={report.reload}
             isDisabled={report.loading}
          />
          {report.error && <Text role="alert">{report.error}</Text>}
-         {report.loading && <Text role="status">Calculating workspace analytics…</Text>}
+         {report.loading && <Text role="status">{tx('Calculating workspace analytics…')}</Text>}
          {report.data && (
             <>
-               <Text>{`Snapshot ${new Date(report.data.asOf).toLocaleString(undefined, { timeZone: query.timezone })} · ${query.timezone} · ${query.fromDate} to ${query.toDate}`}</Text>
+               <Text>
+                  {tx('Snapshot {value0} · {value1} · {value2} to {value3}', {
+                     value0: new Date(report.data.asOf).toLocaleString(accountTime.locale, {
+                        timeZone: query.timezone,
+                     }),
+                     value1: query.timezone,
+                     value2: query.fromDate,
+                     value3: query.toDate,
+                  })}
+               </Text>
                <ReportMetrics data={report.data} />
                <ReportTrend rows={report.data.trend} onDay={setDay} />
                {day && (
@@ -102,7 +120,7 @@ function Dashboard({
                      onClose={() => setDay(undefined)}
                   />
                )}
-               <Heading level={2}>Current status distribution</Heading>
+               <Heading level={2}>{tx('Current status distribution')}</Heading>
                <List hasDividers>
                   {report.data.statuses.map((row) => (
                      <ListItem key={row.id} label={row.name} description={String(row.count)} />

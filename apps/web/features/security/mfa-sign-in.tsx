@@ -1,4 +1,7 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/security/messages.vi';
+
 import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -11,9 +14,12 @@ import { AuthCard } from '@/components/auth/auth-card';
 import { accountHome } from '@/features/identity/account-preferences';
 import { responseData } from '@/lib/http';
 import { authApi } from './types';
-import { factorOptions, type FactorKind } from './mfa-client';
+import { useFactorOptions, type FactorKind } from './mfa-client';
 
 export default function MfaSignIn() {
+   const tx = useMessages(messages);
+   const factorOptions = useFactorOptions();
+
    const router = useRouter();
    const [kind, setKind] = useState<FactorKind>('AUTHENTICATOR'),
       [code, setCode] = useState(''),
@@ -46,21 +52,23 @@ export default function MfaSignIn() {
                     : '/invitations')
          );
       } catch (reason) {
-         setError(reason instanceof Error ? reason.message : 'Verification failed.');
+         setError(reason instanceof Error ? reason.message : tx('Verification failed.'));
       } finally {
          setBusy(false);
       }
    }
    return (
       <AuthCard
-         title="Verify your sign-in"
-         description="Enter a code from your authenticator app or one unused recovery code. This sign-in request expires after five minutes."
+         title={tx('Verify your sign-in')}
+         description={tx(
+            'Enter a code from your authenticator app or one unused recovery code. This sign-in request expires after five minutes.'
+         )}
          loading={busy}
-         footer={<Link href="/auth/login">Start sign-in again</Link>}
+         footer={<Link href="/auth/login">{tx('Start sign-in again')}</Link>}
       >
          <VStack as="form" onSubmit={submit} gap={4} width="100%">
             <Selector
-               label="Verification method"
+               label={tx('Verification method')}
                value={kind}
                options={factorOptions}
                onChange={(value) => {
@@ -70,7 +78,7 @@ export default function MfaSignIn() {
                width="100%"
             />
             <TextInput
-               label="Verification code"
+               label={tx('Verification code')}
                value={code}
                onChange={setCode}
                htmlName="one-time-code"
@@ -80,7 +88,7 @@ export default function MfaSignIn() {
             {error && <Text role="alert">{error}</Text>}
             <Button
                type="submit"
-               label="Verify sign-in"
+               label={tx('Verify sign-in')}
                isLoading={busy}
                isDisabled={!code || busy}
             />

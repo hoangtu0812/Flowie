@@ -33,9 +33,7 @@ export type Credential = {
    revokedAt: string | null;
    lastUsedAt: string | null;
 };
-export const securityDate = (value: string | null) =>
-   value ? new Date(value).toLocaleString() : 'Unknown';
-export function deviceLabel(agent: string | null) {
+export function deviceLabel(agent: string | null, locale = 'en') {
    const value = agent ?? '';
    const browser = value.includes('Edg/')
       ? 'Edge'
@@ -45,7 +43,9 @@ export function deviceLabel(agent: string | null) {
           ? 'Chrome'
           : value.includes('Safari/')
             ? 'Safari'
-            : 'Unknown browser';
+            : locale === 'vi'
+              ? 'Trình duyệt chưa xác định'
+              : 'Unknown browser';
    const platform = /iPhone|iPad|iPod/i.test(value)
       ? 'iOS'
       : /Android/i.test(value)
@@ -56,6 +56,8 @@ export function deviceLabel(agent: string | null) {
             ? 'macOS'
             : /Linux/i.test(value)
               ? 'Linux'
-              : 'device';
-   return `${browser} on ${platform}`;
+              : locale === 'vi'
+                ? 'thiết bị'
+                : 'device';
+   return `${browser} ${locale === 'vi' ? 'trên' : 'on'} ${platform}`;
 }

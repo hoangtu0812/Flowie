@@ -1,4 +1,7 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/security/messages.vi';
+
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { VStack } from '@astryxdesign/core/Layout';
@@ -13,6 +16,8 @@ import { CredentialInventory } from './credential-inventory';
 import { Authenticator } from './authenticator';
 
 export default function AccountSecurity() {
+   const tx = useMessages(messages);
+
    const { orgId } = useParams<{ orgId: string }>();
    const [account, setAccount] = useState(''),
       [error, setError] = useState(''),
@@ -34,7 +39,7 @@ export default function AccountSecurity() {
    if (error)
       return (
          <RecoveryScreen
-            title="Account security unavailable"
+            title={tx('Account security unavailable')}
             message={error}
             retry={() => setRetry((value) => value + 1)}
          />
@@ -43,7 +48,7 @@ export default function AccountSecurity() {
       return (
          <DesignSurface>
             <VStack padding={6}>
-               <Text>Loading account security…</Text>
+               <Text>{tx('Loading account security…')}</Text>
             </VStack>
          </DesignSurface>
       );
@@ -54,31 +59,41 @@ export default function AccountSecurity() {
    );
 }
 function SecurityCenter({ org }: { org: string }) {
+   const tx = useMessages(messages);
+
    const [revision, setRevision] = useState(0);
-   const [tab, setTab] = useState('devices');
+   const [tab, setTab] = useState(tx('devices'));
    const changed = () => setRevision((value) => value + 1);
    return (
       <VStack padding={6} gap={6} width="100%" className="h-full overflow-auto">
-         <Heading level={1}>Security &amp; access</Heading>
+         <Heading level={1}>{tx('Security & access')}</Heading>
          <TabList role="tablist" value={tab} onChange={setTab} hasDivider>
-            <Tab value="devices" label="Devices" panelId="security-devices" />
-            <Tab value="history" label="History" panelId="security-history" />
-            <Tab value="credentials" label="Credentials" panelId="security-credentials" />
-            <Tab value="authenticator" label="Authenticator" panelId="security-authenticator" />
+            <Tab value={tx('devices')} label={tx('Devices')} panelId="security-devices" />
+            <Tab value="history" label={tx('History')} panelId="security-history" />
+            <Tab
+               value={tx('credentials')}
+               label={tx('Credentials')}
+               panelId="security-credentials"
+            />
+            <Tab
+               value="authenticator"
+               label={tx('Authenticator')}
+               panelId="security-authenticator"
+            />
          </TabList>
          <VStack
             id="security-devices"
             role="tabpanel"
-            aria-label="Devices"
+            aria-label={tx('Devices')}
             width="100%"
-            className={tab === 'devices' ? undefined : 'hidden'}
+            className={tab === tx('devices') ? undefined : 'hidden'}
          >
             <DeviceSessions revision={String(revision)} onChanged={changed} />
          </VStack>
          <VStack
             id="security-authenticator"
             role="tabpanel"
-            aria-label="Authenticator"
+            aria-label={tx('Authenticator')}
             width="100%"
             className={tab === 'authenticator' ? undefined : 'hidden'}
          >
@@ -87,7 +102,7 @@ function SecurityCenter({ org }: { org: string }) {
          <VStack
             id="security-history"
             role="tabpanel"
-            aria-label="History"
+            aria-label={tx('History')}
             width="100%"
             className={tab === 'history' ? undefined : 'hidden'}
          >
@@ -96,9 +111,9 @@ function SecurityCenter({ org }: { org: string }) {
          <VStack
             id="security-credentials"
             role="tabpanel"
-            aria-label="Credentials"
+            aria-label={tx('Credentials')}
             width="100%"
-            className={tab === 'credentials' ? undefined : 'hidden'}
+            className={tab === tx('credentials') ? undefined : 'hidden'}
          >
             <CredentialInventory org={org} revision={String(revision)} onChanged={changed} />
          </VStack>

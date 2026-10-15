@@ -1,4 +1,8 @@
 'use client';
+import { useDateFormatter } from '@/features/shared/account-time';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/security/messages.vi';
+
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
@@ -10,7 +14,7 @@ import { authenticatedFetch } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
 import { usePagedResource } from '@/features/shared/use-paged-resource';
 import { ResourcePagination } from '@/features/shared/resource-pagination';
-import { securityApi, securityDate, type Credential } from './types';
+import { securityApi, type Credential } from './types';
 
 export function CredentialInventory({
    org,
@@ -21,6 +25,9 @@ export function CredentialInventory({
    revision: string;
    onChanged: () => void;
 }) {
+   const tx = useMessages(messages);
+   const securityDate = useDateFormatter();
+
    const [revoked, setRevoked] = useState(false),
       [selected, setSelected] = useState<Credential>(),
       [busy, setBusy] = useState(false),
@@ -58,16 +65,19 @@ export function CredentialInventory({
       }
    };
    return (
-      <VStack as="section" aria-label="Credential inventory" gap={3} width="100%">
-         <Heading level={2}>Your integration credentials</Heading>
+      <VStack as="section" aria-label={tx('Credential inventory')} gap={3} width="100%">
+         <Heading level={2}>{tx('Your integration credentials')}</Heading>
          <Text>
-            Scoped AI connections keep their explicit tool/team/project grants and can be revoked
-            independently of browser devices. Legacy personal API keys are retired and are not
-            accepted by the current API. Existing entries remain available for revocation.
+            {tx(
+               'Scoped AI connections keep their explicit tool/team/project grants and can be revoked independently of browser devices. Legacy personal API keys are retired and are not accepted by the current API. Existing entries remain available for revocation.'
+            )}
          </Text>
-         <Button label="Manage scoped AI connections" href={`/${org}/settings/integrations`} />
+         <Button
+            label={tx('Manage scoped AI connections')}
+            href={`/${org}/settings/integrations`}
+         />
          <CheckboxInput
-            label="Include revoked credentials"
+            label={tx('Include revoked credentials')}
             value={revoked}
             onChange={(value) => {
                setRevoked(value);
@@ -75,18 +85,23 @@ export function CredentialInventory({
             }}
             isDisabled={busy}
          />
-         <Button label="Refresh credentials" onClick={credentials.reload} isDisabled={busy} />
+         <Button label={tx('Refresh credentials')} onClick={credentials.reload} isDisabled={busy} />
          {selected && (
             <>
-               <Text>{`Revoke ${selected.name}? Applications holding this credential will lose its access.`}</Text>
+               <Text>
+                  {tx(
+                     'Revoke {value0}? Applications holding this credential will lose its access.',
+                     { value0: selected.name }
+                  )}
+               </Text>
                <HStack gap={2} wrap="wrap">
                   <Button
-                     label="Confirm credential revocation"
+                     label={tx('Confirm credential revocation')}
                      onClick={() => void revoke()}
                      isLoading={busy}
                   />
                   <Button
-                     label="Cancel credential revocation"
+                     label={tx('Cancel credential revocation')}
                      onClick={() => setSelected(undefined)}
                      isDisabled={busy}
                   />
@@ -105,26 +120,34 @@ export function CredentialInventory({
                            <Token
                               label={
                                  row.revokedAt
-                                    ? 'Revoked'
+                                    ? tx('Revoked')
                                     : row.kind === 'LEGACY_API_KEY'
-                                      ? 'Retired'
+                                      ? tx('Retired')
                                       : row.expiresAt &&
                                           new Date(row.expiresAt).getTime() <= Date.now()
-                                        ? 'Expired'
-                                        : 'Active'
+                                        ? tx('Expired')
+                                        : tx('Active')
                               }
                            />
                            <Text>{row.prefix}</Text>
                         </HStack>
                         <Text>
                            {row.kind === 'MCP'
-                              ? `${row.workspaceName ?? 'Unavailable workspace'} · ${row.scopes.join(', ')}`
-                              : 'Legacy personal API key'}
+                              ? `${row.workspaceName ?? tx('Unavailable workspace')} · ${row.scopes.join(', ')}`
+                              : tx('Legacy personal API key')}
                         </Text>
-                        <Text>{`Created ${securityDate(row.createdAt)} · Expires ${row.expiresAt ? securityDate(row.expiresAt) : 'No expiry'} · Last used ${row.lastUsedAt ? securityDate(row.lastUsedAt) : 'Not recorded'}`}</Text>
+                        <Text>
+                           {tx('Created {value0} · Expires {value1} · Last used {value2}', {
+                              value0: securityDate(row.createdAt),
+                              value1: row.expiresAt ? securityDate(row.expiresAt) : tx('No expiry'),
+                              value2: row.lastUsedAt
+                                 ? securityDate(row.lastUsedAt)
+                                 : tx('Not recorded'),
+                           })}
+                        </Text>
                         {!row.revokedAt && (
                            <Button
-                              label="Revoke credential"
+                              label={tx('Revoke credential')}
                               onClick={() => setSelected(row)}
                               isDisabled={busy}
                            />
@@ -135,12 +158,12 @@ export function CredentialInventory({
             ))}
          </List>
          {!credentials.loading && !credentials.error && !credentials.items.length && (
-            <Text>No credentials match this filter.</Text>
+            <Text>{tx('No credentials match this filter.')}</Text>
          )}
          <ResourcePagination
             count={credentials.items.length}
             {...credentials}
-            label="credentials"
+            label={tx('credentials')}
          />
       </VStack>
    );

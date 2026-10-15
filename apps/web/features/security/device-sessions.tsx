@@ -1,4 +1,9 @@
 'use client';
+import { useDateFormatter } from '@/features/shared/account-time';
+import { useLocale } from '@/features/shared/use-locale';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/security/messages.vi';
+
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
@@ -9,7 +14,7 @@ import { authenticatedFetch } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
 import { usePagedResource } from '@/features/shared/use-paged-resource';
 import { ResourcePagination } from '@/features/shared/resource-pagination';
-import { securityApi, authApi, deviceLabel, securityDate, type AccountSession } from './types';
+import { securityApi, authApi, deviceLabel, type AccountSession } from './types';
 
 export function DeviceSessions({
    revision,
@@ -18,6 +23,10 @@ export function DeviceSessions({
    revision: string;
    onChanged: () => void;
 }) {
+   const tx = useMessages(messages);
+   const { locale } = useLocale();
+   const securityDate = useDateFormatter();
+
    const sessions = usePagedResource<AccountSession>(securityApi + '/sessions', revision);
    const [selected, setSelected] = useState<AccountSession | 'others'>(),
       [busy, setBusy] = useState(false),
@@ -44,7 +53,7 @@ export function DeviceSessions({
          );
          if (alive.current) {
             setSelected(undefined);
-            setSuccess('Sessions revoked.');
+            setSuccess(tx('Sessions revoked.'));
             onChanged();
          }
       } catch (reason) {
@@ -54,17 +63,17 @@ export function DeviceSessions({
       }
    };
    return (
-      <VStack as="section" aria-label="Device sessions" gap={3} width="100%">
-         <Heading level={2}>Signed-in devices</Heading>
+      <VStack as="section" aria-label={tx('Device sessions')} gap={3} width="100%">
+         <Heading level={2}>{tx('Signed-in devices')}</Heading>
          <Text>
-            Revocation blocks subsequent API requests even if an access token has not expired.
-            Realtime connections recheck session access within 15 seconds. Device names are reported
-            by the browser; the last refresh time is not continuous activity tracking.
+            {tx(
+               'Revocation blocks subsequent API requests even if an access token has not expired. Realtime connections recheck session access within 15 seconds. Device names are reported by the browser; the last refresh time is not continuous activity tracking.'
+            )}
          </Text>
          <HStack gap={2} wrap="wrap">
-            <Button label="Refresh devices" onClick={sessions.reload} isDisabled={busy} />
+            <Button label={tx('Refresh devices')} onClick={sessions.reload} isDisabled={busy} />
             <Button
-               label="Revoke other devices"
+               label={tx('Revoke other devices')}
                onClick={() => setSelected('others')}
                isDisabled={busy}
             />
@@ -73,17 +82,17 @@ export function DeviceSessions({
             <>
                <Text>
                   {selected === 'others'
-                     ? 'Sign out other devices now?'
+                     ? tx('Sign out other devices now?')
                      : `Sign out ${deviceLabel(selected.userAgent)} now?`}
                </Text>
                <HStack gap={2} wrap="wrap">
                   <Button
-                     label="Confirm device revocation"
+                     label={tx('Confirm device revocation')}
                      onClick={() => void revoke()}
                      isLoading={busy}
                   />
                   <Button
-                     label="Cancel device revocation"
+                     label={tx('Cancel device revocation')}
                      onClick={() => setSelected(undefined)}
                      isDisabled={busy}
                   />
@@ -96,14 +105,21 @@ export function DeviceSessions({
             {sessions.items.map((row) => (
                <ListItem
                   key={row.id}
-                  label={deviceLabel(row.userAgent)}
+                  label={deviceLabel(row.userAgent, locale)}
                   description={
                      <VStack gap={2} width="100%">
-                        {row.current && <Token label="Current device" color="green" />}
-                        <Text>{`${row.ipAddress ?? 'Unknown network'} · ${row.method} · Signed in ${securityDate(row.createdAt)} · Last refresh ${securityDate(row.lastUsedAt)}`}</Text>
+                        {row.current && <Token label={tx('Current device')} color="green" />}
+                        <Text>
+                           {tx('{value0} · {value1} · Signed in {value2} · Last refresh {value3}', {
+                              value0: row.ipAddress ?? tx('Unknown network'),
+                              value1: row.method,
+                              value2: securityDate(row.createdAt),
+                              value3: securityDate(row.lastUsedAt),
+                           })}
+                        </Text>
                         {!row.current && (
                            <Button
-                              label="Revoke this device"
+                              label={tx('Revoke this device')}
                               onClick={() => setSelected(row)}
                               isDisabled={busy}
                            />
@@ -113,7 +129,7 @@ export function DeviceSessions({
                />
             ))}
          </List>
-         <ResourcePagination count={sessions.items.length} {...sessions} label="devices" />
+         <ResourcePagination count={sessions.items.length} {...sessions} label={tx('devices')} />
       </VStack>
    );
 }

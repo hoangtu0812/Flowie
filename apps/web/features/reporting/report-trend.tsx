@@ -1,4 +1,7 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/reporting/messages.vi';
+
 import { useState } from 'react';
 import { Button } from '@astryxdesign/core/Button';
 import { VStack } from '@astryxdesign/core/Layout';
@@ -39,19 +42,21 @@ function TrendTooltip({
    );
 }
 export function ReportTrend({ rows, onDay }: { rows: DailyPoint[]; onDay: (day: string) => void }) {
+   const tx = useMessages(messages);
+
    const { token } = useTheme();
    const [table, setTable] = useState(false);
    return (
       <VStack gap={3} width="100%">
-         <Heading level={2}>Daily throughput and observed WIP</Heading>
+         <Heading level={2}>{tx('Daily throughput and observed WIP')}</Heading>
          <Text>
-            Created and completed are daily event counts. WIP is the captured Started state at each
-            local day end, or the current snapshot for today. Unknown history is shown separately;
-            future snapshots remain blank.
+            {tx(
+               'Created and completed are daily event counts. WIP is the captured Started state at each local day end, or the current snapshot for today. Unknown history is shown separately; future snapshots remain blank.'
+            )}
          </Text>
          <VStack
             as="figure"
-            aria-label="Daily throughput and WIP chart"
+            aria-label={tx('Daily throughput and WIP chart')}
             width="100%"
             className="h-80 min-w-0"
          >
@@ -74,25 +79,25 @@ export function ReportTrend({ rows, onDay }: { rows: DailyPoint[]; onDay: (day: 
                   <Legend />
                   <Line
                      dataKey="created"
-                     name="Created"
+                     name={tx('Created')}
                      stroke={token('--color-data-categorical-blue')}
                      dot={false}
                   />
                   <Line
                      dataKey="completed"
-                     name="Completed"
+                     name={tx('Completed')}
                      stroke={token('--color-data-categorical-green')}
                      dot={false}
                   />
                   <Line
                      dataKey="wip"
-                     name="Observed WIP"
+                     name={tx('Observed WIP')}
                      stroke={token('--color-data-categorical-purple')}
                      dot={false}
                   />
                   <Line
                      dataKey="unknown"
-                     name="Unknown history"
+                     name={tx('Unknown history')}
                      stroke={token('--color-data-categorical-orange')}
                      dot={false}
                      strokeDasharray="4 4"
@@ -101,7 +106,7 @@ export function ReportTrend({ rows, onDay }: { rows: DailyPoint[]; onDay: (day: 
             </ResponsiveContainer>
          </VStack>
          <Button
-            label={table ? 'Hide daily values' : 'Show daily values'}
+            label={table ? tx('Hide daily values') : tx('Show daily values')}
             onClick={() => setTable(!table)}
          />
          {table && (
@@ -111,7 +116,18 @@ export function ReportTrend({ rows, onDay }: { rows: DailyPoint[]; onDay: (day: 
                      key={row.day}
                      label={row.day}
                      description={
-                        <Text>{`Created ${row.created} · Completed ${row.completed} · WIP ${row.wip ?? 'not observed'} · Unknown ${row.unknown ?? 'not observed'}${row.complete ? '' : ' · Partial or future day'}`}</Text>
+                        <Text>
+                           {tx(
+                              'Created {value0} · Completed {value1} · WIP {value2} · Unknown {value3}{value4}',
+                              {
+                                 value0: row.created,
+                                 value1: row.completed,
+                                 value2: row.wip ?? tx('not observed'),
+                                 value3: row.unknown ?? tx('not observed'),
+                                 value4: row.complete ? '' : tx(' · Partial or future day'),
+                              }
+                           )}
+                        </Text>
                      }
                      onClick={() => onDay(row.day)}
                   />

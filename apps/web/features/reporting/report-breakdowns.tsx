@@ -1,4 +1,7 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/reporting/messages.vi';
+
 import { Button } from '@astryxdesign/core/Button';
 import { VStack, HStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
@@ -22,6 +25,8 @@ export function ReportBreakdowns({
    org: string;
    body: string;
 }) {
+   const tx = useMessages(messages);
+
    const scope = new URLSearchParams({ workspaceId: workspace }).toString();
    const workload = usePagedResource<Workload>(`${reportApi}/workload?${scope}`, undefined, body);
    const projects = usePagedResource<ProjectReport>(
@@ -31,41 +36,67 @@ export function ReportBreakdowns({
    );
    return (
       <VStack gap={5} width="100%">
-         <Heading level={2}>Open workload by planned start week</Heading>
+         <Heading level={2}>{tx('Open workload by planned start week')}</Heading>
          <Text>
-            Each task&apos;s complete estimate is counted once in its planned start week within the
-            selected range. Unscheduled work has a separate group. This is a planning total, not a
-            per-week allocation or remaining-effort estimate.
+            {tx(
+               "Each task's complete estimate is counted once in its planned start week within the selected range. Unscheduled work has a separate group. This is a planning total, not a per-week allocation or remaining-effort estimate."
+            )}
          </Text>
          <List hasDividers>
             {workload.items.map((row) => (
                <ListItem
                   key={row.id}
-                  label={`${row.assigneeName ?? 'Unassigned'} · ${row.week ? 'Week of ' + row.week : 'Unscheduled'}`}
+                  label={`${row.assigneeName ?? tx('Unassigned')} · ${row.week ? tx('Week of {week}', { week: row.week }) : tx('Unscheduled')}`}
                   description={
-                     <Text>{`${row.count} open tasks · ${row.estimatedEffort} estimated mandays · ${row.missingEstimates} missing estimates · ${row.overdue} overdue`}</Text>
+                     <Text>
+                        {tx(
+                           '{value0} open tasks · {value1} estimated mandays · {value2} missing estimates · {value3} overdue',
+                           {
+                              value0: row.count,
+                              value1: row.estimatedEffort,
+                              value2: row.missingEstimates,
+                              value3: row.overdue,
+                           }
+                        )}
+                     </Text>
                   }
                />
             ))}
          </List>
-         <ResourcePagination count={workload.items.length} {...workload} label="workload groups" />
-         <Heading level={2}>Progress and effort by current project</Heading>
+         <ResourcePagination
+            count={workload.items.length}
+            {...workload}
+            label={tx('workload groups')}
+         />
+         <Heading level={2}>{tx('Progress and effort by current project')}</Heading>
          <Text>
-            Projects group currently matching tasks. Recorded task effort totals are not attributed
-            to guessed work dates. Completion events cover the selected period, including repeat
-            completions after reopening.
+            {tx(
+               'Projects group currently matching tasks. Recorded task effort totals are not attributed to guessed work dates. Completion events cover the selected period, including repeat completions after reopening.'
+            )}
          </Text>
          <List hasDividers>
             {projects.items.map((row) => (
                <ListItem
                   key={row.id}
-                  label={row.name ?? 'No accessible project'}
+                  label={row.name ?? tx('No accessible project')}
                   description={
                      <VStack gap={2}>
-                        <Text>{`${row.total} tasks · ${row.open} open · ${row.created} created in period · ${row.completions} observed completions · Estimated ${row.estimatedEffort} / actual ${row.actualEffort} mandays`}</Text>
+                        <Text>
+                           {tx(
+                              '{value0} tasks · {value1} open · {value2} created in period · {value3} observed completions · Estimated {value4} / actual {value5} mandays',
+                              {
+                                 value0: row.total,
+                                 value1: row.open,
+                                 value2: row.created,
+                                 value3: row.completions,
+                                 value4: row.estimatedEffort,
+                                 value5: row.actualEffort,
+                              }
+                           )}
+                        </Text>
                         {row.projectId && (
                            <Button
-                              label="Open project"
+                              label={tx('Open project')}
                               href={`/${org}/project/${row.projectId}/overview`}
                            />
                         )}
@@ -74,7 +105,11 @@ export function ReportBreakdowns({
                />
             ))}
          </List>
-         <ResourcePagination count={projects.items.length} {...projects} label="project groups" />
+         <ResourcePagination
+            count={projects.items.length}
+            {...projects}
+            label={tx('project groups')}
+         />
       </VStack>
    );
 }
@@ -91,6 +126,8 @@ export function DayChanges({
    day: string;
    onClose: () => void;
 }) {
+   const tx = useMessages(messages);
+
    const body = JSON.stringify({ ...query, fromDate: day, toDate: day });
    const changes = usePagedResource<ReportChange>(
       `${reportApi}/changes?${new URLSearchParams({ workspaceId: workspace })}`,
@@ -100,8 +137,10 @@ export function DayChanges({
    return (
       <VStack gap={3} width="100%">
          <HStack gap={2} wrap="wrap">
-            <Heading level={2}>Captured activity: {day}</Heading>
-            <Button label="Close day activity" onClick={onClose} />
+            <Heading level={2}>
+               {tx('Captured activity:')} {day}
+            </Heading>
+            <Button label={tx('Close day activity')} onClick={onClose} />
          </HStack>
          <List hasDividers>
             {changes.items.map((row) => (
@@ -112,7 +151,7 @@ export function DayChanges({
                      <VStack gap={2}>
                         <Text>{`${row.kind} · ${new Date(row.occurredAt).toLocaleString(undefined, { timeZone: query.timezone })}`}</Text>
                         <Button
-                           label={`Open ${row.identifier}`}
+                           label={tx('Open {value0}', { value0: row.identifier })}
                            href={`/${org}/issue/${row.identifier}`}
                         />
                      </VStack>
@@ -121,9 +160,9 @@ export function DayChanges({
             ))}
          </List>
          {!changes.loading && !changes.error && !changes.items.length && (
-            <Text>No captured activity on this day.</Text>
+            <Text>{tx('No captured activity on this day.')}</Text>
          )}
-         <ResourcePagination count={changes.items.length} {...changes} label="day events" />
+         <ResourcePagination count={changes.items.length} {...changes} label={tx('day events')} />
       </VStack>
    );
 }

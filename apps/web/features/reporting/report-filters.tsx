@@ -1,4 +1,7 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/reporting/messages.vi';
+
 import { useEffect, useState } from 'react';
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
@@ -24,6 +27,8 @@ export function ReportFilters({
    value: ReportQuery;
    onApply: (query: ReportQuery) => void;
 }) {
+   const tx = useMessages(messages);
+
    const [draft, setDraft] = useState(value),
       [status, setStatus] = useState(''),
       [statuses, setStatuses] = useState<{ id: string; name: string; teamId: string | null }[]>([]),
@@ -72,7 +77,7 @@ export function ReportFilters({
             {[7, 30, 90, 365].map((days) => (
                <Button
                   key={days}
-                  label={`Last ${days} days`}
+                  label={tx('Last {value0} days', { value0: days })}
                   onClick={() => {
                      try {
                         const next = {
@@ -82,7 +87,7 @@ export function ReportFilters({
                         };
                         setDraft(next);
                      } catch {
-                        setError('Enter a valid IANA timezone before choosing a date preset.');
+                        setError(tx('Enter a valid IANA timezone before choosing a date preset.'));
                      }
                   }}
                />
@@ -90,38 +95,39 @@ export function ReportFilters({
          </HStack>
          <HStack gap={3} wrap="wrap" width="100%">
             <TextInput
-               label="Report from date"
-               description="YYYY-MM-DD, inclusive"
+               label={tx('Report from date')}
+               description={tx('YYYY-MM-DD, inclusive')}
                value={draft.fromDate}
                onChange={(fromDate) => setDraft({ ...draft, fromDate })}
             />
             <TextInput
-               label="Report to date"
-               description="YYYY-MM-DD, inclusive; at most 366 days"
+               label={tx('Report to date')}
+               description={tx('YYYY-MM-DD, inclusive; at most 366 days')}
                value={draft.toDate}
                onChange={(toDate) => setDraft({ ...draft, toDate })}
             />
             <TextInput
-               label="Report timezone"
+               label={tx('Report timezone')}
                value={draft.timezone}
                onChange={(timezone) => setDraft({ ...draft, timezone })}
             />
             <Selector
-               label="Report week starts"
+               label={tx('Report week starts')}
                value={String(draft.weekStart)}
                options={[
-                  { value: '0', label: 'Monday' },
-                  { value: '6', label: 'Sunday' },
+                  { value: '0', label: tx('Monday') },
+                  { value: '6', label: tx('Sunday') },
+                  { value: '5', label: tx('Saturday') },
                ]}
                onChange={(value) => setDraft({ ...draft, weekStart: Number(value) })}
             />
          </HStack>
          <HStack gap={3} wrap="wrap" width="100%">
             <Selector
-               label="Report team"
+               label={tx('Report team')}
                value={draft.selection.teamId ?? ''}
                options={[
-                  { value: '', label: 'All accessible teams' },
+                  { value: '', label: tx('All accessible teams') },
                   ...teams.map((row) => ({ value: row.id, label: row.name })),
                ]}
                onChange={(value) => {
@@ -130,19 +136,19 @@ export function ReportFilters({
                }}
             />
             <Selector
-               label="Report project"
+               label={tx('Report project')}
                value={draft.selection.projectId ?? ''}
                options={[
-                  { value: '', label: 'All accessible projects' },
+                  { value: '', label: tx('All accessible projects') },
                   ...projects.items.map((row) => ({ value: row.id, label: row.name })),
                ]}
                onChange={(value) => choose({ projectId: value || undefined })}
             />
             <Selector
-               label="Report status"
+               label={tx('Report status')}
                value={status}
                options={[
-                  { value: '', label: 'All current statuses' },
+                  { value: '', label: tx('All current statuses') },
                   ...statuses
                      .filter(
                         (row) =>
@@ -155,13 +161,13 @@ export function ReportFilters({
                onChange={setStatus}
             />
             <TextInput
-               label="Report task search"
+               label={tx('Report task search')}
                value={draft.selection.query ?? ''}
                onChange={(query) => choose({ query: query || undefined })}
             />
          </HStack>
          <CheckboxInput
-            label="Include sub-issues in reports"
+            label={tx('Include sub-issues in reports')}
             value={draft.selection.includeSubIssues ?? true}
             onChange={(includeSubIssues) => choose({ includeSubIssues })}
          />
@@ -169,11 +175,11 @@ export function ReportFilters({
             <ResourcePagination
                count={projects.items.length}
                {...projects}
-               label="project options"
+               label={tx('project options')}
             />
          ) : null}
          {error && <Text role="alert">{error}</Text>}
-         <Button label="Apply report filters" type="submit" variant="primary" />
+         <Button label={tx('Apply report filters')} type="submit" variant="primary" />
       </VStack>
    );
 }
