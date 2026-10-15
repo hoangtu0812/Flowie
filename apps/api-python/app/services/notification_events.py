@@ -265,7 +265,9 @@ async def create_notification_batch(
     if body_excerpt:
         data['body'] = body_excerpt
     records: list[dict[str, Any]] = []
-    for recipient_id in set(recipient_ids) - {actor['id']}:
+    from ..modules.notifications.access import readable_recipients
+    recipients=await readable_recipients(db,workspace_id,entity_type,entity_id,set(recipient_ids)-{actor['id']})
+    for recipient_id in recipients:
         notification_id = _cuid()
         await db.execute(
             text(

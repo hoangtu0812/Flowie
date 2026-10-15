@@ -77,12 +77,20 @@ async def verify_delivery():
                 ),
                 {"workspace": seed["workspace_id"], "user": user, "now": now},
             )
+            project = _cuid()
             await db.execute(
                 text(
-                    "INSERT INTO notifications(id,workspace_id,user_id,type,entity_type,entity_id,data,created_at) VALUES (:id,:workspace,:user,'test','project','fixture',CAST(:data AS jsonb),:now)"
+                    "INSERT INTO projects(id,workspace_id,name,identifier,created_at,updated_at) VALUES (:id,:workspace,'Notification target',:id,:now,:now)"
+                ),
+                {"id": project, "workspace": seed["workspace_id"], "now": now},
+            )
+            await db.execute(
+                text(
+                    "INSERT INTO notifications(id,workspace_id,user_id,type,entity_type,entity_id,data,created_at) VALUES (:id,:workspace,:user,'test','project',:project,CAST(:data AS jsonb),:now)"
                 ),
                 {
                     "id": notification,
+                    "project": project,
                     "workspace": seed["workspace_id"],
                     "user": user,
                     "data": json.dumps({"title": "Private issue title"}),

@@ -145,3 +145,10 @@ transaction-local context, writer chưa gắn nguồn là UNKNOWN; SLA-managed d
 được đánh dấu riêng. 36 focused tests + 10 subtests và 2 upgrade/history tests
 đạt; test upgrade chạy đúng thứ tự migration, chứng minh baseline không backdate.
 94 migrations và Prisma diff đạt. Chưa có SLA consumer/reporting UI ở checkpoint này.
+
+Dependency bảo mật NEXT-03: notification producer/Inbox/snooze/delivery metadata
+dùng quyền entity hiện tại, outbox kiểm tra lại record/owner/workspace trước khi
+phát realtime. Admin ngoài private team, grant/revoke và revoke sau staging đã test.
+33 tests + 10 subtests (notification/MCP), 4 delivery/access/infrastructure tests
+đạt (1 optional storage skip). Email vẫn chỉ gửi link chung; không suy ra quyền
+Discord từ team membership. SLA alert/worker vẫn đang triển khai ở checkpoint này.

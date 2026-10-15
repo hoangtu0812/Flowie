@@ -85,8 +85,12 @@ async def process_one(factory, outbox_id: str | None = None) -> bool:
         if not row:
             return False
     succeeded = False
+    from .access import readable_records
     try:
-        await deliver(row["payload"])
+        payload=dict(row['payload'])
+        async with factory() as db:
+            payload['records']=await readable_records(db,payload.get('records',[]))
+        await deliver(payload)
         succeeded = True
     except Exception:
         # Provider URLs and credentials must never be included in diagnostics.

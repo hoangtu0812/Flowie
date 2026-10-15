@@ -147,6 +147,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Security
 
+- Inbox notification creation, reads, snooze/delivery metadata and queued realtime records recheck the recipient's current access to the referenced entity. Workspace administrators do not gain private project/task access through notification bodies; revoking team membership hides retained records and prevents queued realtime payloads from being published to that recipient.
+
 - Archiving a shared project requires access to every active task affected by its cascade; project-reference validation holds a read lock to coordinate with archival.
 
 - Project lists now filter inaccessible teams before hydration, and initiative links, progress counts and project activity exclude restricted projects. Search and MCP project reads share the same membership predicate while MCP retains its additional token grants.

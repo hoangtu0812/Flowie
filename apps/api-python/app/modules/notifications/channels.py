@@ -9,6 +9,7 @@ from ...db.session import get_session
 from ...domains.auth import current_user
 from ..access.membership import _workspace_role
 from ..identity.reset_delivery import delivery_enabled
+from .access import notification_scope
 
 router = UtcAPIRouter(prefix="/api/v1/notifications", tags=["notification-delivery"])
 
@@ -97,7 +98,7 @@ async def snooze(
     found = (
         await db.execute(
             text(
-                "UPDATE notifications SET snoozed_until=:until WHERE id=:id AND workspace_id=:workspace AND user_id=:user RETURNING id"
+                f"UPDATE notifications n SET snoozed_until=:until WHERE id=:id AND workspace_id=:workspace AND user_id=:user AND {notification_scope(actor=':user')} RETURNING id"
             ),
             {
                 "until": until,
@@ -122,9 +123,9 @@ async def delivery_status(
     await _workspace_role(db, workspaceId, user["id"])
     rows = (
         await db.execute(
-            text("""SELECT n.id AS "notificationId",e.attempts,e.delivered_at AS "deliveredAt",e.failed_at AS "failedAt",
+            text(f"""SELECT n.id AS "notificationId",e.attempts,e.delivered_at AS "deliveredAt",e.failed_at AS "failedAt",
         e.last_error_code AS "lastErrorCode",e.available_at AS "retryAt" FROM notification_email_deliveries e JOIN notifications n ON n.id=e.notification_id
-        WHERE n.workspace_id=:workspace AND n.user_id=:user ORDER BY n.created_at DESC LIMIT 50"""),
+        WHERE n.workspace_id=:workspace AND n.user_id=:user AND {notification_scope(actor=':user')} ORDER BY n.created_at DESC LIMIT 50"""),
             {"workspace": workspaceId, "user": user["id"]},
         )
     ).mappings()
