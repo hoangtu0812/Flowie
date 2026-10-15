@@ -129,6 +129,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Issue status settings now support version-checked administration, prevent deleting statuses in use or the last category status, and preserve customized workflows when issue options reload.
+
 - Initiative Projects tabs open without a client-side exception, including
   direct links and reloads. Shared timelines refresh the owning page after
   project edits, keeping initiative and workspace project dates current.

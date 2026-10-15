@@ -19,7 +19,12 @@ def _validate_schedule_dates(
 
 
 async def _ensure_circle_issue_statuses(db: AsyncSession, workspace_id: str) -> None:
-    """Bring pre-P6 workspaces onto the unchanged Circle workflow catalog."""
+    """Seed an empty workflow without overwriting administrator customizations."""
+    existing_workflow = (await db.execute(text(
+        'SELECT 1 FROM issue_statuses WHERE workspace_id=:workspace AND team_id IS NULL LIMIT 1'
+    ), {'workspace':workspace_id})).first()
+    if existing_workflow:
+        return
     now = _utcnow()
     for position, (name, category, color) in enumerate(DEFAULT_CIRCLE_ISSUE_STATUSES):
         existing = await db.execute(
