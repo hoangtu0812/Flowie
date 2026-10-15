@@ -1,6 +1,6 @@
 import { BugFieldsForm, emptyBug, type BugFields } from '@/features/issues/bug-fields';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader } from '@/components/ui/dialog';
 import {
    DropdownMenu,
    DropdownMenuContent,
@@ -11,8 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { RiEditLine } from '@remixicon/react';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { priorities } from '@/mock-data/priorities';
 import { status, Status } from '@/mock-data/status';
 import { useIssuesStore } from '@/store/issues-store';
@@ -31,6 +30,9 @@ import { Priority } from '@/mock-data/priorities';
 import { User } from '@/mock-data/users';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import { loadJoinedWorkspaceTeams, WorkspaceTeam } from '@/components/common/teams/team-types';
+import { useUiPreferencesStore } from '@/store/ui-preferences-store';
+import { loadCurrentUser } from '@/features/identity/current-user';
+import { initialAssignee, issueMember } from '@/features/issues/create-defaults';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -52,6 +54,7 @@ type CreateIssueForm = {
 };
 
 type IssueContext = {
+   currentUserId: string;
    workspaceId: string;
    team: WorkspaceTeam;
    /** Joined teams the issue can be filed under. */
@@ -70,6 +73,8 @@ const priorityForApi: Record<string, 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'URGEN
 const normalise = (value: string) => value.trim().toLowerCase();
 
 export function CreateNewIssue() {
+   const autoAssignSelf = useUiPreferencesStore((state) => state.autoAssignSelf);
+   const initializedAssignee = useRef(false);
    const [createMore, setCreateMore] = useState<boolean>(false);
    const { isOpen, defaultStatus, openModal, closeModal } = useCreateIssueStore();
    const { issues, retryIssues } = useIssuesStore();
@@ -99,6 +104,9 @@ export function CreateNewIssue() {
    useEffect(() => {
       setAddIssueForm(createDefaultData());
    }, [createDefaultData]);
+   useEffect(() => {
+      if (!isOpen) initializedAssignee.current = false;
+   }, [isOpen]);
 
    const loadOptions = useCallback(async (workspaceId: string, teamId: string) => {
       const query = new URLSearchParams({ workspaceId, teamId });
@@ -110,9 +118,10 @@ export function CreateNewIssue() {
    const loadContext = useCallback(async () => {
       if (!isOpen) return;
       try {
-         const [workspace, joinedTeams] = await Promise.all([
+         const [workspace, joinedTeams, actor] = await Promise.all([
             loadCurrentWorkspace(),
             loadJoinedWorkspaceTeams(),
+            loadCurrentUser(),
          ]);
          const team =
             joinedTeams.teams.find(
@@ -120,17 +129,35 @@ export function CreateNewIssue() {
                   candidate.id === teamIdentifier || candidate.identifier === teamIdentifier
             ) ?? joinedTeams.teams[0];
          if (!team) throw new Error('Join a team before creating an issue.');
+         const options = await loadOptions(workspace.id, team.id);
          setContext({
+            currentUserId: actor.id,
             workspaceId: workspace.id,
             team,
             teams: joinedTeams.teams,
-            options: await loadOptions(workspace.id, team.id),
+            options,
          });
+         if (!initializedAssignee.current) {
+            initializedAssignee.current = true;
+            setAddIssueForm((form) =>
+               form.title || form.description || form.assignee
+                  ? form
+                  : {
+                       ...form,
+                       assignee: initialAssignee(
+                          options.members,
+                          actor.id,
+                          autoAssignSelf,
+                          team.identifier
+                       ),
+                    }
+            );
+         }
       } catch (error) {
          setContext(undefined);
          toast.error(error instanceof Error ? error.message : 'Workspace is not ready yet.');
       }
-   }, [isOpen, loadOptions, teamIdentifier]);
+   }, [isOpen, loadOptions, teamIdentifier, autoAssignSelf]);
 
    /** Members, projects and labels are team-scoped, so a switch reloads them. */
    const selectTeam = useCallback(
@@ -141,7 +168,12 @@ export function CreateNewIssue() {
             setContext({ ...context, team, options });
             setAddIssueForm((form) => ({
                ...form,
-               assignee: null,
+               assignee: initialAssignee(
+                  options.members,
+                  context.currentUserId,
+                  autoAssignSelf,
+                  team.identifier
+               ),
                project: undefined,
                labels: [],
             }));
@@ -149,7 +181,7 @@ export function CreateNewIssue() {
             toast.error(error instanceof Error ? error.message : 'Could not switch team.');
          }
       },
-      [context, loadOptions]
+      [context, loadOptions, autoAssignSelf]
    );
 
    useEffect(() => {
@@ -158,17 +190,9 @@ export function CreateNewIssue() {
 
    const liveUsers = useMemo<User[]>(
       () =>
-         (context?.options.members ?? []).map((member) => ({
-            id: member.id,
-            name: member.name,
-            avatarUrl: member.avatarUrl ?? '',
-            email: member.email,
-            status: 'offline',
-            role: 'Member',
-            joinedDate: '',
-            teamIds: context ? [context.team.identifier] : [],
-            timezone: 'UTC',
-         })),
+         (context?.options.members ?? []).map((member) =>
+            issueMember(member, context!.team.identifier)
+         ),
       [context]
    );
    const liveProjects = useMemo<ProjectOption[]>(
@@ -241,7 +265,17 @@ export function CreateNewIssue() {
          await retryIssues();
          toast.success('Issue created');
          if (!createMore) closeModal();
-         setAddIssueForm(createDefaultData());
+         setAddIssueForm({
+            ...createDefaultData(),
+            assignee: createMore
+               ? initialAssignee(
+                    context.options.members,
+                    context.currentUserId,
+                    autoAssignSelf,
+                    context.team.identifier
+                 )
+               : null,
+         });
          setBug(emptyBug);
       } catch (error) {
          toast.error(error instanceof Error ? error.message : 'Could not create issue.');
@@ -258,16 +292,6 @@ export function CreateNewIssue() {
             else if (!creating) closeModal();
          }}
       >
-         <DialogTrigger asChild>
-            <Button
-               aria-label="Create issue"
-               className="size-8 shrink-0"
-               variant="secondary"
-               size="icon"
-            >
-               <RiEditLine />
-            </Button>
-         </DialogTrigger>
          <DialogContent className="w-full sm:max-w-3xl p-0 shadow-xl max-h-svh overflow-y-auto">
             <DialogHeader>
                <DialogTitle>

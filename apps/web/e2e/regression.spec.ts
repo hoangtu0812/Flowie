@@ -544,8 +544,8 @@ test('account preferences synchronize on a separate browser context and home nav
       await page
          .getByRole('checkbox', { name: 'Underline links', exact: true })
          .setChecked(!original.values.underlineLinks);
-      await page.getByRole('button', { name: 'Default home view', exact: true }).click();
-      await page.getByRole('menuitem', { name: 'My issues', exact: true }).click();
+      await page.getByRole('combobox', { name: 'Default home view', exact: true }).click();
+      await page.getByRole('option', { name: 'My issues', exact: true }).click();
       await expect
          .poll(
             async () => (await (await context.request.get(endpoint)).json()).data.values.defaultHome

@@ -63,6 +63,7 @@ export function AssigneeSelector({
                   size="xs"
                   variant="secondary"
                   role="combobox"
+                  aria-label="Assignee"
                   aria-expanded={open}
                >
                   {value ? (

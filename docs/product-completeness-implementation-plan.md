@@ -200,3 +200,11 @@ Lần đầu selector alert trùng Next announcer đã sửa và chạy lại to
 Full backend 164 passed, 2 optional skips, 10 subtests; production web build pass;
 101 migrations, schema diff/validate/generate đạt. Key độc lập phải cấu hình ngoài
 Git trước enrollment; thiếu key không bỏ qua MFA. Chưa deploy hoặc bật MFA CT107.
+
+NEXT-09 nền preferences: timezone IANA/alias, week start Monday/Sunday/Saturday và
+optional self-assignment đã nối calendar/report/create form; bỏ chọn assignee
+được giữ khi lưu. Đã sửa dialog tạo việc mount trùng ở sidebar/provider và bổ
+sung tên truy cập bộ chọn assignee/nút tạo theo nhóm. API partial-write/version
+và client cũ đạt; 20 web unit và production build pass. Hai luồng preference/
+đồng bộ thiết bị 6/6 E2E ba engine đạt, ảnh 390px đã kiểm tra. Locale theo module
+vẫn đang bổ sung ở checkpoint này; chưa deploy.

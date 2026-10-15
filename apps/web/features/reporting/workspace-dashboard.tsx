@@ -14,8 +14,10 @@ import { ReportMetrics } from './report-metrics';
 import { ReportTrend } from './report-trend';
 import { DayChanges, ReportBreakdowns } from './report-breakdowns';
 import { recentQuery, type ReportQuery } from './types';
+import { useAccountTime } from '@/features/shared/account-time';
 
 export function WorkspaceDashboard() {
+   const accountTime = useAccountTime();
    const { orgId } = useParams<{ orgId: string }>();
    const scope = useWorkspaceTeams(orgId);
    if (scope.error)
@@ -37,7 +39,7 @@ export function WorkspaceDashboard() {
    return (
       <DesignSurface>
          <Dashboard
-            key={scope.workspace}
+            key={`${scope.workspace}:${accountTime.timezone}:${accountTime.weekStart}`}
             workspace={scope.workspace}
             org={orgId}
             teams={scope.teams ?? []}
@@ -54,7 +56,11 @@ function Dashboard({
    org: string;
    teams: { id: string; name: string }[];
 }) {
-   const [query, setQuery] = useState<ReportQuery>(() => recentQuery()),
+   const accountTime = useAccountTime();
+   const [query, setQuery] = useState<ReportQuery>(() => ({
+         ...recentQuery(30, accountTime.timezone),
+         weekStart: accountTime.weekStart,
+      })),
       [day, setDay] = useState<string>();
    const body = JSON.stringify(query);
    const report = useWorkflowReport(workspace, body);

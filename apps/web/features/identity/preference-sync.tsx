@@ -12,6 +12,9 @@ const keys = [
    'fontSize',
    'pointerCursors',
    'underlineLinks',
+   'timezone',
+   'weekStart',
+   'autoAssignSelf',
 ] as const;
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 type Values = Pick<ReturnType<typeof useUiPreferencesStore.getState>, (typeof keys)[number]>;
