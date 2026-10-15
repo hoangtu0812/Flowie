@@ -1,0 +1,33 @@
+export const astryxMessages = {
+   vi: {
+      '@astryx.dialog.close': { defaultMessage: 'Đóng' },
+      '@astryx.field.required': { defaultMessage: 'Bắt buộc' },
+      '@astryx.field.optional': { defaultMessage: 'Tùy chọn' },
+      '@astryx.button.loading': { defaultMessage: 'Đang tải' },
+      '@astryx.tabList.label': { defaultMessage: 'Các thẻ' },
+      '@astryx.selector.placeholder': { defaultMessage: 'Chọn…' },
+      '@astryx.selector.searchPlaceholder': { defaultMessage: 'Tìm…' },
+      '@astryx.selector.searchOptions': { defaultMessage: 'Tìm tùy chọn' },
+      '@astryx.selector.clearLabel': { defaultMessage: 'Xóa {label}' },
+      '@astryx.selector.emptySearchResults': { defaultMessage: 'Không có kết quả' },
+      '@astryx.selector.resultCount': { defaultMessage: '{count, number} kết quả' },
+      '@astryx.multiSelector.selectPlaceholder': { defaultMessage: 'Chọn…' },
+      '@astryx.multiSelector.searchPlaceholder': { defaultMessage: 'Tìm…' },
+      '@astryx.multiSelector.searchOptions': { defaultMessage: 'Tìm tùy chọn' },
+      '@astryx.multiSelector.selectAll': { defaultMessage: 'Chọn tất cả' },
+      '@astryx.multiSelector.selectAllPartiallySelected': {
+         defaultMessage: '{label}, đã chọn một phần',
+      },
+      '@astryx.multiSelector.clearAll': { defaultMessage: 'Xóa tất cả {label}' },
+      '@astryx.multiSelector.selectionCleared': { defaultMessage: 'Đã bỏ lựa chọn' },
+      '@astryx.multiSelector.allSelected': { defaultMessage: 'Đã chọn tất cả' },
+      '@astryx.multiSelector.selectionCount': {
+         defaultMessage: 'Đã chọn {count, number}/{total, number}',
+      },
+      '@astryx.multiSelector.emptySearchResults': { defaultMessage: 'Không có kết quả' },
+      '@astryx.multiSelector.resultCount': { defaultMessage: '{count, number} kết quả' },
+      '@astryx.textInput.clearLabel': { defaultMessage: 'Xóa {label}' },
+      '@astryx.textArea.charactersRemaining': { defaultMessage: 'Còn {count, number} ký tự' },
+      '@astryx.textArea.charactersOverLimit': { defaultMessage: 'Vượt {count, number} ký tự' },
+   },
+} as const;

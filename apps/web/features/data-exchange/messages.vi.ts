@@ -1,0 +1,51 @@
+export const messages = {
+   'Data exchange unavailable': 'Không thể tải chức năng nhập/xuất',
+   'Loading data exchange…': 'Đang tải chức năng nhập/xuất…',
+   'Import and export': 'Nhập và xuất',
+   'Export tasks from the list using Export matching issues CSV. Exports follow the same applied filters and current access, up to 10,000 tasks / 10 MB. Formula-like text has a leading tab for spreadsheet viewing; treat imported CSV cells as text.':
+      'Xuất công việc từ danh sách bằng Xuất CSV công việc khớp bộ lọc. Kết quả tuân theo bộ lọc và quyền hiện tại, tối đa 10.000 việc / 10 MB. Nội dung giống công thức được thêm tab đầu để xem trên bảng tính; hãy coi ô CSV nhập vào là văn bản.',
+   'Export documents': 'Xuất tài liệu',
+   'Select up to 100 accessible documents. The ZIP contains Markdown, original source links and a manifest; optional stored attachments are limited to 200 files / 25 MB. External URLs are preserved without downloading their contents. Original authenticated links remain in Markdown.':
+      'Chọn tối đa 100 tài liệu trong quyền truy cập. ZIP có Markdown, liên kết nguồn và danh mục; tệp đính kèm tùy chọn giới hạn 200 tệp / 25 MB. Giữ URL ngoài và không tải nội dung từ đó. Liên kết cần xác thực ban đầu vẫn nằm trong Markdown.',
+   'Documents to export': 'Tài liệu cần xuất',
+   'Include stored document attachments': 'Kèm tệp đính kèm đã lưu của tài liệu',
+   'Load more document options': 'Tải thêm tùy chọn tài liệu',
+   'Retry document options': 'Thử tải lại tùy chọn tài liệu',
+   'Export selected documents ZIP': 'Xuất ZIP tài liệu đã chọn',
+   'Import tasks and bugs': 'Nhập task và bug',
+   'Paste UTF-8 CSV with a header and up to 1,000 data rows / 2 MB. The source namespace and required externalId prevent duplicate creation across retries and later imports. Existing tasks are never overwritten.':
+      'Dán CSV UTF-8 có tiêu đề cột, tối đa 1.000 dòng / 2 MB. Mã nguồn và externalId bắt buộc ngăn tạo trùng khi thử lại hoặc nhập lần sau. Không ghi đè công việc hiện có.',
+   'Import team': 'Đội nhận dữ liệu nhập',
+   'Import source namespace': 'Mã nguồn dữ liệu nhập',
+   'Stable name, for example jira-support. Letters, digits, dot, underscore or hyphen.':
+      'Tên ổn định, ví dụ jira-support. Dùng chữ, số, dấu chấm, gạch dưới hoặc gạch ngang.',
+   'Duplicate handling': 'Xử lý trùng',
+   'Skip duplicates': 'Bỏ qua dòng trùng',
+   'Report duplicate errors': 'Báo lỗi dòng trùng',
+   'CSV content': 'Nội dung CSV',
+   'Inspect CSV columns': 'Kiểm tra cột CSV',
+   'Map required externalId and title, then optional fields. Reference columns use Flowie IDs. Dates use ISO 8601; enum values use TASK/BUG, NONE/LOW/MEDIUM/HIGH/URGENT and LOW/MEDIUM/HIGH/CRITICAL severity.':
+      'Ánh xạ externalId và title bắt buộc, rồi các trường tùy chọn. Cột tham chiếu dùng ID Flowie. Ngày dùng ISO 8601; giá trị enum dùng TASK/BUG, NONE/LOW/MEDIUM/HIGH/URGENT và mức nghiêm trọng LOW/MEDIUM/HIGH/CRITICAL.',
+   'Do not import': 'Không nhập',
+   'Preview CSV import': 'Xem trước nhập CSV',
+   'Import preview and results': 'Xem trước và kết quả nhập',
+   'Preview is frozen and expires at': 'Bản xem trước được cố định và hết hạn lúc',
+   '. Confirming imports only PENDING rows. Invalid and duplicate rows remain visible. A stopped import preserves tasks already created.':
+      '. Xác nhận chỉ nhập các dòng PENDING. Dòng lỗi và trùng vẫn hiển thị. Dừng nhập không xóa công việc đã tạo.',
+   'Confirm import valid rows': 'Xác nhận nhập các dòng hợp lệ',
+   'Cancel import': 'Hủy nhập',
+   'Refresh import results': 'Tải lại kết quả nhập',
+   'Load more import rows': 'Tải thêm dòng nhập',
+   'Your latest 20 imports': '20 lần nhập gần nhất của bạn',
+   'Preview and result details are retained for 30 days. External IDs remain registered while their tasks exist.':
+      'Chi tiết xem trước và kết quả được giữ 30 ngày. ID ngoài vẫn được đăng ký khi công việc còn tồn tại.',
+   'Export matching issues CSV': 'Xuất CSV công việc khớp bộ lọc',
+   'CSV mapping {value0}': 'Ánh xạ CSV {value0}',
+   'Import {value0} · {value1}': 'Lần nhập {value0} · {value1}',
+   'Row {value0}: {value1}': 'Dòng {value0}: {value1}',
+   'Open import {value0}': 'Mở lần nhập {value0}',
+   'Could not load data exchange.': 'Không thể tải chức năng nhập/xuất.',
+   'Could not export documents.': 'Không thể xuất tài liệu.',
+   'Import failed.': 'Nhập dữ liệu thất bại.',
+   'Could not export issues.': 'Không thể xuất công việc.',
+} as const;
