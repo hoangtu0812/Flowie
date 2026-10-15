@@ -22,8 +22,13 @@ test('business SLA revision, pause, override, reopen, history and mobile recover
    await page.goto('/auth/login');
    await page.getByLabel('Email', { exact: true }).fill(fixture.email);
    await page.getByLabel('Password', { exact: true }).fill(fixture.password);
+   const workspaceLoaded = page.waitForResponse(
+      (response) => response.url().startsWith(`${api}/teams?`) && response.ok()
+   );
    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
    await expect(page).toHaveURL(new RegExp(`/${fixture.slug}/`));
+   await workspaceLoaded;
+   await page.waitForLoadState('networkidle');
    await page.setViewportSize({ width: 390, height: 844 });
    const name = `Business SLA browser ${Date.now()}`;
    let policyId: string | undefined, issue: { id: string; identifier: string } | undefined;
@@ -85,8 +90,17 @@ test('business SLA revision, pause, override, reopen, history and mobile recover
       expect(created.ok()).toBeTruthy();
       issue = (await created.json()).data;
       await row().getByRole('button', { name: 'Edit SLA', exact: true }).click();
+      await expect(
+         row().getByRole('button', { name: 'Policy history', exact: true })
+      ).toBeDisabled();
       await page.getByRole('textbox', { name: /^Deadline duration/ }).fill('120');
+      const saved = page.waitForResponse(
+         (response) =>
+            response.url().includes(`/slas/${policyId}?`) && response.request().method() === 'PUT'
+      );
       await page.getByRole('button', { name: 'Save SLA', exact: true }).click();
+      expect((await saved).ok()).toBeTruthy();
+      await expect(row().getByText(/120 working minutes · Revision 2/)).toBeVisible();
       await row().getByRole('button', { name: 'Policy history', exact: true }).click();
       await expect(page.getByText('Revision 2 · CHANGED', { exact: true })).toBeVisible();
       const teamReport = page.waitForResponse(

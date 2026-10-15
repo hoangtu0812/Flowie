@@ -183,7 +183,7 @@ function SlaCenter({
                               <Button
                                  label={tx('Policy history')}
                                  onClick={() => setSelected(row)}
-                                 isDisabled={busy}
+                                 isDisabled={busy || !!editor || policies.loading}
                               />
                               {manager && (
                                  <>

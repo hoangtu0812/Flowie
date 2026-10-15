@@ -19,6 +19,12 @@ MinIO/SMTP, web/Compose, browser verification, Update source and deploy và Veri
 API readiness đều success. Đây là bằng chứng triển khai của **code đã merge**;
 không thay thế nghiệm thu mailbox thật, off-host backup hoặc AI xử lý bug đến PR.
 
+Sau khi được cho phép, nhánh mới đã push và tạo [PR nháp 5](https://github.com/hoangtu0812/Flowie/pull/5).
+Tại head `adba73d`, [push CI](https://github.com/hoangtu0812/Flowie/actions/runs/38739725443)
+success; [PR CI](https://github.com/hoangtu0812/Flowie/actions/runs/38739794356)
+E2E 130/132, lỗi thời điểm SLA save/history và workspace navigation đã được ghi
+ở tracker để sửa trên cùng nhánh. Không lấy push CI success để bỏ qua PR CI failure.
+
 ## Nhánh hoàn thiện sản phẩm hiện tại
 
 `codex/product-completeness` bắt đầu từ `f3ae6ae`; bằng chứng theo từng AUD/NEXT

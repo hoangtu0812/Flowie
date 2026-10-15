@@ -249,8 +249,22 @@ lực read-only khiến run FAILED, không có diff/commit/PR. Không tính bả
 do triển khai trực tiếp thành AI acceptance. Cần Codex có quyền ghi và kết nối
 Flowie thực để nghiệm thu tiếp; token thử đã revoke.
 
-Nhánh mới chưa push, chưa có PR/CI nhánh và chưa merge/deploy CT107. Trước phát
+Tại checkpoint local trước khi được cho phép push, nhánh chưa có PR/CI và chưa
+merge/deploy CT107. Trước phát
 hành phải review đúng head, xác minh nâng cấp migration và điều kiện backup,
 storage/MFA key ngoài Git. API, worker và Web phải nâng cấp cùng contract; Compose
 `migrate` hoàn tất trước API/worker. Không tạo tag trước khi đúng release commit
 đã deploy và xác minh thành công.
+
+### Review GitHub và sửa CI
+
+Người dùng đã cho phép push nhánh và sửa CI cùng nhánh; [PR nháp 5](https://github.com/hoangtu0812/Flowie/pull/5)
+được tạo với head `adba73d`. [Push CI 38739725443](https://github.com/hoangtu0812/Flowie/actions/runs/38739725443)
+success với 132/132 E2E; [PR CI 38739794356](https://github.com/hoangtu0812/Flowie/actions/runs/38739794356)
+đạt các gate migration/backend/storage/restore/build nhưng E2E 130/132.
+Trace cho thấy Chromium mở history trước PUT policy kết thúc, rồi onSaved đóng
+history; WebKit hủy request team/notification khi hard-navigation ngay sau login.
+Đã chặn history trong lúc edit/list reload và thêm kiểm thử chờ revision đã commit,
+chờ workspace hydration; không lọc bỏ pageerror hoặc tăng retry để che lỗi.
+Production build/lint/types và 3/3 luồng SLA local sau bản sửa đã đạt.
+CI đúng head bản sửa phải đạt trước khi đánh dấu bàn giao review hoàn tất.
