@@ -191,6 +191,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Initiative Activity regressions verify failed-draft recovery, accepted updates, Overview navigation, readonly visibility and real cursor pagination on three browser engines; month grouping also separates years at account-timezone boundaries.
+
 - Initiative Activity matches the centered project update layout with an inline health/update composer, author avatars, month/year groups and a compact change-history toggle. Posting preserves failed drafts and updates Overview without resetting the composer, and Overview’s See all opens Activity; cursor pagination, read-only membership and recoverable history errors remain explicit. No migration or API change is required.
 
 - Recurring-run browser acceptance waits for durable job completion before verifying the refreshed history, avoiding false CI failures from a temporarily empty list while retaining the original completion deadline and one-task assertion.
