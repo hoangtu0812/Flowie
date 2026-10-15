@@ -13,6 +13,7 @@ from app.main import create_app
 from app.core.config import Settings
 from app.domains import native_attachments, native_emojis
 from app.modules.data_exchange import api as data_exchange_api
+from cryptography.fernet import Fernet
 
 
 class FixtureStorage:
@@ -35,4 +36,4 @@ class FixtureStorage:
 native_attachments.MinioStorage = FixtureStorage
 native_emojis.MinioStorage = FixtureStorage
 data_exchange_api.MinioStorage = FixtureStorage
-app = create_app(replace(Settings.from_environment(),auth_login_account_limit=10000,auth_login_ip_limit=10000))
+app = create_app(replace(Settings.from_environment(),auth_login_account_limit=10000,auth_login_ip_limit=10000,auth_mfa_encryption_keys=Fernet.generate_key().decode()))

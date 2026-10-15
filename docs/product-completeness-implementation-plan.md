@@ -24,9 +24,9 @@ Phạm vi đã được yêu cầu: toàn bộ AUD-01–12 và NEXT-01–09 tron
 | NEXT-04 | Archived center cho task/project/document/initiative; restore preview/version/dependency/audit; giữ dữ liệu, không purge | LOCAL_VERIFIED |
 | NEXT-05 | CSV mapping/preview/validation/dedup, worker/resume/cancel; filtered scoped issue CSV và document/attachment ZIP | LOCAL_VERIFIED |
 | NEXT-06 | Server reporting/flow/aging/WIP/reopen/workload và dashboard theo lịch sử thực | LOCAL_VERIFIED |
-| NEXT-07 | Session binding/revoke, paged history/credential inventory đã local verified; MFA đang triển khai | IN_PROGRESS |
+| NEXT-07 | Session binding/revoke, paged history/credential inventory và TOTP/recovery MFA cho password/Microsoft | LOCAL_VERIFIED |
 | NEXT-08 | Workspace audit cursor/filter/export theo current ACL; source Web/AI/SYSTEM/UNKNOWN; admin UI | LOCAL_VERIFIED |
-| NEXT-09 | Locale core workflows, week start/timezone, optional self-assignment, keyboard/mobile | TODO |
+| NEXT-09 | Locale core workflows, week start/timezone, optional self-assignment, keyboard/mobile | IN_PROGRESS |
 
 ## Thứ tự commit và kiến trúc
 
@@ -189,3 +189,14 @@ do >100 heartbeat cũ; đã sửa độc lập (d0f2763), regression 120 stopped
 Security tabs/device revoke còn hạn/credential revoke/history/retry: 3/3 engine
 đạt, ảnh mobile và bounds đã kiểm tra; build/types pass. 100 migrations/schema
 diff/generate/validate đạt. Chưa deploy, chưa có MFA enrollment ở checkpoint này.
+
+NEXT-07: MFA TOTP/recovery đã nối cả password và Microsoft callback. Kiểm tra RFC
+vectors, mã/counter dùng lại và concurrent challenges, account-bound encryption,
+key loss/recovery, giới hạn 5 lần sai, expiry/authVersion, rollback sau session
+write, thay recovery, disable và password reset đạt. Microsoft boundary dùng mock,
+không tuyên bố tenant thực đã nghiệm thu. UI setup/enable/replay/recovery/disable
+3/3 engine đạt; session/history/inventory 3/3 đạt, đã xem ảnh mobile 390px.
+Lần đầu selector alert trùng Next announcer đã sửa và chạy lại toàn luồng MFA.
+Full backend 164 passed, 2 optional skips, 10 subtests; production web build pass;
+101 migrations, schema diff/validate/generate đạt. Key độc lập phải cấu hình ngoài
+Git trước enrollment; thiếu key không bỏ qua MFA. Chưa deploy hoặc bật MFA CT107.

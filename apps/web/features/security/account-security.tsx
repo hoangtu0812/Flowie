@@ -10,6 +10,7 @@ import { loadCurrentUser } from '@/features/identity/current-user';
 import { DeviceSessions } from './device-sessions';
 import { LoginHistory } from './login-history';
 import { CredentialInventory } from './credential-inventory';
+import { Authenticator } from './authenticator';
 
 export default function AccountSecurity() {
    const { orgId } = useParams<{ orgId: string }>();
@@ -63,6 +64,7 @@ function SecurityCenter({ org }: { org: string }) {
             <Tab value="devices" label="Devices" panelId="security-devices" />
             <Tab value="history" label="History" panelId="security-history" />
             <Tab value="credentials" label="Credentials" panelId="security-credentials" />
+            <Tab value="authenticator" label="Authenticator" panelId="security-authenticator" />
          </TabList>
          <VStack
             id="security-devices"
@@ -72,6 +74,15 @@ function SecurityCenter({ org }: { org: string }) {
             className={tab === 'devices' ? undefined : 'hidden'}
          >
             <DeviceSessions revision={String(revision)} onChanged={changed} />
+         </VStack>
+         <VStack
+            id="security-authenticator"
+            role="tabpanel"
+            aria-label="Authenticator"
+            width="100%"
+            className={tab === 'authenticator' ? undefined : 'hidden'}
+         >
+            {tab === 'authenticator' && <Authenticator org={org} onChanged={changed} />}
          </VStack>
          <VStack
             id="security-history"

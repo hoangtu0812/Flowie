@@ -24,7 +24,10 @@ export function LoginHistory({ revision }: { revision: string }) {
       MFA_ENABLED: 'MFA enabled',
       MFA_DISABLED: 'MFA disabled',
       MFA_FAILED: 'Failed verification',
-      RECOVERY_USED: 'Recovery codes used',
+      MFA_VERIFIED: 'Successful MFA verification',
+      MFA_RECOVERY_REPLACED: 'Recovery codes replaced',
+      MFA_CHALLENGE_STARTED: 'MFA challenges',
+      MFA_SETUP_STARTED: 'Authenticator setup',
    };
    return (
       <VStack as="section" aria-label="Security history" gap={3} width="100%">
