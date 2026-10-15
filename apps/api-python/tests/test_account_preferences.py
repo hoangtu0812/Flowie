@@ -63,6 +63,54 @@ async def verify_preferences():
                 assert error.value.status_code == 409
             assert (await read_preferences(db, user))["values"]["locale"] == "vi"
             assert (await read_preferences(db, other))["values"]["locale"] == "en"
+            configured = await write_preferences(
+                db,
+                user,
+                PreferencesUpdate(
+                    accountId=user,
+                    expectedVersion=1,
+                    values=UiValues(
+                        timezone="Asia/Saigon", weekStart=6, autoAssignSelf=True
+                    ),
+                ),
+            )
+            assert configured["values"]["timezone"] == "Asia/Ho_Chi_Minh"
+            assert (
+                await db.execute(
+                    text("SELECT timezone FROM users WHERE id=:user"), {"user": user}
+                )
+            ).scalar_one() == "Asia/Ho_Chi_Minh"
+            # Older cached clients omit newly introduced settings rather than resetting them.
+            older = await write_preferences(
+                db,
+                user,
+                PreferencesUpdate(
+                    accountId=user, expectedVersion=2, values=UiValues(locale="en")
+                ),
+            )
+            assert (
+                older["values"]["timezone"] == "Asia/Ho_Chi_Minh"
+                and older["values"]["weekStart"] == 6
+                and older["values"]["autoAssignSelf"] is True
+            )
+            assert older["values"]["defaultHome"] == "my-issues"
+            automatic = await write_preferences(
+                db,
+                user,
+                PreferencesUpdate(
+                    accountId=user, expectedVersion=3, values=UiValues(timezone=None)
+                ),
+            )
+            assert (
+                automatic["values"]["timezone"] is None
+                and automatic["values"]["weekStart"] == 6
+            )
             await db.rollback()
     finally:
         await engine.dispose()
+
+
+def test_account_timezone_requires_recognized_iana_zone():
+    with pytest.raises(ApiError):
+        UiValues(timezone="not-a-real-zone")
+    assert UiValues(timezone="UTC").timezone == "UTC"

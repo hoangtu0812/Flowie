@@ -647,7 +647,7 @@ async def _upsert_microsoft_user(
             raise ApiError(403, 'This Flowie account is not active.', 'Forbidden')
         await db.execute(
             text(
-                '''UPDATE users SET name = :name, timezone = COALESCE(:timezone, timezone),
+                '''UPDATE users SET name = :name, timezone = COALESCE((SELECT preferences->>'timezone' FROM user_ui_preferences WHERE user_id=users.id), :timezone, timezone),
                        is_platform_admin = :is_platform_admin, email_verified_at = COALESCE(email_verified_at, :now),
                        last_login_at = :now, last_seen_at = :now, updated_at = :now
                    WHERE id = :id'''
@@ -827,7 +827,7 @@ async def login(payload: LoginInput, request: Request, db: AsyncSession = Depend
     timezone_name = _valid_timezone(payload.timezone)
     await db.execute(
         text('''UPDATE users SET last_login_at = :now, last_seen_at = :now,
-                    timezone = COALESCE(:timezone, timezone),
+                    timezone = COALESCE((SELECT preferences->>'timezone' FROM user_ui_preferences WHERE user_id=users.id), :timezone, timezone),
                     is_platform_admin = :is_platform_admin, updated_at = :now
                 WHERE id = :id'''),
         {

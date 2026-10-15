@@ -10,6 +10,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+### Changed
+
+- Account preferences accept a validated timezone, week start and optional self-assignment. Versioned writes preserve fields omitted by older clients, and an explicit account timezone takes precedence over browser timezone during sign-in. Existing preference storage needs no new migration.
+
 ### Added
 
 - Account security includes authenticator enrollment, one-time recovery-code display and confirmed disable/replacement controls. Password sign-in and Microsoft callbacks lead to the dedicated MFA verification page before any browser session is issued; mobile layouts keep recovery material readable without persistent browser storage.
