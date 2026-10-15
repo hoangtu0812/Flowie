@@ -332,14 +332,10 @@ async def create_workspace_bootstrap(
     return {'organization_id': organization_id, 'workspace_id': workspace_id, 'team_id': team_id, 'slug': slug}
 
 
-def _request_metadata(request: Request) -> dict[str, str | None]:
-    return {
-        'ip_address': request.client.host if request.client else None,
-        'user_agent': request.headers.get('user-agent'),
-    }
 
 
 def _set_cookies(response: Response, access_token: str, refresh_token: str, settings: Settings) -> None:
+    response.headers['Cache-Control'] = 'private, no-store'
     cookie = {'httponly': True, 'secure': settings.auth_cookie_secure, 'samesite': 'lax', 'path': '/'}
     response.set_cookie(
         'flowie_access',
@@ -356,76 +352,28 @@ def _set_cookies(response: Response, access_token: str, refresh_token: str, sett
 
 
 def _clear_cookies(response: Response, settings: Settings) -> None:
+    response.headers['Cache-Control'] = 'private, no-store'
     response.delete_cookie('flowie_access', path='/', secure=settings.auth_cookie_secure, httponly=True, samesite='lax')
     response.delete_cookie('flowie_refresh', path='/', secure=settings.auth_cookie_secure, httponly=True, samesite='lax')
 
 
 async def _create_session(
-    db: AsyncSession, user: Any, request: Request, settings: Settings
+    db: AsyncSession, user: Any, request: Request, settings: Settings, *, method: str = 'PASSWORD'
 ) -> tuple[str, str, dict[str, Any]]:
-    refresh_token = token_urlsafe(48)
-    now = _utcnow()
-    expires_at = now + timedelta(days=settings.auth_refresh_token_ttl_days)
-    metadata = _request_metadata(request)
-    await db.execute(
-        text(
-            '''
-            INSERT INTO sessions (
-                id, user_id, refresh_token_hash, ip_address, user_agent,
-                expires_at, created_at, last_used_at
-            ) VALUES (
-                :id, :user_id, :refresh_token_hash, :ip_address, :user_agent,
-                :expires_at, :created_at, :last_used_at
-            )
-            '''
-        ),
-        {
-            'id': _cuid(),
-            'user_id': user['id'],
-            'refresh_token_hash': _hash_token(refresh_token),
-            'ip_address': metadata['ip_address'],
-            'user_agent': metadata['user_agent'],
-            'expires_at': expires_at,
-            'created_at': now,
-            'last_used_at': now,
-        },
-    )
-    access_token = jwt.encode(
-        {
-            'sub': user['id'],
-            'ver': user.get('auth_version', 0),
-            'email': user['email'],
-            'iat': now,
-            'exp': now + timedelta(seconds=settings.auth_access_token_ttl_seconds),
-        },
-        settings.auth_jwt_secret,
-        algorithm='HS256',
-    )
+    from ..modules.identity.security.sessions import create_session
+    access, refresh = await create_session(db, user, request, settings, method=method)
     workspace = await _first_workspace(db, user['id'])
-    return access_token, refresh_token, {'user': _authenticated_user(user), 'workspace': workspace}
+    return access, refresh, {'user': _authenticated_user(user), 'workspace': workspace}
 
 
-async def current_user(
-    request: Request,
-    db: AsyncSession = Depends(get_session),
-) -> Any:
+async def current_user(request: Request, db: AsyncSession = Depends(get_session)) -> Any:
+    from ..modules.identity.security.sessions import decode_access, active_identity, expired
     token = request.cookies.get('flowie_access')
     if not token:
         raise ApiError(401, 'Sign in is required.', 'Unauthorized')
-    try:
-        payload = jwt.decode(
-            token,
-            request.app.state.settings.auth_jwt_secret,
-            algorithms=['HS256'],
-        )
-    except jwt.PyJWTError as error:
-        raise ApiError(401, 'Your session has expired. Please sign in again.', 'Unauthorized') from error
-    user_id = payload.get('sub')
-    if not isinstance(user_id, str):
-        raise ApiError(401, 'Your session has expired. Please sign in again.', 'Unauthorized')
-    user = await _find_user_by_id(db, user_id)
-    if not user or user['status'] != 'ACTIVE' or payload.get('ver', 0) != user.get('auth_version', 0):
-        raise ApiError(401, 'Your session has expired. Please sign in again.', 'Unauthorized')
+    user = await active_identity(db, decode_access(token, request.app.state.settings))
+    if user is None:
+        raise expired()
     return _runtime_user(user, request.app.state.settings)
 
 
@@ -830,7 +778,7 @@ async def microsoft_callback(
     if not user or user['status'] != 'ACTIVE':
         raise ApiError(403, 'This Flowie account is not active.', 'Forbidden')
     user = _runtime_user(user, settings)
-    access_token, refresh_token, data = await _create_session(db, user, request, settings)
+    access_token, refresh_token, data = await _create_session(db, user, request, settings, method='MICROSOFT')
     await db.commit()
     next_path = _safe_app_path(stored.get('next'))
     if next_path:
@@ -849,9 +797,16 @@ async def microsoft_callback(
 
 @router.post('/login')
 async def login(payload: LoginInput, request: Request, db: AsyncSession = Depends(get_session)) -> JSONResponse:
+    from ..modules.identity.password_reset import limit_request
+    from ..modules.identity.security.events import record_event
+    settings = request.app.state.settings
     email = _normalized_email(payload.email)
+    await limit_request(db, settings.auth_jwt_secret, 'login-ip', request.client.host if request.client else 'unknown', settings.auth_login_ip_limit)
+    await limit_request(db, settings.auth_jwt_secret, 'login-account', email, settings.auth_login_account_limit)
     user = await _find_user_by_email(db, email)
     if not user or not user['password_hash'] or user['status'] != 'ACTIVE':
+        await record_event(db, user['id'] if user else None, 'LOGIN_FAILED', 'PASSWORD', request)
+        await db.commit()
         raise ApiError(401, 'Invalid email or password.', 'Unauthorized')
     try:
         password_matches = password_hasher.verify(
@@ -860,6 +815,8 @@ async def login(payload: LoginInput, request: Request, db: AsyncSession = Depend
     except (InvalidHashError, VerificationError):
         password_matches = False
     if not password_matches:
+        await record_event(db, user['id'], 'LOGIN_FAILED', 'PASSWORD', request)
+        await db.commit()
         raise ApiError(401, 'Invalid email or password.', 'Unauthorized')
 
     user = _runtime_user(user, request.app.state.settings)
@@ -900,50 +857,30 @@ async def refresh_presence(
 
 @router.post('/refresh')
 async def refresh(
-    request: Request,
-    payload: RefreshInput | None = None,
-    db: AsyncSession = Depends(get_session),
+    request: Request, payload: RefreshInput | None = None, db: AsyncSession = Depends(get_session)
 ) -> JSONResponse:
-    refresh_token = payload.refreshToken if payload else None
-    refresh_token = refresh_token or request.cookies.get('flowie_refresh')
+    from ..modules.identity.security.sessions import rotate_session, expired
+    refresh_token = (payload.refreshToken if payload else None) or request.cookies.get('flowie_refresh')
     if not refresh_token:
-        raise ApiError(401, 'Your session has expired. Please sign in again.', 'Unauthorized')
-    now = _utcnow()
-    result = await db.execute(
-        text(
-            '''
-            SELECT s.id AS session_id, u.*
-            FROM sessions AS s
-            INNER JOIN users AS u ON u.id = s.user_id
-            WHERE s.refresh_token_hash = :hash
-              AND s.revoked_at IS NULL
-              AND s.expires_at > :now
-            LIMIT 1
-            '''
-        ),
-        {'hash': _hash_token(refresh_token), 'now': now},
-    )
-    user = result.mappings().first()
-    if not user or user['status'] != 'ACTIVE':
-        raise ApiError(401, 'Your session has expired. Please sign in again.', 'Unauthorized')
-    user = _runtime_user(user, request.app.state.settings)
-    await db.execute(text('UPDATE sessions SET revoked_at = :now, last_used_at = :now WHERE id = :id'), {'id': user['session_id'], 'now': now})
-    access_token, new_refresh_token, data = await _create_session(db, user, request, request.app.state.settings)
+        raise expired()
+    settings = request.app.state.settings
+    access, replacement, user = await rotate_session(db, refresh_token, request, settings)
+    user = _runtime_user(user, settings)
+    data = {'user': _authenticated_user(user), 'workspace': await _first_workspace(db, user['id'])}
     await db.commit()
     response = JSONResponse({'data': data})
-    _set_cookies(response, access_token, new_refresh_token, request.app.state.settings)
+    _set_cookies(response, access, replacement, settings)
     return response
 
 
 @router.post('/logout', status_code=204)
 async def logout(request: Request, db: AsyncSession = Depends(get_session)) -> Response:
-    refresh_token = request.cookies.get('flowie_refresh')
-    if refresh_token:
-        await db.execute(
-            text('UPDATE sessions SET revoked_at = :now WHERE refresh_token_hash = :hash AND revoked_at IS NULL'),
-            {'hash': _hash_token(refresh_token), 'now': _utcnow()},
-        )
-        await db.commit()
+    from ..modules.identity.security.sessions import logout_session
+    from ..services.notification_events import notification_hub
+    owner = await logout_session(db, request, request.app.state.settings)
+    await db.commit()
+    if owner:
+        await notification_hub.close_user(owner)
     response = Response(status_code=204)
     _clear_cookies(response, request.app.state.settings)
     return response
@@ -986,56 +923,25 @@ async def list_sessions(
 
 @router.delete('/sessions')
 async def revoke_other_sessions(
-    request: Request,
-    user: Any = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    request: Request, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)
 ) -> dict[str, dict[str, int]]:
-    refresh_token = request.cookies.get('flowie_refresh')
-    if not refresh_token:
-        raise ApiError(403, 'The current session could not be identified.', 'Forbidden')
-    result = await db.execute(
-        text(
-            '''
-            UPDATE sessions
-            SET revoked_at = :now
-            WHERE user_id = :user_id
-              AND revoked_at IS NULL
-              AND expires_at > :now
-              AND refresh_token_hash <> :current_hash
-            '''
-        ),
-        {'now': _utcnow(), 'user_id': user['id'], 'current_hash': _hash_token(refresh_token)},
-    )
+    from ..modules.identity.security.sessions import revoke_sessions
+    from ..services.notification_events import notification_hub
+    rows = await revoke_sessions(db, user, request)
     await db.commit()
-    return {'data': {'revoked': max(result.rowcount or 0, 0)}}
+    await notification_hub.close_user(user['id'])
+    return {'data': {'revoked': len(rows)}}
 
 
 @router.delete('/sessions/{session_id}')
 async def revoke_session(
-    session_id: str,
-    request: Request,
-    user: Any = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    session_id: str, request: Request, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)
 ) -> dict[str, dict[str, Any]]:
-    result = await db.execute(
-        text(
-            '''
-            SELECT id, refresh_token_hash
-            FROM sessions
-            WHERE id = :id AND user_id = :user_id AND revoked_at IS NULL
-            LIMIT 1
-            '''
-        ),
-        {'id': session_id, 'user_id': user['id']},
-    )
-    session = result.mappings().first()
-    if not session:
-        raise ApiError(404, 'Session not found.', 'Not Found')
-    refresh_token = request.cookies.get('flowie_refresh')
-    if refresh_token and session['refresh_token_hash'] == _hash_token(refresh_token):
-        raise ApiError(400, 'Use sign out to revoke the current session.', 'Bad Request')
-    await db.execute(text('UPDATE sessions SET revoked_at = :now WHERE id = :id'), {'id': session_id, 'now': _utcnow()})
+    from ..modules.identity.security.sessions import revoke_sessions
+    from ..services.notification_events import notification_hub
+    await revoke_sessions(db, user, request, identifier=session_id)
     await db.commit()
+    await notification_hub.close_user(user['id'])
     return {'data': {'id': session_id, 'revoked': True}}
 
 
@@ -1072,39 +978,9 @@ async def list_api_keys(
 
 @router.post('/api-keys')
 async def create_api_key(
-    payload: CreateApiKeyInput,
-    user: Any = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    payload: CreateApiKeyInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)
 ) -> dict[str, dict[str, Any]]:
-    name = payload.name.strip()
-    if len(name) < 2:
-        raise ApiError(400, 'API key name is too short.', 'Bad Request')
-    expires_at = _api_key_expiry(payload.expiresAt)
-    token = f'flowie_pat_{token_urlsafe(32)}'
-    now = _utcnow()
-    result = await db.execute(
-        text(
-            '''
-            INSERT INTO personal_api_keys (
-                id, user_id, name, prefix, token_hash, expires_at, created_at
-            ) VALUES (
-                :id, :user_id, :name, :prefix, :token_hash, :expires_at, :created_at
-            )
-            RETURNING id, name, prefix, expires_at, last_used_at, created_at
-            '''
-        ),
-        {
-            'id': _cuid(),
-            'user_id': user['id'],
-            'name': name,
-            'prefix': token[:18],
-            'token_hash': _hash_token(token),
-            'expires_at': expires_at,
-            'created_at': now,
-        },
-    )
-    await db.commit()
-    return {'data': {**_api_key(result.mappings().one()), 'token': token}}
+    raise ApiError(410, 'Legacy personal API key issuance is retired. Use scoped AI connections in Integrations.', 'Gone')
 
 
 @router.delete('/api-keys/{key_id}')

@@ -119,6 +119,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 "INSERT INTO issues(id,workspace_id,team_id,status_id,identifier,number,title,priority,creator_id,created_at,updated_at) VALUES ('issue','workspace','team','status','UPGRADE-1',1,'Existing task','NONE','user',CURRENT_TIMESTAMP-INTERVAL '30 days',CURRENT_TIMESTAMP)"
             )
             await connection.execute("INSERT INTO sla_policies(id,workspace_id,team_id,name,deadline_minutes,created_by,created_at,updated_at) VALUES ('policy','workspace','team','Existing SLA',60,'user',CURRENT_TIMESTAMP-INTERVAL '30 days',CURRENT_TIMESTAMP)")
+            await connection.execute("INSERT INTO sessions(id,user_id,refresh_token_hash,expires_at,created_at,last_used_at) VALUES ('legacy-session','user','legacy-hash',CURRENT_TIMESTAMP+INTERVAL '1 day',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)")
             for path in migrations:
                 if path.parent.name >= "20261014":
                     await connection.execute(path.read_text(encoding="utf-8"))
@@ -141,6 +142,9 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(policy_baseline['name'], 'Existing SLA')
             self.assertTrue(policy_baseline['observed_later'])
             self.assertEqual(await connection.fetchval("SELECT COUNT(*) FROM issue_sla_cycles WHERE issue_id='issue'"), 0)
+            old_session=await connection.fetchrow("SELECT authenticated_at,auth_method FROM sessions WHERE id='legacy-session'")
+            self.assertIsNone(old_session['authenticated_at'])
+            self.assertEqual(old_session['auth_method'],'LEGACY')
             self.assertEqual(
                 await connection.fetchval(
                     "SELECT content FROM document_revisions WHERE document_id='document' AND version=1"
@@ -1057,7 +1061,8 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                         )
 
     async def test_management_cookie_auth_and_rate_limit(self):
-        import jwt
+        from starlette.requests import Request
+        from app.modules.identity.security.sessions import create_session
 
         host = create_app(replace(self.settings, mcp_rate_limit=1))
         host.state.session_factory = self.factory
@@ -1072,17 +1077,10 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                     headers=headers,
                 )
                 self.assertEqual(response.status_code, 401)
-                client.cookies.set(
-                    "flowie_access",
-                    jwt.encode(
-                        {
-                            "sub": self.user["id"],
-                            "exp": _utcnow() + timedelta(minutes=10),
-                        },
-                        self.settings.auth_jwt_secret,
-                        algorithm="HS256",
-                    ),
-                )
+                async with self.factory() as db:
+                    browser_token, _ = await create_session(db,self.user,Request({"type":"http","headers":[],"client":("127.0.0.1",1234)}),self.settings)
+                    await db.commit()
+                client.cookies.set("flowie_access",browser_token)
                 for path in [
                     "/api/v1/mcp/resources",
                     "/api/v1/mcp/connections",

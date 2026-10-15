@@ -199,6 +199,7 @@ model User {
 
   identities               UserIdentity[]
   sessions                 Session[]
+  securityEvents           AccountSecurityEvent[]
   personalApiKeys          PersonalApiKey[]
   mcpConnections           McpConnection[]
   passwordResetTokens      PasswordResetToken[]
@@ -270,12 +271,30 @@ model Session {
   revokedAt        DateTime? @map("revoked_at")
   createdAt        DateTime  @default(now()) @map("created_at")
   lastUsedAt       DateTime  @default(now()) @map("last_used_at")
+  authenticatedAt  DateTime? @map("authenticated_at")
+  authMethod       String    @default("LEGACY") @map("auth_method")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([userId, createdAt, id])
   @@index([expiresAt])
   @@map("sessions")
+}
+
+model AccountSecurityEvent {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  kind      String
+  method    String
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt, id])
+  @@index([createdAt])
+  @@map("account_security_events")
 }
 
 model PersonalApiKey {

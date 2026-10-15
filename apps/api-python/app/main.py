@@ -173,6 +173,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(slas_router)
     from .modules.reporting.api import router as reporting_router
     app.include_router(reporting_router)
+    from .modules.identity.security.api import router as account_security_router
+    app.include_router(account_security_router)
     app.include_router(pulse_router)
     app.include_router(emojis_router)
     app.include_router(notifications_router)

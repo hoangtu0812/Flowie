@@ -45,6 +45,9 @@ async def cleanup(factory) -> None:
         for table,clock,days in [('client_error_events','created_at',30),('operation_heartbeats','last_seen_at',7)]:
             await db.execute(text(f'DELETE FROM {table} WHERE id IN (SELECT id FROM {table} WHERE {clock}<:cutoff ORDER BY {clock} LIMIT 1000)'),{'cutoff':_utcnow()-timedelta(days=days)})
         await db.commit()
+        await db.execute(text('DELETE FROM account_security_events WHERE id IN (SELECT id FROM account_security_events WHERE created_at<:cutoff ORDER BY created_at LIMIT 1000)'),{'cutoff':_utcnow()-timedelta(days=30)})
+        await db.execute(text('DELETE FROM sessions WHERE id IN (SELECT id FROM sessions WHERE revoked_at<:cutoff OR expires_at<:cutoff ORDER BY created_at LIMIT 1000)'),{'cutoff':_utcnow()-timedelta(days=30)})
+        await db.commit()
 
 
 async def maintenance_loop(factory, stop: asyncio.Event) -> None:
