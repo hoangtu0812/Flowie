@@ -14,7 +14,7 @@ Phạm vi đã được yêu cầu: toàn bộ AUD-01–12 và NEXT-01–09 tron
 | AUD-06 | Error boundaries và Saved View Retry đã có; còn chuẩn hóa recovery các trang legacy khác | IN_PROGRESS |
 | AUD-07 | Batched portfolio list, cursor/history và load-more UI; bounded queries | TODO |
 | AUD-08 | Dependency probes, request ID/build identity, scrubbed error report, job heartbeat/lag | LOCAL_VERIFIED |
-| AUD-09 | Backup/restore tooling và rehearsal; off-host destination và CT107 inventory cần cấu hình thật | TODO |
+| AUD-09 | Backup/restore tooling và rehearsal đã kiểm tra; đích S3 độc lập, credential và CT107 inventory chưa cấu hình | WAITING_CONFIGURATION |
 | AUD-10 | Đã thêm role/revocation, >100 rows, view/error/workflow/operations; tiếp tục mở rộng theo feature | IN_PROGRESS |
 | AUD-11 | Codex bug thật → PR; người dùng cho phép tự chọn project/bug, đang chuẩn bị nghiệm thu | IN_PROGRESS |
 | AUD-12 | Cập nhật bằng chứng kế hoạch cũ, build identity/release checklist; release thực sau deploy verified | TODO |
@@ -76,3 +76,10 @@ stale version, quyền bị thu hồi, hủy, concurrent workers và rollback si
 đã kiểm tra DB. Bulk UI preview/apply/reload/resume: 3/3 engine. Backend 133 passed,
 1 optional storage skip, 10 subtests; production web build pass. Migration thứ 90
 đã áp dụng trên DB thử và schema diff không có thay đổi. Chưa deploy.
+
+AUD-09: đề xuất restic mã hóa đến S3-compatible độc lập CT107, retention 7 ngày /
+4 tuần / 6 tháng. Công cụ capture dừng writer, restart khi lỗi, manifest SHA256,
+restore đích mới và stale-backup status; deployment dùng chung flock. Kiểm thử
+3 ca guard/rollback và 1 rehearsal thật (restic 0.19.1 checksum verified, S3 trên
+MinIO thử, PostgreSQL custom dump → DB mới, physical MinIO → server mới, hash
+attachment và mật khẩu sai). Chưa có đích off-host thật và chưa bật timer CT107.

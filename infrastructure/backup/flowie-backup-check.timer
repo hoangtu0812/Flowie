@@ -1,0 +1,10 @@
+[Unit]
+Description=Weekly full Flowie repository verification
+
+[Timer]
+OnCalendar=Sun *-*-* 05:00:00 Asia/Ho_Chi_Minh
+Persistent=true
+Unit=flowie-backup-check.service
+
+[Install]
+WantedBy=timers.target

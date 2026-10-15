@@ -68,6 +68,7 @@ jobs:
           ruff check apps/api-python/app/modules apps/api-python/app/core/clock.py apps/api-python/app/core/dates.py apps/api-python/app/core/identifiers.py apps/api-python/app/db/mutations.py --select F
           ruff check apps/api-python/app --select F821
           ruff check scripts/flowie_runner --select F
+          ruff check scripts/flowie_backup scripts/flowie-backup.py --select F
           python -m pytest apps/api-python/tests -q
       - name: Install pinned storage fixture toolchain
         uses: actions/setup-go@v5
@@ -75,7 +76,10 @@ jobs:
           go-version: '1.24.8'
           cache: false
       - name: Verify pinned source MinIO and SMTP transports
-        run: bash scripts/verify-storage-acceptance.sh
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16
+          bash scripts/verify-storage-acceptance.sh
       - name: Build web and verify Compose dependencies
         run: |
           pnpm --filter @circle/contracts build

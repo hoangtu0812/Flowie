@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Flowie backup at 02:00 Asia/Ho_Chi_Minh
+
+[Timer]
+OnCalendar=*-*-* 02:00:00 Asia/Ho_Chi_Minh
+RandomizedDelaySec=5m
+Persistent=true
+Unit=flowie-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,15 @@
+[Unit]
+Description=Read and verify the encrypted Flowie backup repository
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+EnvironmentFile=/etc/flowie-backup/credentials
+ExecStart=/usr/bin/python3 /opt/flowie/scripts/flowie-backup.py check
+TimeoutStartSec=12h
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+NoNewPrivileges=true

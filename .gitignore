@@ -48,6 +48,7 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .venv/
+.flowie-operation.lock
 
 # UI regression artifacts
 apps/web/.e2e-fixture.json

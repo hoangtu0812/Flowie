@@ -1,0 +1,19 @@
+[Unit]
+Description=Encrypted Flowie database, objects and configuration backup
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+EnvironmentFile=/etc/flowie-backup/credentials
+ExecStart=/usr/bin/python3 /opt/flowie/scripts/flowie-backup.py capture --config /etc/flowie-backup/config.json --allow-maintenance
+TimeoutStartSec=6h
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+NoNewPrivileges=true
