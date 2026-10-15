@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..modules.access.project_scope import project_read_scope
+
 from ..modules.access.projects import _workspace_access as _workspace_access, _workspace_manager as _workspace_manager, _team_access as _team_access
 
 from ..core.dates import _date as _date
@@ -653,9 +655,9 @@ async def list_projects(workspaceId: str = Query(min_length=1), teamId: str | No
     await _workspace_access(db, workspaceId, user['id'])
     if teamId:
         await _team_access(db, workspaceId, teamId, user['id'])
-        result = await db.execute(text('SELECT id FROM projects WHERE workspace_id = :workspace_id AND team_id = :team_id AND archived_at IS NULL ORDER BY created_at DESC'), {'workspace_id': workspaceId, 'team_id': teamId})
+        result = await db.execute(text(f'SELECT p.id FROM projects p WHERE {project_read_scope(workspace="workspace_id", user="user_id")} AND p.team_id=:team_id ORDER BY p.created_at DESC,p.id DESC'), {'workspace_id': workspaceId, 'user_id': user['id'], 'team_id': teamId})
     else:
-        result = await db.execute(text('SELECT id FROM projects WHERE workspace_id = :workspace_id AND archived_at IS NULL ORDER BY created_at DESC'), {'workspace_id': workspaceId})
+        result = await db.execute(text(f'SELECT p.id FROM projects p WHERE {project_read_scope(workspace="workspace_id", user="user_id")} ORDER BY p.created_at DESC,p.id DESC'), {'workspace_id': workspaceId, 'user_id': user['id']})
     return {'data': [await _project(db, row['id'], workspaceId, user['id']) for row in result.mappings().all()]}
 
 

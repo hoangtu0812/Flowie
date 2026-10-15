@@ -8,7 +8,7 @@ Phạm vi đã được yêu cầu: toàn bộ AUD-01–12 và NEXT-01–09 tron
 
 | ID | Module / cổng nghiệm thu | Trạng thái |
 | --- | --- | --- |
-| AUD-01/02 | Shared project access policy; list/initiative không rò metadata và không fail toàn list; test member/admin/revocation | IN_PROGRESS |
+| AUD-01/02 | Shared project access policy; list/initiative không rò metadata và không fail toàn list; test member/admin/revocation | LOCAL_VERIFIED |
 | AUD-03/04 | Saved View provider; route quản lý status; URL/reload/permission E2E | TODO |
 | AUD-05 | Shared issue query scope và aggregate server; >100 rows, ACL, Load more invariance | TODO |
 | AUD-06 | Error boundaries, classified query errors, safe Retry/draft preservation | TODO |
@@ -55,4 +55,7 @@ phải hoàn tất trước API/worker. Production duy nhất CT107.
 
 ## Nhật ký nghiệm thu
 
-Chưa có kết quả triển khai của đợt này.
+AUD-01/02: predicate chung cho project list, initiative project links/count/activity,
+search và MCP; issue options lọc project/status/cycle theo team membership.
+DB regressions kiểm tra member/admin/owner, cấp và thu hồi membership; full MCP
+và workspace search 35 passed, 10 subtests. Chưa deploy đợt này.

@@ -123,6 +123,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 - Issue/comment/document writes detect stale MCP versions and stage durable
   notification delivery, so retries do not duplicate saved mutations.
 
+### Security
+
+- Project lists now filter inaccessible teams before hydration, and initiative links, progress counts and project activity exclude restricted projects. Search and MCP project reads share the same membership predicate while MCP retains its additional token grants.
+
 ### Fixed
 
 - Initiative Projects tabs open without a client-side exception, including

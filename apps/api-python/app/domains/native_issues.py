@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..modules.access.project_scope import project_read_scope
+
 from datetime import timedelta
 
 from ..modules.work_items.issue_relations import _relation_kind as _relation_kind
@@ -194,17 +196,22 @@ async def issue_options(
     await _ensure_circle_issue_statuses(db, workspaceId)
     await db.commit()
     team_filter = 'AND (team_id IS NULL OR team_id = :team_id)' if teamId else ''
-    params = {'workspace_id': workspaceId, 'team_id': teamId}
+    params = {'workspace_id': workspaceId, 'team_id': teamId, 'user_id': user['id']}
     statuses, projects, members, labels, cycles = await db.execute(
-        text(f'''SELECT id, name, category, color, position FROM issue_statuses WHERE workspace_id = :workspace_id {team_filter} ORDER BY position, name'''), params
+        text(f'''SELECT id, name, category, color, position FROM issue_statuses WHERE workspace_id = :workspace_id {team_filter}
+            AND (team_id IS NULL OR EXISTS (SELECT 1 FROM teams scope_t JOIN team_members scope_tm ON scope_tm.team_id=scope_t.id
+            WHERE scope_t.id=issue_statuses.team_id AND scope_t.workspace_id=:workspace_id AND scope_t.archived_at IS NULL AND scope_tm.user_id=:user_id)) ORDER BY position, name'''), params
     ), await db.execute(
-        text(f'''SELECT id, name, identifier, status, priority, health, start_date, target_date, lead_id, team_id FROM projects WHERE workspace_id = :workspace_id AND archived_at IS NULL {team_filter} ORDER BY name'''), params
+        text(f'''SELECT p.id,p.name,p.identifier,p.status,p.priority,p.health,p.start_date,p.target_date,p.lead_id,p.team_id
+            FROM projects p WHERE {project_read_scope(workspace='workspace_id', user='user_id')} {"AND (p.team_id IS NULL OR p.team_id=:team_id)" if teamId else ""} ORDER BY p.name'''), params
     ), await db.execute(
         text('''SELECT u.id, u.name, u.email, u.avatar_url, u.last_seen_at FROM workspace_members wm JOIN users u ON u.id = wm.user_id WHERE wm.workspace_id = :workspace_id AND wm.status = 'ACTIVE' ORDER BY u.name'''), {'workspace_id': workspaceId}
     ), await db.execute(
         text('SELECT id, name, color FROM labels WHERE workspace_id = :workspace_id ORDER BY name'), {'workspace_id': workspaceId}
     ), await db.execute(
-        text('''SELECT id, team_id, name, status, start_date, end_date FROM cycles WHERE workspace_id = :workspace_id ''' + ('AND team_id = :team_id ' if teamId else '') + 'ORDER BY start_date DESC NULLS LAST, created_at DESC'), params
+        text('''SELECT id, team_id, name, status, start_date, end_date FROM cycles WHERE workspace_id = :workspace_id
+            AND EXISTS (SELECT 1 FROM teams scope_t JOIN team_members scope_tm ON scope_tm.team_id=scope_t.id
+            WHERE scope_t.id=cycles.team_id AND scope_t.workspace_id=:workspace_id AND scope_t.archived_at IS NULL AND scope_tm.user_id=:user_id) ''' + ('AND team_id = :team_id ' if teamId else '') + 'ORDER BY start_date DESC NULLS LAST, created_at DESC'), params
     )
     releases = await db.execute(
         text(

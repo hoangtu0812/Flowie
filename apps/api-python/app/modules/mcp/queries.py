@@ -140,8 +140,7 @@ class QueryService:
             payload,
             f"""SELECT p.id,p.name,p.identifier,p.description,
             p.team_id AS "teamId",p.status,p.updated_at AS "updatedAt"
-            FROM projects p WHERE p.workspace_id=:workspace AND p.archived_at IS NULL
-            AND {self.policy.team_clause("p.team_id", shared=True)} AND {self.policy.project_clause("p.id")}""",
+            FROM projects p WHERE {self.policy.project_read_clause()}""",
             {},
         )
 

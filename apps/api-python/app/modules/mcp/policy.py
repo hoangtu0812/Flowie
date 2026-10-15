@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.errors import ApiError
 from .domain import Principal
+from ..access.project_scope import project_read_scope
 
 
 class AccessPolicy:
@@ -34,6 +35,11 @@ class AccessPolicy:
 
     def project_clause(self, column: str) -> str:
         return f"(:all_projects OR {column}=ANY(CAST(:projects AS text[])))"
+
+    def project_read_clause(self, alias: str = "p") -> str:
+        return f"""{project_read_scope(alias)}
+            AND {self.team_clause(f'{alias}.team_id', shared=True)}
+            AND {self.project_clause(f'{alias}.id')}"""
 
     def issue_clause(self, alias: str = "i") -> str:
         return f"""{alias}.workspace_id=:workspace AND {alias}.archived_at IS NULL
@@ -72,8 +78,7 @@ class AccessPolicy:
             (
                 await self.db.execute(
                     text(f"""SELECT p.* FROM projects p
-            WHERE p.id=:id AND p.workspace_id=:workspace AND p.archived_at IS NULL
-            AND {self.team_clause("p.team_id", shared=True)} AND {self.project_clause("p.id")}"""),
+            WHERE p.id=:id AND {self.project_read_clause()}"""),
                     {**self.params, "id": project_id},
                 )
             )

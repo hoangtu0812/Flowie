@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..modules.access.project_scope import project_read_scope
+
 import json
 from typing import Any, Literal
 from urllib.parse import urlparse
@@ -91,17 +93,17 @@ async def _audit(
     )
 
 
-async def _project(db: AsyncSession, project_id: str) -> dict[str, Any] | None:
+async def _project(db: AsyncSession, project_id: str, workspace_id: str, user_id: str) -> dict[str, Any] | None:
     result = await db.execute(
         text(
-            """SELECT p.*, t.id AS team_id_value, t.name AS team_name, t.identifier AS team_identifier, t.icon AS team_icon,
+            f"""SELECT p.*, t.id AS team_id_value, t.name AS team_name, t.identifier AS team_identifier, t.icon AS team_icon,
                       lead.id AS lead_id_value, lead.name AS lead_name, lead.avatar_url AS lead_avatar_url
                FROM projects p
                LEFT JOIN teams t ON t.id = p.team_id
                LEFT JOIN users lead ON lead.id = p.lead_id
-               WHERE p.id = :project_id AND p.archived_at IS NULL"""
+               WHERE p.id = :project_id AND {project_read_scope()}"""
         ),
-        {'project_id': project_id},
+        {'project_id': project_id, 'workspace': workspace_id, 'user': user_id},
     )
     row = result.mappings().first()
     if not row:
@@ -143,7 +145,7 @@ async def _initiative(db: AsyncSession, initiative_id: str, workspace_id: str, u
     )
     project_links = []
     for link in links.mappings().all():
-        project = await _project(db, link['project_id'])
+        project = await _project(db, link['project_id'], workspace_id, user_id)
         if project:
             project_links.append({'initiativeId': initiative_id, 'projectId': link['project_id'], 'createdAt': link['created_at'], 'project': project})
     labels = await db.execute(
@@ -276,7 +278,7 @@ async def archive_initiative(initiative_id: str, workspaceId: str = Query(min_le
 async def link_project(initiative_id: str, payload: ProjectLinkInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await _manager(db, payload.workspaceId, user['id'])
     await _initiative(db, initiative_id, payload.workspaceId, user['id'])
-    project = await db.execute(text('SELECT id, name FROM projects WHERE id = :project_id AND workspace_id = :workspace_id AND archived_at IS NULL'), {'project_id': payload.projectId, 'workspace_id': payload.workspaceId})
+    project = await db.execute(text(f'SELECT p.id,p.name FROM projects p WHERE p.id=:project_id AND {project_read_scope()}'), {'project_id': payload.projectId, 'workspace': payload.workspaceId, 'user': user['id']})
     row = project.mappings().first()
     if not row:
         raise ApiError(404, 'Initiative or project not found.', 'Not Found')
@@ -336,10 +338,12 @@ async def unlink_label(initiative_id: str, label_id: str, workspaceId: str = Que
 @public_router.get('/{initiative_id}/activity')
 async def initiative_activity(initiative_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
     await _initiative(db, initiative_id, workspaceId, user['id'])
-    result = await db.execute(text('''SELECT audit.*, actor.id AS actor_id_value, actor.name AS actor_name, actor.avatar_url AS actor_avatar_url
+    result = await db.execute(text(f'''SELECT audit.*, actor.id AS actor_id_value, actor.name AS actor_name, actor.avatar_url AS actor_avatar_url
         FROM audit_logs audit LEFT JOIN users actor ON actor.id = audit.actor_id
         WHERE audit.workspace_id = :workspace_id AND audit.entity_type = 'initiative' AND audit.entity_id = :initiative_id
-        ORDER BY audit.created_at DESC LIMIT 100'''), {'workspace_id': workspaceId, 'initiative_id': initiative_id})
+        AND (NOT (audit.metadata ? 'projectId') OR EXISTS (
+            SELECT 1 FROM projects p WHERE p.id=audit.metadata->>'projectId' AND {project_read_scope()}))
+        ORDER BY audit.created_at DESC LIMIT 100'''), {'workspace_id': workspaceId, 'initiative_id': initiative_id, 'workspace': workspaceId, 'user': user['id']})
     return {'data': [{'id': row['id'], 'action': row['action'], 'metadata': row['metadata'] or {}, 'createdAt': row['created_at'], 'actor': {'id': row['actor_id_value'], 'name': row['actor_name'], 'avatarUrl': row['actor_avatar_url']} if row['actor_id_value'] else None} for row in result.mappings().all()]}
 
 
