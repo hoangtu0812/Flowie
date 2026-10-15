@@ -1,8 +1,6 @@
 'use client';
 
 import { useIssueQuery } from '@/features/issues/use-issue-query';
-import { IssuePagination } from '@/features/issues/issue-pagination';
-import { BugReport } from '@/features/issues/bug-report';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Issue } from '@/mock-data/issues';
 import { Status, StatusCategory } from '@/mock-data/status';
@@ -78,8 +76,6 @@ export default function AllIssues({ categories }: AllIssuesProps) {
    return (
       <VStack width="100%" height="100%" className="overflow-hidden">
          <IssueFilterBar />
-         <IssuePagination />
-         <BugReport teamReference={teamIdentifier} />
          <HStack gap={0} className="flex-1 min-h-0 w-full overflow-hidden">
             <VStack className="flex-1 min-w-0 h-full overflow-hidden">
                <GroupedIssuesView

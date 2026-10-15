@@ -1,5 +1,7 @@
 'use client';
 
+import { HStack } from '@astryxdesign/core/Layout';
+import { IssueListActions } from '@/features/issues/issue-list-actions';
 import { Button } from '@/components/ui/button';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useProjectsData } from '@/features/projects/projects-data';
@@ -52,13 +54,16 @@ export default function Header() {
                {count} {view.entityType === 'issue' ? 'issues' : 'projects'}
             </span>
             {view.entityType === 'issue' && (
-               <Button
-                  size="xs"
-                  variant={openPanel === 'insights' ? 'secondary' : 'ghost'}
-                  onClick={() => togglePanel('insights')}
-               >
-                  <BarChart3 className="size-4" />
-               </Button>
+               <HStack gap={1}>
+                  <IssueListActions />
+                  <Button
+                     size="xs"
+                     variant={openPanel === 'insights' ? 'secondary' : 'ghost'}
+                     onClick={() => togglePanel('insights')}
+                  >
+                     <BarChart3 className="size-4" />
+                  </Button>
+               </HStack>
             )}
          </div>
       </div>

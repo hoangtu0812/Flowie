@@ -1,7 +1,6 @@
 'use client';
 
 import { useIssueQuery } from '@/features/issues/use-issue-query';
-import { IssuePagination } from '@/features/issues/issue-pagination';
 import { useMemo } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -49,7 +48,6 @@ export default function MemberProfile({
    return (
       <VStack height="100%" gap={0}>
          <IssueFilterBar />
-         <IssuePagination />
          <HStack height="100%" gap={0} align="stretch">
             <VStack width="100%" isScrollable>
                {isSearchOpen && searchQuery.trim() ? (

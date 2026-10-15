@@ -8,6 +8,7 @@ import {
    useCurrentUserId,
    useMyIssuesTab,
 } from '@/components/common/my-issues/use-my-issues';
+import { IssueListActions } from '@/features/issues/issue-list-actions';
 import { IssueFilterTrigger } from '@/components/common/issues/issue-filter-trigger';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -147,6 +148,7 @@ function HeaderOptions() {
                <PanelRight className="size-4" />
             </Button>
             <DisplayOptions />
+            <IssueListActions />
          </div>
       </div>
    );

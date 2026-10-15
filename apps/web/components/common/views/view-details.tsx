@@ -2,7 +2,6 @@
 import { ProjectPagination } from '@/features/projects/project-pagination';
 
 import { useIssueQuery } from '@/features/issues/use-issue-query';
-import { IssuePagination } from '@/features/issues/issue-pagination';
 import { GroupedIssuesView } from '@/components/common/issues/grouped-issues-view';
 import { InsightsPanel } from '@/components/common/issues/insights-panel';
 import ProjectsList from '@/components/common/projects/projects-list';
@@ -61,7 +60,6 @@ function IssueViewBody({ view }: { view: LiveView }) {
    }, [issues, view]);
    return (
       <div className="w-full h-full flex flex-col overflow-hidden">
-         <IssuePagination />
          <div className="flex-1 min-h-0 w-full flex overflow-hidden">
             <div className="flex-1 min-w-0 h-full overflow-hidden">
                <GroupedIssuesView

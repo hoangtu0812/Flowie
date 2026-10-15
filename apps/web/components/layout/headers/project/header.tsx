@@ -2,6 +2,8 @@
 import { useMessages } from '@/features/shared/use-messages';
 import { messages } from '@/features/navigation/messages.vi';
 
+import { AiScheduleDialog } from '@/components/common/projects/details/ai-schedule-dialog';
+import { IssueListActions } from '@/features/issues/issue-list-actions';
 import { Button } from '@/components/ui/button';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useLiveProjectData } from '@/components/common/projects/details/use-live-project';
@@ -32,7 +34,7 @@ function ProjectTabs({ projectId }: { projectId: string }) {
    const pathname = usePathname();
 
    return (
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 min-w-0 overflow-x-auto">
          {PROJECT_TABS.map((tab) => {
             const href = `/${orgId}/project/${projectId}/${tab.segment}`;
             const isActive = pathname === href;
@@ -42,7 +44,7 @@ function ProjectTabs({ projectId }: { projectId: string }) {
                   href={href}
                   aria-current={isActive ? 'page' : undefined}
                   className={cn(
-                     'px-2.5 h-7 inline-flex items-center rounded-full border text-xs font-medium transition-colors',
+                     'shrink-0 px-2.5 h-7 inline-flex items-center rounded-full border text-xs font-medium transition-colors',
                      isActive
                         ? 'bg-accent text-foreground border-border'
                         : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/50'
@@ -59,10 +61,17 @@ function ProjectTabs({ projectId }: { projectId: string }) {
 function PanelToggles() {
    const tx = useMessages(messages);
 
+   const pathname = usePathname();
    const { openPanel, togglePanel } = useRightPanelStore();
 
    return (
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 shrink-0">
+         {pathname.endsWith('/issues') && (
+            <>
+               <AiScheduleDialog />
+               <IssueListActions />
+            </>
+         )}
          <Button
             size="xs"
             variant={openPanel === 'insights' ? 'secondary' : 'ghost'}

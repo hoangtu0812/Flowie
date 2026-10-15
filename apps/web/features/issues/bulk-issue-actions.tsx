@@ -37,7 +37,9 @@ const running = (state?: string) => state === 'QUEUED' || state === 'RUNNING';
 const fields = ['priority', 'statusId', 'assigneeId', 'projectId', 'cycleId', 'labelIds'];
 const fieldLabels = ['Priority', 'Status', 'Assignee', 'Project', 'Cycle', 'Replace labels'];
 
-export function BulkIssueActions() {
+type BulkIssueActionsProps = { open: boolean; onOpenChange: (open: boolean) => void };
+
+export function BulkIssueActions({ open, onOpenChange }: BulkIssueActionsProps) {
    const { workspaceId, pageQuery, accountId, loadScope } = useIssuesStore();
    if (!workspaceId || !pageQuery) return null;
    return (
@@ -45,18 +47,24 @@ export function BulkIssueActions() {
          key={`${accountId}:${workspaceId}:${loadScope}:${pageQuery}`}
          workspace={workspaceId}
          query={pageQuery}
+         open={open}
+         onOpenChange={onOpenChange}
       />
    );
 }
 
-function BulkEditor({ workspace, query }: { workspace: string; query: string }) {
+function BulkEditor({
+   workspace,
+   query,
+   open,
+   onOpenChange: setOpen,
+}: { workspace: string; query: string } & BulkIssueActionsProps) {
    const tx = useMessages(messages);
    const enumLabel = useEnumLabel();
 
    const { issues, statuses, members, projects, labels, cycles, retryIssues } = useIssuesStore();
    const alive = useRef(true);
    const requestKey = useRef('');
-   const [open, setOpen] = useState(false);
    const [selection, setSelection] = useState('selected');
    const [selected, setSelected] = useState<string[]>([]);
    const [confirm, setConfirm] = useState(false);
@@ -176,7 +184,6 @@ function BulkEditor({ workspace, query }: { workspace: string; query: string }) 
    };
    return (
       <>
-         <Button label={tx('Bulk changes')} size="sm" onClick={() => setOpen(true)} />
          <Dialog isOpen={open} onOpenChange={setOpen} purpose="form" padding={5}>
             <VStack gap={4}>
                <DialogHeader title={tx('Bulk issue changes')} onOpenChange={setOpen} />

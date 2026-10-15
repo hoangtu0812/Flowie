@@ -107,9 +107,16 @@ export function AiScheduleDialog() {
 
    return (
       <>
-         <Button size="xs" variant="outline" className="gap-1.5" onClick={() => void draft()}>
+         <Button
+            size="xs"
+            variant="outline"
+            className="gap-1.5"
+            aria-label="AI scheduling"
+            title="AI scheduling"
+            onClick={() => void draft()}
+         >
             <Sparkles className="size-3.5" />
-            AI scheduling
+            <span className="hidden sm:inline">AI scheduling</span>
          </Button>
          <Dialog open={open} onOpenChange={(next) => !loading && !applying && setOpen(next)}>
             <DialogContent className="sm:max-w-3xl max-h-[80vh] flex flex-col overflow-hidden">
