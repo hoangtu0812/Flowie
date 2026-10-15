@@ -268,3 +268,10 @@ history; WebKit hủy request team/notification khi hard-navigation ngay sau log
 chờ workspace hydration; không lọc bỏ pageerror hoặc tăng retry để che lỗi.
 Production build/lint/types và 3/3 luồng SLA local sau bản sửa đã đạt.
 CI đúng head bản sửa phải đạt trước khi đánh dấu bàn giao review hoàn tất.
+
+Head `c4221f1`: PR CI `38742894796` success toàn bộ; push CI `38742888135` đạt
+131/132, Firefox recurring poll đọc count ngay sau refresh khi hook vừa clear
+rows. Artifact cuối vẫn hiển thị DONE và issue đã tạo. Kiểm thử chuyển sang chờ
+durable run state trong cùng 15 giây, rồi refresh một lần và auto-wait đúng một
+dòng DONE trên UI; vẫn kiểm tra đúng một bug và dữ liệu severity, không thêm retry.
+Ba engine local sau bản sửa đều đạt; TypeScript và whitespace check đạt.

@@ -63,12 +63,18 @@ test('recurring settings preview, run once, edit and pause with real history', a
       await expect
          .poll(
             async () => {
-               await page.getByRole('button', { name: 'Refresh run history', exact: true }).click();
-               return page.getByText(/^DONE · GEN-\d+$/).count();
+               const response = await context.request.get(
+                  `${api}/recurring-schedules/${identifier}/runs?${scope}`
+               );
+               expect(response.ok()).toBeTruthy();
+               const runs = (await response.json()).data as { state: string }[];
+               return runs.filter((run) => run.state === 'DONE').length;
             },
             { timeout: 15000 }
          )
          .toBe(1);
+      await page.getByRole('button', { name: 'Refresh run history', exact: true }).click();
+      await expect(page.getByText(/^DONE · GEN-\d+$/)).toHaveCount(1);
       const issues = (
          await (
             await context.request.get(`${api}/issues?${scope}&query=${encodeURIComponent(title)}`)
