@@ -1,4 +1,8 @@
 'use client';
+import { useEnumLabel } from '@/features/shared/enum-labels';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/issues/messages.vi';
+
 import { useEffect, useState } from 'react';
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
@@ -9,6 +13,9 @@ import { responseData } from '@/lib/http';
 import { useIssuesStore } from '@/store/issues-store';
 type Report = { total: number; groups: { severity: string; category: string; count: number }[] };
 export function BugReport({ teamReference }: { teamReference?: string }) {
+   const tx = useMessages(messages);
+   const enumLabel = useEnumLabel();
+
    const [open, setOpen] = useState(false);
    const [report, setReport] = useState<Report>();
    const [error, setError] = useState<string>();
@@ -34,31 +41,34 @@ export function BugReport({ teamReference }: { teamReference?: string }) {
             if (active) setReport(result);
          } catch (reason) {
             if (active)
-               setError(reason instanceof Error ? reason.message : 'Could not load bug report.');
+               setError(
+                  reason instanceof Error ? reason.message : tx('Could not load bug report.')
+               );
          }
       })();
       return () => {
          active = false;
       };
-   }, [open, team?.id, teamReference, refresh]);
+   }, [open, team, teamReference, refresh, tx]);
    return (
       <DesignSurface>
          <VStack gap={3} padding={3} className="max-h-96" isScrollable>
             <Button
-               label={open ? 'Hide bug report' : 'Bug report'}
+               label={open ? tx('Hide bug report') : tx('Bug report')}
                onClick={() => setOpen(!open)}
             />
             {open && (
                <>
-                  <Heading level={2}>Bugs by severity and workflow status</Heading>
+                  <Heading level={2}>{tx('Bugs by severity and workflow status')}</Heading>
                   {error ? (
                      <Text role="alert">{error}</Text>
                   ) : !report ? (
-                     <Text role="status">Loading report…</Text>
+                     <Text role="status">{tx('Loading report…')}</Text>
                   ) : (
                      <>
                         <Text>
-                           {report.total} bugs in accessible {team ? 'team' : 'workspace'} issues.
+                           {report.total} {tx('bugs in accessible')}{' '}
+                           {team ? tx('team') : tx('workspace')} {tx('issues.')}
                         </Text>
                         {report.groups.map((group) => (
                            <HStack
@@ -67,7 +77,7 @@ export function BugReport({ teamReference }: { teamReference?: string }) {
                               gap={3}
                            >
                               <Text>
-                                 {group.severity} · {group.category}
+                                 {enumLabel(group.severity)} · {enumLabel(group.category)}
                               </Text>
                               <Text>{group.count}</Text>
                            </HStack>
@@ -75,7 +85,7 @@ export function BugReport({ teamReference }: { teamReference?: string }) {
                      </>
                   )}
                   <Button
-                     label="Refresh bug report"
+                     label={tx('Refresh bug report')}
                      onClick={() => setRefresh((value) => value + 1)}
                   />
                </>

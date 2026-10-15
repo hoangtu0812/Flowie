@@ -1,4 +1,8 @@
 'use client';
+import { useLocale } from '@/features/shared/use-locale';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/issues/messages.vi';
+
 import { useRef, useState } from 'react';
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
@@ -24,6 +28,9 @@ export function CommentRow({
    onDelete: () => void;
    onReply: () => void;
 }) {
+   const tx = useMessages(messages);
+   const { locale } = useLocale();
+
    const accountId = useCurrentUserId();
    const own = accountId === comment.authorId;
    const [editing, setEditing] = useState(false);
@@ -48,16 +55,16 @@ export function CommentRow({
          <HStack gap={2}>
             <Text weight="medium">{comment.author.name}</Text>
             <Text type="supporting">
-               {relativeTime(comment.createdAt)}
-               {comment.version > 1 ? ' · edited' : ''}
+               {relativeTime(comment.createdAt, Date.now(), locale)}
+               {comment.version > 1 ? tx(' · edited') : ''}
             </Text>
          </HStack>
          {editing ? (
             <>
-               <TextArea label="Edit comment" value={draft} onChange={setDraft} />
+               <TextArea label={tx('Edit comment')} value={draft} onChange={setDraft} />
                <HStack gap={2}>
                   <Button
-                     label="Save comment"
+                     label={tx('Save comment')}
                      isDisabled={!draft.trim()}
                      clickAction={() =>
                         action(async () => {
@@ -66,29 +73,33 @@ export function CommentRow({
                         })
                      }
                   />
-                  <Button label="Cancel comment editing" onClick={() => setEditing(false)} />
+                  <Button label={tx('Cancel comment editing')} onClick={() => setEditing(false)} />
                </HStack>
             </>
          ) : (
             <MarkdownPreview content={comment.content} />
          )}
          <HStack gap={2} wrap="wrap">
-            {!comment.parentCommentId && <Button label="Reply" size="sm" onClick={onReply} />}
+            {!comment.parentCommentId && <Button label={tx('Reply')} size="sm" onClick={onReply} />}
             {own && (
                <>
                   <Button
-                     label="Edit comment"
+                     label={tx('Edit comment')}
                      size="sm"
                      onClick={() => {
                         setDraft(comment.content);
                         setEditing(true);
                      }}
                   />
-                  <Button label="Delete comment" size="sm" onClick={() => setConfirmDelete(true)} />
+                  <Button
+                     label={tx('Delete comment')}
+                     size="sm"
+                     onClick={() => setConfirmDelete(true)}
+                  />
                </>
             )}
             <Button
-               label={history ? 'Hide comment history' : 'Comment history'}
+               label={history ? tx('Hide comment history') : tx('Comment history')}
                size="sm"
                clickAction={() =>
                   action(async () => {
@@ -100,7 +111,7 @@ export function CommentRow({
             />
             {own && (
                <Button
-                  label="Attach to comment"
+                  label={tx('Attach to comment')}
                   size="sm"
                   isLoading={uploading}
                   onClick={() => picker.current?.click()}
@@ -110,9 +121,9 @@ export function CommentRow({
          {error && <Text role="alert">{error}</Text>}
          {confirmDelete && (
             <HStack gap={2}>
-               <Text>Delete this comment? Replies remain visible.</Text>
+               <Text>{tx('Delete this comment? Replies remain visible.')}</Text>
                <Button
-                  label="Confirm delete comment"
+                  label={tx('Confirm delete comment')}
                   variant="destructive"
                   clickAction={() =>
                      action(async () => {
@@ -121,13 +132,14 @@ export function CommentRow({
                      })
                   }
                />
-               <Button label="Cancel deletion" onClick={() => setConfirmDelete(false)} />
+               <Button label={tx('Cancel deletion')} onClick={() => setConfirmDelete(false)} />
             </HStack>
          )}
          {history?.map((revision) => (
             <VStack key={revision.version} gap={1}>
                <Text>
-                  v{revision.version} · {relativeTime(revision.createdAt)}
+                  {tx('v')}
+                  {revision.version} · {relativeTime(revision.createdAt, Date.now(), locale)}
                </Text>
                <Text className="whitespace-pre-wrap">{revision.content}</Text>
             </VStack>
@@ -147,7 +159,7 @@ export function CommentRow({
             type="file"
             multiple
             hidden
-            aria-label="Select comment attachments"
+            aria-label={tx('Select comment attachments')}
             onChange={(event) => {
                const files = Array.from(event.target.files ?? []);
                event.target.value = '';

@@ -22,4 +22,4 @@ COPY apps/api-python/app ./app
 
 USER flowie
 EXPOSE 4000
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "4000", "--proxy-headers"]
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "4000", "--proxy-headers", "--no-access-log"]

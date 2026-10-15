@@ -1,5 +1,5 @@
 import MainLayout from '@/components/layout/main-layout';
-import AccountSecurity from '@/components/common/settings/account-security';
+import AccountSecurity from '@/features/security/account-security';
 import Header from '@/components/layout/headers/settings/header';
 
 export default function Page() {

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from ..operations.heartbeats import progress
 
 import asyncio
 import logging
@@ -121,7 +122,7 @@ async def process_event(factory) -> bool:
 async def dispatcher_loop(factory, stop: asyncio.Event) -> None:
     while not stop.is_set():
         try:
-            if await process_event(factory):
+            if await progress(factory,'agent-dispatcher',process_event(factory)):
                 continue
         except Exception:
             logger.warning("Agent dispatcher is unavailable")

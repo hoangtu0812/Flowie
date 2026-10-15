@@ -1,10 +1,13 @@
 from __future__ import annotations
+from ..core.audit_context import audit_source
+from ..modules.access.project_scope import project_read_scope
+
 
 import json
-from typing import Any, Literal
+from typing import Any, Literal, Annotated
 from urllib.parse import urlparse
 
-from fastapi import Depends, Query
+from fastapi import Depends, Query, Request
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -86,42 +89,14 @@ async def _audit(
         ),
         {
             'id': _cuid(), 'workspace_id': workspace_id, 'actor_id': actor_id, 'action': action,
-            'entity_id': initiative_id, 'metadata': json.dumps(metadata or {}), 'now': _utcnow(),
+            'entity_id': initiative_id, 'metadata': json.dumps({**(metadata or {}),'source':audit_source.get()}), 'now': _utcnow(),
         },
     )
 
 
-async def _project(db: AsyncSession, project_id: str) -> dict[str, Any] | None:
-    result = await db.execute(
-        text(
-            """SELECT p.*, t.id AS team_id_value, t.name AS team_name, t.identifier AS team_identifier, t.icon AS team_icon,
-                      lead.id AS lead_id_value, lead.name AS lead_name, lead.avatar_url AS lead_avatar_url
-               FROM projects p
-               LEFT JOIN teams t ON t.id = p.team_id
-               LEFT JOIN users lead ON lead.id = p.lead_id
-               WHERE p.id = :project_id AND p.archived_at IS NULL"""
-        ),
-        {'project_id': project_id},
-    )
-    row = result.mappings().first()
-    if not row:
-        return None
-    issues = await db.execute(
-        text(
-            """SELECT issue.id, status.category
-               FROM issues issue JOIN issue_statuses status ON status.id = issue.status_id
-               WHERE issue.project_id = :project_id AND issue.archived_at IS NULL"""
-        ),
-        {'project_id': project_id},
-    )
-    return {
-        'id': row['id'], 'name': row['name'], 'identifier': row['identifier'],
-        'status': row['status'], 'priority': row['priority'], 'health': row['health'],
-        'targetDate': row['target_date'], 'startDate': row['start_date'], 'createdAt': row['created_at'],
-        'team': {'id': row['team_id_value'], 'name': row['team_name'], 'identifier': row['team_identifier'], 'icon': row['team_icon']} if row['team_id_value'] else None,
-        'lead': {'id': row['lead_id_value'], 'name': row['lead_name'], 'avatarUrl': row['lead_avatar_url']} if row['lead_id_value'] else None,
-        'issues': [{'id': issue['id'], 'status': {'category': str(issue['category']).lower()}} for issue in issues.mappings().all()],
-    }
+async def _project(db: AsyncSession, project_id: str, workspace_id: str, user_id: str) -> dict[str, Any] | None:
+    from ..modules.portfolio.projects import project_summaries
+    return (await project_summaries(db,workspace_id,user_id,[project_id])).get(project_id)
 
 
 async def _initiative(db: AsyncSession, initiative_id: str, workspace_id: str, user_id: str) -> dict[str, Any]:
@@ -141,11 +116,11 @@ async def _initiative(db: AsyncSession, initiative_id: str, workspace_id: str, u
         text('SELECT project_id, created_at FROM initiative_projects WHERE initiative_id = :initiative_id ORDER BY created_at'),
         {'initiative_id': initiative_id},
     )
-    project_links = []
-    for link in links.mappings().all():
-        project = await _project(db, link['project_id'])
-        if project:
-            project_links.append({'initiativeId': initiative_id, 'projectId': link['project_id'], 'createdAt': link['created_at'], 'project': project})
+    from ..modules.portfolio.projects import project_summaries
+    link_rows=links.mappings().all()
+    projects=await project_summaries(db,workspace_id,user_id,[link['project_id'] for link in link_rows])
+    project_links=[{'initiativeId':initiative_id,'projectId':link['project_id'],'createdAt':link['created_at'],'project':projects[link['project_id']]}
+        for link in link_rows if link['project_id'] in projects]
     labels = await db.execute(
         text(
             '''SELECT label.id, label.workspace_id, label.name, label.color, label.description, label.created_at, label.updated_at,
@@ -207,10 +182,13 @@ async def _initiative(db: AsyncSession, initiative_id: str, workspace_id: str, u
 
 @router.get('')
 @public_router.get('')
-async def list_initiatives(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
-    await _workspace_access(db, workspaceId, user['id'])
-    result = await db.execute(text('SELECT id FROM initiatives WHERE workspace_id = :workspace_id AND archived_at IS NULL ORDER BY updated_at DESC'), {'workspace_id': workspaceId})
-    return {'data': [await _initiative(db, row['id'], workspaceId, user['id']) for row in result.mappings().all()]}
+async def list_initiatives(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session), *,
+    request: Request = None, limit: Annotated[int, Query(ge=1,le=100)] = 100, cursor: Annotated[str | None, Query(max_length=2000)] = None) -> dict:
+    from ..modules.portfolio.initiatives import initiative_page
+    from ..core.config import Settings
+    await _workspace_access(db,workspaceId,user['id'])
+    settings=request.app.state.settings if request else Settings.from_environment()
+    return await initiative_page(db,workspaceId,user['id'],settings.auth_jwt_secret,limit=limit,cursor=cursor)
 
 
 @router.post('')
@@ -276,7 +254,7 @@ async def archive_initiative(initiative_id: str, workspaceId: str = Query(min_le
 async def link_project(initiative_id: str, payload: ProjectLinkInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await _manager(db, payload.workspaceId, user['id'])
     await _initiative(db, initiative_id, payload.workspaceId, user['id'])
-    project = await db.execute(text('SELECT id, name FROM projects WHERE id = :project_id AND workspace_id = :workspace_id AND archived_at IS NULL'), {'project_id': payload.projectId, 'workspace_id': payload.workspaceId})
+    project = await db.execute(text(f'SELECT p.id,p.name FROM projects p WHERE p.id=:project_id AND {project_read_scope()}'), {'project_id': payload.projectId, 'workspace': payload.workspaceId, 'user': user['id']})
     row = project.mappings().first()
     if not row:
         raise ApiError(404, 'Initiative or project not found.', 'Not Found')
@@ -334,13 +312,22 @@ async def unlink_label(initiative_id: str, label_id: str, workspaceId: str = Que
 
 @router.get('/{initiative_id}/activity')
 @public_router.get('/{initiative_id}/activity')
-async def initiative_activity(initiative_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
-    await _initiative(db, initiative_id, workspaceId, user['id'])
-    result = await db.execute(text('''SELECT audit.*, actor.id AS actor_id_value, actor.name AS actor_name, actor.avatar_url AS actor_avatar_url
-        FROM audit_logs audit LEFT JOIN users actor ON actor.id = audit.actor_id
-        WHERE audit.workspace_id = :workspace_id AND audit.entity_type = 'initiative' AND audit.entity_id = :initiative_id
-        ORDER BY audit.created_at DESC LIMIT 100'''), {'workspace_id': workspaceId, 'initiative_id': initiative_id})
-    return {'data': [{'id': row['id'], 'action': row['action'], 'metadata': row['metadata'] or {}, 'createdAt': row['created_at'], 'actor': {'id': row['actor_id_value'], 'name': row['actor_name'], 'avatarUrl': row['actor_avatar_url']} if row['actor_id_value'] else None} for row in result.mappings().all()]}
+async def initiative_activity(initiative_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session), *,
+    request: Request = None, limit: Annotated[int, Query(ge=1,le=100)] = 50, cursor: Annotated[str | None, Query(max_length=2000)] = None) -> dict:
+    from ..modules.portfolio.history import history_page
+    from ..core.config import Settings
+    settings=request.app.state.settings if request else Settings.from_environment()
+    return await history_page(db,workspaceId,user['id'],settings.auth_jwt_secret,'initiative_activity',initiative_id,limit=limit,cursor=cursor)
+
+
+@router.get('/{initiative_id}/updates')
+@public_router.get('/{initiative_id}/updates')
+async def initiative_updates(initiative_id: str,workspaceId: str = Query(min_length=1),user: Any = Depends(current_user),db: AsyncSession = Depends(get_session), *,
+    request: Request = None, limit: Annotated[int, Query(ge=1,le=100)] = 50, cursor: Annotated[str | None, Query(max_length=2000)] = None) -> dict:
+    from ..modules.portfolio.history import history_page
+    from ..core.config import Settings
+    settings=request.app.state.settings if request else Settings.from_environment()
+    return await history_page(db,workspaceId,user['id'],settings.auth_jwt_secret,'initiative_updates',initiative_id,limit=limit,cursor=cursor)
 
 
 @router.post('/{initiative_id}/updates')

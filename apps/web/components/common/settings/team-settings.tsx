@@ -200,7 +200,8 @@ export default function TeamSettings({ teamId }: { teamId: string }) {
                         icon={<Repeat className="size-4" />}
                         title="Recurring issues"
                         description="Automatically create issues on a schedule"
-                        trailing={<span>Not configured</span>}
+                        chevron
+                        onClick={() => window.location.assign(`/${orgId}/settings/recurring`)}
                      />
                   </SettingsCard>
                </SettingsSection>

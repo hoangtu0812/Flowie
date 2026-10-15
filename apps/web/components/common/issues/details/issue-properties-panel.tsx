@@ -1,4 +1,6 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/issues/messages.vi';
 
 import { CyclePlayIcon } from '@/components/common/cycles/cycle-line';
 import { Button } from '@/components/ui/button';
@@ -64,6 +66,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
  * assignee), cycle, labels, project + milestone, relations and linked PRs.
  */
 export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProps) {
+   const tx = useMessages(messages);
+
    const {
       cycles,
       labels,
@@ -129,7 +133,7 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
    const scheduleLabel =
       issue.startDate || issue.targetDate
          ? `${formatDay(issue.startDate)} → ${formatDay(issue.targetDate)}`
-         : 'Set start and target dates';
+         : tx('Set start and target dates');
 
    const setProject = async (projectId: string | null) => {
       await updateIssueProject(
@@ -150,7 +154,7 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
 
    return (
       <div className="flex flex-col gap-7">
-         <Section title="Properties">
+         <Section title={tx('Properties')}>
             <div className="flex flex-col gap-1.5">
                <div className="flex items-center gap-1.5 -ml-1.5">
                   <StatusSelector status={issue.status} issueId={issue.id} />
@@ -162,7 +166,9 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
                </div>
                <div className="flex items-center gap-2 mt-0.5">
                   <AssigneeUser user={issue.assignee} issueId={issue.id} />
-                  <span className="text-sm">{issue.assignee ? issue.assignee.name : 'Assign'}</span>
+                  <span className="text-sm">
+                     {issue.assignee ? issue.assignee.name : tx('Assign')}
+                  </span>
                </div>
                <button
                   type="button"
@@ -170,7 +176,9 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
                   className="flex items-center gap-2 mt-0.5 -ml-1 px-1 py-0.5 rounded-md text-left hover:bg-accent/50 transition-colors"
                >
                   <CalendarRange className="size-4 text-muted-foreground shrink-0" />
-                  <span className="w-20 shrink-0 text-xs text-muted-foreground">Schedule</span>
+                  <span className="w-20 shrink-0 text-xs text-muted-foreground">
+                     {tx('Schedule')}
+                  </span>
                   <span className="min-w-0 flex-1 truncate text-sm">{scheduleLabel}</span>
                </button>
                <Popover>
@@ -181,7 +189,7 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
                      >
                         <CalendarDays className="size-4 text-muted-foreground shrink-0" />
                         <span className="w-20 shrink-0 text-xs text-muted-foreground">
-                           Due date
+                           {tx('Due date')}
                         </span>
                         <span className="min-w-0 flex-1 truncate text-sm">
                            {formatDay(issue.dueDate)}
@@ -189,7 +197,7 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
                      </button>
                   </PopoverTrigger>
                   <PopoverContent align="start" className="w-64 space-y-2">
-                     <p className="text-sm font-medium">Due date</p>
+                     <p className="text-sm font-medium">{tx('Due date')}</p>
                      <Input
                         type="date"
                         value={issue.dueDate?.slice(0, 10) ?? ''}
@@ -198,7 +206,7 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
                         }
                      />
                      <p className="text-xs text-muted-foreground">
-                        Clear the field to remove the due date.
+                        {tx('Clear the field to remove the due date.')}
                      </p>
                   </PopoverContent>
                </Popover>
@@ -208,14 +216,19 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
                   className="flex items-center gap-2 mt-0.5 -ml-1 px-1 py-0.5 rounded-md text-left hover:bg-accent/50 transition-colors"
                >
                   <Timer className="size-4 text-muted-foreground shrink-0" />
-                  <span className="w-20 shrink-0 text-xs text-muted-foreground">Effort</span>
+                  <span className="w-20 shrink-0 text-xs text-muted-foreground">
+                     {tx('Effort')}
+                  </span>
                   <span className="min-w-0 flex-1 truncate text-sm">
-                     Est {issue.estimatedEffort ?? '—'} · Act {issue.actualEffort ?? '—'} mandays
+                     {tx('Est')} {issue.estimatedEffort ?? '—'} {tx('· Act')}{' '}
+                     {issue.actualEffort ?? '—'} {tx('mandays')}
                   </span>
                </button>
                <div className="flex items-center gap-2 mt-0.5 text-sm">
                   <CalendarPlus className="size-4 text-muted-foreground shrink-0" />
-                  <span className="w-20 shrink-0 text-xs text-muted-foreground">Created</span>
+                  <span className="w-20 shrink-0 text-xs text-muted-foreground">
+                     {tx('Created')}
+                  </span>
                   <span className="min-w-0 flex-1 truncate">{formatDay(issue.createdAt)}</span>
                </div>
                <DropdownMenu>
@@ -225,13 +238,13 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
                         className="flex items-center gap-2 mt-0.5 -ml-1 px-1 py-0.5 rounded-md text-left hover:bg-accent/50 transition-colors"
                      >
                         <CyclePlayIcon className="size-4" />
-                        <span className="text-sm">{cycle?.name ?? 'Add to cycle'}</span>
+                        <span className="text-sm">{cycle?.name ?? tx('Add to cycle')}</span>
                      </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" className="w-56">
-                     <DropdownMenuLabel>Cycle</DropdownMenuLabel>
+                     <DropdownMenuLabel>{tx('Cycle')}</DropdownMenuLabel>
                      <DropdownMenuItem onSelect={() => void setIssueCycle(issue.id, undefined)}>
-                        <span className="text-muted-foreground">No cycle</span>
+                        <span className="text-muted-foreground">{tx('No cycle')}</span>
                         {!issue.cycleId && <Check className="ml-auto size-4" />}
                      </DropdownMenuItem>
                      {availableCycles.map((candidate) => (
@@ -245,7 +258,9 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
                         </DropdownMenuItem>
                      ))}
                      {availableCycles.length === 0 && (
-                        <DropdownMenuItem disabled>No cycles for this team</DropdownMenuItem>
+                        <DropdownMenuItem disabled>
+                           {tx('No cycles for this team')}
+                        </DropdownMenuItem>
                      )}
                   </DropdownMenuContent>
                </DropdownMenu>
@@ -255,11 +270,11 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
          <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
             <DialogContent>
                <DialogHeader>
-                  <DialogTitle>Set issue dates</DialogTitle>
+                  <DialogTitle>{tx('Set issue dates')}</DialogTitle>
                </DialogHeader>
                <div className="grid grid-cols-2 gap-3">
                   <label className="space-y-1.5 text-sm font-medium">
-                     Start date
+                     {tx('Start date')}
                      <Input
                         type="date"
                         value={startDate}
@@ -267,7 +282,7 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
                      />
                   </label>
                   <label className="space-y-1.5 text-sm font-medium">
-                     Target end date
+                     {tx('Target end date')}
                      <Input
                         type="date"
                         value={targetDate}
@@ -281,10 +296,10 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
                      onClick={() => setScheduleOpen(false)}
                      disabled={savingSchedule}
                   >
-                     Cancel
+                     {tx('Cancel')}
                   </Button>
                   <Button onClick={() => void saveSchedule()} disabled={savingSchedule}>
-                     {savingSchedule ? 'Saving…' : 'Save'}
+                     {savingSchedule ? tx('Saving…') : tx('Save')}
                   </Button>
                </DialogFooter>
             </DialogContent>
@@ -293,11 +308,11 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
          <Dialog open={effortOpen} onOpenChange={setEffortOpen}>
             <DialogContent>
                <DialogHeader>
-                  <DialogTitle>Set issue effort</DialogTitle>
+                  <DialogTitle>{tx('Set issue effort')}</DialogTitle>
                </DialogHeader>
                <div className="grid grid-cols-2 gap-3">
                   <label className="space-y-1.5 text-sm font-medium">
-                     Est effort (mandays)
+                     {tx('Est effort (mandays)')}
                      <Input
                         type="number"
                         min="0"
@@ -307,7 +322,7 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
                      />
                   </label>
                   <label className="space-y-1.5 text-sm font-medium">
-                     Act effort (mandays)
+                     {tx('Act effort (mandays)')}
                      <Input
                         type="number"
                         min="0"
@@ -323,16 +338,16 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
                      onClick={() => setEffortOpen(false)}
                      disabled={savingEffort}
                   >
-                     Cancel
+                     {tx('Cancel')}
                   </Button>
                   <Button onClick={() => void saveEffort()} disabled={savingEffort}>
-                     {savingEffort ? 'Saving…' : 'Save'}
+                     {savingEffort ? tx('Saving…') : tx('Save')}
                   </Button>
                </DialogFooter>
             </DialogContent>
          </Dialog>
 
-         <Section title="Labels">
+         <Section title={tx('Labels')}>
             <div className="flex items-center flex-wrap gap-1.5">
                <LabelBadge label={issue.labels} />
                <DropdownMenu>
@@ -341,13 +356,13 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
                         variant="ghost"
                         size="icon"
                         className="size-6 rounded-full border"
-                        aria-label="Edit labels"
+                        aria-label={tx('Edit labels')}
                      >
                         <Plus className="size-3.5" />
                      </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" className="w-56">
-                     <DropdownMenuLabel>Labels</DropdownMenuLabel>
+                     <DropdownMenuLabel>{tx('Labels')}</DropdownMenuLabel>
                      {labels.map((label) => (
                         <DropdownMenuItem
                            key={label.id}
@@ -370,14 +385,16 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
                         </DropdownMenuItem>
                      ))}
                      {labels.length === 0 && (
-                        <DropdownMenuItem disabled>No workspace labels yet</DropdownMenuItem>
+                        <DropdownMenuItem disabled>
+                           {tx('No workspace labels yet')}
+                        </DropdownMenuItem>
                      )}
                   </DropdownMenuContent>
                </DropdownMenu>
             </div>
          </Section>
 
-         <Section title="Project">
+         <Section title={tx('Project')}>
             <DropdownMenu>
                <DropdownMenuTrigger asChild>
                   <button
@@ -392,15 +409,15 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
                      ) : (
                         <>
                            <Box className="size-4 text-muted-foreground shrink-0" />
-                           <span className="text-muted-foreground">Add to project</span>
+                           <span className="text-muted-foreground">{tx('Add to project')}</span>
                         </>
                      )}
                   </button>
                </DropdownMenuTrigger>
                <DropdownMenuContent align="start" className="w-56">
-                  <DropdownMenuLabel>Project</DropdownMenuLabel>
+                  <DropdownMenuLabel>{tx('Project')}</DropdownMenuLabel>
                   <DropdownMenuItem onSelect={() => void setProject(null)}>
-                     <span className="text-muted-foreground">No project</span>
+                     <span className="text-muted-foreground">{tx('No project')}</span>
                      {!issue.project && <Check className="ml-auto size-4 shrink-0" />}
                   </DropdownMenuItem>
                   {projects.map((project) => (
@@ -416,7 +433,9 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
                      </DropdownMenuItem>
                   ))}
                   {projects.length === 0 && (
-                     <DropdownMenuItem disabled>No projects in this workspace</DropdownMenuItem>
+                     <DropdownMenuItem disabled>
+                        {tx('No projects in this workspace')}
+                     </DropdownMenuItem>
                   )}
                </DropdownMenuContent>
             </DropdownMenu>
@@ -429,7 +448,7 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
          </Section>
 
          {detail.blockedByIds && detail.blockedByIds.length > 0 && (
-            <Section title="Blocked by">
+            <Section title={tx('Blocked by')}>
                <div className="flex flex-col">
                   {detail.blockedByIds.map((identifier) => (
                      <div key={identifier} className="flex items-center gap-1.5 min-w-0">
@@ -442,7 +461,7 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
          )}
 
          {detail.relatedIds && detail.relatedIds.length > 0 && (
-            <Section title="Related">
+            <Section title={tx('Related')}>
                <div className="flex flex-col">
                   {detail.relatedIds.map((identifier) => (
                      <IssueRefRow key={identifier} identifier={identifier} />
@@ -452,7 +471,7 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
          )}
 
          {detail.prLinks && detail.prLinks.length > 0 && (
-            <Section title="Diffs">
+            <Section title={tx('Diffs')}>
                <div className="flex flex-col gap-1">
                   {detail.prLinks.map((pr) => (
                      <div key={pr.id} className="flex items-center gap-2 text-sm min-w-0">

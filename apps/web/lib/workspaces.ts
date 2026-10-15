@@ -2,8 +2,8 @@ const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 import { responseData } from './http';
 
 /**
- * Refresh tokens are single-use: `/auth/refresh` revokes the session it was
- * given and issues a new cookie pair. A screen loads several protected
+ * Refresh tokens are single-use: `/auth/refresh` rotates its secret while
+ * retaining the device session ID. A screen loads several protected
  * resources at once, so after the access cookie expires they all see 401 at
  * the same moment — and without this, each would spend the same refresh
  * token. The first call wins, every other one is rejected against the session

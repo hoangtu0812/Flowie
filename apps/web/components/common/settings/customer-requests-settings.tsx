@@ -1,4 +1,5 @@
 'use client';
+import { portfolioFetch } from '@/features/projects/portfolio-fetch';
 
 import { loadCurrentWorkspaceTeams } from '@/components/common/teams/team-types';
 import { authenticatedFetch } from '@/lib/workspaces';
@@ -98,7 +99,7 @@ export default function CustomerRequestsSettings() {
          const query = new URLSearchParams({ workspaceId: id });
          const [requestResponse, projectResponse, issueResponse] = await Promise.all([
             authenticatedFetch(`${api}/customer-requests?${query}`),
-            authenticatedFetch(`${api}/projects?${query}`),
+            portfolioFetch(`${api}/projects?${query}`),
             authenticatedFetch(`${api}/issues?${query}`),
          ]);
          if (!requestResponse.ok || !projectResponse.ok || !issueResponse.ok) {

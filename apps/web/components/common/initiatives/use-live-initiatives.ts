@@ -1,7 +1,11 @@
 'use client';
+import { portfolioFetch } from '@/features/projects/portfolio-fetch';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
+import { useParams } from 'next/navigation';
+import { responseData, responseEnvelope } from '@/lib/http';
+import type { PageMetadata } from '@/features/issues/issue-query';
 
 export type LiveInitiativeProject = {
    id: string;
@@ -15,7 +19,8 @@ export type LiveInitiativeProject = {
    createdAt: string;
    team: { id: string; name: string; identifier: string; icon: string | null } | null;
    lead: { id: string; name: string; avatarUrl: string | null } | null;
-   issues: Array<{ id: string; status: { category: string } }>;
+   issues?: Array<{ id: string; status: { category: string } }>;
+   issueSummary?: { total: number; completed?: number; started?: number };
 };
 
 export type LiveInitiative = {
@@ -60,16 +65,10 @@ export type LiveWorkspaceLabel = {
    name: string;
    color: string;
 };
-export type LiveInitiativeActivity = {
-   id: string;
-   action: string;
-   metadata: Record<string, unknown>;
-   createdAt: string;
-   actor: { id: string; name: string; avatarUrl: string | null } | null;
-};
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 export function useLiveInitiatives() {
+   const { orgId, initiativeId } = useParams<{ orgId: string; initiativeId?: string }>();
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [initiatives, setInitiatives] = useState<LiveInitiative[]>([]);
    const [projects, setProjects] = useState<LiveWorkspaceProject[]>([]);
@@ -78,36 +77,68 @@ export function useLiveInitiatives() {
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState<string>();
    const [refreshKey, setRefreshKey] = useState(0);
+   const [page, setPage] = useState<PageMetadata>();
+   const [loadingMore, setLoadingMore] = useState(false);
+   const [pageError, setPageError] = useState<string>();
+   const generation = useRef(0);
    const reload = useCallback(() => setRefreshKey((value) => value + 1), []);
    useEffect(() => {
       let current = true;
+      const scopeGeneration = ++generation.current;
+      setPage(undefined);
+      setPageError(undefined);
+      setLoadingMore(false);
+      setWorkspaceId(undefined);
+      setInitiatives([]);
+      setProjects([]);
+      setMembers([]);
+      setLabels([]);
       void (async () => {
          setLoading(true);
          setError(undefined);
          try {
-            const currentWorkspaceId = (await loadCurrentWorkspace()).id;
-            const [initiativeResponse, projectResponse, membersResponse, labelsResponse] = await Promise.all([
-               authenticatedFetch(`${api}/initiatives?workspaceId=${currentWorkspaceId}`),
-               authenticatedFetch(`${api}/projects?workspaceId=${currentWorkspaceId}`),
-               authenticatedFetch(`${api}/workspaces/${currentWorkspaceId}/members`),
-               authenticatedFetch(`${api}/labels?workspaceId=${currentWorkspaceId}`),
-            ]);
-            if (!initiativeResponse.ok || !projectResponse.ok || !membersResponse.ok || !labelsResponse.ok)
+            const currentWorkspaceId = (await loadCurrentWorkspace(orgId)).id;
+            const [initiativeResponse, projectResponse, membersResponse, labelsResponse] =
+               await Promise.all([
+                  authenticatedFetch(
+                     `${api}/initiatives?workspaceId=${currentWorkspaceId}&limit=100`
+                  ),
+                  portfolioFetch(`${api}/projects?workspaceId=${currentWorkspaceId}`),
+                  authenticatedFetch(`${api}/workspaces/${currentWorkspaceId}/members`),
+                  authenticatedFetch(`${api}/labels?workspaceId=${currentWorkspaceId}`),
+               ]);
+            if (
+               !initiativeResponse.ok ||
+               !projectResponse.ok ||
+               !membersResponse.ok ||
+               !labelsResponse.ok
+            )
                throw new Error('Could not load initiatives.');
-            if (current) {
-               setWorkspaceId(currentWorkspaceId);
-               setInitiatives(
-                  ((await initiativeResponse.json()) as { data: LiveInitiative[] }).data
-               );
-               setProjects(
-                  ((await projectResponse.json()) as { data: LiveWorkspaceProject[] }).data
-               );
-               setMembers(
-                  ((await membersResponse.json()) as { data: LiveWorkspaceMember[] }).data.filter(
-                     (member) => member.status === 'ACTIVE'
+            const firstPage = await responseEnvelope<LiveInitiative[], PageMetadata>(
+               initiativeResponse
+            );
+            let data = firstPage.data;
+            if (initiativeId) {
+               const detail = await responseData<LiveInitiative>(
+                  await authenticatedFetch(
+                     `${api}/initiatives/${initiativeId}?workspaceId=${currentWorkspaceId}`
                   )
                );
-               setLabels(((await labelsResponse.json()) as { data: LiveWorkspaceLabel[] }).data);
+               data = [detail, ...data.filter((row) => row.id !== detail.id)];
+            }
+            const projectData = ((await projectResponse.json()) as { data: LiveWorkspaceProject[] })
+               .data;
+            const memberData = ((await membersResponse.json()) as { data: LiveWorkspaceMember[] })
+               .data;
+            const labelData = ((await labelsResponse.json()) as { data: LiveWorkspaceLabel[] })
+               .data;
+            if (current) {
+               setWorkspaceId(currentWorkspaceId);
+               setPage(firstPage.meta);
+               setInitiatives(data);
+               setProjects(projectData);
+               setMembers(memberData.filter((member) => member.status === 'ACTIVE'));
+               setLabels(labelData);
             }
          } catch (caught) {
             if (current)
@@ -118,48 +149,50 @@ export function useLiveInitiatives() {
       })();
       return () => {
          current = false;
+         generation.current = scopeGeneration + 1;
       };
-   }, [refreshKey]);
+   }, [orgId, initiativeId, refreshKey]);
    useEffect(() => {
       const onChanged = () => reload();
       window.addEventListener('flowie:initiatives-changed', onChanged);
       return () => window.removeEventListener('flowie:initiatives-changed', onChanged);
    }, [reload]);
-   return { workspaceId, initiatives, projects, members, labels, loading, error, reload };
-}
-
-export function useInitiativeActivity(initiativeId?: string, workspaceId?: string) {
-   const [activities, setActivities] = useState<LiveInitiativeActivity[]>([]);
-   const [loading, setLoading] = useState(false);
-   const [error, setError] = useState<string>();
-   const [refreshKey, setRefreshKey] = useState(0);
-   useEffect(() => {
-      if (!initiativeId || !workspaceId) return;
-      let current = true;
-      setLoading(true);
-      setError(undefined);
-      const query = new URLSearchParams({ workspaceId });
-      void fetch(`${api}/initiatives/${initiativeId}/activity?${query}`, {
-         credentials: 'include',
-      })
-         .then(async (response) => {
-            if (!response.ok) throw new Error('Could not load initiative activity.');
-            const payload = (await response.json()) as { data: LiveInitiativeActivity[] };
-            if (current) setActivities(payload.data);
-         })
-         .catch((caught) => {
-            if (current)
-               setError(
-                  caught instanceof Error ? caught.message : 'Could not load initiative activity.'
-               );
-         })
-         .finally(() => {
-            if (current) setLoading(false);
-         });
-      return () => {
-         current = false;
-      };
-   }, [initiativeId, workspaceId, refreshKey]);
-   const reload = useCallback(() => setRefreshKey((value) => value + 1), []);
-   return { activities, loading, error, reload };
+   const loadMore = async () => {
+      if (!workspaceId || !page?.nextCursor || loadingMore) return;
+      const request = generation.current;
+      setLoadingMore(true);
+      setPageError(undefined);
+      try {
+         const query = new URLSearchParams({ workspaceId, limit: '100', cursor: page.nextCursor });
+         const next = await responseEnvelope<LiveInitiative[], PageMetadata>(
+            await authenticatedFetch(`${api}/initiatives?${query}`)
+         );
+         if (request !== generation.current) return;
+         setInitiatives((previous) => [
+            ...new Map([...previous, ...next.data].map((row) => [row.id, row])).values(),
+         ]);
+         setPage(next.meta);
+      } catch (reason) {
+         if (request === generation.current)
+            setPageError(
+               reason instanceof Error ? reason.message : 'Could not load more initiatives.'
+            );
+      } finally {
+         if (request === generation.current) setLoadingMore(false);
+      }
+   };
+   return {
+      workspaceId,
+      initiatives,
+      projects,
+      members,
+      labels,
+      loading,
+      error,
+      reload,
+      page,
+      loadingMore,
+      pageError,
+      loadMore,
+   };
 }

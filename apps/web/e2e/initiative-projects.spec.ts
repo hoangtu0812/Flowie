@@ -41,8 +41,10 @@ test('initiative Projects supports direct links, navigation, reload and project 
    });
 
    try {
+      await page.waitForLoadState('networkidle');
       await page.goto(initiativeUrl);
       await expect(page.getByRole('button', { name: 'Today', exact: true })).toBeVisible();
+      await page.waitForLoadState('networkidle');
       await page.reload();
       await expect(page.getByRole('button', { name: 'Today', exact: true })).toBeVisible();
       const projectResponse = await context.request.post(`${api}/projects`, {
@@ -67,6 +69,7 @@ test('initiative Projects supports direct links, navigation, reload and project 
          }
       );
       expect(linkResponse.ok()).toBeTruthy();
+      await page.waitForLoadState('networkidle');
       await page.reload();
       const bar = page.getByRole('button', { name: new RegExp(`^${name} · 0% complete ·`) });
       await expect(bar).toBeVisible();
@@ -85,9 +88,11 @@ test('initiative Projects supports direct links, navigation, reload and project 
          `${api}/projects/${projectId}?workspaceId=${fixture.workspace_id}`
       );
       expect((await stored.json()).data.targetDate.slice(0, 10)).toBe(targetDate);
+      await page.waitForLoadState('networkidle');
       await page.reload();
       await expect(bar).toHaveAttribute('aria-label', new RegExp(` - ${targetLabel}$`));
       for (const path of ['projects', 'team/GEN/projects']) {
+         await page.waitForLoadState('networkidle');
          await page.goto(`/${fixture.slug}/${path}?tab=active`);
          await expect(bar).toHaveAttribute('aria-label', new RegExp(` - ${targetLabel}$`));
          await bar.click();
@@ -101,6 +106,7 @@ test('initiative Projects supports direct links, navigation, reload and project 
          await expect(bar).toHaveAttribute('aria-label', new RegExp(` - ${targetLabel}$`));
          await page.getByRole('button', { name: 'Close panel', exact: true }).click();
       }
+      await page.waitForLoadState('networkidle');
       await page.goto(initiativeUrl);
       await expect(bar).toHaveAttribute('aria-label', new RegExp(` - ${targetLabel}$`));
       expect(errors).toEqual([]);

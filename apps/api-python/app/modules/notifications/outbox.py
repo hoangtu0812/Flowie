@@ -1,4 +1,5 @@
 from __future__ import annotations
+from ..operations.heartbeats import progress
 
 import asyncio
 import json
@@ -84,8 +85,12 @@ async def process_one(factory, outbox_id: str | None = None) -> bool:
         if not row:
             return False
     succeeded = False
+    from .access import readable_records
     try:
-        await deliver(row["payload"])
+        payload=dict(row['payload'])
+        async with factory() as db:
+            payload['records']=await readable_records(db,payload.get('records',[]))
+        await deliver(payload)
         succeeded = True
     except Exception:
         # Provider URLs and credentials must never be included in diagnostics.
@@ -119,7 +124,7 @@ async def process_one(factory, outbox_id: str | None = None) -> bool:
 async def outbox_loop(factory, stop: asyncio.Event) -> None:
     while not stop.is_set():
         try:
-            if await process_one(factory):
+            if await progress(factory,'notification-outbox',process_one(factory)):
                 continue
         except Exception:
             logger.warning("Notification outbox is unavailable")

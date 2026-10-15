@@ -12,6 +12,48 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Product acceptance records distinguish verified local features, historical merged/deployed code, the proposed off-site backup configuration and the failed read-only Codex trial. Release checks require the exact new CI/deployment revision, committed migrations and readiness before tagging.
+
+- Browser regressions verify Vietnamese workflow routes and document editing at mobile width without translating saved content. Authenticator state updates with successful security changes, and sign-in regressions wait for workspace hydration before navigating so canceled requests are not hidden.
+
+- The off-site backup proposal includes a private Backblaze B2 destination through S3, a credential template and provider-specific recovery/retention considerations. Account, bucket, credentials, CT107 inventory and an actual off-site restore remain activation prerequisites; no paid service or production timer is enabled by these files.
+
+- English/Vietnamese copy is organized into typed feature catalogs, with account-language Astryx labels and checks that translations preserve interpolation values. Shared formatting keeps calendar dates stable across timezones and distinguishes future/past relative times in Vietnamese.
+
+- Preferences provide timezone/week-start controls used by calendars and workflow reports, plus optional eligible self-assignment in the task/bug create dialog. The dialog now has one owner across the workspace, preventing duplicate focus traps; users can clear the default assignee before saving.
+
+- Account security includes authenticator enrollment, one-time recovery-code display and confirmed disable/replacement controls. Password sign-in and Microsoft callbacks lead to the dedicated MFA verification page before any browser session is issued; mobile layouts keep recovery material readable without persistent browser storage.
+
+- Opt-in authenticator MFA protects password and Microsoft browser sign-ins, with one-use recovery codes, proof-checked enrollment/security changes, replay protection and session invalidation. Apply the account-MFA migration and configure independent `AUTH_MFA_ENCRYPTION_KEYS` outside Git before enrollment; missing keys never permit a password-only fallback for enabled accounts.
+
+- Account security has separate mobile tabs for signed-in devices, personal login/security history and owned integration credentials, with paged results, individual revocation confirmation and recoverable load errors.
+
+- The dashboard provides timezone/date/team/project/status filters, captured daily charts and day drilldown, paged workload/project progress, explicit missing-history coverage and retry recovery. Mobile layouts preserve full duration/sample details and no longer treat the first task page as the complete workspace.
+
+- Workflow reports calculate current scope totals, observed throughput, lead/cycle-time distributions, status age and reopen counts across all matching tasks. Daily WIP shows unknown history separately; weekly workload and project progress use scoped cursor pagination and real captured events, with no reconstructed baseline completions.
+
+- SLA settings provide working-hour and holiday editing, deadline previews, scoped policy history and team compliance reports. Task details show paused/manual/managed clocks, actual cycle history and explicit policy reapply or failed-job retry, with mobile controls and reload recovery.
+
+- SLA policies support versioned business calendars, holidays, paused statuses, warning thresholds and a one-time reassignment after breach. Task clocks retain their accepted policy on reopen, preserve manual deadlines, record actual cycles and stage authorized alerts atomically with durable retry. Apply all business-SLA migrations before API startup; legacy tasks keep untracked deadlines until explicitly enrolled.
+
+- Issue lifecycle history captures real creation/status/team/deadline/archive transitions atomically for all database writers, with explicit observation baselines for existing issues. It provides the event foundation for SLA and flow reports without inventing historical status-entry dates. Apply the lifecycle-history migration before API startup.
+
+- Teams have recurring task/bug schedules with timezone-aware previews, daily/weekly/monthly rules, editable templates, explicit extra runs, pause/resume and paged history. Occurrence creation commits atomically, rechecks the creator's access and pauses after three failures. Delayed workers coalesce missed occurrences; apply the recurring-issues migration and timezone-data dependency before API startup.
+
+- CSV task/bug imports support column mapping, validation previews, per-row errors, explicit confirmation, persistent progress and external-ID duplicate handling. Scoped issue exports honor the applied list filters, and selected documents can be exported as Markdown ZIPs with a manifest and optional bounded stored attachments. Apply the data-exchange migration before API startup; previews expire after 15 minutes and result details are kept for 30 days. Sensitive downloads use private no-store responses.
+
+- Workspace administrators can filter and page accessible audit events by actor, entity, UTC period and Web/AI/system source, and export up to 10,000 events or 10 MB. Unknown historical scopes are excluded; exports omit document bodies and arbitrary metadata. Document creation, editing and archival now record transactional audit events for both Web and AI operations.
+
+- Archived tasks, projects, documents and initiatives have a scoped recovery center with restore previews, dependency checks, conflict detection and audit records. Restoring a project leaves archived tasks available for individual restoration; automatic permanent deletion remains disabled.
+
+- Operators can capture consistent PostgreSQL, MinIO and configuration backups into an encrypted restic repository, verify file manifests, rehearse isolated recovery and inspect backup age. Off-host storage and credentials must be configured before enabling the supplied timers; capture briefly stops application writers and shares a lock with production deployment. Retention defaults to a dry run.
+
+- Issue lists support previewed bulk changes to priority, status, assignee, project, cycle and replacement labels. Explicit all-results selection freezes up to 1000 accessible issues; durable jobs recheck access and versions, expose per-issue results, resume after reload and support cancellation. Apply the bulk-operations migration before API startup.
+
+- Workspace managers can inspect job heartbeats/progress, failed delivery queues and browser-error counts. Browser reporting accepts only bounded category/digest metadata. Apply the operational-observability migration before starting API or worker.
+
+- A product-completeness review and implementation tracker cover access consistency, recoverable workflows, operational readiness and productivity features with separate local and production acceptance gates.
+
 - Browser regressions cover Inbox snooze, account locale and AI budgets across Chromium, Firefox and WebKit. Isolated SMTP/TLS and real MinIO signing acceptance complement UI fixtures; CI provisions its own storage and retains failure traces.
 
 - A modular local Codex runner binds work to an approved project/repository, keeps Flowie tokens out of child processes, renews leases, stops on lease loss and records locally executed test results. Inspect is read-only; publishing requires an explicit local option and existing SCM credentials.
@@ -98,6 +140,20 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Changed
 
+- Account-security/MFA controls and workflow analytics use feature-localized text and account-aware dates. Report week boundaries correctly map Monday, Sunday and Saturday calendar preferences to the reporting convention.
+
+- Archived-record recovery, CSV/ZIP exchange, recurring schedules and business-SLA screens follow the account language, including previews and enum labels. New schedule/calendar forms start with the account timezone; archived records keep readable dates and restore actions on mobile.
+
+- Core task/bug forms, workflow controls, comment actions, document editing/history and navigation follow the account language. User-authored titles, status names, descriptions and Markdown remain unchanged; bug drafts stay isolated when switching the selected issue.
+
+- Account preferences accept a validated timezone, week start and optional self-assignment. Versioned writes preserve fields omitted by older clients, and an explicit account timezone takes precedence over browser timezone during sign-in. Existing preference storage needs no new migration.
+
+- Local Codex acceptance records distinguish a successful model call from a reviewable code change and production acceptance. The observed managed read-only CLI run remains failed, with its test connection revoked; deployment and PR acceptance are still pending.
+
+- Project and initiative lists use cursor pages and batched read models with server-side issue summaries; screens expose loading more records and the scope of local filters. Project/initiative update history is pageable, and temporary portfolio failures offer recovery. Issue summaries and workspace project updates exclude teams outside the reader's access.
+
+- API readiness executes a database query, Redis PING and signed bucket access check; liveness is available separately. Provision the configured storage bucket before deployment. API diagnostics use request references and omit raw request URLs, payloads and exception messages; deployed API and Help expose the workflow commit SHA.
+
 - Comment and activity APIs return bounded cursor pages with batched reactions
   and files. Web loads older pages and long reply threads on demand; concurrent
   page responses preserve newly posted comments and newer edits.
@@ -121,7 +177,35 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 - Issue/comment/document writes detect stale MCP versions and stage durable
   notification delivery, so retries do not duplicate saved mutations.
 
+### Security
+
+- Browser access tokens are bound to revocable database sessions with explicit issuer, audience and purpose. Refresh secrets rotate once while retaining the device identity; logout and individual-device revocation block still-unexpired access tokens, and sockets revalidate within 15 seconds. Apply the account-security-history migration first; valid older refresh cookies can upgrade, while access-only legacy clients must sign in again.
+
+- Account security exposes paged personal login history and owned credential inventory, permits revoking an MCP connection after workspace access is lost, and retires issuance of personal keys unsupported by the current API. Password sign-in is rate-limited by account and request peer; review AUTH_LOGIN_IP_LIMIT for corporate networks. This is the session foundation; MFA enrollment is a separate gate.
+
+- Inbox notification creation, reads, snooze/delivery metadata and queued realtime records recheck the recipient's current access to the referenced entity. Workspace administrators do not gain private project/task access through notification bodies; revoking team membership hides retained records and prevents queued realtime payloads from being published to that recipient.
+
+- Archiving a shared project requires access to every active task affected by its cascade; project-reference validation holds a read lock to coordinate with archival.
+
+- Project lists now filter inaccessible teams before hydration, and initiative links, progress counts and project activity exclude restricted projects. Search and MCP project reads share the same membership predicate while MCP retains its additional token grants.
+
 ### Fixed
+
+- Recurring-run browser acceptance waits for durable job completion before verifying the refreshed history, avoiding false CI failures from a temporarily empty list while retaining the original completion deadline and one-task assertion.
+
+- SLA policy history waits until editing and list refresh complete, preventing a just-saved revision from disappearing behind a stale history view. Browser regressions verify committed revisions and workspace hydration before navigation.
+
+- Authenticator QR codes retain a white quiet zone in dark themes, successful MFA sign-ins update account activity timestamps, and authentication/security error responses are explicitly private and non-cacheable.
+
+- Operations keeps live worker instances and each job's latest state visible after many application restarts, instead of letting older stopped instances fill the result limit. An explicit flag reports an unusually large live result.
+
+- Updating an issue with its existing status preserves its original completed/canceled timestamp.
+
+- Updating an issue validates project, assignee and label references even when its status stays unchanged; relation-only edits advance its version without producing an invalid SQL update.
+
+- Saved Views open with their required project provider, synchronize header/body retry and expose failures separately from missing views. Issue Insights and saved-view totals use the full server-filtered scope rather than the currently loaded page; application error boundaries provide recovery actions.
+
+- Issue status settings now support version-checked administration, prevent deleting statuses in use or the last category status, and preserve customized workflows when issue options reload.
 
 - Initiative Projects tabs open without a client-side exception, including
   direct links and reloads. Shared timelines refresh the owning page after

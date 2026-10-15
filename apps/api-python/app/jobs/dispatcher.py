@@ -1,4 +1,5 @@
 from __future__ import annotations
+from ..modules.operations.heartbeats import progress
 
 import asyncio
 import logging
@@ -54,7 +55,7 @@ async def dispatcher_loop(
 ) -> None:
     while not stop.is_set():
         try:
-            summary = await run(factory)
+            summary = await progress(factory,'team-dispatcher',run(factory))
             if summary["teams"]:
                 logger.info(
                     "Dispatcher run completed: %s team(s), %s assigned, %s nudged.",

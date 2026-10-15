@@ -1,4 +1,6 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/navigation/messages.vi';
 
 import { CyclePlayIcon } from '@/components/common/cycles/cycle-line';
 import { Button } from '@/components/ui/button';
@@ -36,6 +38,8 @@ import { toast } from 'sonner';
  * previous / next navigation across the issue list.
  */
 export default function HeaderNav() {
+   const tx = useMessages(messages);
+
    const { orgId, issueId } = useParams<{ orgId: string; issueId: string }>();
    const { issues, teams, cycles, updateIssueFavorite, updateIssueSubscription } = useIssuesStore();
    const openIssueAction = useIssueActionDialogStore((state) => state.openForIssue);
@@ -91,7 +95,9 @@ export default function HeaderNav() {
                <>
                   <button
                      type="button"
-                     aria-label={issue.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                     aria-label={
+                        issue.isFavorite ? tx('Remove from favorites') : tx('Add to favorites')
+                     }
                      className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
                      onClick={() => void updateIssueFavorite(issue.id, !issue.isFavorite)}
                   >
@@ -106,7 +112,7 @@ export default function HeaderNav() {
                      <DropdownMenuTrigger asChild>
                         <button
                            type="button"
-                           aria-label="Issue actions"
+                           aria-label={tx('Issue actions')}
                            className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
                         >
                            <MoreHorizontal className="size-3.5" />
@@ -114,13 +120,13 @@ export default function HeaderNav() {
                      </DropdownMenuTrigger>
                      <DropdownMenuContent align="start" className="w-56">
                         <DropdownMenuItem onClick={() => openIssueAction(issue.id, 'rename')}>
-                           <PenLine className="size-4" /> Rename...
+                           <PenLine className="size-4" /> {tx('Rename...')}
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => openIssueAction(issue.id, 'due-date')}>
-                           <CalendarClock className="size-4" /> Set due date...
+                           <CalendarClock className="size-4" /> {tx('Set due date...')}
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => openIssueAction(issue.id, 'move')}>
-                           <ArrowRightLeft className="size-4" /> Move to team...
+                           <ArrowRightLeft className="size-4" /> {tx('Move to team...')}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                            onClick={() =>
@@ -129,11 +135,11 @@ export default function HeaderNav() {
                         >
                            {issue.isSubscribed ? (
                               <>
-                                 <BellOff className="size-4" /> Unsubscribe
+                                 <BellOff className="size-4" /> {tx('Unsubscribe')}
                               </>
                            ) : (
                               <>
-                                 <Bell className="size-4" /> Subscribe
+                                 <Bell className="size-4" /> {tx('Subscribe')}
                               </>
                            )}
                         </DropdownMenuItem>
@@ -141,18 +147,18 @@ export default function HeaderNav() {
                            onClick={() => {
                               void navigator.clipboard
                                  .writeText(window.location.href)
-                                 .then(() => toast.success('Issue link copied'))
-                                 .catch(() => toast.error('Could not copy the link.'));
+                                 .then(() => toast.success(tx('Issue link copied')))
+                                 .catch(() => toast.error(tx('Could not copy the link.')));
                            }}
                         >
-                           <Link2 className="size-4" /> Copy link
+                           <Link2 className="size-4" /> {tx('Copy link')}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                            variant="destructive"
                            onClick={() => openIssueAction(issue.id, 'archive')}
                         >
-                           <Trash2 className="size-4" /> Delete...
+                           <Trash2 className="size-4" /> {tx('Delete...')}
                         </DropdownMenuItem>
                      </DropdownMenuContent>
                   </DropdownMenu>
@@ -170,14 +176,14 @@ export default function HeaderNav() {
                variant="ghost"
                size="icon"
                className="size-6"
-               aria-label="Previous issue"
+               aria-label={tx('Previous issue')}
                disabled={!previousIssue}
                asChild={!!previousIssue}
             >
                {previousIssue ? (
                   <Link
                      href={`/${orgId}/issue/${previousIssue.identifier}`}
-                     aria-label="Previous issue"
+                     aria-label={tx('Previous issue')}
                   >
                      <ChevronUp className="size-4" />
                   </Link>
@@ -189,12 +195,15 @@ export default function HeaderNav() {
                variant="ghost"
                size="icon"
                className="size-6"
-               aria-label="Next issue"
+               aria-label={tx('Next issue')}
                disabled={!nextIssue}
                asChild={!!nextIssue}
             >
                {nextIssue ? (
-                  <Link href={`/${orgId}/issue/${nextIssue.identifier}`} aria-label="Next issue">
+                  <Link
+                     href={`/${orgId}/issue/${nextIssue.identifier}`}
+                     aria-label={tx('Next issue')}
+                  >
                      <ChevronDown className="size-4" />
                   </Link>
                ) : (

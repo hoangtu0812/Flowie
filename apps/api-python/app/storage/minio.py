@@ -20,14 +20,18 @@ class MinioStorage:
         self.region = settings.s3_region
         self._bucket_ready = False
 
+    async def ready(self) -> bool:
+        response = await self._request('HEAD', f'/{self._escape_key(self.bucket)}')
+        return response.status_code == 200
+
     async def put(self, key: str, body: bytes, content_type: str) -> None:
         await self._ensure_bucket()
         response = await self._request('PUT', f'/{self.bucket}/{self._escape_key(key)}', body, content_type)
         if not response.is_success:
             raise ApiError(502, 'Could not store attachment.', 'Bad Gateway')
 
-    async def get(self, key: str) -> bytes:
-        response = await self._request('GET', f'/{self.bucket}/{self._escape_key(key)}')
+    async def get(self, key: str, *, maximum_bytes: int | None = None) -> bytes:
+        response = await self._request('GET', f'/{self.bucket}/{self._escape_key(key)}', **({'maximum_bytes':maximum_bytes} if maximum_bytes is not None else {}))
         if not response.is_success:
             raise ApiError(502, 'Could not read attachment.', 'Bad Gateway')
         return response.content
@@ -40,7 +44,7 @@ class MinioStorage:
             raise ApiError(502, 'Could not prepare attachment storage.', 'Bad Gateway')
         self._bucket_ready = True
 
-    async def _request(self, method: str, path: str, body: bytes = b'', content_type: str | None = None) -> httpx.Response:
+    async def _request(self, method: str, path: str, body: bytes = b'', content_type: str | None = None, *, maximum_bytes: int | None = None) -> httpx.Response:
         now = datetime.now(timezone.utc)
         amz_date = now.strftime('%Y%m%dT%H%M%SZ')
         day = now.strftime('%Y%m%d')
@@ -60,6 +64,14 @@ class MinioStorage:
         if content_type:
             headers['content-type'] = content_type
         async with httpx.AsyncClient(timeout=30) as client:
+            if maximum_bytes is not None:
+                async with client.stream(method,f'{self.endpoint.scheme}://{self.endpoint.netloc}{path}',content=body or None,headers=headers) as response:
+                    content=bytearray()
+                    async for chunk in response.aiter_bytes():
+                        if len(content)+len(chunk)>maximum_bytes:
+                            raise ApiError(400,'Attachment exceeds the export size limit.','Bad Request')
+                        content.extend(chunk)
+                    return httpx.Response(response.status_code,content=bytes(content),headers=response.headers)
             return await client.request(method, f'{self.endpoint.scheme}://{self.endpoint.netloc}{path}', content=body or None, headers=headers)
 
     def _signing_key(self, day: str) -> bytes:

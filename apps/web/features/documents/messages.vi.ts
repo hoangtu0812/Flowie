@@ -1,0 +1,51 @@
+export const messages = {
+   'Revision history': 'Lịch sử phiên bản',
+   'Up to 100 recent revisions. Restoring creates a new revision.':
+      'Tối đa 100 phiên bản gần đây. Khôi phục sẽ tạo một phiên bản mới.',
+   'Loading revisions…': 'Đang tải phiên bản…',
+   'Refresh history': 'Tải lại lịch sử',
+   'v': 'v',
+   'Title:': 'Tiêu đề:',
+   'The diff is truncated; inspect full revision content before restoring.':
+      'Bản so sánh đã rút gọn; hãy xem đầy đủ nội dung phiên bản trước khi khôi phục.',
+   'Restore selected revision': 'Khôi phục phiên bản đã chọn',
+   'Replace the current title and content with v':
+      'Thay tiêu đề và nội dung hiện tại bằng phiên bản v',
+   'Confirm restore': 'Xác nhận khôi phục',
+   'The document changed since comparison. Compare again before restoring.':
+      'Tài liệu đã thay đổi sau khi so sánh. Hãy so sánh lại trước khi khôi phục.',
+   'Cancel restore': 'Hủy khôi phục',
+   'Loading document…': 'Đang tải tài liệu…',
+   'Edit Markdown document': 'Sửa tài liệu Markdown',
+   'Edit': 'Sửa',
+   'Done': 'Xong',
+   'Hide history': 'Ẩn lịch sử',
+   'Retry save': 'Thử lưu lại',
+   'Close and keep local draft': 'Đóng và giữ bản nháp trên máy',
+   'Close': 'Đóng',
+   'Document content': 'Nội dung tài liệu',
+   'An unsaved local draft was recovered.': 'Đã khôi phục bản nháp chưa lưu trên máy.',
+   'Your draft cannot overwrite a newer revision. Compare the latest version first.':
+      'Bản nháp không thể ghi đè phiên bản mới hơn. Hãy so sánh bản mới nhất trước.',
+   'Compare latest version': 'So sánh phiên bản mới nhất',
+   'Latest version: v': 'Phiên bản mới nhất: v',
+   'The retained draft remains in the editor. Review both before choosing.':
+      'Bản nháp vẫn được giữ trong trình soạn thảo. Hãy xem cả hai trước khi chọn.',
+   'Use latest version': 'Dùng phiên bản mới nhất',
+   'Save retained draft over reviewed version': 'Lưu bản nháp lên phiên bản đã xem xét',
+   'Document title': 'Tiêu đề tài liệu',
+   'Markdown content': 'Nội dung Markdown',
+   'Preview': 'Xem trước',
+   'Compare v{value0}': 'So sánh v{value0}',
+   'Saving…': 'Đang lưu…',
+   'Save failed — your draft is retained.': 'Lưu thất bại — bản nháp của bạn được giữ lại.',
+   'Unsaved changes…': 'Có thay đổi chưa lưu…',
+   'All changes saved.': 'Đã lưu mọi thay đổi.',
+   'Markdown document': 'Tài liệu Markdown',
+   'Browser storage is unavailable. Keep this editor open and copy your draft before leaving.':
+      'Bộ nhớ trình duyệt không khả dụng. Hãy giữ trình soạn thảo mở và sao chép bản nháp trước khi rời trang.',
+   'Could not load diff.': 'Không thể tải bản so sánh.',
+   'No content changes.': 'Không có thay đổi nội dung.',
+   'Could not restore revision.': 'Không thể khôi phục phiên bản.',
+   'Could not load latest version.': 'Không thể tải phiên bản mới nhất.',
+} as const;

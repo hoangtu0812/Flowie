@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ..modules.access.project_scope import project_read_scope
+
 from datetime import timedelta
 
 from ..modules.work_items.issue_relations import _relation_kind as _relation_kind
@@ -156,6 +158,9 @@ async def list_issues(
     projectId: str | None = None, assigneeId: str | None = None, creatorId: str | None = None,
     cycleId: str | None = None, query: Annotated[str | None, Query(max_length=200)] = None,
     filters: Annotated[str | None, Query(max_length=12000)] = None, includeSubIssues: bool = True,
+    insights: bool = False,
+    sliceBy: Literal['status','priority','assignee','project'] = 'status',
+    segmentBy: Literal['status','priority','assignee','project'] = 'priority',
 ) -> dict:
     from ..modules.work_items.issue_search import search_page
     from ..core.config import Settings
@@ -163,11 +168,15 @@ async def list_issues(
     if teamId:
         await _team_access(db, workspaceId, teamId, user['id'])
     settings = request.app.state.settings if request else Settings.from_environment()
-    return await search_page(db, workspaceId, user['id'], settings.auth_jwt_secret, {
+    options = {
         'teamId': teamId, 'categories': categories, 'scope': scope, 'limit': limit, 'cursor': cursor,
         'projectId': projectId, 'assigneeId': assigneeId, 'creatorId': creatorId, 'cycleId': cycleId,
         'query': query, 'filters': filters, 'includeSubIssues': includeSubIssues,
-    })
+    }
+    if insights:
+        from ..modules.work_items.issue_insights import issue_insights
+        return {'data':await issue_insights(db,workspaceId,user['id'],options,sliceBy,segmentBy)}
+    return await search_page(db, workspaceId, user['id'], settings.auth_jwt_secret, options)
 
 
 @public_router.get('/lookup/{reference}')
@@ -194,17 +203,22 @@ async def issue_options(
     await _ensure_circle_issue_statuses(db, workspaceId)
     await db.commit()
     team_filter = 'AND (team_id IS NULL OR team_id = :team_id)' if teamId else ''
-    params = {'workspace_id': workspaceId, 'team_id': teamId}
+    params = {'workspace_id': workspaceId, 'team_id': teamId, 'user_id': user['id']}
     statuses, projects, members, labels, cycles = await db.execute(
-        text(f'''SELECT id, name, category, color, position FROM issue_statuses WHERE workspace_id = :workspace_id {team_filter} ORDER BY position, name'''), params
+        text(f'''SELECT id, name, category, color, position FROM issue_statuses WHERE workspace_id = :workspace_id {team_filter}
+            AND (team_id IS NULL OR EXISTS (SELECT 1 FROM teams scope_t JOIN team_members scope_tm ON scope_tm.team_id=scope_t.id
+            WHERE scope_t.id=issue_statuses.team_id AND scope_t.workspace_id=:workspace_id AND scope_t.archived_at IS NULL AND scope_tm.user_id=:user_id)) ORDER BY position, name'''), params
     ), await db.execute(
-        text(f'''SELECT id, name, identifier, status, priority, health, start_date, target_date, lead_id, team_id FROM projects WHERE workspace_id = :workspace_id AND archived_at IS NULL {team_filter} ORDER BY name'''), params
+        text(f'''SELECT p.id,p.name,p.identifier,p.status,p.priority,p.health,p.start_date,p.target_date,p.lead_id,p.team_id
+            FROM projects p WHERE {project_read_scope(workspace='workspace_id', user='user_id')} {"AND (p.team_id IS NULL OR p.team_id=:team_id)" if teamId else ""} ORDER BY p.name'''), params
     ), await db.execute(
         text('''SELECT u.id, u.name, u.email, u.avatar_url, u.last_seen_at FROM workspace_members wm JOIN users u ON u.id = wm.user_id WHERE wm.workspace_id = :workspace_id AND wm.status = 'ACTIVE' ORDER BY u.name'''), {'workspace_id': workspaceId}
     ), await db.execute(
         text('SELECT id, name, color FROM labels WHERE workspace_id = :workspace_id ORDER BY name'), {'workspace_id': workspaceId}
     ), await db.execute(
-        text('''SELECT id, team_id, name, status, start_date, end_date FROM cycles WHERE workspace_id = :workspace_id ''' + ('AND team_id = :team_id ' if teamId else '') + 'ORDER BY start_date DESC NULLS LAST, created_at DESC'), params
+        text('''SELECT id, team_id, name, status, start_date, end_date FROM cycles WHERE workspace_id = :workspace_id
+            AND EXISTS (SELECT 1 FROM teams scope_t JOIN team_members scope_tm ON scope_tm.team_id=scope_t.id
+            WHERE scope_t.id=cycles.team_id AND scope_t.workspace_id=:workspace_id AND scope_t.archived_at IS NULL AND scope_tm.user_id=:user_id) ''' + ('AND team_id = :team_id ' if teamId else '') + 'ORDER BY start_date DESC NULLS LAST, created_at DESC'), params
     )
     releases = await db.execute(
         text(
@@ -536,6 +550,11 @@ async def move_issue(
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
     issue = await _issue_row(db, issue_id, payload.workspaceId, user['id'])
+    from ..modules.sla.synchronization import locked_issue, sync_issue
+    from ..modules.work_items.lifecycle import actor_context
+    await locked_issue(db, issue_id)
+    await actor_context(db, user['id'])
+    issue = await _issue_row(db, issue_id, payload.workspaceId, user['id'])
     if issue['teamId'] == payload.teamId:
         return {'data': issue}
     await _team_access(db, payload.workspaceId, payload.teamId, user['id'])
@@ -604,6 +623,7 @@ async def move_issue(
         'toTeamId': team['id'],
         'identifier': f"{team['identifier']}-{team['issue_sequence']}",
     })
+    await sync_issue(db, issue_id)
     await db.commit()
     return {'data': await _issue_row(db, issue_id, payload.workspaceId, user['id'])}
 
@@ -616,6 +636,11 @@ async def classify_issue(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
+    issue = await _issue_row(db, issue_id, payload.workspaceId, user['id'])
+    from ..modules.sla.synchronization import locked_issue, sync_issue
+    from ..modules.work_items.lifecycle import actor_context
+    await locked_issue(db, issue_id)
+    await actor_context(db, user['id'])
     issue = await _issue_row(db, issue_id, payload.workspaceId, user['id'])
     duplicate_of_id: str | None = None
     duplicate_identifier: str | None = None
@@ -671,6 +696,7 @@ async def classify_issue(
         'duplicateOfId': duplicate_of_id,
         'duplicateIdentifier': duplicate_identifier,
     })
+    await sync_issue(db, issue_id)
     await db.commit()
     return {'data': await _issue_row(db, issue_id, payload.workspaceId, user['id'])}
 
@@ -683,6 +709,11 @@ async def convert_issue_to_comment(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
+    source = await _issue_row(db, issue_id, payload.workspaceId, user['id'])
+    from ..modules.sla.synchronization import locked_issue, sync_issue
+    from ..modules.work_items.lifecycle import actor_context
+    await locked_issue(db, issue_id)
+    await actor_context(db, user['id'])
     source = await _issue_row(db, issue_id, payload.workspaceId, user['id'])
     target_id = await db.execute(
         text('''SELECT id FROM issues WHERE workspace_id = :workspace_id AND identifier = :identifier
@@ -712,6 +743,7 @@ async def convert_issue_to_comment(
         'commentId': comment_id, 'targetIssueId': target['id'], 'targetIdentifier': target['identifier'],
     })
     await db.execute(text('UPDATE issues SET archived_at = :now, updated_at = :now WHERE id = :issue_id'), {'issue_id': source['id'], 'now': now})
+    await sync_issue(db, issue_id)
     await db.commit()
     return {'data': {
         'comment': {'id': comment_id, 'issueId': target['id'], 'authorId': user['id'], 'content': content, 'body': body, 'createdAt': now, 'updatedAt': now, 'deletedAt': None, 'author': {'id': actor_row['id'], 'name': actor_row['name'], 'avatarUrl': actor_row['avatar_url']}},
@@ -808,9 +840,15 @@ async def archive_issue(
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
     await _issue_row(db, issue_id, workspaceId, user['id'])
+    from ..modules.sla.synchronization import locked_issue, sync_issue
+    from ..modules.work_items.lifecycle import actor_context
+    await locked_issue(db, issue_id)
+    await actor_context(db, user['id'])
+    await _issue_row(db, issue_id, workspaceId, user['id'])
     now = _utcnow()
     await db.execute(text('UPDATE issues SET archived_at = :now, updated_at = :now WHERE id = :issue_id AND workspace_id = :workspace_id'), {'issue_id': issue_id, 'workspace_id': workspaceId, 'now': now})
     await _write_activity(db, workspaceId, issue_id, user['id'], 'issue.archived', {})
+    await sync_issue(db, issue_id)
     await db.commit()
     return {'data': {'id': issue_id, 'archivedAt': now}}
 

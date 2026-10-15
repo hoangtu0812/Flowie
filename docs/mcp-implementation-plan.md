@@ -1,8 +1,10 @@
 # Flowie — Kế hoạch triển khai MCP và tích hợp AI xử lý công việc
 
+> Cập nhật trạng thái 2026-10-15: code của kế hoạch này đã merge và workflow CT107 đã thành công. Các checkpoint và bảng IN_REVIEW bên dưới giữ lịch sử phát triển; xem [bằng chứng hiện hành](release-evidence-2026-10-15.md). Nghiệm thu AI thật, mailbox và off-host backup vẫn được theo dõi riêng, không tự chuyển DONE.
+
 - Ngày lập: 2026-10-14, múi giờ Asia/Saigon (+07).
-- Trạng thái: đã triển khai mã nguồn trên nhánh `codex/mcp-integration`; đang nghiệm thu tích hợp và chưa triển khai CT107.
-- Người dùng đã cho phép đẩy nhánh tính năng lên `https://github.com/hoangtu0812/Flowie.git`; commit `2609379` đã được đẩy và [CI](https://github.com/hoangtu0812/Flowie/actions/runs/38522306016) hoàn tất thành công. Merge vào `main` và rollout CT107 vẫn thuộc cổng nghiệm thu production.
+- Trạng thái code: đã merge PR 1 và triển khai qua workflow `38524564916`; nghiệm thu client/AI thật còn điều kiện ngoài hệ thống.
+- Người dùng đã cho phép đẩy nhánh tính năng lên `https://github.com/hoangtu0812/Flowie.git`; commit `2609379` đã được đẩy và [CI](https://github.com/hoangtu0812/Flowie/actions/runs/38522306016) hoàn tất thành công. Sau checkpoint này, PR 1 đã merge và workflow production thành công; không dùng CI nhánh cũ làm bằng chứng cho các thay đổi đợt mới.
 - Client mục tiêu đã chốt: Codex/Cursor/Claude chạy trên máy nội bộ, dùng token giới hạn quyền. SDK tham chiếu đã kiểm thử; cấu hình mẫu không thay thế nghiệm thu từng client thực tế.
 - Mục tiêu quản lý: theo dõi phạm vi, phụ thuộc, tiến độ, tiêu chí nghiệm thu và bằng chứng bàn giao.
 - Phạm vi tài liệu: MCP và các cải tiến trực tiếp phục vụ AI kết nối Flowie. Không thay thế kế hoạch của các phân hệ khác.
@@ -31,9 +33,9 @@ Phần còn lại để hoàn tất toàn bộ kế hoạch:
 
 1. MCP-06: OAuth hoãn ngoài phạm vi client nội bộ đã chọn; chỉ triển khai khi bổ sung client cần flow OAuth. Bản hiện tại dùng scoped-token authentication.
 2. MCP-17/19: kiểm thử client desktop thực tế và cấu hình tương ứng; reference SDK và UI cục bộ đã kiểm tra.
-3. MCP-18: hạn mức tổng theo workspace/tool và exporter/dashboard vận hành; bản hiện tại có quota/rate theo connection, logs/audit và thống kê run.
-4. MCP-20: CI GitHub đã đạt trên commit triển khai; còn deployment, migration/readiness và smoke test đúng commit trên CT107.
-5. MCP-22/23: chọn coding agent, repository và quyền SCM, chạy một bug thật đến branch/test/PR; độc lập xác minh CI. Bản hiện tại cung cấp cấu hình và công cụ phối hợp với agent bên ngoài.
+3. MCP-18: quota tổng workspace/tool và dashboard đã bổ sung trong PR 3, đã merge. Operations/audit nâng cao của đợt mới vẫn ở nhánh product-completeness, chưa deploy.
+4. MCP-20: code đã merge và workflow production đúng merge SHA success. Nghiệm thu client thực tế và các điều kiện ngoài hệ thống vẫn cần bằng chứng riêng.
+5. MCP-22/23: đã chọn Codex, repository và bug GEN-9 synthetic để chạy CLI thật. Run FAILED vì CLI hiệu lực read-only; không có diff/commit/PR. Chờ môi trường cho phép ghi và nghiệm thu CT107; xem tracker đợt product-completeness.
 6. MCP-24/25: kiểm thử restart/hủy/retry hết lượt trong triển khai thực tế; đo baseline vận hành trước/sau tối ưu và chi phí nếu provider hỗ trợ.
 
 ## 1. Mục tiêu và kết quả mong đợi

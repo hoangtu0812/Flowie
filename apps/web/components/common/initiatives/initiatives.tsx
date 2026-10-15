@@ -2,6 +2,8 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { LoadingState } from '@/components/common/loading-state';
+import { RecoveryScreen } from '@/features/shared/recovery-screen';
+import { ResourcePagination } from '@/features/shared/resource-pagination';
 import { Button } from '@/components/ui/button';
 import {
    Command,
@@ -620,6 +622,10 @@ export default function Initiatives() {
       loading,
       error,
       reload,
+      page,
+      loadingMore,
+      pageError,
+      loadMore,
    } = useLiveInitiatives();
    const allInitiatives = useMemo(() => adaptInitiatives(liveInitiatives), [liveInitiatives]);
 
@@ -716,9 +722,18 @@ export default function Initiatives() {
                )}
             </div>
 
+            <ResourcePagination
+               count={liveInitiatives.length}
+               page={page}
+               loading={loadingMore}
+               error={pageError}
+               loadMore={loadMore}
+               reload={reload}
+               label="initiatives (filters apply to loaded rows)"
+            />
             {loading && <LoadingState label="Loading initiatives…" className="min-h-48" />}
             {error && (
-               <p className="px-6 py-10 text-sm text-destructive">Could not load initiatives.</p>
+               <RecoveryScreen title="Could not load initiatives" message={error} retry={reload} />
             )}
             {!loading && !error && groups
                ? groups.map((group) => (

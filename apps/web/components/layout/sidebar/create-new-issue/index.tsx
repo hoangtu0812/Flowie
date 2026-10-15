@@ -1,6 +1,10 @@
+'use client';
+
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/issues/messages.vi';
 import { BugFieldsForm, emptyBug, type BugFields } from '@/features/issues/bug-fields';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader } from '@/components/ui/dialog';
 import {
    DropdownMenu,
    DropdownMenuContent,
@@ -11,8 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { RiEditLine } from '@remixicon/react';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { priorities } from '@/mock-data/priorities';
 import { status, Status } from '@/mock-data/status';
 import { useIssuesStore } from '@/store/issues-store';
@@ -31,6 +34,9 @@ import { Priority } from '@/mock-data/priorities';
 import { User } from '@/mock-data/users';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import { loadJoinedWorkspaceTeams, WorkspaceTeam } from '@/components/common/teams/team-types';
+import { useUiPreferencesStore } from '@/store/ui-preferences-store';
+import { loadCurrentUser } from '@/features/identity/current-user';
+import { initialAssignee, issueMember } from '@/features/issues/create-defaults';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -52,6 +58,7 @@ type CreateIssueForm = {
 };
 
 type IssueContext = {
+   currentUserId: string;
    workspaceId: string;
    team: WorkspaceTeam;
    /** Joined teams the issue can be filed under. */
@@ -70,6 +77,10 @@ const priorityForApi: Record<string, 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'URGEN
 const normalise = (value: string) => value.trim().toLowerCase();
 
 export function CreateNewIssue() {
+   const tx = useMessages(messages);
+
+   const autoAssignSelf = useUiPreferencesStore((state) => state.autoAssignSelf);
+   const initializedAssignee = useRef(false);
    const [createMore, setCreateMore] = useState<boolean>(false);
    const { isOpen, defaultStatus, openModal, closeModal } = useCreateIssueStore();
    const { issues, retryIssues } = useIssuesStore();
@@ -99,38 +110,63 @@ export function CreateNewIssue() {
    useEffect(() => {
       setAddIssueForm(createDefaultData());
    }, [createDefaultData]);
+   useEffect(() => {
+      if (!isOpen) initializedAssignee.current = false;
+   }, [isOpen]);
 
-   const loadOptions = useCallback(async (workspaceId: string, teamId: string) => {
-      const query = new URLSearchParams({ workspaceId, teamId });
-      const response = await authenticatedFetch(`${api}/issues/options?${query}`);
-      if (!response.ok) throw new Error('Could not load issue options.');
-      return ((await response.json()) as { data: NativeIssueOptions }).data;
-   }, []);
+   const loadOptions = useCallback(
+      async (workspaceId: string, teamId: string) => {
+         const query = new URLSearchParams({ workspaceId, teamId });
+         const response = await authenticatedFetch(`${api}/issues/options?${query}`);
+         if (!response.ok) throw new Error(tx('Could not load issue options.'));
+         return ((await response.json()) as { data: NativeIssueOptions }).data;
+      },
+      [tx]
+   );
 
    const loadContext = useCallback(async () => {
       if (!isOpen) return;
       try {
-         const [workspace, joinedTeams] = await Promise.all([
+         const [workspace, joinedTeams, actor] = await Promise.all([
             loadCurrentWorkspace(),
             loadJoinedWorkspaceTeams(),
+            loadCurrentUser(),
          ]);
          const team =
             joinedTeams.teams.find(
                (candidate) =>
                   candidate.id === teamIdentifier || candidate.identifier === teamIdentifier
             ) ?? joinedTeams.teams[0];
-         if (!team) throw new Error('Join a team before creating an issue.');
+         if (!team) throw new Error(tx('Join a team before creating an issue.'));
+         const options = await loadOptions(workspace.id, team.id);
          setContext({
+            currentUserId: actor.id,
             workspaceId: workspace.id,
             team,
             teams: joinedTeams.teams,
-            options: await loadOptions(workspace.id, team.id),
+            options,
          });
+         if (!initializedAssignee.current) {
+            initializedAssignee.current = true;
+            setAddIssueForm((form) =>
+               form.title || form.description || form.assignee
+                  ? form
+                  : {
+                       ...form,
+                       assignee: initialAssignee(
+                          options.members,
+                          actor.id,
+                          autoAssignSelf,
+                          team.identifier
+                       ),
+                    }
+            );
+         }
       } catch (error) {
          setContext(undefined);
-         toast.error(error instanceof Error ? error.message : 'Workspace is not ready yet.');
+         toast.error(error instanceof Error ? error.message : tx('Workspace is not ready yet.'));
       }
-   }, [isOpen, loadOptions, teamIdentifier]);
+   }, [isOpen, loadOptions, teamIdentifier, autoAssignSelf, tx]);
 
    /** Members, projects and labels are team-scoped, so a switch reloads them. */
    const selectTeam = useCallback(
@@ -141,15 +177,20 @@ export function CreateNewIssue() {
             setContext({ ...context, team, options });
             setAddIssueForm((form) => ({
                ...form,
-               assignee: null,
+               assignee: initialAssignee(
+                  options.members,
+                  context.currentUserId,
+                  autoAssignSelf,
+                  team.identifier
+               ),
                project: undefined,
                labels: [],
             }));
          } catch (error) {
-            toast.error(error instanceof Error ? error.message : 'Could not switch team.');
+            toast.error(error instanceof Error ? error.message : tx('Could not switch team.'));
          }
       },
-      [context, loadOptions]
+      [context, loadOptions, autoAssignSelf, tx]
    );
 
    useEffect(() => {
@@ -158,17 +199,9 @@ export function CreateNewIssue() {
 
    const liveUsers = useMemo<User[]>(
       () =>
-         (context?.options.members ?? []).map((member) => ({
-            id: member.id,
-            name: member.name,
-            avatarUrl: member.avatarUrl ?? '',
-            email: member.email,
-            status: 'offline',
-            role: 'Member',
-            joinedDate: '',
-            teamIds: context ? [context.team.identifier] : [],
-            timezone: 'UTC',
-         })),
+         (context?.options.members ?? []).map((member) =>
+            issueMember(member, context!.team.identifier)
+         ),
       [context]
    );
    const liveProjects = useMemo<ProjectOption[]>(
@@ -199,11 +232,11 @@ export function CreateNewIssue() {
 
    const createIssue = async () => {
       if (!addIssueForm.title) {
-         toast.error('Title is required');
+         toast.error(tx('Title is required'));
          return;
       }
       if (!context) {
-         toast.error('Workspace is not ready yet.');
+         toast.error(tx('Workspace is not ready yet.'));
          return;
       }
       if (creating) return;
@@ -211,7 +244,7 @@ export function CreateNewIssue() {
          (candidate) => normalise(candidate.name) === normalise(addIssueForm.status.name)
       )?.id;
       if (!statusId) {
-         toast.error('A valid status is required.');
+         toast.error(tx('A valid status is required.'));
          return;
       }
       setCreating(true);
@@ -236,15 +269,25 @@ export function CreateNewIssue() {
             const payload = (await response.json().catch(() => null)) as {
                message?: string;
             } | null;
-            throw new Error(payload?.message ?? 'Could not create issue.');
+            throw new Error(payload?.message ?? tx('Could not create issue.'));
          }
          await retryIssues();
-         toast.success('Issue created');
+         toast.success(tx('Issue created'));
          if (!createMore) closeModal();
-         setAddIssueForm(createDefaultData());
+         setAddIssueForm({
+            ...createDefaultData(),
+            assignee: createMore
+               ? initialAssignee(
+                    context.options.members,
+                    context.currentUserId,
+                    autoAssignSelf,
+                    context.team.identifier
+                 )
+               : null,
+         });
          setBug(emptyBug);
       } catch (error) {
-         toast.error(error instanceof Error ? error.message : 'Could not create issue.');
+         toast.error(error instanceof Error ? error.message : tx('Could not create issue.'));
       } finally {
          setCreating(false);
       }
@@ -258,16 +301,6 @@ export function CreateNewIssue() {
             else if (!creating) closeModal();
          }}
       >
-         <DialogTrigger asChild>
-            <Button
-               aria-label="Create issue"
-               className="size-8 shrink-0"
-               variant="secondary"
-               size="icon"
-            >
-               <RiEditLine />
-            </Button>
-         </DialogTrigger>
          <DialogContent className="w-full sm:max-w-3xl p-0 shadow-xl max-h-svh overflow-y-auto">
             <DialogHeader>
                <DialogTitle>
@@ -277,7 +310,7 @@ export function CreateNewIssue() {
                            <Button size="sm" variant="outline" className="gap-1.5">
                               <span>{context?.team.icon ?? '👥'}</span>
                               <span className="font-medium">
-                                 {context?.team.identifier ?? 'Loading…'}
+                                 {context?.team.identifier ?? tx('Loading…')}
                               </span>
                            </Button>
                         </DropdownMenuTrigger>
@@ -301,8 +334,8 @@ export function CreateNewIssue() {
                <BugFieldsForm value={bug} onChange={setBug} disabled={creating} />
                <Input
                   className="border-none w-full shadow-none outline-none text-2xl font-medium px-0 h-auto focus-visible:ring-0 overflow-hidden text-ellipsis whitespace-normal break-words"
-                  aria-label="Issue title"
-                  placeholder="Issue title"
+                  aria-label={tx('Issue title')}
+                  placeholder={tx('Issue title')}
                   value={addIssueForm.title}
                   disabled={creating}
                   onChange={(e) => setAddIssueForm({ ...addIssueForm, title: e.target.value })}
@@ -310,8 +343,8 @@ export function CreateNewIssue() {
 
                <Textarea
                   className="border-none w-full shadow-none outline-none resize-none px-0 min-h-16 focus-visible:ring-0 break-words whitespace-normal overflow-wrap"
-                  aria-label="Issue description"
-                  placeholder="Add description..."
+                  aria-label={tx('Issue description')}
+                  placeholder={tx('Add description...')}
                   value={addIssueForm.description}
                   disabled={creating}
                   onChange={(e) =>
@@ -366,7 +399,7 @@ export function CreateNewIssue() {
                         disabled={creating}
                         onCheckedChange={setCreateMore}
                      />
-                     <Label htmlFor="create-more">Create more</Label>
+                     <Label htmlFor="create-more">{tx('Create more')}</Label>
                   </div>
                </div>
                <Button
@@ -380,10 +413,10 @@ export function CreateNewIssue() {
                   {creating ? (
                      <>
                         <Loader2 className="animate-spin" aria-hidden="true" />
-                        Creating issue…
+                        {tx('Creating issue…')}
                      </>
                   ) : (
-                     'Create issue'
+                     tx('Create issue')
                   )}
                </Button>
             </div>

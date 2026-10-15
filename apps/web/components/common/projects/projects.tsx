@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { useProjectsData } from '@/features/projects/projects-data';
+import { ProjectPagination } from '@/features/projects/project-pagination';
 import { cn } from '@/lib/utils';
 import { Project } from '@/types/projects';
 import { useProjectsFilterStore } from '@/store/projects-filter-store';
@@ -137,6 +138,7 @@ export default function Projects({ teamId }: { teamId?: string }) {
             </div>
          </div>
 
+         <ProjectPagination />
          <div className="flex-1 min-h-0 w-full flex overflow-hidden">
             <div className="flex-1 min-w-0 h-full overflow-hidden">
                {viewType === 'timeline' && (

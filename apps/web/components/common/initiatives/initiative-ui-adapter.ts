@@ -87,9 +87,11 @@ const healthView = (health: string): UiHealth =>
 
 const projectView = (project: LiveInitiativeProject): InitiativeProject => {
    const category = statusCategory(project.status);
-   const completedIssues = project.issues.filter(
-      (issue) => issue.status.category === 'completed'
-   ).length;
+   const completedIssues =
+      project.issueSummary?.completed ??
+      project.issues?.filter((issue) => issue.status.category === 'completed').length ??
+      0;
+   const total = project.issueSummary?.total ?? project.issues?.length ?? 0;
    return {
       id: project.id,
       name: project.name,
@@ -99,6 +101,7 @@ const projectView = (project: LiveInitiativeProject): InitiativeProject => {
       createdAt: project.createdAt,
       team: project.team,
       issues: project.issues,
+      issueSummary: project.issueSummary,
       icon: FolderKanban,
       status: {
          id: normalize(project.status),
@@ -114,10 +117,7 @@ const projectView = (project: LiveInitiativeProject): InitiativeProject => {
          ? { ...project.lead, avatarUrl: project.lead.avatarUrl ?? '' }
          : { id: 'unassigned', name: 'Unassigned', avatarUrl: '' },
       teamId: project.team?.id ?? 'no-team',
-      percentComplete:
-         project.issues.length > 0
-            ? Math.round((completedIssues / project.issues.length) * 100)
-            : 0,
+      percentComplete: total > 0 ? Math.round((completedIssues / total) * 100) : 0,
       labels: [],
    };
 };

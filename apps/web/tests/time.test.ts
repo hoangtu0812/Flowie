@@ -19,3 +19,8 @@ test('relative times distinguish fresh, future and invalid timestamps', () => {
    assert.equal(relativeTime('2026-10-14T01:05:00Z', now), 'in 5m');
    assert.equal(relativeTime('invalid', now), 'Unknown time');
 });
+test('Vietnamese relative times preserve future and past direction', () => {
+   const now = Date.UTC(2026, 9, 14, 1);
+   assert.equal(relativeTime('2026-10-14T00:55:00Z', now, 'vi'), '5 phút trước');
+   assert.equal(relativeTime('2026-10-14T01:05:00Z', now, 'vi'), 'sau 5 phút nữa');
+});

@@ -1,0 +1,15 @@
+import { parseInstant } from '../../lib/time';
+export function formatDate(value: string | null, locale: string, timezone: string) {
+   if (!value) return '—';
+   // A calendar date has no instant and must not shift into the previous day.
+   const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
+   const date = dateOnly ? new Date(value + 'T00:00:00Z') : parseInstant(value);
+   if (!Number.isFinite(date.getTime())) return '—';
+   return new Intl.DateTimeFormat(locale, {
+      ...(dateOnly ? { dateStyle: 'medium' } : { dateStyle: 'medium', timeStyle: 'short' }),
+      timeZone: dateOnly ? 'UTC' : timezone,
+   }).format(date);
+}
+
+/** JavaScript calendars use Sunday=0; reporting uses Python's Monday=0 convention. */
+export const reportWeekStart = (calendarWeekStart: 0 | 1 | 6) => (calendarWeekStart + 6) % 7;

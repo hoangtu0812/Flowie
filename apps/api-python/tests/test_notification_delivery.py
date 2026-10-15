@@ -5,17 +5,17 @@ from dataclasses import replace
 from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 import httpx
-import jwt
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.config import Settings, _async_database_url
-from app.core.identifiers import _cuid
+from app.core.identifiers import _cuid, _hash_token
 from app.core.clock import _utcnow
 from app.domains.auth import create_workspace_bootstrap
 from app.db.session import get_session
 from app.main import create_app
 from app.modules.notifications.delivery_worker import deliver_one, wake_snoozed
+from app.modules.identity.security.sessions import access_token
 
 
 @pytest.mark.skipif(
@@ -31,6 +31,7 @@ async def verify_delivery():
     )
     factory = async_sessionmaker(engine)
     user, other, notification = _cuid(), _cuid(), _cuid()
+    sessions = {user: _cuid(), other: _cuid()}
     seed = None
     settings = replace(
         Settings.from_environment(),
@@ -60,6 +61,19 @@ async def verify_delivery():
                 workspace_name=_cuid(),
                 now=now,
             )
+            for identifier in [user, other]:
+                await db.execute(
+                    text(
+                        "INSERT INTO sessions(id,user_id,refresh_token_hash,expires_at,created_at,last_used_at) VALUES (:id,:user,:hash,:expires,:now,:now)"
+                    ),
+                    {
+                        "id": sessions[identifier],
+                        "user": identifier,
+                        "hash": _hash_token(_cuid()),
+                        "expires": now + timedelta(days=1),
+                        "now": now,
+                    },
+                )
             await db.execute(
                 text(
                     "INSERT INTO workspace_members(id,workspace_id,user_id,role,status,created_at,updated_at) VALUES (:id,:workspace,:user,'MEMBER','ACTIVE',:now,:now)"
@@ -77,12 +91,20 @@ async def verify_delivery():
                 ),
                 {"workspace": seed["workspace_id"], "user": user, "now": now},
             )
+            project = _cuid()
             await db.execute(
                 text(
-                    "INSERT INTO notifications(id,workspace_id,user_id,type,entity_type,entity_id,data,created_at) VALUES (:id,:workspace,:user,'test','project','fixture',CAST(:data AS jsonb),:now)"
+                    "INSERT INTO projects(id,workspace_id,name,identifier,created_at,updated_at) VALUES (:id,:workspace,'Notification target',:id,:now,:now)"
+                ),
+                {"id": project, "workspace": seed["workspace_id"], "now": now},
+            )
+            await db.execute(
+                text(
+                    "INSERT INTO notifications(id,workspace_id,user_id,type,entity_type,entity_id,data,created_at) VALUES (:id,:workspace,:user,'test','project',:project,CAST(:data AS jsonb),:now)"
                 ),
                 {
                     "id": notification,
+                    "project": project,
                     "workspace": seed["workspace_id"],
                     "user": user,
                     "data": json.dumps({"title": "Private issue title"}),
@@ -102,11 +124,7 @@ async def verify_delivery():
         ) as client:
             client.cookies.set(
                 "flowie_access",
-                jwt.encode(
-                    {"sub": user, "exp": 9999999999},
-                    settings.auth_jwt_secret,
-                    algorithm="HS256",
-                ),
+                access_token({"id": user}, sessions[user], settings),
             )
             endpoint = f"/api/v1/notifications/{notification}/snooze?workspaceId={seed['workspace_id']}"
             assert (
@@ -129,11 +147,7 @@ async def verify_delivery():
             )
             client.cookies.set(
                 "flowie_access",
-                jwt.encode(
-                    {"sub": other, "exp": 9999999999},
-                    settings.auth_jwt_secret,
-                    algorithm="HS256",
-                ),
+                access_token({"id": other}, sessions[other], settings),
             )
             assert (
                 await client.post(endpoint, json={"minutes": None})
@@ -183,7 +197,7 @@ async def verify_delivery():
                 text(
                     "UPDATE notification_email_deliveries SET available_at=:now WHERE notification_id=:id"
                 ),
-                {"id": notification, "now": _utcnow()},
+                {"id": notification, "now": _utcnow() - timedelta(seconds=1)},
             )
             await db.commit()
         results = await asyncio.gather(

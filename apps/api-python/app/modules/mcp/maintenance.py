@@ -1,4 +1,5 @@
 from __future__ import annotations
+from ..operations.heartbeats import progress
 
 import asyncio
 import logging
@@ -38,12 +39,23 @@ async def cleanup(factory) -> None:
             {"cutoff": cutoff},
         )
         await db.commit()
+        await db.execute(text("UPDATE bulk_operations SET state='EXPIRED' WHERE id IN (SELECT id FROM bulk_operations WHERE state='PREVIEW' AND expires_at<:now LIMIT 1000)"),{'now':_utcnow()})
+        await db.execute(text("DELETE FROM bulk_operations WHERE id IN (SELECT id FROM bulk_operations WHERE state IN ('DONE','CANCELLED','FAILED','EXPIRED') AND created_at<:cutoff ORDER BY created_at LIMIT 1000)"),{'cutoff':_utcnow()-timedelta(days=30)})
+        await db.commit()
+        for table,clock,days in [('client_error_events','created_at',30),('operation_heartbeats','last_seen_at',7)]:
+            await db.execute(text(f'DELETE FROM {table} WHERE id IN (SELECT id FROM {table} WHERE {clock}<:cutoff ORDER BY {clock} LIMIT 1000)'),{'cutoff':_utcnow()-timedelta(days=days)})
+        await db.commit()
+        await db.execute(text('DELETE FROM account_security_events WHERE id IN (SELECT id FROM account_security_events WHERE created_at<:cutoff ORDER BY created_at LIMIT 1000)'),{'cutoff':_utcnow()-timedelta(days=30)})
+        await db.execute(text('DELETE FROM sessions WHERE id IN (SELECT id FROM sessions WHERE revoked_at<:cutoff OR expires_at<:cutoff ORDER BY created_at LIMIT 1000)'),{'cutoff':_utcnow()-timedelta(days=30)})
+        await db.execute(text('DELETE FROM mfa_challenges WHERE id IN (SELECT id FROM mfa_challenges WHERE expires_at<:cutoff ORDER BY expires_at LIMIT 1000)'),{'cutoff':_utcnow()-timedelta(days=1)})
+        await db.execute(text('DELETE FROM account_mfa WHERE user_id IN (SELECT user_id FROM account_mfa WHERE enabled_at IS NULL AND pending_until<:cutoff LIMIT 1000)'),{'cutoff':_utcnow()-timedelta(days=1)})
+        await db.commit()
 
 
 async def maintenance_loop(factory, stop: asyncio.Event) -> None:
     while not stop.is_set():
         try:
-            await cleanup(factory)
+            await progress(factory,'maintenance',cleanup(factory))
         except Exception:
             logger.warning("MCP maintenance is unavailable")
         try:

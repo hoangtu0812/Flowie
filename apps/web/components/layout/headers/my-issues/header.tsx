@@ -1,4 +1,6 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/navigation/messages.vi';
 
 import {
    MY_ISSUES_TAB_ITEMS,
@@ -20,6 +22,8 @@ import { DisplayOptions } from '../display-options';
 import Notifications from '../issues/notifications';
 
 function HeaderNav() {
+   const tx = useMessages(messages);
+
    const { isSearchOpen, toggleSearch, closeSearch, setSearchQuery, searchQuery } =
       useSearchStore();
    const searchInputRef = useRef<HTMLInputElement>(null);
@@ -50,7 +54,7 @@ function HeaderNav() {
       <div className="w-full flex justify-between items-center border-b py-1.5 px-6 h-10">
          <div className="flex items-center gap-2">
             <SidebarTrigger />
-            <span className="text-sm font-medium">My issues</span>
+            <span className="text-sm font-medium">{tx('My issues')}</span>
          </div>
          <div className="flex items-center gap-2">
             {isSearchOpen ? (
@@ -61,7 +65,7 @@ function HeaderNav() {
                      ref={searchInputRef}
                      value={searchQuery}
                      onChange={(event) => setSearchQuery(event.target.value)}
-                     placeholder="Search issues..."
+                     placeholder={tx('Search issues...')}
                      className="pl-8 h-7 text-sm"
                      onKeyDown={(event) => {
                         if (event.key === 'Escape') {
@@ -78,7 +82,7 @@ function HeaderNav() {
                      size="icon"
                      onClick={toggleSearch}
                      className="h-8 w-8"
-                     aria-label="Search"
+                     aria-label={tx('Search')}
                   >
                      <SearchIcon className="h-4 w-4" />
                   </Button>
@@ -91,6 +95,8 @@ function HeaderNav() {
 }
 
 function HeaderOptions() {
+   const tx = useMessages(messages);
+
    const [tab, setTab] = useMyIssuesTab();
    const { issues } = useIssuesStore();
    const currentUserId = useCurrentUserId();
@@ -114,12 +120,12 @@ function HeaderOptions() {
                            : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/50'
                      )}
                   >
-                     {item.label}
+                     {tx(item.label)}
                   </button>
                ))}
             </div>
             <span className="text-sm text-muted-foreground hidden sm:inline">
-               {count} {count === 1 ? 'issue' : 'issues'}
+               {count} {count === 1 ? tx('issue') : tx('issues')}
             </span>
          </div>
          <div className="flex items-center gap-1">
@@ -128,7 +134,7 @@ function HeaderOptions() {
                size="xs"
                variant={openPanel === 'insights' ? 'secondary' : 'ghost'}
                onClick={() => togglePanel('insights')}
-               aria-label="Toggle insights panel"
+               aria-label={tx('Toggle insights panel')}
             >
                <BarChart3 className="size-4" />
             </Button>
@@ -136,7 +142,7 @@ function HeaderOptions() {
                size="xs"
                variant={openPanel === 'breakdown' ? 'secondary' : 'ghost'}
                onClick={() => togglePanel('breakdown')}
-               aria-label="Toggle breakdown panel"
+               aria-label={tx('Toggle breakdown panel')}
             >
                <PanelRight className="size-4" />
             </Button>

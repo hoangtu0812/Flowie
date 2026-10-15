@@ -12,6 +12,12 @@ interface UiPreferencesState {
    syncReload: number;
    reloadAccountPreferences: () => void;
    locale: Locale;
+   timezone: string | null;
+   weekStart: 0 | 1 | 6;
+   autoAssignSelf: boolean;
+   setTimezone: (timezone: string | null) => void;
+   setWeekStart: (weekStart: 0 | 1 | 6) => void;
+   setAutoAssignSelf: (autoAssignSelf: boolean) => void;
    commentSubmitMode: 'modifier-enter' | 'enter';
    setLocale: (locale: Locale) => void;
    setCommentSubmitMode: (mode: 'modifier-enter' | 'enter') => void;
@@ -35,6 +41,12 @@ export const useUiPreferencesStore = create<UiPreferencesState>()(
          syncReload: 0,
          reloadAccountPreferences: () => set((state) => ({ syncReload: state.syncReload + 1 })),
          locale: 'en',
+         timezone: null,
+         weekStart: 1,
+         autoAssignSelf: false,
+         setTimezone: (timezone) => set({ timezone }),
+         setWeekStart: (weekStart) => set({ weekStart }),
+         setAutoAssignSelf: (autoAssignSelf) => set({ autoAssignSelf }),
          commentSubmitMode: 'modifier-enter',
          setLocale: (locale) => set({ locale }),
          setCommentSubmitMode: (commentSubmitMode) => set({ commentSubmitMode }),
@@ -51,12 +63,17 @@ export const useUiPreferencesStore = create<UiPreferencesState>()(
       }),
       {
          name: 'ui-preferences',
-         version: 2,
+         version: 3,
          migrate: (persisted) => {
             const preferences = persisted as Partial<UiPreferencesState> | undefined;
             return {
                ...preferences,
                locale: preferences?.locale === 'vi' ? 'vi' : 'en',
+               timezone: preferences?.timezone ?? null,
+               weekStart: [0, 1, 6].includes(preferences?.weekStart ?? -1)
+                  ? preferences!.weekStart
+                  : 1,
+               autoAssignSelf: preferences?.autoAssignSelf === true,
                commentSubmitMode:
                   preferences?.commentSubmitMode === 'enter' ? 'enter' : 'modifier-enter',
                defaultHome:

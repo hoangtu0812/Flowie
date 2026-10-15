@@ -1,0 +1,9 @@
+{
+  "source": "/opt/flowie",
+  "productionEnv": "/opt/flowie/.env.production",
+  "scratch": "/var/lib/flowie-backup/scratch",
+  "writers": ["circle-api", "circle-worker"],
+  "databaseContainer": "circle-postgres",
+  "migrationContainer": "circle-migrate",
+  "objectsContainer": "circle-minio"
+}

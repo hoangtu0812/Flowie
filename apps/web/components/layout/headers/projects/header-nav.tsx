@@ -1,4 +1,6 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/navigation/messages.vi';
 
 import { Button } from '@/components/ui/button';
 import { CreateProjectDialog } from '@/components/common/projects/create-project-dialog';
@@ -8,6 +10,8 @@ import { Plus } from 'lucide-react';
 import { useState } from 'react';
 
 export default function HeaderNav() {
+   const tx = useMessages(messages);
+
    const { allProjects } = useProjectsData();
    const [createOpen, setCreateOpen] = useState(false);
    return (
@@ -16,7 +20,7 @@ export default function HeaderNav() {
             <div className="flex items-center gap-2">
                <SidebarTrigger className="" />
                <div className="flex items-center gap-1">
-                  <span className="text-sm font-medium">Projects</span>
+                  <span className="text-sm font-medium">{tx('Projects')}</span>
                   <span className="text-xs bg-accent rounded-md px-1.5 py-1">
                      {allProjects.length}
                   </span>
@@ -30,7 +34,7 @@ export default function HeaderNav() {
                   onClick={() => setCreateOpen(true)}
                >
                   <Plus className="size-4" />
-                  <span className="hidden sm:inline ml-1">Create project</span>
+                  <span className="hidden sm:inline ml-1">{tx('Create project')}</span>
                </Button>
             </div>
          </div>

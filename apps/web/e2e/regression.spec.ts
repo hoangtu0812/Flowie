@@ -345,9 +345,9 @@ test('SLA request Ask and emoji settings create persisted records', async ({ pag
    await page.goto(`/${fixture.slug}/settings/slas`);
    await page.getByRole('button', { name: 'New SLA', exact: true }).click();
    await page.getByPlaceholder('SLA name').fill('Regression SLA ' + suffix);
-   await page.getByLabel('Deadline duration').fill('2');
+   await page.getByRole('textbox', { name: /^Deadline duration/ }).fill('120');
    await page.getByRole('button', { name: 'Create SLA', exact: true }).click();
-   await expect(page.getByRole('dialog')).toHaveCount(0);
+   await expect(page.getByRole('textbox', { name: /^SLA name/ })).toHaveCount(0);
    await page.reload();
    await expect(page.getByText('Regression SLA ' + suffix, { exact: true })).toBeVisible();
    await page.goto(`/${fixture.slug}/settings/customer-requests`);
@@ -544,8 +544,8 @@ test('account preferences synchronize on a separate browser context and home nav
       await page
          .getByRole('checkbox', { name: 'Underline links', exact: true })
          .setChecked(!original.values.underlineLinks);
-      await page.getByRole('button', { name: 'Default home view', exact: true }).click();
-      await page.getByRole('menuitem', { name: 'My issues', exact: true }).click();
+      await page.getByRole('combobox', { name: 'Default home view', exact: true }).click();
+      await page.getByRole('option', { name: 'My issues', exact: true }).click();
       await expect
          .poll(
             async () => (await (await context.request.get(endpoint)).json()).data.values.defaultHome

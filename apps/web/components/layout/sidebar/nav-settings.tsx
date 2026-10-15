@@ -1,4 +1,6 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/navigation/messages.vi';
 
 import {
    SidebarGroup,
@@ -31,6 +33,8 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { loadCurrentWorkspaceMembership } from '@/lib/workspaces';
 
 interface SettingsNavItem {
    name: string;
@@ -51,6 +55,10 @@ export const settingsNav: SettingsNavGroup[] = [
       items: [
          { name: 'General', url: '/settings/workspace', icon: Settings },
          { name: 'Code & reviews', url: '/settings/code-and-reviews', icon: Code },
+         { name: 'Operations', url: '/settings/operations', icon: Target },
+         { name: 'Audit log', url: '/settings/audit', icon: FileText },
+         { name: 'Archived records', url: '/settings/archive', icon: FileText },
+         { name: 'Import and export', url: '/settings/data-exchange', icon: FileText },
       ],
    },
    {
@@ -67,6 +75,8 @@ export const settingsNav: SettingsNavGroup[] = [
    {
       label: 'Issues',
       items: [
+         { name: 'Statuses', url: '/settings/issue-statuses', icon: Target },
+         { name: 'Recurring schedules', url: '/settings/recurring', icon: Zap },
          { name: 'Labels', url: '/settings/issue-labels', icon: Tag },
          { name: 'Templates', url: '/settings/issue-templates', icon: FileText },
          { name: 'SLAs', url: '/settings/slas', icon: Flame },
@@ -98,29 +108,50 @@ export const settingsNav: SettingsNavGroup[] = [
 ];
 
 export function NavSettings() {
+   const tx = useMessages(messages);
    const { orgId } = useParams<{ orgId: string }>();
    const pathname = usePathname();
+   const [adminScope, setAdminScope] = useState('');
+   useEffect(() => {
+      let current = true;
+      void loadCurrentWorkspaceMembership(orgId)
+         .then((member) => {
+            if (current) setAdminScope(member.role === 'MEMBER' ? '' : orgId);
+         })
+         .catch(() => {
+            if (current) setAdminScope('');
+         });
+      return () => {
+         current = false;
+      };
+   }, [orgId]);
 
    return (
       <>
          {settingsNav.map((group) => (
-            <SidebarGroup key={group.label} className="group-data-[collapsible=icon]:hidden">
-               <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+            <SidebarGroup key={tx(group.label)} className="group-data-[collapsible=icon]:hidden">
+               <SidebarGroupLabel>{tx(group.label)}</SidebarGroupLabel>
                <SidebarMenu>
-                  {group.items.map((item) => {
-                     const href = `/${orgId}${item.url}`;
-                     const isActive = pathname === href;
-                     return (
-                        <SidebarMenuItem key={`${group.label}-${item.name}`}>
-                           <SidebarMenuButton asChild isActive={isActive}>
-                              <Link href={href}>
-                                 <item.icon className="size-4" />
-                                 <span>{item.name}</span>
-                              </Link>
-                           </SidebarMenuButton>
-                        </SidebarMenuItem>
-                     );
-                  })}
+                  {group.items
+                     .filter(
+                        (item) =>
+                           !['/settings/operations', '/settings/audit'].includes(item.url) ||
+                           adminScope === orgId
+                     )
+                     .map((item) => {
+                        const href = `/${orgId}${item.url}`;
+                        const isActive = pathname === href;
+                        return (
+                           <SidebarMenuItem key={`${tx(group.label)}-${tx(item.name)}`}>
+                              <SidebarMenuButton asChild isActive={isActive}>
+                                 <Link href={href}>
+                                    <item.icon className="size-4" />
+                                    <span>{tx(item.name)}</span>
+                                 </Link>
+                              </SidebarMenuButton>
+                           </SidebarMenuItem>
+                        );
+                     })}
                </SidebarMenu>
             </SidebarGroup>
          ))}

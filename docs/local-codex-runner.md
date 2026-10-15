@@ -46,4 +46,22 @@ python -m flowie_runner --config C:/private/flowie-runner.json run --issue REPLA
 
 Nguồn CLI: [OpenAI non-interactive mode](https://developers.openai.com/codex/noninteractive/), [OpenAI CLI reference](https://developers.openai.com/codex/cli/reference/). Không dùng chế độ bỏ sandbox hay bỏ policy.
 
-Hiện chỉ nghiệm thu bằng provider/SCM fixture và repository Git tạm. Một bug thật đang chờ project/bug do người dùng chỉ định; không được ghi DONE từ kết quả fixture.
+## Kiểm tra thực tế 2026-10-15
+
+Người dùng đã cho phép tự chọn project/bug. Một run với Codex CLI thật đã đọc
+bug locale Archived qua MCP local có token giới hạn một project/team, tạo run
+và gọi model. CLI 0.154.0 trên máy báo sandbox hiệu lực `read-only` dù runner
+truyền `--sandbox workspace-write`; probe dùng profile workspace cũng vẫn chỉ đọc.
+Source không đổi, run `c1jlsc2cb5of2l2chpalc2sga` ghi `FAILED`, connection thử đã
+revoke. Các test chạy trên source không đổi không chứng minh bug được sửa.
+
+Đây chưa phải nghiệm thu đến PR và không phải nghiệm thu CT107. `doctor` kiểm
+tra repository, cờ CLI và login; nó chưa chứng minh policy hiệu lực cho phép ghi.
+Cần người quản lý cấu hình CLI cho phép ghi trong checkout trước khi chạy lại;
+không đổi sang full access hoặc tắt sandbox để vượt qua giới hạn. Phiên Flowie
+production hiện ở màn hình đăng nhập và môi trường chưa có token MCP thật.
+
+Đối chiếu [non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode)
+và [permission profiles](https://learn.chatgpt.com/docs/permissions): cấu hình
+managed vẫn có thể giới hạn quyền hiệu lực. Giữ riêng bằng chứng fixture, gọi
+model thật, thay đổi mã, PR/CI và production acceptance.

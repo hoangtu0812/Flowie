@@ -68,7 +68,7 @@ export default function MemberProfile({
             </VStack>
             {openPanel === 'insights' && (
                <VStack as="aside" width={380} isScrollable>
-                  <InsightsPanel issues={displayed} />
+                  <InsightsPanel />
                </VStack>
             )}
             {openPanel !== 'hidden' && openPanel !== 'insights' && (

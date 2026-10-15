@@ -122,13 +122,10 @@ async def update_document(document_id: str, payload: UpdateDocumentInput, worksp
 
 @router.delete('/{document_id}')
 async def archive_document(document_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    current = (await db.execute(text('SELECT team_id FROM documents WHERE id = :id AND workspace_id = :workspace_id AND archived_at IS NULL'), {'id': document_id, 'workspace_id': workspaceId})).mappings().first()
-    if not current:
-        raise ApiError(404, 'Document not found.', 'Not Found')
-    await _team_access(db, workspaceId, current['team_id'], user['id'])
-    await db.execute(text('UPDATE documents SET archived_at = :now, updated_at = :now WHERE id = :id'), {'id': document_id, 'now': _utcnow()})
-    await db.commit()
-    return {'data': {'id': document_id, 'archived': True}}
+    from ..modules.work_items.documents import archive_document as operation
+    from ..db.mutations import commit_mutation
+
+    return await commit_mutation(db,lambda:operation(document_id,workspaceId,user,db))
 
 
 class RestoreDocumentInput(BaseModel):

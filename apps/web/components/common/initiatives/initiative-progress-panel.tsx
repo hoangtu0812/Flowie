@@ -21,10 +21,32 @@ export function InitiativeProgressPanel({ initiative }: { initiative: Initiative
    const projects = useMemo(() => getInitiativeProjects(initiative), [initiative]);
 
    const series = useMemo<ProgressPoint[]>(() => {
-      const issues = projects.flatMap((project) => project.issues);
-      const completed = issues.filter((issue) => issue.status.category === 'completed').length;
-      const started = issues.filter((issue) => issue.status.category === 'started').length;
-      return [{ label: 'Current', completed, started, scope: Math.max(0, issues.length - completed - started) }];
+      const total = projects.reduce(
+         (sum, project) => sum + (project.issueSummary?.total ?? project.issues?.length ?? 0),
+         0
+      );
+      const completed = projects.reduce(
+         (sum, project) =>
+            sum +
+            (project.issueSummary?.completed ??
+               project.issues?.filter(
+                  (issue) => issue.status.category.toLowerCase() === 'completed'
+               ).length ??
+               0),
+         0
+      );
+      const started = projects.reduce(
+         (sum, project) =>
+            sum +
+            (project.issueSummary?.started ??
+               project.issues?.filter((issue) => issue.status.category.toLowerCase() === 'started')
+                  .length ??
+               0),
+         0
+      );
+      return [
+         { label: 'Current', completed, started, scope: Math.max(0, total - completed - started) },
+      ];
    }, [projects]);
 
    const rows = useMemo(() => {

@@ -40,6 +40,9 @@ jobs:
         run: |
           set -euo pipefail
 
+          exec 9>/opt/flowie/.flowie-operation.lock
+          flock -x 9
+
           bash "$GITHUB_WORKSPACE/scripts/checkout-production.sh" /opt/flowie "$FLOWIE_DEPLOY_SHA"
           cd /opt/flowie
 
@@ -73,6 +76,9 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git -C /opt/flowie rev-parse HEAD)" = "$FLOWIE_DEPLOY_SHA"
+
+          exec 9>/opt/flowie/.flowie-operation.lock
+          flock -x 9
 
           for attempt in {1..24}; do
             if curl -fsS http://localhost:4000/readyz; then

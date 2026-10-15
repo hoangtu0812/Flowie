@@ -3,8 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-import jwt
-from fastapi import Depends, Query, WebSocket, WebSocketDisconnect
+from fastapi import Depends, Query, WebSocket
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from pydantic import BaseModel
 from sqlalchemy import text
@@ -14,7 +13,7 @@ from ..core.errors import ApiError
 from ..db.session import get_session
 from .auth import _cuid, _utcnow, current_user
 from .native_projects import _workspace_access
-from ..services.notification_events import notification_hub
+from ..modules.notifications.access import notification_scope
 
 
 router = APIRouter(prefix='/api/v1/notifications', tags=['notifications'])
@@ -32,55 +31,8 @@ async def _access(db: AsyncSession, workspace_id: str, user_id: str) -> None:
 
 @router.websocket('/stream')
 async def notification_stream(websocket: WebSocket, workspaceId: str = Query(min_length=1)) -> None:
-    """Authenticated, cookie-backed real-time delivery for the Inbox.
-
-    The browser keeps the same ``flowie_access`` cookie used by REST requests;
-    no token is exposed in a query string or client-side storage.
-    """
-
-    token = websocket.cookies.get('flowie_access')
-    if not token:
-        await websocket.close(code=4401)
-        return
-    try:
-        payload = jwt.decode(
-            token,
-            websocket.app.state.settings.auth_jwt_secret,
-            algorithms=['HS256'],
-        )
-        user_id = payload.get('sub')
-        if not isinstance(user_id, str):
-            raise jwt.PyJWTError('missing subject')
-    except jwt.PyJWTError:
-        await websocket.close(code=4401)
-        return
-
-    factory = websocket.app.state.session_factory
-    async with factory() as db:
-        user = await db.execute(
-            text("SELECT id FROM users WHERE id = :id AND status = 'ACTIVE' AND auth_version=:version"), {'id': user_id, 'version': payload.get('ver', 0)}
-        )
-        if user.scalar_one_or_none() is None:
-            await websocket.close(code=4401)
-            return
-        try:
-            await _access(db, workspaceId, user_id)
-        except ApiError:
-            await websocket.close(code=4403)
-            return
-
-    await notification_hub.connect(workspaceId, user_id, websocket)
-    try:
-        while True:
-            # Browsers can send a small heartbeat if an intermediary has a
-            # short idle timeout. Receiving text also detects a closed peer.
-            message = await websocket.receive_text()
-            if message == 'ping':
-                await websocket.send_text('pong')
-    except WebSocketDisconnect:
-        pass
-    finally:
-        notification_hub.disconnect(workspaceId, user_id, websocket)
+    from ..modules.identity.security.realtime import serve_notifications
+    await serve_notifications(websocket, workspaceId)
 
 
 @router.get('')
@@ -93,9 +45,10 @@ async def list_notifications(
     await _access(db, workspaceId, user['id'])
     result = await db.execute(
         text(
-            '''SELECT id, workspace_id, user_id, type, entity_type, entity_id, data, read_at, created_at, snoozed_until
-               FROM notifications
+            f'''SELECT id, workspace_id, user_id, type, entity_type, entity_id, data, read_at, created_at, snoozed_until
+               FROM notifications n
                WHERE workspace_id = :workspace_id AND user_id = :user_id
+               AND {notification_scope(actor=':user_id')}
                AND (:include_snoozed OR snoozed_until IS NULL OR snoozed_until<=:now)
                ORDER BY created_at DESC'''
         ),
@@ -189,8 +142,8 @@ async def _notification_exists(
 ) -> None:
     result = await db.execute(
         text(
-            '''SELECT 1 FROM notifications
-               WHERE id = :id AND workspace_id = :workspace_id AND user_id = :user_id'''
+            f'''SELECT 1 FROM notifications n
+                 WHERE id = :id AND workspace_id = :workspace_id AND user_id = :user_id AND {notification_scope(actor=':user_id')}'''
         ),
         {'id': notification_id, 'workspace_id': workspace_id, 'user_id': user_id},
     )

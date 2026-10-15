@@ -99,7 +99,7 @@ export default function AllIssues({ categories }: AllIssuesProps) {
                   width={420}
                   className="hidden lg:flex shrink-0 border-l h-full overflow-hidden bg-container"
                >
-                  <InsightsPanel issues={displayedIssues} />
+                  <InsightsPanel />
                </VStack>
             )}
          </HStack>

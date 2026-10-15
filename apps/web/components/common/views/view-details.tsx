@@ -1,4 +1,5 @@
 'use client';
+import { ProjectPagination } from '@/features/projects/project-pagination';
 
 import { useIssueQuery } from '@/features/issues/use-issue-query';
 import { IssuePagination } from '@/features/issues/issue-pagination';
@@ -11,6 +12,7 @@ import { useIssuesStore } from '@/store/issues-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { useMemo } from 'react';
 import { LiveView, useLiveViews } from './use-live-views';
+import { RecoveryScreen } from '@/features/shared/recovery-screen';
 
 const filterValues = (filters: Record<string, unknown>, key: string) =>
    Array.isArray(filters[key]) ? (filters[key] as string[]) : [];
@@ -74,7 +76,7 @@ function IssueViewBody({ view }: { view: LiveView }) {
             </div>
             {openPanel === 'insights' && (
                <aside className="hidden lg:flex w-[420px] shrink-0 border-l h-full overflow-hidden bg-container">
-                  <InsightsPanel issues={filtered} />
+                  <InsightsPanel />
                </aside>
             )}
          </div>
@@ -101,12 +103,17 @@ function ProjectViewBody({ view }: { view: LiveView }) {
       }
       return [...byStatus.values()];
    }, [allProjects, view]);
-   return <ProjectsList groups={groups} />;
+   return (
+      <>
+         <ProjectPagination />
+         <ProjectsList groups={groups} />
+      </>
+   );
 }
 
 /** Saved view detail backed by persisted view filters and live issue/project data. */
 export default function ViewDetails({ viewId }: { viewId: string }) {
-   const { views, loading, error } = useLiveViews();
+   const { views, loading, error, errorStatus, reload } = useLiveViews();
    const view = views.find((candidate) => candidate.id === viewId);
    if (loading)
       return (
@@ -114,11 +121,20 @@ export default function ViewDetails({ viewId }: { viewId: string }) {
             Loading view…
          </div>
       );
-   if (!view || error)
+   if (error)
       return (
-         <div className="w-full h-full flex items-center justify-center text-sm text-muted-foreground">
-            View not found
-         </div>
+         <RecoveryScreen
+            title={errorStatus === 403 ? 'Access unavailable' : 'Could not load this view'}
+            message={errorStatus === 0 ? 'Check your connection and try again.' : error}
+            retry={reload}
+         />
+      );
+   if (!view)
+      return (
+         <RecoveryScreen
+            title="View not found"
+            message="This view was removed or is outside your access."
+         />
       );
    return view.entityType === 'issue' ? (
       <IssueViewBody view={view} />

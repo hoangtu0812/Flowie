@@ -71,6 +71,7 @@ export function GroupIssues({ group, issues, count }: GroupIssuesProps) {
                </div>
 
                <Button
+                  aria-label={`Create issue in ${group.name}`}
                   className="size-6"
                   size="icon"
                   variant="ghost"

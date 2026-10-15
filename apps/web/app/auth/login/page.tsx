@@ -14,7 +14,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 type AuthPayload = {
-   data: { workspace: { slug: string } | null; user: { isPlatformAdmin: boolean } };
+   data: {
+      mfaRequired?: boolean;
+      workspace: { slug: string } | null;
+      user: { isPlatformAdmin: boolean };
+   };
 };
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
@@ -66,14 +70,25 @@ export default function LoginPage() {
                email: formData.get('email'),
                password: formData.get('password'),
                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+               next: searchParams.get('next'),
             }),
          });
          const payload = (await response.json()) as AuthPayload & { message?: string | string[] };
          if (!response.ok) {
             throw new Error(Array.isArray(payload.message) ? payload.message[0] : payload.message);
          }
+         if (payload.data.mfaRequired) {
+            router.replace('/auth/mfa');
+            return;
+         }
          const next = searchParams.get('next');
-         const safeNext = next?.startsWith('/') && !next.startsWith('//') ? next : null;
+         const safeNext =
+            next?.startsWith('/') &&
+            !next.startsWith('//') &&
+            !next.includes('\\') &&
+            !/[\u0000-\u001f]/.test(next)
+               ? next
+               : null;
          router.replace(
             safeNext ??
                (payload.data.workspace

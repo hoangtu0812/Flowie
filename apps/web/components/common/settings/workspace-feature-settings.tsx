@@ -1,4 +1,5 @@
 'use client';
+import { portfolioFetch } from '@/features/projects/portfolio-fetch';
 
 import { loadCurrentWorkspaceTeams } from '@/components/common/teams/team-types';
 import { authenticatedFetch } from '@/lib/workspaces';
@@ -104,12 +105,9 @@ export default function WorkspaceFeatureSettings({ feature }: { feature: Feature
       try {
          const { workspaceId: id } = await loadCurrentWorkspaceTeams();
          const [recordsResponse, membersResponse] = await Promise.all([
-            authenticatedFetch(
-               feature === 'documents'
-                  ? `${api}/documents?${new URLSearchParams({ workspaceId: id }).toString()}`
-                  : `${api}/initiatives?${new URLSearchParams({ workspaceId: id }).toString()}`,
-               {}
-            ),
+            feature === 'documents'
+               ? authenticatedFetch(`${api}/documents?${new URLSearchParams({ workspaceId: id })}`)
+               : portfolioFetch(`${api}/initiatives?${new URLSearchParams({ workspaceId: id })}`),
             feature === 'initiatives'
                ? authenticatedFetch(`${api}/workspaces/${id}/members`)
                : Promise.resolve(undefined),

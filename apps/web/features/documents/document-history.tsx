@@ -1,4 +1,7 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/documents/messages.vi';
+
 import { useEffect, useState } from 'react';
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
@@ -11,7 +14,7 @@ import {
    type RevisionDiff,
 } from './document-api';
 import type { LiveDocument } from '@/components/common/teams/use-live-team';
-import { relativeTime } from '@/lib/time';
+import { useDateFormatter } from '@/features/shared/account-time';
 
 export function DocumentHistory({
    id,
@@ -24,6 +27,9 @@ export function DocumentHistory({
    beforeRestore: () => Promise<boolean>;
    onRestore: (document: LiveDocument) => Promise<void>;
 }) {
+   const tx = useMessages(messages);
+   const dateLabel = useDateFormatter();
+
    const [items, setItems] = useState<Revision[]>([]);
    const [diff, setDiff] = useState<RevisionDiff>();
    const [selection, setSelection] = useState<number>();
@@ -59,23 +65,24 @@ export function DocumentHistory({
          setDiff(result);
          setSelection(version);
       } catch (reason) {
-         setError(reason instanceof Error ? reason.message : 'Could not load diff.');
+         setError(reason instanceof Error ? reason.message : tx('Could not load diff.'));
       }
    };
    return (
       <VStack as="section" gap={3}>
-         <Heading level={2}>Revision history</Heading>
-         <Text>Up to 100 recent revisions. Restoring creates a new revision.</Text>
-         {loading && <Text role="status">Loading revisions…</Text>}
+         <Heading level={2}>{tx('Revision history')}</Heading>
+         <Text>{tx('Up to 100 recent revisions. Restoring creates a new revision.')}</Text>
+         {loading && <Text role="status">{tx('Loading revisions…')}</Text>}
          {error && <Text role="alert">{error}</Text>}
-         <Button label="Refresh history" onClick={() => setRefresh((value) => value + 1)} />
+         <Button label={tx('Refresh history')} onClick={() => setRefresh((value) => value + 1)} />
          {items.map((item) => (
             <HStack key={item.version} justify="between" gap={3}>
                <Text>
-                  v{item.version} · {item.title} · {relativeTime(item.createdAt)}
+                  {tx('v')}
+                  {item.version} · {item.title} · {dateLabel(item.createdAt)}
                </Text>
                <Button
-                  label={`Compare v${item.version}`}
+                  label={tx('Compare v{value0}', { value0: item.version })}
                   clickAction={() => inspect(item.version)}
                />
             </HStack>
@@ -83,26 +90,29 @@ export function DocumentHistory({
          {diff && (
             <VStack gap={2}>
                <Text>
-                  Title: {diff.fromTitle} → {diff.toTitle}
+                  {tx('Title:')} {diff.fromTitle} → {diff.toTitle}
                </Text>
                <pre className="overflow-auto rounded bg-muted p-4">
-                  <code>{diff.diff || 'No content changes.'}</code>
+                  <code>{diff.diff || tx('No content changes.')}</code>
                </pre>
                {diff.truncated && (
                   <Text>
-                     The diff is truncated; inspect full revision content before restoring.
+                     {tx('The diff is truncated; inspect full revision content before restoring.')}
                   </Text>
                )}
                <Button
-                  label="Restore selected revision"
+                  label={tx('Restore selected revision')}
                   isDisabled={diff.truncated}
                   onClick={() => setConfirmation(true)}
                />
                {confirmation && (
                   <HStack gap={2}>
-                     <Text>Replace the current title and content with v{selection}?</Text>
+                     <Text>
+                        {tx('Replace the current title and content with v')}
+                        {selection}?
+                     </Text>
                      <Button
-                        label="Confirm restore"
+                        label={tx('Confirm restore')}
                         variant="destructive"
                         clickAction={async () => {
                            try {
@@ -111,7 +121,9 @@ export function DocumentHistory({
                               // The comparison version binds confirmation to the content already reviewed.
                               if (current.version !== diff.toVersion)
                                  throw new Error(
-                                    'The document changed since comparison. Compare again before restoring.'
+                                    tx(
+                                       'The document changed since comparison. Compare again before restoring.'
+                                    )
                                  );
                               const restored = await restoreRevision(
                                  id,
@@ -126,12 +138,12 @@ export function DocumentHistory({
                               setError(
                                  reason instanceof Error
                                     ? reason.message
-                                    : 'Could not restore revision.'
+                                    : tx('Could not restore revision.')
                               );
                            }
                         }}
                      />
-                     <Button label="Cancel restore" onClick={() => setConfirmation(false)} />
+                     <Button label={tx('Cancel restore')} onClick={() => setConfirmation(false)} />
                   </HStack>
                )}
             </VStack>

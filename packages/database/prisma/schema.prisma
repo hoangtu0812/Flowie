@@ -172,26 +172,36 @@ enum CycleStatus {
 }
 
 model User {
-  uiPreferences   UserUiPreferences?
-  id              String             @id @default(cuid())
-  email           String             @unique
-  name            String
-  username        String?            @unique
-  title           String?
-  timezone        String             @default("UTC")
-  avatarUrl       String?            @map("avatar_url")
-  authVersion     Int                @default(0) @map("auth_version")
-  passwordHash    String?            @map("password_hash")
-  isPlatformAdmin Boolean            @default(false) @map("is_platform_admin")
-  emailVerifiedAt DateTime?          @map("email_verified_at")
-  status          UserStatus         @default(ACTIVE)
-  createdAt       DateTime           @default(now()) @map("created_at")
-  updatedAt       DateTime           @updatedAt @map("updated_at")
-  lastLoginAt     DateTime?          @map("last_login_at")
-  lastSeenAt      DateTime?          @map("last_seen_at")
+  bulkOperations       BulkOperation[]
+  issueImports         IssueImportBatch[]
+  recurringSchedules   RecurringSchedule[]
+  issueLifecycleEvents IssueLifecycleEvent[]
+  slaEscalations       SlaPolicy[]           @relation("SlaEscalationTarget")
+  slaPolicyRevisions   SlaPolicyRevision[]
+  clientErrorEvents    ClientErrorEvent[]
+  uiPreferences        UserUiPreferences?
+  id                   String                @id @default(cuid())
+  email                String                @unique
+  name                 String
+  username             String?               @unique
+  title                String?
+  timezone             String                @default("UTC")
+  avatarUrl            String?               @map("avatar_url")
+  authVersion          Int                   @default(0) @map("auth_version")
+  passwordHash         String?               @map("password_hash")
+  isPlatformAdmin      Boolean               @default(false) @map("is_platform_admin")
+  emailVerifiedAt      DateTime?             @map("email_verified_at")
+  status               UserStatus            @default(ACTIVE)
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+  lastLoginAt          DateTime?             @map("last_login_at")
+  lastSeenAt           DateTime?             @map("last_seen_at")
 
   identities               UserIdentity[]
   sessions                 Session[]
+  securityEvents           AccountSecurityEvent[]
+  mfa                      AccountMfa?
+  mfaChallenges            MfaChallenge[]
   personalApiKeys          PersonalApiKey[]
   mcpConnections           McpConnection[]
   passwordResetTokens      PasswordResetToken[]
@@ -263,12 +273,62 @@ model Session {
   revokedAt        DateTime? @map("revoked_at")
   createdAt        DateTime  @default(now()) @map("created_at")
   lastUsedAt       DateTime  @default(now()) @map("last_used_at")
+  authenticatedAt  DateTime? @map("authenticated_at")
+  authMethod       String    @default("LEGACY") @map("auth_method")
+  mfaVerifiedAt    DateTime? @map("mfa_verified_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([userId, createdAt, id])
   @@index([expiresAt])
   @@map("sessions")
+}
+
+model AccountSecurityEvent {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  kind      String
+  method    String
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt, id])
+  @@index([createdAt])
+  @@map("account_security_events")
+}
+
+model AccountMfa {
+  userId          String    @id @map("user_id")
+  secretCipher    String    @map("secret_cipher")
+  enabledAt       DateTime? @map("enabled_at")
+  pendingUntil    DateTime? @map("pending_until")
+  lastCounter     BigInt?   @map("last_counter")
+  recoveryHashes  Json      @default("[]") @map("recovery_hashes")
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("account_mfa")
+}
+
+model MfaChallenge {
+  id              String    @id @default(cuid())
+  userId          String    @map("user_id")
+  tokenHash       String    @unique @map("token_hash")
+  authVersion     Int       @map("auth_version")
+  authMethod      String    @map("auth_method")
+  authenticatedAt DateTime? @map("authenticated_at")
+  nextPath        String?   @map("next_path")
+  attempts        Int       @default(0)
+  expiresAt       DateTime  @map("expires_at")
+  consumedAt      DateTime? @map("consumed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("mfa_challenges")
 }
 
 model PersonalApiKey {
@@ -532,20 +592,27 @@ model Organization {
 }
 
 model Workspace {
+  bulkOperations         BulkOperation[]
+  issueImports           IssueImportBatch[]
+  recurringSchedules     RecurringSchedule[]
+  issueLifecycleEvents   IssueLifecycleEvent[]
+  issueSlaCycles         IssueSlaCycle[]
+  issueImportKeys        IssueImportKey[]
+  clientErrorEvents      ClientErrorEvent[]
   aiLimits               AiWorkspaceLimit?
   aiToolWindows          AiToolWindow[]
-  id                     String            @id @default(cuid())
-  organizationId         String            @map("organization_id")
+  id                     String                @id @default(cuid())
+  organizationId         String                @map("organization_id")
   name                   String
-  slug                   String            @unique
+  slug                   String                @unique
   icon                   String?
   description            String?
-  timezone               String            @default("UTC")
-  projectDisplayDefaults Json?             @map("project_display_defaults")
-  issueDisplayDefaults   Json?             @map("issue_display_defaults")
-  issueInsightDefaults   Json?             @map("issue_insight_defaults")
-  createdAt              DateTime          @default(now()) @map("created_at")
-  updatedAt              DateTime          @updatedAt @map("updated_at")
+  timezone               String                @default("UTC")
+  projectDisplayDefaults Json?                 @map("project_display_defaults")
+  issueDisplayDefaults   Json?                 @map("issue_display_defaults")
+  issueInsightDefaults   Json?                 @map("issue_insight_defaults")
+  createdAt              DateTime              @default(now()) @map("created_at")
+  updatedAt              DateTime              @updatedAt @map("updated_at")
 
   organization            Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   members                 WorkspaceMember[]
@@ -994,6 +1061,8 @@ model Team {
   childTeams           Team[]                  @relation("TeamHierarchy")
   defaultIssueTemplate IssueTemplate?          @relation(fields: [defaultIssueTemplateId], references: [id], onDelete: SetNull)
   dispatcherSettings   TeamDispatcherSettings?
+  issueImports         IssueImportBatch[]
+  recurringSchedules   RecurringSchedule[]
 
   @@unique([workspaceId, identifier])
   @@index([workspaceId])
@@ -1413,16 +1482,25 @@ model SlaPolicy {
   priority        IssuePriority?
   deadlineMinutes Int            @map("deadline_minutes")
   enabled         Boolean        @default(true)
+  version         Int            @default(1)
+  calendar        Json?
+  pauseStatusIds  String[]       @default([]) @map("pause_status_ids")
+  warningMinutes  Int            @default(0) @map("warning_minutes")
+  escalateToId    String?        @map("escalate_to_id")
   createdById     String         @map("created_by")
   archivedAt      DateTime?      @map("archived_at")
   createdAt       DateTime       @default(now()) @map("created_at")
   updatedAt       DateTime       @default(now()) @updatedAt @map("updated_at")
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  team      Team?     @relation(fields: [teamId], references: [id], onDelete: SetNull)
-  createdBy User      @relation("SlaPolicyCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  workspace  Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  team       Team?               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy  User                @relation("SlaPolicyCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  escalateTo User?               @relation("SlaEscalationTarget", fields: [escalateToId], references: [id], onDelete: SetNull)
+  revisions  SlaPolicyRevision[]
+  cycles     IssueSlaCycle[]
 
   @@index([workspaceId, archivedAt, enabled])
+  @@index([workspaceId, createdAt, id])
   @@index([teamId])
   @@map("sla_policies")
 }
@@ -1514,6 +1592,7 @@ model IssueTemplate {
 }
 
 model Issue {
+  slaJob            IssueSlaJob?
   agentRuns         AgentRun[]
   agentEvents       AgentIssueEvent[]
   documentLinks     DocumentLink[]
@@ -1574,6 +1653,11 @@ model Issue {
   customerRequests  CustomerRequest[]
   convertedAsks     Ask[]                 @relation("AskConvertedIssue")
   codeReviewLinks   CodeReviewIssueLink[]
+  importKeys        IssueImportKey[]
+  recurringRuns     RecurringRun[]
+  lifecycleEvents   IssueLifecycleEvent[]
+  slaOptOut         Boolean               @default(false) @map("sla_opt_out")
+  slaCycles         IssueSlaCycle[]
 
   @@unique([workspaceId, identifier])
   @@unique([teamId, number])
@@ -2055,4 +2139,258 @@ model AuthRateLimit {
 
   @@index([windowStart])
   @@map("auth_rate_limits")
+}
+
+model OperationHeartbeat {
+  id             String    @id @default(cuid())
+  instanceId     String    @map("instance_id")
+  job            String
+  status         String
+  lastSeenAt     DateTime  @map("last_seen_at")
+  lastProgressAt DateTime? @map("last_progress_at")
+  failures       Int       @default(0)
+  lastErrorCode  String?   @map("last_error_code")
+
+  @@unique([instanceId, job])
+  @@index([lastSeenAt])
+  @@map("operation_heartbeats")
+}
+
+model ClientErrorEvent {
+  id          String    @id @default(cuid())
+  workspaceId String    @map("workspace_id")
+  actorId     String    @map("actor_id")
+  category    String
+  routeKind   String    @map("route_kind")
+  digest      String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actor       User      @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@map("client_error_events")
+}
+
+model BulkOperation {
+  id          String              @id @default(cuid())
+  workspaceId String              @map("workspace_id")
+  actorId     String              @map("actor_id")
+  requestKey  String              @map("request_key")
+  fingerprint String
+  changes     Json
+  state       String              @default("PREVIEW")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  expiresAt   DateTime            @map("expires_at")
+  workspace   Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actor       User                @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  items       BulkOperationItem[]
+
+  @@unique([actorId, requestKey])
+  @@index([state, createdAt])
+  @@map("bulk_operations")
+}
+
+model BulkOperationItem {
+  operationId     String        @map("operation_id")
+  issueId         String        @map("issue_id")
+  expectedVersion Int           @map("expected_version")
+  identifier      String
+  state           String        @default("PENDING")
+  errorCode       String?       @map("error_code")
+  operation       BulkOperation @relation(fields: [operationId], references: [id], onDelete: Cascade)
+
+  @@id([operationId, issueId])
+  @@map("bulk_operation_items")
+}
+
+model IssueImportBatch {
+  id            String           @id @default(cuid())
+  workspaceId   String           @map("workspace_id")
+  actorId       String           @map("actor_id")
+  teamId        String           @map("team_id")
+  sourceKey     String           @map("source_key")
+  requestKey    String           @map("request_key")
+  fingerprint   String
+  duplicateMode String           @map("duplicate_mode")
+  state         String           @default("PREVIEW")
+  createdAt     DateTime         @default(now()) @map("created_at")
+  expiresAt     DateTime         @map("expires_at")
+  workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actor         User             @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  team          Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  rows          IssueImportRow[]
+
+  @@unique([actorId, requestKey])
+  @@index([state, createdAt])
+  @@map("issue_import_batches")
+}
+
+model IssueImportRow {
+  batchId    String           @map("batch_id")
+  rowNumber  Int              @map("row_number")
+  externalId String?          @map("external_id")
+  payload    Json
+  state      String           @default("PENDING")
+  errorCode  String?          @map("error_code")
+  issueId    String?          @map("issue_id")
+  identifier String?
+  batch      IssueImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@id([batchId, rowNumber])
+  @@map("issue_import_rows")
+}
+
+model IssueImportKey {
+  workspaceId String    @map("workspace_id")
+  sourceKey   String    @map("source_key")
+  externalId  String    @map("external_id")
+  issueId     String    @map("issue_id")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  issue       Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, sourceKey, externalId])
+  @@map("issue_import_keys")
+}
+
+model RecurringSchedule {
+  id                  String         @id @default(cuid())
+  workspaceId         String         @map("workspace_id")
+  teamId              String         @map("team_id")
+  createdBy           String         @map("created_by")
+  requestKey          String         @map("request_key")
+  fingerprint         String
+  name                String
+  rule                Json
+  template            Json
+  dueAfterMinutes     Int?           @map("due_after_minutes")
+  active              Boolean        @default(true)
+  version             Int            @default(1)
+  nextRunAt           DateTime       @map("next_run_at")
+  consecutiveFailures Int            @default(0) @map("consecutive_failures")
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @map("updated_at")
+  workspace           Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  team                Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  creator             User           @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  runs                RecurringRun[]
+
+  @@unique([createdBy, requestKey])
+  @@index([active, nextRunAt])
+  @@index([workspaceId, teamId, createdAt])
+  @@map("recurring_schedules")
+}
+
+model RecurringRun {
+  id            String            @id @default(cuid())
+  scheduleId    String            @map("schedule_id")
+  occurrenceKey String            @map("occurrence_key")
+  scheduledFor  DateTime          @map("scheduled_for")
+  state         String
+  snapshot      Json
+  issueId       String?           @map("issue_id")
+  errorCode     String?           @map("error_code")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  schedule      RecurringSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  issue         Issue?            @relation(fields: [issueId], references: [id], onDelete: SetNull)
+
+  @@unique([scheduleId, occurrenceKey])
+  @@index([scheduleId, createdAt, id])
+  @@index([scheduleId, state, createdAt])
+  @@map("recurring_runs")
+}
+
+model IssueLifecycleEvent {
+  toPriority     String?   @map("to_priority")
+  id             String    @id @default(cuid())
+  issueId        String    @map("issue_id")
+  workspaceId    String    @map("workspace_id")
+  issueVersion   Int       @map("issue_version")
+  kind           String
+  actorId        String?   @map("actor_id")
+  source         String    @default("UNKNOWN")
+  fromStatusId   String?   @map("from_status_id")
+  toStatusId     String    @map("to_status_id")
+  fromCategory   String?   @map("from_category")
+  toCategory     String    @map("to_category")
+  fromTeamId     String?   @map("from_team_id")
+  toTeamId       String    @map("to_team_id")
+  fromDueDate    DateTime? @map("from_due_date")
+  toDueDate      DateTime? @map("to_due_date")
+  fromArchivedAt DateTime? @map("from_archived_at")
+  toArchivedAt   DateTime? @map("to_archived_at")
+  managedDue     Boolean   @default(false) @map("managed_due")
+  fromSlaOptOut  Boolean?  @map("from_sla_opt_out")
+  toSlaOptOut    Boolean   @default(false) @map("to_sla_opt_out")
+  occurredAt     DateTime  @default(now()) @map("occurred_at")
+  slaProcessedAt DateTime? @map("sla_processed_at")
+  issue          Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actor          User?     @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@unique([issueId, issueVersion])
+  @@index([workspaceId, occurredAt])
+  @@index([issueId, occurredAt, issueVersion])
+  @@index([slaProcessedAt, occurredAt])
+  @@map("issue_lifecycle_events")
+}
+
+model SlaPolicyRevision {
+  policyId  String    @map("policy_id")
+  version   Int
+  kind      String    @default("CREATED")
+  snapshot  Json
+  actorId   String?   @map("actor_id")
+  createdAt DateTime  @default(now()) @map("created_at")
+  policy    SlaPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  actor     User?     @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@id([policyId, version])
+  @@map("sla_policy_revisions")
+}
+
+model IssueSlaCycle {
+  alertResults     Json       @default("{}") @map("alert_results")
+  id               String     @id @default(cuid())
+  issueId          String     @map("issue_id")
+  workspaceId      String     @map("workspace_id")
+  cycle            Int
+  policyId         String?    @map("policy_id")
+  policyVersion    Int        @map("policy_version")
+  snapshot         Json
+  state            String
+  budgetSeconds    Int        @map("budget_seconds")
+  remainingSeconds Float      @map("remaining_seconds")
+  lastStartedAt    DateTime?  @map("last_started_at")
+  dueAt            DateTime?  @map("due_at")
+  warningAt        DateTime?  @map("warning_at")
+  startedAt        DateTime   @map("started_at")
+  closedAt         DateTime?  @map("closed_at")
+  breachedAt       DateTime?  @map("breached_at")
+  warningSentAt    DateTime?  @map("warning_sent_at")
+  breachSentAt     DateTime?  @map("breach_sent_at")
+  escalatedAt      DateTime?  @map("escalated_at")
+  escalationCode   String?    @map("escalation_code")
+  issue            Issue      @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  workspace        Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  policy           SlaPolicy? @relation(fields: [policyId], references: [id], onDelete: SetNull)
+
+  @@unique([issueId, cycle])
+  @@index([workspaceId, startedAt])
+  @@index([state, dueAt])
+  @@index([warningSentAt, warningAt])
+  @@index([breachSentAt, breachedAt])
+  @@map("issue_sla_cycles")
+}
+
+model IssueSlaJob {
+  issueId       String    @id @map("issue_id")
+  nextAttemptAt DateTime? @map("next_attempt_at")
+  generation    Int       @default(1)
+  attempts      Int       @default(0)
+  lastErrorCode String?   @map("last_error_code")
+  failedAt      DateTime? @map("failed_at")
+  issue         Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([failedAt, nextAttemptAt])
+  @@map("issue_sla_jobs")
 }

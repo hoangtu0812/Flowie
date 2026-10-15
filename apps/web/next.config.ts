@@ -60,6 +60,7 @@ const nextConfig: NextConfig = {
    transpilePackages: ['thinking-orbs'],
    env: {
       NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION ?? release.version,
+      NEXT_PUBLIC_BUILD_REVISION: process.env.NEXT_PUBLIC_BUILD_REVISION ?? 'local',
       NEXT_PUBLIC_APP_RELEASED_AT: process.env.NEXT_PUBLIC_APP_RELEASED_AT ?? release.releasedAt,
       NEXT_PUBLIC_APP_HIGHLIGHTS: JSON.stringify(release.highlights),
    },

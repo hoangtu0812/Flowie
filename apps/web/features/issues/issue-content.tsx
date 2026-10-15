@@ -11,6 +11,7 @@ import { IssueSubIssues } from '@/components/common/issues/details/issue-sub-iss
 import { IssueRelations } from '@/components/common/issues/details/issue-relations';
 import { IssuePropertiesPanel } from '@/components/common/issues/details/issue-properties-panel';
 import { MobileIssueProperties } from '@/components/common/issues/details/mobile-issue-properties';
+import { IssueSlaPanel } from '@/features/sla/issue-sla-panel';
 
 export function IssueContent({
    issue,
@@ -29,7 +30,8 @@ export function IssueContent({
                <Heading level={compact ? 2 : 1}>{issue.title}</Heading>
                <MobileIssueProperties issue={issue} detail={detail} allScreens={compact} />
                <IssueDescription issue={issue} />
-               <BugDetails issue={issue} />
+               <BugDetails key={issue.id} issue={issue} />
+               <IssueSlaPanel issue={issue} />
                <IssueReactions issueId={issue.id} />
                <IssueAttachments issueId={issue.id} />
                {issue.teamId && (

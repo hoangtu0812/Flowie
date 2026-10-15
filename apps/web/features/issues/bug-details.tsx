@@ -1,5 +1,9 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEnumLabel } from '@/features/shared/enum-labels';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/issues/messages.vi';
+
+import { useState } from 'react';
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
@@ -7,25 +11,25 @@ import { useIssuesStore } from '@/store/issues-store';
 import type { Issue } from '@/mock-data/issues';
 import { BugFieldsForm, type BugFields } from './bug-fields';
 export function BugDetails({ issue }: { issue: Issue }) {
+   const tx = useMessages(messages);
+   const enumLabel = useEnumLabel();
+
    const [editing, setEditing] = useState(false);
    const [draft, setDraft] = useState<BugFields>(issue);
    const [error, setError] = useState<string>();
    const update = useIssuesStore((state) => state.updateIssueBug);
-   useEffect(() => {
-      setEditing(false);
-      setDraft(issue);
-      setError(undefined);
-   }, [issue.id]);
    return (
       <VStack gap={3} as="section">
-         <Heading level={2}>{issue.issueType === 'BUG' ? 'Bug report' : 'Task details'}</Heading>
+         <Heading level={2}>
+            {issue.issueType === 'BUG' ? tx('Bug report') : tx('Task details')}
+         </Heading>
          {editing ? (
             <>
                <BugFieldsForm value={draft} onChange={setDraft} />
                {error && <Text role="alert">{error}</Text>}
                <HStack gap={2}>
                   <Button
-                     label="Save bug details"
+                     label={tx('Save bug details')}
                      clickAction={async () => {
                         try {
                            await update(issue.id, draft);
@@ -35,19 +39,22 @@ export function BugDetails({ issue }: { issue: Issue }) {
                            setError(
                               reason instanceof Error
                                  ? reason.message
-                                 : 'Could not save bug details.'
+                                 : tx('Could not save bug details.')
                            );
                         }
                      }}
                   />
-                  <Button label="Cancel bug editing" onClick={() => setEditing(false)} />
+                  <Button label={tx('Cancel bug editing')} onClick={() => setEditing(false)} />
                </HStack>
             </>
          ) : (
             <>
                {issue.issueType === 'BUG' && (
                   <>
-                     <Text>Severity: {issue.severity ?? 'Unspecified'}</Text>
+                     <Text>
+                        {tx('Severity:')}{' '}
+                        {issue.severity ? enumLabel(issue.severity) : tx('Unspecified')}
+                     </Text>
                      {(
                         [
                            'environment',
@@ -60,22 +67,22 @@ export function BugDetails({ issue }: { issue: Issue }) {
                            <Text weight="medium">
                               {
                                  {
-                                    environment: 'Environment',
-                                    reproductionSteps: 'Steps to reproduce',
-                                    expectedResult: 'Expected result',
-                                    actualResult: 'Actual result',
+                                    environment: tx('Environment'),
+                                    reproductionSteps: tx('Steps to reproduce'),
+                                    expectedResult: tx('Expected result'),
+                                    actualResult: tx('Actual result'),
                                  }[field]
                               }
                            </Text>
                            <Text className="whitespace-pre-wrap">
-                              {issue[field] || 'Not provided'}
+                              {issue[field] || tx('Not provided')}
                            </Text>
                         </VStack>
                      ))}
                   </>
                )}
                <Button
-                  label="Edit type and bug details"
+                  label={tx('Edit type and bug details')}
                   variant="ghost"
                   onClick={() => {
                      setDraft({

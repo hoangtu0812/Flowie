@@ -16,7 +16,7 @@ const values = (filters: Record<string, unknown>, key: string) =>
 export default function Header() {
    const { viewId } = useParams<{ viewId: string }>();
    const { views, loading } = useLiveViews();
-   const { issues } = useIssuesStore();
+   const { page, loading: issuesLoading } = useIssuesStore();
    const { allProjects } = useProjectsData();
    const { openPanel, togglePanel } = useRightPanelStore();
    const view = views.find((candidate) => candidate.id === viewId);
@@ -30,15 +30,8 @@ export default function Header() {
                (!priorities.length || priorities.includes(project.priority.id)) &&
                (!teamId || project.teamId === teamId)
          ).length;
-      const categories = values(view.filters, 'statusCategories');
-      const statuses = values(view.filters, 'statusIds');
-      return issues.filter(
-         (issue) =>
-            (!categories.length || categories.includes(issue.status.category)) &&
-            (!statuses.length || statuses.includes(issue.status.id)) &&
-            (!teamId || issue.teamId === teamId)
-      ).length;
-   }, [allProjects, issues, view]);
+      return issuesLoading ? '…' : (page?.total ?? '…');
+   }, [allProjects, page, issuesLoading, view]);
    if (loading || !view) return null;
    const Icon = view.entityType === 'issue' ? Layers : Box;
    return (

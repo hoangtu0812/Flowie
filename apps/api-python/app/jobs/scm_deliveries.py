@@ -1,4 +1,5 @@
 from __future__ import annotations
+from ..modules.operations.heartbeats import progress
 
 import asyncio
 import logging
@@ -103,7 +104,7 @@ async def scm_delivery_loop(
 ) -> None:
     while not stop.is_set():
         try:
-            processed = await run(factory, settings)
+            processed = await progress(factory,'scm-delivery',run(factory, settings))
             if processed:
                 logger.info('Processed %s source-control webhook delivery record(s).', processed)
         except Exception:

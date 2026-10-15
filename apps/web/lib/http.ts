@@ -1,7 +1,8 @@
 export class ApiRequestError extends Error {
    constructor(
       message: string,
-      readonly status: number
+      readonly status: number,
+      readonly requestId?: string
    ) {
       super(message);
       this.name = 'ApiRequestError';
@@ -26,7 +27,11 @@ export async function responseEnvelope<T, M = unknown>(
    } | null;
    if (!response.ok || !payload || !('data' in payload)) {
       const message = Array.isArray(payload?.message) ? payload.message[0] : payload?.message;
-      throw new ApiRequestError(message ?? fallback, response.status);
+      throw new ApiRequestError(
+         message ?? fallback,
+         response.status,
+         response.headers.get('x-request-id') ?? undefined
+      );
    }
    return { data: payload.data as T, meta: payload.meta };
 }

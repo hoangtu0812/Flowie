@@ -19,7 +19,12 @@ def _validate_schedule_dates(
 
 
 async def _ensure_circle_issue_statuses(db: AsyncSession, workspace_id: str) -> None:
-    """Bring pre-P6 workspaces onto the unchanged Circle workflow catalog."""
+    """Seed an empty workflow without overwriting administrator customizations."""
+    existing_workflow = (await db.execute(text(
+        'SELECT 1 FROM issue_statuses WHERE workspace_id=:workspace AND team_id IS NULL LIMIT 1'
+    ), {'workspace':workspace_id})).first()
+    if existing_workflow:
+        return
     now = _utcnow()
     for position, (name, category, color) in enumerate(DEFAULT_CIRCLE_ISSUE_STATUSES):
         existing = await db.execute(
@@ -76,6 +81,7 @@ async def _validate_references(
     *,
     creating: bool,
 ) -> str | None:
+    row = None
     status_id = values.get("statusId")
     if status_id:
         status = await db.execute(
@@ -96,19 +102,18 @@ async def _validate_references(
             ),
             {"workspace_id": workspace_id, "team_id": team_id},
         )
-    else:
-        return None
-    row = status.mappings().first()
-    if not row:
-        raise ApiError(404, "A valid issue status is required.", "Not Found")
-    values["statusId"] = row["id"]
+    if status_id or creating:
+        row = status.mappings().first()
+        if not row:
+            raise ApiError(404, "A valid issue status is required.", "Not Found")
+        values["statusId"] = row["id"]
 
     project_id = values.get("projectId")
     if project_id:
         project = await db.execute(
             text(
                 """SELECT 1 FROM projects WHERE id = :project_id AND workspace_id = :workspace_id
-                   AND archived_at IS NULL AND (team_id IS NULL OR team_id = :team_id)"""
+                   AND archived_at IS NULL AND (team_id IS NULL OR team_id = :team_id) FOR SHARE"""
             ),
             {
                 "project_id": project_id,
@@ -144,7 +149,7 @@ async def _validate_references(
             if len(labels.mappings().all()) != len(unique_ids):
                 raise ApiError(404, "One or more labels were not found.", "Not Found")
         values["labelIds"] = unique_ids
-    return row["category"]
+    return row["category"] if row else None
 
 
 async def _validate_release_ids(

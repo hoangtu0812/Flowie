@@ -1,4 +1,6 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/navigation/messages.vi';
 
 import {
    Archive,
@@ -44,6 +46,8 @@ import { RiDonutChartFill } from '@remixicon/react';
 import { toast } from 'sonner';
 
 export function NavTeams() {
+   const tx = useMessages(messages);
+
    const { orgId } = useParams<{ orgId: string }>();
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [joinedTeams, setJoinedTeams] = useState<WorkspaceTeam[]>([]);
@@ -85,7 +89,7 @@ export function NavTeams() {
 
    return (
       <SidebarGroup>
-         <SidebarGroupLabel>Your teams</SidebarGroupLabel>
+         <SidebarGroupLabel>{tx('Your teams')}</SidebarGroupLabel>
          <SidebarMenu>
             {joinedTeams.map((item, index) => (
                <Collapsible
@@ -109,7 +113,7 @@ export function NavTeams() {
                                  <SidebarMenuAction asChild showOnHover>
                                     <div>
                                        <MoreHorizontal />
-                                       <span className="sr-only">More</span>
+                                       <span className="sr-only">{tx('More')}</span>
                                     </div>
                                  </SidebarMenuAction>
                               </DropdownMenuTrigger>
@@ -121,7 +125,7 @@ export function NavTeams() {
                                  <DropdownMenuItem asChild>
                                     <Link href={`/${orgId}/settings/teams/${item.id}`}>
                                        <Settings className="size-4" />
-                                       <span>Team settings</span>
+                                       <span>{tx('Team settings')}</span>
                                     </Link>
                                  </DropdownMenuItem>
                                  <DropdownMenuItem
@@ -130,25 +134,27 @@ export function NavTeams() {
                                           .writeText(
                                              `${window.location.origin}/${orgId}/team/${item.identifier}/overview`
                                           )
-                                          .then(() => toast.success('Team link copied.'))
-                                          .catch(() => toast.error('Could not copy team link.'));
+                                          .then(() => toast.success(tx('Team link copied.')))
+                                          .catch(() =>
+                                             toast.error(tx('Could not copy team link.'))
+                                          );
                                     }}
                                  >
                                     <LinkIcon className="size-4" />
-                                    <span>Copy link</span>
+                                    <span>{tx('Copy link')}</span>
                                  </DropdownMenuItem>
                                  <DropdownMenuItem disabled>
                                     <Archive className="size-4" />
-                                    <span>Open archive</span>
+                                    <span>{tx('Open archive')}</span>
                                  </DropdownMenuItem>
                                  <DropdownMenuSeparator />
                                  <DropdownMenuItem disabled>
                                     <Bell className="size-4" />
-                                    <span>Subscribe</span>
+                                    <span>{tx('Subscribe')}</span>
                                  </DropdownMenuItem>
                                  <DropdownMenuSeparator />
                                  <DropdownMenuItem onSelect={() => void leave(item)}>
-                                    <span>Leave team...</span>
+                                    <span>{tx('Leave team...')}</span>
                                  </DropdownMenuItem>
                               </DropdownMenuContent>
                            </DropdownMenu>
@@ -160,7 +166,7 @@ export function NavTeams() {
                               <SidebarMenuSubButton asChild>
                                  <Link href={`/${orgId}/team/${item.identifier}/overview`}>
                                     <Home size={14} />
-                                    <span>Home</span>
+                                    <span>{tx('Home')}</span>
                                  </Link>
                               </SidebarMenuSubButton>
                            </SidebarMenuSubItem>
@@ -168,7 +174,7 @@ export function NavTeams() {
                               <SidebarMenuSubButton asChild>
                                  <Link href={`/${orgId}/team/${item.identifier}/all`}>
                                     <CopyMinus size={14} />
-                                    <span>Issues</span>
+                                    <span>{tx('Issues')}</span>
                                  </Link>
                               </SidebarMenuSubButton>
                            </SidebarMenuSubItem>
@@ -176,7 +182,7 @@ export function NavTeams() {
                               <SidebarMenuSubButton asChild>
                                  <Link href={`/${orgId}/team/${item.identifier}/cycles`}>
                                     <RiDonutChartFill size={14} />
-                                    <span>Cycles</span>
+                                    <span>{tx('Cycles')}</span>
                                  </Link>
                               </SidebarMenuSubButton>
                               <SidebarMenuSub className="mr-0 pr-0">
@@ -185,7 +191,7 @@ export function NavTeams() {
                                        <Link
                                           href={`/${orgId}/team/${item.identifier}/cycle/active`}
                                        >
-                                          <span>Current</span>
+                                          <span>{tx('Current')}</span>
                                        </Link>
                                     </SidebarMenuSubButton>
                                  </SidebarMenuSubItem>
@@ -194,7 +200,7 @@ export function NavTeams() {
                                        <Link
                                           href={`/${orgId}/team/${item.identifier}/cycle/upcoming`}
                                        >
-                                          <span>Upcoming</span>
+                                          <span>{tx('Upcoming')}</span>
                                        </Link>
                                     </SidebarMenuSubButton>
                                  </SidebarMenuSubItem>
@@ -204,7 +210,7 @@ export function NavTeams() {
                               <SidebarMenuSubButton asChild>
                                  <Link href={`/${orgId}/team/${item.identifier}/projects`}>
                                     <Box size={14} />
-                                    <span>Projects</span>
+                                    <span>{tx('Projects')}</span>
                                  </Link>
                               </SidebarMenuSubButton>
                            </SidebarMenuSubItem>
@@ -212,7 +218,7 @@ export function NavTeams() {
                               <SidebarMenuSubButton asChild>
                                  <Link href={`/${orgId}/team/${item.identifier}/views`}>
                                     <Layers size={14} />
-                                    <span>Views</span>
+                                    <span>{tx('Views')}</span>
                                  </Link>
                               </SidebarMenuSubButton>
                            </SidebarMenuSubItem>

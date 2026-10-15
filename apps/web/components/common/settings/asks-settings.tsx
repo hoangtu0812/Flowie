@@ -1,4 +1,5 @@
 'use client';
+import { portfolioFetch } from '@/features/projects/portfolio-fetch';
 
 import {
    loadCurrentWorkspaceTeams,
@@ -91,7 +92,7 @@ export default function AsksSettings() {
          const query = new URLSearchParams({ workspaceId: workspace.workspaceId });
          const [askResponse, projectResponse] = await Promise.all([
             authenticatedFetch(`${api}/asks?${query}`),
-            authenticatedFetch(`${api}/projects?${query}`),
+            portfolioFetch(`${api}/projects?${query}`),
          ]);
          if (!askResponse.ok || !projectResponse.ok) throw new Error('Could not load Asks.');
          setWorkspaceId(workspace.workspaceId);
