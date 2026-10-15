@@ -11,6 +11,7 @@ import { responseData } from '@/lib/http';
 
 type Operations = {
    revision: string;
+   jobsTruncated?: boolean;
    jobs: {
       instance: string;
       job: string;
@@ -75,7 +76,13 @@ export default function OperationsPage() {
                   <Heading level={2}>Background tasks</Heading>
                   <Text>
                      Heartbeats track process liveness; progress records the last completed scan.
+                     The list shows live instances and the latest state for each job.
                   </Text>
+                  {data.jobsTruncated && (
+                     <Text role="alert">
+                        More than 100 recent job instances match. Some instances are omitted.
+                     </Text>
+                  )}
                   <List hasDividers>
                      {data.jobs.map((job) => (
                         <ListItem

@@ -14,6 +14,7 @@ from ...domains.auth import current_user
 from ..access.projects import _workspace_access, _workspace_manager
 from ..identity.password_reset import limit_request
 from .diagnostics import build_identity
+from .job_query import visible_jobs
 
 router=UtcAPIRouter(prefix='/api/v1/operations',tags=['operations'])
 
@@ -42,8 +43,7 @@ async def client_error(payload:ClientError,request:Request,user=Depends(current_
 async def overview(workspaceId:str,user=Depends(current_user),db:AsyncSession=Depends(get_session)):
     await _workspace_manager(db,workspaceId,user['id'])
     now=_utcnow()
-    jobs=(await db.execute(text('''SELECT instance_id,job,status,last_seen_at,last_progress_at,failures,last_error_code
-        FROM operation_heartbeats WHERE last_seen_at>=:cutoff ORDER BY job,last_seen_at DESC LIMIT 100'''),{'cutoff':now-timedelta(days=1)})).mappings().all()
+    jobs,truncated=await visible_jobs(db,now)
     errors=(await db.execute(text('''SELECT category,route_kind,COUNT(*) AS count FROM client_error_events
         WHERE workspace_id=:workspace AND created_at>=:cutoff GROUP BY category,route_kind'''),{'workspace':workspaceId,'cutoff':now-timedelta(days=1)})).mappings().all()
     queues=[]
@@ -61,6 +61,6 @@ async def overview(workspaceId:str,user=Depends(current_user),db:AsyncSession=De
         WHERE i.workspace_id=:workspace AND t.archived_at IS NULL AND EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=i.team_id AND tm.user_id=:user)'''),
         {'workspace':workspaceId,'user':user['id'],'now':now})).mappings().one()
     queues.append({'name':'sla','pending':sla['pending'],'failed':sla['failed'],'lagSeconds':max(0,int((now-sla['oldest']).total_seconds())) if sla['oldest'] else 0})
-    return {'data':{**build_identity(),'jobs':[{'instance':r['instance_id'],'job':r['job'],'status':'stale' if r['last_seen_at']<now-timedelta(seconds=60) else r['status'],
+    return {'data':{**build_identity(),'jobsTruncated':truncated,'jobs':[{'instance':r['instance_id'],'job':r['job'],'status':'stale' if r['last_seen_at']<now-timedelta(seconds=60) else r['status'],
         'lastSeenAt':r['last_seen_at'],'lastProgressAt':r['last_progress_at'],'failures':r['failures'],'lastErrorCode':r['last_error_code']} for r in jobs],
         'clientErrors':[dict(r) for r in errors],'queues':queues}}

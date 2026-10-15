@@ -163,6 +163,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Operations keeps live worker instances and each job's latest state visible after many application restarts, instead of letting older stopped instances fill the result limit. An explicit flag reports an unusually large live result.
+
 - Updating an issue with its existing status preserves its original completed/canceled timestamp.
 
 - Updating an issue validates project, assignee and label references even when its status stays unchanged; relation-only edits advance its version without producing an invalid SQL update.

@@ -39,11 +39,14 @@ async def verify():
             async with factory() as db:
                 user={'id':_cuid(),'name':'Operations owner'}
                 now=_utcnow()
+                await db.execute(text("""INSERT INTO operation_heartbeats(id,instance_id,job,status,last_seen_at,failures)
+                    SELECT :prefix||n::text,:prefix||n::text,'bulk-issues','stopped',:past,0 FROM generate_series(1,120) n"""),{'prefix':_cuid(),'past':now-timedelta(hours=1)})
                 await db.execute(text("INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,:name,:email,'ACTIVE',:now,:now)"),{**user,'email':_cuid()+'@example.test','now':now})
                 seed=await create_workspace_bootstrap(db,user_id=user['id'],organization_name='Operations',workspace_name=_cuid(),now=now)
                 await db.execute(text('UPDATE operation_heartbeats SET last_seen_at=:past WHERE instance_id=:instance'),{'past':now-timedelta(seconds=90),'instance':instance})
                 data=(await overview(seed['workspace_id'],user,db))['data']
                 job=next(j for j in data['jobs'] if j['instance']==instance)
+                assert len([row for row in data['jobs'] if row['job']=='bulk-issues'])==1
                 assert job['status']=='stale' and job['lastProgressAt'] is not None and job['lastErrorCode'] is None
                 await db.execute(text("UPDATE workspace_members SET role='MEMBER' WHERE workspace_id=:workspace AND user_id=:user"),{'workspace':seed['workspace_id'],'user':user['id']})
                 with pytest.raises(ApiError) as denied:

@@ -29,6 +29,9 @@
   Progress is the last completed scan, not proof that every domain item succeeded.
   Delivery failures remain visible in queue state. Digest/maintenance scans can
   legitimately have long intervals between progress records.
+  The list prioritizes live instances and the most recent state per job; older
+  stopped/stale instances cannot crowd new jobs out after repeated restarts.
+  An explicit truncation notice covers more than 100 matching live/latest rows.
 - Browser diagnostics accept only category, static route kind and a bounded
   digest; arbitrary message, stack, URL and payload fields are rejected. Reports
   require workspace access and are capped at 60 per account/hour. First-party
