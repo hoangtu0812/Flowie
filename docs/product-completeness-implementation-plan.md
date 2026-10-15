@@ -23,7 +23,7 @@ Phạm vi đã được yêu cầu: toàn bộ AUD-01–12 và NEXT-01–09 tron
 | NEXT-03 | Business calendar, SLA pause/resume/escalation, policy revision và reports | LOCAL_VERIFIED |
 | NEXT-04 | Archived center cho task/project/document/initiative; restore preview/version/dependency/audit; giữ dữ liệu, không purge | LOCAL_VERIFIED |
 | NEXT-05 | CSV mapping/preview/validation/dedup, worker/resume/cancel; filtered scoped issue CSV và document/attachment ZIP | LOCAL_VERIFIED |
-| NEXT-06 | Đã có nền lifecycle event transaction + baseline rõ ràng; server reporting/flow/aging/WIP/reopen/workload tiếp tục | IN_PROGRESS |
+| NEXT-06 | Server reporting/flow/aging/WIP/reopen/workload và dashboard theo lịch sử thực | LOCAL_VERIFIED |
 | NEXT-07 | MFA/IdP policy, per-session revoke, credential inventory và login audit | TODO |
 | NEXT-08 | Workspace audit cursor/filter/export theo current ACL; source Web/AI/SYSTEM/UNKNOWN; admin UI | LOCAL_VERIFIED |
 | NEXT-09 | Locale core workflows, week start/timezone, optional self-assignment, keyboard/mobile | TODO |
@@ -166,3 +166,15 @@ UI policy/calendar preview, revisions, team report filter và task pause/manual/
 reopen/history/recovery: 3/3 engine đạt. Bounds 390px và ảnh calendar/task đã xem;
 web production build pass. Năm migration SLA liên tiếp phải chạy trước API;
 worker lifespan có heartbeat/lag, chưa deploy CT107 hoặc xác nhận SMTP delivery.
+
+NEXT-06: dashboard chuyển sang server aggregate, định nghĩa current snapshot tách
+khỏi period events. Lead/cycle mean/median/P85 chỉ lấy episode có lịch sử đầy đủ;
+baseline completed không bị tính thành completion, status aging thiếu entry ghi
+unknown, WIP theo local day kèm unknown/future coverage. Workload dùng planned
+start week, không giả lập time log/capacity; project dùng quyền hiện tại, kể cả
+khi task còn đọc được nhưng project riêng tư. Fixture 153 readable / 150 private,
+151 project groups và 105 workload groups; cursor, grant/revoke, restricted
+history và DST day bounds đạt. Full backend 158 passed, 2 optional skips,
+10 subtests; web build/types và 17 unit pass. Reporting + SLA/Ask/request settings
+6/6 E2E trên ba engine đạt, có drilldown, empty/retry, mobile bounds và ảnh đã xem.
+Chưa deploy; dashboard dùng migration lifecycle đã commit, không cần DDL bổ sung.

@@ -347,7 +347,7 @@ test('SLA request Ask and emoji settings create persisted records', async ({ pag
    await page.getByPlaceholder('SLA name').fill('Regression SLA ' + suffix);
    await page.getByRole('textbox', { name: /^Deadline duration/ }).fill('120');
    await page.getByRole('button', { name: 'Create SLA', exact: true }).click();
-   await expect(page.getByRole('dialog')).toHaveCount(0);
+   await expect(page.getByRole('textbox', { name: /^SLA name/ })).toHaveCount(0);
    await page.reload();
    await expect(page.getByText('Regression SLA ' + suffix, { exact: true })).toBeVisible();
    await page.goto(`/${fixture.slug}/settings/customer-requests`);

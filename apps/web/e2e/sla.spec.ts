@@ -127,7 +127,7 @@ test('business SLA revision, pause, override, reopen, history and mobile recover
       await expect(panel.getByText('PAUSED', { exact: true })).toBeVisible();
       await changeStatus('In Progress');
       await expect(panel.getByText('ACTIVE', { exact: true })).toBeVisible();
-      const manual = await context.request.patch(`${api}/issues/${issue.id}?${scope}`, {
+      const manual = await context.request.patch(`${api}/issues/${issue!.id}?${scope}`, {
          data: { dueDate: new Date(Date.now() + 86400000).toISOString() },
       });
       expect(manual.ok()).toBeTruthy();
@@ -165,7 +165,7 @@ test('business SLA revision, pause, override, reopen, history and mobile recover
       }
       await page.waitForLoadState('networkidle');
       let fail = true;
-      await page.route(`**/slas/issues/${issue.id}/clock?**`, async (route) => {
+      await page.route(`**/slas/issues/${issue!.id}/clock?**`, async (route) => {
          if (fail) {
             fail = false;
             await route.fulfill({
