@@ -20,7 +20,7 @@ Phạm vi đã được yêu cầu: toàn bộ AUD-01–12 và NEXT-01–09 tron
 | AUD-12 | Cập nhật bằng chứng kế hoạch cũ, build identity/release checklist; release thực sau deploy verified | TODO |
 | NEXT-01 | Bulk preview/execute có version/ACL/idempotency và explicit all-results selection | LOCAL_VERIFIED |
 | NEXT-02 | Recurring schedules/timezone, transaction lock/idempotency, pause/run history và UI | LOCAL_VERIFIED |
-| NEXT-03 | Business calendar, SLA pause/resume/escalation, policy revision và reports | TODO |
+| NEXT-03 | Business calendar, SLA pause/resume/escalation, policy revision và reports | LOCAL_VERIFIED |
 | NEXT-04 | Archived center cho task/project/document/initiative; restore preview/version/dependency/audit; giữ dữ liệu, không purge | LOCAL_VERIFIED |
 | NEXT-05 | CSV mapping/preview/validation/dedup, worker/resume/cancel; filtered scoped issue CSV và document/attachment ZIP | LOCAL_VERIFIED |
 | NEXT-06 | Đã có nền lifecycle event transaction + baseline rõ ràng; server reporting/flow/aging/WIP/reopen/workload tiếp tục | IN_PROGRESS |
@@ -152,3 +152,17 @@ phát realtime. Admin ngoài private team, grant/revoke và revoke sau staging �
 33 tests + 10 subtests (notification/MCP), 4 delivery/access/infrastructure tests
 đạt (1 optional storage skip). Email vẫn chỉ gửi link chung; không suy ra quyền
 Discord từ team membership. SLA alert/worker vẫn đang triển khai ở checkpoint này.
+
+NEXT-03: calendar/holiday/DST, fractional pause, completion boundary, revision
+isolation, manual override, explicit reapply, archive/restore/team move và durable
+warning/breach/escalation đã hoàn tất. Concurrent workers không tạo trùng;
+notification/outbox rollback cùng clock, revoke target bị bỏ qua, failure backoff
+8 lần và generation chống lỗi cũ ghi đè edit/retry mới. Báo cáo 152 task dùng
+server scope, lịch sử phân trang và mất quyền team cũ không lộ policy metadata.
+Upgrade giữ policy BASELINE đúng thời điểm quan sát, không tạo SLA giả cho task cũ.
+Toàn bộ backend 156 passed, 2 optional skips, 10 subtests; focused MCP/SLA 34
+passed + 10 subtests, bổ sung retry test pass; Prisma 99 migrations không drift.
+UI policy/calendar preview, revisions, team report filter và task pause/manual/
+reopen/history/recovery: 3/3 engine đạt. Bounds 390px và ảnh calendar/task đã xem;
+web production build pass. Năm migration SLA liên tiếp phải chạy trước API;
+worker lifespan có heartbeat/lag, chưa deploy CT107 hoặc xác nhận SMTP delivery.

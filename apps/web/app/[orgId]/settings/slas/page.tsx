@@ -1,4 +1,4 @@
-import SlasSettings from '@/components/common/settings/slas-settings';
+import SlasSettings from '@/features/sla/sla-settings';
 import MainLayout from '@/components/layout/main-layout';
 import Header from '@/components/layout/headers/settings/header';
 
