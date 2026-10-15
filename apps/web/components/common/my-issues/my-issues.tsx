@@ -74,7 +74,7 @@ export default function MyIssues() {
 
             {openPanel === 'insights' && (
                <aside className="hidden lg:flex w-[420px] shrink-0 border-l h-full overflow-hidden bg-container">
-                  <InsightsPanel issues={displayedIssues} />
+                  <InsightsPanel />
                </aside>
             )}
             {openPanel === 'breakdown' && (

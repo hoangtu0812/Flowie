@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useParams } from 'next/navigation';
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
@@ -26,6 +27,10 @@ const blank = { name: '', category: 'UNSTARTED', color: '#99a2b2', position: 0 }
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 export default function WorkflowSettings() {
+   const { orgId } = useParams<{ orgId: string }>();
+   const currentOrg = useRef(orgId);
+   currentOrg.current = orgId;
+   const generation = useRef(0);
    const [workspace, setWorkspace] = useState('');
    const [canEdit, setCanEdit] = useState(false);
    const [rows, setRows] = useState<WorkflowStatus[]>([]);
@@ -36,30 +41,42 @@ export default function WorkflowSettings() {
    const [saving, setSaving] = useState(false);
    const [error, setError] = useState('');
    const load = useCallback(async () => {
+      const request = ++generation.current;
       setLoading(true);
       setError('');
       try {
-         const membership = await loadCurrentWorkspaceMembership();
+         const membership = await loadCurrentWorkspaceMembership(orgId);
          const data = await responseData<WorkflowStatus[]>(
             await authenticatedFetch(`${api}/issue-statuses?workspaceId=${membership.workspace.id}`)
          );
+         if (request !== generation.current || currentOrg.current !== orgId) return;
          setWorkspace(membership.workspace.id);
          setCanEdit(membership.role !== 'MEMBER');
          setRows(data);
       } catch (reason) {
-         setError(reason instanceof Error ? reason.message : 'Could not load workflow.');
+         if (request === generation.current && currentOrg.current === orgId)
+            setError(reason instanceof Error ? reason.message : 'Could not load workflow.');
       } finally {
-         setLoading(false);
+         if (request === generation.current && currentOrg.current === orgId) setLoading(false);
       }
-   }, []);
+   }, [orgId]);
    useEffect(() => {
+      setWorkspace('');
+      setRows([]);
+      setCanEdit(false);
+      setEditing(false);
+      setSaving(false);
       void load();
+      return () => {
+         generation.current++;
+      };
    }, [load]);
    const save = async (remove = false) => {
       if (saving || !canEdit || !workspace) return;
       if (remove && !window.confirm('Delete this unused status?')) return;
       setSaving(true);
       setError('');
+      const scope = orgId;
       try {
          const query = new URLSearchParams({ workspaceId: workspace });
          if (remove && selected) query.set('expectedUpdatedAt', selected.updatedAt);
@@ -79,13 +96,15 @@ export default function WorkflowSettings() {
                }
             )
          );
+         if (currentOrg.current !== scope) return;
          setEditing(false);
          setSelected(undefined);
          await load();
       } catch (reason) {
-         setError(reason instanceof Error ? reason.message : 'Could not save workflow.');
+         if (currentOrg.current === scope)
+            setError(reason instanceof Error ? reason.message : 'Could not save workflow.');
       } finally {
-         setSaving(false);
+         if (currentOrg.current === scope) setSaving(false);
       }
    };
    return (

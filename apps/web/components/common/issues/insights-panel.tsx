@@ -11,10 +11,13 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { useRightPanelStore } from '@/store/right-panel-store';
-import type { Issue } from '@/types/issues';
+import type { IssueQuery } from '@/features/issues/issue-query';
+import { useIssueInsights } from '@/features/issues/use-issue-insights';
+import { RecoveryScreen } from '@/features/shared/recovery-screen';
+import { LoadingState } from '@/components/common/loading-state';
 import { X } from 'lucide-react';
 import type { ComponentType } from 'react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { PanelFilterTarget } from './use-panel-filter';
 import { usePanelFilter } from './use-panel-filter';
@@ -48,51 +51,9 @@ interface DimensionValue {
    color?: string;
 }
 
-interface InsightsRow {
-   value: DimensionValue;
-   total: number;
-   bySegment: Record<string, number>;
-}
-
 interface InsightsPanelProps {
-   issues: Issue[];
+   query?: IssueQuery;
 }
-
-const valueFor = (issue: Issue, dimension: Dimension): DimensionValue => {
-   if (dimension === 'status') {
-      return {
-         id: `status:${issue.status.id}`,
-         label: issue.status.name,
-         filterValue: issue.status.id,
-         icon: issue.status.icon as Icon,
-         color: issue.status.color,
-      };
-   }
-   if (dimension === 'priority') {
-      return {
-         id: `priority:${issue.priority.id}`,
-         label: issue.priority.name,
-         filterValue: issue.priority.id,
-         icon: issue.priority.icon as Icon,
-      };
-   }
-   if (dimension === 'assignee') {
-      const assignee = issue.assignee;
-      return {
-         id: `assignee:${assignee?.id ?? 'unassigned'}`,
-         label: assignee?.name ?? 'Unassigned',
-         filterValue: assignee?.id ?? 'unassigned',
-         avatarUrl: assignee?.avatarUrl ?? null,
-      };
-   }
-   const project = issue.project;
-   return {
-      id: `project:${project?.id ?? 'no-project'}`,
-      label: project?.name ?? 'No project',
-      filterValue: project?.id ?? 'no-project',
-      icon: project?.icon as Icon | undefined,
-   };
-};
 
 const filterColumnFor = (dimension: Dimension): PanelFilterTarget['columnId'] => dimension;
 
@@ -121,42 +82,20 @@ function ValueGlyph({ value }: { value: DimensionValue }) {
  * Analytics based exclusively on live issues supplied by the current Circle page.
  * Custom workspace statuses and real user/project assignments are calculated at runtime.
  */
-export function InsightsPanel({ issues }: InsightsPanelProps) {
+export function InsightsPanel({ query }: InsightsPanelProps) {
    const { closePanel } = useRightPanelStore();
    const { isActive, toggle } = usePanelFilter();
    const [sliceBy, setSliceBy] = useState<Dimension>('status');
    const [segmentBy, setSegmentBy] = useState<Dimension>('priority');
 
-   const { rows, segments } = useMemo(() => {
-      const sliceValues = new Map<string, DimensionValue>();
-      const segmentValues = new Map<string, DimensionValue>();
-      const issuesBySlice = new Map<string, Issue[]>();
-
-      for (const issue of issues) {
-         const slice = valueFor(issue, sliceBy);
-         const segment = valueFor(issue, segmentBy);
-         sliceValues.set(slice.id, slice);
-         segmentValues.set(segment.id, segment);
-         const bucket = issuesBySlice.get(slice.id) ?? [];
-         bucket.push(issue);
-         issuesBySlice.set(slice.id, bucket);
-      }
-
-      const segmentList = [...segmentValues.values()];
-      const rowList: InsightsRow[] = [...sliceValues.values()].map((slice) => {
-         const bucket = issuesBySlice.get(slice.id) ?? [];
-         const bySegment = Object.fromEntries(segmentList.map((segment) => [segment.id, 0]));
-         for (const issue of bucket) bySegment[valueFor(issue, segmentBy).id] += 1;
-         return { value: slice, total: bucket.length, bySegment };
-      });
-
-      return { rows: rowList, segments: segmentList };
-   }, [issues, segmentBy, sliceBy]);
-
-   const chartData = useMemo(
-      () => rows.map((row) => ({ id: row.value.id, name: row.value.label, ...row.bySegment })),
-      [rows]
-   );
+   const { data, error, retry } = useIssueInsights(sliceBy, segmentBy, query);
+   const rows = data?.rows ?? [];
+   const segments = data?.segments ?? [];
+   const chartData = rows.map((row) => ({
+      id: row.value.id,
+      name: row.value.label,
+      ...row.bySegment,
+   }));
 
    const segmentColor = (segment: DimensionValue, index: number) => {
       if (segment.id.startsWith('priority:')) {
@@ -172,11 +111,14 @@ export function InsightsPanel({ issues }: InsightsPanelProps) {
       return segment.color ?? SEGMENT_COLORS[index % SEGMENT_COLORS.length];
    };
 
+   if (error)
+      return <RecoveryScreen title="Could not load insights" message={error} retry={retry} />;
+   if (!data) return <LoadingState label="Loading insights…" />;
    return (
       <div className="flex flex-col h-full w-full">
          <div className="flex items-center justify-between px-4 pt-4 pb-2 shrink-0">
             <div className="flex items-baseline gap-1.5">
-               <span className="text-xl font-semibold">{issues.length}</span>
+               <span className="text-xl font-semibold">{data.total}</span>
                <span className="text-sm text-muted-foreground">issues</span>
             </div>
             <Button variant="ghost" size="icon" className="size-7" onClick={closePanel}>
@@ -237,7 +179,9 @@ export function InsightsPanel({ issues }: InsightsPanelProps) {
                   <XAxis
                      dataKey="id"
                      tick={({ x = 0, y = 0, payload }) => {
-                        const value = rows.find((row) => row.value.id === payload?.value)?.value;
+                        const value: DimensionValue | undefined = rows.find(
+                           (row) => row.value.id === payload?.value
+                        )?.value;
                         if (!value) return <g />;
                         if (sliceBy === 'status' && value.icon) {
                            const IconComponent = value.icon;

@@ -76,9 +76,7 @@ def filter_sql(raw: str | None) -> tuple[list[str], dict]:
     return clauses, params
 
 
-async def search_page(
-    db: AsyncSession, workspace: str, user: str, secret: str, options: dict
-) -> dict:
+def issue_scope(workspace: str, user: str, options: dict) -> tuple[str, dict]:
     filters, extra = filter_sql(options.get("filters"))
     clauses = [
         "i.workspace_id=:workspace",
@@ -143,6 +141,13 @@ async def search_page(
         params["query"] = literal_search(query)
     clauses.extend(filters)
     sql = f"FROM issues i JOIN teams t ON t.id=i.team_id JOIN issue_statuses s ON s.id=i.status_id WHERE {' AND '.join(clauses)}"
+    return sql, params
+
+
+async def search_page(
+    db: AsyncSession, workspace: str, user: str, secret: str, options: dict
+) -> dict:
+    sql, params = issue_scope(workspace, user, options)
     total = (await db.execute(text("SELECT COUNT(*) " + sql), params)).scalar_one()
     codec = CursorCodec(
         secret,

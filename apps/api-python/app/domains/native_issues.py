@@ -158,6 +158,9 @@ async def list_issues(
     projectId: str | None = None, assigneeId: str | None = None, creatorId: str | None = None,
     cycleId: str | None = None, query: Annotated[str | None, Query(max_length=200)] = None,
     filters: Annotated[str | None, Query(max_length=12000)] = None, includeSubIssues: bool = True,
+    insights: bool = False,
+    sliceBy: Literal['status','priority','assignee','project'] = 'status',
+    segmentBy: Literal['status','priority','assignee','project'] = 'priority',
 ) -> dict:
     from ..modules.work_items.issue_search import search_page
     from ..core.config import Settings
@@ -165,11 +168,15 @@ async def list_issues(
     if teamId:
         await _team_access(db, workspaceId, teamId, user['id'])
     settings = request.app.state.settings if request else Settings.from_environment()
-    return await search_page(db, workspaceId, user['id'], settings.auth_jwt_secret, {
+    options = {
         'teamId': teamId, 'categories': categories, 'scope': scope, 'limit': limit, 'cursor': cursor,
         'projectId': projectId, 'assigneeId': assigneeId, 'creatorId': creatorId, 'cycleId': cycleId,
         'query': query, 'filters': filters, 'includeSubIssues': includeSubIssues,
-    })
+    }
+    if insights:
+        from ..modules.work_items.issue_insights import issue_insights
+        return {'data':await issue_insights(db,workspaceId,user['id'],options,sliceBy,segmentBy)}
+    return await search_page(db, workspaceId, user['id'], settings.auth_jwt_secret, options)
 
 
 @public_router.get('/lookup/{reference}')

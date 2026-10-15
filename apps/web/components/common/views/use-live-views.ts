@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
+import { responseData, ApiRequestError } from '@/lib/http';
+import { useParams } from 'next/navigation';
 
 export type LiveView = {
    id: string;
@@ -22,33 +24,42 @@ async function workspaceIdForCurrentUser() {
 }
 
 export function useLiveViews() {
+   const { orgId } = useParams<{ orgId: string }>();
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [currentUserId, setCurrentUserId] = useState<string>();
    const [views, setViews] = useState<LiveView[]>([]);
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState<string>();
+   const [errorStatus, setErrorStatus] = useState<number>();
    const [refreshKey, setRefreshKey] = useState(0);
 
    useEffect(() => {
       let current = true;
+      setViews([]);
+      setWorkspaceId(undefined);
+      setCurrentUserId(undefined);
       void (async () => {
          setLoading(true);
          setError(undefined);
+         setErrorStatus(undefined);
          try {
             const currentWorkspaceId = await workspaceIdForCurrentUser();
             const [response, userResponse] = await Promise.all([
                authenticatedFetch(`${api}/views?workspaceId=${currentWorkspaceId}`),
                authenticatedFetch(`${api}/users/me`),
             ]);
-            if (!response.ok || !userResponse.ok) throw new Error('Could not load views.');
+            const data = await responseData<LiveView[]>(response, 'Could not load views.');
+            const account = await responseData<{ id: string }>(userResponse);
             if (current) {
                setWorkspaceId(currentWorkspaceId);
-               setViews(((await response.json()) as { data: LiveView[] }).data);
-               setCurrentUserId(((await userResponse.json()) as { data: { id: string } }).data.id);
+               setViews(data);
+               setCurrentUserId(account.id);
             }
          } catch (caught) {
-            if (current)
+            if (current) {
                setError(caught instanceof Error ? caught.message : 'Could not load views.');
+               setErrorStatus(caught instanceof ApiRequestError ? caught.status : 0);
+            }
          } finally {
             if (current) setLoading(false);
          }
@@ -56,8 +67,13 @@ export function useLiveViews() {
       return () => {
          current = false;
       };
-   }, [refreshKey]);
+   }, [orgId, refreshKey]);
 
-   const reload = useCallback(() => setRefreshKey((value) => value + 1), []);
-   return { workspaceId, currentUserId, views, loading, error, reload };
+   useEffect(() => {
+      const refresh = () => setRefreshKey((value) => value + 1);
+      window.addEventListener('flowie:views-changed', refresh);
+      return () => window.removeEventListener('flowie:views-changed', refresh);
+   }, []);
+   const reload = useCallback(() => window.dispatchEvent(new Event('flowie:views-changed')), []);
+   return { workspaceId, currentUserId, views, loading, error, errorStatus, reload };
 }
