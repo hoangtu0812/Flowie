@@ -56,6 +56,7 @@ export const settingsNav: SettingsNavGroup[] = [
          { name: 'Operations', url: '/settings/operations', icon: Target },
          { name: 'Audit log', url: '/settings/audit', icon: FileText },
          { name: 'Archived records', url: '/settings/archive', icon: FileText },
+         { name: 'Import and export', url: '/settings/data-exchange', icon: FileText },
       ],
    },
    {

@@ -22,7 +22,7 @@ Phạm vi đã được yêu cầu: toàn bộ AUD-01–12 và NEXT-01–09 tron
 | NEXT-02 | Recurring schedules/timezone, lease/idempotency, pause/run history và UI | TODO |
 | NEXT-03 | Business calendar, SLA pause/resume/escalation, policy revision và reports | TODO |
 | NEXT-04 | Archived center cho task/project/document/initiative; restore preview/version/dependency/audit; giữ dữ liệu, không purge | LOCAL_VERIFIED |
-| NEXT-05 | CSV mapping/preview/validation/dedup, filtered scoped export và document export | TODO |
+| NEXT-05 | CSV mapping/preview/validation/dedup, worker/resume/cancel; filtered scoped issue CSV và document/attachment ZIP | LOCAL_VERIFIED |
 | NEXT-06 | Server reporting trên actual status history: flow, aging, WIP, reopen, workload | TODO |
 | NEXT-07 | MFA/IdP policy, per-session revoke, credential inventory và login audit | TODO |
 | NEXT-08 | Workspace audit cursor/filter/export theo current ACL; source Web/AI/SYSTEM/UNKNOWN; admin UI | LOCAL_VERIFIED |
@@ -114,3 +114,16 @@ archived, metadata allowlist và export cùng scope. Test 125 sự kiện đư�
 MCP/source contracts 35 passed, 10 subtests; document/archive/audit 12 passed.
 Audit recovery/filter/load-more/CSV thật 3/3 engine; web production build pass.
 Scope lịch sử không chứng minh được bị loại, legacy source là UNKNOWN. Chưa deploy.
+
+NEXT-05: CSV 1–1000 record/2 MB, mapping và lỗi từng dòng, preview 15 phút,
+confirm chỉ nhập dòng hợp lệ; request/external key idempotency, duplicate race,
+rollback sau domain write, cancel sau một dòng, reference đổi và revoke quyền
+đã kiểm tra trên PostgreSQL thật. Kết quả 105 dòng đọc hết qua paging.
+Issue CSV dùng chung query/ACL, chặn >10000/10 MB; ZIP document/attachment
+đường dẫn theo ID, không fetch URL ngoài, byte budget và quyền hiện tại.
+7 focused backend tests và 6/6 E2E ba engine đạt, mobile 390px đã xem ảnh.
+91 migrations chạy mới trên flowie_product_20261015, Prisma diff không có khác biệt;
+DB cũ giữ nguyên evidence AI. Web build/generate pass. Chưa deploy.
+
+Checkpoint sau NEXT-05: toàn bộ backend 145 passed, 2 optional storage/rehearsal
+skipped, 10 subtests. Storage/backup acceptance thật đã có bằng chứng riêng ở AUD-08/09.

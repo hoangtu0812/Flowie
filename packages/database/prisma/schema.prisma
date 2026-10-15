@@ -173,6 +173,7 @@ enum CycleStatus {
 
 model User {
   bulkOperations    BulkOperation[]
+  issueImports      IssueImportBatch[]
   clientErrorEvents ClientErrorEvent[]
   uiPreferences     UserUiPreferences?
   id                String             @id @default(cuid())
@@ -535,6 +536,8 @@ model Organization {
 
 model Workspace {
   bulkOperations         BulkOperation[]
+  issueImports           IssueImportBatch[]
+  issueImportKeys        IssueImportKey[]
   clientErrorEvents      ClientErrorEvent[]
   aiLimits               AiWorkspaceLimit?
   aiToolWindows          AiToolWindow[]
@@ -998,6 +1001,7 @@ model Team {
   childTeams           Team[]                  @relation("TeamHierarchy")
   defaultIssueTemplate IssueTemplate?          @relation(fields: [defaultIssueTemplateId], references: [id], onDelete: SetNull)
   dispatcherSettings   TeamDispatcherSettings?
+  issueImports         IssueImportBatch[]
 
   @@unique([workspaceId, identifier])
   @@index([workspaceId])
@@ -1578,6 +1582,7 @@ model Issue {
   customerRequests  CustomerRequest[]
   convertedAsks     Ask[]                 @relation("AskConvertedIssue")
   codeReviewLinks   CodeReviewIssueLink[]
+  importKeys        IssueImportKey[]
 
   @@unique([workspaceId, identifier])
   @@unique([teamId, number])
@@ -2121,4 +2126,53 @@ model BulkOperationItem {
 
   @@id([operationId, issueId])
   @@map("bulk_operation_items")
+}
+
+model IssueImportBatch {
+  id            String           @id @default(cuid())
+  workspaceId   String           @map("workspace_id")
+  actorId       String           @map("actor_id")
+  teamId        String           @map("team_id")
+  sourceKey     String           @map("source_key")
+  requestKey    String           @map("request_key")
+  fingerprint   String
+  duplicateMode String           @map("duplicate_mode")
+  state         String           @default("PREVIEW")
+  createdAt     DateTime         @default(now()) @map("created_at")
+  expiresAt     DateTime         @map("expires_at")
+  workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actor         User             @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  team          Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  rows          IssueImportRow[]
+
+  @@unique([actorId, requestKey])
+  @@index([state, createdAt])
+  @@map("issue_import_batches")
+}
+
+model IssueImportRow {
+  batchId    String           @map("batch_id")
+  rowNumber  Int              @map("row_number")
+  externalId String?          @map("external_id")
+  payload    Json
+  state      String           @default("PENDING")
+  errorCode  String?          @map("error_code")
+  issueId    String?          @map("issue_id")
+  identifier String?
+  batch      IssueImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@id([batchId, rowNumber])
+  @@map("issue_import_rows")
+}
+
+model IssueImportKey {
+  workspaceId String    @map("workspace_id")
+  sourceKey   String    @map("source_key")
+  externalId  String    @map("external_id")
+  issueId     String    @map("issue_id")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  issue       Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, sourceKey, externalId])
+  @@map("issue_import_keys")
 }

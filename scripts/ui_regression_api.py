@@ -10,6 +10,7 @@ if url.hostname not in {'localhost', '127.0.0.1', '::1'} or url.username != 'flo
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'apps/api-python'))
 from app.main import create_app
 from app.domains import native_attachments, native_emojis
+from app.modules.data_exchange import api as data_exchange_api
 
 
 class FixtureStorage:
@@ -21,11 +22,15 @@ class FixtureStorage:
     async def put(self, key, body, _content_type):
         self.objects[key] = body
 
-    async def get(self, key):
-        return self.objects[key]
+    async def get(self, key, *, maximum_bytes=None):
+        body=self.objects[key]
+        if maximum_bytes is not None and len(body)>maximum_bytes:
+            raise RuntimeError('Fixture export exceeds its bound')
+        return body
 
 
 # This adapter exists only in the test harness; production keeps its S3 adapter.
 native_attachments.MinioStorage = FixtureStorage
 native_emojis.MinioStorage = FixtureStorage
+data_exchange_api.MinioStorage = FixtureStorage
 app = create_app()

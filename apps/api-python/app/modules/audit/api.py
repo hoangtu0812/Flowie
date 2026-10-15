@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import Depends, Query, Request, Response
+from fastapi import Depends, Query, Request
+from ...core.downloads import private_download
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -104,8 +105,4 @@ async def export(
         ],
     )
     await db.commit()
-    return Response(
-        content,
-        media_type="text/csv",
-        headers={"content-disposition": 'attachment; filename="flowie-audit.csv"'},
-    )
+    return private_download(content, "text/csv", "flowie-audit.csv")

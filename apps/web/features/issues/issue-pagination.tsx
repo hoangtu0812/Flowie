@@ -5,6 +5,7 @@ import { Text } from '@astryxdesign/core/Text';
 import { DesignSurface } from '@/components/common/design-surface';
 import { useIssuesStore } from '@/store/issues-store';
 import { BulkIssueActions } from './bulk-issue-actions';
+import { IssueExportButton } from '@/features/data-exchange/issue-export-button';
 export function IssuePagination() {
    const { issues, page, loading, loadingMore, loadMore, pageError } = useIssuesStore();
    if (!page) return null;
@@ -17,6 +18,7 @@ export function IssuePagination() {
             </Text>
             {pageError && <Text role="alert">{pageError}</Text>}
             <BulkIssueActions />
+            <IssueExportButton />
             {page.nextCursor && (
                <Button
                   label={pageError ? 'Retry more issues' : 'Load more issues'}
