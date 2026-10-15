@@ -1,4 +1,7 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/shared/messages.vi';
+
 import { Button } from '@astryxdesign/core/Button';
 import { HStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
@@ -22,22 +25,32 @@ export function ResourcePagination({
    reload: () => unknown;
    label?: string;
 }) {
+   const tx = useMessages(messages);
+
    return (
       <DesignSurface>
          <HStack padding={3} gap={3} wrap="wrap" justify="between">
             <Text type="supporting">
-               {page ? `${count} of ${page.total} ${label} loaded` : loading ? 'Loading…' : ''}
+               {page
+                  ? tx('{count} of {total} {label} loaded', { count, total: page.total, label })
+                  : loading
+                    ? tx('Loading…')
+                    : ''}
             </Text>
             {error && <Text role="alert">{error}</Text>}
             {page?.nextCursor && (
                <Button
-                  label={error ? `Retry more ${label}` : `Load more ${label}`}
+                  label={
+                     error
+                        ? tx('Retry more {label}', { label })
+                        : tx('Load more {label}', { label })
+                  }
                   isLoading={loading}
                   onClick={() => void loadMore()}
                />
             )}
             {error && !page?.nextCursor && (
-               <Button label="Try again" isLoading={loading} onClick={() => void reload()} />
+               <Button label={tx('Try again')} isLoading={loading} onClick={() => void reload()} />
             )}
          </HStack>
       </DesignSurface>

@@ -1,4 +1,10 @@
 'use client';
+import { useDateFormatter, useAccountTime } from '@/features/shared/account-time';
+import { useEnumLabel } from '@/features/shared/enum-labels';
+import { formatDate } from '@/features/shared/date-format';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/recurring/messages.vi';
+
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Button } from '@astryxdesign/core/Button';
@@ -15,6 +21,8 @@ import { ScheduleEditor } from './schedule-editor';
 import { recurringApi, type Schedule, type Run } from './types';
 
 export default function RecurringPage() {
+   const tx = useMessages(messages);
+
    const { orgId } = useParams<{ orgId: string }>();
    const [scope, setScope] = useState<{
       org: string;
@@ -44,17 +52,17 @@ export default function RecurringPage() {
          if (active)
             setScope({
                org: orgId,
-               error: reason instanceof Error ? reason.message : 'Could not load schedules.',
+               error: reason instanceof Error ? reason.message : tx('Could not load schedules.'),
             });
       });
       return () => {
          active = false;
       };
-   }, [orgId, retry]);
+   }, [orgId, retry, tx]);
    if (scope?.org === orgId && scope.error)
       return (
          <RecoveryScreen
-            title="Recurring schedules unavailable"
+            title={tx('Recurring schedules unavailable')}
             message={scope.error}
             retry={() => setRetry((value) => value + 1)}
          />
@@ -62,7 +70,7 @@ export default function RecurringPage() {
    if (scope?.org !== orgId || !scope.workspace)
       return (
          <DesignSurface>
-            <Text role="status">Loading recurring schedules…</Text>
+            <Text role="status">{tx('Loading recurring schedules…')}</Text>
          </DesignSurface>
       );
    return (
@@ -84,6 +92,11 @@ function ScheduleCenter({
    manager: boolean;
    teams: { id: string; name: string }[];
 }) {
+   const tx = useMessages(messages);
+   const enumLabel = useEnumLabel();
+   const dateLabel = useDateFormatter();
+   const accountTime = useAccountTime();
+
    const scope = new URLSearchParams({ workspaceId: workspace }).toString();
    const schedules = usePagedResource<Schedule>(`${recurringApi}?${scope}`);
    const [editor, setEditor] = useState<Schedule | 'new'>();
@@ -128,7 +141,7 @@ function ScheduleCenter({
             setError(
                reason instanceof Error
                   ? reason.message
-                  : 'Could not update schedule. Reload the list before retrying.'
+                  : tx('Could not update schedule. Reload the list before retrying.')
             );
       } finally {
          if (alive.current) setBusy(false);
@@ -137,22 +150,21 @@ function ScheduleCenter({
    return (
       <DesignSurface>
          <VStack padding={6} gap={5} width="100%" className="h-full overflow-auto">
-            <Heading level={1}>Recurring schedules</Heading>
+            <Heading level={1}>{tx('Recurring schedules')}</Heading>
             <Text>
-               Schedules create tasks using their original creator&apos;s current permissions.
-               Workspace managers configure schedules for teams they belong to. Three consecutive
-               failed runs pause a schedule. Run now adds one extra task and leaves the regular
-               schedule unchanged.
+               {tx(
+                  "Schedules create tasks using their original creator's current permissions. Workspace managers configure schedules for teams they belong to. Three consecutive failed runs pause a schedule. Run now adds one extra task and leaves the regular schedule unchanged."
+               )}
             </Text>
             <HStack gap={3} wrap="wrap">
                {manager && (
                   <Button
-                     label="New recurring schedule"
+                     label={tx('New recurring schedule')}
                      onClick={() => setEditor('new')}
                      isDisabled={busy || !teams.length}
                   />
                )}
-               <Button label="Refresh schedules" onClick={schedules.reload} />
+               <Button label={tx('Refresh schedules')} onClick={schedules.reload} />
             </HStack>
             {editor && (
                <ScheduleEditor
@@ -175,10 +187,25 @@ function ScheduleCenter({
                      label={row.name}
                      description={
                         <VStack gap={2} width="100%">
-                           <Text type="supporting">{`${row.active ? 'Active' : 'Paused'} · ${row.rule.frequency} · ${row.rule.timezone} · Next ${new Date(row.nextRunAt).toLocaleString()} · Failed runs ${row.consecutiveFailures}`}</Text>
+                           <Text type="supporting">
+                              {tx(
+                                 '{value0} · {value1} · {value2} · Next {value3} · Failed runs {value4}',
+                                 {
+                                    value0: row.active ? tx('Active') : tx('Paused'),
+                                    value1: enumLabel(row.rule.frequency),
+                                    value2: row.rule.timezone,
+                                    value3: formatDate(
+                                       row.nextRunAt,
+                                       accountTime.locale,
+                                       row.rule.timezone
+                                    ),
+                                    value4: row.consecutiveFailures,
+                                 }
+                              )}
+                           </Text>
                            <HStack gap={2} wrap="wrap">
                               <Button
-                                 label="History"
+                                 label={tx('History')}
                                  onClick={() => {
                                     setSelected(row);
                                  }}
@@ -186,19 +213,19 @@ function ScheduleCenter({
                               {manager && (
                                  <>
                                     <Button
-                                       label="Edit"
+                                       label={tx('Edit')}
                                        onClick={() => setEditor(row)}
                                        isDisabled={busy}
                                     />
                                     <Button
-                                       label={row.active ? 'Pause' : 'Resume'}
+                                       label={row.active ? tx('Pause') : tx('Resume')}
                                        onClick={() =>
                                           void command(row, row.active ? 'pause' : 'resume')
                                        }
                                        isDisabled={busy}
                                     />
                                     <Button
-                                       label="Run now"
+                                       label={tx('Run now')}
                                        onClick={() => void command(row, 'run-now')}
                                        isDisabled={busy || !row.active}
                                     />
@@ -211,30 +238,41 @@ function ScheduleCenter({
                ))}
             </List>
             {!schedules.loading && !schedules.error && !schedules.items.length && (
-               <Text>No accessible recurring schedules.</Text>
+               <Text>{tx('No accessible recurring schedules.')}</Text>
             )}
-            <ResourcePagination count={schedules.items.length} {...schedules} label="schedules" />
+            <ResourcePagination
+               count={schedules.items.length}
+               {...schedules}
+               label={tx('schedules')}
+            />
             {selected && (
                <>
-                  <Heading level={2}>Run history: {selected.name}</Heading>
+                  <Heading level={2}>
+                     {tx('Run history:')} {selected.name}
+                  </Heading>
                   <Text>
-                     Queued manual runs use the template revision accepted at the time of the
-                     request. Pause cancels queued runs; completed tasks are preserved.
+                     {tx(
+                        'Queued manual runs use the template revision accepted at the time of the request. Pause cancels queued runs; completed tasks are preserved.'
+                     )}
                   </Text>
-                  <Button label="Refresh run history" onClick={history.reload} />
+                  <Button label={tx('Refresh run history')} onClick={history.reload} />
                   <List hasDividers>
                      {history.items.map((row) => (
                         <ListItem
                            key={row.id}
-                           label={`${row.state}${row.identifier ? ' · ' + row.identifier : ''}`}
-                           description={`${new Date(row.scheduledFor).toLocaleString()} · Revision ${row.scheduleVersion}${row.errorCode ? ' · ' + row.errorCode : ''}`}
+                           label={`${enumLabel(row.state)}${row.identifier ? ' · ' + row.identifier : ''}`}
+                           description={tx('{value0} · Revision {value1}{value2}', {
+                              value0: dateLabel(row.scheduledFor),
+                              value1: row.scheduleVersion,
+                              value2: row.errorCode ? ' · ' + row.errorCode : '',
+                           })}
                         />
                      ))}
                   </List>
                   <ResourcePagination
                      count={history.items.length}
                      {...history}
-                     label="schedule runs"
+                     label={tx('schedule runs')}
                   />
                </>
             )}

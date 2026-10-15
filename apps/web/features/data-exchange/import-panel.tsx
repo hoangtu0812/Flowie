@@ -1,4 +1,8 @@
 'use client';
+import { useDateFormatter } from '@/features/shared/account-time';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/data-exchange/messages.vi';
+
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
@@ -22,6 +26,9 @@ export function ImportPanel({
    workspace: string;
    teams: { id: string; name: string }[];
 }) {
+   const tx = useMessages(messages);
+   const dateLabel = useDateFormatter();
+
    const [team, setTeam] = useState(teams[0]?.id ?? '');
    const [csv, setCsv] = useState(
       'externalId,title,priority,issueType\nexample-1,Example task,HIGH,TASK'
@@ -85,7 +92,8 @@ export function ImportPanel({
       try {
          await action();
       } catch (reason) {
-         if (alive.current) setError(reason instanceof Error ? reason.message : 'Import failed.');
+         if (alive.current)
+            setError(reason instanceof Error ? reason.message : tx('Import failed.'));
       } finally {
          if (alive.current) setBusy(false);
       }
@@ -137,15 +145,15 @@ export function ImportPanel({
       });
    return (
       <VStack gap={4}>
-         <Heading level={2}>Import tasks and bugs</Heading>
+         <Heading level={2}>{tx('Import tasks and bugs')}</Heading>
          <Text>
-            Paste UTF-8 CSV with a header and up to 1,000 data rows / 2 MB. The source namespace and
-            required externalId prevent duplicate creation across retries and later imports.
-            Existing tasks are never overwritten.
+            {tx(
+               'Paste UTF-8 CSV with a header and up to 1,000 data rows / 2 MB. The source namespace and required externalId prevent duplicate creation across retries and later imports. Existing tasks are never overwritten.'
+            )}
          </Text>
          <HStack gap={3} wrap="wrap">
             <Selector
-               label="Import team"
+               label={tx('Import team')}
                isDisabled={busy}
                value={team}
                options={teams.map((row) => ({ value: row.id, label: row.name }))}
@@ -155,17 +163,19 @@ export function ImportPanel({
                }}
             />
             <TextInput
-               label="Import source namespace"
+               label={tx('Import source namespace')}
                isDisabled={busy}
                value={source}
                onChange={(value) => {
                   setSource(value);
                   reset();
                }}
-               description="Stable name, for example jira-support. Letters, digits, dot, underscore or hyphen."
+               description={tx(
+                  'Stable name, for example jira-support. Letters, digits, dot, underscore or hyphen.'
+               )}
             />
             <Selector
-               label="Duplicate handling"
+               label={tx('Duplicate handling')}
                isDisabled={busy}
                value={duplicates}
                onChange={(value) => {
@@ -173,13 +183,13 @@ export function ImportPanel({
                   reset();
                }}
                options={[
-                  { value: 'skip', label: 'Skip duplicates' },
-                  { value: 'error', label: 'Report duplicate errors' },
+                  { value: 'skip', label: tx('Skip duplicates') },
+                  { value: 'error', label: tx('Report duplicate errors') },
                ]}
             />
          </HStack>
          <TextArea
-            label="CSV content"
+            label={tx('CSV content')}
             isDisabled={busy}
             value={csv}
             onChange={(value) => {
@@ -192,7 +202,7 @@ export function ImportPanel({
             maxLength={2 * 1024 * 1024}
          />
          <Button
-            label="Inspect CSV columns"
+            label={tx('Inspect CSV columns')}
             onClick={() => void inspect()}
             isLoading={busy}
             isDisabled={!team}
@@ -200,19 +210,19 @@ export function ImportPanel({
          {!!columns.length && (
             <>
                <Text>
-                  Map required externalId and title, then optional fields. Reference columns use
-                  Flowie IDs. Dates use ISO 8601; enum values use TASK/BUG,
-                  NONE/LOW/MEDIUM/HIGH/URGENT and LOW/MEDIUM/HIGH/CRITICAL severity.
+                  {tx(
+                     'Map required externalId and title, then optional fields. Reference columns use Flowie IDs. Dates use ISO 8601; enum values use TASK/BUG, NONE/LOW/MEDIUM/HIGH/URGENT and LOW/MEDIUM/HIGH/CRITICAL severity.'
+                  )}
                </Text>
                <HStack gap={3} wrap="wrap">
                   {importFields.map((field) => (
                      <Selector
                         key={field}
-                        label={`CSV mapping ${field}`}
+                        label={tx('CSV mapping {value0}', { value0: field })}
                         isDisabled={busy}
                         value={mapping[field] ?? ''}
                         options={[
-                           { value: '', label: 'Do not import' },
+                           { value: '', label: tx('Do not import') },
                            ...columns.map((value) => ({ value, label: value })),
                         ]}
                         onChange={(value) => {
@@ -228,7 +238,7 @@ export function ImportPanel({
                   ))}
                </HStack>
                <Button
-                  label="Preview CSV import"
+                  label={tx('Preview CSV import')}
                   onClick={() => void preview()}
                   isLoading={busy}
                   isDisabled={!mapping.externalId || !mapping.title}
@@ -238,19 +248,25 @@ export function ImportPanel({
          {error && <Text role="alert">{error}</Text>}
          {operation && (
             <>
-               <Heading level={3}>Import preview and results</Heading>
-               <Text role="status">{`Import ${operation.state} · ${Object.entries(operation.counts)
-                  .map(([name, count]) => `${name}: ${count}`)
-                  .join(' · ')}`}</Text>
+               <Heading level={3}>{tx('Import preview and results')}</Heading>
+               <Text role="status">
+                  {tx('Import {value0} · {value1}', {
+                     value0: operation.state,
+                     value1: Object.entries(operation.counts)
+                        .map(([name, count]) => `${name}: ${count}`)
+                        .join(' · '),
+                  })}
+               </Text>
                <Text>
-                  Preview is frozen and expires at {new Date(operation.expiresAt).toLocaleString()}.
-                  Confirming imports only PENDING rows. Invalid and duplicate rows remain visible. A
-                  stopped import preserves tasks already created.
+                  {tx('Preview is frozen and expires at')} {dateLabel(operation.expiresAt)}
+                  {tx(
+                     '. Confirming imports only PENDING rows. Invalid and duplicate rows remain visible. A stopped import preserves tasks already created.'
+                  )}
                </Text>
                <HStack gap={3} wrap="wrap">
                   {operation.state === 'PREVIEW' && (
                      <Button
-                        label="Confirm import valid rows"
+                        label={tx('Confirm import valid rows')}
                         onClick={() => void command('apply')}
                         isLoading={busy}
                         isDisabled={!operation.counts.PENDING}
@@ -258,13 +274,13 @@ export function ImportPanel({
                   )}
                   {['PREVIEW', 'QUEUED', 'RUNNING'].includes(operation.state) && (
                      <Button
-                        label="Cancel import"
+                        label={tx('Cancel import')}
                         onClick={() => void command('cancel')}
                         isLoading={busy}
                      />
                   )}
                   <Button
-                     label="Refresh import results"
+                     label={tx('Refresh import results')}
                      onClick={() => void open(operation.id)}
                      isLoading={busy}
                   />
@@ -273,14 +289,17 @@ export function ImportPanel({
                   {operation.rows.map((row) => (
                      <ListItem
                         key={row.rowNumber}
-                        label={`Row ${row.rowNumber}: ${row.title || '(missing title)'}`}
+                        label={tx('Row {value0}: {value1}', {
+                           value0: row.rowNumber,
+                           value1: row.title || '(missing title)',
+                        })}
                         description={`${row.externalId ?? '(missing externalId)'} · ${row.issueType ?? ''} · ${row.priority ?? ''} · ${row.state}${row.identifier ? ' · ' + row.identifier : ''}${row.errorCode ? ' · ' + row.errorCode : ''}`}
                      />
                   ))}
                </List>
                {operation.nextAfter !== null && (
                   <Button
-                     label="Load more import rows"
+                     label={tx('Load more import rows')}
                      isLoading={busy}
                      isDisabled={importRunning(operation.state)}
                      onClick={() =>
@@ -296,20 +315,21 @@ export function ImportPanel({
                )}
             </>
          )}
-         <Heading level={3}>Your latest 20 imports</Heading>
+         <Heading level={3}>{tx('Your latest 20 imports')}</Heading>
          <Text>
-            Preview and result details are retained for 30 days. External IDs remain registered
-            while their tasks exist.
+            {tx(
+               'Preview and result details are retained for 30 days. External IDs remain registered while their tasks exist.'
+            )}
          </Text>
          <List hasDividers>
             {recent.map((row) => (
                <ListItem
                   key={row.id}
                   label={`${row.sourceKey} · ${row.state}`}
-                  description={new Date(row.createdAt).toLocaleString()}
+                  description={dateLabel(row.createdAt)}
                   endContent={
                      <Button
-                        label={`Open import ${row.id}`}
+                        label={tx('Open import {value0}', { value0: row.id })}
                         onClick={() => void open(row.id)}
                         isDisabled={busy}
                      />

@@ -1,4 +1,9 @@
 'use client';
+import { useDateFormatter, useAccountTime } from '@/features/shared/account-time';
+import { useEnumLabel } from '@/features/shared/enum-labels';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/sla/messages.vi';
+
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
@@ -11,7 +16,7 @@ import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
 import { authenticatedFetch } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
 import { CalendarEditor } from './calendar-editor';
-import { slaApi, defaultCalendar, type PolicyValues, type SlaPolicy, dateLabel } from './types';
+import { slaApi, defaultCalendar, type PolicyValues, type SlaPolicy } from './types';
 
 type Options = {
    statuses: { id: string; name: string }[];
@@ -30,6 +35,11 @@ export function PolicyEditor({
    onSaved: () => void;
    onCancel: () => void;
 }) {
+   const tx = useMessages(messages);
+   const enumLabel = useEnumLabel();
+   const dateLabel = useDateFormatter();
+   const accountTime = useAccountTime();
+
    const [draft, setDraft] = useState<PolicyValues>(
       policy
          ? {
@@ -59,7 +69,9 @@ export function PolicyEditor({
    );
    const [budget, setBudget] = useState(String(draft.deadlineMinutes)),
       [warning, setWarning] = useState(String(draft.warningMinutes));
-   const [calendar, setCalendar] = useState(draft.calendar ?? defaultCalendar());
+   const [calendar, setCalendar] = useState(
+      draft.calendar ?? defaultCalendar(accountTime.timezone)
+   );
    const [options, setOptions] = useState<Options>(),
       [retry, setRetry] = useState(0);
    const [busy, setBusy] = useState(false),
@@ -103,7 +115,7 @@ export function PolicyEditor({
       setError('');
       try {
          if (!/^[1-9]\d*$/.test(budget) || !/^\d+$/.test(warning))
-            throw new Error('Deadline and warning must be whole minutes; warning may be zero.');
+            throw new Error(tx('Deadline and warning must be whole minutes; warning may be zero.'));
          const values = {
             ...draft,
             deadlineMinutes: Number(budget),
@@ -122,7 +134,8 @@ export function PolicyEditor({
                   }),
                })
             );
-            if (alive.current) setPreview(`Starting now, deadline: ${dateLabel(result.dueAt)}`);
+            if (alive.current)
+               setPreview(tx('Starting now, deadline: {date}', { date: dateLabel(result.dueAt) }));
          } else {
             await responseData(
                await authenticatedFetch(
@@ -145,7 +158,7 @@ export function PolicyEditor({
          }
       } catch (reason) {
          if (alive.current)
-            setError(reason instanceof Error ? reason.message : 'Could not save SLA.');
+            setError(reason instanceof Error ? reason.message : tx('Could not save SLA.'));
       } finally {
          if (alive.current) setBusy(false);
       }
@@ -161,14 +174,15 @@ export function PolicyEditor({
             void action(false);
          }}
       >
-         <Heading level={2}>{policy ? 'Edit SLA' : 'New SLA'}</Heading>
+         <Heading level={2}>{policy ? tx('Edit SLA') : tx('New SLA')}</Heading>
          <Text>
-            Changes apply to new tasks. Existing tasks keep their accepted policy revision until
-            explicitly reapplied.
+            {tx(
+               'Changes apply to new tasks. Existing tasks keep their accepted policy revision until explicitly reapplied.'
+            )}
          </Text>
          <TextInput
-            label="SLA name"
-            placeholder="SLA name"
+            label={tx('SLA name')}
+            placeholder={tx('SLA name')}
             value={draft.name}
             onChange={(name) => change({ name })}
             isRequired
@@ -176,17 +190,17 @@ export function PolicyEditor({
             width="100%"
          />
          <TextArea
-            label="SLA description"
+            label={tx('SLA description')}
             value={draft.description ?? ''}
             onChange={(description) => change({ description: description || null })}
             isDisabled={busy}
             width="100%"
          />
          <Selector
-            label="Policy team"
+            label={tx('Policy team')}
             value={draft.teamId ?? ''}
             options={[
-               { value: '', label: 'All teams' },
+               { value: '', label: tx('All teams') },
                ...teams.map((row) => ({ value: row.id, label: row.name })),
             ]}
             onChange={(value) =>
@@ -196,13 +210,17 @@ export function PolicyEditor({
             width="100%"
          />
          <Selector
-            label="Policy priority"
+            label={tx('Policy priority')}
             value={draft.priority ?? ''}
             options={[
-               { value: '', label: 'Any priority' },
+               { value: '', label: tx('Any priority') },
                ...['NONE', 'LOW', 'MEDIUM', 'HIGH', 'URGENT'].map((value) => ({
                   value,
-                  label: value === 'NONE' ? 'No priority' : value[0] + value.slice(1).toLowerCase(),
+                  label:
+                     value === 'NONE'
+                        ? tx('No priority')
+                        : enumLabel(value).charAt(0) +
+                          enumLabel(value).slice(1).toLocaleLowerCase(),
                })),
             ]}
             onChange={(priority) => change({ priority: priority || null })}
@@ -210,8 +228,8 @@ export function PolicyEditor({
             width="100%"
          />
          <TextInput
-            label="Deadline duration"
-            description="Working minutes, from 15 to 525600."
+            label={tx('Deadline duration')}
+            description={tx('Working minutes, from 15 to 525600.')}
             value={budget}
             onChange={(value) => {
                setBudget(value);
@@ -222,25 +240,25 @@ export function PolicyEditor({
             width="100%"
          />
          <TextInput
-            label="Warning minutes remaining"
-            description="Zero disables the warning; use a value below the deadline duration."
+            label={tx('Warning minutes remaining')}
+            description={tx('Zero disables the warning; use a value below the deadline duration.')}
             value={warning}
             onChange={setWarning}
             isDisabled={busy}
             width="100%"
          />
          <CheckboxInput
-            label="Policy enabled"
+            label={tx('Policy enabled')}
             value={draft.enabled}
             onChange={(enabled) => change({ enabled })}
             isDisabled={busy}
          />
          <Selector
-            label="Clock calendar"
+            label={tx('Clock calendar')}
             value={draft.calendar ? 'business' : 'elapsed'}
             options={[
-               { value: 'elapsed', label: '24 hours, every day' },
-               { value: 'business', label: 'Business working hours' },
+               { value: 'elapsed', label: tx('24 hours, every day') },
+               { value: 'business', label: tx('Business working hours') },
             ]}
             onChange={(value) => change({ calendar: value === 'business' ? calendar : null })}
             isDisabled={busy}
@@ -259,7 +277,7 @@ export function PolicyEditor({
          {options ? (
             <>
                <MultiSelector
-                  label="Pause in statuses"
+                  label={tx('Pause in statuses')}
                   value={draft.pauseStatusIds}
                   options={[
                      ...options.statuses.map((row) => ({ value: row.id, label: row.name })),
@@ -267,7 +285,7 @@ export function PolicyEditor({
                         .filter((id) => !options.statuses.some((row) => row.id === id))
                         .map((value) => ({
                            value,
-                           label: 'Unavailable status — remove before saving',
+                           label: tx('Unavailable status — remove before saving'),
                         })),
                   ]}
                   onChange={(pauseStatusIds) => change({ pauseStatusIds })}
@@ -276,17 +294,17 @@ export function PolicyEditor({
                   width="100%"
                />
                <Selector
-                  label="Escalate to"
+                  label={tx('Escalate to')}
                   value={draft.escalateToId ?? ''}
                   options={[
-                     { value: '', label: 'No reassignment' },
+                     { value: '', label: tx('No reassignment') },
                      ...options.members.map((row) => ({ value: row.id, label: row.name })),
                      ...(draft.escalateToId &&
                      !options.members.some((row) => row.id === draft.escalateToId)
                         ? [
                              {
                                 value: draft.escalateToId,
-                                label: 'Unavailable member — choose another',
+                                label: tx('Unavailable member — choose another'),
                              },
                           ]
                         : []),
@@ -296,13 +314,14 @@ export function PolicyEditor({
                   width="100%"
                />
                <Text>
-                  Escalation reassigns once after a breach, only when the policy creator and
-                  recipient still have access to the task.
+                  {tx(
+                     'Escalation reassigns once after a breach, only when the policy creator and recipient still have access to the task.'
+                  )}
                </Text>
             </>
          ) : (
             <Button
-               label="Retry SLA options"
+               label={tx('Retry SLA options')}
                onClick={() => setRetry((value) => value + 1)}
                isDisabled={busy}
             />
@@ -311,14 +330,18 @@ export function PolicyEditor({
          {preview && <Text role="status">{preview}</Text>}
          <HStack gap={2} wrap="wrap">
             <Button
-               label={policy ? 'Save SLA' : 'Create SLA'}
+               label={policy ? tx('Save SLA') : tx('Create SLA')}
                type="submit"
                variant="primary"
                isLoading={busy}
                isDisabled={!options}
             />
-            <Button label="Preview deadline" onClick={() => void action(true)} isDisabled={busy} />
-            <Button label="Cancel SLA editing" onClick={onCancel} isDisabled={busy} />
+            <Button
+               label={tx('Preview deadline')}
+               onClick={() => void action(true)}
+               isDisabled={busy}
+            />
+            <Button label={tx('Cancel SLA editing')} onClick={onCancel} isDisabled={busy} />
          </HStack>
       </VStack>
    );

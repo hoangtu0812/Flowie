@@ -1,4 +1,6 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/shared/messages.vi';
 
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
@@ -18,15 +20,21 @@ export function RecoveryScreen({
    reference?: string;
    home?: string;
 }) {
+   const tx = useMessages(messages);
+
    return (
       <DesignSurface>
          <VStack gap={4} padding={6} className="h-full w-full" justify="center" align="center">
             <Heading level={1}>{title}</Heading>
             <Text role="alert">{message}</Text>
-            {reference && <Text color="secondary">Reference: {reference}</Text>}
+            {reference && (
+               <Text color="secondary">
+                  {tx('Reference:')} {reference}
+               </Text>
+            )}
             <HStack gap={3}>
-               {retry && <Button label="Try again" onClick={retry} />}
-               <Button label="Return home" href={home} />
+               {retry && <Button label={tx('Try again')} onClick={retry} />}
+               <Button label={tx('Return home')} href={home} />
             </HStack>
          </VStack>
       </DesignSurface>

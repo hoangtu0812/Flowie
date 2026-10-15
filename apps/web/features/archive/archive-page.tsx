@@ -1,4 +1,8 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/archive/messages.vi';
+import { useDateFormatter } from '@/features/shared/account-time';
+
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Button } from '@astryxdesign/core/Button';
@@ -16,6 +20,7 @@ import { usePagedResource } from '@/features/shared/use-paged-resource';
 
 type Archived = { id: string; title: string; kind: string; archivedAt: string; updatedAt: string };
 type Preview = Archived & {
+   relatedArchivedIssues: number;
    blockers: string[];
    canRestore: boolean;
    retention: string;
@@ -24,6 +29,8 @@ type Preview = Archived & {
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 export default function ArchivePage() {
+   const tx = useMessages(messages);
+
    const { orgId } = useParams<{ orgId: string }>();
    const [retry, setRetry] = useState(0);
    const [scope, setScope] = useState<{
@@ -47,17 +54,17 @@ export default function ArchivePage() {
             if (current)
                setScope({
                   org: orgId,
-                  error: reason instanceof Error ? reason.message : 'Could not load archive.',
+                  error: reason instanceof Error ? reason.message : tx('Could not load archive.'),
                });
          });
       return () => {
          current = false;
       };
-   }, [orgId, retry]);
+   }, [orgId, retry, tx]);
    if (scope?.org === orgId && scope.error)
       return (
          <RecoveryScreen
-            title="Could not load archive"
+            title={tx('Could not load archive')}
             message={scope.error}
             retry={() => setRetry((value) => value + 1)}
          />
@@ -65,7 +72,7 @@ export default function ArchivePage() {
    if (scope?.org !== orgId || !scope.workspace)
       return (
          <DesignSurface>
-            <Text role="status">Loading archive…</Text>
+            <Text role="status">{tx('Loading archive…')}</Text>
          </DesignSurface>
       );
    return (
@@ -87,6 +94,9 @@ function ArchiveCenter({
    manager: boolean;
    org: string;
 }) {
+   const tx = useMessages(messages);
+   const dateLabel = useDateFormatter();
+
    const [kind, setKind] = useState('issue');
    const [preview, setPreview] = useState<Preview>();
    const [busy, setBusy] = useState(false);
@@ -119,7 +129,9 @@ function ArchiveCenter({
          if (request === generation.current) setPreview(data);
       } catch (reason) {
          if (request === generation.current)
-            setError(reason instanceof Error ? reason.message : 'Could not preview restoration.');
+            setError(
+               reason instanceof Error ? reason.message : tx('Could not preview restoration.')
+            );
       } finally {
          if (request === generation.current) setBusy(false);
       }
@@ -154,7 +166,7 @@ function ArchiveCenter({
          records.reload();
       } catch (reason) {
          if (request === generation.current)
-            setError(reason instanceof Error ? reason.message : 'Could not restore record.');
+            setError(reason instanceof Error ? reason.message : tx('Could not restore record.'));
       } finally {
          if (request === generation.current) setBusy(false);
       }
@@ -162,28 +174,31 @@ function ArchiveCenter({
    return (
       <DesignSurface>
          <VStack padding={6} gap={4} className="h-full overflow-auto" width="100%">
-            <Heading level={1}>Archived records</Heading>
+            <Heading level={1}>{tx('Archived records')}</Heading>
             <Text>
-               Review archived items you can access and restore their existing relationships.
-               Automatic permanent deletion is disabled.
+               {tx(
+                  'Review archived items you can access and restore their existing relationships. Automatic permanent deletion is disabled.'
+               )}
             </Text>
             <Selector
-               label="Record type"
+               label={tx('Record type')}
                value={kind}
                onChange={setKind}
                isDisabled={busy}
                options={[
-                  { value: 'issue', label: 'Tasks and bugs' },
-                  { value: 'project', label: 'Projects' },
-                  { value: 'document', label: 'Documents' },
-                  ...(manager ? [{ value: 'initiative', label: 'Initiatives' }] : []),
+                  { value: 'issue', label: tx('Tasks and bugs') },
+                  { value: 'project', label: tx('Projects') },
+                  { value: 'document', label: tx('Documents') },
+                  ...(manager ? [{ value: 'initiative', label: tx('Initiatives') }] : []),
                ]}
             />
             {error && !preview && <Text role="alert">{error}</Text>}
             {restored && (
                <HStack gap={3} wrap="wrap">
-                  <Text role="status">Restored {restored.title}</Text>
-                  <Button label="Open restored record" href={restored.href} />
+                  <Text role="status">
+                     {tx('Restored')} {restored.title}
+                  </Text>
+                  <Button label={tx('Open restored record')} href={restored.href} />
                </HStack>
             )}
             <List hasDividers>
@@ -191,25 +206,29 @@ function ArchiveCenter({
                   <ListItem
                      key={row.id}
                      label={row.title}
-                     description={`Archived ${new Date(row.archivedAt).toLocaleString()}`}
-                     endContent={
-                        <Button
-                           label="Preview restore"
-                           aria-label={`Preview restore ${row.title}`}
-                           onClick={() => void select(row)}
-                           isDisabled={busy}
-                        />
+                     description={
+                        <VStack gap={2}>
+                           <Text>{tx('Archived {date}', { date: dateLabel(row.archivedAt) })}</Text>
+                           <HStack wrap="wrap">
+                              <Button
+                                 label={tx('Preview restore')}
+                                 aria-label={tx('Preview restore {title}', { title: row.title })}
+                                 onClick={() => void select(row)}
+                                 isDisabled={busy}
+                              />
+                           </HStack>
+                        </VStack>
                      }
                   />
                ))}
             </List>
             {!records.loading && !records.error && !records.items.length && (
-               <Text>No accessible archived records of this type.</Text>
+               <Text>{tx('No accessible archived records of this type.')}</Text>
             )}
             <ResourcePagination
                count={records.items.length}
                {...records}
-               label="archived records"
+               label={tx('archived records')}
             />
             <Dialog
                isOpen={!!preview}
@@ -221,7 +240,7 @@ function ArchiveCenter({
             >
                <VStack gap={4}>
                   <DialogHeader
-                     title="Restore archived record"
+                     title={tx('Restore archived record')}
                      onOpenChange={(open) => {
                         if (!open && !busy) setPreview(undefined);
                      }}
@@ -229,23 +248,30 @@ function ArchiveCenter({
                   {preview && (
                      <>
                         <Heading level={2}>{preview.title}</Heading>
-                        <Text>{preview.effect}</Text>
-                        <Text>{preview.retention}</Text>
+                        <Text>
+                           {preview.kind === 'project'
+                              ? tx(
+                                   'Restore this project. {count} accessible archived tasks can then be restored individually.',
+                                   { count: preview.relatedArchivedIssues }
+                                )
+                              : tx(preview.effect as keyof typeof messages)}
+                        </Text>
+                        <Text>{tx(preview.retention as keyof typeof messages)}</Text>
                         {preview.blockers.map((message) => (
                            <Text key={message} role="alert">
-                              {message}
+                              {tx(message as keyof typeof messages)}
                            </Text>
                         ))}
                         {error && <Text role="alert">{error}</Text>}
                         <HStack gap={3} wrap="wrap">
                            <Button
-                              label="Restore record"
+                              label={tx('Restore record')}
                               isDisabled={!preview.canRestore}
                               isLoading={busy}
                               onClick={() => void restore()}
                            />
                            <Button
-                              label="Cancel restore"
+                              label={tx('Cancel restore')}
                               isDisabled={busy}
                               onClick={() => setPreview(undefined)}
                            />

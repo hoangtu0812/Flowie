@@ -1,4 +1,9 @@
 'use client';
+import { useEnumLabel, useWeekdayLabel } from '@/features/shared/enum-labels';
+import { useAccountTime } from '@/features/shared/account-time';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/recurring/messages.vi';
+
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
@@ -28,11 +33,16 @@ export function ScheduleEditor({
    onSaved: () => void;
    onCancel: () => void;
 }) {
+   const accountTime = useAccountTime();
+   const tx = useMessages(messages);
+   const enumLabel = useEnumLabel();
+   const weekdayLabel = useWeekdayLabel();
+
    const [name, setName] = useState(schedule?.name ?? '');
    const [team, setTeam] = useState(schedule?.teamId ?? teams[0]?.id ?? '');
    const [rule, setRule] = useState<ScheduleRule>(
       schedule?.rule ?? {
-         timezone: 'Asia/Ho_Chi_Minh',
+         timezone: accountTime.timezone,
          startDate: new Date().toISOString().slice(0, 10),
          time: '09:00',
          frequency: 'WEEKLY',
@@ -102,7 +112,7 @@ export function ScheduleEditor({
       setError('');
       try {
          if (!/^[1-9]\d*$/.test(repeat) || !/^[1-9]\d*$/.test(monthDay))
-            throw new Error('Repeat interval and day of month must be positive whole numbers.');
+            throw new Error(tx('Repeat interval and day of month must be positive whole numbers.'));
          const requestedRule = { ...rule, interval: Number(repeat), monthDay: Number(monthDay) };
          if (preview) {
             const data = await responseData<{ occurrences: string[] }>(
@@ -116,7 +126,7 @@ export function ScheduleEditor({
          } else {
             if (due && !/^[1-9]\d*$/.test(due))
                throw new Error(
-                  'Due-after minutes must be a positive whole number, or left blank for SLA.'
+                  tx('Due-after minutes must be a positive whole number, or left blank for SLA.')
                );
             if (!requestKey.current) requestKey.current = crypto.randomUUID();
             const body = {
@@ -144,7 +154,7 @@ export function ScheduleEditor({
          }
       } catch (reason) {
          if (alive.current)
-            setError(reason instanceof Error ? reason.message : 'Could not save schedule.');
+            setError(reason instanceof Error ? reason.message : tx('Could not save schedule.'));
       } finally {
          if (alive.current) setBusy(false);
       }
@@ -176,17 +186,18 @@ export function ScheduleEditor({
          }}
       >
          <Heading level={2}>
-            {schedule ? 'Edit recurring schedule' : 'Create recurring schedule'}
+            {schedule ? tx('Edit recurring schedule') : tx('Create recurring schedule')}
          </Heading>
          {schedule?.unavailableProject && (
             <Text role="alert">
-               The original project is unavailable. Saving clears that reference unless you select
-               an accessible replacement.
+               {tx(
+                  'The original project is unavailable. Saving clears that reference unless you select an accessible replacement.'
+               )}
             </Text>
          )}
          <HStack gap={3} wrap="wrap">
             <TextInput
-               label="Schedule name"
+               label={tx('Schedule name')}
                value={name}
                onChange={(value) => {
                   setName(value);
@@ -196,7 +207,7 @@ export function ScheduleEditor({
                isDisabled={busy}
             />
             <Selector
-               label="Schedule team"
+               label={tx('Schedule team')}
                value={team}
                options={teams.map((row) => ({ value: row.id, label: row.name }))}
                isDisabled={busy || !!schedule}
@@ -206,32 +217,35 @@ export function ScheduleEditor({
                }}
             />
             <TextInput
-               label="Schedule time zone"
+               label={tx('Schedule time zone')}
                value={rule.timezone}
                onChange={(timezone) => changeRule({ timezone })}
-               description="IANA name, for example Asia/Ho_Chi_Minh"
+               description={tx('IANA name, for example Asia/Ho_Chi_Minh')}
                isDisabled={busy}
             />
          </HStack>
          <HStack gap={3} wrap="wrap">
             <TextInput
-               label="Schedule start date"
-               description="YYYY-MM-DD in the schedule time zone"
+               label={tx('Schedule start date')}
+               description={tx('YYYY-MM-DD in the schedule time zone')}
                value={rule.startDate}
                onChange={(startDate) => changeRule({ startDate })}
                isDisabled={busy}
             />
             <TextInput
-               label="Schedule local time"
-               description="HH:MM, 24-hour clock"
+               label={tx('Schedule local time')}
+               description={tx('HH:MM, 24-hour clock')}
                value={rule.time}
                onChange={(time) => changeRule({ time })}
                isDisabled={busy}
             />
             <Selector
-               label="Repeat frequency"
+               label={tx('Repeat frequency')}
                value={rule.frequency}
-               options={['DAILY', 'WEEKLY', 'MONTHLY'].map((value) => ({ value, label: value }))}
+               options={['DAILY', 'WEEKLY', 'MONTHLY'].map((value) => ({
+                  value,
+                  label: enumLabel(value),
+               }))}
                onChange={(frequency) => {
                   changeRule({ frequency, interval: 1 });
                   setRepeat('1');
@@ -240,8 +254,8 @@ export function ScheduleEditor({
                isDisabled={busy}
             />
             <TextInput
-               label="Repeat every"
-               description="Days, weeks or months according to frequency"
+               label={tx('Repeat every')}
+               description={tx('Days, weeks or months according to frequency')}
                value={repeat}
                onChange={(value) => {
                   setRepeat(value);
@@ -253,49 +267,51 @@ export function ScheduleEditor({
          </HStack>
          {rule.frequency === 'WEEKLY' && (
             <MultiSelector
-               label="Repeat weekdays"
+               label={tx('Repeat weekdays')}
                value={rule.weekdays.map(String)}
                onChange={(values) => changeRule({ weekdays: values.map(Number) })}
                options={[
-                  'Monday',
+                  tx('Monday'),
                   'Tuesday',
                   'Wednesday',
                   'Thursday',
                   'Friday',
                   'Saturday',
-                  'Sunday',
-               ].map((label, index) => ({ label, value: String(index) }))}
+                  tx('Sunday'),
+               ].map((label, index) => ({ label: weekdayLabel(index), value: String(index) }))}
                isDisabled={busy}
             />
          )}
          {rule.frequency === 'MONTHLY' && (
             <TextInput
-               label="Day of month"
+               label={tx('Day of month')}
                value={monthDay}
                onChange={(value) => {
                   setMonthDay(value);
                   setOccurrences([]);
                   requestKey.current = '';
                }}
-               description="1–31; shorter months use their final day."
+               description={tx('1–31; shorter months use their final day.')}
                isDisabled={busy}
             />
          )}
          <Text>
-            Daylight-saving overlaps run once at the first occurrence; missing local times advance
-            to the first valid minute. A delayed worker creates one missed occurrence and schedules
-            the next future one, without backfilling every missed task.
+            {tx(
+               'Daylight-saving overlaps run once at the first occurrence; missing local times advance to the first valid minute. A delayed worker creates one missed occurrence and schedules the next future one, without backfilling every missed task.'
+            )}
          </Text>
          <Button
-            label="Preview next five occurrences"
+            label={tx('Preview next five occurrences')}
             onClick={() => void action(true)}
             isLoading={busy}
          />
          {!!occurrences.length && (
-            <Text role="status">Next occurrences (UTC): {occurrences.join(' · ')}</Text>
+            <Text role="status">
+               {tx('Next occurrences (UTC):')} {occurrences.join(' · ')}
+            </Text>
          )}
          <TextInput
-            label="Recurring issue title"
+            label={tx('Recurring issue title')}
             value={template.title}
             onChange={(title) => changeTemplate({ title })}
             isRequired
@@ -303,7 +319,7 @@ export function ScheduleEditor({
             width="100%"
          />
          <TextArea
-            label="Recurring issue description"
+            label={tx('Recurring issue description')}
             value={template.description ?? ''}
             onChange={(description) => changeTemplate({ description })}
             rows={4}
@@ -311,7 +327,7 @@ export function ScheduleEditor({
          />
          <HStack gap={3} wrap="wrap">
             <Selector
-               label="Recurring issue priority"
+               label={tx('Recurring issue priority')}
                value={template.priority}
                onChange={(priority) => changeTemplate({ priority })}
                options={['NONE', 'LOW', 'MEDIUM', 'HIGH', 'URGENT'].map((value) => ({
@@ -321,23 +337,35 @@ export function ScheduleEditor({
                isDisabled={busy}
             />
             <Selector
-               label="Recurring issue type"
+               label={tx('Recurring issue type')}
                value={template.issueType}
                onChange={(issueType) => changeTemplate({ issueType })}
-               options={['TASK', 'BUG'].map((value) => ({ value, label: value }))}
+               options={['TASK', 'BUG'].map((value) => ({ value, label: enumLabel(value) }))}
                isDisabled={busy}
             />
             {refs(
                'statusId',
-               'Recurring issue status',
+               tx('Recurring issue status'),
                options?.statuses ?? [],
-               'Team default status'
+               tx('Team default status')
             )}
-            {refs('projectId', 'Recurring issue project', options?.projects ?? [], 'No project')}
-            {refs('assigneeId', 'Recurring issue assignee', options?.members ?? [], 'Unassigned')}
+            {refs(
+               'projectId',
+               tx('Recurring issue project'),
+               options?.projects ?? [],
+               tx('No project')
+            )}
+            {refs(
+               'assigneeId',
+               tx('Recurring issue assignee'),
+               options?.members ?? [],
+               tx('Unassigned')
+            )}
             <TextInput
-               label="Due after minutes"
-               description="Elapsed minutes after actual creation; leave blank to use the matching SLA."
+               label={tx('Due after minutes')}
+               description={tx(
+                  'Elapsed minutes after actual creation; leave blank to use the matching SLA.'
+               )}
                value={due}
                onChange={(value) => {
                   setDue(value);
@@ -349,11 +377,11 @@ export function ScheduleEditor({
          {template.issueType === 'BUG' && (
             <>
                <Selector
-                  label="Recurring bug severity"
+                  label={tx('Recurring bug severity')}
                   value={template.severity ?? ''}
                   onChange={(value) => changeTemplate({ severity: value || null })}
                   options={[
-                     { value: '', label: 'Unspecified' },
+                     { value: '', label: tx('Unspecified') },
                      ...['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map((value) => ({
                         value,
                         label: value,
@@ -362,7 +390,7 @@ export function ScheduleEditor({
                   isDisabled={busy}
                />
                <TextInput
-                  label="Recurring bug environment"
+                  label={tx('Recurring bug environment')}
                   value={template.environment ?? ''}
                   onChange={(environment) => changeTemplate({ environment })}
                   isDisabled={busy}
@@ -373,9 +401,9 @@ export function ScheduleEditor({
                      label={
                         (
                            {
-                              reproductionSteps: 'Recurring bug steps to reproduce',
-                              expectedResult: 'Recurring bug expected result',
-                              actualResult: 'Recurring bug actual result',
+                              reproductionSteps: tx('Recurring bug steps to reproduce'),
+                              expectedResult: tx('Recurring bug expected result'),
+                              actualResult: tx('Recurring bug actual result'),
                            } as const
                         )[field]
                      }
@@ -389,19 +417,19 @@ export function ScheduleEditor({
          {error && <Text role="alert">{error}</Text>}
          {!options && (
             <Button
-               label="Retry schedule options"
+               label={tx('Retry schedule options')}
                onClick={() => setOptionRetry((value) => value + 1)}
                isDisabled={busy}
             />
          )}
          <HStack gap={3} wrap="wrap">
             <Button
-               label={schedule ? 'Save recurring schedule' : 'Create schedule'}
+               label={schedule ? tx('Save recurring schedule') : tx('Create schedule')}
                type="submit"
                isLoading={busy}
                isDisabled={!options || !team}
             />
-            <Button label="Cancel schedule editing" onClick={onCancel} isDisabled={busy} />
+            <Button label={tx('Cancel schedule editing')} onClick={onCancel} isDisabled={busy} />
          </HStack>
       </VStack>
    );

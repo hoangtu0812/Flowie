@@ -1,4 +1,7 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/sla/messages.vi';
+
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Button } from '@astryxdesign/core/Button';
@@ -20,12 +23,14 @@ import { SlaReportSummary } from './report-summary';
 import { slaApi, type SlaPolicy } from './types';
 
 export default function SlaSettings() {
+   const tx = useMessages(messages);
+
    const { orgId } = useParams<{ orgId: string }>();
    const scope = useWorkspaceTeams(orgId);
    if (scope.error)
       return (
          <RecoveryScreen
-            title="SLA settings unavailable"
+            title={tx('SLA settings unavailable')}
             message={scope.error}
             retry={scope.reload}
          />
@@ -34,7 +39,7 @@ export default function SlaSettings() {
       return (
          <DesignSurface>
             <VStack padding={6}>
-               <Text>Loading SLA settings…</Text>
+               <Text>{tx('Loading SLA settings…')}</Text>
             </VStack>
          </DesignSurface>
       );
@@ -56,6 +61,8 @@ function SlaCenter({
    manager: boolean;
    teams: { id: string; name: string }[];
 }) {
+   const tx = useMessages(messages);
+
    const [archived, setArchived] = useState(false),
       [editor, setEditor] = useState<SlaPolicy | 'new'>(),
       [selected, setSelected] = useState<SlaPolicy>();
@@ -101,25 +108,29 @@ function SlaCenter({
    return (
       <DesignSurface>
          <VStack padding={6} gap={5} width="100%" className="h-full overflow-auto">
-            <Heading level={1}>SLA policies</Heading>
+            <Heading level={1}>{tx('SLA policies')}</Heading>
             <Text>
-               Team-specific policies take precedence, followed by priority-specific policies. Ties
-               use the oldest policy. Manual deadlines opt out; applying a current policy on a task
-               starts a new clock.
+               {tx(
+                  'Team-specific policies take precedence, followed by priority-specific policies. Ties use the oldest policy. Manual deadlines opt out; applying a current policy on a task starts a new clock.'
+               )}
             </Text>
             <HStack gap={2} wrap="wrap">
                {manager && (
                   <Button
-                     label="New SLA"
+                     label={tx('New SLA')}
                      variant="primary"
                      onClick={() => setEditor('new')}
                      isDisabled={busy || !!editor}
                   />
                )}
-               <Button label="Refresh SLA policies" onClick={policies.reload} isDisabled={busy} />
+               <Button
+                  label={tx('Refresh SLA policies')}
+                  onClick={policies.reload}
+                  isDisabled={busy}
+               />
             </HStack>
             <CheckboxInput
-               label="Include archived policies"
+               label={tx('Include archived policies')}
                value={archived}
                onChange={(value) => {
                   setArchived(value);
@@ -153,30 +164,38 @@ function SlaCenter({
                               <Token
                                  label={
                                     row.archivedAt
-                                       ? 'Archived'
+                                       ? tx('Archived')
                                        : row.enabled
                                          ? 'Enabled'
                                          : 'Disabled'
                                  }
                               />
-                              <Text>{`${row.deadlineMinutes} working minutes · Revision ${row.version} · ${row.calendar?.timezone ?? '24/7'}`}</Text>
+                              <Text>
+                                 {tx('{value0} working minutes · Revision {value1} · {value2}', {
+                                    value0: row.deadlineMinutes,
+                                    value1: row.version,
+                                    value2: row.calendar?.timezone ?? '24/7',
+                                 })}
+                              </Text>
                            </HStack>
-                           <Text>{`${row.teamId ? (teams.find((team) => team.id === row.teamId)?.name ?? 'Team policy') : 'All teams'} · ${row.priority ?? 'Any priority'}`}</Text>
+                           <Text>{`${row.teamId ? (teams.find((team) => team.id === row.teamId)?.name ?? tx('Team policy')) : tx('All teams')} · ${row.priority ?? tx('Any priority')}`}</Text>
                            <HStack gap={2} wrap="wrap">
                               <Button
-                                 label="Policy history"
+                                 label={tx('Policy history')}
                                  onClick={() => setSelected(row)}
                                  isDisabled={busy}
                               />
                               {manager && (
                                  <>
                                     <Button
-                                       label="Edit SLA"
+                                       label={tx('Edit SLA')}
                                        onClick={() => setEditor(row)}
                                        isDisabled={busy || !!editor}
                                     />
                                     <Button
-                                       label={row.archivedAt ? 'Restore SLA' : 'Archive SLA'}
+                                       label={
+                                          row.archivedAt ? tx('Restore SLA') : tx('Archive SLA')
+                                       }
                                        onClick={() => void command(row)}
                                        isDisabled={busy || !!editor}
                                     />
@@ -189,9 +208,13 @@ function SlaCenter({
                ))}
             </List>
             {!policies.loading && !policies.error && !policies.items.length && (
-               <Text>No accessible SLA policies.</Text>
+               <Text>{tx('No accessible SLA policies.')}</Text>
             )}
-            <ResourcePagination count={policies.items.length} {...policies} label="SLA policies" />
+            <ResourcePagination
+               count={policies.items.length}
+               {...policies}
+               label={tx('SLA policies')}
+            />
             {selected && (
                <RevisionHistory
                   key={`${selected.id}:${selected.version}`}

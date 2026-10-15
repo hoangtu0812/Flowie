@@ -1,4 +1,7 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/data-exchange/messages.vi';
+
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { VStack } from '@astryxdesign/core/Layout';
@@ -11,6 +14,8 @@ import { ImportPanel } from './import-panel';
 import { DocumentExportPanel } from './export-panel';
 
 export default function DataExchangePage() {
+   const tx = useMessages(messages);
+
    const { orgId } = useParams<{ orgId: string }>();
    const [scope, setScope] = useState<{
       org: string;
@@ -38,17 +43,18 @@ export default function DataExchangePage() {
          if (active)
             setScope({
                org: orgId,
-               error: reason instanceof Error ? reason.message : 'Could not load data exchange.',
+               error:
+                  reason instanceof Error ? reason.message : tx('Could not load data exchange.'),
             });
       });
       return () => {
          active = false;
       };
-   }, [orgId, retry]);
+   }, [orgId, retry, tx]);
    if (scope?.org === orgId && scope.error)
       return (
          <RecoveryScreen
-            title="Data exchange unavailable"
+            title={tx('Data exchange unavailable')}
             message={scope.error}
             retry={() => setRetry((value) => value + 1)}
          />
@@ -56,7 +62,7 @@ export default function DataExchangePage() {
    if (scope?.org !== orgId || !scope.workspace)
       return (
          <DesignSurface>
-            <Text role="status">Loading data exchange…</Text>
+            <Text role="status">{tx('Loading data exchange…')}</Text>
          </DesignSurface>
       );
    return (
@@ -68,11 +74,11 @@ export default function DataExchangePage() {
             className="h-full overflow-auto"
             key={scope.workspace}
          >
-            <Heading level={1}>Import and export</Heading>
+            <Heading level={1}>{tx('Import and export')}</Heading>
             <Text>
-               Export tasks from the list using Export matching issues CSV. Exports follow the same
-               applied filters and current access, up to 10,000 tasks / 10 MB. Formula-like text has
-               a leading tab for spreadsheet viewing; treat imported CSV cells as text.
+               {tx(
+                  'Export tasks from the list using Export matching issues CSV. Exports follow the same applied filters and current access, up to 10,000 tasks / 10 MB. Formula-like text has a leading tab for spreadsheet viewing; treat imported CSV cells as text.'
+               )}
             </Text>
             <ImportPanel workspace={scope.workspace} teams={scope.teams ?? []} />
             <DocumentExportPanel workspace={scope.workspace} />

@@ -1,4 +1,7 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/sla/messages.vi';
+
 import { useEffect, useState } from 'react';
 import { Button } from '@astryxdesign/core/Button';
 import { VStack } from '@astryxdesign/core/Layout';
@@ -16,6 +19,8 @@ export function SlaReportSummary({
    workspace: string;
    teams: { id: string; name: string }[];
 }) {
+   const tx = useMessages(messages);
+
    const [team, setTeam] = useState('');
    const [data, setData] = useState<Record<string, number | null>>(),
       [error, setError] = useState(''),
@@ -44,41 +49,41 @@ export function SlaReportSummary({
       };
    }, [workspace, team, retry]);
    const labels: Record<string, string> = {
-      total: 'Accessible tasks',
-      active: 'Active clocks',
-      paused: 'Paused clocks',
-      breached: 'Cycles with a breach',
-      completed_on_time: 'Completed on time',
-      completed_late: 'Completed late',
-      manual: 'Manual deadlines',
-      unmanaged: 'Unmanaged or restricted clocks',
-      inactive: 'Canceled, overridden or unavailable',
-      pending_events: 'Lifecycle events awaiting processing',
+      total: tx('Accessible tasks'),
+      active: tx('Active clocks'),
+      paused: tx('Paused clocks'),
+      breached: tx('Cycles with a breach'),
+      completed_on_time: tx('Completed on time'),
+      completed_late: tx('Completed late'),
+      manual: tx('Manual deadlines'),
+      unmanaged: tx('Unmanaged or restricted clocks'),
+      inactive: tx('Canceled, overridden or unavailable'),
+      pending_events: tx('Lifecycle events awaiting processing'),
    };
    return (
       <VStack gap={3} width="100%">
-         <Heading level={2}>SLA compliance</Heading>
+         <Heading level={2}>{tx('SLA compliance')}</Heading>
          <Selector
-            label="SLA report team"
+            label={tx('SLA report team')}
             value={team}
             options={[
-               { value: '', label: 'All accessible teams' },
+               { value: '', label: tx('All accessible teams') },
                ...teams.map((row) => ({ value: row.id, label: row.name })),
             ]}
             onChange={setTeam}
             width="100%"
          />
          <Text>
-            All currently accessible, non-archived tasks; the latest cycle of each task. Compliance
-            includes only completed tracked cycles. Manual deadlines do not create clocks; an
-            earlier completed cycle keeps its result.
+            {tx(
+               'All currently accessible, non-archived tasks; the latest cycle of each task. Compliance includes only completed tracked cycles. Manual deadlines do not create clocks; an earlier completed cycle keeps its result.'
+            )}
          </Text>
          {data ? (
             <>
                <Text>
                   {data.compliancePercent === null
-                     ? 'No completed tracked cycles yet.'
-                     : `Compliance: ${data.compliancePercent}%`}
+                     ? tx('No completed tracked cycles yet.')
+                     : tx('Compliance: {percent}%', { percent: data.compliancePercent })}
                </Text>
                <List density="compact" hasDividers>
                   {Object.entries(labels).map(([key, label]) => (
@@ -87,10 +92,10 @@ export function SlaReportSummary({
                </List>
             </>
          ) : (
-            <Text>{error ? 'Report unavailable.' : 'Loading report…'}</Text>
+            <Text>{error ? tx('Report unavailable.') : tx('Loading report…')}</Text>
          )}
          {error && <Text role="alert">{error}</Text>}
-         <Button label="Refresh SLA report" onClick={() => setRetry((value) => value + 1)} />
+         <Button label={tx('Refresh SLA report')} onClick={() => setRetry((value) => value + 1)} />
       </VStack>
    );
 }

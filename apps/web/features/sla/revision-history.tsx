@@ -1,4 +1,8 @@
 'use client';
+import { useDateFormatter } from '@/features/shared/account-time';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/sla/messages.vi';
+
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@astryxdesign/core/Button';
 import { VStack } from '@astryxdesign/core/Layout';
@@ -6,10 +10,13 @@ import { Heading, Text } from '@astryxdesign/core/Text';
 import { List, ListItem } from '@astryxdesign/core/List';
 import { authenticatedFetch } from '@/lib/workspaces';
 import { responseEnvelope } from '@/lib/http';
-import { slaApi, type SlaPolicy, type PolicyValues, type VersionPage, dateLabel } from './types';
+import { slaApi, type SlaPolicy, type PolicyValues, type VersionPage } from './types';
 
 type Revision = { version: number; kind: string; createdAt: string; snapshot: PolicyValues };
 export function RevisionHistory({ workspace, policy }: { workspace: string; policy: SlaPolicy }) {
+   const tx = useMessages(messages);
+   const dateLabel = useDateFormatter();
+
    const [rows, setRows] = useState<Revision[]>([]),
       [page, setPage] = useState<VersionPage>();
    const [busy, setBusy] = useState(false),
@@ -49,23 +56,35 @@ export function RevisionHistory({ workspace, policy }: { workspace: string; poli
    }, []);
    return (
       <VStack gap={3} width="100%">
-         <Heading level={2}>Policy history: {policy.name}</Heading>
+         <Heading level={2}>
+            {tx('Policy history:')} {policy.name}
+         </Heading>
          <Text>
-            Baseline revisions describe the policy observed during upgrade; they do not recreate
-            earlier edits.
+            {tx(
+               'Baseline revisions describe the policy observed during upgrade; they do not recreate earlier edits.'
+            )}
          </Text>
          <List hasDividers>
             {rows.map((row) => (
                <ListItem
                   key={row.version}
-                  label={`Revision ${row.version} · ${row.kind}`}
+                  label={tx('Revision {value0} · {value1}', {
+                     value0: row.version,
+                     value1: row.kind,
+                  })}
                   description={
                      <VStack gap={1}>
-                        <Text>{`${dateLabel(row.createdAt)} · ${row.snapshot.name} · ${row.snapshot.deadlineMinutes} working minutes`}</Text>
+                        <Text>
+                           {tx('{value0} · {value1} · {value2} working minutes', {
+                              value0: dateLabel(row.createdAt),
+                              value1: row.snapshot.name,
+                              value2: row.snapshot.deadlineMinutes,
+                           })}
+                        </Text>
                         <Text>
                            {row.snapshot.calendar
                               ? row.snapshot.calendar.timezone
-                              : '24 hours, every day'}
+                              : tx('24 hours, every day')}
                         </Text>
                      </VStack>
                   }
@@ -74,12 +93,18 @@ export function RevisionHistory({ workspace, policy }: { workspace: string; poli
          </List>
          {error && <Text role="alert">{error}</Text>}
          <Text>
-            {page ? `${rows.length} of ${page.total} accessible revisions` : 'Loading revisions…'}
+            {page
+               ? `${rows.length} of ${page.total} accessible revisions`
+               : tx('Loading revisions…')}
          </Text>
-         <Button label="Refresh policy history" onClick={() => void load()} isLoading={busy} />
+         <Button
+            label={tx('Refresh policy history')}
+            onClick={() => void load()}
+            isLoading={busy}
+         />
          {page?.nextBefore && (
             <Button
-               label="Load more policy revisions"
+               label={tx('Load more policy revisions')}
                onClick={() => void load(page.nextBefore ?? undefined)}
                isDisabled={busy}
             />

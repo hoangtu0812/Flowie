@@ -1,4 +1,9 @@
 'use client';
+import { useDateFormatter } from '@/features/shared/account-time';
+import { useEnumLabel } from '@/features/shared/enum-labels';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/sla/messages.vi';
+
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
@@ -9,7 +14,7 @@ import type { Issue } from '@/mock-data/issues';
 import { useIssuesStore } from '@/store/issues-store';
 import { authenticatedFetch } from '@/lib/workspaces';
 import { responseEnvelope } from '@/lib/http';
-import { slaApi, dateLabel, type IssueSla, type VersionPage } from './types';
+import { slaApi, type IssueSla, type VersionPage } from './types';
 
 export function IssueSlaPanel({ issue }: { issue: Issue }) {
    const workspace = useIssuesStore((state) => state.workspaceId);
@@ -18,6 +23,10 @@ export function IssueSlaPanel({ issue }: { issue: Issue }) {
    ) : null;
 }
 function ClockPanel({ workspace, issue }: { workspace: string; issue: Issue }) {
+   const tx = useMessages(messages);
+   const enumLabel = useEnumLabel();
+   const dateLabel = useDateFormatter();
+
    const [data, setData] = useState<IssueSla>(),
       [page, setPage] = useState<VersionPage>();
    const [busy, setBusy] = useState(false),
@@ -110,18 +119,18 @@ function ClockPanel({ workspace, issue }: { workspace: string; issue: Issue }) {
    };
    const current = data?.current;
    return (
-      <VStack as="section" gap={3} width="100%" aria-label="Issue SLA">
-         <Heading level={2}>Service level</Heading>
+      <VStack as="section" gap={3} width="100%" aria-label={tx('Issue SLA')}>
+         <Heading level={2}>{tx('Service level')}</Heading>
          {data ? (
             <>
                <HStack gap={2} wrap="wrap">
                   <Token
                      label={
                         data.coverage === 'MANUAL'
-                           ? 'Manual deadline'
+                           ? tx('Manual deadline')
                            : current?.breachedAt
-                             ? 'Breached'
-                             : (current?.state ?? data.coverage)
+                             ? tx('Breached')
+                             : enumLabel(current?.state ?? data.coverage)
                      }
                      color={
                         current?.breachedAt
@@ -132,48 +141,72 @@ function ClockPanel({ workspace, issue }: { workspace: string; issue: Issue }) {
                      }
                   />
                   {current && (
-                     <Text>{`${current.policyName} · Revision ${current.policyVersion} · Cycle ${current.cycle}`}</Text>
+                     <Text>
+                        {tx('{value0} · Revision {value1} · Cycle {value2}', {
+                           value0: current.policyName,
+                           value1: current.policyVersion,
+                           value2: current.cycle,
+                        })}
+                     </Text>
                   )}
                </HStack>
                {current ? (
                   <>
-                     <Text>{`${Math.ceil(current.remainingSeconds / 60)} working minutes remaining · Deadline ${dateLabel(current.dueAt)}`}</Text>
+                     <Text>
+                        {tx('{value0} working minutes remaining · Deadline {value1}', {
+                           value0: Math.ceil(current.remainingSeconds / 60),
+                           value1: dateLabel(current.dueAt),
+                        })}
+                     </Text>
                      <Text>
                         {current.calendar
                            ? `Working timezone: ${current.calendar.timezone}`
-                           : 'Calendar: 24 hours, every day'}
+                           : tx('Calendar: 24 hours, every day')}
                      </Text>
                      {current.escalationCode && (
-                        <Text>{`Escalation: ${current.escalationCode.toLowerCase().replaceAll('_', ' ')}`}</Text>
+                        <Text>
+                           {tx('Escalation: {value0}', {
+                              value0: current.escalationCode.toLowerCase().replaceAll('_', ' '),
+                           })}
+                        </Text>
                      )}
                      {Object.entries(current.alertResults).map(([kind, result]) => (
-                        <Text
-                           key={kind}
-                        >{`${kind}: ${result.outcome.toLowerCase().replaceAll('_', ' ')} · ${result.recipients} authorized recipients`}</Text>
+                        <Text key={kind}>
+                           {tx('{value0}: {value1} · {value2} authorized recipients', {
+                              value0: kind,
+                              value1: result.outcome.toLowerCase().replaceAll('_', ' '),
+                              value2: result.recipients,
+                           })}
+                        </Text>
                      ))}
                   </>
                ) : (
                   <Text>
                      {data.coverage === 'MANUAL'
-                        ? 'A manually chosen deadline disables SLA automation.'
+                        ? tx('A manually chosen deadline disables SLA automation.')
                         : data.coverage === 'RESTRICTED'
-                          ? 'Earlier policy details are outside your current access.'
-                          : 'No SLA clock is attached. Older tasks have no reconstructed SLA history.'}
+                          ? tx('Earlier policy details are outside your current access.')
+                          : tx(
+                               'No SLA clock is attached. Older tasks have no reconstructed SLA history.'
+                            )}
                   </Text>
                )}
                {data.pending && (
                   <Text role="status">
-                     Recent changes are awaiting SLA processing. Refresh to check the updated clock.
+                     {tx(
+                        'Recent changes are awaiting SLA processing. Refresh to check the updated clock.'
+                     )}
                   </Text>
                )}
                {data.job?.failedAt && (
                   <>
                      <Text role="alert">
-                        SLA processing stopped after repeated failures. Last error:{' '}
-                        {data.job.errorCode}. A retry keeps the existing clock.
+                        {tx('SLA processing stopped after repeated failures. Last error:')}{' '}
+                        {data.job.errorCode}
+                        {tx('. A retry keeps the existing clock.')}
                      </Text>
                      <Button
-                        label="Retry SLA processing"
+                        label={tx('Retry SLA processing')}
                         onClick={() => void command('retry')}
                         isDisabled={busy}
                      />
@@ -181,19 +214,19 @@ function ClockPanel({ workspace, issue }: { workspace: string; issue: Issue }) {
                )}
                <HStack gap={2} wrap="wrap">
                   <Button
-                     label="Refresh SLA"
+                     label={tx('Refresh SLA')}
                      onClick={() => setRefresh((value) => value + 1)}
                      isDisabled={busy}
                   />
                   <Button
-                     label="Use current SLA policy"
+                     label={tx('Use current SLA policy')}
                      onClick={() => setConfirm(true)}
                      isDisabled={
                         busy || ['completed', 'canceled'].includes(issue.status.category ?? '')
                      }
                   />
                   <Button
-                     label={history ? 'Hide SLA history' : 'Show SLA history'}
+                     label={history ? tx('Hide SLA history') : tx('Show SLA history')}
                      onClick={() => setHistory(!history)}
                      isDisabled={busy}
                   />
@@ -201,17 +234,18 @@ function ClockPanel({ workspace, issue }: { workspace: string; issue: Issue }) {
                {confirm && (
                   <>
                      <Text>
-                        Apply the currently matching policy and start a new clock now? This replaces
-                        the manual deadline or active cycle and preserves earlier cycles in history.
+                        {tx(
+                           'Apply the currently matching policy and start a new clock now? This replaces the manual deadline or active cycle and preserves earlier cycles in history.'
+                        )}
                      </Text>
                      <HStack gap={2} wrap="wrap">
                         <Button
-                           label="Confirm current SLA"
+                           label={tx('Confirm current SLA')}
                            onClick={() => void command('apply')}
                            isLoading={busy}
                         />
                         <Button
-                           label="Keep existing SLA"
+                           label={tx('Keep existing SLA')}
                            onClick={() => setConfirm(false)}
                            isDisabled={busy}
                         />
@@ -224,20 +258,43 @@ function ClockPanel({ workspace, issue }: { workspace: string; issue: Issue }) {
                         {data.history.map((row) => (
                            <ListItem
                               key={row.cycle}
-                              label={`Cycle ${row.cycle} · ${row.policyName}`}
+                              label={tx('Cycle {value0} · {value1}', {
+                                 value0: row.cycle,
+                                 value1: row.policyName,
+                              })}
                               description={
                                  <VStack gap={1}>
-                                    <Text>{`${row.state} · Policy revision ${row.policyVersion} · Started ${dateLabel(row.startedAt)} · Closed ${dateLabel(row.closedAt)}`}</Text>
-                                    <Text>{`Deadline ${dateLabel(row.dueAt)} · Breached ${dateLabel(row.breachedAt)}`}</Text>
+                                    <Text>
+                                       {tx(
+                                          '{value0} · Policy revision {value1} · Started {value2} · Closed {value3}',
+                                          {
+                                             value0: enumLabel(row.state),
+                                             value1: row.policyVersion,
+                                             value2: dateLabel(row.startedAt),
+                                             value3: dateLabel(row.closedAt),
+                                          }
+                                       )}
+                                    </Text>
+                                    <Text>
+                                       {tx('Deadline {value0} · Breached {value1}', {
+                                          value0: dateLabel(row.dueAt),
+                                          value1: dateLabel(row.breachedAt),
+                                       })}
+                                    </Text>
                                  </VStack>
                               }
                            />
                         ))}
                      </List>
-                     <Text>{`${data.history.length} of ${page?.total ?? 0} accessible SLA cycles`}</Text>
+                     <Text>
+                        {tx('{value0} of {value1} accessible SLA cycles', {
+                           value0: data.history.length,
+                           value1: page?.total ?? 0,
+                        })}
+                     </Text>
                      {page?.nextBefore && (
                         <Button
-                           label="Load more SLA cycles"
+                           label={tx('Load more SLA cycles')}
                            onClick={() => void load(page.nextBefore ?? undefined)}
                            isDisabled={busy}
                         />
@@ -246,13 +303,13 @@ function ClockPanel({ workspace, issue }: { workspace: string; issue: Issue }) {
                )}
             </>
          ) : (
-            <Text>{error ? 'SLA unavailable.' : 'Loading SLA…'}</Text>
+            <Text>{error ? tx('SLA unavailable.') : tx('Loading SLA…')}</Text>
          )}
          {error && (
             <>
                <Text role="alert">{error}</Text>
                <Button
-                  label="Reload SLA"
+                  label={tx('Reload SLA')}
                   onClick={() => setRefresh((value) => value + 1)}
                   isDisabled={busy}
                />

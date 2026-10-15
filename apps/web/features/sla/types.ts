@@ -1,8 +1,8 @@
 export const slaApi = `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'}/slas`;
 export type WorkingWindow = { weekday: number; start: string; end: string };
 export type BusinessCalendar = { timezone: string; windows: WorkingWindow[]; holidays: string[] };
-export const defaultCalendar = (): BusinessCalendar => ({
-   timezone: 'Asia/Ho_Chi_Minh',
+export const defaultCalendar = (timezone = 'Asia/Ho_Chi_Minh'): BusinessCalendar => ({
+   timezone,
    windows: [0, 1, 2, 3, 4].map((weekday) => ({ weekday, start: '09:00', end: '17:00' })),
    holidays: [],
 });
@@ -60,4 +60,3 @@ export type IssueSla = {
    history: SlaCycle[];
 };
 export type VersionPage = { total: number; nextBefore: number | null };
-export const dateLabel = (value: string | null) => (value ? new Date(value).toLocaleString() : '—');

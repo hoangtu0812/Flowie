@@ -1,4 +1,7 @@
 'use client';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/data-exchange/messages.vi';
+
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@astryxdesign/core/Button';
 import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
@@ -11,6 +14,8 @@ import { downloadFile } from '@/features/shared/download-file';
 import { exchange, exchangeApi } from './client';
 
 export function DocumentExportPanel({ workspace }: { workspace: string }) {
+   const tx = useMessages(messages);
+
    const [options, setOptions] = useState<{ id: string; title: string }[]>([]);
    const [after, setAfter] = useState<string | null>('');
    const [selected, setSelected] = useState<string[]>([]);
@@ -62,7 +67,7 @@ export function DocumentExportPanel({ workspace }: { workspace: string }) {
                includeAttachments: attachments,
             }),
          });
-         if (!response.ok) await responseData(response, 'Could not export documents.');
+         if (!response.ok) await responseData(response, tx('Could not export documents.'));
          const content = await response.blob();
          if (alive.current) downloadFile(content, 'flowie-documents.zip');
       } catch (reason) {
@@ -73,34 +78,35 @@ export function DocumentExportPanel({ workspace }: { workspace: string }) {
    };
    return (
       <VStack gap={3}>
-         <Heading level={2}>Export documents</Heading>
+         <Heading level={2}>{tx('Export documents')}</Heading>
          <Text>
-            Select up to 100 accessible documents. The ZIP contains Markdown, original source links
-            and a manifest; optional stored attachments are limited to 200 files / 25 MB. External
-            URLs are preserved without downloading their contents. Original authenticated links
-            remain in Markdown.
+            {tx(
+               'Select up to 100 accessible documents. The ZIP contains Markdown, original source links and a manifest; optional stored attachments are limited to 200 files / 25 MB. External URLs are preserved without downloading their contents. Original authenticated links remain in Markdown.'
+            )}
          </Text>
          <MultiSelector
-            label="Documents to export"
+            label={tx('Documents to export')}
             value={selected}
             onChange={setSelected}
             options={options.map((row) => ({ value: row.id, label: row.title }))}
             hasSearch
          />
          <CheckboxInput
-            label="Include stored document attachments"
+            label={tx('Include stored document attachments')}
             value={attachments}
             onChange={setAttachments}
          />
          {after !== null && (
             <Button
-               label={options.length ? 'Load more document options' : 'Retry document options'}
+               label={
+                  options.length ? tx('Load more document options') : tx('Retry document options')
+               }
                isLoading={busy}
                onClick={() => void load(after)}
             />
          )}
          <Button
-            label="Export selected documents ZIP"
+            label={tx('Export selected documents ZIP')}
             isLoading={busy}
             isDisabled={!selected.length || selected.length > 100}
             onClick={() => void exportZip()}
