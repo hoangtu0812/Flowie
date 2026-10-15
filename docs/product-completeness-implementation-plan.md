@@ -13,9 +13,9 @@ Phạm vi đã được yêu cầu: toàn bộ AUD-01–12 và NEXT-01–09 tron
 | AUD-05 | Shared issue query scope và aggregate server; >100 rows, ACL, Load more invariance | LOCAL_VERIFIED |
 | AUD-06 | Error boundaries và Saved View Retry đã có; còn chuẩn hóa recovery các trang legacy khác | IN_PROGRESS |
 | AUD-07 | Batched portfolio list, cursor/history và load-more UI; bounded queries | TODO |
-| AUD-08 | Dependency probes, request ID/build identity, scrubbed error report, job heartbeat/lag | TODO |
+| AUD-08 | Dependency probes, request ID/build identity, scrubbed error report, job heartbeat/lag | LOCAL_VERIFIED |
 | AUD-09 | Backup/restore tooling và rehearsal; off-host destination và CT107 inventory cần cấu hình thật | TODO |
-| AUD-10 | Direct route, role, scope-switch, large-data/error regression matrix | TODO |
+| AUD-10 | Đã thêm role/revocation, >100 rows, view/error/workflow/operations; tiếp tục mở rộng theo feature | IN_PROGRESS |
 | AUD-11 | Codex bug thật → PR; người dùng đã chọn client và sẽ chỉ định project/bug | WAITING_INPUT |
 | AUD-12 | Cập nhật bằng chứng kế hoạch cũ, build identity/release checklist; release thực sau deploy verified | TODO |
 | NEXT-01 | Bulk preview/execute có version/ACL/idempotency và explicit all-results selection | TODO |
@@ -64,3 +64,9 @@ AUD-03/04/05: build/lint/types pass; workflow service test kiểm tra stale vers
 status in-use và bootstrap không ghi đè. Issue Insights kiểm tra 150 issue được
 phép đọc + 25 issue team khác, page 100/50, filter và cả bốn dimension.
 Saved Views direct URL/reload/retry và workflow CRUD: 12/12 E2E trên ba engine.
+
+AUD-08: 89 migrations và schema diff pass trên DB thử; backend full 131 passed,
+1 optional S3 skip, 10 subtests. MinIO ký request thật (bao gồm HEAD hợp lệ và
+credential sai) + SMTP/TLS: 3 passed. Web build, 17 unit và worker build pass;
+Operations/report contract E2E 3/3 trên ba engine. Runbook nêu bucket phải được
+provision và phân biệt liveness, readiness, heartbeat và progress. Chưa deploy.

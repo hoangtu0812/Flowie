@@ -61,6 +61,7 @@ export const metadata: Metadata = {
 };
 
 import { UiPreferencesApplier } from '@/components/layout/ui-preferences-applier';
+import { ClientErrorObserver } from '@/features/shared/error-reporting';
 import { RouteProgress } from '@/components/layout/route-progress';
 import { ThemeProvider } from '@/components/layout/theme-provider';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
@@ -79,6 +80,7 @@ export default function RootLayout({
             <NuqsAdapter>
                <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
                   <UiPreferencesApplier />
+                  <ClientErrorObserver />
                   <RouteProgress />
                   {children}
                   <Toaster />

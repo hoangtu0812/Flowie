@@ -2,6 +2,7 @@ import { PrismaClient } from '@circle/database';
 import { Queue, Worker } from 'bullmq';
 import { runTeamPolicies } from './team-policies.js';
 import { runCycleCadence } from './cycle-cadence.js';
+import { trackWorker } from './operations.js';
 
 type DiscordJob = { workspaceId: string; content: string };
 type IssueReminderJob = { reminderId: string };
@@ -94,8 +95,8 @@ worker.on('ready', () => {
    console.log('Flowie worker is connected to Redis.');
 });
 
-worker.on('failed', (job, error) => {
-   console.error(`Job ${job?.id ?? 'unknown'} failed:`, error);
+worker.on('failed', (job) => {
+   console.error(`Job ${job?.id ?? 'unknown'} failed.`);
 });
 
 async function scheduleTeamPolicies() {
@@ -131,13 +132,14 @@ async function scheduleTeamPolicies() {
    }
 }
 
-void scheduleTeamPolicies().catch((error: unknown) => {
-   console.error('Could not schedule team policy scans:', error);
+void scheduleTeamPolicies().catch(() => {
+   console.error('Could not schedule team policy scans.');
 });
 
 async function shutdown(signal: NodeJS.Signals) {
    console.log(`Received ${signal}; closing worker.`);
    await worker.close();
+   await stopWorkerTracking();
    await queue.close();
    await prisma.$disconnect();
    process.exit(0);
@@ -145,3 +147,5 @@ async function shutdown(signal: NodeJS.Signals) {
 
 process.once('SIGINT', () => void shutdown('SIGINT'));
 process.once('SIGTERM', () => void shutdown('SIGTERM'));
+
+const stopWorkerTracking = trackWorker(prisma, worker);

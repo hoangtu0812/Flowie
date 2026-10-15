@@ -12,10 +12,10 @@ class ApiError(Exception):
         self.error = error
 
 
-async def api_error_handler(_: Request, error: ApiError) -> JSONResponse:
+async def api_error_handler(request: Request, error: ApiError) -> JSONResponse:
     return JSONResponse(
         status_code=error.status_code,
-        content={'message': error.message, 'error': error.error, 'statusCode': error.status_code},
+        content={'message': error.message, 'error': error.error, 'statusCode': error.status_code, 'requestId':getattr(request.state,'request_id',None)},
     )
 
 

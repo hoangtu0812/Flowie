@@ -59,6 +59,7 @@ from .modules.notifications.outbox import outbox_loop
 from .modules.agent_runs.api import router as agent_runs_router
 from .modules.agent_runs.dispatcher import dispatcher_loop as agent_run_dispatcher_loop
 from .modules.mcp.maintenance import maintenance_loop
+from .modules.operations.heartbeats import supervise
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -68,24 +69,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         session_factory, engine = create_session_factory(runtime)
         app.state.session_factory = session_factory
+        def tracked(job,operation,stop):
+            return asyncio.create_task(supervise(session_factory,job,operation,stop))
         mcp_stack = AsyncExitStack()
         if runtime.mcp_enabled:
             await mcp_stack.enter_async_context(app.state.mcp_server.session_manager.run())
         outbox_stop = asyncio.Event()
-        outbox_task = asyncio.create_task(outbox_loop(session_factory, outbox_stop))
+        outbox_task = tracked('notification-outbox',outbox_loop(session_factory, outbox_stop),outbox_stop)
         from .modules.notifications.delivery_worker import delivery_loop
-        channel_task=asyncio.create_task(delivery_loop(session_factory,runtime,outbox_stop))
-        maintenance_task=asyncio.create_task(maintenance_loop(session_factory,outbox_stop))
+        channel_task=tracked('notification-channels',delivery_loop(session_factory,runtime,outbox_stop),outbox_stop)
+        maintenance_task=tracked('maintenance',maintenance_loop(session_factory,outbox_stop),outbox_stop)
         agent_runs_stop = asyncio.Event()
-        agent_runs_task = asyncio.create_task(agent_run_dispatcher_loop(session_factory, agent_runs_stop)) if runtime.mcp_enabled and runtime.mcp_writes_enabled else None
+        agent_runs_task = tracked('agent-dispatcher',agent_run_dispatcher_loop(session_factory, agent_runs_stop),agent_runs_stop) if runtime.mcp_enabled and runtime.mcp_writes_enabled else None
         reminder_stop = asyncio.Event()
-        reminder_task = asyncio.create_task(reminder_loop(session_factory, reminder_stop))
+        reminder_task = tracked('reminders',reminder_loop(session_factory, reminder_stop),reminder_stop)
         digest_stop = asyncio.Event()
-        digest_task = asyncio.create_task(digest_loop(session_factory, digest_stop))
+        digest_task = tracked('digest',digest_loop(session_factory, digest_stop),digest_stop)
         dispatch_stop = asyncio.Event()
-        dispatch_task = asyncio.create_task(dispatcher_loop(session_factory, dispatch_stop))
+        dispatch_task = tracked('team-dispatcher',dispatcher_loop(session_factory, dispatch_stop),dispatch_stop)
         scm_stop = asyncio.Event()
-        scm_task = asyncio.create_task(scm_delivery_loop(session_factory, runtime, scm_stop))
+        scm_task = tracked('scm-delivery',scm_delivery_loop(session_factory, runtime, scm_stop),scm_stop)
         try:
             yield
         finally:
@@ -95,19 +98,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             digest_stop.set()
             dispatch_stop.set()
             scm_stop.set()
-            await reminder_task
-            await digest_task
-            await dispatch_task
-            await scm_task
-            await outbox_task
-            await channel_task
-            await maintenance_task
-            if agent_runs_task:
-                await agent_runs_task
+            await asyncio.gather(*[task for task in [reminder_task,digest_task,dispatch_task,scm_task,outbox_task,channel_task,maintenance_task,agent_runs_task] if task],return_exceptions=True)
             await mcp_stack.aclose()
             await engine.dispose()
 
     app = FastAPI(title='Flowie Python API', version='0.1.0', lifespan=lifespan)
+    from .modules.operations.diagnostics import install_diagnostics, build_identity
+    install_diagnostics(app)
     app.state.settings = runtime
     app.include_router(mcp_management_router)
     app.include_router(agent_runs_router)
@@ -124,6 +121,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_credentials=True,
         allow_methods=['*'],
         allow_headers=['*'],
+        expose_headers=['x-request-id','x-flowie-revision'],
     )
     app.add_exception_handler(ApiError, api_error_handler)
     app.add_exception_handler(RequestValidationError, validation_error_handler)
@@ -147,6 +145,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(issues_router)
     from .modules.work_items.workflow_api import router as workflow_router
     app.include_router(workflow_router)
+    from .modules.operations.api import router as operations_admin_router
+    app.include_router(operations_admin_router)
     app.include_router(native_initiatives_router)
     app.include_router(initiatives_router)
     app.include_router(native_documents_router)
@@ -176,13 +176,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get('/readyz')
     async def readyz(request: Request) -> JSONResponse:
-        del request
-        dependencies = await dependency_status(runtime)
+        dependencies = await dependency_status(runtime,getattr(request.app.state,'session_factory',None))
         status = 'ok' if all(dependencies.values()) else 'degraded'
         return JSONResponse(
             status_code=200 if status == 'ok' else 503,
-            content={'status': status, 'service': 'api-python', 'dependencies': dependencies},
+            content={'status': status, 'service': 'api-python', 'dependencies': dependencies, **build_identity()},
         )
+
+    @app.get('/livez')
+    async def livez():
+        return {'status':'ok','service':'api-python',**build_identity()}
 
     return app
 

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from ..modules.operations.heartbeats import progress
 
 import asyncio
 import logging
@@ -54,7 +55,7 @@ async def digest_loop(
     # send_digest_for_workspace skips workspaces that already received one.
     while not stop.is_set():
         try:
-            delivered = await run(factory)
+            delivered = await progress(factory,'digest',run(factory))
             if delivered:
                 logger.info("Delivered %s daily digest(s).", delivered)
         except Exception:

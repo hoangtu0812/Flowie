@@ -1,4 +1,5 @@
 from __future__ import annotations
+from ..operations.heartbeats import progress
 
 import asyncio
 import json
@@ -119,7 +120,7 @@ async def process_one(factory, outbox_id: str | None = None) -> bool:
 async def outbox_loop(factory, stop: asyncio.Event) -> None:
     while not stop.is_set():
         try:
-            if await process_one(factory):
+            if await progress(factory,'notification-outbox',process_one(factory)):
                 continue
         except Exception:
             logger.warning("Notification outbox is unavailable")

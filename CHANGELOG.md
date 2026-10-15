@@ -12,6 +12,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Workspace managers can inspect job heartbeats/progress, failed delivery queues and browser-error counts. Browser reporting accepts only bounded category/digest metadata. Apply the operational-observability migration before starting API or worker.
+
 - A product-completeness review and implementation tracker cover access consistency, recoverable workflows, operational readiness and productivity features with separate local and production acceptance gates.
 
 - Browser regressions cover Inbox snooze, account locale and AI budgets across Chromium, Firefox and WebKit. Isolated SMTP/TLS and real MinIO signing acceptance complement UI fixtures; CI provisions its own storage and retains failure traces.
@@ -99,6 +101,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
   commands or create pull requests.
 
 ### Changed
+
+- API readiness executes a database query, Redis PING and signed bucket access check; liveness is available separately. Provision the configured storage bucket before deployment. API diagnostics use request references and omit raw request URLs, payloads and exception messages; deployed API and Help expose the workflow commit SHA.
 
 - Comment and activity APIs return bounded cursor pages with batched reactions
   and files. Web loads older pages and long reply threads on demand; concurrent

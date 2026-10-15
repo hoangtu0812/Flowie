@@ -20,6 +20,10 @@ class MinioStorage:
         self.region = settings.s3_region
         self._bucket_ready = False
 
+    async def ready(self) -> bool:
+        response = await self._request('HEAD', f'/{self._escape_key(self.bucket)}')
+        return response.status_code == 200
+
     async def put(self, key: str, body: bytes, content_type: str) -> None:
         await self._ensure_bucket()
         response = await self._request('PUT', f'/{self.bucket}/{self._escape_key(key)}', body, content_type)

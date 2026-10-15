@@ -172,23 +172,24 @@ enum CycleStatus {
 }
 
 model User {
-  uiPreferences   UserUiPreferences?
-  id              String             @id @default(cuid())
-  email           String             @unique
-  name            String
-  username        String?            @unique
-  title           String?
-  timezone        String             @default("UTC")
-  avatarUrl       String?            @map("avatar_url")
-  authVersion     Int                @default(0) @map("auth_version")
-  passwordHash    String?            @map("password_hash")
-  isPlatformAdmin Boolean            @default(false) @map("is_platform_admin")
-  emailVerifiedAt DateTime?          @map("email_verified_at")
-  status          UserStatus         @default(ACTIVE)
-  createdAt       DateTime           @default(now()) @map("created_at")
-  updatedAt       DateTime           @updatedAt @map("updated_at")
-  lastLoginAt     DateTime?          @map("last_login_at")
-  lastSeenAt      DateTime?          @map("last_seen_at")
+  clientErrorEvents ClientErrorEvent[]
+  uiPreferences     UserUiPreferences?
+  id                String             @id @default(cuid())
+  email             String             @unique
+  name              String
+  username          String?            @unique
+  title             String?
+  timezone          String             @default("UTC")
+  avatarUrl         String?            @map("avatar_url")
+  authVersion       Int                @default(0) @map("auth_version")
+  passwordHash      String?            @map("password_hash")
+  isPlatformAdmin   Boolean            @default(false) @map("is_platform_admin")
+  emailVerifiedAt   DateTime?          @map("email_verified_at")
+  status            UserStatus         @default(ACTIVE)
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+  lastLoginAt       DateTime?          @map("last_login_at")
+  lastSeenAt        DateTime?          @map("last_seen_at")
 
   identities               UserIdentity[]
   sessions                 Session[]
@@ -532,20 +533,21 @@ model Organization {
 }
 
 model Workspace {
+  clientErrorEvents      ClientErrorEvent[]
   aiLimits               AiWorkspaceLimit?
   aiToolWindows          AiToolWindow[]
-  id                     String            @id @default(cuid())
-  organizationId         String            @map("organization_id")
+  id                     String             @id @default(cuid())
+  organizationId         String             @map("organization_id")
   name                   String
-  slug                   String            @unique
+  slug                   String             @unique
   icon                   String?
   description            String?
-  timezone               String            @default("UTC")
-  projectDisplayDefaults Json?             @map("project_display_defaults")
-  issueDisplayDefaults   Json?             @map("issue_display_defaults")
-  issueInsightDefaults   Json?             @map("issue_insight_defaults")
-  createdAt              DateTime          @default(now()) @map("created_at")
-  updatedAt              DateTime          @updatedAt @map("updated_at")
+  timezone               String             @default("UTC")
+  projectDisplayDefaults Json?              @map("project_display_defaults")
+  issueDisplayDefaults   Json?              @map("issue_display_defaults")
+  issueInsightDefaults   Json?              @map("issue_insight_defaults")
+  createdAt              DateTime           @default(now()) @map("created_at")
+  updatedAt              DateTime           @updatedAt @map("updated_at")
 
   organization            Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   members                 WorkspaceMember[]
@@ -2055,4 +2057,34 @@ model AuthRateLimit {
 
   @@index([windowStart])
   @@map("auth_rate_limits")
+}
+
+model OperationHeartbeat {
+  id             String    @id @default(cuid())
+  instanceId     String    @map("instance_id")
+  job            String
+  status         String
+  lastSeenAt     DateTime  @map("last_seen_at")
+  lastProgressAt DateTime? @map("last_progress_at")
+  failures       Int       @default(0)
+  lastErrorCode  String?   @map("last_error_code")
+
+  @@unique([instanceId, job])
+  @@index([lastSeenAt])
+  @@map("operation_heartbeats")
+}
+
+model ClientErrorEvent {
+  id          String    @id @default(cuid())
+  workspaceId String    @map("workspace_id")
+  actorId     String    @map("actor_id")
+  category    String
+  routeKind   String    @map("route_kind")
+  digest      String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actor       User      @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@map("client_error_events")
 }

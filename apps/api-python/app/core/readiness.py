@@ -1,33 +1,39 @@
-from __future__ import annotations
-
+"""Bounded dependency operations; a listening port alone is not readiness."""
 import asyncio
-from collections.abc import Iterable
+from sqlalchemy import text
+from ..storage.minio import MinioStorage
 
-from .config import Settings
+
+async def database_ready(factory):
+    if factory is None:
+        return False
+    async with factory() as db:
+        return (await db.execute(text('SELECT 1'))).scalar_one()==1
 
 
-async def _tcp_ready(host: str, port: int, timeout: float = 1.5) -> bool:
+async def redis_ready(settings):
+    reader,writer=await asyncio.open_connection(settings.redis_host,settings.redis_port)
     try:
-        reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout)
-        del reader
+        writer.write(b'*1\r\n$4\r\nPING\r\n')
+        await writer.drain()
+        return await reader.readexactly(7)==b'+PONG\r\n'
+    finally:
         writer.close()
         await writer.wait_closed()
-        return True
-    except (OSError, TimeoutError):
+
+
+async def storage_ready(settings):
+    return await MinioStorage(settings).ready()
+
+
+async def bounded_probe(operation,timeout=3):
+    try:
+        return bool(await asyncio.wait_for(operation,timeout))
+    except Exception:
         return False
 
 
-async def dependency_status(settings: Settings) -> dict[str, bool]:
-    """Return TCP readiness for services shared with the legacy API.
-
-    These probes never include credentials or connection strings in a response
-    or log message.
-    """
-
-    dependencies: Iterable[tuple[str, str, int]] = (
-        ('postgres', settings.postgres_host, settings.postgres_port),
-        ('redis', settings.redis_host, settings.redis_port),
-        ('minio', settings.minio_host, settings.minio_port),
-    )
-    results = await asyncio.gather(*(_tcp_ready(host, port) for _, host, port in dependencies))
-    return {name: result for (name, _, _), result in zip(dependencies, results, strict=True)}
+async def dependency_status(settings,factory=None):
+    results=await asyncio.gather(
+        bounded_probe(database_ready(factory)),bounded_probe(redis_ready(settings)),bounded_probe(storage_ready(settings)))
+    return dict(zip(['postgres','redis','minio'],results,strict=True))

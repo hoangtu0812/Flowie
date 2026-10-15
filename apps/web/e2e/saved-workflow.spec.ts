@@ -17,6 +17,37 @@ test.beforeEach(async ({ page }) => {
    await expect(page).toHaveURL(new RegExp(`/${fixture.slug}/`));
 });
 
+test('operations separates liveness, readiness and scoped browser error reports', async ({
+   page,
+   context,
+}) => {
+   const live = await context.request.get('http://localhost:4000/livez');
+   expect(live.ok()).toBeTruthy();
+   const rejected = await context.request.post(`${api}/operations/client-errors`, {
+      data: {
+         workspaceId: fixture.workspace_id,
+         category: 'render',
+         routeKind: 'view',
+         message: 'Must never persist a free-form payload',
+      },
+   });
+   expect(rejected.status()).toBe(400);
+   const report = await context.request.post(`${api}/operations/client-errors`, {
+      data: {
+         workspaceId: fixture.workspace_id,
+         category: 'render',
+         routeKind: 'view',
+         digest: 'synthetic-error',
+      },
+   });
+   expect(report.ok()).toBeTruthy();
+   expect((await report.json()).data.reference).toBeTruthy();
+   await page.goto(`/${fixture.slug}/settings/operations`);
+   await expect(page.getByRole('heading', { name: 'Operations', exact: true })).toBeVisible();
+   await expect(page.getByRole('heading', { name: 'Delivery queues' })).toBeVisible();
+   await expect(page.getByText('render · view', { exact: true })).toBeVisible();
+});
+
 for (const entityType of ['issue', 'project'])
    test(`saved ${entityType} view opens directly and survives reload`, async ({
       page,

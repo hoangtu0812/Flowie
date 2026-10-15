@@ -1,3 +1,4 @@
+from ..operations.heartbeats import progress
 import asyncio
 from datetime import timedelta
 from email.message import EmailMessage
@@ -129,7 +130,7 @@ async def delivery_loop(factory, settings, stop):
     logger = logging.getLogger(__name__)
     while not stop.is_set():
         try:
-            await wake_snoozed(factory)
+            await progress(factory,'notification-channels',wake_snoozed(factory))
             for _ in range(20):
                 if stop.is_set() or not await deliver_one(factory, settings):
                     break

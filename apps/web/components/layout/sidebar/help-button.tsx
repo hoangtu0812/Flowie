@@ -122,6 +122,9 @@ export function HelpButton() {
                <Link href={CHANGELOG_URL} target="_blank" rel="noreferrer">
                   Flowie {releaseLabel()} · Changelog
                </Link>
+               <Text color="secondary">
+                  Build: {process.env.NEXT_PUBLIC_BUILD_REVISION ?? 'local'}
+               </Text>
                <Link
                   href="https://github.com/hoangtu0812/Flowie/issues"
                   target="_blank"

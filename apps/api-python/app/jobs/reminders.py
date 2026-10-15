@@ -1,4 +1,5 @@
 from __future__ import annotations
+from ..modules.operations.heartbeats import progress
 
 import asyncio
 import json
@@ -64,7 +65,7 @@ async def reminder_loop(
 ) -> None:
     while not stop.is_set():
         try:
-            delivered = await run(factory)
+            delivered = await progress(factory,'reminders',run(factory))
             if delivered:
                 logger.info('Delivered %s due issue reminder(s).', delivered)
         except Exception:  # Keep the API alive; the durable record is retried next interval.

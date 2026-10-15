@@ -44,6 +44,9 @@ def test_real_s3_signing_binary_unicode_keys_and_cleanup():
         key, body = "fixture/tài liệu % #.bin", bytes(range(256))
         try:
             await storage.put(key, body, "application/octet-stream")
+            assert await storage.ready()
+            denied = MinioStorage(replace(settings,s3_secret_key='incorrect-synthetic-key'))
+            assert not await denied.ready()
             assert await MinioStorage(settings).get(key) == body
             await storage.put(key, b"updated", "text/plain")
             assert await storage.get(key) == b"updated"

@@ -78,6 +78,7 @@ services:
       container_name: circle-api
       environment:
          API_PORT: 4000
+         FLOWIE_REVISION: ${FLOWIE_DEPLOY_SHA:-local}
          API_CORS_ORIGIN: http://localhost:3000
          # Absolute base for the links carried by Discord notifications.
          APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
@@ -147,6 +148,7 @@ services:
          args:
             NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api/v1}
             UI_BUILD_REVISION: ${UI_BUILD_REVISION:-circle-ui-preview-20260825}
+            FLOWIE_REVISION: ${FLOWIE_DEPLOY_SHA:-local}
       container_name: circle-web
       environment:
          NODE_ENV: production
