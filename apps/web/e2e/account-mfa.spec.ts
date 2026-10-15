@@ -34,8 +34,12 @@ test('authenticator enrollment, challenge replay rejection, recovery sign-in and
       await page.goto('/auth/login');
       await page.getByLabel('Email', { exact: true }).fill(fixture.email);
       await page.getByLabel('Password', { exact: true }).fill(fixture.password);
+      const firstWorkspace = page.waitForResponse(
+         (response) => response.url().startsWith(`${api}/teams?`) && response.ok()
+      );
       await page.getByRole('button', { name: 'Sign in', exact: true }).click();
       await expect(page).toHaveURL(new RegExp(`/${fixture.slug}/`));
+      await firstWorkspace;
       await page.waitForLoadState('networkidle');
       await page.goto(`/${fixture.slug}/settings/security`);
       await page.getByRole('tab', { name: 'Authenticator', exact: true }).click();
@@ -60,6 +64,7 @@ test('authenticator enrollment, challenge replay rejection, recovery sign-in and
       enabled = true;
       codes = (await response.json()).data.recoveryCodes;
       expect(codes).toHaveLength(10);
+      await expect(panel.getByText('Authenticator enabled', { exact: true })).toBeVisible();
       await expect(panel.getByLabel('Recovery codes', { exact: true })).toHaveText(
          codes.join('\n')
       );
@@ -91,8 +96,12 @@ test('authenticator enrollment, challenge replay rejection, recovery sign-in and
       await page.getByRole('combobox', { name: 'Verification method', exact: true }).click();
       await page.getByRole('option', { name: 'Recovery code', exact: true }).click();
       await page.getByRole('textbox', { name: /Verification code/ }).fill(codes[0]);
+      const verifiedWorkspace = page.waitForResponse(
+         (response) => response.url().startsWith(`${api}/teams?`) && response.ok()
+      );
       await page.getByRole('button', { name: 'Verify sign-in', exact: true }).click();
       await expect(page).toHaveURL(new RegExp(`/${fixture.slug}/`));
+      await verifiedWorkspace;
       await page.waitForLoadState('networkidle');
       await page.goto(`/${fixture.slug}/settings/security`);
       await page.getByRole('tab', { name: 'Authenticator', exact: true }).click();
@@ -106,6 +115,7 @@ test('authenticator enrollment, challenge replay rejection, recovery sign-in and
       await panel.getByRole('textbox', { name: 'Verification code', exact: true }).fill(codes[1]);
       await panel.getByRole('button', { name: 'Confirm security change', exact: true }).click();
       await expect(panel.getByText('Authenticator off', { exact: true })).toBeVisible();
+      await expect(panel.getByLabel('Recovery codes', { exact: true })).toHaveCount(0);
       enabled = false;
       expect(errors).toEqual([]);
    } finally {

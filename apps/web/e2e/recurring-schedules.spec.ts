@@ -41,7 +41,7 @@ test('recurring settings preview, run once, edit and pause with real history', a
       ).toBeVisible();
       await page.getByRole('textbox', { name: /^Recurring issue title/ }).fill(title);
       await page.getByRole('combobox', { name: 'Recurring issue type', exact: true }).click();
-      await page.getByRole('option', { name: 'BUG', exact: true }).click();
+      await page.getByRole('option', { name: 'Bug', exact: true }).click();
       await page.getByRole('combobox', { name: 'Recurring bug severity', exact: true }).click();
       await page.getByRole('option', { name: 'HIGH', exact: true }).click();
       await page.getByLabel('Due after minutes', { exact: true }).fill('30');

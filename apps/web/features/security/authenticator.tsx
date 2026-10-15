@@ -211,6 +211,15 @@ export function Authenticator({ org, onChanged }: { org: string; onChanged: () =
                                           '/enable',
                                           { password: password || null, code }
                                        );
+                                       setStatus((current) =>
+                                          current
+                                             ? {
+                                                  ...current,
+                                                  enabled: true,
+                                                  recoveryRemaining: result.recoveryCodes.length,
+                                               }
+                                             : current
+                                       );
                                        setCodes(result.recoveryCodes);
                                        setEnrollment(undefined);
                                        refresh();
@@ -283,6 +292,15 @@ export function Authenticator({ org, onChanged }: { org: string; onChanged: () =
                                        const result = await mfaRequest<{ recoveryCodes: string[] }>(
                                           `/${action}`,
                                           { password: password || null, code, kind }
+                                       );
+                                       setStatus((current) =>
+                                          current
+                                             ? {
+                                                  ...current,
+                                                  enabled: action !== 'disable',
+                                                  recoveryRemaining: result.recoveryCodes.length,
+                                               }
+                                             : current
                                        );
                                        setCodes(result.recoveryCodes);
                                        setAction(undefined);
