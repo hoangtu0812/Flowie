@@ -51,6 +51,8 @@ def visible_entities():
         OR (ev.entity_type='mcp-tool' AND (ev.entity_id IS NULL OR {issue} OR {project_exists} OR {document} OR {comment} OR {agent}))
         OR (ev.entity_type='agent-run-management' AND {agent})
         OR (ev.entity_type='recurring-schedule' AND EXISTS(SELECT 1 FROM recurring_schedules rs JOIN teams t ON t.id=rs.team_id JOIN team_members tm ON tm.team_id=t.id WHERE rs.id=ev.entity_id AND rs.workspace_id=:workspace AND tm.user_id=:user))
+        OR (ev.entity_type='sla-policy' AND EXISTS(SELECT 1 FROM sla_policies sp WHERE sp.id=ev.entity_id AND sp.workspace_id=:workspace AND
+            (sp.team_id IS NULL OR EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=sp.team_id AND tm.user_id=:user))))
         OR (ev.entity_type IN ('workspace','workspace-member','invitation','label','project-label','project-status','release','mcp-connection','ai-budget'))
     ) AND (ev.entity_type<>'initiative' OR NOT(ev.metadata ? 'projectId') OR
         EXISTS(SELECT 1 FROM projects p WHERE p.id=ev.metadata->>'projectId' AND {project}))"""

@@ -8,6 +8,7 @@ from ...core.errors import ApiError
 from ...core.identifiers import _cuid
 from .repository import TABLES, record, scope as archive_scope
 from ..access.projects import _workspace_access, _team_access
+from ..work_items.lifecycle import actor_context
 
 
 async def restore_preview(db, workspace, user, kind, identifier, *, lock=False):
@@ -102,6 +103,7 @@ async def restore(db, workspace, user, kind, identifier, expected):
         raise ApiError(409, " ".join(preview["blockers"]), "Conflict")
     table, _ = TABLES[kind]
     now = _utcnow()
+    await actor_context(db, user["id"])
     actor_update = ",updated_by=:actor" if kind == "document" else ""
     await db.execute(
         text(
@@ -109,6 +111,9 @@ async def restore(db, workspace, user, kind, identifier, expected):
         ),
         {"now": now, "id": identifier, "workspace": workspace, "actor": user["id"]},
     )
+    if kind == "issue":
+        from ..sla.synchronization import sync_issue
+        await sync_issue(db, identifier)
     await db.execute(
         text("""INSERT INTO audit_logs(id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at)
         VALUES (:id,:workspace,:user,:action,:kind,:entity,CAST(:metadata AS jsonb),:now)"""),
@@ -164,6 +169,7 @@ async def archive_project(db, workspace, user, identifier):
             "Forbidden",
         )
     now = _utcnow()
+    await actor_context(db, user["id"])
     await db.execute(
         text(
             "UPDATE issues SET archived_at=:now,updated_at=:now WHERE project_id=:id AND workspace_id=:workspace AND archived_at IS NULL"

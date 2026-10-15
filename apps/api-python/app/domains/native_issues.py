@@ -550,6 +550,11 @@ async def move_issue(
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
     issue = await _issue_row(db, issue_id, payload.workspaceId, user['id'])
+    from ..modules.sla.synchronization import locked_issue, sync_issue
+    from ..modules.work_items.lifecycle import actor_context
+    await locked_issue(db, issue_id)
+    await actor_context(db, user['id'])
+    issue = await _issue_row(db, issue_id, payload.workspaceId, user['id'])
     if issue['teamId'] == payload.teamId:
         return {'data': issue}
     await _team_access(db, payload.workspaceId, payload.teamId, user['id'])
@@ -618,6 +623,7 @@ async def move_issue(
         'toTeamId': team['id'],
         'identifier': f"{team['identifier']}-{team['issue_sequence']}",
     })
+    await sync_issue(db, issue_id)
     await db.commit()
     return {'data': await _issue_row(db, issue_id, payload.workspaceId, user['id'])}
 
@@ -630,6 +636,11 @@ async def classify_issue(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
+    issue = await _issue_row(db, issue_id, payload.workspaceId, user['id'])
+    from ..modules.sla.synchronization import locked_issue, sync_issue
+    from ..modules.work_items.lifecycle import actor_context
+    await locked_issue(db, issue_id)
+    await actor_context(db, user['id'])
     issue = await _issue_row(db, issue_id, payload.workspaceId, user['id'])
     duplicate_of_id: str | None = None
     duplicate_identifier: str | None = None
@@ -685,6 +696,7 @@ async def classify_issue(
         'duplicateOfId': duplicate_of_id,
         'duplicateIdentifier': duplicate_identifier,
     })
+    await sync_issue(db, issue_id)
     await db.commit()
     return {'data': await _issue_row(db, issue_id, payload.workspaceId, user['id'])}
 
@@ -697,6 +709,11 @@ async def convert_issue_to_comment(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
+    source = await _issue_row(db, issue_id, payload.workspaceId, user['id'])
+    from ..modules.sla.synchronization import locked_issue, sync_issue
+    from ..modules.work_items.lifecycle import actor_context
+    await locked_issue(db, issue_id)
+    await actor_context(db, user['id'])
     source = await _issue_row(db, issue_id, payload.workspaceId, user['id'])
     target_id = await db.execute(
         text('''SELECT id FROM issues WHERE workspace_id = :workspace_id AND identifier = :identifier
@@ -726,6 +743,7 @@ async def convert_issue_to_comment(
         'commentId': comment_id, 'targetIssueId': target['id'], 'targetIdentifier': target['identifier'],
     })
     await db.execute(text('UPDATE issues SET archived_at = :now, updated_at = :now WHERE id = :issue_id'), {'issue_id': source['id'], 'now': now})
+    await sync_issue(db, issue_id)
     await db.commit()
     return {'data': {
         'comment': {'id': comment_id, 'issueId': target['id'], 'authorId': user['id'], 'content': content, 'body': body, 'createdAt': now, 'updatedAt': now, 'deletedAt': None, 'author': {'id': actor_row['id'], 'name': actor_row['name'], 'avatarUrl': actor_row['avatar_url']}},
@@ -822,9 +840,15 @@ async def archive_issue(
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
     await _issue_row(db, issue_id, workspaceId, user['id'])
+    from ..modules.sla.synchronization import locked_issue, sync_issue
+    from ..modules.work_items.lifecycle import actor_context
+    await locked_issue(db, issue_id)
+    await actor_context(db, user['id'])
+    await _issue_row(db, issue_id, workspaceId, user['id'])
     now = _utcnow()
     await db.execute(text('UPDATE issues SET archived_at = :now, updated_at = :now WHERE id = :issue_id AND workspace_id = :workspace_id'), {'issue_id': issue_id, 'workspace_id': workspaceId, 'now': now})
     await _write_activity(db, workspaceId, issue_id, user['id'], 'issue.archived', {})
+    await sync_issue(db, issue_id)
     await db.commit()
     return {'data': {'id': issue_id, 'archivedAt': now}}
 

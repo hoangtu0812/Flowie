@@ -118,6 +118,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             await connection.execute(
                 "INSERT INTO issues(id,workspace_id,team_id,status_id,identifier,number,title,priority,creator_id,created_at,updated_at) VALUES ('issue','workspace','team','status','UPGRADE-1',1,'Existing task','NONE','user',CURRENT_TIMESTAMP-INTERVAL '30 days',CURRENT_TIMESTAMP)"
             )
+            await connection.execute("INSERT INTO sla_policies(id,workspace_id,team_id,name,deadline_minutes,created_by,created_at,updated_at) VALUES ('policy','workspace','team','Existing SLA',60,'user',CURRENT_TIMESTAMP-INTERVAL '30 days',CURRENT_TIMESTAMP)")
             for path in migrations:
                 if path.parent.name >= "20261014":
                     await connection.execute(path.read_text(encoding="utf-8"))
@@ -135,6 +136,11 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(baseline["source"], "UNKNOWN")
             self.assertIsNotNone(baseline["sla_processed_at"])
             self.assertTrue(baseline["observed_later"])
+            policy_baseline = await connection.fetchrow("SELECT r.kind,r.snapshot->>'name' AS name,r.created_at>p.created_at AS observed_later FROM sla_policy_revisions r JOIN sla_policies p ON p.id=r.policy_id WHERE p.id='policy'")
+            self.assertEqual(policy_baseline['kind'], 'BASELINE')
+            self.assertEqual(policy_baseline['name'], 'Existing SLA')
+            self.assertTrue(policy_baseline['observed_later'])
+            self.assertEqual(await connection.fetchval("SELECT COUNT(*) FROM issue_sla_cycles WHERE issue_id='issue'"), 0)
             self.assertEqual(
                 await connection.fetchval(
                     "SELECT content FROM document_revisions WHERE document_id='document' AND version=1"

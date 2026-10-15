@@ -10,7 +10,8 @@ from .bug_contracts import BUG_COLUMNS
 from .contracts import CreateIssueInput, UpdateIssueInput
 from ...core.dates import _date
 from ..access.projects import _team_access, _workspace_access
-from .deadlines import resolve_deadline
+from ..sla.policies import select_policy
+from ..sla.synchronization import initialize_cycle, locked_issue, safe_clock, sync_issue
 from ...services.notification_events import (
     create_notification_batch,
     issue_recipient_ids,
@@ -41,10 +42,12 @@ async def create_issue(
     _validate_schedule_dates(
         _date(values.get("startDate")), _date(values.get("targetDate"))
     )
-    if not values.get("dueDate"):
-        values["dueDate"] = await resolve_deadline(
-            db, payload.workspaceId, payload.teamId, values["priority"]
-        )
+    explicit_due = bool(values.get("dueDate"))
+    sla_policy = (
+        await select_policy(db, payload.workspaceId, payload.teamId, values["priority"])
+        if not explicit_due
+        else None
+    )
     if values.get("parentIssueId"):
         parent = await db.execute(
             text("""SELECT 1 FROM issues WHERE id = :issue_id AND workspace_id = :workspace_id
@@ -73,16 +76,23 @@ async def create_issue(
     if not sequence:
         raise ApiError(404, "Team not found.", "Not Found")
     issue_id, now = _cuid(), _utcnow()
+    sla_clock = (
+        safe_clock(sla_policy, values["statusId"], category, now)
+        if sla_policy
+        else None
+    )
+    if sla_clock:
+        values["dueDate"] = sla_clock["due"].isoformat() if sla_clock["due"] else None
     completed_at = now if category == "COMPLETED" else None
     canceled_at = now if category == "CANCELED" else None
     await db.execute(
         text(
             """INSERT INTO issues (id, workspace_id, team_id, status_id, project_id, parent_issue_id,
                identifier, number, issue_type, severity, environment, reproduction_steps, expected_result, actual_result, title, description, priority, estimated_effort, actual_effort, start_date, target_date, due_date, creator_id,
-               assignee_id, completed_at, canceled_at, created_at, updated_at)
+               assignee_id, completed_at, canceled_at, created_at, updated_at,sla_opt_out)
                VALUES (:id, :workspace_id, :team_id, :status_id, :project_id, :parent_issue_id,
                :identifier, :number, :issueType, :severity, :environment, :reproductionSteps, :expectedResult, :actualResult, :title, :description, :priority, :estimated_effort, :actual_effort, :start_date, :target_date, :due_date, :creator_id,
-               :assignee_id, :completed_at, :canceled_at, :now, :now)"""
+               :assignee_id, :completed_at, :canceled_at, :now, :now,:sla_opt_out)"""
         ),
         {
             **{field: values.get(field) for field in BUG_COLUMNS},
@@ -107,8 +117,14 @@ async def create_issue(
             "completed_at": completed_at,
             "canceled_at": canceled_at,
             "now": now,
+            "sla_opt_out": explicit_due,
         },
     )
+    if sla_policy:
+        await initialize_cycle(
+            db, await locked_issue(db, issue_id), sla_policy, now, clock=sla_clock
+        )
+    await sync_issue(db, issue_id, now=now)
     for label_id in values.get("labelIds") or []:
         await db.execute(
             text(
@@ -197,6 +213,12 @@ async def update_issue(
     user: Any,
     db: AsyncSession,
 ) -> dict[str, dict[str, Any]]:
+    await db.execute(
+        text(
+            "SELECT id FROM issues WHERE id=:id AND workspace_id=:workspace FOR UPDATE"
+        ),
+        {"id": issue_id, "workspace": workspaceId},
+    )
     issue = await _issue_row(db, issue_id, workspaceId, user["id"])
     await actor_context(db, user["id"])
     values = payload.model_dump(exclude_unset=True)
@@ -253,6 +275,7 @@ async def update_issue(
             ),
             params,
         )
+    await sync_issue(db, issue_id)
     if "labelIds" in values:
         await db.execute(
             text("DELETE FROM issue_labels WHERE issue_id = :issue_id"),

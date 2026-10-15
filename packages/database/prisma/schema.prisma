@@ -176,6 +176,8 @@ model User {
   issueImports         IssueImportBatch[]
   recurringSchedules   RecurringSchedule[]
   issueLifecycleEvents IssueLifecycleEvent[]
+  slaEscalations       SlaPolicy[]           @relation("SlaEscalationTarget")
+  slaPolicyRevisions   SlaPolicyRevision[]
   clientErrorEvents    ClientErrorEvent[]
   uiPreferences        UserUiPreferences?
   id                   String                @id @default(cuid())
@@ -541,6 +543,7 @@ model Workspace {
   issueImports           IssueImportBatch[]
   recurringSchedules     RecurringSchedule[]
   issueLifecycleEvents   IssueLifecycleEvent[]
+  issueSlaCycles         IssueSlaCycle[]
   issueImportKeys        IssueImportKey[]
   clientErrorEvents      ClientErrorEvent[]
   aiLimits               AiWorkspaceLimit?
@@ -1426,16 +1429,25 @@ model SlaPolicy {
   priority        IssuePriority?
   deadlineMinutes Int            @map("deadline_minutes")
   enabled         Boolean        @default(true)
+  version         Int            @default(1)
+  calendar        Json?
+  pauseStatusIds  String[]       @default([]) @map("pause_status_ids")
+  warningMinutes  Int            @default(0) @map("warning_minutes")
+  escalateToId    String?        @map("escalate_to_id")
   createdById     String         @map("created_by")
   archivedAt      DateTime?      @map("archived_at")
   createdAt       DateTime       @default(now()) @map("created_at")
   updatedAt       DateTime       @default(now()) @updatedAt @map("updated_at")
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  team      Team?     @relation(fields: [teamId], references: [id], onDelete: SetNull)
-  createdBy User      @relation("SlaPolicyCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  workspace  Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  team       Team?               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  createdBy  User                @relation("SlaPolicyCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  escalateTo User?               @relation("SlaEscalationTarget", fields: [escalateToId], references: [id], onDelete: SetNull)
+  revisions  SlaPolicyRevision[]
+  cycles     IssueSlaCycle[]
 
   @@index([workspaceId, archivedAt, enabled])
+  @@index([workspaceId, createdAt, id])
   @@index([teamId])
   @@map("sla_policies")
 }
@@ -1527,6 +1539,7 @@ model IssueTemplate {
 }
 
 model Issue {
+  slaJob            IssueSlaJob?
   agentRuns         AgentRun[]
   agentEvents       AgentIssueEvent[]
   documentLinks     DocumentLink[]
@@ -1590,6 +1603,8 @@ model Issue {
   importKeys        IssueImportKey[]
   recurringRuns     RecurringRun[]
   lifecycleEvents   IssueLifecycleEvent[]
+  slaOptOut         Boolean               @default(false) @map("sla_opt_out")
+  slaCycles         IssueSlaCycle[]
 
   @@unique([workspaceId, identifier])
   @@unique([teamId, number])
@@ -2232,6 +2247,7 @@ model RecurringRun {
 }
 
 model IssueLifecycleEvent {
+  toPriority     String?   @map("to_priority")
   id             String    @id @default(cuid())
   issueId        String    @map("issue_id")
   workspaceId    String    @map("workspace_id")
@@ -2250,6 +2266,8 @@ model IssueLifecycleEvent {
   fromArchivedAt DateTime? @map("from_archived_at")
   toArchivedAt   DateTime? @map("to_archived_at")
   managedDue     Boolean   @default(false) @map("managed_due")
+  fromSlaOptOut  Boolean?  @map("from_sla_opt_out")
+  toSlaOptOut    Boolean   @default(false) @map("to_sla_opt_out")
   occurredAt     DateTime  @default(now()) @map("occurred_at")
   slaProcessedAt DateTime? @map("sla_processed_at")
   issue          Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
@@ -2261,4 +2279,65 @@ model IssueLifecycleEvent {
   @@index([issueId, occurredAt, issueVersion])
   @@index([slaProcessedAt, occurredAt])
   @@map("issue_lifecycle_events")
+}
+
+model SlaPolicyRevision {
+  policyId  String    @map("policy_id")
+  version   Int
+  kind      String    @default("CREATED")
+  snapshot  Json
+  actorId   String?   @map("actor_id")
+  createdAt DateTime  @default(now()) @map("created_at")
+  policy    SlaPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  actor     User?     @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@id([policyId, version])
+  @@map("sla_policy_revisions")
+}
+
+model IssueSlaCycle {
+  alertResults     Json       @default("{}") @map("alert_results")
+  id               String     @id @default(cuid())
+  issueId          String     @map("issue_id")
+  workspaceId      String     @map("workspace_id")
+  cycle            Int
+  policyId         String?    @map("policy_id")
+  policyVersion    Int        @map("policy_version")
+  snapshot         Json
+  state            String
+  budgetSeconds    Int        @map("budget_seconds")
+  remainingSeconds Float      @map("remaining_seconds")
+  lastStartedAt    DateTime?  @map("last_started_at")
+  dueAt            DateTime?  @map("due_at")
+  warningAt        DateTime?  @map("warning_at")
+  startedAt        DateTime   @map("started_at")
+  closedAt         DateTime?  @map("closed_at")
+  breachedAt       DateTime?  @map("breached_at")
+  warningSentAt    DateTime?  @map("warning_sent_at")
+  breachSentAt     DateTime?  @map("breach_sent_at")
+  escalatedAt      DateTime?  @map("escalated_at")
+  escalationCode   String?    @map("escalation_code")
+  issue            Issue      @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  workspace        Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  policy           SlaPolicy? @relation(fields: [policyId], references: [id], onDelete: SetNull)
+
+  @@unique([issueId, cycle])
+  @@index([workspaceId, startedAt])
+  @@index([state, dueAt])
+  @@index([warningSentAt, warningAt])
+  @@index([breachSentAt, breachedAt])
+  @@map("issue_sla_cycles")
+}
+
+model IssueSlaJob {
+  issueId       String    @id @map("issue_id")
+  nextAttemptAt DateTime? @map("next_attempt_at")
+  generation    Int       @default(1)
+  attempts      Int       @default(0)
+  lastErrorCode String?   @map("last_error_code")
+  failedAt      DateTime? @map("failed_at")
+  issue         Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([failedAt, nextAttemptAt])
+  @@map("issue_sla_jobs")
 }

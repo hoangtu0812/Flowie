@@ -85,6 +85,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         import_task=tracked('issue-import',import_loop(session_factory,outbox_stop),outbox_stop)
         from .modules.recurring.worker import recurring_loop
         recurring_task=tracked('recurring-issues',recurring_loop(session_factory,outbox_stop),outbox_stop)
+        from .modules.sla.worker import sla_loop
+        sla_task=tracked('sla-clocks',sla_loop(session_factory,outbox_stop),outbox_stop)
         agent_runs_stop = asyncio.Event()
         agent_runs_task = tracked('agent-dispatcher',agent_run_dispatcher_loop(session_factory, agent_runs_stop),agent_runs_stop) if runtime.mcp_enabled and runtime.mcp_writes_enabled else None
         reminder_stop = asyncio.Event()
@@ -104,7 +106,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             digest_stop.set()
             dispatch_stop.set()
             scm_stop.set()
-            await asyncio.gather(*[task for task in [reminder_task,digest_task,dispatch_task,scm_task,outbox_task,channel_task,maintenance_task,agent_runs_task,bulk_task,import_task,recurring_task] if task],return_exceptions=True)
+            await asyncio.gather(*[task for task in [reminder_task,digest_task,dispatch_task,scm_task,outbox_task,channel_task,maintenance_task,agent_runs_task,bulk_task,import_task,recurring_task,sla_task] if task],return_exceptions=True)
             await mcp_stack.aclose()
             await engine.dispose()
 
