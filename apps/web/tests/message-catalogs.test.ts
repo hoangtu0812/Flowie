@@ -1,3 +1,4 @@
+import { messages as initiativeActivity } from '../features/initiatives/activity/messages.vi';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { messages as issues } from '../features/issues/messages.vi';
@@ -16,6 +17,7 @@ test('feature translations retain interpolation fields and valid Unicode', () =>
    const placeholders = (value: string) =>
       [...new Set([...value.matchAll(/\{([a-zA-Z][a-zA-Z0-9_]*)\}/g)].map((row) => row[1]))].sort();
    for (const catalog of [
+      initiativeActivity,
       issues,
       archive,
       documents,
