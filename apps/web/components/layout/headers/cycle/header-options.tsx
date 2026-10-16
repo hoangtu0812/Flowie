@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button';
 import { useLiveCycle } from '@/components/common/cycles/use-live-cycle';
+import { IssueListActions } from '@/features/issues/issue-list-actions';
 import { IssueFilterTrigger } from '@/components/common/issues/issue-filter-trigger';
 import { useIssuesStore } from '@/store/issues-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
@@ -12,7 +13,7 @@ import { CycleView } from '@/components/common/issues/cycle-issues';
 export default function HeaderOptions({ cycleView }: { cycleView: CycleView }) {
    const { openPanel, togglePanel } = useRightPanelStore();
    const { issues } = useIssuesStore();
-   const { cycle } = useLiveCycle(cycleView);
+   const { cycle, loading, error } = useLiveCycle(cycleView);
    const count = cycle ? issues.filter((issue) => issue.cycleId === cycle.id).length : 0;
 
    return (
@@ -42,6 +43,7 @@ export default function HeaderOptions({ cycleView }: { cycleView: CycleView }) {
                <PanelRight className="size-4" />
             </Button>
             <DisplayOptions />
+            {cycle && !loading && !error && <IssueListActions />}
          </div>
       </div>
    );

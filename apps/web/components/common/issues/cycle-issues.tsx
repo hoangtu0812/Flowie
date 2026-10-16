@@ -1,7 +1,6 @@
 'use client';
 
 import { useIssueQuery } from '@/features/issues/use-issue-query';
-import { IssuePagination } from '@/features/issues/issue-pagination';
 import { CycleDetailsPanel } from '@/components/common/cycles/cycle-details-panel';
 import { LoadingState } from '@/components/common/loading-state';
 import { QueryState } from '@/components/common/query-state';
@@ -78,7 +77,6 @@ export default function CycleIssues({ cycleView }: CycleIssuesProps) {
    return (
       <div className="w-full h-full flex flex-col overflow-hidden">
          <IssueFilterBar />
-         <IssuePagination />
          <div className="flex-1 min-h-0 w-full flex overflow-hidden">
             <div className="flex-1 min-w-0 h-full overflow-hidden">
                <GroupedIssuesView

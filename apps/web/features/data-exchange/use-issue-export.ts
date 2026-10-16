@@ -3,30 +3,17 @@ import { useMessages } from '@/features/shared/use-messages';
 import { messages } from '@/features/data-exchange/messages.vi';
 
 import { useEffect, useRef, useState } from 'react';
-import { Button } from '@astryxdesign/core/Button';
-import { Text } from '@astryxdesign/core/Text';
 import { authenticatedFetch } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
-import { useIssuesStore } from '@/store/issues-store';
 import { downloadFile } from '@/features/shared/download-file';
 import { bulkQuery } from '@/features/issues/bulk-query';
 import { exchangeApi } from './client';
+import { toast } from 'sonner';
 
-export function IssueExportButton() {
-   const { workspaceId, pageQuery, accountId } = useIssuesStore();
-   return workspaceId && pageQuery ? (
-      <ExportButton
-         key={`${accountId}:${workspaceId}:${pageQuery}`}
-         workspace={workspaceId}
-         query={pageQuery}
-      />
-   ) : null;
-}
-function ExportButton({ workspace, query }: { workspace: string; query: string }) {
+export function useIssueExport(workspace: string, query: string) {
    const tx = useMessages(messages);
 
-   const [busy, setBusy] = useState(false),
-      [error, setError] = useState('');
+   const [busy, setBusy] = useState(false);
    const alive = useRef(true);
    useEffect(() => {
       alive.current = true;
@@ -37,7 +24,6 @@ function ExportButton({ workspace, query }: { workspace: string; query: string }
    const run = async () => {
       if (busy) return;
       setBusy(true);
-      setError('');
       try {
          const response = await authenticatedFetch(exchangeApi + '/issues/export', {
             method: 'POST',
@@ -49,19 +35,10 @@ function ExportButton({ workspace, query }: { workspace: string; query: string }
          if (alive.current) downloadFile(content, 'flowie-issues.csv');
       } catch (reason) {
          if (alive.current)
-            setError(reason instanceof Error ? reason.message : tx('Could not export issues.'));
+            toast.error(reason instanceof Error ? reason.message : tx('Could not export issues.'));
       } finally {
          if (alive.current) setBusy(false);
       }
    };
-   return (
-      <>
-         <Button
-            label={tx('Export matching issues CSV')}
-            isLoading={busy}
-            onClick={() => void run()}
-         />
-         {error && <Text role="alert">{error}</Text>}
-      </>
-   );
+   return { run, busy };
 }

@@ -193,6 +193,12 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Report and bulk forms open after the toolbar menu closes and focus their title region, avoiding an automatically focused close-button tooltip that can consume Escape on Firefox. Pagination acceptance waits for each real cursor response and its settled count, so loading labels and footer removal cannot be mistaken for completed pages.
+
+- Browser regressions cover compact issue actions on desktop/mobile, keyboard focus after report/bulk dialogs, report recovery, real cursor pagination and the relocated bulk/CSV commands across Chromium, Firefox and WebKit.
+
+- Issue lists keep bulk changes, CSV export and team bug reports in a compact toolbar menu instead of permanent action strips. Reports open on demand, pagination appears at the bottom only when needed, and project AI scheduling shares the existing toolbar. Filters, export scope and resumable bulk previews remain available; no migration is required.
+
 - The workspace dashboard restores its compact five-metric overview, throughput/status chart row and effort/project charts. Advanced workflow reports now have a separate `/reports` page with links in both directions. The restored layout retains complete scoped server data, language/time preferences and recoverable errors; deploy API and Web together for the dashboard report endpoint.
 
 - Recurring-run browser acceptance waits for durable job completion before verifying the refreshed history, avoiding false CI failures from a temporarily empty list while retaining the original completion deadline and one-task assertion.

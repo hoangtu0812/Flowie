@@ -1,5 +1,6 @@
 'use client';
 
+import { IssueListActions } from '@/features/issues/issue-list-actions';
 import { IssueFilterTrigger } from '@/components/common/issues/issue-filter-trigger';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -176,6 +177,7 @@ export default function Header({ member }: { member: User }) {
                   <PanelRight className="size-4" />
                </Button>
                <DisplayOptions />
+               <IssueListActions />
             </div>
          </div>
       </>

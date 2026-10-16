@@ -22,7 +22,6 @@ export function SearchIssues({ issues }: { issues: Issue[] }) {
    if (error) return <QueryState message={error} onRetry={retryIssues} />;
    return (
       <DesignSurface>
-         <IssuePagination />
          <VStack gap={2} paddingBlock={4}>
             <Heading level={2}>Results ({results.length})</Heading>
             {results.length ? (
@@ -31,6 +30,7 @@ export function SearchIssues({ issues }: { issues: Issue[] }) {
                <Text>No results in this view for “{searchQuery}”.</Text>
             )}
          </VStack>
+         <IssuePagination />
       </DesignSurface>
    );
 }
