@@ -225,6 +225,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 - Issue status settings now support version-checked administration, prevent deleting statuses in use or the last category status, and preserve customized workflows when issue options reload.
 
+- Local startup probing in `scripts/start-local.ps1` now targets the native `/readyz` endpoint, and FastAPI accepts `/api/v1/health` as an alias to `/readyz` so startup health checks succeed without 404 errors.
+
 - Initiative Projects tabs open without a client-side exception, including
   direct links and reloads. Shared timelines refresh the owning page after
   project edits, keeping initiative and workspace project dates current.

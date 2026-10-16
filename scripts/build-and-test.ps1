@@ -59,7 +59,7 @@ function Wait-ForHttpOk {
 
 Write-Host 'Running smoke tests...' -ForegroundColor Cyan
 Wait-ForHttpOk -Name 'FastAPI readiness' -Url 'http://localhost:4000/readyz'
-Wait-ForHttpOk -Name 'Legacy API through FastAPI facade' -Url 'http://localhost:4000/api/v1/health'
+Wait-ForHttpOk -Name 'API health route' -Url 'http://localhost:4000/api/v1/health'
 Wait-ForHttpOk -Name 'Flowie login page' -Url 'http://localhost:3000/auth/login'
 
 & docker compose ps

@@ -23,7 +23,7 @@ Then run this script again.
 $apiReady = $false
 for ($attempt = 1; $attempt -le 12; $attempt++) {
    try {
-      $health = Invoke-WebRequest -UseBasicParsing 'http://localhost:4000/api/v1/health' -TimeoutSec 2
+      $health = Invoke-WebRequest -UseBasicParsing 'http://localhost:4000/readyz' -TimeoutSec 2
       if ($health.StatusCode -eq 200) {
          $apiReady = $true
          break
@@ -35,10 +35,9 @@ for ($attempt = 1; $attempt -le 12; $attempt++) {
 
 if ($apiReady) {
    Write-Host 'Flowie is ready:' -ForegroundColor Green
-   Write-Host '  Web:    http://localhost:3000'
-   Write-Host '  API:    http://localhost:4000/api/v1/health'
+   Write-Host '  Web:       http://localhost:3000'
    Write-Host '  Readiness: http://localhost:4000/readyz'
    Write-Host '  API docs:  http://localhost:4000/docs'
 } else {
-   Write-Warning 'Containers started, but the API health check is not ready yet. Run: pnpm docker:logs'
+   Write-Warning 'Containers started, but the API readiness check is not ready yet. Run: pnpm docker:logs'
 }
