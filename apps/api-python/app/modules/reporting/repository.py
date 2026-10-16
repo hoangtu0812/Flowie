@@ -43,8 +43,8 @@ async def workflow_report(db, workspace, user, query, *, now=None):
         WHERE readable AND from_category='COMPLETED' AND to_category NOT IN ('COMPLETED','CANCELED') AND to_archived_at IS NULL
             AND occurred_at>=:start AND occurred_at<:until
     ), statuses AS (
-        SELECT i.status_id AS id,s.name,s.category::text AS category,COUNT(*) AS count FROM scoped i JOIN issue_statuses s ON s.id=i.status_id
-        GROUP BY i.status_id,s.name,s.category ORDER BY count DESC,i.status_id LIMIT 1001
+        SELECT i.status_id AS id,s.name,s.color,s.category::text AS category,COUNT(*) AS count FROM scoped i JOIN issue_statuses s ON s.id=i.status_id
+        GROUP BY i.status_id,s.name,s.color,s.category ORDER BY count DESC,i.status_id LIMIT 1001
     ) SELECT (SELECT row_to_json(summary) FROM summary) AS summary,(SELECT row_to_json(flow) FROM flow) AS flow,
         (SELECT row_to_json(age_counts) FROM age_counts) AS aging,(SELECT row_to_json(reopens) FROM reopens) AS reopens,
         COALESCE((SELECT json_agg(trend) FROM trend),'[]'::json) AS trend,

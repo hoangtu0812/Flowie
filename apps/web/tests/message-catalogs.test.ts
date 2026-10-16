@@ -6,6 +6,7 @@ import { messages as archive } from '../features/archive/messages.vi';
 import { messages as documents } from '../features/documents/messages.vi';
 import { messages as security } from '../features/security/messages.vi';
 import { messages as reporting } from '../features/reporting/messages.vi';
+import { messages as dashboard } from '../features/dashboard/messages.vi';
 import { messages as sla } from '../features/sla/messages.vi';
 import { messages as recurring } from '../features/recurring/messages.vi';
 import { messages as dataExchange } from '../features/data-exchange/messages.vi';
@@ -22,6 +23,7 @@ test('feature translations retain interpolation fields and valid Unicode', () =>
       documents,
       security,
       reporting,
+      dashboard,
       sla,
       recurring,
       dataExchange,

@@ -19,8 +19,9 @@ import { DayChanges, ReportBreakdowns } from './report-breakdowns';
 import { recentQuery, type ReportQuery } from './types';
 import { useAccountTime } from '@/features/shared/account-time';
 import { reportWeekStart } from '@/features/shared/date-format';
+import { messages as dashboardMessages } from '@/features/dashboard/messages.vi';
 
-export function WorkspaceDashboard() {
+export function WorkflowReports() {
    const tx = useMessages(messages);
 
    const accountTime = useAccountTime();
@@ -63,6 +64,7 @@ function Dashboard({
    teams: { id: string; name: string }[];
 }) {
    const tx = useMessages(messages);
+   const dashboardText = useMessages(dashboardMessages);
 
    const accountTime = useAccountTime();
    const [query, setQuery] = useState<ReportQuery>(() => ({
@@ -74,6 +76,11 @@ function Dashboard({
    const report = useWorkflowReport(workspace, body);
    return (
       <VStack gap={6} padding={6} width="100%" className="h-full overflow-auto">
+         <Button
+            label={dashboardText('Back to dashboard')}
+            variant="ghost"
+            href={`/${org}/dashboard`}
+         />
          <Heading level={1}>{tx('Workspace analytics')}</Heading>
          <Text>
             {tx(

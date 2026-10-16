@@ -57,7 +57,7 @@ test('timezone and week start persist and optional self-assignment respects clea
       const reportRequest = page.waitForRequest(
          (request) =>
             request.method() === 'POST' &&
-            request.url().includes('/reports/workflow?') &&
+            request.url().includes('/reports/dashboard?') &&
             request.postDataJSON().timezone === 'America/Los_Angeles'
       );
       await page.waitForLoadState('networkidle');

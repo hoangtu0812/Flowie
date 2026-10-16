@@ -14,7 +14,7 @@ supplies a new one. Aliases such as Asia/Saigon normalize to Asia/Ho_Chi_Minh.
 Invalid zones are rejected before saving.
 
 Shared calendars use the chosen week start and account language. The workflow
-dashboard initializes its date range and workload week grouping from these
+dashboard overview and advanced reports initialize their date range and week grouping from these
 preferences; explicit report filters still apply to the current report. An
 account preference update resets the report's initial scope rather than silently
 mixing a newly displayed timezone with data calculated in the old one.

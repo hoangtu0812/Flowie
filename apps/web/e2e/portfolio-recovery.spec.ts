@@ -13,8 +13,13 @@ test.beforeEach(async ({ page }) => {
    await page.goto('/auth/login');
    await page.getByLabel('Email', { exact: true }).fill(fixture.email);
    await page.getByLabel('Password', { exact: true }).fill(fixture.password);
+   const ready = page.waitForResponse(
+      (response) => response.url().startsWith(`${api}/teams?`) && response.ok()
+   );
    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
    await expect(page).toHaveURL(new RegExp(`/${fixture.slug}/`));
+   await ready;
+   await page.waitForLoadState('networkidle');
 });
 
 test('project list recovers and loads a real second cursor page', async ({ page, context }) => {
@@ -109,12 +114,12 @@ test('initiative detail separates temporary failure from a missing initiative an
       await page.route(`**/api/v1/initiatives/${initiative.id}/updates?*`, async (route) => {
          const url = new URL(route.request().url());
          url.searchParams.set('limit', '1');
-         await route.continue({ url: url.toString() });
+         await route.fulfill({ response: await route.fetch({ url: url.toString() }) });
       });
       await page.goto(`/${fixture.slug}/initiative/${initiative.id}?tab=activity`);
-      await expect(page.getByText('1 of 2 history events loaded', { exact: true })).toBeVisible();
-      await page.getByRole('button', { name: 'Load more history events', exact: true }).click();
-      await expect(page.getByText('2 of 2 history events loaded', { exact: true })).toBeVisible();
+      await expect(page.getByText('1 of 2 loaded', { exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Load more', exact: true }).click();
+      await expect(page.getByText('2 of 2 loaded', { exact: true })).toBeVisible();
       await expect(page.getByText('History regression first', { exact: true })).toBeVisible();
       await expect(page.getByText('History regression second', { exact: true })).toBeVisible();
    } finally {

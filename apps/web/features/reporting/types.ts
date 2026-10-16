@@ -27,7 +27,7 @@ export type WorkflowReport = {
    aging: Record<string, number>;
    reopens: { reopened: number; bugs_reopened: number };
    trend: DailyPoint[];
-   statuses: { id: string; name: string; category: string; count: number }[];
+   statuses: { id: string; name: string; category: string; color?: string; count: number }[];
 };
 export type Workload = {
    id: string;

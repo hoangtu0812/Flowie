@@ -1,7 +1,9 @@
 # Workflow reporting and dashboard
 
-The dashboard reads server aggregates across all matching accessible tasks. Its
-filters use the shared issue query contract: team, project, current status,
+The compact `/dashboard` overview retains its original five metric cards,
+throughput/status row and effort/project charts. Detailed reports live at
+`/reports`, linked in both directions. Both read server aggregates across all
+matching accessible tasks. Advanced filters use the shared issue query contract: team, project, current status,
 search and sub-issues. API callers can also use the contract's assignee, creator,
 cycle, personal scope and supported issue filters. Local dates use an IANA zone;
 the range is inclusive and limited to 366 days in 2020–2100. Weekly planning
@@ -49,6 +51,19 @@ name is revealed through a readable task's report grouping.
 
 ## API and pagination
 
+POST `/api/v1/reports/dashboard` accepts the same report body and adds dated
+effort, the top eight project groups for throughput and recorded effort, group
+counts and missing-date counts. All totals and top-group selection use the full
+authorized cohort, never a first issue/project page. Neutral grouping hides
+restricted project metadata. Estimated effort is placed on the explicit planned
+start date; actual effort is counted once on the latest visible, observed
+completion. These are today's editable task values attributed to recorded dates,
+not time entries or reconstructed historical effort. Values without those dates
+stay in scope totals and have an explicit missing-date disclosure. Week/month
+display buckets preserve daily totals and the account's configured week start.
+Current open/overdue metrics are labeled as current, not past period-end counts.
+API and Web must be deployed together; no database migration is added.
+
 POST `/api/v1/reports/workflow` takes `workspaceId` plus a body containing
 `fromDate`, `toDate`, `timezone`, `weekStart` and `selection`. It returns the
 summary, flow samples, aging, reopen counts, daily series and current status
@@ -70,4 +85,14 @@ groups and 151 project groups. Tests verify known elapsed durations, historical
 team revocation, private project redaction, cursor binding and day boundaries
 across daylight saving time. Browser evidence is recorded separately in the
 implementation tracker. This module uses the committed lifecycle migration and
-requires no direct production DDL. It has not been deployed to CT107.
+requires no direct production DDL. The dashboard restoration on this branch has
+not yet been deployed to CT107.
+
+Restoration verification: 165 backend tests passed (two optional storage/restore
+skips), 24 Web unit tests and the production build passed. The final targeted
+matrix passed 12/12 across Chromium, Firefox and WebKit: original layout and
+rendered project bars, status/day focus, filters, recovery, advanced-report links,
+Vietnamese routes and account timezone/week preferences. Desktop 1280/1600 and
+mobile 390 screenshots were inspected. Repeated local runs exhausted only the
+synthetic account's report quota; its guarded local key was reset for the final
+run. Production limits were not changed, and no browser errors were filtered.
