@@ -3,6 +3,8 @@ import { useMessages } from '@/features/shared/use-messages';
 import { messages } from '@/features/navigation/messages.vi';
 
 import { Button } from '@/components/ui/button';
+import { IssueListCount } from '@/features/issues/issue-list-count';
+import { IssueListActions } from '@/features/issues/issue-list-actions';
 import { IssueFilterTrigger } from '@/components/common/issues/issue-filter-trigger';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { BarChart3 } from 'lucide-react';
@@ -15,7 +17,7 @@ export default function HeaderOptions() {
 
    return (
       <div className="w-full flex justify-between items-center border-b py-1.5 px-6 h-10">
-         <div />
+         <IssueListCount />
          <div className="flex items-center gap-1">
             <IssueFilterTrigger />
             <Button
@@ -27,6 +29,7 @@ export default function HeaderOptions() {
                <BarChart3 className="size-4" />
             </Button>
             <DisplayOptions />
+            <IssueListActions hasBugReport />
          </div>
       </div>
    );

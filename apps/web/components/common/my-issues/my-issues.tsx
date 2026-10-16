@@ -1,7 +1,6 @@
 'use client';
 
 import { useIssueQuery } from '@/features/issues/use-issue-query';
-import { IssuePagination } from '@/features/issues/issue-pagination';
 import { applyIssueFilters } from '@/components/common/issues/issue-filter-columns';
 import { IssueFilterBar } from '@/components/common/issues/issue-filter-bar';
 import { GroupedIssuesView } from '@/components/common/issues/grouped-issues-view';
@@ -58,7 +57,6 @@ export default function MyIssues() {
    return (
       <div className="w-full h-full flex flex-col overflow-hidden">
          <IssueFilterBar />
-         <IssuePagination />
          <div className="flex-1 min-h-0 w-full flex overflow-hidden">
             <div className="flex-1 min-w-0 h-full overflow-hidden">
                <GroupedIssuesView

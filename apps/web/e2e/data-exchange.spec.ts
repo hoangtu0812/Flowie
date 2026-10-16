@@ -12,8 +12,13 @@ test.beforeEach(async ({ page }) => {
    await page.goto('/auth/login');
    await page.getByLabel('Email', { exact: true }).fill(fixture.email);
    await page.getByLabel('Password', { exact: true }).fill(fixture.password);
+   const workspaceReady = page.waitForResponse(
+      (response) => response.url().startsWith(`${api}/teams?`) && response.ok()
+   );
    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
    await expect(page).toHaveURL(new RegExp(`/${fixture.slug}/`));
+   await workspaceReady;
+   await page.waitForLoadState('networkidle');
 });
 
 test('CSV import previews valid, invalid and duplicate rows, then resumes durable results', async ({
@@ -79,9 +84,10 @@ test('CSV import previews valid, invalid and duplicate rows, then resumes durabl
       );
       await page.waitForLoadState('networkidle');
       await page.goto(`/${fixture.slug}/team/GEN/all`);
+      await page.getByRole('button', { name: 'Issue actions', exact: true }).click();
       const [download] = await Promise.all([
          page.waitForEvent('download'),
-         page.getByRole('button', { name: 'Export matching issues CSV', exact: true }).click(),
+         page.getByRole('menuitem', { name: 'Export matching issues CSV', exact: true }).click(),
       ]);
       expect(download.suggestedFilename()).toBe('flowie-issues.csv');
       const stream = await download.createReadStream();

@@ -1,5 +1,6 @@
 'use client';
 
+import { IssuePagination } from '@/features/issues/issue-pagination';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { Issue, sortIssuesByPriority } from '@/mock-data/issues';
@@ -301,6 +302,7 @@ export const GroupedIssuesView: FC<GroupedIssuesViewProps> = ({
                      )}
                   </div>
                </div>
+               <IssuePagination />
                {!loading && showFooter && (
                   <div className="shrink-0 border-t bg-container">
                      <HiddenByFiltersFooter hiddenCount={hiddenCount} />
@@ -337,6 +339,7 @@ export const GroupedIssuesView: FC<GroupedIssuesViewProps> = ({
                   ))}
                {!loading && showFooter && <HiddenByFiltersFooter hiddenCount={hiddenCount} />}
             </div>
+            <IssuePagination />
          </div>
       </DndProvider>
    );

@@ -48,7 +48,7 @@ Preview requests are limited to 20 per account/hour. Export requests share a
 
 ## Exports
 
-Issue lists expose **Export matching issues CSV**. It uses the same current ACL
+Issue lists expose **Export matching issues CSV** in the **Issue actions** (three-dot) toolbar menu. It uses the same current ACL
 and applied query as list and Insights, independent of loaded pages. More than
 10,000 matches or 10 MB are rejected instead of silently truncated. UTF-8 BOM,
 quoted fields and leading tabs on formula-like text support spreadsheet viewing;
