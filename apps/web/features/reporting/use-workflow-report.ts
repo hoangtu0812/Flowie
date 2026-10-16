@@ -3,8 +3,12 @@ import { useEffect, useState } from 'react';
 import { authenticatedFetch } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
 import { reportApi, type WorkflowReport } from './types';
-export function useWorkflowReport(workspace: string, body: string) {
-   const [data, setData] = useState<WorkflowReport>(),
+export function useWorkflowReport<T extends WorkflowReport = WorkflowReport>(
+   workspace: string,
+   body: string,
+   kind: 'workflow' | 'dashboard' = 'workflow'
+) {
+   const [data, setData] = useState<T>(),
       [error, setError] = useState(''),
       [loading, setLoading] = useState(true),
       [revision, setRevision] = useState(0);
@@ -14,10 +18,10 @@ export function useWorkflowReport(workspace: string, body: string) {
       setError('');
       setData(undefined);
       void authenticatedFetch(
-         `${reportApi}/workflow?${new URLSearchParams({ workspaceId: workspace })}`,
+         `${reportApi}/${kind}?${new URLSearchParams({ workspaceId: workspace })}`,
          { method: 'POST', headers: { 'content-type': 'application/json' }, body }
       )
-         .then((response) => responseData<WorkflowReport>(response))
+         .then((response) => responseData<T>(response))
          .then((value) => {
             if (active) setData(value);
          })
@@ -30,6 +34,6 @@ export function useWorkflowReport(workspace: string, body: string) {
       return () => {
          active = false;
       };
-   }, [workspace, body, revision]);
+   }, [workspace, body, kind, revision]);
    return { data, error, loading, reload: () => setRevision((value) => value + 1) };
 }

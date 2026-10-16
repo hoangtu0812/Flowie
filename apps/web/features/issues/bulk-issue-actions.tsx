@@ -186,7 +186,13 @@ function BulkEditor({
       <>
          <Dialog isOpen={open} onOpenChange={setOpen} purpose="form" padding={5}>
             <VStack gap={4}>
-               <DialogHeader title={tx('Bulk issue changes')} onOpenChange={setOpen} />
+               <DialogHeader
+                  data-autofocus
+                  tabIndex={-1}
+                  className="outline-none"
+                  title={tx('Bulk issue changes')}
+                  onOpenChange={setOpen}
+               />
                <Text>
                   {tx(
                      'Preview up to 1000 issues. Each issue is checked again for access and conflicting edits before applying.'

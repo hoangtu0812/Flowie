@@ -65,6 +65,7 @@ test('list commands stay in the toolbar, report errors recover and dialogs resto
    await page.keyboard.press('Enter');
    const report = page.getByRole('dialog', { name: 'Bug report', exact: true });
    await expect(report).toBeVisible();
+   await expect(report.locator('[data-autofocus]')).toBeFocused();
    await expect(report.getByRole('alert')).toContainText('Report temporarily unavailable');
    await report.getByRole('button', { name: 'Refresh bug report', exact: true }).click();
    await expect(report.getByText(/bugs in accessible team issues/)).toBeVisible();
@@ -86,6 +87,7 @@ test('list commands stay in the toolbar, report errors recover and dialogs resto
    await page.getByRole('menuitem', { name: 'Bulk changes', exact: true }).click();
    const bulk = page.getByRole('dialog', { name: 'Bulk issue changes', exact: true });
    await expect(bulk).toBeVisible();
+   await expect(bulk.locator('[data-autofocus]')).toBeFocused();
    await expect(bulk.getByRole('button', { name: 'Preview changes', exact: true })).toBeDisabled();
    await page.keyboard.press('Escape');
    await expect(bulk).not.toBeVisible();
@@ -114,20 +116,46 @@ test('partial lists paginate at the bottom and remove the footer after the last 
       url.searchParams.set('limit', '1');
       await route.fulfill({ response: await route.fetch({ url: url.toString() }) });
    });
+   const firstPage = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return url.pathname === '/api/v1/issues' && !url.searchParams.has('cursor') && response.ok();
+   });
    await page.goto(`/${fixture.slug}/team/GEN/all`);
+   const initial = await (await firstPage).json();
    const footer = page.getByRole('contentinfo');
    await expect(footer).toContainText(/1 of \d+ issues loaded/);
    const header = page.getByText('Title', { exact: true });
    const footBox = await footer.boundingBox();
    const headBox = await header.boundingBox();
    expect(footBox!.y).toBeGreaterThan(headBox!.y);
-   for (let index = 0; index < 10 && (await footer.isVisible()); index++) {
-      const before = await footer.textContent();
+   let loaded = initial.data.length;
+   let cursor: string | null = initial.meta.nextCursor;
+   const cursors = new Set<string>();
+   while (cursor) {
+      expect(cursors.has(cursor)).toBe(false);
+      cursors.add(cursor);
+      const requested = cursor;
+      const nextPage = page.waitForResponse((response) => {
+         const url = new URL(response.url());
+         return (
+            url.pathname === '/api/v1/issues' &&
+            url.searchParams.get('cursor') === requested &&
+            response.ok()
+         );
+      });
       await footer.getByRole('button', { name: 'Load more issues', exact: true }).click();
-      await expect
-         .poll(async () => ((await footer.isVisible()) ? footer.textContent() : 'complete'))
-         .not.toBe(before);
+      const payload = await (await nextPage).json();
+      loaded += payload.data.length;
+      cursor = payload.meta.nextCursor;
+      expect(loaded).toBeLessThanOrEqual(initial.meta.total);
+      if (cursor) {
+         await expect(footer).toContainText(`${loaded} of ${initial.meta.total} issues loaded`);
+         await expect(
+            footer.getByRole('button', { name: 'Load more issues', exact: true })
+         ).toBeEnabled();
+      }
    }
+   expect(loaded).toBe(initial.meta.total);
    await expect(footer).toHaveCount(0);
    await expect(page.getByRole('button', { name: 'Issue actions', exact: true })).toBeEnabled();
 });

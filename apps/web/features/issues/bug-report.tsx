@@ -60,7 +60,13 @@ export function BugReport({
    return (
       <Dialog isOpen={open} onOpenChange={onOpenChange} purpose="info" padding={5}>
          <VStack gap={4}>
-            <DialogHeader title={tx('Bug report')} onOpenChange={onOpenChange} />
+            <DialogHeader
+               data-autofocus
+               tabIndex={-1}
+               className="outline-none"
+               title={tx('Bug report')}
+               onOpenChange={onOpenChange}
+            />
             <Text type="supporting">{tx('Bugs by severity and workflow status')}</Text>
             {error ? (
                <Text role="alert">{error}</Text>

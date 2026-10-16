@@ -39,7 +39,8 @@ test('Vietnamese core routes retain user content and controls remain usable on m
          ['settings/recurring', 'Lịch định kỳ'],
          ['settings/slas', 'Chính sách SLA'],
          ['settings/security', 'Bảo mật và truy cập'],
-         ['dashboard', 'Báo cáo workspace'],
+         ['dashboard', 'Dashboard workspace'],
+         ['reports', 'Báo cáo workspace'],
       ]) {
          await page.waitForLoadState('networkidle');
          await page.goto(`/${fixture.slug}/${route}`);

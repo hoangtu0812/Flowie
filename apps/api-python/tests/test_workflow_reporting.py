@@ -13,6 +13,7 @@ from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
 from app.modules.reporting.contracts import WorkflowReport
 from app.modules.reporting.repository import workflow_report, workload_page
 from app.modules.reporting.breakdowns import change_page, project_page
+from app.modules.reporting.dashboard import dashboard_report
 
 
 def test_report_ranges_use_local_day_boundaries_and_preserve_unknown_future_days():
@@ -81,10 +82,12 @@ async def verify_report():
             }
             issue, baseline, legacy_done = _cuid(), _cuid(), _cuid()
             await db.execute(
-                text("""INSERT INTO issues(id,workspace_id,team_id,status_id,identifier,number,title,issue_type,creator_id,created_at,updated_at,version,estimated_effort,actual_effort)
+                text(
+                    """INSERT INTO issues(id,workspace_id,team_id,status_id,identifier,number,title,issue_type,creator_id,created_at,updated_at,version,estimated_effort,actual_effort)
                 VALUES (:id,:workspace,:team,:done,'REPORT-1',1,'Flow test','BUG',:actor,'2026-10-12','2026-10-15',6,3,4),
                 (:baseline,:workspace,:team,:started,'REPORT-2',2,'Observed work','TASK',:actor,'2026-01-01','2026-10-12',1,2,NULL),
-                (:legacy_done,:workspace,:team,:done,'REPORT-3',3,'Legacy completion','TASK',:actor,'2026-01-01','2026-10-12',1,NULL,NULL)"""),
+                (:legacy_done,:workspace,:team,:done,'REPORT-3',3,'Legacy completion','TASK',:actor,'2026-01-01','2026-10-12',1,NULL,NULL)"""
+                ),
                 {**base, "id": issue, "baseline": baseline, "legacy_done": legacy_done},
             )
             # Synthetic history sets exact instants; production has no event-editing API.
@@ -107,8 +110,10 @@ async def verify_report():
                 eid = _cuid()
                 event_ids.append(eid)
                 await db.execute(
-                    text("""INSERT INTO issue_lifecycle_events(id,issue_id,workspace_id,issue_version,kind,from_status_id,to_status_id,from_category,to_category,from_team_id,to_team_id,occurred_at)
-                    VALUES (:eid,:issue,:workspace,:version,:kind,:previous,:current,:from_category,:to_category,:from_team,:team,:at)"""),
+                    text(
+                        """INSERT INTO issue_lifecycle_events(id,issue_id,workspace_id,issue_version,kind,from_status_id,to_status_id,from_category,to_category,from_team_id,to_team_id,occurred_at)
+                    VALUES (:eid,:issue,:workspace,:version,:kind,:previous,:current,:from_category,:to_category,:from_team,:team,:at)"""
+                    ),
                     {
                         **base,
                         "eid": eid,
@@ -131,9 +136,11 @@ async def verify_report():
             )
             prefix = _cuid()
             await db.execute(
-                text("""INSERT INTO issues(id,workspace_id,team_id,status_id,identifier,number,title,creator_id,created_at,updated_at,estimated_effort,start_date,assignee_id,due_date)
+                text(
+                    """INSERT INTO issues(id,workspace_id,team_id,status_id,identifier,number,title,creator_id,created_at,updated_at,estimated_effort,start_date,assignee_id,due_date)
                 SELECT :prefix||n::text,:workspace,:team,:todo,'REPORT-'||(n+1000)::text,n+1000,'Planned work',:actor,'2026-10-12','2026-10-12',0.5,
-                DATE '2026-01-01'+((n-1)%52)*7,CASE WHEN ((n-1)/52)%2=0 THEN :actor END,CASE WHEN n%10=0 THEN TIMESTAMP '2026-10-10' END FROM generate_series(1,150) n"""),
+                DATE '2026-01-01'+((n-1)%52)*7,CASE WHEN ((n-1)/52)%2=0 THEN :actor END,CASE WHEN n%10=0 THEN TIMESTAMP '2026-10-10' END FROM generate_series(1,150) n"""
+                ),
                 {**base, "prefix": prefix},
             )
             await db.execute(
@@ -150,8 +157,10 @@ async def verify_report():
                 {"id": private, "workspace": workspace, "now": now},
             )
             await db.execute(
-                text("""INSERT INTO issues(id,workspace_id,team_id,status_id,identifier,number,title,creator_id,created_at,updated_at)
-                SELECT :prefix||n::text,:workspace,:private,:todo,'SECRET-'||n::text,n,'Secret reporting task',:actor,'2026-10-12','2026-10-12' FROM generate_series(1,150) n"""),
+                text(
+                    """INSERT INTO issues(id,workspace_id,team_id,status_id,identifier,number,title,creator_id,created_at,updated_at)
+                SELECT :prefix||n::text,:workspace,:private,:todo,'SECRET-'||n::text,n,'Secret reporting task',:actor,'2026-10-12','2026-10-12' FROM generate_series(1,150) n"""
+                ),
                 {**base, "prefix": _cuid(), "private": private},
             )
             query = WorkflowReport(
@@ -190,6 +199,14 @@ async def verify_report():
                 and result["trend"][-1]["complete"] is False
             )
             assert sum(row["completed"] for row in result["trend"]) == 2
+            dashboard = (await dashboard_report(db, workspace, user, query, now=asof))[
+                "data"
+            ]
+            assert dashboard["summary"]["total"] == 153
+            assert sum(row["actual"] for row in dashboard["effort"]) == 4
+            assert dashboard["projectThroughput"][0]["completed"] == 2
+            assert dashboard["projectGroups"] == 1
+            assert dashboard["missingEstimatedDates"] >= 1
             changes = await change_page(
                 db, workspace, user, query, "report-secret", limit=50, now=asof
             )
@@ -217,8 +234,10 @@ async def verify_report():
             assert projects["data"][0]["completions"] == 2
             project_prefix, secret_project = _cuid(), _cuid()
             await db.execute(
-                text("""INSERT INTO projects(id,workspace_id,team_id,name,identifier,created_at,updated_at)
-                VALUES (:id,:workspace,:team,'Hidden report project','HIDDEN',:now,:now)"""),
+                text(
+                    """INSERT INTO projects(id,workspace_id,team_id,name,identifier,created_at,updated_at)
+                VALUES (:id,:workspace,:team,'Hidden report project','HIDDEN',:now,:now)"""
+                ),
                 {
                     "id": secret_project,
                     "workspace": workspace,
@@ -230,9 +249,21 @@ async def verify_report():
                 text("UPDATE issues SET project_id=:project WHERE id=:id"),
                 {"project": secret_project, "id": baseline},
             )
+            safe_dashboard = (
+                await dashboard_report(db, workspace, user, query, now=asof)
+            )["data"]
+            assert all(
+                row["name"] != "Hidden report project"
+                for row in safe_dashboard["projectThroughput"]
+            )
+            assert all(
+                row["project_id"] is None for row in safe_dashboard["projectEffort"]
+            )
             await db.execute(
-                text("""INSERT INTO projects(id,workspace_id,name,identifier,created_at,updated_at)
-                SELECT :prefix||n::text,:workspace,'Report project '||n::text,'RPT-'||n::text,:now,:now FROM generate_series(1,150) n"""),
+                text(
+                    """INSERT INTO projects(id,workspace_id,name,identifier,created_at,updated_at)
+                SELECT :prefix||n::text,:workspace,'Report project '||n::text,'RPT-'||n::text,:now,:now FROM generate_series(1,150) n"""
+                ),
                 {"prefix": project_prefix, "workspace": workspace, "now": now},
             )
             await db.execute(
@@ -321,6 +352,14 @@ async def verify_report():
             assert (
                 empty["summary"]["total"] == 0
                 and empty["flow"]["lead_mean_seconds"] is None
+            )
+            empty_dashboard = (
+                await dashboard_report(db, workspace, user, query, now=asof)
+            )["data"]
+            assert not empty_dashboard["projectThroughput"]
+            assert all(
+                row["actual"] == row["estimated"] == 0
+                for row in empty_dashboard["effort"]
             )
             await db.rollback()
     finally:

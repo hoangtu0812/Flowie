@@ -59,7 +59,7 @@ test('workflow reports use captured events, scoped filters, day drilldown and mo
          expect(changed.ok()).toBeTruthy();
       }
       await page.setViewportSize({ width: 390, height: 844 });
-      await page.goto(`/${fixture.slug}/dashboard`);
+      await page.goto(`/${fixture.slug}/reports`);
       await expect(
          page.getByRole('heading', { name: 'Workspace analytics', exact: true })
       ).toBeVisible();

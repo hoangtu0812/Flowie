@@ -48,6 +48,7 @@ function ListActions({
    const tx = useMessages(messages);
    const [dialog, setDialog] = useState<'bulk' | 'bugs'>();
    const trigger = useRef<HTMLButtonElement>(null);
+   const pendingDialog = useRef<'bulk' | 'bugs' | undefined>(undefined);
    const changeDialog = (kind: 'bulk' | 'bugs', open: boolean) => {
       setDialog(open ? kind : undefined);
       // The native dialog's original menu item disappears when the Radix menu closes.
@@ -72,8 +73,23 @@ function ListActions({
                   <MoreHorizontal className="size-4" />
                </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-               <DropdownMenuItem onSelect={() => setDialog('bulk')}>
+            <DropdownMenuContent
+               align="end"
+               onCloseAutoFocus={(event) => {
+                  const next = pendingDialog.current;
+                  pendingDialog.current = undefined;
+                  if (!next || !trigger.current?.isConnected) return;
+                  // Open after the menu focus scope unmounts so its closing layer cannot consume Escape.
+                  event.preventDefault();
+                  trigger.current.focus();
+                  setDialog(next);
+               }}
+            >
+               <DropdownMenuItem
+                  onSelect={() => {
+                     pendingDialog.current = 'bulk';
+                  }}
+               >
                   <ListChecks />
                   {tx('Bulk changes')}
                </DropdownMenuItem>
@@ -82,7 +98,11 @@ function ListActions({
                   {tx('Export matching issues CSV')}
                </DropdownMenuItem>
                {hasBugReport && (
-                  <DropdownMenuItem onSelect={() => setDialog('bugs')}>
+                  <DropdownMenuItem
+                     onSelect={() => {
+                        pendingDialog.current = 'bugs';
+                     }}
+                  >
                      <Bug />
                      {tx('Bug report')}
                   </DropdownMenuItem>

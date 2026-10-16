@@ -22,7 +22,12 @@ The team issue header and pagination use server totals; partial loading remains
 explicit. Cycle menus stay hidden while the cycle is unresolved, unavailable
 or absent, so commands cannot target the previously loaded list. After a
 report or bulk dialog closes, keyboard focus returns to the persistent menu
-trigger because its original menu item is no longer mounted.
+trigger because its original menu item is no longer mounted. The toolbar
+opens native dialogs after the menu focus scope closes, so its invisible closing
+layer cannot intercept Escape before the dialog. An explicit autofocus title
+region prevents native focus from opening the close-button tooltip and consuming
+the first Escape press. Browser pagination checks wait for real cursor responses
+and settled counts rather than temporary loading text.
 
 Browser coverage in `issue-toolbar.spec.ts` checks keyboard focus restoration,
 report error/retry and team scope, mobile menu bounds, project entry points,
