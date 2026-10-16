@@ -59,3 +59,7 @@ apps/web/playwright-report/
 
 # editors
 .idea/
+
+# MinIO
+minio-data/
+minio.license
