@@ -193,6 +193,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- The Compose `api` service honors `API_CORS_ORIGIN` from the runtime environment instead of forcing `http://localhost:3000`, allowing browser requests from configured LAN or external origins without requiring an image rebuild.
+
 - Initiative Activity, restored dashboard reports and compact issue toolbars retain their shared translations, pagination and change records when combined for production verification; no schema or configuration changes are required.
 
 - Initiative recovery checks follow the current Activity controls while continuing to verify temporary-outage recovery and both pages of persisted update history. Dashboard and Initiative change records are retained together when integrating main.

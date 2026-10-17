@@ -79,7 +79,7 @@ services:
       environment:
          API_PORT: 4000
          FLOWIE_REVISION: ${FLOWIE_DEPLOY_SHA:-local}
-         API_CORS_ORIGIN: http://localhost:3000
+         API_CORS_ORIGIN: ${API_CORS_ORIGIN:-http://localhost:3000}
          # Absolute base for the links carried by Discord notifications.
          APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
          POSTGRES_HOST: circle-postgres
