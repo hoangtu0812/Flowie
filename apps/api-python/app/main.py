@@ -199,6 +199,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(reviews_router)
 
     @app.get('/readyz')
+    @app.get('/api/v1/health')
     async def readyz(request: Request) -> JSONResponse:
         dependencies = await dependency_status(runtime,getattr(request.app.state,'session_factory',None))
         status = 'ok' if all(dependencies.values()) else 'degraded'
