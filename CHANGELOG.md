@@ -193,6 +193,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- The Compose `api` service honors `API_CORS_ORIGIN` from the runtime environment instead of forcing `http://localhost:3000`, allowing browser requests from configured LAN or external origins without requiring an image rebuild.
+
 - Initiative Activity, restored dashboard reports and compact issue toolbars retain their shared translations, pagination and change records when combined for production verification; no schema or configuration changes are required.
 
 - Initiative recovery checks follow the current Activity controls while continuing to verify temporary-outage recovery and both pages of persisted update history. Dashboard and Initiative change records are retained together when integrating main.
@@ -224,6 +226,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 - Saved Views open with their required project provider, synchronize header/body retry and expose failures separately from missing views. Issue Insights and saved-view totals use the full server-filtered scope rather than the currently loaded page; application error boundaries provide recovery actions.
 
 - Issue status settings now support version-checked administration, prevent deleting statuses in use or the last category status, and preserve customized workflows when issue options reload.
+
+- Local startup probing in `scripts/start-local.ps1` now targets the native `/readyz` endpoint, and FastAPI accepts `/api/v1/health` as an alias to `/readyz` so startup health checks succeed without 404 errors.
 
 - Initiative Projects tabs open without a client-side exception, including
   direct links and reloads. Shared timelines refresh the owning page after
