@@ -197,8 +197,9 @@ test('default workspace persists across returning, sign-in and direct links, wit
    await page.getByRole('menuitem', { name: 'Set as default workspace' }).click();
    await expect(page.getByText('Default workspace saved', { exact: true })).toBeVisible();
    expect(state.values.defaultWorkspaceId).toBe('beta');
-   await page.goto('/');
+   await page.goto('/', { waitUntil: 'commit' });
    await expect(page).toHaveURL('/beta/inbox');
+   await expect(page.getByRole('heading', { name: 'Inbox', exact: true })).toBeVisible();
    await page.goto('/alpha/reports');
    await expect(page).toHaveURL('/alpha/reports');
    await page.goto('/auth/login');
@@ -206,14 +207,17 @@ test('default workspace persists across returning, sign-in and direct links, wit
    await page.getByLabel('Password', { exact: true }).fill('test-password');
    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
    await expect(page).toHaveURL('/beta/inbox');
+   await expect(page.getByRole('heading', { name: 'Inbox', exact: true })).toBeVisible();
    state.memberships = ['alpha'];
-   await page.goto('/');
+   await page.goto('/', { waitUntil: 'commit' });
    await expect(page).toHaveURL('/alpha/inbox');
+   await expect(page.getByRole('heading', { name: 'Inbox', exact: true })).toBeVisible();
    state.memberships = ['alpha', 'beta'];
    state.accountId = 'account-two';
    state.values.defaultWorkspaceId = null;
-   await page.goto('/');
+   await page.goto('/', { waitUntil: 'commit' });
    await expect(page).toHaveURL('/alpha/inbox');
+   await expect(page.getByRole('heading', { name: 'Inbox', exact: true })).toBeVisible();
 });
 
 test('default workspace save errors remain visible and the preference can be removed', async ({
