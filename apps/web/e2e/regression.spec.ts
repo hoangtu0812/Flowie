@@ -325,10 +325,12 @@ test('structured bug fields and comment attachments persist through the API', as
 test('Help search and project client presets expose meaningful actions', async ({ page }) => {
    await page.goto(`/${fixture.slug}/team/GEN/all`);
    await page.getByRole('button', { name: 'Help and keyboard shortcuts' }).click();
+   await page.getByRole('menuitem', { name: 'Feature guide', exact: true }).click();
    const help = page.getByRole('dialog');
    await help.getByLabel('Search help topics').fill('password');
-   await expect(help.getByText('Password recovery', { exact: true })).toBeVisible();
-   await expect(help.getByText('Document editing and history', { exact: true })).toHaveCount(0);
+   await expect(help.getByText('Account, preferences & security', { exact: true })).toBeVisible();
+   await expect(help.getByText(/Use Forgot password on the login screen/)).toBeVisible();
+   await expect(help.getByText('Documents & revision history', { exact: true })).toHaveCount(0);
    await page.goto(`/${fixture.slug}/settings/integrations`);
    await expect(page.getByRole('heading', { name: 'AI connections (MCP)' })).toBeVisible();
    await page.getByRole('button', { name: 'Coding project preset' }).click();
@@ -365,8 +367,22 @@ test('SLA request Ask and emoji settings create persisted records', async ({ pag
    await expect(page.getByRole('dialog')).toHaveCount(0);
    await page.reload();
    await expect(page.getByText('Regression Ask ' + suffix, { exact: true })).toBeVisible();
+   let finishEmojiLoad!: () => void;
+   const emojiLoad = new Promise<void>((resolve) => {
+      finishEmojiLoad = resolve;
+   });
+   await page.route('**/api/v1/emojis?*', async (route) => {
+      await emojiLoad;
+      await route.continue();
+   });
    await page.goto(`/${fixture.slug}/settings/emojis`);
+   try {
+      await expect(page.getByRole('button', { name: 'Upload', exact: true })).toBeDisabled();
+   } finally {
+      finishEmojiLoad();
+   }
    await page.getByRole('button', { name: 'Upload', exact: true }).click();
+   await page.unroute('**/api/v1/emojis?*');
    const dialog = page.getByRole('dialog');
    await dialog.getByLabel('Name', { exact: true }).fill('regression_' + suffix);
    await dialog.getByLabel('Image', { exact: true }).setInputFiles({

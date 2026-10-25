@@ -92,9 +92,9 @@ jobs:
         run: |
           python scripts/seed-ui-regression.py
           pnpm --filter @circle/web exec playwright install --with-deps chromium firefox webkit
-          pnpm --filter @circle/web test:e2e
+          pnpm --filter @circle/web test:e2e --max-failures=5
       - uses: actions/upload-artifact@v4
-        if: failure()
+        if: failure() || cancelled()
         with:
           name: ui-regression-traces
           path: apps/web/test-results/

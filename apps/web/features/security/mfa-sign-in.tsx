@@ -4,7 +4,6 @@ import { messages } from '@/features/security/messages.vi';
 
 import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { VStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
 import { Button } from '@astryxdesign/core/Button';
@@ -19,7 +18,6 @@ export default function MfaSignIn() {
    const tx = useMessages(messages);
    const factorOptions = useFactorOptions();
 
-   const router = useRouter();
    const [kind, setKind] = useState<FactorKind>('AUTHENTICATOR'),
       [code, setCode] = useState(''),
       [error, setError] = useState(''),
@@ -42,7 +40,8 @@ export default function MfaSignIn() {
             })
          );
          setCode('');
-         router.replace(data.next ?? '/');
+         // The authenticated document must not reuse redirects prefetched before MFA completed.
+         window.location.replace(data.next ?? '/');
       } catch (reason) {
          setError(reason instanceof Error ? reason.message : tx('Verification failed.'));
       } finally {

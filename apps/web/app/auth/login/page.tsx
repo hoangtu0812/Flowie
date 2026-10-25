@@ -88,7 +88,8 @@ export default function LoginPage() {
             !/[\u0000-\u001f]/.test(next)
                ? next
                : null;
-         router.replace(safeNext ?? '/');
+         // Authentication changes cookies outside Next's router cache; discard anonymous prefetches.
+         window.location.replace(safeNext ?? '/');
       } catch (caughtError) {
          setError(caughtError instanceof Error ? caughtError.message : t('signInFailed'));
       } finally {

@@ -178,6 +178,7 @@ export default function EmojisSettings() {
                />
                <Button
                   size="xs"
+                  disabled={loading || !workspaceId}
                   onClick={() => {
                      reset();
                      setOpen(true);

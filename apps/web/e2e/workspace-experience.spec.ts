@@ -6,6 +6,7 @@ async function fixture(page: Page, locale: 'en' | 'vi' = 'en') {
       version: 1,
       failSave: false,
       failReport: false,
+      signInNext: null as string | null,
       memberships: ['alpha', 'beta'],
       values: {
          locale,
@@ -86,8 +87,19 @@ async function fixture(page: Page, locale: 'en' | 'vi' = 'en') {
             releases: [],
          };
       if (path === '/auth/providers') data = { microsoft: { enabled: false } };
-      if (path === '/auth/login')
-         data = { workspace: { slug: 'alpha' }, user: { isPlatformAdmin: false } };
+      if (path === '/auth/login' || path === '/auth/mfa/verify')
+         return route.fulfill({
+            headers: {
+               'Set-Cookie': 'flowie_refresh=synthetic-session; Path=/; HttpOnly; SameSite=Lax',
+            },
+            json: {
+               data: {
+                  next: state.signInNext,
+                  workspace: { slug: 'alpha' },
+                  user: { isPlatformAdmin: false },
+               },
+            },
+         });
       if (path === '/reports/workflow') {
          state.queries.push(route.request().postDataJSON());
          if (state.failReport)
@@ -141,6 +153,38 @@ async function fixture(page: Page, locale: 'en' | 'vi' = 'en') {
       });
    });
    return state;
+}
+
+for (const method of ['password', 'MFA'] as const) {
+   for (const destination of ['default workspace', 'direct link'] as const) {
+      test(`fresh ${method} sign-in escapes anonymous prefetches and opens the ${destination}`, async ({
+         page,
+      }) => {
+         const state = await fixture(page);
+         state.values.defaultWorkspaceId = 'beta';
+         state.signInNext = destination === 'direct link' ? '/alpha/reports' : null;
+         await page.context().clearCookies();
+         const prefetch = page.waitForResponse((response) => {
+            const url = new URL(response.url());
+            return url.pathname === '/' && url.searchParams.has('_rsc');
+         });
+         await page.goto(
+            method === 'MFA'
+               ? '/auth/mfa'
+               : `/auth/login${state.signInNext ? '?next=' + encodeURIComponent(state.signInNext) : ''}`
+         );
+         await prefetch;
+         if (method === 'MFA') {
+            await page.getByRole('textbox', { name: 'Verification code' }).fill('123456');
+            await page.getByRole('button', { name: 'Verify sign-in', exact: true }).click();
+         } else {
+            await page.getByLabel('Email', { exact: true }).fill('test@example.test');
+            await page.getByLabel('Password', { exact: true }).fill('test-password');
+            await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+         }
+         await expect(page).toHaveURL(state.signInNext ?? '/beta/inbox');
+      });
+   }
 }
 
 test('default workspace persists across returning, sign-in and direct links, with safe fallback', async ({
