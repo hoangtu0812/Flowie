@@ -21,7 +21,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     services:
       postgres:
         image: postgres:16
@@ -86,12 +86,15 @@ jobs:
           pnpm --filter @circle/web test:unit
           pnpm --filter @circle/web build
           docker compose --profile app config --quiet
+      - name: Install browser test dependencies
+        timeout-minutes: 25
+        run: pnpm --filter @circle/web exec playwright install --with-deps chromium firefox webkit
       - name: Verify browser regression workflows
+        timeout-minutes: 20
         env:
           FLOWIE_E2E_DATABASE_URL: postgresql://flowie_test:test-only-password@localhost:5432/flowie_mcp_test
         run: |
           python scripts/seed-ui-regression.py
-          pnpm --filter @circle/web exec playwright install --with-deps chromium firefox webkit
           pnpm --filter @circle/web test:e2e --max-failures=5
       - uses: actions/upload-artifact@v4
         if: failure() || cancelled()

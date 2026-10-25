@@ -200,6 +200,7 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Production verification gives browser dependency installation and test execution separate bounded time budgets within a 60-minute job, allowing slow Ubuntu package downloads without cutting off healthy regression tests. All three browser suites still gate deployment, with a 20-minute test limit and early stop after five failures.
 - Default-workspace browser verification waits for the destination Inbox after root redirects, so WebKit does not mistake a successful client redirect for an interrupted page load.
 - Inbox recovery verification waits for initial sidebar and page loads to settle before restoring the network, avoiding a false failure when automatic recovery removes Retry before the test clicks it.
 - Password and MFA sign-in discard anonymous navigation caches before opening the saved workspace or requested direct link, preventing successful sign-ins from returning to the login page. Browser verification stops after five failures and attempts to retain traces on cancellation so shared regressions remain diagnosable before deployment.
