@@ -11,7 +11,6 @@ import { Button } from '@astryxdesign/core/Button';
 import { TextInput } from '@astryxdesign/core/TextInput';
 import { Selector } from '@astryxdesign/core/Selector';
 import { AuthCard } from '@/components/auth/auth-card';
-import { accountHome } from '@/features/identity/account-preferences';
 import { responseData } from '@/lib/http';
 import { authApi } from './types';
 import { useFactorOptions, type FactorKind } from './mfa-client';
@@ -43,14 +42,7 @@ export default function MfaSignIn() {
             })
          );
          setCode('');
-         router.replace(
-            data.next ??
-               (data.workspace
-                  ? `/${data.workspace.slug}/${await accountHome()}`
-                  : data.user.isPlatformAdmin
-                    ? '/admin'
-                    : '/invitations')
-         );
+         router.replace(data.next ?? '/');
       } catch (reason) {
          setError(reason instanceof Error ? reason.message : tx('Verification failed.'));
       } finally {

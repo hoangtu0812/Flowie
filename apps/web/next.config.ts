@@ -8,7 +8,7 @@ import type { NextConfig } from 'next';
  * is not written down there cannot be shown, which is the point — it makes a
  * forgotten changelog entry visible inside the product instead of silent.
  */
-type Release = { version: string; releasedAt: string; highlights: string[] };
+type Release = { version: string; releasedAt: string; highlights: string[]; notes: string[] };
 
 const RELEASE_HEADING = /^## \[(\d+\.\d+\.\d+)\]\s*[—-]\s*(.+?)\s*$/;
 
@@ -26,7 +26,7 @@ function shorten(bullet: string, limit = 72): string {
 }
 
 function readRelease(): Release {
-   const empty: Release = { version: '', releasedAt: '', highlights: [] };
+   const empty: Release = { version: '', releasedAt: '', highlights: [], notes: [] };
    let lines: string[];
    try {
       lines = readFileSync(join(process.cwd(), '..', '..', 'CHANGELOG.md'), 'utf8').split(/\r?\n/);
@@ -49,7 +49,7 @@ function readRelease(): Release {
    }
 
    const highlights = bullets.slice(0, 4).map((bullet) => shorten(bullet));
-   return { version, releasedAt, highlights };
+   return { version, releasedAt, highlights, notes: bullets };
 }
 
 const release = readRelease();
@@ -63,6 +63,7 @@ const nextConfig: NextConfig = {
       NEXT_PUBLIC_BUILD_REVISION: process.env.NEXT_PUBLIC_BUILD_REVISION ?? 'local',
       NEXT_PUBLIC_APP_RELEASED_AT: process.env.NEXT_PUBLIC_APP_RELEASED_AT ?? release.releasedAt,
       NEXT_PUBLIC_APP_HIGHLIGHTS: JSON.stringify(release.highlights),
+      NEXT_PUBLIC_APP_RELEASE_NOTES: JSON.stringify(release.notes),
    },
 };
 

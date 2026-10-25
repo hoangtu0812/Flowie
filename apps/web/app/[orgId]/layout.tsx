@@ -1,5 +1,6 @@
 import React from 'react';
 import { AppSidebar } from '@/components/layout/sidebar/app-sidebar';
+import { HelpCenter } from '@/components/layout/sidebar/help-button';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { CreateIssueModalProvider } from '@/components/common/issues/create-issue-modal-provider';
 import { IssueActionDialog } from '@/components/common/issues/issue-action-dialog';
@@ -27,6 +28,7 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
          <IssueRelationDialog />
          <CommandPalette />
          <AppSidebar />
+         <HelpCenter />
          <div className="h-svh overflow-hidden lg:p-2 w-full">
             <div className="lg:border lg:rounded-md overflow-hidden flex flex-col items-center justify-start bg-container h-full w-full">
                {children}

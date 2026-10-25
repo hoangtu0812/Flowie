@@ -147,6 +147,9 @@ test('original dashboard composition keeps complete scoped data and advanced rep
    await expect(
       page.getByRole('heading', { name: 'Workspace analytics', exact: true })
    ).toBeVisible();
+   await page
+      .getByRole('button', { name: 'More filters and calendar settings', exact: true })
+      .click();
    await expect(page.getByRole('textbox', { name: 'Report timezone', exact: true })).toBeVisible();
    await page.waitForLoadState('networkidle');
    await page.getByRole('link', { name: 'Back to dashboard', exact: true }).click();

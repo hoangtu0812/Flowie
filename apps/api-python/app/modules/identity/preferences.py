@@ -20,6 +20,7 @@ class UiValues(BaseModel):
     locale: Literal["en", "vi"] = "en"
     commentSubmitMode: Literal["modifier-enter", "enter"] = "modifier-enter"
     defaultHome: Literal["inbox", "my-issues"] = "inbox"
+    defaultWorkspaceId: str | None = Field(default=None, min_length=1, max_length=100)
     fontSize: Literal["default", "small", "large"] = "default"
     pointerCursors: bool = True
     underlineLinks: bool = False

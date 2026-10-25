@@ -4,8 +4,8 @@ import { useRouter } from 'next/navigation';
 import { loadWorkspaceMemberships } from '@/lib/workspaces';
 import { ApiRequestError } from '@/lib/http';
 import { loadCurrentUser } from '@/features/identity/current-user';
-import { resolveWorkspaceRoot } from '@/lib/workspace-root';
-import { accountHome } from '@/features/identity/account-preferences';
+import { preferredWorkspaceSlug, resolveWorkspaceRoot } from '@/lib/workspace-root';
+import { accountPreferences } from '@/features/identity/account-preferences';
 import { LoadingState } from '@/components/common/loading-state';
 import { QueryState } from '@/components/common/query-state';
 export default function Home() {
@@ -17,14 +17,18 @@ export default function Home() {
       setError(undefined);
       void Promise.all([loadCurrentUser(), loadWorkspaceMemberships()])
          .then(async ([user, memberships]) => {
-            const defaultHome = await accountHome(user.id);
+            const preferences = await accountPreferences(user.id);
             if (!active) return;
             const destination = resolveWorkspaceRoot({
                adminAccessible: Boolean(user.isPlatformAdmin),
                workspacesAccessible: true,
                workspaceSlug: memberships[0]?.workspace.slug,
+               preferredWorkspaceSlug: preferredWorkspaceSlug(
+                  memberships,
+                  preferences.defaultWorkspaceId
+               ),
                invitationCount: 0,
-               defaultHome,
+               defaultHome: preferences.defaultHome,
             });
             router.replace(destination ?? '/invitations');
          })

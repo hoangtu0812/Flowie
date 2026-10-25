@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-import { accountHome } from '@/features/identity/account-preferences';
 import { useLocale } from '@/features/shared/use-locale';
 import { VStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
@@ -89,14 +88,7 @@ export default function LoginPage() {
             !/[\u0000-\u001f]/.test(next)
                ? next
                : null;
-         router.replace(
-            safeNext ??
-               (payload.data.workspace
-                  ? `/${payload.data.workspace.slug}/${await accountHome()}`
-                  : payload.data.user.isPlatformAdmin
-                    ? '/admin'
-                    : '/invitations')
-         );
+         router.replace(safeNext ?? '/');
       } catch (caughtError) {
          setError(caughtError instanceof Error ? caughtError.message : t('signInFailed'));
       } finally {

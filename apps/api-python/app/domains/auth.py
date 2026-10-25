@@ -781,14 +781,7 @@ async def microsoft_callback(
     access_token, refresh_token, data = await _create_session(db, user, request, settings, method='MICROSOFT', authenticated_at=profile.authenticated_at)
     await db.commit()
     next_path = _safe_app_path(stored.get('next'))
-    if next_path:
-        destination = next_path
-    elif data['workspace']:
-        destination = f"/{data['workspace']['slug']}/teams"
-    elif user['is_platform_admin']:
-        destination = '/admin'
-    else:
-        destination = '/invitations'
+    destination = next_path or '/'
     response = RedirectResponse(f'{settings.app_url}{destination}', status_code=302)
     response.delete_cookie(MICROSOFT_FLOW_COOKIE, path='/api/v1/auth/microsoft')
     _set_cookies(response, access_token, refresh_token, settings)

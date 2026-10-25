@@ -1,4 +1,17 @@
 export const messages = {
+   'Understand delivery, spot delays, and plan your team’s workload.':
+      'Theo dõi tiến độ, phát hiện chậm trễ và lên kế hoạch công việc cho nhóm.',
+   'Report filters': 'Bộ lọc báo cáo',
+   'More filters and calendar settings': 'Bộ lọc bổ sung và thiết lập lịch',
+   'All matching tasks, grouped by their current status.':
+      'Các công việc trong phạm vi đã chọn, nhóm theo trạng thái hiện tại.',
+   'No matching tasks. Try a broader scope.':
+      'Không có công việc phù hợp. Hãy mở rộng phạm vi lọc.',
+   'How to read this chart': 'Cách đọc biểu đồ',
+   'How workload is calculated': 'Cách tính tải công việc',
+   'How project totals are calculated': 'Cách tính số liệu dự án',
+   'No workload in this scope.': 'Không có tải công việc trong phạm vi này.',
+   'No projects in this scope.': 'Không có dự án trong phạm vi này.',
    'not observed': 'chưa ghi nhận',
    ' · Partial or future day': ' · Ngày chưa kết thúc hoặc tương lai',
    'Saturday': 'Thứ Bảy',

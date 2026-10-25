@@ -10,9 +10,9 @@ export const APP_RELEASED_AT = process.env.NEXT_PUBLIC_APP_RELEASED_AT ?? '';
 
 export const CHANGELOG_URL = 'https://github.com/hoangtu0812/Flowie/blob/main/CHANGELOG.md';
 
-function parseHighlights(): string[] {
+function parseNotes(value: string): string[] {
    try {
-      const parsed: unknown = JSON.parse(process.env.NEXT_PUBLIC_APP_HIGHLIGHTS ?? '[]');
+      const parsed: unknown = JSON.parse(value);
       return Array.isArray(parsed)
          ? parsed.filter((item): item is string => typeof item === 'string')
          : [];
@@ -22,7 +22,8 @@ function parseHighlights(): string[] {
 }
 
 /** First entries of the current release, used by the Help menu's "What's new". */
-export const APP_HIGHLIGHTS = parseHighlights();
+export const APP_HIGHLIGHTS = parseNotes(process.env.NEXT_PUBLIC_APP_HIGHLIGHTS ?? '[]');
+export const APP_RELEASE_NOTES = parseNotes(process.env.NEXT_PUBLIC_APP_RELEASE_NOTES ?? '[]');
 
 /** "v0.2.0 · 2026-08-26 19:41 +07", or just the half that is known. */
 export function releaseLabel(): string {

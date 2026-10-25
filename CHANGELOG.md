@@ -12,6 +12,9 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Accounts can set or remove a default workspace from the workspace menu. Returning to Flowie and signing in (including Microsoft and MFA) honor that choice after checking current membership; direct links keep their destination. The preference syncs across devices through the existing versioned preference store; no schema migration is required.
+- Help includes searchable English/Vietnamese feature guides, report metric explanations, contextual keyboard shortcuts and direct links to features.
+
 - A scoped dashboard report endpoint provides complete overview totals, dated recorded effort, missing-date coverage and top project charts without first-page truncation. Restricted project metadata remains hidden, current status colors are returned, and no schema migration is required.
 
 - Product acceptance records distinguish verified local features, historical merged/deployed code, the proposed off-site backup configuration and the failed read-only Codex trial. Release checks require the exact new CI/deployment revision, committed migrations and readiness before tagging.
@@ -141,6 +144,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
   commands or create pull requests.
 
 ### Changed
+
+- Advanced reports use responsive metric tiles, aligned filters with expandable calendar settings, paired analysis sections and compact actions. Missing history and empty results remain explicit.
+- The compact Help menu again shows release highlights and the published version/date, with a dedicated in-app release-notes view sourced from the built changelog.
+- Report and Help surfaces correctly adopt the saved light theme after hydration, and Help remains available when mobile navigation is closed.
 
 - Account-security/MFA controls and workflow analytics use feature-localized text and account-aware dates. Report week boundaries correctly map Monday, Sunday and Saturday calendar preferences to the reporting convention.
 

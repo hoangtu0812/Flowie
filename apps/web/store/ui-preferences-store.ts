@@ -22,6 +22,7 @@ interface UiPreferencesState {
    setLocale: (locale: Locale) => void;
    setCommentSubmitMode: (mode: 'modifier-enter' | 'enter') => void;
    defaultHome: DefaultHome;
+   defaultWorkspaceId: string | null;
    fontSize: FontSize;
    pointerCursors: boolean;
    underlineLinks: boolean;
@@ -51,6 +52,7 @@ export const useUiPreferencesStore = create<UiPreferencesState>()(
          setLocale: (locale) => set({ locale }),
          setCommentSubmitMode: (commentSubmitMode) => set({ commentSubmitMode }),
          defaultHome: 'inbox',
+         defaultWorkspaceId: null,
          fontSize: 'default',
          pointerCursors: true,
          underlineLinks: false,

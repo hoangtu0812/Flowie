@@ -4,7 +4,8 @@ import { messages } from '@/features/reporting/messages.vi';
 
 import { useState } from 'react';
 import { Button } from '@astryxdesign/core/Button';
-import { VStack } from '@astryxdesign/core/Layout';
+import { VStack, HStack } from '@astryxdesign/core/Layout';
+import { Collapsible } from '@astryxdesign/core/Collapsible';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { List, ListItem } from '@astryxdesign/core/List';
 import { useTheme } from '@astryxdesign/core/theme';
@@ -49,11 +50,13 @@ export function ReportTrend({ rows, onDay }: { rows: DailyPoint[]; onDay: (day: 
    return (
       <VStack gap={3} width="100%">
          <Heading level={2}>{tx('Daily throughput and observed WIP')}</Heading>
-         <Text>
-            {tx(
-               'Created and completed are daily event counts. WIP is the captured Started state at each local day end, or the current snapshot for today. Unknown history is shown separately; future snapshots remain blank.'
-            )}
-         </Text>
+         <Collapsible trigger={tx('How to read this chart')} defaultIsOpen={false}>
+            <Text color="secondary">
+               {tx(
+                  'Created and completed are daily event counts. WIP is the captured Started state at each local day end, or the current snapshot for today. Unknown history is shown separately; future snapshots remain blank.'
+               )}
+            </Text>
+         </Collapsible>
          <VStack
             as="figure"
             aria-label={tx('Daily throughput and WIP chart')}
@@ -105,10 +108,12 @@ export function ReportTrend({ rows, onDay }: { rows: DailyPoint[]; onDay: (day: 
                </LineChart>
             </ResponsiveContainer>
          </VStack>
-         <Button
-            label={table ? tx('Hide daily values') : tx('Show daily values')}
-            onClick={() => setTable(!table)}
-         />
+         <HStack>
+            <Button
+               label={table ? tx('Hide daily values') : tx('Show daily values')}
+               onClick={() => setTable(!table)}
+            />
+         </HStack>
          {table && (
             <List hasDividers>
                {rows.map((row) => (

@@ -9,6 +9,7 @@ const keys = [
    'locale',
    'commentSubmitMode',
    'defaultHome',
+   'defaultWorkspaceId',
    'fontSize',
    'pointerCursors',
    'underlineLinks',
@@ -41,7 +42,12 @@ export function PreferenceSync() {
             if (!active) return;
             if (saved.accountId !== user.id)
                throw new Error('Your account changed. Reload preferences.');
-            store.setState({ ...saved.values, accountId: user.id, syncStatus: 'saved' });
+            store.setState({
+               ...saved.values,
+               defaultWorkspaceId: saved.values.defaultWorkspaceId ?? null,
+               accountId: user.id,
+               syncStatus: 'saved',
+            });
             let version = saved.version;
             controller = new AutosaveController(saved.values, async (draft) => {
                if (!active) return;

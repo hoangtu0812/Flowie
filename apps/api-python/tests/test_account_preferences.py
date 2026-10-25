@@ -70,7 +70,8 @@ async def verify_preferences():
                     accountId=user,
                     expectedVersion=1,
                     values=UiValues(
-                        timezone="Asia/Saigon", weekStart=6, autoAssignSelf=True
+                        timezone="Asia/Saigon", weekStart=6, autoAssignSelf=True,
+                        defaultWorkspaceId="preferred-workspace",
                     ),
                 ),
             )
@@ -94,17 +95,19 @@ async def verify_preferences():
                 and older["values"]["autoAssignSelf"] is True
             )
             assert older["values"]["defaultHome"] == "my-issues"
+            assert older["values"]["defaultWorkspaceId"] == "preferred-workspace"
             automatic = await write_preferences(
                 db,
                 user,
                 PreferencesUpdate(
-                    accountId=user, expectedVersion=3, values=UiValues(timezone=None)
+                    accountId=user, expectedVersion=3, values=UiValues(timezone=None, defaultWorkspaceId=None)
                 ),
             )
             assert (
                 automatic["values"]["timezone"] is None
                 and automatic["values"]["weekStart"] == 6
             )
+            assert automatic["values"]["defaultWorkspaceId"] is None
             await db.rollback()
     finally:
         await engine.dispose()

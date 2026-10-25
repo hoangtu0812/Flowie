@@ -1,7 +1,10 @@
 'use client';
 
 import * as React from 'react';
-import { ChevronsUpDown, ShieldCheck } from 'lucide-react';
+import { ChevronsUpDown, ShieldCheck, Star } from 'lucide-react';
+import { useUiPreferencesStore } from '@/store/ui-preferences-store';
+import { saveDefaultWorkspace } from '@/features/identity/account-preferences';
+import { useMessages } from '@/features/shared/use-messages';
 
 import {
    DropdownMenu,
@@ -79,6 +82,16 @@ function WorkspaceMark({ workspace }: { workspace?: WorkspaceSummary }) {
 }
 
 export function OrgSwitcher() {
+   const tx = useMessages({
+      'Set as default workspace': 'Đặt làm workspace mặc định',
+      'Remove default workspace': 'Bỏ workspace mặc định',
+      'Default workspace saved': 'Đã lưu workspace mặc định',
+      'Default workspace removed': 'Đã bỏ workspace mặc định',
+      'Could not save default workspace.': 'Không thể lưu workspace mặc định.',
+      'Default workspace': 'Workspace mặc định',
+   });
+   const preferences = useUiPreferencesStore();
+   const [savingDefault, setSavingDefault] = React.useState(false);
    const { orgId } = useParams<{ orgId: string }>();
    const pathname = usePathname();
    const router = useRouter();
@@ -229,6 +242,46 @@ export function OrgSwitcher() {
                                     Invite and manage members
                                  </Link>
                               </DropdownMenuItem>
+                              <DropdownMenuItem
+                                 disabled={
+                                    savingDefault ||
+                                    preferences.syncStatus !== 'saved' ||
+                                    !preferences.accountId
+                                 }
+                                 onSelect={() => {
+                                    if (!preferences.accountId) return;
+                                    const next =
+                                       preferences.defaultWorkspaceId === currentWorkspace.id
+                                          ? null
+                                          : currentWorkspace.id;
+                                    setSavingDefault(true);
+                                    void saveDefaultWorkspace(preferences.accountId, next)
+                                       .then(() =>
+                                          toast.success(
+                                             tx(
+                                                next
+                                                   ? 'Default workspace saved'
+                                                   : 'Default workspace removed'
+                                             )
+                                          )
+                                       )
+                                       .catch((reason) =>
+                                          toast.error(
+                                             reason instanceof Error
+                                                ? reason.message
+                                                : tx('Could not save default workspace.')
+                                          )
+                                       )
+                                       .finally(() => setSavingDefault(false));
+                                 }}
+                              >
+                                 <Star className="size-4" />
+                                 {tx(
+                                    preferences.defaultWorkspaceId === currentWorkspace.id
+                                       ? 'Remove default workspace'
+                                       : 'Set as default workspace'
+                                 )}
+                              </DropdownMenuItem>
                               {isPlatformAdmin && (
                                  <DropdownMenuItem asChild>
                                     <Link href="/admin">
@@ -266,6 +319,12 @@ export function OrgSwitcher() {
                                     <Link href={workspaceHref(workspace.slug)}>
                                        <WorkspaceMark workspace={workspace} />
                                        {workspace.name}
+                                       {workspace.id === preferences.defaultWorkspaceId && (
+                                          <Star
+                                             className="ml-auto size-4"
+                                             aria-label={tx('Default workspace')}
+                                          />
+                                       )}
                                     </Link>
                                  </DropdownMenuItem>
                               ))}

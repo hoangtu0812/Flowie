@@ -65,6 +65,9 @@ test('workflow reports use captured events, scoped filters, day drilldown and mo
       ).toBeVisible();
       await page.getByRole('textbox', { name: 'Report from date', exact: true }).fill(today);
       await page.getByRole('textbox', { name: 'Report to date', exact: true }).fill(today);
+      await page
+         .getByRole('button', { name: 'More filters and calendar settings', exact: true })
+         .click();
       await page.getByRole('textbox', { name: 'Report timezone', exact: true }).fill('UTC');
       await page.getByRole('textbox', { name: 'Report task search', exact: true }).fill(title);
       const response = page.waitForResponse(
