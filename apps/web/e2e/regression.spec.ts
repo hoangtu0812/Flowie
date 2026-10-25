@@ -484,6 +484,8 @@ test('Inbox shows failed loads with Retry instead of an empty notification list'
 }) => {
    await page.route('**/api/v1/notifications?*', (route) => route.abort('failed'));
    await page.goto(`/${fixture.slug}/inbox`);
+   // Settle both sidebar and Inbox startup loads before restoring the network for manual Retry.
+   await page.waitForLoadState('networkidle');
    await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeVisible();
    await expect(page.getByText('No notifications to show.', { exact: true })).toHaveCount(0);
    await page.unroute('**/api/v1/notifications?*');
