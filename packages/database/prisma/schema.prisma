@@ -631,6 +631,7 @@ model Workspace {
   notifications           Notification[]
   notificationPreferences NotificationPreference[]
   discordWebhook          DiscordWebhook?
+  teamsWebhook            TeamsWebhook?
   projectCustomFields     ProjectCustomField[]
   projectTemplates        ProjectTemplate[]
   projectMilestones       ProjectMilestone[]
@@ -1011,6 +1012,33 @@ model DiscordWebhook {
   @@map("discord_webhooks")
 }
 
+model TeamsWebhook {
+  id          String   @id @default(cuid())
+  workspaceId String   @unique @map("workspace_id")
+  webhookUrl  String   @map("webhook_url")
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("teams_webhooks")
+}
+
+model ProjectTeamsChannel {
+  id          String   @id @default(cuid())
+  projectId   String   @unique @map("project_id")
+  channelName String?  @map("channel_name")
+  webhookUrl  String   @map("webhook_url")
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_teams_channels")
+}
+
 model AuditLog {
   id          String   @id @default(cuid())
   workspaceId String?  @map("workspace_id")
@@ -1127,6 +1155,7 @@ model Project {
   updates           ProjectUpdate[]
   resources         ProjectResource[]
   members           ProjectMember[]
+  teamsChannel      ProjectTeamsChannel?
 
   @@unique([workspaceId, identifier])
   @@index([workspaceId, teamId])

@@ -154,8 +154,9 @@ export function ChannelSettings() {
                </VStack>
             ))}
             <Text>
-               Discord is configured in workspace Integrations. Native mobile and Slack delivery
-               require separate integrations.
+               Discord and Microsoft Teams are configured in workspace Integrations; Teams is
+               available when Microsoft sign-in is enabled. Native mobile and Slack delivery require
+               separate integrations.
             </Text>
          </VStack>
       </DesignSurface>
