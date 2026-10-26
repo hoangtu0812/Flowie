@@ -26,6 +26,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- `.env.example` documents the seven MCP variables the API reads, which were previously visible only in `docker-compose.yml`. The endpoint is mounted at `/mcp/` only while `MCP_ENABLED=true` and a reverse proxy in front of the API must route `/mcp/` to it; mutation tools and the agent run dispatcher stay unavailable while `MCP_WRITES_ENABLED=false`; and `MCP_ALLOWED_HOSTS` must name every public hostname the endpoint is reached through, because DNS-rebinding protection compares the request Host against that list and its default covers loopback only. Documentation only: no runtime behaviour, configuration default, or schema changes.
+
 - The local Flowie agent runner can use Claude Code instead of Codex (`"provider": "claude"` in the runner JSON; Codex stays the default). Claude Code runs non-interactively in the checkout with file tools only, restricted settings, no MCP servers and no Flowie/SCM/database tokens; `doctor` rejects a missing, outdated or signed-out CLI. Each Claude session is saved locally, named after the issue (for example `Flowie DTD-3`), and its id is printed when the run starts so it can be followed and later opened with `claude --resume`. A new `pending` command lists issues with queued automation runs so the runner can be polled periodically. Local tooling only; nothing changes on CT107.
 
 - Workspace owners can permanently delete a workspace from Workspace settings after typing its exact name. The API verifies active ownership and confirmation, removes workspace data atomically, and clears saved default-workspace preferences while preserving accounts and other workspaces.
