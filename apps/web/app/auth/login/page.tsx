@@ -11,6 +11,7 @@ import { AuthCard } from '@/components/auth/auth-card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { AuthProviderStatus, useAuthProviders } from '@/features/identity/auth-providers';
 
 type AuthPayload = {
    data: {
@@ -28,22 +29,13 @@ export default function LoginPage() {
    const searchParams = useSearchParams();
    const [error, setError] = useState<string | null>(null);
    const [isSubmitting, setIsSubmitting] = useState(false);
-   const [microsoftEnabled, setMicrosoftEnabled] = useState(false);
+   const providers = useAuthProviders();
    const [timezone, setTimezone] = useState('UTC');
 
    useEffect(() => {
       setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
       const microsoftError = searchParams.get('azure_error');
       if (microsoftError) setError(microsoftError);
-      void fetch(`${apiUrl}/auth/providers`)
-         .then(async (response) => {
-            if (!response.ok) return;
-            const payload = (await response.json()) as {
-               data?: { microsoft?: { enabled?: boolean } };
-            };
-            setMicrosoftEnabled(Boolean(payload.data?.microsoft?.enabled));
-         })
-         .catch(() => undefined);
    }, [searchParams]);
 
    const microsoftHref = useMemo(() => {
@@ -57,6 +49,7 @@ export default function LoginPage() {
 
    async function onSubmit(event: FormEvent<HTMLFormElement>) {
       event.preventDefault();
+      if (!providers.passwordEnabled) return;
       const formData = new FormData(event.currentTarget);
       setError(null);
       setIsSubmitting(true);
@@ -103,45 +96,50 @@ export default function LoginPage() {
          description={t('signInDescription')}
          loading={isSubmitting}
          footer={
-            <>
-               {t('noAccount')}{' '}
-               <Link href="/auth/register" className="font-medium text-foreground underline">
-                  {t('createAccount')}
-               </Link>
-            </>
+            providers.passwordEnabled && (
+               <>
+                  {t('noAccount')}{' '}
+                  <Link href="/auth/register" className="font-medium text-foreground underline">
+                     {t('createAccount')}
+                  </Link>
+               </>
+            )
          }
       >
-         {microsoftEnabled && (
+         <AuthProviderStatus {...providers} />
+         {error && <Text role="alert">{error}</Text>}
+         {providers.state === 'ready' && providers.microsoftEnabled && (
             <>
                <Button variant="outline" className="w-full" asChild>
                   <a href={microsoftHref}>{t('microsoft')}</a>
                </Button>
-               <Text>{t('or')}</Text>
+               <Text>{t('microsoftOnly')}</Text>
             </>
          )}
-         <form className="space-y-4" onSubmit={onSubmit}>
-            <VStack gap={2}>
-               <Label htmlFor="email">Email</Label>
-               <Input id="email" name="email" type="email" autoComplete="email" required />
-            </VStack>
-            <VStack gap={2}>
-               <Label htmlFor="password">{t('password')}</Label>
-               <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-               />
-            </VStack>
-            {error && <Text role="alert">{error}</Text>}
-            <Button className="w-full" type="submit" disabled={isSubmitting}>
-               {isSubmitting ? t('signingIn') : t('signIn')}
-            </Button>
-            <Link href="/auth/forgot-password" className="text-sm underline">
-               {t('forgotPassword')}
-            </Link>
-         </form>
+         {providers.passwordEnabled && (
+            <form className="space-y-4" onSubmit={onSubmit}>
+               <VStack gap={2}>
+                  <Label htmlFor="email">Email</Label>
+                  <Input id="email" name="email" type="email" autoComplete="email" required />
+               </VStack>
+               <VStack gap={2}>
+                  <Label htmlFor="password">{t('password')}</Label>
+                  <Input
+                     id="password"
+                     name="password"
+                     type="password"
+                     autoComplete="current-password"
+                     required
+                  />
+               </VStack>
+               <Button className="w-full" type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? t('signingIn') : t('signIn')}
+               </Button>
+               <Link href="/auth/forgot-password" className="text-sm underline">
+                  {t('forgotPassword')}
+               </Link>
+            </form>
+         )}
       </AuthCard>
    );
 }

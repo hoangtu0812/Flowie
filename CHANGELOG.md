@@ -12,6 +12,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- Workspace owners and admins can browse existing active Flowie users and search by name or email when inviting members. Results exclude current members and pending invitations, with bounded results and retry support.
+
 - Microsoft Teams notifications: workspace administrators can connect a Teams channel next to Discord in Settings → Integrations, and project leads or administrators can connect a per-project channel from the project's properties ("MS Teams" below Slack). Issue and project events are posted as Adaptive Cards through Teams Workflows webhooks (`*.logic.azure.com` / `*.api.powerplatform.com` only). The feature is hidden and rejected by the API unless Microsoft Entra sign-in (`AZURE_AD_*`) is configured. Requires the `teams_channels` migration; daily digests and dispatcher reports remain Discord-only.
 
 - Accounts can set or remove a default workspace from the workspace menu. Returning to Flowie and signing in (including Microsoft and MFA) honor that choice after checking current membership; direct links keep their destination. The preference syncs across devices through the existing versioned preference store; no schema migration is required.
@@ -147,6 +149,14 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Changed
 
+- Bug severity uses a compact icon dropdown in creation and editing forms, with the same Unspecified, Low, Medium, High and Critical values and localized labels.
+
+- Issue creation has a compact header and Task/Bug selector, a clearer writing area, labeled property controls and a fixed action footer for long bug forms. Existing creation, team selection, defaults and create-more behavior are preserved; selected native statuses remain visible in the picker.
+
+- Projects lists and timelines use lighter bars, compact group headers and clearer progress indicators. Issue details have a centered reading column, a distinct properties sidebar, clearer Markdown typography and compact activity with author avatars. Existing filters, editing, comments, attachments and navigation remain unchanged; no schema or configuration changes are required.
+
+- Configuring Microsoft Entra sign-in makes it the only sign-in method: password login, local registration, password recovery and pending password MFA challenges are disabled. The first verified Microsoft sign-in links a matching local email without changing user IDs, work or memberships, removes the local password and revokes its existing browser sessions. Subsequent sign-ins synchronize name, email and photo through the immutable tenant/object identity; conflicting identities are rejected. No schema migration is required; production must have working Entra credentials and redirect configuration before deployment.
+
 - Advanced reports use responsive metric tiles, aligned filters with expandable calendar settings, paired analysis sections and compact actions. Missing history and empty results remain explicit.
 - The compact Help menu again shows release highlights and the published version/date, with a dedicated in-app release-notes view sourced from the built changelog.
 - Report and Help surfaces correctly adopt the saved light theme after hydration, and Help remains available when mobile navigation is closed.
@@ -201,6 +211,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 - Project lists now filter inaccessible teams before hydration, and initiative links, progress counts and project activity exclude restricted projects. Search and MCP project reads share the same membership predicate while MCP retains its additional token grants.
 
 ### Fixed
+
+- Browser regression checks support an isolated web port through `FLOWIE_E2E_WEB_PORT`, preventing another local development server from serving the wrong app during verification.
 
 - Production verification gives browser dependency installation and test execution separate bounded time budgets within a 60-minute job, allowing slow Ubuntu package downloads without cutting off healthy regression tests. All three browser suites still gate deployment, with a 20-minute test limit and early stop after five failures.
 - Default-workspace browser verification waits for the destination Inbox after root redirects, so WebKit does not mistake a successful client redirect for an interrupted page load.

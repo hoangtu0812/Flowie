@@ -77,12 +77,16 @@ const activityItem = (activity: NativeActivity, locale = 'en'): ActivityItem => 
 
 function EventRow({ item }: { item: Extract<ActivityItem, { kind: 'event' }> }) {
    return (
-      <HStack gap={2} paddingBlock={2}>
-         {EVENT_ICONS[item.event] ?? <CircleDot aria-hidden="true" />}
-         <Text>
+      <HStack gap={2} paddingBlock={1} align="start" className="text-muted-foreground">
+         <HStack className="mt-1 shrink-0" aria-hidden="true">
+            {EVENT_ICONS[item.event] ?? <CircleDot className="size-3.5" />}
+         </HStack>
+         <Text type="supporting" className="min-w-0 flex-1">
             <Text weight="medium">{item.actor.name}</Text> {item.text}
          </Text>
-         <Text type="supporting">{item.timeAgo}</Text>
+         <Text type="supporting" className="shrink-0">
+            {item.timeAgo}
+         </Text>
       </HStack>
    );
 }
@@ -107,7 +111,8 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
       <DesignSurface>
          <VStack
             gap={4}
-            paddingBlock={4}
+            paddingBlock={6}
+            className="min-w-0 border-t border-border/60"
             onKeyDown={(event) => {
                if (
                   event.target instanceof HTMLElement &&
@@ -124,7 +129,9 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
             }}
          >
             <HStack justify="between" gap={2}>
-               <Heading level={2}>{t('activity')}</Heading>
+               <Heading level={4} accessibilityLevel={2}>
+                  {t('activity')}
+               </Heading>
                <Button
                   label={issue?.isSubscribed ? t('unsubscribe') : t('subscribe')}
                   size="sm"
@@ -174,7 +181,11 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
                         {state.comments
                            .filter((reply) => reply.parentCommentId === comment.id)
                            .map((reply) => (
-                              <VStack key={reply.id} paddingInlineStart={4}>
+                              <VStack
+                                 key={reply.id}
+                                 paddingInlineStart={4}
+                                 className="border-l border-border/60"
+                              >
                                  <CommentRow
                                     comment={reply}
                                     workspaceId={state.workspaceId!}

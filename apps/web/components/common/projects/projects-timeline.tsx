@@ -108,17 +108,17 @@ function IssueRow({
                title={`${issue.identifier} · ${issue.title} - ${label}`}
                aria-label={`${issue.identifier} · ${issue.title} - ${label}`}
                className={cn(
-                  'absolute top-1 h-6 rounded border transition-opacity hover:opacity-85',
+                  'absolute top-1 h-6 rounded border shadow-xs transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   !end && 'border-dashed'
                )}
                style={{
                   left,
                   width,
-                  backgroundColor: issue.status.color,
+                  backgroundColor: 'var(--container)',
                   borderColor: issue.status.color,
                }}
             >
-               <span className="relative z-10 block truncate px-2 text-[11px] font-medium text-foreground drop-shadow-sm">
+               <span className="relative z-10 block truncate px-2 text-xs font-medium text-foreground">
                   {issue.title}
                </span>
             </button>
@@ -308,19 +308,22 @@ function TimelineBar({
             title={`${project.name} · ${completion}% complete · ${dateRangeLabel(project)}`}
             aria-label={`${project.name} · ${completion}% complete · ${dateRangeLabel(project)}`}
             className={cn(
-               'absolute top-1 h-7 overflow-hidden rounded-md border bg-muted/35 transition-opacity hover:opacity-85',
-               selected && 'border-violet-500 ring-1 ring-violet-500'
+               'absolute top-1 h-7 overflow-hidden rounded-md border border-border/70 bg-container shadow-xs transition-colors hover:border-muted-foreground/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+               selected && 'border-primary ring-1 ring-primary'
             )}
             style={{ left, width }}
          >
             <span
                aria-hidden="true"
-               className="pointer-events-none absolute inset-y-0 left-0"
+               className="pointer-events-none absolute inset-y-0 left-0 opacity-10"
                style={{ width: `${completion}%`, backgroundColor: project.status.color }}
             />
-            <span className="relative z-10 flex h-full min-w-0 items-center gap-1.5 px-2.5 text-xs font-medium text-foreground drop-shadow-sm">
+            <span className="relative z-10 flex h-full min-w-0 items-center gap-2 px-2.5 text-xs font-medium text-foreground">
                <span className="truncate">{project.name}</span>
-               <span className="shrink-0">{completion}%</span>
+               <CapacityRing value={completion} color={project.status.color} size={12} />
+               <span className="shrink-0 font-normal tabular-nums text-muted-foreground">
+                  {completion}%
+               </span>
             </span>
          </button>
       </div>
@@ -509,7 +512,7 @@ export default function ProjectsTimeline({ groups, onProjectChanged }: ProjectsT
    };
 
    return (
-      <div className="relative w-full h-full">
+      <div className="relative w-full h-full bg-container">
          {peekProjectId !== null && (
             <ProjectPeekPanel
                projectId={peekProjectId}
@@ -532,7 +535,7 @@ export default function ProjectsTimeline({ groups, onProjectChanged }: ProjectsT
             />
          )}
          {/* Floating scale controls (Linear-style) */}
-         <div className="absolute top-1 right-4 z-30 flex items-center gap-1.5">
+         <div className="absolute top-1 right-3 z-30 flex items-center gap-1 rounded-md bg-container p-0.5">
             <button
                type="button"
                onClick={scrollToToday}
@@ -564,7 +567,7 @@ export default function ProjectsTimeline({ groups, onProjectChanged }: ProjectsT
          <div ref={scrollRef} onScroll={handleScroll} className="w-full h-full overflow-auto">
             <div style={{ width: totalWidth }} className="relative min-h-full">
                {/* Month scale: month names, weekly ticks and date labels */}
-               <div className="sticky top-0 z-20 border-b bg-container select-none">
+               <div className="sticky top-0 z-20 border-b border-border/60 bg-container select-none">
                   <div className="relative flex">
                      {MONTHS.map((month) => (
                         <div
@@ -619,7 +622,7 @@ export default function ProjectsTimeline({ groups, onProjectChanged }: ProjectsT
                      <div
                         key={month.key}
                         style={{ width: monthWidth }}
-                        className="shrink-0 border-r border-border/25 h-full"
+                        className="shrink-0 border-r border-border/15 h-full"
                      />
                   ))}
                </div>
@@ -636,7 +639,7 @@ export default function ProjectsTimeline({ groups, onProjectChanged }: ProjectsT
                <div className="relative z-[5] pb-8">
                   {groups.map((group) => (
                      <div key={group.id}>
-                        <div className="sticky left-0 flex items-center gap-2 px-4 h-9 text-sm font-medium bg-[color-mix(in_oklab,var(--accent)_30%,var(--container))] border-y border-border/40 w-screen max-w-full">
+                        <div className="sticky left-0 flex items-center gap-2 px-4 h-8 text-xs font-medium bg-container border-y border-border/50 w-screen max-w-full">
                            {group.icon && <span>{group.icon}</span>}
                            {group.name}
                            <span className="text-xs text-muted-foreground">
@@ -649,7 +652,7 @@ export default function ProjectsTimeline({ groups, onProjectChanged }: ProjectsT
                         <div className="py-1">
                            {group.projects.map((project) => (
                               <div key={project.id}>
-                                 <div className="relative h-9 flex items-center">
+                                 <div className="group relative h-9 flex items-center hover:bg-muted/20">
                                     <TimelineBar
                                        project={project}
                                        monthWidth={monthWidth}
@@ -662,7 +665,7 @@ export default function ProjectsTimeline({ groups, onProjectChanged }: ProjectsT
                                        }}
                                     />
                                     {showProjectList && (
-                                       <div className="sticky left-0 z-10 flex items-center gap-1.5 w-56 shrink-0 pl-1 pr-4 h-9 bg-container/95 backdrop-blur-sm text-xs border-r border-border/40">
+                                       <div className="sticky left-0 z-10 flex items-center gap-1.5 w-56 shrink-0 pl-2 pr-3 h-9 bg-container text-xs border-r border-border/50">
                                           <button
                                              type="button"
                                              aria-label={
@@ -684,7 +687,12 @@ export default function ProjectsTimeline({ groups, onProjectChanged }: ProjectsT
                                           <span className="inline-flex size-5 bg-muted/50 items-center justify-center rounded shrink-0">
                                              <project.icon className="size-3" />
                                           </span>
-                                          <span className="truncate flex-1">{project.name}</span>
+                                          <span
+                                             className="truncate flex-1 font-medium"
+                                             title={project.name}
+                                          >
+                                             {project.name}
+                                          </span>
                                           {displayProperties.health && (
                                              <span
                                                 className="size-2 rounded-full shrink-0"
@@ -694,7 +702,7 @@ export default function ProjectsTimeline({ groups, onProjectChanged }: ProjectsT
                                           {displayProperties.status && (
                                              <CapacityRing
                                                 value={project.percentComplete}
-                                                color="#6771c5"
+                                                color={project.status.color}
                                              />
                                           )}
                                           {displayProperties.priority && (

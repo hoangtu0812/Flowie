@@ -29,6 +29,7 @@ from ..core.config import Settings
 from ..core.errors import ApiError
 from ..db.session import get_session
 from ..services.microsoft_identity import MicrosoftIdentityClient, MicrosoftProfile
+from ..services.auth_policy import require_password_sign_in
 from ..services.registration_verification import RegistrationDeliveryError, deliver_registration_code
 from ..storage.minio import MinioStorage
 from .workflow_catalog import DEFAULT_CIRCLE_ISSUE_STATUSES
@@ -373,6 +374,7 @@ async def request_registration_verification(
     request: Request,
     db: AsyncSession = Depends(get_session),
 ) -> JSONResponse:
+    require_password_sign_in(request.app.state.settings)
     name = _normalized_name(payload.name)
     email = _normalized_email(payload.email)
     timezone_name = _valid_timezone(payload.timezone) or 'UTC'
@@ -464,6 +466,7 @@ async def verify_registration(
     request: Request,
     db: AsyncSession = Depends(get_session),
 ) -> JSONResponse:
+    require_password_sign_in(request.app.state.settings)
     email = _normalized_email(payload.email)
     now = _utcnow()
     async with db.begin():
@@ -572,8 +575,21 @@ async def _upsert_microsoft_user(
         )
         user = identity.mappings().first()
         if not user:
-            user = await _find_user_by_email(db, profile.email)
+            # Email can bootstrap an unlinked account; subsequent logins must use tenant/object identity.
+            matches = (await db.execute(
+                text(f'SELECT {USER_COLUMNS} FROM users WHERE lower(email) = :email FOR UPDATE'),
+                {'email': profile.email.lower()},
+            )).mappings().all()
+            if len(matches) > 1:
+                raise ApiError(409, 'Multiple accounts use this email. Contact your administrator.', 'Conflict')
+            user = matches[0] if matches else None
             if user:
+                linked = (await db.execute(
+                    text("SELECT id FROM user_identities WHERE user_id = :id AND provider = 'MICROSOFT'"),
+                    {'id': user['id']},
+                )).first()
+                if linked:
+                    raise ApiError(409, 'This email is already linked to another Microsoft account.', 'Conflict')
                 await db.execute(
                     text(
                         '''INSERT INTO user_identities (
@@ -645,9 +661,23 @@ async def _upsert_microsoft_user(
 
         if user['status'] != 'ACTIVE':
             raise ApiError(403, 'This Flowie account is not active.', 'Forbidden')
+        collision = (await db.execute(
+            text('SELECT id FROM users WHERE lower(email) = :email AND id <> :id'),
+            {'email': profile.email.lower(), 'id': user['id']},
+        )).first()
+        if collision:
+            raise ApiError(409, 'This Microsoft email belongs to another Flowie account.', 'Conflict')
+        if user['password_hash']:
+            await db.execute(
+                text('UPDATE sessions SET revoked_at = :now WHERE user_id = :id AND revoked_at IS NULL'),
+                {'id': user['id'], 'now': now},
+            )
         await db.execute(
             text(
-                '''UPDATE users SET name = :name, timezone = COALESCE((SELECT preferences->>'timezone' FROM user_ui_preferences WHERE user_id=users.id), :timezone, timezone),
+                '''UPDATE users SET name = :name, email = :email,
+                       auth_version = auth_version + CASE WHEN password_hash IS NOT NULL THEN 1 ELSE 0 END,
+                       password_hash = NULL,
+                       timezone = COALESCE((SELECT preferences->>'timezone' FROM user_ui_preferences WHERE user_id=users.id), :timezone, timezone),
                        is_platform_admin = :is_platform_admin, email_verified_at = COALESCE(email_verified_at, :now),
                        last_login_at = :now, last_seen_at = :now, updated_at = :now
                    WHERE id = :id'''
@@ -655,10 +685,15 @@ async def _upsert_microsoft_user(
             {
                 'id': user['id'],
                 'name': profile.name,
+                'email': profile.email.lower(),
                 'timezone': timezone_name,
-                'is_platform_admin': _is_environment_admin(str(user['email']), settings),
+                'is_platform_admin': _is_environment_admin(profile.email, settings),
                 'now': now,
             },
+        )
+        await db.execute(
+            text("DELETE FROM user_identities WHERE user_id = :id AND provider = 'LOCAL'"),
+            {'id': user['id']},
         )
         await db.execute(
             text(
@@ -677,7 +712,8 @@ async def _upsert_microsoft_user(
 
 @router.get('/providers')
 async def auth_providers(request: Request) -> dict[str, dict[str, dict[str, bool]]]:
-    return {'data': {'microsoft': {'enabled': _microsoft_client(request.app.state.settings).enabled}}}
+    enabled = _microsoft_client(request.app.state.settings).enabled
+    return {'data': {'microsoft': {'enabled': enabled}, 'password': {'enabled': not enabled}}}
 
 
 @router.get('/microsoft/start')
@@ -736,7 +772,7 @@ async def microsoft_callback(
             timezone_name=stored.get('timezone'),
             settings=settings,
         )
-    except (RuntimeError, ValueError, httpx.HTTPError, IntegrityError) as error:
+    except (RuntimeError, ValueError, httpx.HTTPError, IntegrityError, ApiError) as error:
         await db.rollback()
         login = RedirectResponse(
             f'{settings.app_url}/auth/login?azure_error=Microsoft+sign-in+could+not+be+completed.',
@@ -790,6 +826,7 @@ async def microsoft_callback(
 
 @router.post('/login')
 async def login(payload: LoginInput, request: Request, db: AsyncSession = Depends(get_session)) -> JSONResponse:
+    require_password_sign_in(request.app.state.settings)
     from ..modules.identity.password_reset import limit_request
     from ..modules.identity.security.events import record_event
     settings = request.app.state.settings

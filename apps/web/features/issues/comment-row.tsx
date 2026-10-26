@@ -14,6 +14,7 @@ import { uploadAttachment } from '@/lib/attachments';
 import { useCurrentUserId } from '@/components/common/my-issues/use-my-issues';
 import { commentHistory, editComment, removeComment, type IssueComment } from './comments-api';
 import { SubmissionGate } from '@/features/shared/submission-gate';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 export function CommentRow({
    comment,
@@ -51,8 +52,19 @@ export function CommentRow({
       }
    };
    return (
-      <VStack as="article" gap={2} paddingBlock={3}>
-         <HStack gap={2}>
+      <VStack
+         as="article"
+         gap={3}
+         padding={4}
+         className="min-w-0 rounded-lg border border-border/60 bg-background"
+      >
+         <HStack gap={2} wrap="wrap">
+            <Avatar className="size-6 shrink-0">
+               <AvatarImage src={comment.author.avatarUrl ?? undefined} alt={comment.author.name} />
+               <AvatarFallback className="text-xs">
+                  {comment.author.name.slice(0, 1)}
+               </AvatarFallback>
+            </Avatar>
             <Text weight="medium">{comment.author.name}</Text>
             <Text type="supporting">
                {relativeTime(comment.createdAt, Date.now(), locale)}
@@ -77,15 +89,18 @@ export function CommentRow({
                </HStack>
             </>
          ) : (
-            <MarkdownPreview content={comment.content} />
+            <MarkdownPreview content={comment.content} appearance="issue" />
          )}
-         <HStack gap={2} wrap="wrap">
-            {!comment.parentCommentId && <Button label={tx('Reply')} size="sm" onClick={onReply} />}
+         <HStack gap={1} wrap="wrap" className="text-muted-foreground">
+            {!comment.parentCommentId && (
+               <Button label={tx('Reply')} size="sm" variant="ghost" onClick={onReply} />
+            )}
             {own && (
                <>
                   <Button
                      label={tx('Edit comment')}
                      size="sm"
+                     variant="ghost"
                      onClick={() => {
                         setDraft(comment.content);
                         setEditing(true);
@@ -94,6 +109,7 @@ export function CommentRow({
                   <Button
                      label={tx('Delete comment')}
                      size="sm"
+                     variant="ghost"
                      onClick={() => setConfirmDelete(true)}
                   />
                </>
@@ -101,6 +117,7 @@ export function CommentRow({
             <Button
                label={history ? tx('Hide comment history') : tx('Comment history')}
                size="sm"
+               variant="ghost"
                clickAction={() =>
                   action(async () => {
                      setHistory(
@@ -113,6 +130,7 @@ export function CommentRow({
                <Button
                   label={tx('Attach to comment')}
                   size="sm"
+                  variant="ghost"
                   isLoading={uploading}
                   onClick={() => picker.current?.click()}
                />

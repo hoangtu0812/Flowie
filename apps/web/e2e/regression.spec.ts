@@ -281,7 +281,8 @@ test('structured bug fields and comment attachments persist through the API', as
    await page.goto(`/${fixture.slug}/issue/${issue.identifier}`);
    await page.getByRole('button', { name: 'Edit type and bug details', exact: true }).click();
    await page.getByRole('button', { name: 'Bug', exact: true }).click();
-   await page.getByRole('button', { name: 'CRITICAL', exact: true }).click();
+   await page.getByRole('combobox', { name: 'Severity', exact: true }).click();
+   await page.getByRole('option', { name: 'CRITICAL', exact: true }).click();
    await page.getByLabel('Environment', { exact: true }).fill('Windows / Chromium regression');
    await page
       .getByLabel('Steps to reproduce', { exact: true })
@@ -571,12 +572,12 @@ test('account preferences synchronize on a separate browser context and home nav
          .toBe('my-issues');
       second = await browser.newContext();
       const device = await second.newPage();
-      await device.goto('http://localhost:3000/auth/login');
+      await device.goto(new URL('/auth/login', page.url()).href);
       await device.getByLabel('Email', { exact: true }).fill(fixture.email);
       await device.getByLabel('Password', { exact: true }).fill(fixture.password);
       await device.getByRole('button', { name: 'Sign in', exact: true }).click();
       await expect(device).toHaveURL(new RegExp(`/${fixture.slug}/my-issues`));
-      await device.goto(`http://localhost:3000/${fixture.slug}/settings/preferences`);
+      await device.goto(new URL(`/${fixture.slug}/settings/preferences`, page.url()).href);
       await expect(
          device.getByRole('checkbox', { name: 'Underline links', exact: true })
       ).toBeEnabled();
@@ -628,7 +629,7 @@ test('Inbox snooze persists and notification channel availability is real', asyn
       page.getByText('Private SMTP delivery is not configured.', { exact: true })
    ).toBeVisible();
    if (browserName !== 'chromium') return;
-   await context.grantPermissions(['notifications'], { origin: 'http://localhost:3000' });
+   await context.grantPermissions(['notifications'], { origin: new URL(page.url()).origin });
    await page.getByRole('checkbox', { name: 'Desktop notifications', exact: true }).check();
    await expect
       .poll(

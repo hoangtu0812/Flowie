@@ -43,26 +43,26 @@ export function StatusSelector({ status, onChange, counts }: StatusSelectorProps
    };
 
    return (
-      <div className="*:not-first:mt-2">
+      <div className="min-w-0 max-w-full">
          <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
                <Button
                   id={id}
-                  className="flex items-center justify-center"
+                  className="h-8 max-w-full gap-1.5 rounded-md px-2 text-xs font-normal shadow-none [&>span]:truncate"
                   size="xs"
-                  variant="secondary"
+                  variant="outline"
                   role="combobox"
                   aria-expanded={open}
                >
                   {(() => {
-                     const selectedItem = allStatus.find((item) => item.id === value);
+                     const selectedItem = allStatus.find((item) => item.id === value) ?? status;
                      if (selectedItem) {
                         const Icon = selectedItem.icon;
                         return <Icon />;
                      }
                      return null;
                   })()}
-                  <span>{value ? allStatus.find((s) => s.id === value)?.name : 'To do'}</span>
+                  <span>{allStatus.find((s) => s.id === value)?.name ?? status.name}</span>
                </Button>
             </PopoverTrigger>
             <PopoverContent

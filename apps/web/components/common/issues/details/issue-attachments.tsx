@@ -29,12 +29,17 @@ export function IssueAttachments({ issueId }: { issueId: string }) {
             label="Attach file"
             size="sm"
             variant="ghost"
+            className="self-start text-muted-foreground"
             onClick={() => picker.current?.click()}
             isDisabled={!workspaceId}
             isLoading={state.uploading}
          />
          {state.error && <Text role="alert">{state.error}</Text>}
-         {state.attachments.length > 0 && <Heading level={2}>Attachments</Heading>}
+         {state.attachments.length > 0 && (
+            <Heading level={4} accessibilityLevel={2}>
+               Attachments
+            </Heading>
+         )}
          {state.attachments.map((attachment) => (
             <a
                key={attachment.id}

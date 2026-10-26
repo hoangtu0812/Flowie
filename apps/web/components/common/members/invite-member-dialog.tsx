@@ -9,9 +9,9 @@ import {
    DialogHeader,
    DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
+import { InvitationUserPicker, type InvitationUser } from './invitation-user-picker';
 import { useMembersData } from '@/features/members/members-data';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 export function InviteMemberDialog({
@@ -22,17 +22,21 @@ export function InviteMemberDialog({
    onOpenChange: (open: boolean) => void;
 }) {
    const { inviteMember, workspaceLoading, workspaceId } = useMembersData();
-   const [email, setEmail] = useState('');
+   const [person, setPerson] = useState<InvitationUser | null>(null);
    const [role, setRole] = useState<'MEMBER' | 'ADMIN'>('MEMBER');
    const [submitting, setSubmitting] = useState(false);
+   useEffect(() => {
+      setPerson(null);
+      setRole('MEMBER');
+   }, [open, workspaceId]);
    const submit = async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
-      if (!email.trim()) return;
+      if (!person || submitting || workspaceLoading || !workspaceId) return;
       setSubmitting(true);
       try {
-         await inviteMember(email, role);
+         await inviteMember(person.email, role);
          toast.success('Invitation created.');
-         setEmail('');
+         setPerson(null);
          onOpenChange(false);
       } catch (error) {
          toast.error(error instanceof Error ? error.message : 'Could not invite this person.');
@@ -48,16 +52,15 @@ export function InviteMemberDialog({
                <DialogDescription>The person must already have a Flowie account.</DialogDescription>
             </DialogHeader>
             <form className="grid gap-4" onSubmit={submit}>
-               <label className="grid gap-1.5 text-sm font-medium">
-                  Email
-                  <Input
-                     autoFocus
-                     type="email"
-                     value={email}
-                     onChange={(event) => setEmail(event.target.value)}
-                     required
+               {open && workspaceId && (
+                  <InvitationUserPicker
+                     key={workspaceId}
+                     workspaceId={workspaceId}
+                     value={person}
+                     onChange={setPerson}
+                     disabled={submitting || workspaceLoading}
                   />
-               </label>
+               )}
                <label className="grid gap-1.5 text-sm font-medium">
                   Role
                   <select
@@ -80,7 +83,7 @@ export function InviteMemberDialog({
                   </Button>
                   <Button
                      type="submit"
-                     disabled={submitting || workspaceLoading || !workspaceId || !email.trim()}
+                     disabled={submitting || workspaceLoading || !workspaceId || !person}
                   >
                      {submitting ? 'Inviting…' : workspaceLoading ? 'Loading workspace…' : 'Invite'}
                   </Button>

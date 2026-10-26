@@ -24,8 +24,9 @@ an ephemeral test-only key; this is not production configuration.
 
 ## Proof and session behavior
 
-Enrollment requires the account password, or a Microsoft authentication within
-five minutes for SSO-only accounts, followed by a valid pending TOTP. Explicit
+Enrollment requires the account password when local sign-in is available, or a
+Microsoft authentication within five minutes for SSO-only accounts and whenever
+Entra sign-in is enabled, followed by a valid pending TOTP. Explicit
 Microsoft reauthentication requests `prompt=login` and `max_age=0`; only the
 validated ID token's `auth_time` can provide that proof. Token issuance,
 background refresh and a new local browser session do not count as fresh SSO.

@@ -34,7 +34,7 @@ async def setup(db, actor, password, request, settings):
     configured = await factor(db, user["id"], lock=True)
     if configured and configured["enabled_at"]:
         raise ApiError(409, "Authenticator is already enabled.", "Conflict")
-    await first_factor(db, user, actor, password, request)
+    await first_factor(db, user, actor, password, request, settings)
     secret, expires = new_secret(), _utcnow() + timedelta(minutes=10)
     cipher = encrypt_secret(settings, user["id"], secret)
     await db.execute(
@@ -55,7 +55,7 @@ async def enable(db, actor, payload, request, settings):
     configured = await factor(db, user["id"], lock=True)
     if configured and configured["enabled_at"]:
         raise ApiError(409, "Authenticator is already enabled.", "Conflict")
-    method, proof = await first_factor(db, user, actor, payload.password, request)
+    method, proof = await first_factor(db, user, actor, payload.password, request, settings)
     if (
         not configured
         or not configured["pending_until"]
@@ -95,7 +95,7 @@ async def change(db, actor, payload, request, settings, *, disable=False):
     configured = await factor(db, user["id"], lock=True)
     if not configured or not configured["enabled_at"]:
         raise ApiError(409, "Authenticator is not enabled.", "Conflict")
-    await first_factor(db, user, actor, payload.password, request)
+    await first_factor(db, user, actor, payload.password, request, settings)
     if not await consume_factor(
         db, configured, user["id"], payload.code, payload.kind, settings
     ):

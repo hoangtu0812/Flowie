@@ -11,6 +11,7 @@ import { AuthCard } from '@/components/auth/auth-card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PasswordAuthBoundary } from '@/features/identity/auth-providers';
 
 type AuthPayload = {
    data: { workspace: { slug: string } | null; user: { isPlatformAdmin: boolean } };
@@ -23,6 +24,14 @@ type VerificationPayload = {
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 export default function RegisterPage() {
+   return (
+      <PasswordAuthBoundary>
+         <RegisterForm />
+      </PasswordAuthBoundary>
+   );
+}
+
+function RegisterForm() {
    const { t } = useLocale();
    const router = useRouter();
    const [error, setError] = useState<string | null>(null);

@@ -1,5 +1,15 @@
 export type Locale = 'en' | 'vi';
 const catalog = {
+   loadingSignInOptions: ['Loading sign-in options…', 'Đang tải phương thức đăng nhập…'],
+   signInOptionsUnavailable: [
+      'Could not load sign-in options. Please try again.',
+      'Không thể tải phương thức đăng nhập. Vui lòng thử lại.',
+   ],
+   retrySignInOptions: ['Retry', 'Thử lại'],
+   microsoftOnly: [
+      'Your organization uses Microsoft sign-in. Your existing work stays with your account.',
+      'Tổ chức của bạn sử dụng đăng nhập Microsoft. Dữ liệu công việc hiện có vẫn được giữ nguyên.',
+   ],
    registerFailed: ['Could not create the account.', 'Không thể tạo tài khoản.'],
    verifyFailed: ['Could not verify the code.', 'Không thể xác thực mã.'],
    verifyRegistration: ['Verify registration', 'Xác thực đăng ký'],

@@ -7,6 +7,7 @@ from sqlalchemy import text
 
 from .....core.clock import _utcnow
 from .....core.errors import ApiError
+from .....services.auth_policy import microsoft_sign_in_enabled
 from ..events import record_event
 from .crypto import decrypt_secret, matching_counter, recovery_hash
 
@@ -22,10 +23,10 @@ async def reject(db, user, request, method="AUTHENTICATOR"):
     )
 
 
-async def first_factor(db, user, actor, password, request):
+async def first_factor(db, user, actor, password, request, settings):
     from .....core.passwords import verify_password
 
-    if user["password_hash"]:
+    if user["password_hash"] and not microsoft_sign_in_enabled(settings):
         if not await asyncio.to_thread(
             verify_password, user["password_hash"], password or ""
         ):

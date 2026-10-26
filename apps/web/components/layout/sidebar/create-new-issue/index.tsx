@@ -2,9 +2,17 @@
 
 import { useMessages } from '@/features/shared/use-messages';
 import { messages } from '@/features/issues/messages.vi';
-import { BugFieldsForm, emptyBug, type BugFields } from '@/features/issues/bug-fields';
+import {
+   BugFieldsForm,
+   IssueTypeSelector,
+   emptyBug,
+   type BugFields,
+} from '@/features/issues/bug-fields';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader } from '@/components/ui/dialog';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { HStack, VStack } from '@astryxdesign/core/Layout';
+import { Text } from '@astryxdesign/core/Text';
+import { DesignSurface } from '@/components/common/design-surface';
 import {
    DropdownMenu,
    DropdownMenuContent,
@@ -28,7 +36,7 @@ import { ProjectOption, ProjectSelector } from './project-selector';
 import { LabelSelector } from './label-selector';
 import { DialogTitle } from '@radix-ui/react-dialog';
 import { useParams } from 'next/navigation';
-import { Box, Loader2 } from 'lucide-react';
+import { Box, ChevronDown, Loader2 } from 'lucide-react';
 import { LabelInterface } from '@/mock-data/labels';
 import { Priority } from '@/mock-data/priorities';
 import { User } from '@/mock-data/users';
@@ -301,109 +309,147 @@ export function CreateNewIssue() {
             else if (!creating) closeModal();
          }}
       >
-         <DialogContent className="w-full sm:max-w-3xl p-0 shadow-xl max-h-svh overflow-y-auto">
-            <DialogHeader>
-               <DialogTitle>
-                  <div className="flex items-center px-4 pt-4 gap-2">
-                     <DropdownMenu>
-                        <DropdownMenuTrigger asChild disabled={!context}>
-                           <Button size="sm" variant="outline" className="gap-1.5">
-                              <span>{context?.team.icon ?? '👥'}</span>
-                              <span className="font-medium">
-                                 {context?.team.identifier ?? tx('Loading…')}
-                              </span>
-                           </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-56">
-                           {(context?.teams ?? []).map((team) => (
-                              <DropdownMenuItem key={team.id} onClick={() => void selectTeam(team)}>
-                                 <span>{team.icon ?? '👥'}</span>
-                                 <span className="truncate">{team.name}</span>
-                                 <span className="ml-auto text-xs text-muted-foreground">
-                                    {team.identifier}
-                                 </span>
-                              </DropdownMenuItem>
-                           ))}
-                        </DropdownMenuContent>
-                     </DropdownMenu>
-                  </div>
-               </DialogTitle>
-            </DialogHeader>
+         <DialogContent className="flex w-full sm:max-w-2xl flex-col gap-0 p-0 shadow-xl max-h-svh overflow-hidden rounded-xl">
+            <HStack
+               gap={3}
+               padding={4}
+               wrap="wrap"
+               align="center"
+               className="shrink-0 border-b border-border/60 pr-12"
+            >
+               <DialogTitle className="text-sm font-medium">{tx('Create issue')}</DialogTitle>
+               <DropdownMenu>
+                  <DropdownMenuTrigger asChild disabled={!context}>
+                     <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 gap-1.5 rounded-md px-2 text-xs shadow-none"
+                     >
+                        <span>{context?.team.icon ?? '👥'}</span>
+                        <span className="font-medium">
+                           {context?.team.identifier ?? tx('Loading…')}
+                        </span>
+                        <ChevronDown className="size-3 text-muted-foreground" aria-hidden="true" />
+                     </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-56">
+                     {(context?.teams ?? []).map((team) => (
+                        <DropdownMenuItem key={team.id} onClick={() => void selectTeam(team)}>
+                           <span>{team.icon ?? '👥'}</span>
+                           <span className="truncate">{team.name}</span>
+                           <span className="ml-auto text-xs text-muted-foreground">
+                              {team.identifier}
+                           </span>
+                        </DropdownMenuItem>
+                     ))}
+                  </DropdownMenuContent>
+               </DropdownMenu>
+            </HStack>
 
-            <div className="px-4 pb-0 space-y-3 w-full">
-               <BugFieldsForm value={bug} onChange={setBug} disabled={creating} />
-               <Input
-                  className="border-none w-full shadow-none outline-none text-2xl font-medium px-0 h-auto focus-visible:ring-0 overflow-hidden text-ellipsis whitespace-normal break-words"
-                  aria-label={tx('Issue title')}
-                  placeholder={tx('Issue title')}
-                  value={addIssueForm.title}
-                  disabled={creating}
-                  onChange={(e) => setAddIssueForm({ ...addIssueForm, title: e.target.value })}
-               />
+            <VStack gap={5} padding={5} className="min-h-0 overflow-y-auto overscroll-contain">
+               <DesignSurface>
+                  <IssueTypeSelector value={bug} onChange={setBug} disabled={creating} />
+               </DesignSurface>
+               <VStack gap={2}>
+                  <Input
+                     className="border-none w-full rounded-none shadow-none outline-none text-xl md:text-xl font-semibold px-0 h-auto py-1 focus-visible:ring-0 placeholder:text-muted-foreground/70"
+                     aria-label={tx('Issue title')}
+                     placeholder={tx('Issue title')}
+                     value={addIssueForm.title}
+                     disabled={creating}
+                     onChange={(e) => setAddIssueForm({ ...addIssueForm, title: e.target.value })}
+                  />
 
-               <Textarea
-                  className="border-none w-full shadow-none outline-none resize-none px-0 min-h-16 focus-visible:ring-0 break-words whitespace-normal overflow-wrap"
-                  aria-label={tx('Issue description')}
-                  placeholder={tx('Add description...')}
-                  value={addIssueForm.description}
-                  disabled={creating}
-                  onChange={(e) =>
-                     setAddIssueForm({ ...addIssueForm, description: e.target.value })
-                  }
-               />
-
-               <div className="w-full flex items-center justify-start gap-1.5 flex-wrap">
-                  <StatusSelector
-                     status={addIssueForm.status}
-                     counts={statusCounts}
-                     onChange={(newStatus) =>
-                        setAddIssueForm({ ...addIssueForm, status: newStatus })
+                  <Textarea
+                     className="border-none w-full rounded-none shadow-none outline-none resize-none px-0 min-h-28 focus-visible:ring-0 break-words whitespace-pre-wrap leading-relaxed placeholder:text-muted-foreground/70"
+                     aria-label={tx('Issue description')}
+                     placeholder={tx('Add description...')}
+                     value={addIssueForm.description}
+                     disabled={creating}
+                     onChange={(e) =>
+                        setAddIssueForm({ ...addIssueForm, description: e.target.value })
                      }
                   />
-                  <PrioritySelector
-                     priority={addIssueForm.priority}
-                     onChange={(newPriority) =>
-                        setAddIssueForm({ ...addIssueForm, priority: newPriority })
-                     }
-                  />
-                  <AssigneeSelector
-                     assignee={addIssueForm.assignee}
-                     users={liveUsers}
-                     teamIdentifier={context?.team.identifier}
-                     onChange={(newAssignee) =>
-                        setAddIssueForm({ ...addIssueForm, assignee: newAssignee })
-                     }
-                  />
-                  <ProjectSelector
-                     project={addIssueForm.project}
-                     projects={liveProjects}
-                     onChange={(newProject) =>
-                        setAddIssueForm({ ...addIssueForm, project: newProject })
-                     }
-                  />
-                  <LabelSelector
-                     selectedLabels={addIssueForm.labels}
-                     labels={context?.options.labels ?? []}
-                     onChange={(newLabels) =>
-                        setAddIssueForm({ ...addIssueForm, labels: newLabels })
-                     }
-                  />
-               </div>
-            </div>
-            <div className="flex items-center justify-between py-2.5 px-4 w-full border-t">
-               <div className="flex items-center gap-2">
-                  <div className="flex items-center space-x-2">
-                     <Switch
-                        id="create-more"
-                        checked={createMore}
+               </VStack>
+               {bug.issueType === 'BUG' && (
+                  <VStack padding={4} className="rounded-lg border border-border/60 bg-muted/10">
+                     <BugFieldsForm
+                        value={bug}
+                        onChange={setBug}
                         disabled={creating}
-                        onCheckedChange={setCreateMore}
+                        showTypeSelector={false}
                      />
-                     <Label htmlFor="create-more">{tx('Create more')}</Label>
-                  </div>
-               </div>
+                  </VStack>
+               )}
+
+               <VStack gap={2} className="border-t border-border/50 pt-4">
+                  <Text type="supporting" weight="medium">
+                     {tx('Properties')}
+                  </Text>
+                  <HStack gap={2} wrap="wrap" className="min-w-0">
+                     <StatusSelector
+                        status={addIssueForm.status}
+                        counts={statusCounts}
+                        onChange={(newStatus) =>
+                           setAddIssueForm({ ...addIssueForm, status: newStatus })
+                        }
+                     />
+                     <PrioritySelector
+                        priority={addIssueForm.priority}
+                        onChange={(newPriority) =>
+                           setAddIssueForm({ ...addIssueForm, priority: newPriority })
+                        }
+                     />
+                     <AssigneeSelector
+                        assignee={addIssueForm.assignee}
+                        users={liveUsers}
+                        teamIdentifier={context?.team.identifier}
+                        onChange={(newAssignee) =>
+                           setAddIssueForm({ ...addIssueForm, assignee: newAssignee })
+                        }
+                     />
+                     <ProjectSelector
+                        project={addIssueForm.project}
+                        projects={liveProjects}
+                        onChange={(newProject) =>
+                           setAddIssueForm({ ...addIssueForm, project: newProject })
+                        }
+                     />
+                     <LabelSelector
+                        selectedLabels={addIssueForm.labels}
+                        labels={context?.options.labels ?? []}
+                        onChange={(newLabels) =>
+                           setAddIssueForm({ ...addIssueForm, labels: newLabels })
+                        }
+                     />
+                  </HStack>
+               </VStack>
+            </VStack>
+            <HStack
+               justify="between"
+               align="center"
+               gap={3}
+               paddingInline={5}
+               paddingBlock={3}
+               className="shrink-0 border-t border-border/60 bg-muted/20"
+            >
+               <HStack gap={2} align="center">
+                  <Switch
+                     id="create-more"
+                     checked={createMore}
+                     disabled={creating}
+                     onCheckedChange={setCreateMore}
+                  />
+                  <Label
+                     htmlFor="create-more"
+                     className="text-xs font-normal text-muted-foreground"
+                  >
+                     {tx('Create more')}
+                  </Label>
+               </HStack>
                <Button
                   size="sm"
+                  className="rounded-md px-4 shadow-sm"
                   disabled={creating}
                   aria-busy={creating}
                   onClick={() => {
@@ -419,7 +465,7 @@ export function CreateNewIssue() {
                      tx('Create issue')
                   )}
                </Button>
-            </div>
+            </HStack>
          </DialogContent>
       </Dialog>
    );
