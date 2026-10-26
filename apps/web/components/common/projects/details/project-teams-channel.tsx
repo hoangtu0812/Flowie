@@ -1,9 +1,11 @@
 'use client';
 
 import {
+   Pending,
    TEAMS_WEBHOOK_PLACEHOLDER,
+   TeamsTestButton,
    microsoftSignInEnabled,
-   testTeamsDelivery,
+   withTeamsToast,
    type TeamsStatus,
 } from '@/components/settings/teams-integration';
 import { Button } from '@/components/ui/button';
@@ -18,6 +20,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { responseData } from '@/lib/http';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import { MessagesSquare } from 'lucide-react';
 import { useParams } from 'next/navigation';
@@ -44,8 +47,7 @@ export function ProjectTeamsChannel({
    const [url, setUrl] = useState('');
    const [channelName, setChannelName] = useState('');
    const [enabled, setEnabled] = useState(true);
-   const [saving, setSaving] = useState(false);
-   const [message, setMessage] = useState<string>();
+   const [pending, setPending] = useState<'save' | 'disconnect'>();
 
    useEffect(() => {
       let current = true;
@@ -74,37 +76,42 @@ export function ProjectTeamsChannel({
       setUrl('');
       setChannelName(status?.channelName ?? '');
       setEnabled(status?.enabled ?? true);
-      setMessage(undefined);
       setOpen(true);
    }
 
    async function save(event: FormEvent) {
       event.preventDefault();
-      setSaving(true);
-      setMessage(undefined);
-      const response = await authenticatedFetch(`${endpoint}${query}`, {
-         method: 'PUT',
-         headers: { 'content-type': 'application/json' },
-         body: JSON.stringify({ ...(url ? { webhookUrl: url } : {}), channelName, enabled }),
-      });
-      setSaving(false);
-      if (!response.ok) {
-         setMessage('Could not save. Check the Workflows webhook URL and your project role.');
-         return;
-      }
-      setStatus(((await response.json()) as { data: TeamsStatus }).data);
+      setPending('save');
+      const saved = await withTeamsToast(
+         authenticatedFetch(`${endpoint}${query}`, {
+            method: 'PUT',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ ...(url ? { webhookUrl: url } : {}), channelName, enabled }),
+         }).then((response) =>
+            responseData<TeamsStatus>(response, 'Could not save the Microsoft Teams channel.')
+         ),
+         'Saving Microsoft Teams channel…',
+         'Microsoft Teams channel saved.'
+      );
+      setPending(undefined);
+      if (!saved) return;
+      setStatus(saved);
       setUrl('');
-      setMessage('Microsoft Teams channel saved.');
    }
 
    async function disconnect() {
-      setSaving(true);
-      const response = await authenticatedFetch(`${endpoint}${query}`, { method: 'DELETE' });
-      setSaving(false);
-      if (!response.ok) {
-         setMessage('Could not disconnect the channel.');
-         return;
-      }
+      setPending('disconnect');
+      const removed = await withTeamsToast(
+         authenticatedFetch(`${endpoint}${query}`, { method: 'DELETE' })
+            .then((response) =>
+               responseData<null>(response, 'Could not disconnect the Microsoft Teams channel.')
+            )
+            .then(() => true),
+         'Disconnecting Microsoft Teams channel…',
+         'Microsoft Teams channel disconnected.'
+      );
+      setPending(undefined);
+      if (!removed) return;
       setStatus(null);
       setOpen(false);
    }
@@ -170,7 +177,6 @@ export function ProjectTeamsChannel({
                      <p className="text-sm font-medium">Send notifications to this channel</p>
                      <Switch checked={enabled} onCheckedChange={setEnabled} />
                   </div>
-                  {message && <p className="text-sm text-muted-foreground">{message}</p>}
                </form>
                <DialogFooter className="gap-2 sm:justify-between">
                   {status ? (
@@ -178,22 +184,13 @@ export function ProjectTeamsChannel({
                         <Button
                            type="button"
                            variant="outline"
-                           disabled={saving}
+                           disabled={Boolean(pending)}
                            onClick={() => void disconnect()}
                         >
-                           Disconnect
+                           {pending === 'disconnect' && <Pending />}
+                           {pending === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}
                         </Button>
-                        <Button
-                           type="button"
-                           variant="outline"
-                           onClick={() =>
-                              void testTeamsDelivery(`/projects/${projectId}/test${query}`).then(
-                                 setMessage
-                              )
-                           }
-                        >
-                           Send test
-                        </Button>
+                        <TeamsTestButton path={`/projects/${projectId}/test${query}`} />
                      </div>
                   ) : (
                      <span />
@@ -201,9 +198,10 @@ export function ProjectTeamsChannel({
                   <Button
                      type="submit"
                      form="project-teams-channel"
-                     disabled={saving || (!status && !url)}
+                     disabled={Boolean(pending) || (!status && !url)}
                   >
-                     {saving ? 'Saving…' : 'Save'}
+                     {pending === 'save' && <Pending />}
+                     {pending === 'save' ? 'Saving…' : 'Save'}
                   </Button>
                </DialogFooter>
             </DialogContent>
