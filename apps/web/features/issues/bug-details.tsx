@@ -20,7 +20,7 @@ export function BugDetails({ issue }: { issue: Issue }) {
    const update = useIssuesStore((state) => state.updateIssueBug);
    return (
       <VStack gap={3} as="section">
-         <Heading level={2}>
+         <Heading level={4} accessibilityLevel={2}>
             {issue.issueType === 'BUG' ? tx('Bug report') : tx('Task details')}
          </Heading>
          {editing ? (
@@ -84,6 +84,8 @@ export function BugDetails({ issue }: { issue: Issue }) {
                <Button
                   label={tx('Edit type and bug details')}
                   variant="ghost"
+                  size="sm"
+                  className="self-start text-muted-foreground"
                   onClick={() => {
                      setDraft({
                         issueType: issue.issueType ?? 'TASK',

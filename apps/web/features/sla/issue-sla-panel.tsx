@@ -120,7 +120,9 @@ function ClockPanel({ workspace, issue }: { workspace: string; issue: Issue }) {
    const current = data?.current;
    return (
       <VStack as="section" gap={3} width="100%" aria-label={tx('Issue SLA')}>
-         <Heading level={2}>{tx('Service level')}</Heading>
+         <Heading level={4} accessibilityLevel={2}>
+            {tx('Service level')}
+         </Heading>
          {data ? (
             <>
                <HStack gap={2} wrap="wrap">

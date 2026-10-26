@@ -281,7 +281,8 @@ test('structured bug fields and comment attachments persist through the API', as
    await page.goto(`/${fixture.slug}/issue/${issue.identifier}`);
    await page.getByRole('button', { name: 'Edit type and bug details', exact: true }).click();
    await page.getByRole('button', { name: 'Bug', exact: true }).click();
-   await page.getByRole('button', { name: 'CRITICAL', exact: true }).click();
+   await page.getByRole('combobox', { name: 'Severity', exact: true }).click();
+   await page.getByRole('option', { name: 'CRITICAL', exact: true }).click();
    await page.getByLabel('Environment', { exact: true }).fill('Windows / Chromium regression');
    await page
       .getByLabel('Steps to reproduce', { exact: true })

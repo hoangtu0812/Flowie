@@ -69,7 +69,8 @@ export function IssueDescription({ issue }: { issue: Issue }) {
    return (
       <VStack
          gap={3}
-         paddingBlock={4}
+         paddingBlock={0}
+         className="min-w-0"
          onKeyDown={(event) => {
             if (!editing || event.nativeEvent.isComposing || saving) return;
             if (event.key === 'Escape') {
@@ -118,13 +119,15 @@ export function IssueDescription({ issue }: { issue: Issue }) {
          ) : (
             <>
                {issue.description.trim() ? (
-                  <MarkdownPreview content={issue.description} />
+                  <MarkdownPreview content={issue.description} appearance="issue" />
                ) : (
                   <Text type="supporting">{tx('No description yet.')}</Text>
                )}
                <Button
                   label={tx('Edit description')}
                   variant="ghost"
+                  size="sm"
+                  className="self-start text-muted-foreground"
                   onClick={() => setEditing(true)}
                />
             </>

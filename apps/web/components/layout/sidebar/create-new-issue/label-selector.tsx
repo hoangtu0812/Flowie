@@ -14,7 +14,8 @@ import { useIssuesStore } from '@/store/issues-store';
 import { LabelInterface, labels } from '@/mock-data/labels';
 import { CheckIcon, TagIcon } from 'lucide-react';
 import { useId, useState } from 'react';
-import { cn } from '@/lib/utils';
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/issues/messages.vi';
 
 interface LabelSelectorProps {
    selectedLabels: LabelInterface[];
@@ -27,6 +28,7 @@ export function LabelSelector({
    onChange,
    labels: availableLabels = labels,
 }: LabelSelectorProps) {
+   const tx = useMessages(messages);
    const id = useId();
    const [open, setOpen] = useState<boolean>(false);
 
@@ -46,21 +48,20 @@ export function LabelSelector({
    };
 
    return (
-      <div className="*:not-first:mt-2">
+      <div className="min-w-0 max-w-full">
          <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
                <Button
                   id={id}
-                  className={cn(
-                     'flex items-center justify-center',
-                     selectedLabels.length === 0 && 'size-7'
-                  )}
-                  size={selectedLabels.length > 0 ? 'xs' : 'icon'}
-                  variant="secondary"
+                  className="h-8 max-w-full gap-1.5 rounded-md px-2 text-xs font-normal shadow-none"
+                  size="xs"
+                  variant="outline"
                   role="combobox"
+                  aria-label={tx('Labels')}
                   aria-expanded={open}
                >
                   <TagIcon className="size-4" />
+                  {tx('Labels')}
                   {selectedLabels.length > 0 && (
                      <div className="flex -space-x-0.5">
                         {selectedLabels.map((label) => (

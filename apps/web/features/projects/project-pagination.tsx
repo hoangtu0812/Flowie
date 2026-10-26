@@ -18,7 +18,14 @@ export function ProjectPagination() {
    if (!projectPage) return null;
    return (
       <DesignSurface>
-         <HStack padding={3} gap={3} justify="between" wrap="wrap">
+         <HStack
+            paddingInline={4}
+            paddingBlock={2}
+            gap={3}
+            justify="between"
+            wrap="wrap"
+            className="border-b border-border/50"
+         >
             <Text type="supporting">
                Loaded projects: {allProjects.length} of {projectPage.total}. Filters and reports
                apply to loaded projects.

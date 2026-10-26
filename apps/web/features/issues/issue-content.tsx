@@ -24,10 +24,17 @@ export function IssueContent({
 }) {
    const detail = { identifier: issue.identifier, description: [], activity: [] };
    return (
-      <HStack height="100%" gap={0} align="stretch">
-         <VStack width="100%" isScrollable>
-            <VStack maxWidth="90ch" padding={6} gap={4}>
-               <Heading level={compact ? 2 : 1}>{issue.title}</Heading>
+      <HStack height="100%" gap={0} align="stretch" className="min-h-0 min-w-0 overflow-hidden">
+         <VStack isScrollable className="min-h-0 min-w-0 flex-1" align="center">
+            <VStack
+               width="100%"
+               maxWidth={768}
+               gap={6}
+               className={compact ? 'px-5 py-6' : 'px-5 py-8 sm:px-8 sm:py-10'}
+            >
+               <Heading level={compact ? 2 : 1} textWrap="balance" className="break-words">
+                  {issue.title}
+               </Heading>
                <MobileIssueProperties issue={issue} detail={detail} allScreens={compact} />
                <IssueDescription issue={issue} />
                <BugDetails key={issue.id} issue={issue} />
@@ -42,7 +49,13 @@ export function IssueContent({
             </VStack>
          </VStack>
          {!compact && (
-            <VStack as="aside" width={320} isScrollable padding={5} className="hidden lg:flex">
+            <VStack
+               as="aside"
+               width={304}
+               isScrollable
+               padding={5}
+               className="hidden min-h-0 shrink-0 border-l border-border/60 bg-muted/10 lg:flex"
+            >
                <IssuePropertiesPanel issue={issue} detail={detail} />
             </VStack>
          )}

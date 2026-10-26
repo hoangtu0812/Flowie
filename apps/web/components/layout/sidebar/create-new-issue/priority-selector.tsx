@@ -42,14 +42,14 @@ export function PrioritySelector({ priority, onChange }: PrioritySelectorProps) 
    };
 
    return (
-      <div className="*:not-first:mt-2">
+      <div className="min-w-0 max-w-full">
          <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
                <Button
                   id={id}
-                  className="flex items-center justify-center"
+                  className="h-8 max-w-full gap-1.5 rounded-md px-2 text-xs font-normal shadow-none [&>span]:truncate"
                   size="xs"
-                  variant="secondary"
+                  variant="outline"
                   role="combobox"
                   aria-expanded={open}
                >

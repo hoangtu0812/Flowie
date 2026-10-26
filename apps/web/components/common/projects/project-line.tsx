@@ -27,10 +27,10 @@ export default function ProjectLine({ project }: ProjectLineProps) {
    };
 
    return (
-      <div className="w-full flex items-center py-3 px-6 border-b hover:bg-sidebar/50 border-muted-foreground/5 text-sm">
+      <div className="w-full flex items-center py-2.5 px-6 border-b hover:bg-muted/30 border-border/40 text-sm transition-colors">
          <div className="flex-1 min-w-0 flex items-center gap-2">
             <div className="relative">
-               <div className="inline-flex size-6 bg-muted/50 items-center justify-center rounded shrink-0">
+               <div className="inline-flex size-6 bg-muted/30 items-center justify-center rounded shrink-0 text-muted-foreground">
                   <project.icon className="size-4" />
                </div>
             </div>
