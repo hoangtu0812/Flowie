@@ -28,6 +28,16 @@ from app.modules.work_items.contracts import CreateIssueInput
 from app.modules.work_items.issues import create_issue
 
 
+PASSING_TEST = {
+    "name": "approved-local-test-1",
+    "command": ["python", "-m", "pytest", "-q"],
+    "exitCode": 0,
+    "result": "passed",
+    "durationMs": 1200,
+    "log": "1 passed",
+}
+
+
 class McpContractTests(unittest.TestCase):
     def test_cursor_is_bound_to_connection_and_query(self):
         codec = CursorCodec("secret", "connection", "search_issues", {"projectId": "A"})
@@ -1022,6 +1032,57 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         released = await claim(other_principal, "shared-pool-claim")
         self.assertNotEqual(released["data"]["id"], queued)
 
+    async def test_review_ready_results_require_passing_test_evidence(self):
+        run = (
+            await self.call(
+                "claim_issue",
+                issueId=self.issue["id"],
+                idempotencyKey="evidence-claim-key",
+            )
+        )["data"]
+        lease = {
+            "runId": run["id"],
+            "leaseToken": run["leaseToken"],
+            "fencingToken": run["fencingToken"],
+        }
+        failing = {**PASSING_TEST, "exitCode": 1, "result": "failed", "log": "1 failed"}
+        rejected = {
+            "no-tests-key": {"tests": []},
+            "failed-test-key": {"tests": [failing]},
+            "mismatched-verdict-key": {"tests": [{**PASSING_TEST, "exitCode": 2}]},
+            "unbounded-command-key": {"tests": [{**PASSING_TEST, "command": []}]},
+            "untyped-evidence-key": {"tests": [{"name": "x", "result": "passed"}]},
+        }
+        for idempotency, payload in rejected.items():
+            with self.subTest(case=idempotency):
+                with self.assertRaises(ApiError) as error:
+                    await self.call(
+                        "report_run_result",
+                        **lease,
+                        idempotencyKey=idempotency,
+                        outcome="AWAITING_REVIEW",
+                        summary="Fixed in a branch; pending review",
+                        commit="b" * 40,
+                        **payload,
+                    )
+                self.assertEqual(error.exception.status_code, 400)
+        # A failure may still report the check that failed, and its log reaches the
+        # issue comment so a reviewer sees why without opening the run record.
+        result = await self.call(
+            "report_run_result",
+            **lease,
+            idempotencyKey="failed-evidence-key",
+            outcome="FAILED",
+            summary="The approved test did not pass",
+            tests=[failing],
+        )
+        self.assertEqual(result["data"]["state"], "FAILED")
+        comments = (await self.call("list_comments", issueId=self.issue["id"]))["items"]
+        posted = comments[0]["content"]
+        self.assertIn("approved-local-test-1: failed (exit 1, 1200 ms)", posted)
+        self.assertIn('["python", "-m", "pytest", "-q"]', posted)
+        self.assertIn("log tail: 1 failed", posted)
+
     async def test_run_lease_reclaim_fencing_and_results(self):
         first = (
             await self.call(
@@ -1076,10 +1137,12 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             outcome="AWAITING_REVIEW",
             summary="Fixed in a branch; pending review",
             commit="a" * 40,
-            tests=[{"command": "pytest", "result": "passed"}],
+            tests=[PASSING_TEST],
             idempotencyKey="run-result-key",
         )
         self.assertEqual(result["data"]["state"], "AWAITING_REVIEW")
+        stored = (await self.call("get_run", runId=second["id"]))["result"]["tests"]
+        self.assertEqual(stored, [PASSING_TEST])
         self.assertEqual(
             (await self.call("get_issue", issueId=self.issue["id"]))["statusId"],
             self.status,

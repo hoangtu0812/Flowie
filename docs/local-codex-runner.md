@@ -7,7 +7,7 @@ Runner dùng Codex CLI hoặc Claude Code đã đăng nhập trên máy (chọn 
 1. Quản trị workspace khai báo repository của project trong AI settings và cấp connection có các scope `context:read`, `projects:read`, `issues:read`, `comments:read`, `documents:read`, `activities:read`, `reviews:read`, `runs:read`, `runs:write`, `comments:write`. Chọn đúng project; backend phải bật MCP và MCP writes.
 2. Clone repository về máy. `origin` phải khớp URL đã duyệt. Mỗi lượt chạy tự `git fetch` base từ `origin` và làm việc trong worktree riêng, nên checkout dùng chung không cần sạch và không bị runner sửa; `baseRef` luôn được hiểu là nhánh trên `origin` (`main` và `origin/main` là một).
 3. Cài dependency Python theo `apps/api-python/requirements.txt`; kiểm tra `codex exec --help`. Runner yêu cầu sandbox `workspace-write`, `--ephemeral`, `--ignore-user-config`, `--output-schema` và `--output-last-message`. CLI cũ thiếu flag sẽ bị từ chối.
-4. Tạo file JSON **ngoài Git**, duyệt các test command local dưới dạng argv. Command từ cấu hình server không tự được thực thi. Không đặt token/password trong JSON hay argv test.
+4. Tạo file JSON **ngoài Git**, duyệt các test command local dưới dạng argv. Command từ cấu hình server không tự được thực thi. Không đặt token/password trong JSON hay argv test, và chỉ duyệt command không in secret ra output: argv cùng phần cuối log của mỗi test được gửi lên Flowie làm bằng chứng. Ưu tiên chế độ ít output (ví dụ `-q`) vì runner giữ toàn bộ output trong bộ nhớ trước khi cắt.
 
 ```json
 {
@@ -95,6 +95,15 @@ python -m flowie_runner --config "$CONFIG" pending \
 ```
 
 Chạy bằng cron/launchd (ví dụ mỗi 10 phút). Mỗi lượt chạy có worktree riêng nên một lượt lỗi không còn làm bẩn checkout dùng chung và không chặn các vòng sau; vẫn nên dùng khoá (`flock` hoặc launchd không chồng lần chạy) để giới hạn số lượt chạy song song trên một máy.
+
+## Bằng chứng test
+
+Mỗi test đã duyệt được ghi lại đủ để kiểm chứng sau: `name`, `command` (argv đúng như đã chạy), `exitCode`, `result`, `durationMs` và `log` là phần cuối output (stdout và stderr gộp, giữ tối đa 2000 ký tự cuối, có dòng đánh dấu khi bị cắt).
+
+- Test bị dừng vì `commandTimeout` được ghi là `failed` với `exitCode` 124 và log nói rõ lý do, thay vì biến mất khỏi báo cáo.
+- API từ chối `AWAITING_REVIEW` nếu không có test nào, nếu có test `failed`, hoặc nếu `result` không khớp `exitCode`. Báo `FAILED` vẫn được kèm test lỗi — đó là cách ghi lại thất bại.
+- Comment trên issue liệt kê từng test kèm exit code, thời lượng và argv; log chỉ hiện với test lỗi. Bằng chứng đầy đủ nằm trong `result` của agent run, xem ở Settings → AI operations.
+- Bằng chứng này vẫn là do agent tự báo. Nó không thay thế việc đối chiếu CI độc lập trên commit của PR.
 
 ## Cô lập mỗi lượt chạy
 

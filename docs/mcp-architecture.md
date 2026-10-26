@@ -83,6 +83,9 @@ The new controls follow the repository's Astryx component guidance.
   does not extend a run beyond its two-hour budget.
 - Reported test and PR evidence is explicitly agent-reported. The API does not
   claim independent CI verification, merge a PR or mark an issue complete.
+- Each reported check carries its command, exit code, duration and a bounded log
+  tail, and its verdict must match its exit code. A result awaiting review must
+  report at least one check and may not report a failed one; a failed result may.
 - Repository instructions and test argument arrays are maintained by a workspace
   manager. External coding agents execute in their own authorized environments;
   the production API never executes those commands.

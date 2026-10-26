@@ -17,7 +17,7 @@ from flowie_runner.__main__ import main_async
 from flowie_runner.claude import REQUIRED_FLAGS, ClaudeProvider
 from flowie_runner.config import RunnerConfig
 from flowie_runner.codex import CodexProvider
-from flowie_runner.orchestrator import execute, prepare
+from flowie_runner.orchestrator import LOG_TAIL, execute, log_tail, prepare
 from flowie_runner.process import child_environment, run_process
 from flowie_runner.repository import Repository
 
@@ -218,7 +218,12 @@ def test_runner_records_executed_tests_and_never_auto_publishes(tmp_path):
         for call in client.call.call_args_list
         if call.args[0] == "report_run_result"
     )
-    assert payload["tests"] == [{"name": "approved-local-test-1", "result": "passed"}]
+    (evidence,) = payload["tests"]
+    assert evidence["name"] == "approved-local-test-1"
+    assert evidence["command"] == [sys.executable, "-c", "print('ok')"]
+    assert (evidence["exitCode"], evidence["result"]) == (0, "passed")
+    assert evidence["log"] == "ok"
+    assert isinstance(evidence["durationMs"], int) and evidence["durationMs"] >= 0
     assert len(payload["commit"]) == 40
     # A successful run removes its worktree; the branch in the shared checkout keeps
     # the reviewable commit, and the checkout itself was never touched.
@@ -242,6 +247,62 @@ def test_each_run_starts_from_the_current_origin_base(tmp_path):
     assert git_in(config.repository_path, "rev-parse", f"{result['branch']}^") == moved
     assert git_in(config.repository_path, "rev-parse", "main") == stale
     assert moved != stale
+
+
+def test_failing_approved_test_records_its_output_and_exit_code(tmp_path):
+    config = replace(
+        fixture_repository(tmp_path),
+        tests=(
+            (
+                sys.executable,
+                "-c",
+                "import sys; print('boom', file=sys.stderr); sys.exit(3)",
+            ),
+        ),
+    )
+    client, provider, seen = client_fixture(config.repository_url), AsyncMock(), {}
+    provider.execute.side_effect = changelog_editor(seen)
+    with pytest.raises(RuntimeError):
+        asyncio.run(execute(client, config, "issue", provider))
+    payload = next(
+        call.args[1]
+        for call in client.call.call_args_list
+        if call.args[0] == "report_run_result"
+    )
+    assert payload["outcome"] == "FAILED"
+    (evidence,) = payload["tests"]
+    assert (evidence["exitCode"], evidence["result"]) == (3, "failed")
+    # stderr joins the captured stream, so a failure's diagnostics are not lost.
+    assert evidence["log"] == "boom"
+
+
+def test_timed_out_approved_test_is_recorded_as_a_failure(tmp_path):
+    config = replace(
+        fixture_repository(tmp_path),
+        tests=((sys.executable, "-c", "import time; time.sleep(30)"),),
+        command_timeout=1,
+    )
+    client, provider, seen = client_fixture(config.repository_url), AsyncMock(), {}
+    provider.execute.side_effect = changelog_editor(seen)
+    with pytest.raises(RuntimeError):
+        asyncio.run(execute(client, config, "issue", provider))
+    payload = next(
+        call.args[1]
+        for call in client.call.call_args_list
+        if call.args[0] == "report_run_result"
+    )
+    (evidence,) = payload["tests"]
+    assert (evidence["exitCode"], evidence["result"]) == (124, "failed")
+    assert "commandTimeout" in evidence["log"]
+
+
+def test_log_tail_keeps_the_end_and_marks_truncation():
+    assert log_tail("short output") == "short output"
+    tail = log_tail("head" + "x" * 5000)
+    assert tail.endswith("x" * LOG_TAIL) and "head" not in tail
+    assert f"truncated to the last {LOG_TAIL} characters" in tail
+    # The reported tail stays inside the 4000-character contract bound.
+    assert len(tail) < 4000
 
 
 def test_providers_accept_the_run_worktree_path():

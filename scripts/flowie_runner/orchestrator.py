@@ -1,13 +1,54 @@
 import asyncio
 import sys
+from time import monotonic
 from uuid import uuid4
 
 from .process import run_process
 from .repository import Repository
 
+# A log tail bounds what a chatty test can push into a run record; failures normally
+# explain themselves at the end of their output.
+LOG_TAIL = 2000
+# Reported when an approved test is stopped at commandTimeout, matching the exit code
+# GNU timeout uses for the same condition.
+TIMEOUT_EXIT_CODE = 124
+
 
 def key():
     return str(uuid4())
+
+
+def log_tail(output):
+    if len(output) <= LOG_TAIL:
+        return output
+    return f"[log truncated to the last {LOG_TAIL} characters]\n" + output[-LOG_TAIL:]
+
+
+async def run_approved_test(name, command, path, timeout):
+    """Execute one approved command and record what can be audited afterwards.
+
+    A timeout is recorded as a failed check instead of propagating, so the evidence
+    for a stopped test still reaches the run record; the caller stops the run on any
+    non-zero exit code.
+    """
+    started = monotonic()
+    try:
+        code, output = await run_process(
+            command, path, timeout, capture=True, merge_errors=True
+        )
+    except TimeoutError:
+        code, output = (
+            TIMEOUT_EXIT_CODE,
+            "The approved test exceeded commandTimeout and was stopped.",
+        )
+    return {
+        "name": name,
+        "command": list(command),
+        "exitCode": code,
+        "result": "passed" if code == 0 else "failed",
+        "durationMs": int((monotonic() - started) * 1000),
+        "log": log_tail(output),
+    }
 
 
 async def prepare(client, config, issue_id):
@@ -95,14 +136,14 @@ async def execute(
         workspaces.append(workspace)
         summary = await provider.execute(config, context, workspace.path)
         for index, command in enumerate(config.tests):
-            code, _ = await run_process(command, workspace.path, config.command_timeout)
-            tests.append(
-                {
-                    "name": f"approved-local-test-{index + 1}",
-                    "result": "passed" if code == 0 else "failed",
-                }
+            evidence = await run_approved_test(
+                f"approved-local-test-{index + 1}",
+                command,
+                workspace.path,
+                config.command_timeout,
             )
-            if code:
+            tests.append(evidence)
+            if evidence["exitCode"]:
                 raise RuntimeError(
                     "An approved local test failed; no result was marked successful."
                 )

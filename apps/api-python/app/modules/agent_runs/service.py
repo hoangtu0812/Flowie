@@ -225,9 +225,17 @@ class RunService:
             if payload.pullRequestUrl:
                 summary += f"\nPR reported by agent: {payload.pullRequestUrl}"
             if payload.tests:
-                summary += "\n\nTest evidence reported by agent:\n" + json.dumps(
-                    payload.tests, ensure_ascii=False
-                )
+                summary += "\n\nTest evidence reported by agent:"
+                for test in payload.tests:
+                    summary += (
+                        f"\n- {test.name}: {test.result}"
+                        f" (exit {test.exitCode}, {test.durationMs} ms)"
+                        f" {json.dumps(test.command, ensure_ascii=False)}"
+                    )
+                    # Only a failure's output earns comment space; the full evidence,
+                    # including every log tail, stays on the run record.
+                    if test.result != "passed" and test.log:
+                        summary += f"\n  log tail: {test.log[:1000]}"
             await create_comment(
                 CreateCommentInput(
                     workspaceId=self.principal.workspace_id,

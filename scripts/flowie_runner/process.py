@@ -56,7 +56,7 @@ async def stop_process(process):
         await process.wait()
 
 
-async def run_process(argv, cwd, timeout, *, stdin=None, capture=False):
+async def run_process(argv, cwd, timeout, *, stdin=None, capture=False, merge_errors=False):
     options = (
         {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
         if os.name == "nt"
@@ -68,7 +68,11 @@ async def run_process(argv, cwd, timeout, *, stdin=None, capture=False):
         env=child_environment(),
         stdin=asyncio.subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
         stdout=asyncio.subprocess.PIPE if capture else subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        # Approved tests report their diagnostics, so their stderr joins the captured
+        # stream; a provider's stderr stays out of the stream that carries its result.
+        stderr=asyncio.subprocess.STDOUT
+        if capture and merge_errors
+        else subprocess.DEVNULL,
         **options,
     )
     try:
