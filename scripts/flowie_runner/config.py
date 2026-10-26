@@ -15,6 +15,8 @@ class RunnerConfig:
     tests: tuple[tuple[str, ...], ...]
     codex: str = "codex"
     command_timeout: int = 900
+    provider: str = "codex"
+    claude: str = "claude"
 
     @classmethod
     def load(cls, filename):
@@ -29,6 +31,8 @@ class RunnerConfig:
             "tests",
             "codex",
             "commandTimeout",
+            "provider",
+            "claude",
         }:
             raise ValueError("Unknown runner configuration field.")
         for key in ["endpoint", "repositoryUrl"]:
@@ -78,6 +82,9 @@ class RunnerConfig:
         timeout = value.get("commandTimeout", 900)
         if type(timeout) is not int or not 1 <= timeout <= 3600:
             raise ValueError("Command timeout must be between 1 and 3600 seconds.")
+        provider = value.get("provider", "codex")
+        if provider not in {"codex", "claude"}:
+            raise ValueError("Provider must be codex or claude.")
         return cls(
             value["endpoint"],
             value["projectId"],
@@ -88,4 +95,6 @@ class RunnerConfig:
             tuple(tuple(command) for command in tests),
             value.get("codex", "codex"),
             timeout,
+            provider,
+            value.get("claude", "claude"),
         )

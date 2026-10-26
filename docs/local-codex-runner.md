@@ -1,6 +1,6 @@
-# Codex local runner cho Flowie
+# Local agent runner cho Flowie (Codex / Claude Code)
 
-Runner dùng Codex CLI đã đăng nhập trên máy, kết nối Flowie qua token giới hạn project/quyền. Không có agent chạy trên CT107. Các module nằm trong `scripts/flowie_runner`: config, transport, repository, process, codex và orchestrator.
+Runner dùng Codex CLI hoặc Claude Code đã đăng nhập trên máy (chọn bằng `provider`, mặc định `codex`), kết nối Flowie qua token giới hạn project/quyền. Không có agent chạy trên CT107. Các module nằm trong `scripts/flowie_runner`: config, transport, repository, process, prompt, codex, claude và orchestrator.
 
 ## Chuẩn bị
 
@@ -35,6 +35,58 @@ python -m flowie_runner --config C:/private/flowie-runner.json run --issue REPLA
 `doctor` chỉ kiểm tra repo và CLI. `inspect` đọc context nhưng không claim run. `run` claim bug 5 phút, tạo nhánh `codex/flowie-RUN_ID`, gọi Codex trong sandbox, chạy test local đã duyệt, kiểm tra changelog, tạo commit và báo `AWAITING_REVIEW`. Bug không tự chuyển Done. Ctrl+C, timeout, test lỗi hoặc heartbeat bị từ chối sẽ dừng process con; lỗi ghi FAILED nếu lease còn hợp lệ, hủy chạy cố release; mã đang có được giữ lại. Nếu connection bị thu hồi, lease còn lại tự hết hạn. Không tự reset, xóa nhánh hoặc bỏ qua lỗi.
 
 Để đẩy nhánh và tạo PR nháp sau test, người chạy cấp quyền SCM thông qua Git credential helper và `gh auth login`, rồi chủ động thêm `--publish` vào lệnh `run`. Runner không nhận token SCM trong JSON và không chuyển biến `FLOWIE_MCP_TOKEN`, `GH_TOKEN`, `DATABASE_URL` vào Codex/test. Auth Codex vẫn đọc từ home hiện có; cấu hình MCP/hook của CLI không được tải từ user config. Repository cần chứa mã có thể gửi tới Codex theo quyền của người chạy.
+
+## Claude Code provider
+
+Đặt `"provider": "claude"` trong JSON; `claude` là đường dẫn binary (mặc định `claude`). Các field còn lại giữ nguyên; field `codex` bị bỏ qua.
+
+```json
+{
+  "endpoint": "https://flowie.dtd.bsr.com.vn/mcp/",
+  "projectId": "REPLACE_PROJECT_ID",
+  "repositoryId": "REPLACE_FLOWIE_REPOSITORY_ID",
+  "repositoryUrl": "https://github.com/OWNER/REPOSITORY.git",
+  "repositoryPath": "/Users/me/work/REPOSITORY",
+  "baseRef": "main",
+  "tests": [["python", "-m", "pytest", "-q"]],
+  "provider": "claude",
+  "claude": "claude",
+  "commandTimeout": 900
+}
+```
+
+```bash
+export PYTHONPATH=scripts
+python -m flowie_runner --config ~/private/flowie-runner.json doctor
+python -m flowie_runner --config ~/private/flowie-runner.json inspect --issue REPLACE_ISSUE_ID
+python -m flowie_runner --config ~/private/flowie-runner.json run --issue REPLACE_ISSUE_ID
+```
+
+Runner gọi `claude --print --output-format json --json-schema … --permission-mode acceptEdits --permission-prompts none --tools Read,Edit,Write,Glob,Grep --restricted --strict-mcp-config --no-session-persistence` trong `repositoryPath`, prompt qua stdin và đọc `structured_output.summary` (tối đa 10.000 ký tự).
+
+- Chỉ có tool đọc/ghi file; không có Bash, WebFetch hay MCP. Test, commit, push và gọi Flowie vẫn do runner cha làm.
+- `--restricted` bỏ qua settings user/project/local, giới hạn tool file trong checkout và từ chối `bypassPermissions`; `--permission-prompts none` tự từ chối mọi thao tác cần hỏi (ví dụ ghi ngoài checkout). Không dùng `--dangerously-skip-permissions`.
+- Process con chỉ nhận biến môi trường trong allowlist (thêm `USER`/`LOGNAME` để Claude Code đọc login từ macOS keychain, và `CLAUDE_CONFIG_DIR`); `FLOWIE_MCP_TOKEN`, `GH_TOKEN`, `DATABASE_URL` không được chuyển. Đăng nhập bằng `claude auth login` trước; login qua biến `ANTHROPIC_API_KEY` không được chuyển vào process con.
+- `doctor` kiểm tra `claude --help` có đủ các flag trên và `claude auth status --json` báo `loggedIn: true`; CLI thiếu, cũ hoặc chưa đăng nhập đều bị từ chối. Đã kiểm tra với Claude Code 2.1.296.
+- Nhánh vẫn đặt tên `codex/flowie-RUN_ID` cho cả hai provider.
+
+## Chạy định kỳ cho hàng đợi automation
+
+Event automation (project + label + connection) chỉ tạo run `PENDING`; server không tự gọi provider. `pending` gọi `list_runs` với `state=PENDING` và `projectId` trong config, trả `{"issueIds": [...]}` (tối đa 100 mỗi lần). `run --issue` claim lại đúng run `PENDING` của issue đó. Production phải bật MCP writes (`MCP_WRITES_ENABLED=true`) thì `run` mới claim được.
+
+```bash
+#!/bin/sh
+# flowie-poll.sh: FLOWIE_MCP_TOKEN phải được nạp từ kho bí mật trước khi chạy.
+cd /path/to/Flowie && export PYTHONPATH=scripts
+CONFIG=~/private/flowie-runner.json
+python -m flowie_runner --config "$CONFIG" pending \
+  | python -c 'import json,sys; print("\n".join(json.load(sys.stdin)["issueIds"]))' \
+  | while read -r issue; do
+      python -m flowie_runner --config "$CONFIG" run --issue "$issue" || break
+    done
+```
+
+Chạy tuần tự bằng cron/launchd (ví dụ mỗi 10 phút) và dùng khoá (`flock` hoặc launchd không chồng lần chạy) để hai vòng không cùng sửa một checkout. Run lỗi để lại thay đổi local và cây làm việc bẩn, nên các vòng sau sẽ dừng ở bước kiểm tra repo cho tới khi người chạy xem xét và dọn checkout.
 
 ## Nghiệm thu bug thật
 

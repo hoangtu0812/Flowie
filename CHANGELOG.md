@@ -12,6 +12,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
+- The local Flowie agent runner can use Claude Code instead of Codex (`"provider": "claude"` in the runner JSON; Codex stays the default). Claude Code runs non-interactively in the checkout with file tools only, restricted settings, no MCP servers and no Flowie/SCM/database tokens; `doctor` rejects a missing, outdated or signed-out CLI. A new `pending` command lists issues with queued automation runs so the runner can be polled periodically. Local tooling only; nothing changes on CT107.
+
 - Workspace owners and admins can browse existing active Flowie users and search by name or email when inviting members. Results exclude current members and pending invitations, with bounded results and retry support.
 
 - Microsoft Teams notifications: workspace administrators can connect a Teams channel next to Discord in Settings → Integrations, and project leads or administrators can connect a per-project channel from the project's properties ("MS Teams" below Slack). Issue and project events are posted as Adaptive Cards through Teams Workflows webhooks (`*.logic.azure.com` / `*.api.powerplatform.com` only). The feature is hidden and rejected by the API unless Microsoft Entra sign-in (`AZURE_AD_*`) is configured. Requires the `teams_channels` migration; daily digests and dispatcher reports remain Discord-only.
