@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from ...core.utc_responses import UtcAPIRouter
 from ...core.errors import ApiError
 from ...db.session import get_session
+from ...services.auth_policy import microsoft_sign_in_enabled, require_password_sign_in
 from .password_reset import consume_reset, issue_reset, limit_request
 from .reset_delivery import delivery_enabled, deliver_reset
 
@@ -20,7 +21,8 @@ class ResetConfirm(BaseModel):
 
 @router.get("/configuration")
 async def configuration(request: Request):
-    return {"data": {"enabled": delivery_enabled(request.app.state.settings)}}
+    settings = request.app.state.settings
+    return {"data": {"enabled": not microsoft_sign_in_enabled(settings) and delivery_enabled(settings)}}
 
 
 @router.post("/request", status_code=202)
@@ -31,6 +33,7 @@ async def request_reset(
     db=Depends(get_session),
 ):
     settings = request.app.state.settings
+    require_password_sign_in(settings)
     if not delivery_enabled(settings):
         raise ApiError(
             503,
@@ -56,6 +59,7 @@ async def confirm_reset(
     payload: ResetConfirm, request: Request, db=Depends(get_session)
 ):
     settings = request.app.state.settings
+    require_password_sign_in(settings)
     await limit_request(
         db,
         settings.auth_jwt_secret,

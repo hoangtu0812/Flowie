@@ -4,7 +4,7 @@ import json
 from datetime import timedelta
 from typing import Any, Literal
 
-from fastapi import Depends
+from fastapi import Depends, Query, Response
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -663,6 +663,29 @@ async def members(
     return {'data': [_member(row) for row in result.mappings().all()]}
 
 
+@router.get('/{workspace_id}/invitation-candidates')
+async def invitation_candidates(
+    workspace_id: str,
+    response: Response,
+    q: str = Query(default='', max_length=120),
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    await _authorize_manager(db, workspace_id, user['id'])
+    response.headers['Cache-Control'] = 'no-store'
+    rows = (await db.execute(text('''
+        SELECT u.id, u.name, u.email FROM users u
+        WHERE u.status = 'ACTIVE'
+          AND (strpos(lower(u.name), :query) > 0 OR strpos(lower(u.email), :query) > 0)
+          AND NOT EXISTS (
+              SELECT 1 FROM workspace_members m WHERE m.user_id = u.id
+                AND m.workspace_id = :workspace AND m.status IN ('ACTIVE', 'INVITED')
+          )
+        ORDER BY lower(u.name), u.id LIMIT 26
+    '''), {'query': q.strip().lower(), 'workspace': workspace_id})).mappings().all()
+    return {'data': [dict(row) for row in rows[:25]], 'meta': {'hasMore': len(rows) > 25}}
+
+
 @router.post('/{workspace_id}/invitations')
 async def invite(
     workspace_id: str,
@@ -673,8 +696,11 @@ async def invite(
     await _authorize_manager(db, workspace_id, user['id'])
     email = _normalized_email(payload.email)
     role = _role(payload.role, invite=True)
-    result = await db.execute(text('SELECT id FROM users WHERE email = :email LIMIT 1'), {'email': email})
-    invited_id = result.scalar_one_or_none()
+    result = await db.execute(text("SELECT id FROM users WHERE lower(email) = :email AND status = 'ACTIVE' LIMIT 2"), {'email': email})
+    matches = result.scalars().all()
+    if len(matches) > 1:
+        raise ApiError(409, 'Multiple accounts use this email. Contact your administrator.', 'Conflict')
+    invited_id = matches[0] if matches else None
     if not invited_id:
         raise ApiError(404, 'This person needs to register a Flowie account before they can be invited.', 'Not Found')
     if invited_id == user['id']:

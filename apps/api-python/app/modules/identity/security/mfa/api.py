@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from .....core.errors import ApiError
+from .....services.auth_policy import microsoft_sign_in_enabled
 from .....core.utc_responses import UtcAPIRouter
 from .....db.session import get_session
 from .....domains.auth import (
@@ -53,7 +54,7 @@ async def status(request: Request, user=Depends(current_user), db=Depends(get_se
         "data": {
             "available": keyring(request.app.state.settings) is not None,
             "enabled": bool(configured and configured["enabled_at"]),
-            "hasPassword": bool(user["password_hash"]),
+            "hasPassword": bool(user["password_hash"]) and not microsoft_sign_in_enabled(request.app.state.settings),
             "recoveryRemaining": (
                 len(configured["recovery_hashes"])
                 if configured and configured["enabled_at"]

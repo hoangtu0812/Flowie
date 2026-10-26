@@ -42,6 +42,13 @@ Never expose the client secret through a `NEXT_PUBLIC_*` variable or commit it.
 The redirect URI must exactly match the Web redirect URI in the app
 registration. `APP_URL` is the trusted destination used after the API callback.
 
+When all four `AZURE_AD_*` values are configured, Microsoft is the only sign-in
+method. The login page hides email/password, registration and password-reset
+links; their API endpoints reject requests, including pending password MFA
+challenges. Provider discovery failures show a retry state rather than exposing
+the password form. Confirm Entra sign-in works before enabling this configuration
+on CT107; there is no separate password fallback while it is enabled.
+
 `ADMIN_EMAIL` is case-insensitive and is evaluated on every authenticated API
 request. It is the only source of platform administrator access; the Admin
 Panel cannot promote another account. Keep it set to an active account and
@@ -52,9 +59,20 @@ change the environment value to transfer platform administration.
 - Flowie validates the configured tenant and stores the immutable Entra tenant
   ID plus object ID as the provider account key.
 - On the first login, an existing Flowie account with the same normalized
-  email is linked; otherwise Flowie creates the user and a default
-  workspace. Later logins resolve only through the immutable provider key.
-- Display name is refreshed from Microsoft Graph on every Entra login.
+  email is linked if it is not already linked to another Microsoft identity;
+  otherwise Flowie creates the user and a default workspace. Linking preserves
+  the user ID, work, memberships, roles and preferences, removes the local
+  password/identity, invalidates pending password challenges and revokes existing
+  browser sessions. The successful callback creates a new Microsoft session,
+  with MFA still required when configured.
+- Later logins resolve only through the immutable provider key. Display name
+  and email are refreshed from Microsoft Graph on every Entra login. Email
+  collisions with another Flowie user are rejected rather than merging users.
+- Synchronization occurs when each person signs in. This does not import the
+  entire Entra directory: `User.Read` only reads the signed-in user's profile.
+  Invitation search lists existing active Flowie users, so a new Entra user
+  must sign in once before appearing in that list. Only workspace owners and
+  admins can search it; current members and pending invitations are excluded.
 - The Microsoft profile photo is copied into Flowie's object storage. A
   temporary photo download/storage failure keeps the last successful photo;
   an authoritative Graph 404 clears it.
@@ -81,5 +99,10 @@ After deployment:
    avatar, and profile-field locks.
 3. Sign in with the exact `ADMIN_EMAIL`, open the workspace switcher, and enter
    the Admin Panel. Verify a different user receives HTTP 403 for admin APIs.
-4. Verify local password login and refresh-token rotation still work.
+4. Verify password login, registration and recovery return HTTP 403, the login
+   page shows only Microsoft sign-in, and Microsoft refresh-token rotation works.
 5. Tag the release only after that exact commit is verified on CT107.
+
+Removing the Entra configuration restores local sign-in only for accounts that
+still have a password. Accounts already converted to Microsoft remain managed
+by Microsoft and do not regain their removed passwords.

@@ -70,6 +70,7 @@ async def begin_login(
 
 
 async def finish_login(db, raw, code, kind, request, settings):
+    from .....services.auth_policy import require_password_sign_in
     owner = (
         await db.execute(
             text("SELECT user_id FROM mfa_challenges WHERE token_hash=:hash"),
@@ -94,6 +95,8 @@ async def finish_login(db, raw, code, kind, request, settings):
         .first()
     )
     now = _utcnow()
+    if challenge and challenge['auth_method'] == 'PASSWORD':
+        require_password_sign_in(settings)
     if (
         not challenge
         or not configured
