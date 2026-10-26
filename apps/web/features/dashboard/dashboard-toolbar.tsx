@@ -53,61 +53,73 @@ export function DashboardToolbar({
                gap={2}
                wrap="wrap"
                align="end"
+               className="w-full sm:w-auto"
                onSubmit={(event) => {
                   event.preventDefault();
                   apply();
                }}
             >
-               <Selector
-                  size="sm"
-                  label={tx('Project')}
-                  width="10rem"
-                  value={draft.selection.projectId ?? ''}
-                  options={[
-                     { value: '', label: tx('All projects') },
-                     ...projects.items.map((row) => ({ value: row.id, label: row.name })),
-                  ]}
-                  onChange={(projectId) =>
-                     setDraft({
-                        ...draft,
-                        selection: { ...draft.selection, projectId: projectId || undefined },
-                     })
-                  }
-               />
-               <VStack as="label" gap={1}>
+               <VStack gap={1} className="w-full sm:w-40">
+                  <Text type="supporting">{tx('Project')}</Text>
+                  <Selector
+                     size="md"
+                     label={tx('Project')}
+                     isLabelHidden
+                     width="100%"
+                     value={draft.selection.projectId ?? ''}
+                     options={[
+                        { value: '', label: tx('All projects') },
+                        ...projects.items.map((row) => ({ value: row.id, label: row.name })),
+                     ]}
+                     onChange={(projectId) =>
+                        setDraft({
+                           ...draft,
+                           selection: { ...draft.selection, projectId: projectId || undefined },
+                        })
+                     }
+                  />
+               </VStack>
+               <VStack as="label" gap={1} className="min-w-0 flex-1 sm:flex-none sm:w-36">
                   <Text type="supporting">{tx('From')}</Text>
                   <Input
                      type="date"
                      value={draft.fromDate}
                      max={draft.toDate}
-                     className="w-full sm:w-32"
+                     className="h-8 w-full min-w-0"
                      onChange={(event) => setDraft({ ...draft, fromDate: event.target.value })}
                   />
                </VStack>
-               <VStack as="label" gap={1}>
+               <VStack as="label" gap={1} className="min-w-0 flex-1 sm:flex-none sm:w-36">
                   <Text type="supporting">{tx('To')}</Text>
                   <Input
                      type="date"
                      value={draft.toDate}
                      min={draft.fromDate}
                      max={localToday(value.timezone)}
-                     className="w-full sm:w-32"
+                     className="h-8 w-full min-w-0"
                      onChange={(event) => setDraft({ ...draft, toDate: event.target.value })}
                   />
                </VStack>
-               <Button label={tx('Apply')} size="sm" type="submit" variant="secondary" />
-               <Button
-                  label={tx('Reset')}
-                  size="sm"
-                  variant="ghost"
-                  onClick={() =>
-                     onApply({ ...recentQuery(30, value.timezone), weekStart: value.weekStart })
-                  }
-               />
+               <HStack gap={2} align="center" className="w-full sm:w-auto">
+                  <Button label={tx('Apply')} size="md" type="submit" variant="secondary" />
+                  <Button
+                     label={tx('Reset')}
+                     size="md"
+                     variant="ghost"
+                     onClick={() =>
+                        onApply({ ...recentQuery(30, value.timezone), weekStart: value.weekStart })
+                     }
+                  />
+               </HStack>
             </HStack>
          </HStack>
-         <HStack gap={2} wrap="wrap" justify="between">
-            <HStack gap={1} wrap="wrap" className="w-fit rounded-lg border bg-surface-muted p-1">
+         <HStack gap={2} wrap="wrap" justify="between" align="center">
+            <HStack
+               gap={1}
+               wrap="wrap"
+               align="center"
+               className="max-w-full rounded-lg border bg-surface-muted p-1"
+            >
                {(
                   [
                      ['1 week', 7],

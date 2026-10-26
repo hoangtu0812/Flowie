@@ -82,7 +82,7 @@ function Dashboard({ org, workspace }: { org: string; workspace: string }) {
                </VStack>
             }
             actions={
-               <HStack gap={2} wrap="wrap">
+               <HStack gap={2} wrap="wrap" align="center">
                   <Button
                      label={tx('Refresh dashboard')}
                      variant="ghost"
