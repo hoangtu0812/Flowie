@@ -18,7 +18,7 @@ from flowie_runner.claude import REQUIRED_FLAGS, ClaudeProvider
 from flowie_runner.config import RunnerConfig
 from flowie_runner.codex import CodexProvider
 from flowie_runner.orchestrator import LOG_TAIL, execute, log_tail, prepare
-from flowie_runner.process import child_environment, run_process
+from flowie_runner.process import child_environment, resolve_executable, run_process
 from flowie_runner.repository import Repository
 
 
@@ -294,6 +294,26 @@ def test_timed_out_approved_test_is_recorded_as_a_failure(tmp_path):
     (evidence,) = payload["tests"]
     assert (evidence["exitCode"], evidence["result"]) == (124, "failed")
     assert "commandTimeout" in evidence["log"]
+
+
+def test_run_process_resolves_a_shim_reachable_only_through_path(tmp_path, monkeypatch):
+    # npm installs Claude Code and Codex as a .CMD shim on Windows; a bare name must
+    # still reach it, as the documented configuration uses bare names.
+    if os.name == "nt":
+        script = tmp_path / "flowie-probe.cmd"
+        script.write_text("@echo probe\n", encoding="utf-8")
+    else:
+        script = tmp_path / "flowie-probe"
+        script.write_text(f"#!{sys.executable}\nprint('probe')\n", encoding="utf-8")
+        script.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+    assert Path(resolve_executable("flowie-probe")).parent == tmp_path
+    code, output = asyncio.run(
+        run_process(["flowie-probe"], tmp_path, 60, capture=True)
+    )
+    assert (code, output) == (0, "probe")
+    with pytest.raises(RuntimeError, match="not found on PATH"):
+        resolve_executable("flowie-absent-executable")
 
 
 def test_log_tail_keeps_the_end_and_marks_truncation():

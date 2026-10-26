@@ -10,6 +10,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+### Fixed
+
+- The local runner resolves a configured provider binary through a PATHEXT-aware PATH lookup before starting it. On Windows npm installs Claude Code and Codex as a `.CMD` shim, which `CreateProcess` never finds from a bare name, so the documented `"claude": "claude"` configuration could not start the provider at all; a binary missing from PATH is now rejected with a clear error instead of a bare file-not-found.
+
 ### Changed
 
 - Agent runs must now report auditable test evidence. Each reported check carries its command, exit code, verdict, duration and a bounded log tail (stdout and stderr merged, last 2000 characters), and a verdict that contradicts its exit code is rejected. A result awaiting review must report at least one check and may not report a failed one; a failed result still may, which is how a failure is recorded. The local runner captures this for every approved command and records a command stopped at `commandTimeout` as a failed check with exit code 124 instead of dropping it. The issue comment lists each check with its exit code, duration and command, and shows a log only for a failed one; the full evidence stays on the run record. Approved test commands must not print secrets, because their arguments and log tail reach Flowie. Clients reporting the previous free-form `tests` shape are rejected with 400. No schema migration is required.
