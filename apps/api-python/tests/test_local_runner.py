@@ -247,13 +247,15 @@ def test_claude_adapter_requires_flags_and_login(tmp_path):
 
 
 @pytest.mark.skipif(os.name == "nt", reason="fake CLI uses a POSIX shebang")
-def test_claude_adapter_edits_checkout_without_tokens(tmp_path, monkeypatch):
+def test_claude_adapter_edits_checkout_without_tokens(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("FLOWIE_MCP_TOKEN", "never-pass-this")
     monkeypatch.setenv("GH_TOKEN", "never-pass-scm")
     monkeypatch.setenv("DATABASE_URL", "private-database")
     config = replace(fixture_repository(tmp_path), claude=fake_claude(tmp_path))
     summary = asyncio.run(
-        ClaudeProvider().execute(config, {"issue": {"title": "Fixture"}})
+        ClaudeProvider().execute(
+            config, {"issue": {"identifier": "FL-7", "title": "Fixture"}}
+        )
     )
     assert summary == "Fixture fixed by Claude."
     assert "Fixture fixed" in (config.repository_path / "CHANGELOG.md").read_text()
@@ -266,6 +268,9 @@ def test_claude_adapter_edits_checkout_without_tokens(tmp_path, monkeypatch):
     assert {"--print", "--restricted", "--strict-mcp-config"} <= set(args)
     assert args[args.index("--permission-mode") + 1] == "acceptEdits"
     assert args[args.index("--tools") + 1] == "Read,Edit,Write,Glob,Grep"
+    assert args[args.index("--name") + 1] == "Flowie FL-7"
+    session = args[args.index("--session-id") + 1]
+    assert f"claude --resume {session}" in capsys.readouterr().err
     assert "untrusted data" in record["prompt"] and "Fixture" in record["prompt"]
 
 
