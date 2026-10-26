@@ -7,6 +7,7 @@ import { TextArea } from '@astryxdesign/core/TextArea';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
 import { MarkdownPreview } from '@/components/common/markdown/markdown-preview';
+import { DraftImages } from '@/components/common/markdown/draft-images';
 import { useImagePaste } from '@/hooks/use-image-paste';
 import { Issue } from '@/mock-data/issues';
 import { useIssuesStore } from '@/store/issues-store';
@@ -92,6 +93,13 @@ export function IssueDescription({ issue }: { issue: Issue }) {
                   onPaste={onPaste}
                   rows={10}
                   isDisabled={saving}
+               />
+               <DraftImages
+                  value={draft}
+                  onChange={setDraft}
+                  label={tx('Images in this description')}
+                  removeLabel={tx('Remove image')}
+                  isDisabled={saving || uploading}
                />
                {error && <Text role="alert">{error}</Text>}
                <HStack gap={2}>

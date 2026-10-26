@@ -96,6 +96,8 @@ export const messages = {
    'Back to issues': 'Về danh sách công việc',
    'Save description': 'Lưu mô tả',
    'Uploading image…': 'Đang tải ảnh…',
+   'Images in this description': 'Ảnh trong mô tả',
+   'Remove image': 'Xoá ảnh',
    'No description yet.': 'Chưa có mô tả.',
    'Edit description': 'Sửa mô tả',
    'Hide properties': 'Ẩn thuộc tính',

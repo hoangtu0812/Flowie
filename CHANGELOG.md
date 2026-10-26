@@ -222,6 +222,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Screenshots pasted into an issue description or a comment are shown as pictures instead of a broken image: embedded attachment URLs are fetched with the session the private attachment route requires, and a tall screenshot is bounded so it no longer fills the description. While editing a description or writing a comment, every image the text references is listed as a thumbnail with its own Remove control, so the `![name](url)` markup no longer has to be read or deleted by hand. No schema or deployment change.
+
 - Production deployment builds the worker again after issues became allowed without a team: the auto-close SLA check accepts team-less issues, which match only workspace-wide SLA policies. No schema change beyond the existing `workspace_issues` migration.
 
 - Microsoft Teams "Save", "Disconnect" and "Send test" (workspace Integrations and project channel) now show a progress state and report success or the API/provider error in a toast on every attempt, instead of silently repeating the previous message; a network failure no longer leaves Save stuck.

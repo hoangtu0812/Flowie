@@ -12,6 +12,7 @@ import { CommentMentions } from '@/features/issues/comment-mentions';
 import { useIssueActivity } from '@/features/issues/use-issue-activity';
 import { useIssuesStore } from '@/store/issues-store';
 import { useImagePaste } from '@/hooks/use-image-paste';
+import { DraftImages } from '@/components/common/markdown/draft-images';
 import { ActivityItem } from '@/mock-data/issue-details';
 import { User } from '@/mock-data/users';
 import {
@@ -239,6 +240,13 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
                   rows={3}
                   placeholder={t('commentPlaceholder')}
                   isDisabled={state.sending || !state.workspaceId}
+               />
+               <DraftImages
+                  value={state.draft}
+                  onChange={state.setDraft}
+                  label={t('imagesInComment')}
+                  removeLabel={t('removeImage')}
+                  isDisabled={state.sending || uploading}
                />
                {state.submitError && <Text role="alert">{state.submitError}</Text>}
                <HStack justify="between" gap={2}>

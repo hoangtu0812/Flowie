@@ -115,6 +115,8 @@ const catalog = {
    commentPlaceholder: ['Leave a comment...', 'Viết bình luận...'],
    uploadingImage: ['Uploading image…', 'Đang tải ảnh…'],
    pasteScreenshot: ['Paste a screenshot to attach it', 'Dán ảnh chụp màn hình để đính kèm'],
+   imagesInComment: ['Images in this comment', 'Ảnh trong bình luận'],
+   removeImage: ['Remove image', 'Xoá ảnh'],
    language: ['Language', 'Ngôn ngữ'],
 } as const;
 export type MessageKey = keyof typeof catalog;

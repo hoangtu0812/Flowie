@@ -2,6 +2,7 @@ import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { VStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
+import { AttachmentImage } from '@/components/common/attachment-image';
 import { cn } from '@/lib/utils';
 
 /** CommonMark/GFM rendering without raw HTML or executable URL protocols. */
@@ -103,18 +104,19 @@ export function MarkdownPreview({
                      aria-label={checked ? 'Completed task list item' : 'Incomplete task list item'}
                   />
                ),
-               img: ({ src, alt }) => (
-                  // eslint-disable-next-line @next/next/no-img-element -- Private URLs require browser credentials and have no intrinsic size metadata.
-                  <img
-                     src={src}
-                     alt={alt ?? ''}
-                     loading="lazy"
-                     className={cn(
-                        'max-w-full rounded',
-                        readable && 'h-auto border border-border/50'
-                     )}
-                  />
-               ),
+               img: ({ src, alt }) =>
+                  typeof src === 'string' ? (
+                     // Attachment URLs are private and need the session on the
+                     // request, which a bare `<img src>` cannot carry.
+                     <AttachmentImage
+                        src={src}
+                        alt={alt ?? ''}
+                        className={cn(
+                           'max-h-[28rem] w-auto object-contain',
+                           readable && 'border-border/50'
+                        )}
+                     />
+                  ) : null,
             }}
          >
             {content}
