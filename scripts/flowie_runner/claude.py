@@ -1,4 +1,6 @@
 import json
+import sys
+from uuid import uuid4
 
 from .process import run_process
 from .prompt import SUMMARY_SCHEMA, checked_summary, task_prompt
@@ -14,7 +16,8 @@ REQUIRED_FLAGS = [
     "--tools",
     "--restricted",
     "--strict-mcp-config",
-    "--no-session-persistence",
+    "--session-id",
+    "--name",
 ]
 
 
@@ -41,6 +44,16 @@ class ClaudeProvider:
             raise RuntimeError("Sign in to Claude Code before starting local work.")
 
     async def execute(self, config, context):
+        session = str(uuid4())
+        identifier = str(context.get("issue", {}).get("identifier") or "run")[:50]
+        # The transcript is kept so operators can follow or resume the session; stdout
+        # stays reserved for the runner's JSON result.
+        print(
+            f"Claude Code session {session}: claude --resume {session}"
+            f" in {config.repository_path}",
+            file=sys.stderr,
+            flush=True,
+        )
         # --restricted ignores user/project settings and confines file tools to the
         # checkout; --permission-prompts none denies anything acceptEdits would ask.
         code, output = await run_process(
@@ -59,7 +72,10 @@ class ClaudeProvider:
                 TOOLS,
                 "--restricted",
                 "--strict-mcp-config",
-                "--no-session-persistence",
+                "--session-id",
+                session,
+                "--name",
+                f"Flowie {identifier}",
             ],
             config.repository_path,
             config.command_timeout,

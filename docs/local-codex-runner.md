@@ -62,13 +62,14 @@ python -m flowie_runner --config ~/private/flowie-runner.json inspect --issue RE
 python -m flowie_runner --config ~/private/flowie-runner.json run --issue REPLACE_ISSUE_ID
 ```
 
-Runner gọi `claude --print --output-format json --json-schema … --permission-mode acceptEdits --permission-prompts none --tools Read,Edit,Write,Glob,Grep --restricted --strict-mcp-config --no-session-persistence` trong `repositoryPath`, prompt qua stdin và đọc `structured_output.summary` (tối đa 10.000 ký tự).
+Runner gọi `claude --print --output-format json --json-schema … --permission-mode acceptEdits --permission-prompts none --tools Read,Edit,Write,Glob,Grep --restricted --strict-mcp-config --session-id <uuid> --name "Flowie <mã issue>"` trong `repositoryPath`, prompt qua stdin và đọc `structured_output.summary` (tối đa 10.000 ký tự).
 
 - Chỉ có tool đọc/ghi file; không có Bash, WebFetch hay MCP. Test, commit, push và gọi Flowie vẫn do runner cha làm.
 - `--restricted` bỏ qua settings user/project/local, giới hạn tool file trong checkout và từ chối `bypassPermissions`; `--permission-prompts none` tự từ chối mọi thao tác cần hỏi (ví dụ ghi ngoài checkout). Không dùng `--dangerously-skip-permissions`.
 - Process con chỉ nhận biến môi trường trong allowlist (thêm `USER`/`LOGNAME` để Claude Code đọc login từ macOS keychain, và `CLAUDE_CONFIG_DIR`); `FLOWIE_MCP_TOKEN`, `GH_TOKEN`, `DATABASE_URL` không được chuyển. Đăng nhập bằng `claude auth login` trước; login qua biến `ANTHROPIC_API_KEY` không được chuyển vào process con.
 - `doctor` kiểm tra `claude --help` có đủ các flag trên và `claude auth status --json` báo `loggedIn: true`; CLI thiếu, cũ hoặc chưa đăng nhập đều bị từ chối. Đã kiểm tra với Claude Code 2.1.296.
 - Nhánh vẫn đặt tên `codex/flowie-RUN_ID` cho cả hai provider.
+- Theo dõi phiên: khi bắt đầu, runner in ra stderr dòng `Claude Code session <id>: claude --resume <id> in <repositoryPath>`. Trong lúc chạy, xem transcript bằng `tail -f ~/.claude/projects/*/<id>.jsonl`. Sau khi xong, chạy `claude --resume <id>` trong `repositoryPath` để đọc lại hoặc tiếp tục hội thoại (phiên tiếp tục này dùng quyền bình thường của bạn, không còn các giới hạn của runner). Transcript chứa nội dung issue và được lưu cục bộ trong `~/.claude/projects`.
 
 ## Chạy định kỳ cho hàng đợi automation
 

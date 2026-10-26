@@ -12,7 +12,7 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Added
 
-- The local Flowie agent runner can use Claude Code instead of Codex (`"provider": "claude"` in the runner JSON; Codex stays the default). Claude Code runs non-interactively in the checkout with file tools only, restricted settings, no MCP servers and no Flowie/SCM/database tokens; `doctor` rejects a missing, outdated or signed-out CLI. A new `pending` command lists issues with queued automation runs so the runner can be polled periodically. Local tooling only; nothing changes on CT107.
+- The local Flowie agent runner can use Claude Code instead of Codex (`"provider": "claude"` in the runner JSON; Codex stays the default). Claude Code runs non-interactively in the checkout with file tools only, restricted settings, no MCP servers and no Flowie/SCM/database tokens; `doctor` rejects a missing, outdated or signed-out CLI. Each Claude session is saved locally, named after the issue (for example `Flowie DTD-3`), and its id is printed when the run starts so it can be followed and later opened with `claude --resume`. A new `pending` command lists issues with queued automation runs so the runner can be polled periodically. Local tooling only; nothing changes on CT107.
 
 - Workspace owners can permanently delete a workspace from Workspace settings after typing its exact name. The API verifies active ownership and confirmation, removes workspace data atomically, and clears saved default-workspace preferences while preserving accounts and other workspaces.
 
