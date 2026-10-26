@@ -70,7 +70,7 @@ async def deliver_one(factory, settings, send=send_private_email, notification_i
         target = (
             (
                 await db.execute(
-                    text("""SELECT u.email,u.status,u.email_verified_at,w.slug,p.email_enabled,wm.status AS membership_status
+                    text("""SELECT u.email,u.status,u.email_verified_at,w.id AS workspace_id,p.email_enabled,wm.status AS membership_status
             FROM notifications n JOIN users u ON u.id=n.user_id JOIN workspaces w ON w.id=n.workspace_id
             LEFT JOIN workspace_members wm ON wm.user_id=n.user_id AND wm.workspace_id=n.workspace_id
             LEFT JOIN notification_preferences p ON p.user_id=n.user_id AND p.workspace_id=n.workspace_id WHERE n.id=:id"""),
@@ -98,7 +98,7 @@ async def deliver_one(factory, settings, send=send_private_email, notification_i
         message["To"] = target["email"]
         message["Message-ID"] = f"<{row['notification_id']}@flowie>"
         message.set_content(
-            f"You have a new Flowie notification.\n\n{settings.app_url}/{target['slug']}/inbox\n\nManage email notifications in workspace Settings > Notifications."
+            f"You have a new Flowie notification.\n\n{settings.app_url}/{target['workspace_id']}/inbox\n\nManage email notifications in workspace Settings > Notifications."
         )
         try:
             await send(settings, message)

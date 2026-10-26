@@ -19,9 +19,15 @@ interface StatusSelectorProps {
    status: Status;
    onChange: (status: Status) => void;
    counts?: Record<string, number>;
+   options?: Status[];
 }
 
-export function StatusSelector({ status, onChange, counts }: StatusSelectorProps) {
+export function StatusSelector({
+   status,
+   onChange,
+   counts,
+   options = allStatus,
+}: StatusSelectorProps) {
    const id = useId();
    const [open, setOpen] = useState<boolean>(false);
    const [value, setValue] = useState<string>(status.id);
@@ -36,7 +42,7 @@ export function StatusSelector({ status, onChange, counts }: StatusSelectorProps
       setValue(statusId);
       setOpen(false);
 
-      const newStatus = allStatus.find((s) => s.id === statusId);
+      const newStatus = options.find((s) => s.id === statusId);
       if (newStatus) {
          onChange(newStatus);
       }
@@ -55,14 +61,14 @@ export function StatusSelector({ status, onChange, counts }: StatusSelectorProps
                   aria-expanded={open}
                >
                   {(() => {
-                     const selectedItem = allStatus.find((item) => item.id === value) ?? status;
+                     const selectedItem = options.find((item) => item.id === value) ?? status;
                      if (selectedItem) {
                         const Icon = selectedItem.icon;
                         return <Icon />;
                      }
                      return null;
                   })()}
-                  <span>{allStatus.find((s) => s.id === value)?.name ?? status.name}</span>
+                  <span>{options.find((s) => s.id === value)?.name ?? status.name}</span>
                </Button>
             </PopoverTrigger>
             <PopoverContent
@@ -74,7 +80,7 @@ export function StatusSelector({ status, onChange, counts }: StatusSelectorProps
                   <CommandList>
                      <CommandEmpty>No status found.</CommandEmpty>
                      <CommandGroup>
-                        {allStatus.map((item) => (
+                        {options.map((item) => (
                            <CommandItem
                               key={item.id}
                               value={item.id}

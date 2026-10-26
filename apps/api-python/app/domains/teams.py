@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..modules.access.membership import _workspace_role as _workspace_role, _manager as _manager
+from ..modules.access.membership import _workspace_role as _workspace_role, _manager as _manager, _owner
 
 from datetime import timedelta
 import json
@@ -40,7 +40,7 @@ class UpdateTeamInput(BaseModel):
     icon: str | None = Field(default=None, max_length=16)
     color: str | None = Field(default=None, pattern=r'^#[0-9a-fA-F]{6}$')
     triageEnabled: bool | None = None
-    joinPolicy: Literal['OPEN', 'INVITE_ONLY'] | None = None
+    joinPolicy: Literal['INVITE_ONLY'] | None = None
     cycleCadenceWeeks: int | None = Field(default=None, ge=1, le=12)
     autoCloseDays: int | None = Field(default=None, ge=1, le=3650)
     autoArchiveDays: int | None = Field(default=None, ge=1, le=3650)
@@ -59,10 +59,11 @@ class TeamMemberRoleInput(BaseModel):
 
 
 def _team(row: Any) -> dict[str, Any]:
+    # Owner-managed membership also applies to legacy teams stored with OPEN access.
     return {
         'id': row['id'], 'workspaceId': row['workspace_id'], 'name': row['name'],
         'identifier': row['identifier'], 'description': row['description'], 'icon': row['icon'],
-        'color': row['color'], 'joinPolicy': row['join_policy'], 'triageEnabled': row['triage_enabled'],
+        'color': row['color'], 'joinPolicy': 'INVITE_ONLY', 'triageEnabled': row['triage_enabled'],
         'cycleCadenceWeeks': row['cycle_cadence_weeks'], 'autoCloseDays': row['auto_close_days'],
         'autoArchiveDays': row['auto_archive_days'], 'parentTeamId': row['parent_team_id'],
         'defaultIssueTemplateId': row['default_issue_template_id'], 'archivedAt': row['archived_at'],
@@ -130,7 +131,10 @@ async def create_team(payload: CreateTeamInput, user: Any = Depends(current_user
     team_id, now = _cuid(), _utcnow()
     try:
         await db.execute(text('''INSERT INTO teams (id, workspace_id, name, identifier, description, icon, color, created_at, updated_at) VALUES (:id, :workspace_id, :name, :identifier, :description, :icon, :color, :now, :now)'''), {'id': team_id, 'workspace_id': payload.workspaceId, 'name': name, 'identifier': identifier, 'description': payload.description, 'icon': payload.icon or '👥', 'color': payload.color or '#6366f1', 'now': now})
-        await db.execute(text("INSERT INTO team_members (team_id, user_id, role) VALUES (:team_id, :user_id, 'LEAD')"), {'team_id': team_id, 'user_id': user['id']})
+        # Administrators may create teams, but only an owner can grant membership.
+        if await _workspace_role(db, payload.workspaceId, user['id']) == 'OWNER':
+            await _owner(db, payload.workspaceId, user['id'])
+            await db.execute(text("INSERT INTO team_members (team_id, user_id, role) VALUES (:team_id, :user_id, 'LEAD')"), {'team_id': team_id, 'user_id': user['id']})
         await db.execute(text("INSERT INTO document_folders (id, workspace_id, team_id, name, icon, position, created_at, updated_at) VALUES (:id, :workspace_id, :team_id, 'Team documents', '📁', 0, :now, :now)"), {'id': _cuid(), 'workspace_id': payload.workspaceId, 'team_id': team_id, 'now': now})
         await db.commit()
     except IntegrityError as error:
@@ -267,7 +271,7 @@ async def restore_team(team_id: str, workspaceId: str = Query(min_length=1), use
 
 @router.post('/{team_id}/members')
 async def add_member(team_id: str, payload: TeamMemberInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _manager(db, payload.workspaceId, user['id'])
+    await _owner(db, payload.workspaceId, user['id'])
     if not await _team_row(db, team_id, payload.workspaceId): raise ApiError(404, 'Team not found.', 'Not Found')
     active = await db.execute(text("SELECT 1 FROM workspace_members WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'"), {'workspace_id': payload.workspaceId, 'user_id': payload.userId})
     if active.scalar_one_or_none() is None: raise ApiError(404, 'Workspace member not found.', 'Not Found')
@@ -281,11 +285,9 @@ async def add_member(team_id: str, payload: TeamMemberInput, user: Any = Depends
 
 @router.post('/{team_id}/join')
 async def join_team(team_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    role = await _workspace_role(db, workspaceId, user['id'])
+    await _owner(db, workspaceId, user['id'])
     team = await _team_row(db, team_id, workspaceId)
     if not team: raise ApiError(404, 'Team not found.', 'Not Found')
-    existing = await db.execute(text('SELECT 1 FROM team_members WHERE team_id = :team_id AND user_id = :user_id'), {'team_id': team_id, 'user_id': user['id']})
-    if team['join_policy'] == 'INVITE_ONLY' and existing.scalar_one_or_none() is None and role not in {'OWNER', 'ADMIN'}: raise ApiError(403, 'This team is invite-only. Ask a workspace administrator to add you.', 'Forbidden')
     await db.execute(text("INSERT INTO team_members (team_id, user_id, role) VALUES (:team_id, :user_id, 'MEMBER') ON CONFLICT (team_id, user_id) DO NOTHING"), {'team_id': team_id, 'user_id': user['id']})
     await db.commit()
     member = [entry for entry in await _members(db, team_id) if entry['userId'] == user['id']][0]

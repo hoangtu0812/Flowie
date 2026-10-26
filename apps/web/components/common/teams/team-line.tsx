@@ -10,7 +10,7 @@ import { useState } from 'react';
 
 interface TeamLineProps {
    team: WorkspaceTeam;
-   onJoin: (teamId: string) => Promise<void>;
+   onJoin?: (teamId: string) => Promise<void>;
 }
 
 const dateLabel = (value: string) => {
@@ -28,7 +28,7 @@ export default function TeamLine({ team, onJoin }: TeamLineProps) {
    const join = async () => {
       setJoining(true);
       try {
-         await onJoin(team.id);
+         await onJoin?.(team.id);
       } finally {
          setJoining(false);
       }
@@ -55,7 +55,15 @@ export default function TeamLine({ team, onJoin }: TeamLineProps) {
                      Joined
                   </span>
                )}
-               {!team.joined && (
+               {!team.joined && !onJoin && (
+                  <p
+                     className="text-xs text-muted-foreground"
+                     title="Ask the workspace owner to add you to this team."
+                  >
+                     Owner managed
+                  </p>
+               )}
+               {!team.joined && onJoin && (
                   <Button
                      size="xs"
                      variant="outline"

@@ -24,8 +24,8 @@ EVENTS = """WITH events AS (
 
 def visible_entities():
     project = project_read_scope(include_archived=True, include_archived_teams=True)
-    team = """EXISTS(SELECT 1 FROM team_members tm JOIN teams t ON t.id=tm.team_id
-        WHERE tm.user_id=:user AND t.id=i.team_id AND t.workspace_id=:workspace)"""
+    team = """(i.team_id IS NULL OR EXISTS(SELECT 1 FROM team_members tm JOIN teams t ON t.id=tm.team_id
+        WHERE tm.user_id=:user AND t.id=i.team_id AND t.workspace_id=:workspace))"""
     issue = f"EXISTS(SELECT 1 FROM issues i WHERE i.id=ev.entity_id AND i.workspace_id=:workspace AND {team})"
     document = """EXISTS(SELECT 1 FROM documents d WHERE d.id=ev.entity_id AND d.workspace_id=:workspace AND
         (d.team_id IS NULL OR EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=d.team_id AND tm.user_id=:user)))"""

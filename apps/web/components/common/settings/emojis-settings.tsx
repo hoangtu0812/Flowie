@@ -293,7 +293,7 @@ export default function EmojisSettings() {
                   <AlertDialogCancel disabled={removing}>Cancel</AlertDialogCancel>
                   <AlertDialogAction
                      disabled={removing}
-                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                     variant="destructive"
                      onClick={(event) => {
                         event.preventDefault();
                         if (removeTarget) void archive(removeTarget);

@@ -1,4 +1,7 @@
 export const messages = {
+   'No team': 'Chưa có nhóm',
+   'Bugs': 'Lỗi',
+
    'Issue actions': 'Thao tác công việc',
    'Exporting issues…': 'Đang xuất công việc…',
    'Export matching issues CSV': 'Xuất CSV công việc khớp bộ lọc',

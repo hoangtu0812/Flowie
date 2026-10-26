@@ -45,7 +45,7 @@ export default function IssueDetails() {
    );
 
    const team = teams.find((candidate) => candidate.id === issue?.teamId);
-   const listHref = useRef(`/${orgId ?? ''}/my-issues`);
+   const listHref = useRef(`/${orgId ?? ''}/issues`);
    useEffect(() => {
       if (team) listHref.current = `/${orgId}/team/${team.identifier}/all`;
    }, [orgId, team]);

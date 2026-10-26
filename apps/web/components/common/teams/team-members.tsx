@@ -30,6 +30,7 @@ export default function TeamMembers() {
    const {
       team,
       workspaceId,
+      canAddTeamMembers,
       workspaceMembers,
       loading,
       error,
@@ -65,7 +66,7 @@ export default function TeamMembers() {
       );
 
    const add = async () => {
-      if (!personId) return;
+      if (!personId || !canAddTeamMembers) return;
       setSaving(true);
       try {
          await addMember(personId, role);
@@ -104,10 +105,12 @@ export default function TeamMembers() {
          <div className="flex items-center justify-between px-6 py-3">
             <span className="text-sm text-muted-foreground font-medium">Name ↓</span>
             <div className="flex items-center gap-2">
-               <Button size="xs" variant="secondary" onClick={() => setDialogOpen(true)}>
-                  <Plus className="size-4 mr-1" />
-                  Add a member
-               </Button>
+               {canAddTeamMembers && (
+                  <Button size="xs" variant="secondary" onClick={() => setDialogOpen(true)}>
+                     <Plus className="size-4 mr-1" />
+                     Add a member
+                  </Button>
+               )}
                <Button size="xs" variant="ghost" aria-label="Display options">
                   <SlidersHorizontal className="size-4" />
                </Button>
@@ -165,7 +168,10 @@ export default function TeamMembers() {
                </div>
             </div>
          ))}
-         <Dialog open={dialogOpen} onOpenChange={(open) => !saving && setDialogOpen(open)}>
+         <Dialog
+            open={dialogOpen && canAddTeamMembers}
+            onOpenChange={(open) => !saving && setDialogOpen(open)}
+         >
             <DialogContent>
                <DialogHeader>
                   <DialogTitle>Add a team member</DialogTitle>

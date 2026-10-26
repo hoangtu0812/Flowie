@@ -198,7 +198,7 @@ export default function AdminPage() {
       void load();
       void loadWorkspaceMemberships()
          .then((memberships) => {
-            if (memberships[0]) setAppHref(`/${memberships[0].workspace.slug}/inbox`);
+            if (memberships[0]) setAppHref(`/${memberships[0].workspace.id}/inbox`);
          })
          .catch(() => undefined);
    }, [load]);

@@ -1,6 +1,6 @@
 'use client';
 
-import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
+import { authenticatedFetch, loadCurrentWorkspaceMembership } from '@/lib/workspaces';
 
 export type TeamMember = {
    id: string;
@@ -51,9 +51,11 @@ export const mapWorkspaceTeam = (team: ApiTeam): WorkspaceTeam => ({
 
 export async function loadCurrentWorkspaceTeams(): Promise<{
    workspaceId: string;
+   canAddTeamMembers: boolean;
    teams: WorkspaceTeam[];
 }> {
-   const workspaceId = (await loadCurrentWorkspace()).id;
+   const { workspace, role } = await loadCurrentWorkspaceMembership();
+   const workspaceId = workspace.id;
 
    const teamsResponse = await authenticatedFetch(`${api}/teams?workspaceId=${workspaceId}`);
    if (!teamsResponse.ok) throw new Error('Could not load teams.');
@@ -61,6 +63,7 @@ export async function loadCurrentWorkspaceTeams(): Promise<{
    const payload = (await teamsResponse.json()) as { data: ApiTeam[] };
    return {
       workspaceId,
+      canAddTeamMembers: role === 'OWNER',
       teams: payload.data.map(mapWorkspaceTeam),
    };
 }

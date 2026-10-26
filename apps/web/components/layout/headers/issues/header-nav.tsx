@@ -2,6 +2,8 @@
 import { useMessages } from '@/features/shared/use-messages';
 import { messages } from '@/features/navigation/messages.vi';
 
+import { workspaceIssueViews } from '@/features/issues/workspace-views';
+import { HStack } from '@astryxdesign/core/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -20,30 +22,40 @@ const ISSUE_VIEW_TABS = [
 ];
 
 function IssueViewTabs() {
+   const tx = useMessages(messages);
    const { orgId, teamId } = useParams<{ orgId: string; teamId: string }>();
    const pathname = usePathname();
+   const tabsRef = useRef<HTMLDivElement>(null);
+   useEffect(() => {
+      tabsRef.current
+         ?.querySelector('[aria-current="page"]')
+         ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+   }, [pathname]);
 
    return (
-      <div className="flex items-center gap-1">
-         {ISSUE_VIEW_TABS.map((tab) => {
-            const href = `/${orgId}/team/${teamId}/${tab.segment}`;
+      <HStack ref={tabsRef} gap={1} align="center" className="min-w-0 overflow-x-auto">
+         {(teamId ? ISSUE_VIEW_TABS : workspaceIssueViews).map((tab) => {
+            const href = teamId
+               ? `/${orgId}/team/${teamId}/${tab.segment}`
+               : `/${orgId}/issues${tab.segment ? `/${tab.segment}` : ''}`;
             const isActive = pathname === href;
             return (
                <Link
                   key={tab.segment}
                   href={href}
+                  aria-current={isActive ? 'page' : undefined}
                   className={cn(
-                     'px-2.5 h-7 inline-flex items-center rounded-full border text-xs font-medium transition-colors',
+                     'shrink-0 px-2.5 h-7 inline-flex items-center rounded-full border text-xs font-medium transition-colors',
                      isActive
                         ? 'bg-accent text-foreground border-border'
                         : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-accent/50'
                   )}
                >
-                  {tab.label}
+                  {tx(tab.label)}
                </Link>
             );
          })}
-      </div>
+      </HStack>
    );
 }
 
@@ -83,7 +95,7 @@ export default function HeaderNav() {
 
    return (
       <div className="w-full flex justify-between items-center border-b py-1.5 px-6 h-10">
-         <div className="flex items-center gap-3">
+         <div className="flex min-w-0 items-center gap-3">
             <SidebarTrigger className="" />
             <IssueViewTabs />
          </div>

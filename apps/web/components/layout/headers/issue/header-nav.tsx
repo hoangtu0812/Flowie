@@ -70,6 +70,14 @@ export default function HeaderNav() {
                   <span className="text-sm font-medium hidden md:inline">{team.name}</span>
                </Link>
             )}
+            {issue && !team && (
+               <Link
+                  href={`/${orgId}/issues`}
+                  className="shrink-0 text-sm text-muted-foreground hover:text-foreground"
+               >
+                  {tx('All issues')}
+               </Link>
+            )}
             {cycle && (
                <>
                   <ChevronRight className="size-3.5 text-muted-foreground shrink-0" />

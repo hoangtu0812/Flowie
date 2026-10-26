@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
+import { authenticatedFetch, loadCurrentWorkspaceMembership } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
 
 export type LiveTeamMember = {
@@ -72,6 +72,7 @@ const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 /** Resolves a sidebar identifier or database id, then loads the live team data. */
 export function useLiveTeam(teamReference: string) {
+   const [canAddTeamMembers, setCanAddTeamMembers] = useState(false);
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [team, setTeam] = useState<LiveTeam>();
    const [documents, setDocuments] = useState<LiveDocument[]>([]);
@@ -87,7 +88,8 @@ export function useLiveTeam(teamReference: string) {
          setLoading(true);
          setError(undefined);
          try {
-            const currentWorkspaceId = (await loadCurrentWorkspace()).id;
+            const membership = await loadCurrentWorkspaceMembership();
+            const currentWorkspaceId = membership.workspace.id;
 
             const teamsResponse = await authenticatedFetch(
                `${api}/teams?workspaceId=${currentWorkspaceId}`
@@ -119,6 +121,7 @@ export function useLiveTeam(teamReference: string) {
                (await documentFoldersResponse.json()) as { data: LiveDocumentFolder[] }
             ).data;
             setWorkspaceId(currentWorkspaceId);
+            setCanAddTeamMembers(membership.role === 'OWNER');
             setTeam(((await teamResponse.json()) as { data: LiveTeam }).data);
             setDocumentFolders(folders);
             setDocuments(folders.flatMap((folder) => folder.documents));
@@ -168,6 +171,8 @@ export function useLiveTeam(teamReference: string) {
 
    const addMember = useCallback(
       async (userId: string, role: 'LEAD' | 'MEMBER') => {
+         if (!canAddTeamMembers)
+            throw new Error('Only the workspace owner can add people to a team.');
          const context = requireContext();
          const response = await authenticatedFetch(`${api}/teams/${context.teamId}/members`, {
             method: 'POST',
@@ -182,7 +187,7 @@ export function useLiveTeam(teamReference: string) {
          }
          reload();
       },
-      [reload, requireContext]
+      [reload, requireContext, canAddTeamMembers]
    );
 
    const updateMember = useCallback(
@@ -366,6 +371,7 @@ export function useLiveTeam(teamReference: string) {
    );
 
    return {
+      canAddTeamMembers,
       workspaceId,
       team,
       documents,

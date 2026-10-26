@@ -20,3 +20,17 @@ async def _workspace_role(db: AsyncSession, workspace_id: str, user_id: str) -> 
 async def _manager(db: AsyncSession, workspace_id: str, user_id: str) -> None:
     if await _workspace_role(db, workspace_id, user_id) not in {"OWNER", "ADMIN"}:
         raise ApiError(403, "Workspace administrator access is required.", "Forbidden")
+
+
+async def _owner(db: AsyncSession, workspace_id: str, user_id: str) -> None:
+    # Keep ownership stable until the protected membership write commits.
+    result = await db.execute(
+        text("""SELECT role FROM workspace_members
+            WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'
+            FOR SHARE"""),
+        {"workspace_id": workspace_id, "user_id": user_id},
+    )
+    if result.scalar_one_or_none() != "OWNER":
+        raise ApiError(
+            403, "Only the workspace owner can add people to a team.", "Forbidden"
+        )

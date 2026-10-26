@@ -129,9 +129,7 @@ export default function TeamSettings({ teamId }: { teamId: string }) {
                <div className="flex-1">
                   <h1 className="text-2xl font-medium">{team.name}</h1>
                   <p className="text-sm text-muted-foreground">
-                     {team.joinPolicy === 'OPEN'
-                        ? 'Accessible to all workspace members'
-                        : 'Invite-only team'}
+                     Membership managed by the workspace owner
                   </p>
                </div>
                <Link
@@ -155,12 +153,8 @@ export default function TeamSettings({ teamId }: { teamId: string }) {
                      <SettingsRow
                         icon={<Lock className="size-4" />}
                         title="Access and permissions"
-                        description="Control who can join this team"
-                        trailing={
-                           <span>{team.joinPolicy === 'OPEN' ? 'Open' : 'Invite only'}</span>
-                        }
-                        chevron
-                        onClick={() => setEditing('access')}
+                        description="Only the workspace owner can add people to this team."
+                        trailing={<span>Owner managed</span>}
                      />
                      <SettingsRow
                         icon={<Users className="size-4" />}

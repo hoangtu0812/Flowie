@@ -14,6 +14,12 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 - The local Flowie agent runner can use Claude Code instead of Codex (`"provider": "claude"` in the runner JSON; Codex stays the default). Claude Code runs non-interactively in the checkout with file tools only, restricted settings, no MCP servers and no Flowie/SCM/database tokens; `doctor` rejects a missing, outdated or signed-out CLI. A new `pending` command lists issues with queued automation runs so the runner can be polled periodically. Local tooling only; nothing changes on CT107.
 
+- Workspace owners can permanently delete a workspace from Workspace settings after typing its exact name. The API verifies active ownership and confirmation, removes workspace data atomically, and clears saved default-workspace preferences while preserving accounts and other workspaces.
+
+- Workspace URLs now use the existing immutable workspace ID, independent of Vietnamese names. Existing slug links redirect to the equivalent ID-based page with query parameters and anchors preserved; workspace navigation and notification links use the stable ID. No additional migration is required for workspace URLs or deletion.
+
+- Workspace All issues includes Active, Backlog, Bugs, No team, and No project views with the existing search, filters, export, and bulk actions. Issues and bugs can be created without a team or project, default to workspace Backlog, and can later move into a team or back to the workspace. Workspace issues use `WS_` identifiers and remain visible only to active workspace members; team issues retain team access rules. Apply migration `20261026120000_workspace_issues` before starting the API or worker.
+
 - Workspace owners and admins can browse existing active Flowie users and search by name or email when inviting members. Results exclude current members and pending invitations, with bounded results and retry support.
 
 - Microsoft Teams notifications: workspace administrators can connect a Teams channel next to Discord in Settings → Integrations, and project leads or administrators can connect a per-project channel from the project's properties ("MS Teams" below Slack). Issue and project events are posted as Adaptive Cards through Teams Workflows webhooks (`*.logic.azure.com` / `*.api.powerplatform.com` only). The feature is hidden and rejected by the API unless Microsoft Entra sign-in (`AZURE_AD_*`) is configured. Requires the `teams_channels` migration; daily digests and dispatcher reports remain Discord-only.
@@ -202,6 +208,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Security
 
+- Only active workspace owners can add team members or join teams, including teams previously configured as Open. Members, team leads, and workspace admins cannot self-join or add others through the API. Team access screens hide unauthorized join/add actions and show owner-managed membership; administrators creating teams no longer gain automatic membership. Existing memberships are preserved; no migration is required.
+
 - Browser access tokens are bound to revocable database sessions with explicit issuer, audience and purpose. Refresh secrets rotate once while retaining the device identity; logout and individual-device revocation block still-unexpired access tokens, and sockets revalidate within 15 seconds. Apply the account-security-history migration first; valid older refresh cookies can upgrade, while access-only legacy clients must sign in again.
 
 - Account security exposes paged personal login history and owned credential inventory, permits revoking an MCP connection after workspace access is lost, and retires issuance of personal keys unsupported by the current API. Password sign-in is rate-limited by account and request peer; review AUTH_LOGIN_IP_LIMIT for corporate networks. This is the session foundation; MFA enrollment is a separate gate.
@@ -215,6 +223,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 ### Fixed
 
 - Microsoft Teams "Save", "Disconnect" and "Send test" (workspace Integrations and project channel) now show a progress state and report success or the API/provider error in a toast on every attempt, instead of silently repeating the previous message; a network failure no longer leaves Save stuck.
+
+- Archive issue and destructive Settings confirmation buttons keep their labels readable against the red background in light and dark themes.
 
 - Dashboard project/date filters use consistent control heights and labels, with centered range summaries and actions. Narrow screens wrap filters without changing their values or behavior.
 

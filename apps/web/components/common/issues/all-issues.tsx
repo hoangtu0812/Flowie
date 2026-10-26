@@ -1,5 +1,6 @@
 'use client';
 
+import type { IssueQuery } from '@/features/issues/issue-query';
 import { useIssueQuery } from '@/features/issues/use-issue-query';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Issue } from '@/mock-data/issues';
@@ -24,9 +25,10 @@ interface AllIssuesProps {
     * tabs. When omitted, every status is shown ("All issues").
     */
    categories?: StatusCategory[];
+   query?: IssueQuery;
 }
 
-export default function AllIssues({ categories }: AllIssuesProps) {
+export default function AllIssues({ categories, query }: AllIssuesProps) {
    const { isSearchOpen, searchQuery } = useSearchStore();
    const { viewType } = useViewStore();
    const { filters } = useFilterStore();
@@ -35,7 +37,7 @@ export default function AllIssues({ categories }: AllIssuesProps) {
    const { openPanel } = useRightPanelStore();
    const params = useParams<{ teamId?: string | string[] }>();
    const teamIdentifier = Array.isArray(params.teamId) ? params.teamId[0] : params.teamId;
-   const queryState = useIssueQuery(teamIdentifier, { categories });
+   const queryState = useIssueQuery(teamIdentifier, { ...query, categories });
 
    const isSearching = isSearchOpen && searchQuery.trim() !== '';
    const isViewTypeGrid = viewType === 'grid';

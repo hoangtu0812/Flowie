@@ -111,6 +111,7 @@ export function CommandPalette() {
       setIssueCycle,
       setIssueReleases,
       moveIssue,
+      retryIssues,
    } = useIssuesStore();
    const { openModal } = useCreateIssueStore();
 
@@ -723,6 +724,14 @@ export function CommandPalette() {
                                  onSelect={() => {
                                     void moveIssue(issue.id, team.id)
                                        .then((moved) => {
+                                          if (
+                                             pathname.endsWith(`/issue/${issue.identifier}`) ||
+                                             pathname.endsWith(`/issue/${issue.id}`)
+                                          ) {
+                                             router.replace(`/${orgId}/issue/${moved.identifier}`);
+                                          } else {
+                                             void retryIssues();
+                                          }
                                           toast.success(`Moved as ${moved.identifier}`);
                                           close();
                                        })

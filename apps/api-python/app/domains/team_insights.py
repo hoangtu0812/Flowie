@@ -48,14 +48,14 @@ def hcm_today(value: datetime | None = None) -> str:
 async def _app_links(
     db: AsyncSession, workspace_id: str
 ) -> tuple[str | None, str | None]:
-    """Base app URL and workspace slug for Discord links.
+    """Base app URL and stable workspace ID for Discord links.
 
     Discord rejects a whole embed when a link is not absolute, so callers
     must fall back to plain text whenever either part is missing.
     """
     base = (getenv("APP_URL") or getenv("NEXT_PUBLIC_APP_URL") or "").rstrip("/")
     result = await db.execute(
-        text("SELECT slug FROM workspaces WHERE id = :workspace_id"),
+        text("SELECT id FROM workspaces WHERE id = :workspace_id"),
         {"workspace_id": workspace_id},
     )
     return (base or None, result.scalar_one_or_none())

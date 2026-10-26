@@ -18,7 +18,7 @@ def notification_scope(alias="n", *, actor=None):
 
     project = f"p.workspace_id={alias}.workspace_id AND p.archived_at IS NULL AND {team('p', True)}"
     issue = (
-        f"i.workspace_id={alias}.workspace_id AND i.archived_at IS NULL AND {team('i')}"
+        f"i.workspace_id={alias}.workspace_id AND i.archived_at IS NULL AND {team('i', True)}"
     )
     return f"""EXISTS(SELECT 1 FROM workspace_members scope_wm JOIN users scope_user ON scope_user.id=scope_wm.user_id
         WHERE scope_wm.workspace_id={alias}.workspace_id AND scope_wm.user_id={actor} AND scope_wm.status='ACTIVE' AND scope_user.status='ACTIVE')

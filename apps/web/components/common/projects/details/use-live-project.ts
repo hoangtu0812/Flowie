@@ -69,7 +69,7 @@ export type LiveProjectIssue = {
    actualEffort: number | null;
    dueDate: string | null;
    status: { id: string; name: string; category: string; color: string };
-   team: { id: string; name: string; identifier: string };
+   team: { id: string; name: string; identifier: string } | null;
    creator: { id: string; name: string; avatarUrl: string | null };
    assignee: { id: string; name: string; avatarUrl: string | null } | null;
    labelLinks: Array<{ label: { id: string; name: string; color: string } }>;

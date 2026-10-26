@@ -124,7 +124,7 @@ export function IssueContextMenu({ issueId }: IssueContextMenuProps) {
    };
 
    const handleMakeCopy = async () => {
-      if (!issue?.teamId) return;
+      if (!issue) return;
       try {
          const copy = await createIssue({
             teamId: issue.teamId,

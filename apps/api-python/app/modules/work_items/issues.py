@@ -25,6 +25,7 @@ from .issue_rules import (
 from .issue_queries import _issue_row, _status_name, _person_name, _project_name
 from .issue_activity import _write_activity, _transition
 from .lifecycle import actor_context
+from .issue_numbering import allocate_issue_number
 
 
 async def create_issue(
@@ -33,7 +34,8 @@ async def create_issue(
     db: AsyncSession,
 ) -> dict[str, dict[str, Any]]:
     await _workspace_access(db, payload.workspaceId, user["id"])
-    await _team_access(db, payload.workspaceId, payload.teamId, user["id"])
+    if payload.teamId:
+        await _team_access(db, payload.workspaceId, payload.teamId, user["id"])
     await actor_context(db, user["id"])
     values = payload.model_dump()
     category = await _validate_references(
@@ -51,7 +53,7 @@ async def create_issue(
     if values.get("parentIssueId"):
         parent = await db.execute(
             text("""SELECT 1 FROM issues WHERE id = :issue_id AND workspace_id = :workspace_id
-                    AND team_id = :team_id AND archived_at IS NULL"""),
+                    AND team_id IS NOT DISTINCT FROM :team_id AND archived_at IS NULL"""),
             {
                 "issue_id": values["parentIssueId"],
                 "workspace_id": payload.workspaceId,
@@ -62,19 +64,8 @@ async def create_issue(
             raise ApiError(
                 404, "Parent issue was not found for this team.", "Not Found"
             )
-    team = await db.execute(
-        text("""UPDATE teams SET issue_sequence = issue_sequence + 1, updated_at = :now
-                WHERE id = :team_id AND workspace_id = :workspace_id
-                RETURNING identifier, issue_sequence"""),
-        {
-            "team_id": payload.teamId,
-            "workspace_id": payload.workspaceId,
-            "now": _utcnow(),
-        },
-    )
-    sequence = team.mappings().first()
-    if not sequence:
-        raise ApiError(404, "Team not found.", "Not Found")
+    sequence = await allocate_issue_number(db, payload.workspaceId, payload.teamId)
+    identifier = sequence["issue_identifier"]
     issue_id, now = _cuid(), _utcnow()
     sla_clock = (
         safe_clock(sla_policy, values["statusId"], category, now)
@@ -102,7 +93,7 @@ async def create_issue(
             "status_id": values["statusId"],
             "project_id": values.get("projectId"),
             "parent_issue_id": values.get("parentIssueId"),
-            "identifier": f"{sequence['identifier']}-{sequence['issue_sequence']}",
+            "identifier": identifier,
             "number": sequence["issue_sequence"],
             "title": payload.title.strip(),
             "description": values.get("description"),
@@ -147,7 +138,7 @@ async def create_issue(
         "issue.created",
         {
             "title": payload.title.strip(),
-            "identifier": f"{sequence['identifier']}-{sequence['issue_sequence']}",
+            "identifier": identifier,
         },
     )
     if values.get("parentIssueId"):
@@ -159,12 +150,12 @@ async def create_issue(
             "issue.subissue_created",
             {
                 "issueId": issue_id,
-                "identifier": f"{sequence['identifier']}-{sequence['issue_sequence']}",
+                "identifier": identifier,
                 "title": payload.title.strip(),
             },
         )
     created_details = [
-        ("Team", sequence["identifier"]),
+        ("Team", sequence["identifier"] or "No team"),
         ("Status", await _status_name(db, values["statusId"]) or ""),
         ("Priority", (values.get("priority") or "NONE").title()),
     ]
@@ -181,8 +172,8 @@ async def create_issue(
         entity_id=issue_id,
         title=payload.title.strip(),
         message="created a new issue",
-        entity_path=f"/issue/{sequence['identifier']}-{sequence['issue_sequence']}",
-        entity_label=f"{sequence['identifier']}-{sequence['issue_sequence']}",
+        entity_path=f"/issue/{identifier}",
+        entity_label=identifier,
         details=created_details,
         body=values.get("description"),
     )
@@ -196,8 +187,8 @@ async def create_issue(
         entity_id=issue_id,
         title=payload.title.strip(),
         message="assigned you to an issue",
-        entity_path=f"/issue/{sequence['identifier']}-{sequence['issue_sequence']}",
-        entity_label=f"{sequence['identifier']}-{sequence['issue_sequence']}",
+        entity_path=f"/issue/{identifier}",
+        entity_label=identifier,
         discord=False,
     )
     await stage_notifications(

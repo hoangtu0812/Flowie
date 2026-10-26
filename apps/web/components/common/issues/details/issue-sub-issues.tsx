@@ -64,7 +64,7 @@ export function IssueSubIssues({
    orgId,
 }: {
    issueId: string;
-   teamId: string;
+   teamId?: string;
    orgId: string;
 }) {
    const { workspaceId, retryIssues } = useIssuesStore();

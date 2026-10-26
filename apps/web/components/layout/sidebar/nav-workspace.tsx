@@ -49,6 +49,7 @@ interface WorkspaceNavItem {
 
 const WORKSPACE_NAV: WorkspaceNavItem[] = [
    { key: 'dashboard', name: 'Dashboard', icon: ChartNoAxesCombined, url: '/dashboard' },
+   { key: 'issues', name: 'All issues', icon: LayoutList, url: '/issues' },
    { key: 'initiatives', name: 'Initiatives', icon: Compass, url: '/initiatives' },
    { key: 'projects', name: 'Projects', icon: Box, url: '/projects' },
    { key: 'views', name: 'Views', icon: Layers, url: '/views' },

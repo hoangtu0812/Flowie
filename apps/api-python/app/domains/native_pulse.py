@@ -16,7 +16,7 @@ async def pulse(workspaceId:str=Query(min_length=1),limit:int=Query(default=100,
     await _workspace_access(db,workspaceId,user['id'])
     activities=await db.execute(text('''SELECT a.*,u.name actor_name,u.avatar_url actor_avatar,i.id issue_id,i.identifier issue_identifier,i.title issue_title,p.id project_id,p.name project_name
     FROM activities a LEFT JOIN users u ON u.id=a.actor_id LEFT JOIN issues i ON i.id=a.issue_id LEFT JOIN projects p ON p.id=a.project_id
-    WHERE a.workspace_id=:workspace_id AND (i.id IS NULL OR (i.archived_at IS NULL AND EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=i.team_id AND tm.user_id=:user_id)))
+    WHERE a.workspace_id=:workspace_id AND (i.id IS NULL OR (i.archived_at IS NULL AND (i.team_id IS NULL OR EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=i.team_id AND tm.user_id=:user_id))))
     AND (p.id IS NULL OR (p.archived_at IS NULL AND (p.team_id IS NULL OR EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=p.team_id AND tm.user_id=:user_id)))) ORDER BY a.created_at DESC LIMIT :limit'''),{'workspace_id':workspaceId,'user_id':user['id'],'limit':limit})
     updates=await db.execute(text('''SELECT pu.*,u.name actor_name,u.avatar_url actor_avatar,p.id project_id,p.name project_name FROM project_updates pu JOIN users u ON u.id=pu.author_id JOIN projects p ON p.id=pu.project_id
     WHERE pu.workspace_id=:workspace_id AND p.archived_at IS NULL AND (p.team_id IS NULL OR EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=p.team_id AND tm.user_id=:user_id)) ORDER BY pu.created_at DESC LIMIT :limit'''),{'workspace_id':workspaceId,'user_id':user['id'],'limit':limit})

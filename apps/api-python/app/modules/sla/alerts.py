@@ -16,13 +16,21 @@ from .cycles import LIVE, TERMINAL
 async def escalation_actor(db, issue, identifier):
     if not identifier:
         return None
+    team_join = (
+        "JOIN team_members tm ON tm.user_id=u.id AND tm.team_id=:team"
+        if issue["team_id"]
+        else ""
+    )
+    locked_rows = "u,wm,tm" if issue["team_id"] else "u,wm"
     return (
         (
             await db.execute(
-                text("""SELECT u.id,u.name,u.avatar_url FROM users u
+                text(
+                    f"""SELECT u.id,u.name,u.avatar_url FROM users u
         JOIN workspace_members wm ON wm.user_id=u.id AND wm.workspace_id=:workspace
-        JOIN team_members tm ON tm.user_id=u.id AND tm.team_id=:team
-        WHERE u.id=:id AND u.status='ACTIVE' AND wm.status='ACTIVE' FOR SHARE OF u,wm,tm"""),
+        {team_join}
+        WHERE u.id=:id AND u.status='ACTIVE' AND wm.status='ACTIVE' FOR SHARE OF {locked_rows}"""
+                ),
                 {
                     "id": identifier,
                     "workspace": issue["workspace_id"],
@@ -87,9 +95,11 @@ async def alert_intent(db, issue, cycle, kind, now, *, suppressed=None):
         entity_type="issue",
         entity_id=issue["id"],
         title=issue["title"],
-        message="SLA is nearing its deadline"
-        if kind == "warning"
-        else "SLA deadline was exceeded",
+        message=(
+            "SLA is nearing its deadline"
+            if kind == "warning"
+            else "SLA deadline was exceeded"
+        ),
         entity_path="/issue/" + issue["identifier"],
         entity_label=issue["identifier"],
         discord=False,

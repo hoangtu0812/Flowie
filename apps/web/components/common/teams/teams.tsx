@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 export default function Teams() {
    const { filters } = useTeamsFilterStore();
    const { ordering, displayProperties } = useTeamsDisplayStore();
-   const { teams: allTeams, joinTeam } = useTeamsData();
+   const { teams: allTeams, joinTeam, canAddTeamMembers } = useTeamsData();
 
    const join = async (teamId: string) => {
       try {
@@ -90,7 +90,7 @@ export default function Teams() {
 
          <div className="w-full">
             {displayed.map((team) => (
-               <TeamLine key={team.id} team={team} onJoin={join} />
+               <TeamLine key={team.id} team={team} onJoin={canAddTeamMembers ? join : undefined} />
             ))}
          </div>
       </div>

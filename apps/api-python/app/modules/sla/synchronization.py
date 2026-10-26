@@ -23,7 +23,7 @@ async def locked_issue(db, identifier):
         (
             await db.execute(
                 text("""SELECT i.*,s.category::text AS category,t.archived_at AS team_archived_at
-        FROM issues i JOIN issue_statuses s ON s.id=i.status_id JOIN teams t ON t.id=i.team_id
+        FROM issues i JOIN issue_statuses s ON s.id=i.status_id LEFT JOIN teams t ON t.id=i.team_id
         WHERE i.id=:id FOR UPDATE OF i"""),
                 {"id": identifier},
             )

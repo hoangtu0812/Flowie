@@ -152,7 +152,7 @@ async def run_history(db, workspace, user, secret, identifier, cursor=None, limi
             await db.execute(
                 text(
                     """SELECT r.id,r.scheduled_for AS "scheduledFor",r.state,r.error_code AS "errorCode",r.created_at AS "createdAt",r.snapshot->>'version' AS "scheduleVersion",
-        CASE WHEN i.workspace_id=:workspace AND i.archived_at IS NULL AND EXISTS(SELECT 1 FROM team_members tm JOIN teams t ON t.id=tm.team_id WHERE tm.team_id=i.team_id AND tm.user_id=:user AND t.archived_at IS NULL) THEN i.identifier END AS identifier """
+        CASE WHEN i.workspace_id=:workspace AND i.archived_at IS NULL AND (i.team_id IS NULL OR EXISTS(SELECT 1 FROM team_members tm JOIN teams t ON t.id=tm.team_id WHERE tm.team_id=i.team_id AND tm.user_id=:user AND t.archived_at IS NULL)) THEN i.identifier END AS identifier """
                     + scope
                     + " ORDER BY r.created_at DESC,r.id DESC LIMIT :limit"
                 ),

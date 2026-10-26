@@ -286,7 +286,7 @@ export default function IssueTemplatesSettings() {
                   <AlertDialogCancel disabled={saving}>Cancel</AlertDialogCancel>
                   <AlertDialogAction
                      disabled={saving}
-                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                     variant="destructive"
                      onClick={(event) => {
                         event.preventDefault();
                         void remove();

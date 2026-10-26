@@ -206,6 +206,7 @@ async def verify_delivery():
         )
         assert sum(results) == 1 and len(sent) == 1
         assert "Private issue title" not in sent[0].get_content()
+        assert f"/{seed['workspace_id']}/inbox" in sent[0].get_content()
         async with factory() as db:
             assert (
                 await db.execute(

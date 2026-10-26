@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import unicodedata
 from datetime import timedelta
 from typing import Any, Literal
 
@@ -33,6 +34,10 @@ class CreateWorkspaceInput(BaseModel):
 
 class UpdateWorkspaceInput(BaseModel):
     icon: str | None = Field(default=None, max_length=16)
+
+
+class DeleteWorkspaceInput(BaseModel):
+    confirmationName: str = Field(min_length=1, max_length=240)
 
 
 class InviteMemberInput(BaseModel):
@@ -476,6 +481,42 @@ async def create_workspace(
         await db.rollback()
         raise ApiError(409, 'A workspace with this name already exists.', 'Conflict') from error
     return {'data': await _created_organization(db, bootstrap['workspace_id'])}
+
+
+@router.delete('/{workspace_id}')
+async def delete_workspace(
+    workspace_id: str,
+    payload: DeleteWorkspaceInput,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, bool]]:
+    # Lock both identity and membership until deletion so ownership cannot change
+    # between authorization and the cascading delete.
+    result = await db.execute(
+        text('''
+            SELECT w.name, wm.role
+            FROM workspaces w JOIN workspace_members wm ON wm.workspace_id = w.id
+            WHERE w.id = :workspace AND wm.user_id = :user AND wm.status = 'ACTIVE'
+            FOR UPDATE OF w, wm
+        '''),
+        {'workspace': workspace_id, 'user': user['id']},
+    )
+    workspace = result.mappings().first()
+    if not workspace:
+        raise ApiError(404, 'Workspace not found.', 'Not Found')
+    if workspace['role'] != 'OWNER':
+        raise ApiError(403, 'Only the workspace owner can delete this workspace.', 'Forbidden')
+    if unicodedata.normalize('NFC', payload.confirmationName) != unicodedata.normalize('NFC', workspace['name']):
+        raise ApiError(400, 'Enter the exact workspace name to confirm deletion.', 'Bad Request')
+    await db.execute(
+        text('''UPDATE user_ui_preferences
+            SET preferences = preferences - 'defaultWorkspaceId', version = version + 1, updated_at = :now
+            WHERE preferences ->> 'defaultWorkspaceId' = :workspace'''),
+        {'workspace': workspace_id, 'now': _utcnow()},
+    )
+    await db.execute(text('DELETE FROM workspaces WHERE id = :workspace'), {'workspace': workspace_id})
+    await db.commit()
+    return {'data': {'deleted': True}}
 
 
 @router.patch('/{workspace_id}')

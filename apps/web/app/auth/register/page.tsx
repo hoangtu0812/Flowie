@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { PasswordAuthBoundary } from '@/features/identity/auth-providers';
 
 type AuthPayload = {
-   data: { workspace: { slug: string } | null; user: { isPlatformAdmin: boolean } };
+   data: { workspace: { id: string; slug: string } | null; user: { isPlatformAdmin: boolean } };
 };
 
 type VerificationPayload = {
@@ -101,7 +101,9 @@ function RegisterForm() {
          router.replace(
             payload.data.user.isPlatformAdmin
                ? '/admin'
-               : `/${payload.data.workspace?.slug ?? 'flowie'}/teams`
+               : payload.data.workspace
+                 ? `/${payload.data.workspace.id}/teams`
+                 : '/'
          );
       } catch (caughtError) {
          setError(caughtError instanceof Error ? caughtError.message : t('verifyFailed'));

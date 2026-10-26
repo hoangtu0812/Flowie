@@ -32,6 +32,7 @@ import { type IssueActionKind, useIssueActionDialogStore } from '@/store/issue-a
 import { useIssuesStore } from '@/store/issues-store';
 import { authenticatedFetch } from '@/lib/workspaces';
 import { type FormEvent, useEffect, useMemo, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
@@ -57,6 +58,8 @@ const successMessages: Record<Exclude<IssueActionKind, 'archive'>, string> = {
 };
 
 export function IssueActionDialog() {
+   const router = useRouter();
+   const route = useParams<{ orgId: string; issueId?: string }>();
    const { issueId, kind, close } = useIssueActionDialogStore();
    const {
       issues,
@@ -71,6 +74,7 @@ export function IssueActionDialog() {
       classifyIssue,
       convertIssueToComment,
       archiveIssue,
+      retryIssues,
    } = useIssuesStore();
    const [value, setValue] = useState('');
    const [saving, setSaving] = useState(false);
@@ -125,8 +129,14 @@ export function IssueActionDialog() {
          }
          if (kind === 'move') {
             const destination = destinations.find((team) => team.id === value);
-            if (!destination) throw new Error('Choose an accessible destination team.');
-            const moved = await moveIssue(issue.id, destination.id);
+            if (value !== 'no-team' && !destination)
+               throw new Error('Choose an accessible destination team.');
+            const moved = await moveIssue(issue.id, destination?.id ?? null);
+            if (route.issueId === issue.identifier || route.issueId === issue.id) {
+               router.replace(`/${route.orgId}/issue/${moved.identifier}`);
+            } else {
+               await retryIssues();
+            }
             toast.success(`Moved as ${moved.identifier}`);
          }
          if (kind === 'due-date') await updateIssueDueDate(issue.id, value || undefined);
@@ -135,7 +145,7 @@ export function IssueActionDialog() {
             await updateIssueTitle(issue.id, value.trim());
          }
          if (kind === 'create-related') {
-            if (!workspaceId || !issue.teamId) throw new Error('Workspace or team is unavailable.');
+            if (!workspaceId) throw new Error('Workspace or team is unavailable.');
             if (value.trim().length < 2) throw new Error('Issue title is too short.');
             const related = await createIssue({ teamId: issue.teamId, title: value.trim() });
             const response = await authenticatedFetch(`${api}/issues/${issue.id}/relations`, {
@@ -229,6 +239,7 @@ export function IssueActionDialog() {
                               <SelectValue placeholder="Select a team…" />
                            </SelectTrigger>
                            <SelectContent>
+                              {issue?.teamId && <SelectItem value="no-team">No team</SelectItem>}
                               {destinations.map((team) => (
                                  <SelectItem key={team.id} value={team.id}>
                                     <span className="text-sm">{team.icon}</span>
@@ -296,7 +307,7 @@ export function IssueActionDialog() {
                   <AlertDialogCancel disabled={saving}>Cancel</AlertDialogCancel>
                   <AlertDialogAction
                      disabled={saving}
-                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                     variant="destructive"
                      onClick={(event) => {
                         event.preventDefault();
                         void archive();

@@ -23,5 +23,5 @@ export function preferredWorkspaceSlug(
    memberships: { workspace: { id: string; slug: string } }[],
    workspaceId?: string | null
 ): string | undefined {
-   return memberships.find(({ workspace }) => workspace.id === workspaceId)?.workspace.slug;
+   return memberships.find(({ workspace }) => workspace.id === workspaceId)?.workspace.id;
 }

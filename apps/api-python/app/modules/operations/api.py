@@ -57,8 +57,8 @@ async def overview(workspaceId:str,user=Depends(current_user),db:AsyncSession=De
     sla=(await db.execute(text('''SELECT COUNT(*) FILTER(WHERE j.failed_at IS NULL AND j.next_attempt_at<=:now) AS pending,
         COUNT(*) FILTER(WHERE j.failed_at IS NOT NULL) AS failed,
         MIN(j.next_attempt_at) FILTER(WHERE j.failed_at IS NULL AND j.next_attempt_at<=:now) AS oldest
-        FROM issue_sla_jobs j JOIN issues i ON i.id=j.issue_id JOIN teams t ON t.id=i.team_id
-        WHERE i.workspace_id=:workspace AND t.archived_at IS NULL AND EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=i.team_id AND tm.user_id=:user)'''),
+        FROM issue_sla_jobs j JOIN issues i ON i.id=j.issue_id LEFT JOIN teams t ON t.id=i.team_id
+        WHERE i.workspace_id=:workspace AND t.archived_at IS NULL AND (i.team_id IS NULL OR EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=i.team_id AND tm.user_id=:user))'''),
         {'workspace':workspaceId,'user':user['id'],'now':now})).mappings().one()
     queues.append({'name':'sla','pending':sla['pending'],'failed':sla['failed'],'lagSeconds':max(0,int((now-sla['oldest']).total_seconds())) if sla['oldest'] else 0})
     return {'data':{**build_identity(),'jobsTruncated':truncated,'jobs':[{'instance':r['instance_id'],'job':r['job'],'status':'stale' if r['last_seen_at']<now-timedelta(seconds=60) else r['status'],

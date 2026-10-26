@@ -18,6 +18,7 @@ type CreateTeamValues = {
 type TeamsData = {
    workspaceId?: string;
    workspaceLoading: boolean;
+   canAddTeamMembers: boolean;
    teams: WorkspaceTeam[];
    createTeam: (values: CreateTeamValues) => Promise<void>;
    joinTeam: (teamId: string) => Promise<void>;
@@ -29,11 +30,13 @@ const TeamsDataContext = createContext<TeamsData | null>(null);
 function useTeamsDataSource(): TeamsData {
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [workspaceLoading, setWorkspaceLoading] = useState(true);
+   const [canAddTeamMembers, setCanAddTeamMembers] = useState(false);
    const [teams, setTeams] = useState<WorkspaceTeam[]>([]);
 
    const refreshTeams = useCallback(async () => {
       const current = await loadCurrentWorkspaceTeams();
       setWorkspaceId(current.workspaceId);
+      setCanAddTeamMembers(current.canAddTeamMembers);
       setTeams(current.teams);
    }, []);
 
@@ -44,6 +47,7 @@ function useTeamsDataSource(): TeamsData {
          .catch((error: unknown) => {
             if (active) {
                setWorkspaceId(undefined);
+               setCanAddTeamMembers(false);
                setTeams([]);
                toast.error(error instanceof Error ? error.message : 'Could not load teams.');
             }
@@ -74,14 +78,24 @@ function useTeamsDataSource(): TeamsData {
    const joinTeam = useCallback(
       async (teamId: string) => {
          if (!workspaceId) throw new Error('Workspace is not ready yet.');
+         if (!canAddTeamMembers)
+            throw new Error('Only the workspace owner can add people to a team.');
          await joinWorkspaceTeam(workspaceId, teamId);
          await refreshTeams();
          window.dispatchEvent(new Event('flowie-teams-changed'));
       },
-      [refreshTeams, workspaceId]
+      [refreshTeams, workspaceId, canAddTeamMembers]
    );
 
-   return { workspaceId, workspaceLoading, teams, createTeam, joinTeam, refreshTeams };
+   return {
+      workspaceId,
+      workspaceLoading,
+      canAddTeamMembers,
+      teams,
+      createTeam,
+      joinTeam,
+      refreshTeams,
+   };
 }
 
 export function TeamsDataProvider({ children }: { children: ReactNode }) {

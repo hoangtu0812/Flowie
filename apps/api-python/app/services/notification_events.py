@@ -104,7 +104,7 @@ def actor_payload(actor: Any) -> dict[str, str | None]:
     }
 
 
-async def team_recipient_ids(db: AsyncSession, team_id: str) -> set[str]:
+async def team_recipient_ids(db: AsyncSession, team_id: str | None) -> set[str]:
     result = await db.execute(text('SELECT user_id FROM team_members WHERE team_id = :team_id'), {'team_id': team_id})
     return {row['user_id'] for row in result.mappings().all()}
 
@@ -175,9 +175,9 @@ def _app_url() -> str:
     return (getenv('APP_URL') or getenv('NEXT_PUBLIC_APP_URL') or '').rstrip('/')
 
 
-async def _workspace_slug(db: AsyncSession, workspace_id: str) -> str | None:
+async def _workspace_route_id(db: AsyncSession, workspace_id: str) -> str | None:
     result = await db.execute(
-        text('SELECT slug FROM workspaces WHERE id = :workspace_id'), {'workspace_id': workspace_id}
+        text('SELECT id FROM workspaces WHERE id = :workspace_id'), {'workspace_id': workspace_id}
     )
     return result.scalar_one_or_none()
 
@@ -332,7 +332,7 @@ async def create_notification_batch(
     if not discord:
         return NotificationBatch(records=records)
 
-    slug = await _workspace_slug(db, workspace_id)
+    slug = await _workspace_route_id(db, workspace_id)
     app_url = _app_url()
     return NotificationBatch(
         records=records,

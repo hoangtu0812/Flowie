@@ -13,8 +13,8 @@ def scoped_sql(workspace, user, options):
 
 def history_ctes(scope):
     # Visibility applies to both sides of historical team transitions, not just today's team.
-    readable = """EXISTS(SELECT 1 FROM teams et JOIN team_members etm ON etm.team_id=et.id
-        WHERE et.id=e.to_team_id AND et.workspace_id=:workspace AND et.archived_at IS NULL AND etm.user_id=:user)
+    readable = """(e.to_team_id IS NULL OR EXISTS(SELECT 1 FROM teams et JOIN team_members etm ON etm.team_id=et.id
+        WHERE et.id=e.to_team_id AND et.workspace_id=:workspace AND et.archived_at IS NULL AND etm.user_id=:user))
         AND (e.from_team_id IS NULL OR EXISTS(SELECT 1 FROM teams ft JOIN team_members ftm ON ftm.team_id=ft.id
         WHERE ft.id=e.from_team_id AND ft.workspace_id=:workspace AND ft.archived_at IS NULL AND ftm.user_id=:user))"""
     return (

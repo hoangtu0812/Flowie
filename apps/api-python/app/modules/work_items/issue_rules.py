@@ -76,7 +76,7 @@ async def _ensure_circle_issue_statuses(db: AsyncSession, workspace_id: str) -> 
 async def _validate_references(
     db: AsyncSession,
     workspace_id: str,
-    team_id: str,
+    team_id: str | None,
     values: dict[str, Any],
     *,
     creating: bool,
@@ -96,11 +96,12 @@ async def _validate_references(
         status = await db.execute(
             text(
                 """SELECT id, category FROM issue_statuses
-                   WHERE workspace_id = :workspace_id AND category = 'UNSTARTED'
+                   WHERE workspace_id = :workspace_id AND category = :default_category
                      AND (team_id IS NULL OR team_id = :team_id)
                    ORDER BY position ASC LIMIT 1"""
             ),
-            {"workspace_id": workspace_id, "team_id": team_id},
+            {"workspace_id": workspace_id, "team_id": team_id,
+             "default_category": "UNSTARTED" if team_id else "BACKLOG"},
         )
     if status_id or creating:
         row = status.mappings().first()

@@ -60,7 +60,7 @@ export function NavTeamsSettings() {
                   <Button variant="ghost" className="w-full justify-start gap-2 px-2" asChild>
                      <Link href={`/${orgId}/settings/teams/new`}>
                         <PlusIcon className="size-4" />
-                        <span>Join or create a team</span>
+                        <span>Team access</span>
                      </Link>
                   </Button>
                </SidebarMenuButton>

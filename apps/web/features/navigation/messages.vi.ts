@@ -1,4 +1,11 @@
 export const messages: Readonly<Record<string, string>> = {
+   'All issues': 'Tất cả công việc',
+   'Backlog': 'Backlog',
+   'Active': 'Đang hoạt động',
+   'No project': 'Chưa có dự án',
+   'No team': 'Chưa có nhóm',
+   'Bugs': 'Lỗi',
+
    'Assigned': 'Được giao',
    'Created': 'Đã tạo',
    'Subscribed': 'Đang theo dõi',

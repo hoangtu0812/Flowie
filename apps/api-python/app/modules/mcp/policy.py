@@ -43,7 +43,7 @@ class AccessPolicy:
 
     def issue_clause(self, alias: str = "i") -> str:
         return f"""{alias}.workspace_id=:workspace AND {alias}.archived_at IS NULL
-            AND {self.team_clause(f"{alias}.team_id")}
+            AND {self.team_clause(f"{alias}.team_id", shared=True)}
             AND {self.project_clause(f"{alias}.project_id")}"""
 
     def document_clause(self, alias: str = "d") -> str:

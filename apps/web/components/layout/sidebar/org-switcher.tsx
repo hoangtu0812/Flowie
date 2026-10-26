@@ -141,7 +141,7 @@ export function OrgSwitcher() {
             );
             if (!matched && nextMemberships[0]) {
                const rest = pathname.split('/').slice(2).join('/');
-               router.replace(`/${nextMemberships[0].workspace.slug}${rest ? `/${rest}` : ''}`);
+               router.replace(`/${nextMemberships[0].workspace.id}${rest ? `/${rest}` : ''}`);
             }
          })
          .catch(() => {
@@ -184,7 +184,7 @@ export function OrgSwitcher() {
          const workspace = await createWorkspace(workspaceName);
          setCreateOpen(false);
          setWorkspaceName('');
-         router.push(`/${workspace.slug}/teams`);
+         router.push(`/${workspace.id}/teams`);
          router.refresh();
       } catch (error) {
          toast.error(error instanceof Error ? error.message : 'Could not create workspace.');
@@ -232,13 +232,13 @@ export function OrgSwitcher() {
                         {currentWorkspace ? (
                            <>
                               <DropdownMenuItem asChild>
-                                 <Link href={`/${currentWorkspace.slug}/settings`}>
+                                 <Link href={`/${currentWorkspace.id}/settings`}>
                                     Settings
                                     <DropdownMenuShortcut>G then S</DropdownMenuShortcut>
                                  </Link>
                               </DropdownMenuItem>
                               <DropdownMenuItem asChild>
-                                 <Link href={`/${currentWorkspace.slug}/members`}>
+                                 <Link href={`/${currentWorkspace.id}/members`}>
                                     Invite and manage members
                                  </Link>
                               </DropdownMenuItem>
@@ -316,7 +316,7 @@ export function OrgSwitcher() {
                               <DropdownMenuSeparator />
                               {memberships.map(({ workspace }) => (
                                  <DropdownMenuItem key={workspace.id} asChild>
-                                    <Link href={workspaceHref(workspace.slug)}>
+                                    <Link href={workspaceHref(workspace.id)}>
                                        <WorkspaceMark workspace={workspace} />
                                        {workspace.name}
                                        {workspace.id === preferences.defaultWorkspaceId && (

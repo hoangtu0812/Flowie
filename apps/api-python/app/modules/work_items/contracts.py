@@ -11,7 +11,7 @@ IssuePriority = Literal["NONE", "LOW", "MEDIUM", "HIGH", "URGENT"]
 
 class CreateIssueInput(BugCreateFields):
     workspaceId: str = Field(min_length=1)
-    teamId: str = Field(min_length=1)
+    teamId: str | None = Field(default=None, min_length=1)
     title: str = Field(min_length=2, max_length=500)
     description: str | None = Field(default=None, max_length=10_000)
     statusId: str | None = None

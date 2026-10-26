@@ -3,8 +3,15 @@
 import { Button } from '@/components/ui/button';
 import { IconPicker } from '@/components/common/icon-picker';
 import { Input } from '@/components/ui/input';
-import { authenticatedFetch, loadCurrentWorkspace, type WorkspaceSummary } from '@/lib/workspaces';
-import { Building2, Check } from 'lucide-react';
+import {
+   authenticatedFetch,
+   loadCurrentWorkspaceMembership,
+   type WorkspaceSummary,
+} from '@/lib/workspaces';
+import { Building2, Check, Link2 } from 'lucide-react';
+import { HStack } from '@astryxdesign/core/HStack';
+import { VStack } from '@astryxdesign/core/VStack';
+import { DeleteWorkspace } from './delete-workspace';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { SettingsCard, SettingsRow, SettingsSection, SettingsShell } from './shared';
@@ -20,11 +27,13 @@ export default function WorkspaceSettings() {
    const [workspace, setWorkspace] = useState<WorkspaceSummary>();
    const [icon, setIcon] = useState('');
    const [saving, setSaving] = useState(false);
+   const [role, setRole] = useState('');
 
    useEffect(() => {
-      void loadCurrentWorkspace()
-         .then((current) => {
+      void loadCurrentWorkspaceMembership()
+         .then(({ workspace: current, role: currentRole }) => {
             setWorkspace(current);
+            setRole(currentRole);
             setIcon(current.icon ?? '');
          })
          .catch(() => toast.error('Could not load workspace settings.'));
@@ -64,17 +73,30 @@ export default function WorkspaceSettings() {
                      <span className="max-w-44 truncate">{workspace?.name ?? 'Loading…'}</span>
                   }
                />
-               <div className="flex items-center gap-3 px-4 py-3">
+               <VStack gap={2} paddingInline={4} paddingBlock={3}>
+                  <HStack gap={2} vAlign="center">
+                     <Link2 className="size-4 text-muted-foreground" />
+                     <p className="text-sm font-medium">Workspace URL</p>
+                  </HStack>
+                  <p className="text-xs text-muted-foreground">
+                     Uses a permanent ID, independent of the workspace name. Existing links still
+                     work.
+                  </p>
+                  <code className="rounded-md bg-muted/50 p-2 text-xs break-all">
+                     {workspace ? `/${workspace.id}` : 'Loading…'}
+                  </code>
+               </VStack>
+               <HStack gap={3} paddingInline={4} paddingBlock={3} vAlign="center" wrap="wrap">
                   <span className="inline-flex size-8 items-center justify-center rounded-md bg-muted/50 text-lg shrink-0">
                      {icon.trim() || fallbackIcon(workspace)}
                   </span>
-                  <div className="flex-1 min-w-0">
+                  <VStack gap={0.5} className="flex-1 min-w-0">
                      <p className="text-sm font-medium">Workspace icon</p>
                      <p className="text-xs text-muted-foreground mt-0.5">
                         Shown in the sidebar and workspace switcher.
                      </p>
-                  </div>
-                  <div className="flex items-center gap-2">
+                  </VStack>
+                  <HStack gap={2} vAlign="center">
                      <IconPicker value={icon} onChange={setIcon} label="Choose workspace icon" />
                      <Input
                         aria-label="Workspace icon"
@@ -88,10 +110,11 @@ export default function WorkspaceSettings() {
                         <Check className="size-3.5" />
                         {saving ? 'Saving…' : 'Save'}
                      </Button>
-                  </div>
-               </div>
+                  </HStack>
+               </HStack>
             </SettingsCard>
          </SettingsSection>
+         {role === 'OWNER' && workspace && <DeleteWorkspace workspace={workspace} />}
       </SettingsShell>
    );
 }

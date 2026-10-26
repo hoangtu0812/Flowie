@@ -1,4 +1,7 @@
 export type IssueQuery = {
+   noTeam?: boolean;
+   noProject?: boolean;
+   issueType?: 'TASK' | 'BUG';
    scope?: 'assigned' | 'created' | 'subscribed' | 'activity';
    categories?: string[];
    projectId?: string;

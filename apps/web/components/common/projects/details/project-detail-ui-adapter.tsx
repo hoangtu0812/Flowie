@@ -216,7 +216,7 @@ export function toIssueUi(
       priority: priorityPresentation(issue.priority),
       labels: issue.labelLinks.map((link) => link.label),
       createdAt: issue.createdAt,
-      team: issue.team,
+      team: issue.team ?? undefined,
       cycleId: issue.cycleLinks[0]?.cycle.id ?? '',
       cycleName: issue.cycleLinks[0]?.cycle.name,
       project,

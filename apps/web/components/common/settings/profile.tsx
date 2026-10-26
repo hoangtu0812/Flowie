@@ -152,7 +152,7 @@ export default function Profile() {
          const memberships = await loadWorkspaceMemberships();
          const nextWorkspace = memberships[0]?.workspace;
          toast.success('You left the workspace.');
-         router.replace(nextWorkspace ? `/${nextWorkspace.slug}/teams` : '/invitations');
+         router.replace(nextWorkspace ? `/${nextWorkspace.id}/teams` : '/invitations');
       } catch (error) {
          toast.error(error instanceof Error ? error.message : 'Could not leave workspace.');
       } finally {
@@ -329,7 +329,7 @@ export default function Profile() {
                   <AlertDialogCancel disabled={leaving}>Cancel</AlertDialogCancel>
                   <AlertDialogAction
                      disabled={leaving}
-                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                     variant="destructive"
                      onClick={(event) => {
                         event.preventDefault();
                         void leaveWorkspace();

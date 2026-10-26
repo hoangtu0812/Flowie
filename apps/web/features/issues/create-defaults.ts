@@ -12,7 +12,7 @@ export function issueMember(member: IssueMemberOption, team: string): User {
       status: 'offline',
       role: 'Member',
       joinedDate: '',
-      teamIds: [team],
+      teamIds: team ? [team] : [],
       timezone: 'UTC',
    };
 }

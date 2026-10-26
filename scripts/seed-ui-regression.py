@@ -46,7 +46,7 @@ async def main():
                 'data': json.dumps({'title': issues[0]['title'], 'entityPath': '/issue/' + issues[0]['identifier'], 'actor': {'id': user['id'], 'name': user['name']}}),
             })
             await db.commit()
-            output = {**seed, 'userId': user['id'], 'email': user['email'], 'password': password,
+            output = {**seed, 'legacy_slug': seed['slug'], 'slug': seed['workspace_id'], 'userId': user['id'], 'email': user['email'], 'password': password,
                 'projectId': project, 'documentId': document['id'], 'documentTitle': document['title'],
                 'issues': [{'id': item['id'], 'identifier': item['identifier'], 'title': item['title']} for item in issues]}
             target = ROOT / 'apps/web/.e2e-fixture.json'

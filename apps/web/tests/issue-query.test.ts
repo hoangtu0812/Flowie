@@ -1,6 +1,22 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { issueQueryParams } from '../features/issues/issue-query';
+import { bulkQuery } from '../features/issues/bulk-query';
+
+test('workspace views preserve scope when exporting or applying bulk changes', () => {
+   const query = issueQueryParams({
+      noTeam: true,
+      noProject: false,
+      issueType: 'BUG',
+      categories: ['backlog'],
+   });
+   assert.deepEqual(bulkQuery(query.toString()), {
+      noTeam: true,
+      noProject: false,
+      issueType: 'BUG',
+      categories: ['backlog'],
+   });
+});
 test('server queries preserve personal scope, Unicode search and filter semantics', () => {
    const filters = [
       { columnId: 'issueType', type: 'option', operator: 'is not', values: ['TASK'] },

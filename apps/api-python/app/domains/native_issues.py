@@ -73,7 +73,7 @@ class UpdateIssueRelationInput(BaseModel):
 
 class MoveIssueInput(BaseModel):
     workspaceId: str = Field(min_length=1)
-    teamId: str = Field(min_length=1)
+    teamId: str | None = Field(default=None, min_length=1)
 
 
 class ClassifyIssueInput(BaseModel):
@@ -158,6 +158,8 @@ async def list_issues(
     projectId: str | None = None, assigneeId: str | None = None, creatorId: str | None = None,
     cycleId: str | None = None, query: Annotated[str | None, Query(max_length=200)] = None,
     filters: Annotated[str | None, Query(max_length=12000)] = None, includeSubIssues: bool = True,
+    noTeam: bool = False, noProject: bool = False,
+    issueType: Literal["TASK", "BUG"] | None = None,
     insights: bool = False,
     sliceBy: Literal['status','priority','assignee','project'] = 'status',
     segmentBy: Literal['status','priority','assignee','project'] = 'priority',
@@ -172,6 +174,7 @@ async def list_issues(
         'teamId': teamId, 'categories': categories, 'scope': scope, 'limit': limit, 'cursor': cursor,
         'projectId': projectId, 'assigneeId': assigneeId, 'creatorId': creatorId, 'cycleId': cycleId,
         'query': query, 'filters': filters, 'includeSubIssues': includeSubIssues,
+        'noTeam': noTeam, 'noProject': noProject, 'issueType': issueType,
     }
     if insights:
         from ..modules.work_items.issue_insights import issue_insights
@@ -196,13 +199,14 @@ async def issue_options(
     teamId: str | None = None,
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
+    noTeam: bool = False,
 ) -> dict[str, dict[str, list[dict[str, Any]]]]:
     await _workspace_access(db, workspaceId, user['id'])
     if teamId:
         await _team_access(db, workspaceId, teamId, user['id'])
     await _ensure_circle_issue_statuses(db, workspaceId)
     await db.commit()
-    team_filter = 'AND (team_id IS NULL OR team_id = :team_id)' if teamId else ''
+    team_filter = 'AND team_id IS NULL' if noTeam else ('AND (team_id IS NULL OR team_id = :team_id)' if teamId else '')
     params = {'workspace_id': workspaceId, 'team_id': teamId, 'user_id': user['id']}
     statuses, projects, members, labels, cycles = await db.execute(
         text(f'''SELECT id, name, category, color, position FROM issue_statuses WHERE workspace_id = :workspace_id {team_filter}
@@ -210,7 +214,7 @@ async def issue_options(
             WHERE scope_t.id=issue_statuses.team_id AND scope_t.workspace_id=:workspace_id AND scope_t.archived_at IS NULL AND scope_tm.user_id=:user_id)) ORDER BY position, name'''), params
     ), await db.execute(
         text(f'''SELECT p.id,p.name,p.identifier,p.status,p.priority,p.health,p.start_date,p.target_date,p.lead_id,p.team_id
-            FROM projects p WHERE {project_read_scope(workspace='workspace_id', user='user_id')} {"AND (p.team_id IS NULL OR p.team_id=:team_id)" if teamId else ""} ORDER BY p.name'''), params
+            FROM projects p WHERE {project_read_scope(workspace='workspace_id', user='user_id')} {"AND p.team_id IS NULL" if noTeam else ("AND (p.team_id IS NULL OR p.team_id=:team_id)" if teamId else "")} ORDER BY p.name'''), params
     ), await db.execute(
         text('''SELECT u.id, u.name, u.email, u.avatar_url, u.last_seen_at FROM workspace_members wm JOIN users u ON u.id = wm.user_id WHERE wm.workspace_id = :workspace_id AND wm.status = 'ACTIVE' ORDER BY u.name'''), {'workspace_id': workspaceId}
     ), await db.execute(
@@ -254,8 +258,9 @@ async def public_issue_options(
     teamId: str | None = None,
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
+    noTeam: bool = False,
 ) -> dict[str, dict[str, list[dict[str, Any]]]]:
-    return await issue_options(workspaceId, teamId, user, db)
+    return await issue_options(workspaceId, teamId, user, db, noTeam)
 
 
 @router.post('')
@@ -397,7 +402,7 @@ async def list_sub_issues(
                FROM issues child
                JOIN issue_statuses status ON status.id = child.status_id
                LEFT JOIN users assignee ON assignee.id = child.assignee_id
-               WHERE child.workspace_id = :workspace_id AND child.team_id = :team_id
+               WHERE child.workspace_id = :workspace_id AND child.team_id IS NOT DISTINCT FROM :team_id
                  AND child.parent_issue_id = :parent_issue_id AND child.archived_at IS NULL
                ORDER BY child.updated_at DESC, child.created_at DESC'''
         ),
@@ -557,18 +562,10 @@ async def move_issue(
     issue = await _issue_row(db, issue_id, payload.workspaceId, user['id'])
     if issue['teamId'] == payload.teamId:
         return {'data': issue}
-    await _team_access(db, payload.workspaceId, payload.teamId, user['id'])
-    destination = await db.execute(
-        text(
-            '''UPDATE teams SET issue_sequence = issue_sequence + 1, updated_at = :now
-               WHERE id = :team_id AND workspace_id = :workspace_id AND archived_at IS NULL
-               RETURNING id, name, identifier, issue_sequence'''
-        ),
-        {'team_id': payload.teamId, 'workspace_id': payload.workspaceId, 'now': _utcnow()},
-    )
-    team = destination.mappings().first()
-    if not team:
-        raise ApiError(404, 'Destination team not found.', 'Not Found')
+    if payload.teamId:
+        await _team_access(db, payload.workspaceId, payload.teamId, user['id'])
+    from ..modules.work_items.issue_numbering import allocate_issue_number
+    team = await allocate_issue_number(db, payload.workspaceId, payload.teamId)
     status = await db.execute(
         text(
             '''SELECT id FROM issue_statuses
@@ -610,7 +607,7 @@ async def move_issue(
         {
             'team_id': team['id'],
             'status_id': destination_status['id'],
-            'identifier': f"{team['identifier']}-{team['issue_sequence']}",
+            'identifier': team['issue_identifier'],
             'number': team['issue_sequence'],
             'clear_project': bool(project_team_id and project_team_id != team['id']),
             'now': now,
@@ -621,7 +618,7 @@ async def move_issue(
     await _write_activity(db, payload.workspaceId, issue_id, user['id'], 'issue.moved', {
         'fromTeamId': issue['teamId'],
         'toTeamId': team['id'],
-        'identifier': f"{team['identifier']}-{team['issue_sequence']}",
+        'identifier': team['issue_identifier'],
     })
     await sync_issue(db, issue_id)
     await db.commit()

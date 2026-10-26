@@ -28,14 +28,14 @@ async def _issue_rows(
                        WHERE reminder.issue_id = i.id AND reminder.user_id = :user_id AND reminder.delivered_at IS NULL
                        ORDER BY reminder.updated_at DESC LIMIT 1) AS reminder_at
                FROM issues i
-               JOIN teams t ON t.id = i.team_id
+               LEFT JOIN teams t ON t.id = i.team_id
                JOIN issue_statuses s ON s.id = i.status_id
                LEFT JOIN projects p ON p.id = i.project_id
                JOIN users c ON c.id = i.creator_id
                LEFT JOIN users a ON a.id = i.assignee_id
                WHERE i.id = ANY(CAST(:issue_ids AS text[])) AND i.workspace_id = :workspace_id AND i.archived_at IS NULL
                AND t.archived_at IS NULL
-               AND EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=i.team_id AND tm.user_id=:user_id)
+               AND (i.team_id IS NULL OR EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=i.team_id AND tm.user_id=:user_id))
                AND EXISTS(SELECT 1 FROM workspace_members wm WHERE wm.workspace_id=i.workspace_id AND wm.user_id=:user_id AND wm.status='ACTIVE')
 """),
         {"issue_ids": issue_ids, "workspace_id": workspace_id, "user_id": user_id},
@@ -140,7 +140,7 @@ def _present_issue(row, labels, cycles, releases, user_id):
             "id": row["team_id_value"],
             "name": row["team_name"],
             "identifier": row["team_identifier"],
-        },
+        } if row["team_id_value"] else None,
         "status": {
             "id": row["status_id_value"],
             "name": row["status_name"],

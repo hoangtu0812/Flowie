@@ -8,7 +8,7 @@ import { authenticatedFetch } from '@/lib/workspaces';
 type Invitation = {
    id: string;
    role: 'OWNER' | 'ADMIN' | 'MEMBER';
-   workspace: { name: string; slug: string; organization: { name: string } };
+   workspace: { id: string; name: string; slug: string; organization: { name: string } };
    invitedBy: { name: string } | null;
 };
 
@@ -41,7 +41,7 @@ export default function InvitationsPage() {
          return;
       }
       if (action === 'accept') {
-         router.replace(`/${invitation.workspace.slug}/teams`);
+         router.replace(`/${invitation.workspace.id}/teams`);
          return;
       }
       await load();

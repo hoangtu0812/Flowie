@@ -157,7 +157,7 @@ async def archive_project(db, workspace, user, identifier):
     unavailable = (
         await db.execute(
             text("""SELECT 1 FROM issues i WHERE i.project_id=:id AND i.workspace_id=:workspace AND i.archived_at IS NULL
-        AND NOT EXISTS(SELECT 1 FROM team_members tm JOIN teams t ON t.id=tm.team_id
+        AND i.team_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM team_members tm JOIN teams t ON t.id=tm.team_id
         WHERE tm.team_id=i.team_id AND tm.user_id=:user AND t.archived_at IS NULL) LIMIT 1"""),
             {"id": identifier, "workspace": workspace, "user": user["id"]},
         )

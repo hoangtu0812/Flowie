@@ -41,9 +41,7 @@ export function IssueContent({
                <IssueSlaPanel issue={issue} />
                <IssueReactions issueId={issue.id} />
                <IssueAttachments issueId={issue.id} />
-               {issue.teamId && (
-                  <IssueSubIssues issueId={issue.id} teamId={issue.teamId} orgId={orgId} />
-               )}
+               <IssueSubIssues issueId={issue.id} teamId={issue.teamId} orgId={orgId} />
                <IssueRelations issueId={issue.id} orgId={orgId} />
                <ActivityFeed key={issue.id} issueId={issue.id} />
             </VStack>

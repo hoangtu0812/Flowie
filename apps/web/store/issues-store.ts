@@ -41,7 +41,7 @@ declare module '@/mock-data/issues' {
 type NativeIssue = BugFields & {
    id: string;
    version: number;
-   teamId: string;
+   teamId: string | null;
    parentIssueId?: string | null;
    identifier: string;
    title: string;
@@ -109,7 +109,7 @@ type NativeIssueOptions = {
 };
 
 type CreateIssuePayload = BugFields & {
-   teamId: string;
+   teamId?: string;
    title: string;
    description?: string;
    statusId?: string;
@@ -186,7 +186,7 @@ function asIssue(native: NativeIssue): Issue {
       expectedResult: native.expectedResult,
       actualResult: native.actualResult,
       id: native.id,
-      teamId: native.teamId,
+      teamId: native.teamId ?? undefined,
       version: native.version,
       parentIssueId: native.parentIssueId ?? undefined,
       creatorId: native.creator?.id,
@@ -326,7 +326,7 @@ interface IssuesState {
    updateIssueBug: (issueId: string, fields: BugFields) => Promise<Issue>;
    updateIssueTitle: (issueId: string, title: string) => Promise<Issue>;
    updateIssueDescription: (issueId: string, description: string) => Promise<Issue>;
-   moveIssue: (issueId: string, teamId: string) => Promise<Issue>;
+   moveIssue: (issueId: string, teamId: string | null) => Promise<Issue>;
    classifyIssue: (
       issueId: string,
       resolution: 'DUPLICATE' | 'WONT_FIX',
@@ -527,7 +527,7 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
          );
          const [options, joined] = await Promise.all([
             authenticatedFetch(
-               `${api}/issues/options?${new URLSearchParams({ workspaceId: workspace.id, teamId: native.teamId })}`
+               `${api}/issues/options?${new URLSearchParams({ workspaceId: workspace.id, ...(native.teamId ? { teamId: native.teamId } : { noTeam: 'true' }) })}`
             ).then(responseData<NativeIssueOptions>),
             loadJoinedWorkspaceTeams(),
          ]);

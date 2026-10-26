@@ -23,6 +23,7 @@ const toIdentifier = (value: string) =>
 
 /** "Join or create a team" settings page. */
 export default function NewTeam() {
+   const [canAddTeamMembers, setCanAddTeamMembers] = useState(false);
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [teams, setTeams] = useState<WorkspaceTeam[]>([]);
    const [loading, setLoading] = useState(true);
@@ -34,6 +35,7 @@ export default function NewTeam() {
    const refresh = async () => {
       const result = await loadCurrentWorkspaceTeams();
       setWorkspaceId(result.workspaceId);
+      setCanAddTeamMembers(result.canAddTeamMembers);
       setTeams(result.teams);
    };
 
@@ -77,7 +79,7 @@ export default function NewTeam() {
    };
 
    const join = async (teamId: string) => {
-      if (!workspaceId) return;
+      if (!workspaceId || !canAddTeamMembers) return;
       setJoiningId(teamId);
       try {
          await joinWorkspaceTeam(workspaceId, teamId);
@@ -93,7 +95,7 @@ export default function NewTeam() {
 
    return (
       <SettingsShell
-         title="Join or create a team"
+         title="Team access"
          description="Teams organize issues, cycles and projects around the people working together"
       >
          <SettingsSection title="Create a new team">
@@ -131,11 +133,14 @@ export default function NewTeam() {
             </SettingsCard>
          </SettingsSection>
 
-         <SettingsSection title="Join an existing team">
+         <SettingsSection
+            title="Other teams"
+            description="Only the workspace owner can add people to a team. Ask the owner to add you."
+         >
             <SettingsCard>
                {!loading && notJoined.length === 0 && (
                   <div className="px-4 py-3 text-sm text-muted-foreground">
-                     There are no other teams available to join.
+                     There are no other teams.
                   </div>
                )}
                {notJoined.map((team) => (
@@ -145,15 +150,17 @@ export default function NewTeam() {
                      title={team.name}
                      description={`${team.members.length} members · ${team.projectCount} projects`}
                      trailing={
-                        <Button
-                           size="xs"
-                           variant="secondary"
-                           disabled={Boolean(joiningId)}
-                           onClick={() => void join(team.id)}
-                        >
-                           <Check className="size-3.5" />
-                           {joiningId === team.id ? 'Joining…' : 'Join'}
-                        </Button>
+                        canAddTeamMembers ? (
+                           <Button
+                              size="xs"
+                              variant="secondary"
+                              disabled={Boolean(joiningId)}
+                              onClick={() => void join(team.id)}
+                           >
+                              <Check className="size-3.5" />
+                              {joiningId === team.id ? 'Joining…' : 'Join'}
+                           </Button>
+                        ) : undefined
                      }
                   />
                ))}

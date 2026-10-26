@@ -9,6 +9,7 @@ import { CommandPalette } from '@/components/layout/command-palette';
 import { BodyInteractionGuard } from '@/components/layout/body-interaction-guard';
 import { PresenceHeartbeat } from '@/components/common/presence-heartbeat';
 import { PreferenceSync } from '@/features/identity/preference-sync';
+import { WorkspaceCanonicalRoute } from '@/components/layout/workspace-canonical-route';
 
 /**
  * The workspace shell lives in a route layout, not in the page, so moving
@@ -20,6 +21,7 @@ import { PreferenceSync } from '@/features/identity/preference-sync';
 export default function WorkspaceLayout({ children }: { children: React.ReactNode }) {
    return (
       <SidebarProvider>
+         <WorkspaceCanonicalRoute />
          <BodyInteractionGuard />
          <PresenceHeartbeat />
          <PreferenceSync />

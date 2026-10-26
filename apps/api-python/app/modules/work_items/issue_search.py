@@ -82,7 +82,8 @@ def issue_scope(workspace: str, user: str, options: dict) -> tuple[str, dict]:
         "i.workspace_id=:workspace",
         "i.archived_at IS NULL",
         "t.archived_at IS NULL",
-        "EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=i.team_id AND tm.user_id=:user)",
+        "(i.team_id IS NULL OR EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=i.team_id AND tm.user_id=:user))",
+        "EXISTS(SELECT 1 FROM workspace_members wm WHERE wm.workspace_id=i.workspace_id AND wm.user_id=:user AND wm.status='ACTIVE')",
     ]
     params = {"workspace": workspace, "user": user, **extra}
     for field, column in {
@@ -94,6 +95,13 @@ def issue_scope(workspace: str, user: str, options: dict) -> tuple[str, dict]:
         if options.get(field):
             clauses.append(f"i.{column}=:{field}")
             params[field] = options[field]
+    if options.get("noTeam"):
+        clauses.append("i.team_id IS NULL")
+    if options.get("noProject"):
+        clauses.append("i.project_id IS NULL")
+    if options.get("issueType"):
+        clauses.append("i.issue_type::text=:issue_type")
+        params["issue_type"] = options["issueType"]
     if options.get("cycleId"):
         clauses.append(
             "EXISTS(SELECT 1 FROM issue_cycles ic WHERE ic.issue_id=i.id AND ic.cycle_id=:cycle)"
@@ -140,7 +148,7 @@ def issue_scope(workspace: str, user: str, options: dict) -> tuple[str, dict]:
         )
         params["query"] = literal_search(query)
     clauses.extend(filters)
-    sql = f"FROM issues i JOIN teams t ON t.id=i.team_id JOIN issue_statuses s ON s.id=i.status_id WHERE {' AND '.join(clauses)}"
+    sql = f"FROM issues i LEFT JOIN teams t ON t.id=i.team_id JOIN issue_statuses s ON s.id=i.status_id WHERE {' AND '.join(clauses)}"
     return sql, params
 
 

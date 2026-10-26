@@ -49,8 +49,8 @@ test('resolves a saved workspace by stable ID and ignores removed memberships', 
       { workspace: { id: 'one', slug: 'renamed' } },
       { workspace: { id: 'two', slug: 'second' } },
    ];
-   assert.equal(preferredWorkspaceSlug(memberships, 'one'), 'renamed');
-   assert.equal(preferredWorkspaceSlug(memberships, 'two'), 'second');
+   assert.equal(preferredWorkspaceSlug(memberships, 'one'), 'one');
+   assert.equal(preferredWorkspaceSlug(memberships, 'two'), 'two');
    assert.equal(preferredWorkspaceSlug(memberships, 'revoked'), undefined);
    assert.equal(preferredWorkspaceSlug(memberships, null), undefined);
    assert.equal(

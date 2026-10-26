@@ -636,7 +636,7 @@ async def _project(db: AsyncSession, project_id: str, workspace_id: str, user_id
     labels = await db.execute(text('''SELECT l.* FROM project_label_links pl JOIN project_labels l ON l.id = pl.label_id WHERE pl.project_id = :project_id ORDER BY l.name'''), {'project_id': project_id})
     resources = await db.execute(text('''SELECT r.*, u.id AS creator_id_value, u.name AS creator_name, u.avatar_url AS creator_avatar_url FROM project_resources r JOIN users u ON u.id = r.created_by WHERE r.project_id = :project_id ORDER BY r.created_at'''), {'project_id': project_id})
     initiatives = await db.execute(text('''SELECT ip.initiative_id, ip.project_id, ip.created_at, i.id, i.name FROM initiative_projects ip JOIN initiatives i ON i.id = ip.initiative_id WHERE ip.project_id = :project_id'''), {'project_id': project_id})
-    issues = await db.execute(text('''SELECT i.id, i.identifier, i.title, i.priority, i.updated_at, s.id AS status_id_value, s.name AS status_name, s.category AS status_category, s.color AS status_color, a.id AS assignee_id_value, a.name AS assignee_name, a.avatar_url AS assignee_avatar_url FROM issues i JOIN issue_statuses s ON s.id = i.status_id LEFT JOIN users a ON a.id = i.assignee_id WHERE i.project_id = :project_id AND i.archived_at IS NULL AND EXISTS(SELECT 1 FROM team_members tm JOIN teams scoped_team ON scoped_team.id=tm.team_id WHERE tm.team_id=i.team_id AND tm.user_id=:user_id AND scoped_team.archived_at IS NULL) ORDER BY i.updated_at DESC'''), {'project_id': project_id,'user_id':user_id})
+    issues = await db.execute(text('''SELECT i.id, i.identifier, i.title, i.priority, i.updated_at, s.id AS status_id_value, s.name AS status_name, s.category AS status_category, s.color AS status_color, a.id AS assignee_id_value, a.name AS assignee_name, a.avatar_url AS assignee_avatar_url FROM issues i JOIN issue_statuses s ON s.id = i.status_id LEFT JOIN users a ON a.id = i.assignee_id WHERE i.project_id = :project_id AND i.archived_at IS NULL AND (i.team_id IS NULL OR EXISTS(SELECT 1 FROM team_members tm JOIN teams scoped_team ON scoped_team.id=tm.team_id WHERE tm.team_id=i.team_id AND tm.user_id=:user_id AND scoped_team.archived_at IS NULL)) ORDER BY i.updated_at DESC'''), {'project_id': project_id,'user_id':user_id})
     issue_records=issues.mappings().all()
     return {
         'id': row['id'], 'workspaceId': row['workspace_id'], 'teamId': row['team_id'], 'name': row['name'], 'identifier': row['identifier'], 'description': row['description'], 'type': row['type'], 'status': row['status'], 'priority': row['priority'], 'health': row['health'], 'leadId': row['lead_id'], 'startDate': row['start_date'], 'targetDate': row['target_date'], 'archivedAt': row['archived_at'], 'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
@@ -814,11 +814,11 @@ async def _project_issue_rows(db: AsyncSession, project_id: str, workspace_id: s
                       a.id AS assignee_id_value, a.name AS assignee_name, a.avatar_url AS assignee_avatar_url
                FROM issues i
                JOIN issue_statuses s ON s.id = i.status_id
-               JOIN teams t ON t.id = i.team_id
+               LEFT JOIN teams t ON t.id = i.team_id
                JOIN users c ON c.id = i.creator_id
                LEFT JOIN users a ON a.id = i.assignee_id
                WHERE i.project_id = :project_id AND i.workspace_id = :workspace_id AND i.archived_at IS NULL
-               AND t.archived_at IS NULL AND EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=i.team_id AND tm.user_id=:user_id)
+               AND t.archived_at IS NULL AND (i.team_id IS NULL OR EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=i.team_id AND tm.user_id=:user_id))
                ORDER BY i.updated_at DESC"""
         ),
         {'project_id': project_id, 'workspace_id': workspace_id,'user_id':user_id},
@@ -876,7 +876,7 @@ async def _project_issue_rows(db: AsyncSession, project_id: str, workspace_id: s
                 'id': row['status_id_value'], 'name': row['status_name'],
                 'category': row['status_category'], 'color': row['status_color'],
             },
-            'team': {'id': row['team_id_value'], 'name': row['team_name'], 'identifier': row['team_identifier']},
+            'team': {'id': row['team_id_value'], 'name': row['team_name'], 'identifier': row['team_identifier']} if row['team_id_value'] else None,
             'creator': {'id': row['creator_id_value'], 'name': row['creator_name'], 'avatarUrl': row['creator_avatar_url']},
             'assignee': {'id': row['assignee_id_value'], 'name': row['assignee_name'], 'avatarUrl': row['assignee_avatar_url']} if row['assignee_id_value'] else None,
             'labelLinks': label_links.get(row['id'], []),
