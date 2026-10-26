@@ -25,12 +25,38 @@ class LeaseInput(WriteInput, RunInput):
     fencingToken: int = Field(ge=1)
 
 
+class TestEvidence(StrictInput):
+    """One executed check: what ran, how it ended and how long it took.
+
+    A name and a verdict alone cannot be audited, so the command, exit code,
+    duration and a bounded log tail are all required.
+    """
+
+    name: str = Field(min_length=1, max_length=200)
+    command: list[str] = Field(min_length=1, max_length=50)
+    exitCode: int = Field(ge=-2147483648, le=2147483647)
+    result: Literal["passed", "failed"]
+    durationMs: int = Field(ge=0, le=86400000)
+    log: str = Field(default="", max_length=4000)
+
+    @model_validator(mode="after")
+    def bounded_command(self):
+        if any(not argument or len(argument) > 2000 for argument in self.command):
+            raise ValueError(
+                "Test command arguments must be bounded non-empty strings."
+            )
+        # A verdict that contradicts its own exit code is not evidence.
+        if (self.exitCode == 0) != (self.result == "passed"):
+            raise ValueError("Test result must match its exit code.")
+        return self
+
+
 class ResultInput(LeaseInput):
     outcome: Literal["AWAITING_REVIEW", "FAILED"]
     summary: str = Field(min_length=3, max_length=10000)
     commit: str | None = Field(default=None, pattern=r"^[a-fA-F0-9]{7,64}$")
     pullRequestUrl: str | None = Field(default=None, max_length=2048)
-    tests: list[dict[str, str]] = Field(default_factory=list, max_length=50)
+    tests: list[TestEvidence] = Field(default_factory=list, max_length=50)
 
     @model_validator(mode="after")
     def evidence(self):
@@ -47,12 +73,17 @@ class ResultInput(LeaseInput):
                 )
         if self.outcome == "AWAITING_REVIEW" and not self.commit:
             raise ValueError("A commit is required for a code result awaiting review.")
-        if any(
-            len(key) > 100 or len(value) > 2000
-            for test in self.tests
-            for key, value in test.items()
-        ):
-            raise ValueError("Test evidence entries are too large.")
+        # Work cannot be presented as review-ready without executed checks behind it,
+        # and a recorded failure contradicts that claim.
+        if self.outcome == "AWAITING_REVIEW":
+            if not self.tests:
+                raise ValueError(
+                    "A code result awaiting review must report the tests it executed."
+                )
+            if any(test.result != "passed" for test in self.tests):
+                raise ValueError(
+                    "A code result awaiting review cannot report a failed test."
+                )
         return self
 
 
@@ -61,6 +92,9 @@ class RunPageInput(PageInput):
         Literal["PENDING", "RUNNING", "AWAITING_REVIEW", "FAILED", "CANCELED"] | None
     ) = None
     projectId: str | None = None
+    # True returns only runs directed at the calling connection, so a runner polls its
+    # own queue instead of work routed to another agent.
+    assignedToThisConnection: bool | None = None
 
 
 class RepositoryInput(StrictInput):

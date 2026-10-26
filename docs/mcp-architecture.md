@@ -83,6 +83,9 @@ The new controls follow the repository's Astryx component guidance.
   does not extend a run beyond its two-hour budget.
 - Reported test and PR evidence is explicitly agent-reported. The API does not
   claim independent CI verification, merge a PR or mark an issue complete.
+- Each reported check carries its command, exit code, duration and a bounded log
+  tail, and its verdict must match its exit code. A result awaiting review must
+  report at least one check and may not report a failed one; a failed result may.
 - Repository instructions and test argument arrays are maintained by a workspace
   manager. External coding agents execute in their own authorized environments;
   the production API never executes those commands.
@@ -104,8 +107,14 @@ created before a rule are not replayed into new work automatically.
 
 The dispatcher creates pending runs. It does not launch an LLM or a coding
 process. An external client polls `list_runs`, claims an issue, heartbeats and
-reports results. Provider-specific PR creation and independent CI reconciliation
-remain separate integrations to verify against the selected repository/client.
+reports results. A pending or running run is directed at exactly one connection
+and only that connection may claim or reclaim it, including after its lease
+expires; `list_runs` exposes `assignedToThisConnection` so a client polls its own
+queue. Issues without a pending or running run form the shared pool that any
+connection with `runs:write` and issue access may claim, and canceling a directed
+run is the only way to return its issue to that pool. Provider-specific PR
+creation and independent CI reconciliation remain separate integrations to
+verify against the selected repository/client.
 
 Prisma owns both migrations, including database triggers and partial indexes
 that cannot be represented fully in the Prisma model. Startup continues to

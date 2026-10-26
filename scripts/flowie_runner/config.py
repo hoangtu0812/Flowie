@@ -17,6 +17,24 @@ class RunnerConfig:
     command_timeout: int = 900
     provider: str = "codex"
     claude: str = "claude"
+    worktree_root: Path | None = None
+
+    def __post_init__(self):
+        # Each run gets its own worktree under this root, beside the checkout rather
+        # than inside it. Resolving the default here keeps every caller, including
+        # direct construction, working with a concrete path.
+        if self.worktree_root is None:
+            object.__setattr__(
+                self,
+                "worktree_root",
+                self.repository_path.parent
+                / f"{self.repository_path.name}.flowie-worktrees",
+            )
+
+    @property
+    def base_branch(self) -> str:
+        """The base branch name on origin; `baseRef` may name it either way."""
+        return self.base_ref.removeprefix("origin/")
 
     @classmethod
     def load(cls, filename):
@@ -33,6 +51,7 @@ class RunnerConfig:
             "commandTimeout",
             "provider",
             "claude",
+            "worktreeRoot",
         }:
             raise ValueError("Unknown runner configuration field.")
         for key in ["endpoint", "repositoryUrl"]:
@@ -85,6 +104,17 @@ class RunnerConfig:
         provider = value.get("provider", "codex")
         if provider not in {"codex", "claude"}:
             raise ValueError("Provider must be codex or claude.")
+        worktrees = value.get("worktreeRoot")
+        if worktrees is not None:
+            if not isinstance(worktrees, str) or not worktrees:
+                raise ValueError("The worktree root must be an absolute directory path.")
+            # Resolved without requiring existence: the runner creates it on first use.
+            worktrees = Path(worktrees).expanduser()
+            if not worktrees.is_absolute():
+                raise ValueError(
+                    "The worktree root must be an absolute directory path."
+                )
+            worktrees = worktrees.resolve()
         return cls(
             value["endpoint"],
             value["projectId"],
@@ -97,4 +127,5 @@ class RunnerConfig:
             timeout,
             provider,
             value.get("claude", "claude"),
+            worktrees,
         )

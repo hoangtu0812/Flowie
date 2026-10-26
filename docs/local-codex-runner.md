@@ -5,9 +5,9 @@ Runner dùng Codex CLI hoặc Claude Code đã đăng nhập trên máy (chọn 
 ## Chuẩn bị
 
 1. Quản trị workspace khai báo repository của project trong AI settings và cấp connection có các scope `context:read`, `projects:read`, `issues:read`, `comments:read`, `documents:read`, `activities:read`, `reviews:read`, `runs:read`, `runs:write`, `comments:write`. Chọn đúng project; backend phải bật MCP và MCP writes.
-2. Clone repository về máy; giữ cây làm việc sạch. `origin` phải khớp URL đã duyệt. Base ref phải có trong clone; runner không tự fetch hay ghi đè thay đổi đang có.
+2. Clone repository về máy. `origin` phải khớp URL đã duyệt. Mỗi lượt chạy tự `git fetch` base từ `origin` và làm việc trong worktree riêng, nên checkout dùng chung không cần sạch và không bị runner sửa; `baseRef` luôn được hiểu là nhánh trên `origin` (`main` và `origin/main` là một).
 3. Cài dependency Python theo `apps/api-python/requirements.txt`; kiểm tra `codex exec --help`. Runner yêu cầu sandbox `workspace-write`, `--ephemeral`, `--ignore-user-config`, `--output-schema` và `--output-last-message`. CLI cũ thiếu flag sẽ bị từ chối.
-4. Tạo file JSON **ngoài Git**, duyệt các test command local dưới dạng argv. Command từ cấu hình server không tự được thực thi. Không đặt token/password trong JSON hay argv test.
+4. Tạo file JSON **ngoài Git**, duyệt các test command local dưới dạng argv. Command từ cấu hình server không tự được thực thi. Không đặt token/password trong JSON hay argv test, và chỉ duyệt command không in secret ra output: argv cùng phần cuối log của mỗi test được gửi lên Flowie làm bằng chứng. Ưu tiên chế độ ít output (ví dụ `-q`) vì runner giữ toàn bộ output trong bộ nhớ trước khi cắt.
 
 ```json
 {
@@ -17,11 +17,14 @@ Runner dùng Codex CLI hoặc Claude Code đã đăng nhập trên máy (chọn 
   "repositoryUrl": "https://github.com/OWNER/REPOSITORY.git",
   "repositoryPath": "C:/work/REPOSITORY",
   "baseRef": "main",
+  "worktreeRoot": "C:/work/REPOSITORY.flowie-worktrees",
   "tests": [["python", "-m", "pytest", "-q"]],
   "codex": "codex",
   "commandTimeout": 900
 }
 ```
+
+`worktreeRoot` là nơi chứa worktree của từng lượt chạy; bỏ trống thì runner dùng `<repositoryPath>.flowie-worktrees` cạnh checkout. Đường dẫn phải tuyệt đối và nằm ngoài `repositoryPath`.
 
 Trong PowerShell, từ thư mục Flowie, đặt `PYTHONPATH=scripts` (giữ đường dẫn API nếu máy cần), và đặt `FLOWIE_MCP_TOKEN` trong môi trường của tiến trình cha từ kho bí mật của bạn. Không ghi token vào shell history, prompt, log hay commit.
 
@@ -32,7 +35,7 @@ python -m flowie_runner --config C:/private/flowie-runner.json inspect --issue R
 python -m flowie_runner --config C:/private/flowie-runner.json run --issue REPLACE_ISSUE_ID
 ```
 
-`doctor` chỉ kiểm tra repo và CLI. `inspect` đọc context nhưng không claim run. `run` claim bug 5 phút, tạo nhánh `codex/flowie-RUN_ID`, gọi Codex trong sandbox, chạy test local đã duyệt, kiểm tra changelog, tạo commit và báo `AWAITING_REVIEW`. Bug không tự chuyển Done. Ctrl+C, timeout, test lỗi hoặc heartbeat bị từ chối sẽ dừng process con; lỗi ghi FAILED nếu lease còn hợp lệ, hủy chạy cố release; mã đang có được giữ lại. Nếu connection bị thu hồi, lease còn lại tự hết hạn. Không tự reset, xóa nhánh hoặc bỏ qua lỗi.
+`doctor` chỉ kiểm tra repo và CLI, và in ra `baseBranch` cùng `worktreeRoot` đang dùng. `inspect` đọc context nhưng không claim run. `run` claim bug 5 phút, fetch base từ `origin`, tạo worktree riêng cho lượt chạy trên nhánh `codex/flowie-RUN_ID`, gọi Codex trong sandbox ở worktree đó, chạy test local đã duyệt, kiểm tra changelog, tạo commit và báo `AWAITING_REVIEW`. Bug không tự chuyển Done. Ctrl+C, timeout, test lỗi hoặc heartbeat bị từ chối sẽ dừng process con; lỗi ghi FAILED nếu lease còn hợp lệ, hủy chạy cố release; mã đang có được giữ lại. Nếu connection bị thu hồi, lease còn lại tự hết hạn. Không tự reset, xóa nhánh hoặc bỏ qua lỗi.
 
 Để đẩy nhánh và tạo PR nháp sau test, người chạy cấp quyền SCM thông qua Git credential helper và `gh auth login`, rồi chủ động thêm `--publish` vào lệnh `run`. Runner không nhận token SCM trong JSON và không chuyển biến `FLOWIE_MCP_TOKEN`, `GH_TOKEN`, `DATABASE_URL` vào Codex/test. Auth Codex vẫn đọc từ home hiện có; cấu hình MCP/hook của CLI không được tải từ user config. Repository cần chứa mã có thể gửi tới Codex theo quyền của người chạy.
 
@@ -67,13 +70,19 @@ Runner gọi `claude --print --output-format json --json-schema … --permission
 - Chỉ có tool đọc/ghi file; không có Bash, WebFetch hay MCP. Test, commit, push và gọi Flowie vẫn do runner cha làm.
 - `--restricted` bỏ qua settings user/project/local, giới hạn tool file trong checkout và từ chối `bypassPermissions`; `--permission-prompts none` tự từ chối mọi thao tác cần hỏi (ví dụ ghi ngoài checkout). Không dùng `--dangerously-skip-permissions`.
 - Process con chỉ nhận biến môi trường trong allowlist (thêm `USER`/`LOGNAME` để Claude Code đọc login từ macOS keychain, và `CLAUDE_CONFIG_DIR`); `FLOWIE_MCP_TOKEN`, `GH_TOKEN`, `DATABASE_URL` không được chuyển. Đăng nhập bằng `claude auth login` trước; login qua biến `ANTHROPIC_API_KEY` không được chuyển vào process con.
-- `doctor` kiểm tra `claude --help` có đủ các flag trên và `claude auth status --json` báo `loggedIn: true`; CLI thiếu, cũ hoặc chưa đăng nhập đều bị từ chối. Đã kiểm tra với Claude Code 2.1.296.
+- `doctor` kiểm tra `claude --help` có đủ các flag trên và `claude auth status --json` báo `loggedIn: true`; CLI thiếu, cũ hoặc chưa đăng nhập đều bị từ chối. Đủ flag từ Claude Code 2.1.296; đã kiểm lại trên 2.1.310.
+- Tên binary trong `claude`/`codex` được phân giải qua PATH có xét PATHEXT. Trên Windows npm cài Claude Code thành `claude.CMD`, mà `CreateProcess` chỉ tự thêm `.exe`, nên nếu không phân giải thì tên trần `claude` sẽ không chạy được. Binary không có trên PATH bị từ chối ngay.
+- Đăng nhập phải đọc được dưới môi trường đã lọc của process con (allowlist trong `process.py`). Nếu `claude auth status --json` chạy trực tiếp báo `loggedIn: true` mà `doctor` vẫn báo chưa đăng nhập thì allowlist thiếu biến môi trường mà nền tảng đó cần; bổ sung vào allowlist chứ không tắt việc lọc.
 - Nhánh vẫn đặt tên `codex/flowie-RUN_ID` cho cả hai provider.
-- Theo dõi phiên: khi bắt đầu, runner in ra stderr dòng `Claude Code session <id>: claude --resume <id> in <repositoryPath>`. Trong lúc chạy, xem transcript bằng `tail -f ~/.claude/projects/*/<id>.jsonl`. Sau khi xong, chạy `claude --resume <id>` trong `repositoryPath` để đọc lại hoặc tiếp tục hội thoại (phiên tiếp tục này dùng quyền bình thường của bạn, không còn các giới hạn của runner). Transcript chứa nội dung issue và được lưu cục bộ trong `~/.claude/projects`.
+- Theo dõi phiên: khi bắt đầu, runner in ra stderr dòng `Claude Code session <id>: claude --resume <id> in <đường dẫn worktree của lượt chạy>`. Trong lúc chạy, xem transcript bằng `tail -f ~/.claude/projects/*/<id>.jsonl`. Chạy `claude --resume <id>` trong đường dẫn đó để đọc lại hoặc tiếp tục hội thoại (phiên tiếp tục này dùng quyền bình thường của bạn, không còn các giới hạn của runner); lượt chạy thành công đã xoá worktree, nên hãy resume từ checkout dùng chung sau khi `git switch` sang nhánh của lượt đó. Transcript chứa nội dung issue và được lưu cục bộ trong `~/.claude/projects`.
 
 ## Chạy định kỳ cho hàng đợi automation
 
-Event automation (project + label + connection) chỉ tạo run `PENDING`; server không tự gọi provider. `pending` gọi `list_runs` với `state=PENDING` và `projectId` trong config, trả `{"issueIds": [...]}` (tối đa 100 mỗi lần). `run --issue` claim lại đúng run `PENDING` của issue đó. Production phải bật MCP writes (`MCP_WRITES_ENABLED=true`) thì `run` mới claim được.
+Event automation (project + label + connection) chỉ tạo run `PENDING`; server không tự gọi provider. `pending` gọi `list_runs` với `state=PENDING`, `projectId` trong config và `assignedToThisConnection=true`, trả `{"issueIds": [...]}` (tối đa 100 mỗi lần). `run --issue` claim lại đúng run `PENDING` của issue đó. Production phải bật MCP writes (`MCP_WRITES_ENABLED=true`) thì `run` mới claim được.
+
+Một run `PENDING` hoặc `RUNNING` được giao đích danh cho đúng một connection: automation xếp run cho connection của rule, còn claim trực tiếp tạo run cho chính connection gọi. Connection khác claim run đó sẽ nhận lỗi 409, kể cả khi lease đã hết hạn — hết lease không phải cửa sổ để agent khác chiếm việc. Vì vậy mỗi máy chạy runner phải dùng connection của chính nó; nhiều máy dùng chung một connection vẫn tranh nhau cùng hàng đợi.
+
+Hàng đợi chung là các issue chưa có run `PENDING`/`RUNNING` nào: mọi connection có `runs:write` và quyền đọc issue đều claim được. Muốn trả một việc đã giao về hàng đợi chung thì phải cancel run đó (chủ connection, hoặc quản trị workspace trong AI operations); khi run sang `CANCELED`, issue mở lại cho connection khác.
 
 ```bash
 #!/bin/sh
@@ -87,7 +96,25 @@ python -m flowie_runner --config "$CONFIG" pending \
     done
 ```
 
-Chạy tuần tự bằng cron/launchd (ví dụ mỗi 10 phút) và dùng khoá (`flock` hoặc launchd không chồng lần chạy) để hai vòng không cùng sửa một checkout. Run lỗi để lại thay đổi local và cây làm việc bẩn, nên các vòng sau sẽ dừng ở bước kiểm tra repo cho tới khi người chạy xem xét và dọn checkout.
+Chạy bằng cron/launchd (ví dụ mỗi 10 phút). Mỗi lượt chạy có worktree riêng nên một lượt lỗi không còn làm bẩn checkout dùng chung và không chặn các vòng sau; vẫn nên dùng khoá (`flock` hoặc launchd không chồng lần chạy) để giới hạn số lượt chạy song song trên một máy.
+
+## Bằng chứng test
+
+Mỗi test đã duyệt được ghi lại đủ để kiểm chứng sau: `name`, `command` (argv đúng như đã chạy), `exitCode`, `result`, `durationMs` và `log` là phần cuối output (stdout và stderr gộp, giữ tối đa 2000 ký tự cuối, có dòng đánh dấu khi bị cắt).
+
+- Test bị dừng vì `commandTimeout` được ghi là `failed` với `exitCode` 124 và log nói rõ lý do, thay vì biến mất khỏi báo cáo.
+- API từ chối `AWAITING_REVIEW` nếu không có test nào, nếu có test `failed`, hoặc nếu `result` không khớp `exitCode`. Báo `FAILED` vẫn được kèm test lỗi — đó là cách ghi lại thất bại.
+- Comment trên issue liệt kê từng test kèm exit code, thời lượng và argv; log chỉ hiện với test lỗi. Bằng chứng đầy đủ nằm trong `result` của agent run, xem ở Settings → AI operations.
+- Bằng chứng này vẫn là do agent tự báo. Nó không thay thế việc đối chiếu CI độc lập trên commit của PR.
+
+## Cô lập mỗi lượt chạy
+
+- Trước mỗi lượt, runner `git fetch --no-tags --prune origin` đúng nhánh base rồi tạo `git worktree` tại `<worktreeRoot>/<RUN_ID>` từ `refs/remotes/origin/<base>`. Không lượt nào xây trên ref local cũ hay trên thay đổi của lượt trước.
+- Provider và test local chạy trong worktree đó, không phải trong checkout dùng chung. `git add --all` khi commit vì vậy chỉ thấy thay đổi của chính lượt đó.
+- Lượt chạy lại cùng `RUN_ID` (sau khi reclaim lease) dùng `git worktree add -B`, nên nhánh được đặt lại về base hiện tại thay vì lỗi vì nhánh cũ còn đó.
+- Thành công: worktree bị xoá sau khi báo kết quả. Commit vẫn nằm trên nhánh `codex/flowie-RUN_ID` trong checkout dùng chung, nên người review `git switch` sang nhánh đó là thấy.
+- Thất bại: worktree được giữ lại nếu còn thay đổi chưa commit, và đường dẫn được in ra stderr (`Run worktree preserved for inspection: ...`). Nếu không còn gì để xem, worktree bị xoá luôn. Đường dẫn local không được gửi vào báo cáo trên server.
+- Dọn tay khi cần: `git worktree remove --force <đường dẫn>` rồi `git worktree prune`, chạy trong checkout dùng chung.
 
 ## Nghiệm thu bug thật
 

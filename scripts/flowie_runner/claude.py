@@ -43,14 +43,15 @@ class ClaudeProvider:
         if not logged_in:
             raise RuntimeError("Sign in to Claude Code before starting local work.")
 
-    async def execute(self, config, context):
+    async def execute(self, config, context, path):
         session = str(uuid4())
         identifier = str(context.get("issue", {}).get("identifier") or "run")[:50]
         # The transcript is kept so operators can follow or resume the session; stdout
-        # stays reserved for the runner's JSON result.
+        # stays reserved for the runner's JSON result. The path is the run's own
+        # worktree, which a successful run removes once the branch holds the commit.
         print(
             f"Claude Code session {session}: claude --resume {session}"
-            f" in {config.repository_path}",
+            f" in {path}",
             file=sys.stderr,
             flush=True,
         )
@@ -77,7 +78,7 @@ class ClaudeProvider:
                 "--name",
                 f"Flowie {identifier}",
             ],
-            config.repository_path,
+            path,
             config.command_timeout,
             stdin=task_prompt(context),
             capture=True,
