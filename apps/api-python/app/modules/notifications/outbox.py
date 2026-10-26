@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.identifiers import _cuid
 from ...core.clock import _utcnow
+from ...services.microsoft_teams import teams_message
 from ...services.notification_events import NotificationBatch, notification_hub
 
 logger = logging.getLogger(__name__)
@@ -56,6 +57,9 @@ async def deliver(payload: dict) -> None:
                     headers={"Authorization": f"Bot {token}"},
                     json={"embeds": [embed]},
                 )
+                response.raise_for_status()
+            for url in payload.get("teams_urls", []):
+                response = await client.post(url, json=teams_message(embed))
                 response.raise_for_status()
     for record in payload.get("records", []):
         await notification_hub.publish(record)

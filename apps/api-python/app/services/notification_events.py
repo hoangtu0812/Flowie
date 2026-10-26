@@ -26,6 +26,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..domains.auth import _cuid, _utcnow
+from .microsoft_teams import teams_available, teams_message
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,8 @@ class NotificationBatch:
     records: list[dict[str, Any]] = field(default_factory=list)
     discord_url: str | None = None
     discord_embed: dict[str, Any] | None = None
+    # Teams cards are rendered from ``discord_embed`` at delivery time.
+    teams_urls: list[str] = field(default_factory=list)
 
 
 # One colour per event so a channel can be read at a glance.
@@ -141,6 +144,31 @@ async def _discord_webhook(db: AsyncSession, workspace_id: str) -> str | None:
         {'workspace_id': workspace_id},
     )
     return result.scalar_one_or_none()
+
+
+async def _teams_webhooks(
+    db: AsyncSession, workspace_id: str, entity_type: str, entity_id: str
+) -> list[str]:
+    """The workspace Teams channel plus the channel of the event's project."""
+
+    if not teams_available():
+        return []
+    result = await db.execute(
+        text(
+            '''SELECT webhook_url FROM teams_webhooks
+               WHERE workspace_id = :workspace_id AND enabled = TRUE
+               UNION
+               SELECT c.webhook_url FROM project_teams_channels c
+               JOIN projects p ON p.id = c.project_id
+               WHERE p.workspace_id = :workspace_id AND c.enabled = TRUE
+                 AND p.id IN (
+                     SELECT CAST(:entity_id AS text) WHERE CAST(:entity_type AS text) = 'project'
+                     UNION SELECT project_id FROM issues
+                     WHERE id = :entity_id AND CAST(:entity_type AS text) = 'issue')'''
+        ),
+        {'workspace_id': workspace_id, 'entity_type': entity_type, 'entity_id': entity_id},
+    )
+    return list(result.scalars().all())
 
 
 def _app_url() -> str:
@@ -309,6 +337,7 @@ async def create_notification_batch(
     return NotificationBatch(
         records=records,
         discord_url=await _discord_webhook(db, workspace_id),
+        teams_urls=await _teams_webhooks(db, workspace_id, entity_type, entity_id),
         # The optional bot channel is configured globally, rather than per
         # workspace. Keep a payload even when this workspace has no webhook
         # so a bot-only installation still receives the event.
@@ -369,8 +398,23 @@ async def _send_discord_bot(embed: dict[str, Any]) -> None:
         logger.warning('Discord bot is unreachable: %s', error)
 
 
+async def _send_teams(url: str, embed: dict[str, Any]) -> None:
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.post(url, json=teams_message(embed))
+        if not response.is_success:
+            logger.warning(
+                'Microsoft Teams rejected the notification: %s %s',
+                response.status_code,
+                response.text[:500],
+            )
+    except httpx.HTTPError as error:
+        logger.warning('Microsoft Teams is unreachable: %s', error)
+
+
 async def publish_notification_batches(*batches: NotificationBatch | None) -> None:
     webhook_deliveries: list[tuple[str, dict[str, Any]]] = []
+    teams_deliveries: list[tuple[str, dict[str, Any]]] = []
     bot_deliveries: dict[str, dict[str, Any]] = {}
     for batch in batches:
         if batch is None:
@@ -387,9 +431,12 @@ async def publish_notification_batches(*batches: NotificationBatch | None) -> No
         bot_deliveries[key] = batch.discord_embed
         if batch.discord_url:
             webhook_deliveries.append((batch.discord_url, batch.discord_embed))
+        teams_deliveries.extend((url, batch.discord_embed) for url in batch.teams_urls)
     if not webhook_deliveries and bot_deliveries:
         logger.info('Notification has no Discord webhook configured for this workspace.')
     for url, embed in webhook_deliveries:
         asyncio.create_task(_send_discord(url, embed))
     for embed in bot_deliveries.values():
         asyncio.create_task(_send_discord_bot(embed))
+    for url, embed in teams_deliveries:
+        asyncio.create_task(_send_teams(url, embed))

@@ -26,6 +26,7 @@ import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ProjectProgressChart } from './details/project-progress-chart';
+import { ProjectTeamsChannel } from './details/project-teams-channel';
 
 interface ProjectPeekPanelProps {
    projectId: string;
@@ -458,6 +459,10 @@ export function ProjectPeekPanel({ projectId, onClose, onChanged }: ProjectPeekP
                      Connect channel
                   </button>
                </PropertyRow>
+               <ProjectTeamsChannel
+                  projectId={project.id}
+                  row={(label, children) => <PropertyRow label={label}>{children}</PropertyRow>}
+               />
                <PropertyRow label="Initiatives">
                   {project.initiative ? (
                      <span className="truncate max-w-44">{project.initiative}</span>

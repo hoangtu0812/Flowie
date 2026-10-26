@@ -36,6 +36,7 @@ import { toast } from 'sonner';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { type LiveProjectCustomField, useLiveProjectData } from './use-live-project';
+import { ProjectTeamsChannel } from './project-teams-channel';
 
 interface ProjectPropertiesPanelProps {
    project: ProjectDetailUiProject;
@@ -458,6 +459,10 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
                         Connect channel
                      </button>
                   </PropertyRow>
+                  <ProjectTeamsChannel
+                     projectId={project.id}
+                     row={(label, children) => <PropertyRow label={label}>{children}</PropertyRow>}
+                  />
                   <PropertyRow label="Initiatives">
                      <button
                         type="button"
