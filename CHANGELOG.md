@@ -222,6 +222,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Fixed
 
+- Production deployment builds the worker again after issues became allowed without a team: the auto-close SLA check accepts team-less issues, which match only workspace-wide SLA policies. No schema change beyond the existing `workspace_issues` migration.
+
 - Microsoft Teams "Save", "Disconnect" and "Send test" (workspace Integrations and project channel) now show a progress state and report success or the API/provider error in a toast on every attempt, instead of silently repeating the previous message; a network failure no longer leaves Save stuck.
 
 - Archive issue and destructive Settings confirmation buttons keep their labels readable against the red background in light and dark themes.

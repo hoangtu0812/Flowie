@@ -164,7 +164,7 @@ async function closedProjectStatusNames(prisma: PrismaClient, workspaceId: strin
 
 async function hasActiveSla(
    prisma: Prisma.TransactionClient,
-   issue: { workspaceId: string; teamId: string; priority: IssuePriority }
+   issue: { workspaceId: string; teamId: string | null; priority: IssuePriority }
 ) {
    return (
       (await prisma.slaPolicy.count({
