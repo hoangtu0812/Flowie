@@ -61,6 +61,9 @@ class RunPageInput(PageInput):
         Literal["PENDING", "RUNNING", "AWAITING_REVIEW", "FAILED", "CANCELED"] | None
     ) = None
     projectId: str | None = None
+    # True returns only runs directed at the calling connection, so a runner polls its
+    # own queue instead of work routed to another agent.
+    assignedToThisConnection: bool | None = None
 
 
 class RepositoryInput(StrictInput):

@@ -109,9 +109,22 @@ class RunService:
                 .mappings()
                 .first()
             )
+            # A queued or live run is directed at exactly one connection: automation
+            # routes a run to its rule's connection, and an ad-hoc claim creates the run
+            # for the claiming connection. Only that connection may claim or reclaim it,
+            # so an expired lease is not a takeover window for another agent. Returning
+            # the issue to the shared pool requires an explicit cancel.
+            if row and row["connection_id"] != self.principal.connection_id:
+                raise ApiError(
+                    409,
+                    "This issue is assigned to another agent connection. Cancel that run before claiming it here.",
+                    "Conflict",
+                )
             if row and row["state"] == "RUNNING" and row["lease_until"] > now:
                 raise ApiError(
-                    409, "Another active run already holds this issue.", "Conflict"
+                    409,
+                    "This connection already holds a live run for this issue.",
+                    "Conflict",
                 )
             lease = token_urlsafe(32)
             if row:
@@ -253,11 +266,18 @@ class RunService:
             "list_runs",
             payload,
             f"""SELECT r.id,r.issue_id AS "issueId",i.identifier AS "issueIdentifier",i.title AS "issueTitle",r.state,r.connection_id AS "connectionId",r.created_at AS "createdAt",
-            EXISTS(SELECT 1 FROM mcp_connections own WHERE own.id=r.connection_id AND own.user_id=:user) AS "ownedByCurrentUser"
+            EXISTS(SELECT 1 FROM mcp_connections own WHERE own.id=r.connection_id AND own.user_id=:user) AS "ownedByCurrentUser",
+            r.connection_id=:connection AS "assignedToThisConnection"
             FROM agent_runs r JOIN issues i ON i.id=r.issue_id WHERE {self.policy.issue_clause()}
             AND (CAST(:state AS text) IS NULL OR r.state=CAST(:state AS text))
-            AND (CAST(:project AS text) IS NULL OR i.project_id=CAST(:project AS text))""",
-            {"state": payload.state, "project": payload.projectId},
+            AND (CAST(:project AS text) IS NULL OR i.project_id=CAST(:project AS text))
+            AND (CAST(:assigned AS boolean) IS NULL OR (r.connection_id=:connection)=CAST(:assigned AS boolean))""",
+            {
+                "state": payload.state,
+                "project": payload.projectId,
+                "connection": self.principal.connection_id,
+                "assigned": payload.assignedToThisConnection,
+            },
             time_field="createdAt",
         )
 

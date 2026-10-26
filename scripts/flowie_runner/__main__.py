@@ -23,10 +23,17 @@ async def main_async(args):
         }
     async with connect(config.endpoint) as client:
         if args.command == "pending":
-            # shortcut: first 100 queued runs only; drain the rest on the next poll.
+            # Only runs directed at this connection are listed; work routed to another
+            # agent cannot be claimed here. First 100 queued runs only; drain the rest
+            # on the next poll.
             page = await client.call(
                 "list_runs",
-                {"state": "PENDING", "projectId": config.project_id, "limit": 100},
+                {
+                    "state": "PENDING",
+                    "projectId": config.project_id,
+                    "assignedToThisConnection": True,
+                    "limit": 100,
+                },
             )
             return {"issueIds": [row["issueId"] for row in page.get("items", [])]}
         if args.command == "inspect":

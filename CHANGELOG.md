@@ -10,6 +10,10 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ## Unreleased
 
+### Security
+
+- A queued or running agent run is now directed at exactly one MCP connection. Automation routes a run to its rule's connection and a direct claim creates a run for the calling connection; any other connection claiming that issue is rejected with 409, including after the lease expires, so an expired lease is no longer a takeover window for a different agent. Returning an issue to the shared pool requires canceling its run. `list_runs` returns `assignedToThisConnection` and accepts it as a filter, and the local runner's `pending` command lists only runs directed at its own connection. Each runner host must therefore use its own connection. No schema migration is required.
+
 ### Added
 
 - The local Flowie agent runner can use Claude Code instead of Codex (`"provider": "claude"` in the runner JSON; Codex stays the default). Claude Code runs non-interactively in the checkout with file tools only, restricted settings, no MCP servers and no Flowie/SCM/database tokens; `doctor` rejects a missing, outdated or signed-out CLI. Each Claude session is saved locally, named after the issue (for example `Flowie DTD-3`), and its id is printed when the run starts so it can be followed and later opened with `claude --resume`. A new `pending` command lists issues with queued automation runs so the runner can be polled periodically. Local tooling only; nothing changes on CT107.

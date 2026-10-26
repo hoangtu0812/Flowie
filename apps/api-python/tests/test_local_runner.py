@@ -1,4 +1,6 @@
+import argparse
 import asyncio
+from contextlib import asynccontextmanager
 from dataclasses import replace
 import json
 import os
@@ -10,6 +12,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
+from flowie_runner.__main__ import main_async
 from flowie_runner.claude import REQUIRED_FLAGS, ClaudeProvider
 from flowie_runner.config import RunnerConfig
 from flowie_runner.codex import CodexProvider
@@ -85,6 +88,33 @@ def test_parent_tokens_do_not_reach_children_or_inspect(tmp_path, monkeypatch):
     client = client_fixture()
     asyncio.run(prepare(client, fixture_repository(tmp_path), "issue"))
     assert all(call.args[0] != "claim_issue" for call in client.call.call_args_list)
+
+
+def test_pending_lists_only_runs_assigned_to_this_connection(tmp_path):
+    config = fixture_repository(tmp_path)
+    client = AsyncMock()
+    client.call.return_value = {"items": [{"issueId": "issue"}]}
+
+    @asynccontextmanager
+    async def connect(endpoint):
+        yield client
+
+    with (
+        patch("flowie_runner.__main__.RunnerConfig") as loader,
+        patch("flowie_runner.__main__.Repository") as repository,
+        patch("flowie_runner.__main__.CodexProvider") as provider,
+        patch("flowie_runner.__main__.connect", connect),
+    ):
+        loader.load.return_value = config
+        repository.return_value, provider.return_value = AsyncMock(), AsyncMock()
+        result = asyncio.run(
+            main_async(argparse.Namespace(config="fixture.json", command="pending"))
+        )
+    assert result == {"issueIds": ["issue"]}
+    name, arguments = client.call.call_args.args
+    assert name == "list_runs"
+    assert arguments["state"] == "PENDING"
+    assert arguments["assignedToThisConnection"] is True
 
 
 def test_runner_checks_repo_and_preserves_failed_work(tmp_path):

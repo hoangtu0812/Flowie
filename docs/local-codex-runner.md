@@ -73,7 +73,11 @@ Runner gọi `claude --print --output-format json --json-schema … --permission
 
 ## Chạy định kỳ cho hàng đợi automation
 
-Event automation (project + label + connection) chỉ tạo run `PENDING`; server không tự gọi provider. `pending` gọi `list_runs` với `state=PENDING` và `projectId` trong config, trả `{"issueIds": [...]}` (tối đa 100 mỗi lần). `run --issue` claim lại đúng run `PENDING` của issue đó. Production phải bật MCP writes (`MCP_WRITES_ENABLED=true`) thì `run` mới claim được.
+Event automation (project + label + connection) chỉ tạo run `PENDING`; server không tự gọi provider. `pending` gọi `list_runs` với `state=PENDING`, `projectId` trong config và `assignedToThisConnection=true`, trả `{"issueIds": [...]}` (tối đa 100 mỗi lần). `run --issue` claim lại đúng run `PENDING` của issue đó. Production phải bật MCP writes (`MCP_WRITES_ENABLED=true`) thì `run` mới claim được.
+
+Một run `PENDING` hoặc `RUNNING` được giao đích danh cho đúng một connection: automation xếp run cho connection của rule, còn claim trực tiếp tạo run cho chính connection gọi. Connection khác claim run đó sẽ nhận lỗi 409, kể cả khi lease đã hết hạn — hết lease không phải cửa sổ để agent khác chiếm việc. Vì vậy mỗi máy chạy runner phải dùng connection của chính nó; nhiều máy dùng chung một connection vẫn tranh nhau cùng hàng đợi.
+
+Hàng đợi chung là các issue chưa có run `PENDING`/`RUNNING` nào: mọi connection có `runs:write` và quyền đọc issue đều claim được. Muốn trả một việc đã giao về hàng đợi chung thì phải cancel run đó (chủ connection, hoặc quản trị workspace trong AI operations); khi run sang `CANCELED`, issue mở lại cho connection khác.
 
 ```bash
 #!/bin/sh

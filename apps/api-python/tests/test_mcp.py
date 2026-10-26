@@ -955,6 +955,73 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                             result.structured_content["id"], self.issue["id"]
                         )
 
+    async def test_queued_run_stays_directed_to_its_connection(self):
+        queued = _cuid()
+        async with self.factory() as db:
+            other = await create(
+                db,
+                self.workspace,
+                self.user,
+                ConnectionInput(
+                    name="Second agent",
+                    scopes=sorted(ALL_SCOPES),
+                    projectIds=[self.project],
+                ),
+            )
+            other_principal = await authenticate(db, other["token"])
+            await db.execute(
+                text("""INSERT INTO agent_runs (id,workspace_id,issue_id,connection_id)
+                VALUES (:id,:workspace,:issue,:connection)"""),
+                {
+                    "id": queued,
+                    "workspace": self.workspace,
+                    "issue": self.issue["id"],
+                    "connection": self.principal.connection_id,
+                },
+            )
+            await db.commit()
+
+        async def claim(principal, key):
+            return await self.application.call(
+                principal,
+                "claim_issue",
+                {"issueId": self.issue["id"], "idempotencyKey": key},
+            )
+
+        async def queue(principal):
+            return await self.application.call(
+                principal,
+                "list_runs",
+                {"projectId": self.project, "assignedToThisConnection": True},
+            )
+
+        with self.assertRaises(ApiError) as blocked:
+            await claim(other_principal, "directed-other-claim")
+        self.assertEqual(blocked.exception.status_code, 409)
+        self.assertEqual((await claim(self.principal, "directed-owner-claim"))["data"]["id"], queued)
+        async with self.factory() as db:
+            await db.execute(
+                text("UPDATE agent_runs SET lease_until=:expired WHERE id=:id"),
+                {"id": queued, "expired": _utcnow() - timedelta(minutes=1)},
+            )
+            await db.commit()
+        # An expired lease is not a takeover window for a different connection.
+        with self.assertRaises(ApiError):
+            await claim(other_principal, "directed-other-expired-claim")
+        self.assertEqual(
+            (await claim(self.principal, "directed-owner-reclaim"))["data"]["fencingToken"], 2
+        )
+        self.assertEqual([row["id"] for row in (await queue(self.principal))["items"]], [queued])
+        self.assertEqual((await queue(other_principal))["items"], [])
+        await self.application.call(
+            self.principal,
+            "cancel_run",
+            {"runId": queued, "idempotencyKey": "directed-owner-cancel"},
+        )
+        # Canceling returns the issue to the shared pool any connection may claim.
+        released = await claim(other_principal, "shared-pool-claim")
+        self.assertNotEqual(released["data"]["id"], queued)
+
     async def test_run_lease_reclaim_fencing_and_results(self):
         first = (
             await self.call(
