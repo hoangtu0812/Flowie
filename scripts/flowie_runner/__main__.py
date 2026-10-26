@@ -20,6 +20,8 @@ async def main_async(args):
             "ready": True,
             "provider": "Claude Code" if config.provider == "claude" else "Codex CLI",
             "publishing": "requires --publish",
+            "baseBranch": f"origin/{config.base_branch}",
+            "worktreeRoot": str(config.worktree_root),
         }
     async with connect(config.endpoint) as client:
         if args.command == "pending":

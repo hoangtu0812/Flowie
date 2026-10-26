@@ -1,4 +1,5 @@
 import asyncio
+import sys
 from uuid import uuid4
 
 from .process import run_process
@@ -37,6 +38,34 @@ async def prepare(client, config, issue_id):
     }
 
 
+async def retire(repo, workspace, *, keep_work):
+    """Remove a run's worktree, keeping it only when it still holds work to inspect.
+
+    The committed work lives on the run branch in the shared checkout, so removal
+    never discards a reviewable result. Cleanup failures are reported rather than
+    raised: they must not mask a run's own outcome.
+    """
+    if workspace is None:
+        return None
+    try:
+        if keep_work and await workspace.dirty():
+            print(
+                f"Run worktree preserved for inspection: {workspace.path}",
+                file=sys.stderr,
+                flush=True,
+            )
+            return str(workspace.path)
+        await repo.discard(workspace.path)
+        return None
+    except Exception:
+        print(
+            f"Run worktree could not be cleaned up: {workspace.path}",
+            file=sys.stderr,
+            flush=True,
+        )
+        return str(workspace.path)
+
+
 async def execute(
     client, config, issue_id, provider, *, publish=False, heartbeat_interval=60
 ):
@@ -59,12 +88,14 @@ async def execute(
             await client.call("heartbeat_run", {**lease, "idempotencyKey": key()})
 
     tests = []
+    workspaces = []
 
     async def work():
-        branch = await repo.branch(run["id"])
-        summary = await provider.execute(config, context)
+        workspace = await repo.worktree(run["id"])
+        workspaces.append(workspace)
+        summary = await provider.execute(config, context, workspace.path)
         for index, command in enumerate(config.tests):
-            code, _ = await run_process(command, repo.path, config.command_timeout)
+            code, _ = await run_process(command, workspace.path, config.command_timeout)
             tests.append(
                 {
                     "name": f"approved-local-test-{index + 1}",
@@ -75,8 +106,8 @@ async def execute(
                 raise RuntimeError(
                     "An approved local test failed; no result was marked successful."
                 )
-        commit = await repo.commit(run["id"])
-        url = await repo.publish(branch, run["id"]) if publish else None
+        commit = await workspace.commit(run["id"])
+        url = await workspace.publish(run["id"]) if publish else None
         await client.call("heartbeat_run", {**lease, "idempotencyKey": key()})
         return {
             "outcome": "AWAITING_REVIEW",
@@ -102,8 +133,10 @@ async def execute(
         return {
             "runId": run["id"],
             "state": "AWAITING_REVIEW",
+            "branch": workspaces[0].branch,
             "commit": result["commit"],
             "pullRequestUrl": result["pullRequestUrl"],
+            "worktree": await retire(repo, workspaces[0], keep_work=False),
         }
     except BaseException as error:
         worker.cancel()
@@ -127,6 +160,8 @@ async def execute(
                 await client.call("release_issue", {**lease, "idempotencyKey": key()})
             except Exception:
                 pass
+        # Local paths stay out of the server-side report; the operator reads them here.
+        await retire(repo, workspaces[0] if workspaces else None, keep_work=True)
         raise
     finally:
         heart.cancel()

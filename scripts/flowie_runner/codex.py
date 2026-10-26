@@ -28,7 +28,7 @@ class CodexProvider:
         if code:
             raise RuntimeError("Sign in to Codex CLI before starting local work.")
 
-    async def execute(self, config, context):
+    async def execute(self, config, context, path):
         with tempfile.TemporaryDirectory(prefix="flowie-codex-") as directory:
             output = Path(directory) / "result.json"
             schema = Path(directory) / "schema.json"
@@ -46,10 +46,10 @@ class CodexProvider:
                     "--output-last-message",
                     str(output),
                     "--cd",
-                    str(config.repository_path),
+                    str(path),
                     "-",
                 ],
-                config.repository_path,
+                path,
                 config.command_timeout,
                 stdin=task_prompt(context),
             )
