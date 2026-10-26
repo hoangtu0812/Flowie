@@ -1,5 +1,7 @@
 import asyncio
+from dataclasses import replace
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -8,6 +10,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
+from flowie_runner.claude import REQUIRED_FLAGS, ClaudeProvider
 from flowie_runner.config import RunnerConfig
 from flowie_runner.codex import CodexProvider
 from flowie_runner.orchestrator import execute, prepare
@@ -192,5 +195,98 @@ def test_runner_rejects_remote_credentials_and_unreviewed_config(tmp_path):
     }
     path = tmp_path / "config.json"
     path.write_text(json.dumps(value))
+    with pytest.raises(ValueError):
+        RunnerConfig.load(path)
+
+
+FAKE_CLAUDE = """#!{python}
+import json, os, sys
+args = sys.argv[1:]
+if args == ["--help"]:
+    print({help!r})
+elif args[:2] == ["auth", "status"]:
+    print(json.dumps({{"loggedIn": {logged_in}}}))
+    sys.exit(0 if {logged_in} else 1)
+else:
+    prompt = sys.stdin.read()
+    with open("CHANGELOG.md", "a") as handle:
+        handle.write("- Fixture fixed.\\n")
+    with open({record!r}, "w") as handle:
+        json.dump({{"args": args, "env": sorted(os.environ), "prompt": prompt}}, handle)
+    print(json.dumps({{"type": "result", "subtype": "success", "is_error": False,
+                      "structured_output": {{"summary": "Fixture fixed by Claude."}}}}))
+"""
+
+
+def fake_claude(tmp_path, *, flags=None, logged_in=True):
+    help_text = " ".join(flags if flags is not None else REQUIRED_FLAGS)
+    script = tmp_path / "claude"
+    script.write_text(
+        FAKE_CLAUDE.format(
+            python=sys.executable,
+            help=help_text,
+            logged_in=logged_in,
+            record=str(tmp_path / "record.json"),
+        )
+    )
+    script.chmod(0o755)
+    return str(script)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="fake CLI uses a POSIX shebang")
+def test_claude_adapter_requires_flags_and_login(tmp_path):
+    config = fixture_repository(tmp_path)
+    old = replace(config, claude=fake_claude(tmp_path, flags=["--print"]))
+    with pytest.raises(RuntimeError, match="Update Claude Code"):
+        asyncio.run(ClaudeProvider().doctor(old))
+    logged_out = replace(config, claude=fake_claude(tmp_path, logged_in=False))
+    with pytest.raises(RuntimeError, match="Sign in"):
+        asyncio.run(ClaudeProvider().doctor(logged_out))
+    ready = replace(config, claude=fake_claude(tmp_path))
+    asyncio.run(ClaudeProvider().doctor(ready))
+
+
+@pytest.mark.skipif(os.name == "nt", reason="fake CLI uses a POSIX shebang")
+def test_claude_adapter_edits_checkout_without_tokens(tmp_path, monkeypatch):
+    monkeypatch.setenv("FLOWIE_MCP_TOKEN", "never-pass-this")
+    monkeypatch.setenv("GH_TOKEN", "never-pass-scm")
+    monkeypatch.setenv("DATABASE_URL", "private-database")
+    config = replace(fixture_repository(tmp_path), claude=fake_claude(tmp_path))
+    summary = asyncio.run(
+        ClaudeProvider().execute(config, {"issue": {"title": "Fixture"}})
+    )
+    assert summary == "Fixture fixed by Claude."
+    assert "Fixture fixed" in (config.repository_path / "CHANGELOG.md").read_text()
+    record = json.loads((tmp_path / "record.json").read_text())
+    assert not {"FLOWIE_MCP_TOKEN", "GH_TOKEN", "DATABASE_URL"}.intersection(
+        record["env"]
+    )
+    args = record["args"]
+    assert "--dangerously-skip-permissions" not in args
+    assert {"--print", "--restricted", "--strict-mcp-config"} <= set(args)
+    assert args[args.index("--permission-mode") + 1] == "acceptEdits"
+    assert args[args.index("--tools") + 1] == "Read,Edit,Write,Glob,Grep"
+    assert "untrusted data" in record["prompt"] and "Fixture" in record["prompt"]
+
+
+def test_runner_config_selects_provider(tmp_path):
+    value = {
+        "endpoint": "https://flowie.example.test/mcp/",
+        "repositoryUrl": "https://github.com/fixture/repo.git",
+        "repositoryPath": str(tmp_path),
+        "baseRef": "main",
+        "projectId": "project",
+        "repositoryId": "repository",
+        "tests": [["python", "--version"]],
+    }
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps(value))
+    assert RunnerConfig.load(path).provider == "codex"
+    path.write_text(
+        json.dumps({**value, "provider": "claude", "claude": "/opt/claude"})
+    )
+    loaded = RunnerConfig.load(path)
+    assert (loaded.provider, loaded.claude) == ("claude", "/opt/claude")
+    path.write_text(json.dumps({**value, "provider": "other"}))
     with pytest.raises(ValueError):
         RunnerConfig.load(path)

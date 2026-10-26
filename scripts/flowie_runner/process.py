@@ -4,7 +4,8 @@ import subprocess
 
 
 def child_environment():
-    # Auth remains in the existing Codex home; Flowie and SCM tokens never enter children.
+    # Auth remains in the existing Codex/Claude home (USER unlocks the macOS keychain);
+    # Flowie and SCM tokens never enter children.
     allowed = {
         "PATH",
         "PATHEXT",
@@ -18,6 +19,9 @@ def child_environment():
         "TEMP",
         "TMP",
         "CODEX_HOME",
+        "CLAUDE_CONFIG_DIR",
+        "USER",
+        "LOGNAME",
         "LANG",
         "LC_ALL",
     }

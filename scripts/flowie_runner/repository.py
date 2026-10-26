@@ -43,7 +43,7 @@ class Repository:
 
     async def commit(self, run_id):
         if not await self.git("status", "--porcelain"):
-            raise RuntimeError("Codex produced no reviewable changes.")
+            raise RuntimeError("The provider produced no reviewable changes.")
         changed = await self.git("diff", "--name-only", "HEAD", "--", "CHANGELOG.md")
         if not changed:
             raise RuntimeError("CHANGELOG.md must record the change before committing.")
@@ -74,7 +74,7 @@ class Repository:
                 "--title",
                 f"Resolve Flowie run {run_id}",
                 "--body",
-                "Local Codex changes with locally executed test evidence. Review the diff and independent CI before merging.",
+                "Local agent changes with locally executed test evidence. Review the diff and independent CI before merging.",
             ],
             self.path,
             120,
