@@ -12,7 +12,10 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { responseData } from '@/lib/http';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
+import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -45,7 +48,7 @@ export async function loadTeamsStatus(): Promise<TeamsStatus> {
    return ((await response.json()) as { data: TeamsStatus }).data;
 }
 
-export async function testTeamsDelivery(path: string): Promise<string> {
+async function testTeamsDelivery(path: string): Promise<string> {
    const response = await authenticatedFetch(`${api}/integrations/teams${path}`, {
       method: 'POST',
    });
@@ -53,9 +56,55 @@ export async function testTeamsDelivery(path: string): Promise<string> {
       data?: { delivered: boolean; reason?: string };
    } | null;
    if (response.ok && payload?.data?.delivered) return 'Test message sent to Microsoft Teams.';
-   return (
+   throw new Error(
       payload?.data?.reason ??
-      'The test could not be delivered. Check the webhook and enabled state.'
+         'The test could not be delivered. Check the webhook and enabled state.'
+   );
+}
+
+/** Reports a request's progress and outcome in a toast; resolves to undefined on failure. */
+export function withTeamsToast<T>(
+   request: Promise<T>,
+   loading: string,
+   success: string | ((value: T) => string)
+): Promise<T | undefined> {
+   toast.promise(request, {
+      loading,
+      success,
+      error: (error: unknown) =>
+         error instanceof Error ? error.message : 'Microsoft Teams could not be reached.',
+   });
+   return request.catch(() => undefined);
+}
+
+export function Pending() {
+   return <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />;
+}
+
+/** Sends a test card; progress and the outcome are reported through a toast. */
+export function TeamsTestButton({ path, disabled }: { path: string; disabled?: boolean }) {
+   const [sending, setSending] = useState(false);
+
+   async function send() {
+      setSending(true);
+      await withTeamsToast(
+         testTeamsDelivery(path),
+         'Sending test message to Microsoft Teams…',
+         (message) => message
+      );
+      setSending(false);
+   }
+
+   return (
+      <Button
+         type="button"
+         variant="outline"
+         onClick={() => void send()}
+         disabled={disabled || sending}
+      >
+         {sending && <Pending />}
+         {sending ? 'Sending…' : 'Send test'}
+      </Button>
    );
 }
 
@@ -89,30 +138,26 @@ export function TeamsIntegration({
       if (!workspaceId) return;
       setSaving(true);
       setMessage(undefined);
-      const response = await authenticatedFetch(
-         `${api}/integrations/teams?workspaceId=${workspaceId}`,
-         {
+      const status = await withTeamsToast(
+         authenticatedFetch(`${api}/integrations/teams?workspaceId=${workspaceId}`, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ ...(url ? { webhookUrl: url } : {}), enabled }),
-         }
+         }).then((response) =>
+            responseData<NonNullable<TeamsStatus>>(
+               response,
+               'Could not save the Microsoft Teams integration.'
+            )
+         ),
+         'Saving Microsoft Teams integration…',
+         'Microsoft Teams integration saved.'
       );
       setSaving(false);
-      if (!response.ok) {
-         setMessage('Could not save. Check the Workflows webhook URL and your workspace role.');
-         return;
-      }
-      const status = ((await response.json()) as { data: NonNullable<TeamsStatus> }).data;
+      if (!status) return;
       setConfigured(true);
       setUrl('');
       setEnabled(status.enabled);
-      setMessage('Microsoft Teams integration saved.');
       onSaved?.(status);
-   }
-
-   async function test() {
-      if (!workspaceId) return;
-      setMessage(await testTeamsDelivery(`/test?workspaceId=${workspaceId}`));
    }
 
    return (
@@ -148,16 +193,13 @@ export function TeamsIntegration({
          {message && <p className="text-sm text-muted-foreground">{message}</p>}
          <div className="flex gap-2">
             <Button type="submit" disabled={saving || (!configured && !url)}>
+               {saving && <Pending />}
                {saving ? 'Saving…' : 'Save configuration'}
             </Button>
-            <Button
-               type="button"
-               variant="outline"
-               onClick={() => void test()}
-               disabled={!configured}
-            >
-               Send test
-            </Button>
+            <TeamsTestButton
+               path={`/test?workspaceId=${workspaceId}`}
+               disabled={!configured || !workspaceId}
+            />
          </div>
       </form>
    );
