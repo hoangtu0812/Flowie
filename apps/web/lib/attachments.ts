@@ -87,3 +87,13 @@ export function insertAtCursor(
    const next = `${prefix}${separator}${insertion}\n${suffix}`;
    return { value: next, caret: prefix.length + separator.length + insertion.length + 1 };
 }
+
+/**
+ * Reads a public page title for a pasted link; null when the page has none.
+ * VI: Lấy tiêu đề trang công khai cho link được dán; null khi trang không có.
+ */
+export async function linkTitle(url: string): Promise<string | null> {
+   const response = await authenticatedFetch(`${api}/link-metadata?url=${encodeURIComponent(url)}`);
+   if (!response.ok) return null;
+   return ((await response.json()) as { data: { title: string | null } }).data.title;
+}

@@ -4,7 +4,10 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Button } from '@astryxdesign/core/Button';
-import { HStack, VStack } from '@astryxdesign/core/Layout';
+import { Check, ArrowUpRight, Clock } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { getNotificationIcon } from '@/lib/notification-utils';
+import { VStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { DesignSurface } from '@/components/common/design-surface';
@@ -50,13 +53,21 @@ export function NotificationPreview({
                <EmptyState title={t('selectNotification')} description={t('notificationHelp')} />
             ) : (
                <>
-                  <HStack padding={3} gap={3} justify="between">
-                     <Text>
-                        {notification.user.name} · {notification.timestamp}
-                     </Text>
-                     <HStack gap={2} wrap="wrap">
+                  <div className="flex h-10 shrink-0 items-center justify-between gap-3 border-b border-border px-4">
+                     <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                        {getNotificationIcon(notification.type, 'size-4 shrink-0')}
+                        <span className="truncate">
+                           {issue?.identifier ?? notification.identifier}
+                        </span>
+                     </div>
+                     <div className="flex shrink-0 items-center gap-1">
                         <Button
                            label={notification.snoozedUntil ? t('unsnooze') : t('snoozeHour')}
+                           tooltip={notification.snoozedUntil ? t('unsnooze') : t('snoozeHour')}
+                           icon={<Clock className="size-4" />}
+                           isIconOnly
+                           variant="ghost"
+                           size="sm"
                            clickAction={async () => {
                               try {
                                  await snooze(
@@ -76,14 +87,25 @@ export function NotificationPreview({
                         {!notification.read && onMarkAsRead && (
                            <Button
                               label={t('markRead')}
+                              icon={<Check className="size-4" />}
+                              variant="ghost"
+                              size="sm"
                               onClick={() => {
                                  void onMarkAsRead(notification.id);
                               }}
                            />
                         )}
-                        {safePath && <Link href={`/${orgId}${safePath}`}>{t('open')}</Link>}
-                     </HStack>
-                  </HStack>
+                        {safePath && (
+                           <Link
+                              href={`/${orgId}${safePath}`}
+                              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm font-medium hover:bg-accent"
+                           >
+                              {t('open')}
+                              <ArrowUpRight className="size-4" />
+                           </Link>
+                        )}
+                     </div>
+                  </div>
                   {actionError && <Text role="alert">{actionError}</Text>}
                   {notification.snoozedUntil && (
                      <Text>
@@ -91,7 +113,32 @@ export function NotificationPreview({
                         {new Date(notification.snoozedUntil).toLocaleString(tag)}
                      </Text>
                   )}
-                  <Text>{notification.content}</Text>
+                  <div className="mx-4 mt-4 flex gap-3 rounded-lg bg-muted/40 p-3">
+                     <Avatar className="size-7 shrink-0">
+                        <AvatarImage
+                           src={notification.user.avatarUrl}
+                           alt={notification.user.name}
+                        />
+                        <AvatarFallback className="text-xs">
+                           {notification.user.name
+                              .split(' ')
+                              .map((part) => part[0])
+                              .join('')}
+                        </AvatarFallback>
+                     </Avatar>
+                     <div className="min-w-0 text-sm">
+                        <p>
+                           <span className="font-medium">{notification.user.name}</span>
+                           <span className="text-muted-foreground">
+                              {' '}
+                              · {notification.timestamp}
+                           </span>
+                        </p>
+                        <p className="whitespace-pre-wrap break-words text-muted-foreground">
+                           {notification.content}
+                        </p>
+                     </div>
+                  </div>
                   {reference ? (
                      pending ? (
                         <LoadingState label={t('loadingIssue')} />
