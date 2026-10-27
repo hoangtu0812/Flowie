@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { AtSign } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
@@ -40,10 +41,18 @@ export function CommentMentions({
       <VStack gap={2}>
          <Button
             label={open ? 'Hide mention picker' : `Mention members (${selected.length})`}
+            tooltip={open ? 'Hide mention picker' : 'Mention members'}
+            icon={<AtSign className="size-4" />}
+            isIconOnly={!selected.length}
             size="sm"
+            variant={open ? 'secondary' : 'ghost'}
+            aria-pressed={open}
             isDisabled={disabled}
+            className="self-start"
             onClick={() => setOpen(!open)}
-         />
+         >
+            {selected.length ? String(selected.length) : undefined}
+         </Button>
          {open && (
             <>
                <TextInput label="Find a member to mention" value={search} onChange={setSearch} />

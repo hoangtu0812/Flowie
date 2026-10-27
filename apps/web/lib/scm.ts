@@ -139,12 +139,14 @@ export async function loadReviews(
       state?: ReviewState;
       provider?: ScmProvider;
       search?: string;
+      issueId?: string;
    }
 ): Promise<CodeReview[]> {
    const query = new URLSearchParams({ workspaceId, view: options.view });
    if (options.state) query.set('state', options.state);
    if (options.provider) query.set('provider', options.provider);
    if (options.search?.trim()) query.set('search', options.search.trim());
+   if (options.issueId) query.set('issueId', options.issueId);
    const response = await authenticatedFetch(`${api}/reviews?${query}`);
    if (!response.ok) throw await apiError(response, 'Could not load reviews.');
    return ((await response.json()) as { data: CodeReview[] }).data;

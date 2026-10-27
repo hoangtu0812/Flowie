@@ -171,6 +171,58 @@ class ScmPersistenceIntegrationTests(unittest.TestCase):
                         db=db,
                     )
                     self.assertEqual(hidden['meta']['total'], 0)
+                    status_id = (
+                        await db.execute(
+                            text('SELECT id FROM issue_statuses WHERE workspace_id=:workspace LIMIT 1'),
+                            {'workspace': owner['workspace_id']},
+                        )
+                    ).scalar_one()
+                    linked_issue, other_issue = _cuid(), _cuid()
+                    await db.execute(
+                        text(
+                            '''INSERT INTO issues(id,workspace_id,team_id,status_id,identifier,number,title,creator_id,created_at,updated_at)
+                               VALUES (:linked,:workspace,:team,:status,'SCM-1',90001,'Linked',:user,:now,:now),
+                                      (:other,:workspace,:team,:status,'SCM-2',90002,'Unlinked',:user,:now,:now)'''
+                        ),
+                        {
+                            'linked': linked_issue,
+                            'other': other_issue,
+                            'workspace': owner['workspace_id'],
+                            'team': owner['team_id'],
+                            'status': status_id,
+                            'user': owner['user_id'],
+                            'now': now,
+                        },
+                    )
+                    await db.execute(
+                        text(
+                            '''INSERT INTO code_review_issue_links (
+                                   workspace_id, code_review_id, issue_id, source, created_by_id, created_at
+                               ) VALUES (:workspace, :review, :issue, 'MANUAL', :user, :now)'''
+                        ),
+                        {
+                            'workspace': owner['workspace_id'],
+                            'review': review_id,
+                            'issue': linked_issue,
+                            'user': owner['user_id'],
+                            'now': now,
+                        },
+                    )
+                    for issue_id, expected in ((linked_issue, 1), (other_issue, 0)):
+                        by_issue = await list_reviews(
+                            workspaceId=owner['workspace_id'],
+                            view='all',
+                            state=None,
+                            provider=None,
+                            repositoryId=None,
+                            search=None,
+                            limit=50,
+                            offset=0,
+                            user={'id': owner['user_id']},
+                            db=db,
+                            issueId=issue_id,
+                        )
+                        self.assertEqual(by_issue['meta']['total'], expected)
                     review.reviewers = []
                     second_id = await upsert_review(db, repository, review)
                     self.assertEqual(review_id, second_id)

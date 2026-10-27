@@ -17,6 +17,8 @@ import { ActivityItem } from '@/mock-data/issue-details';
 import { User } from '@/mock-data/users';
 import {
    Ban,
+   Bell,
+   BellOff,
    CircleDot,
    GitPullRequestArrow,
    Link2,
@@ -135,6 +137,15 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
                </Heading>
                <Button
                   label={issue?.isSubscribed ? t('unsubscribe') : t('subscribe')}
+                  tooltip={issue?.isSubscribed ? t('unsubscribe') : t('subscribe')}
+                  icon={
+                     issue?.isSubscribed ? (
+                        <BellOff className="size-4" />
+                     ) : (
+                        <Bell className="size-4" />
+                     )
+                  }
+                  isIconOnly
                   size="sm"
                   variant="ghost"
                   isDisabled={!issue}
@@ -219,7 +230,12 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
                   <Text>
                      {t('replyingTo')} {state.replyTo.author.name}
                   </Text>
-                  <Button label={t('cancelReply')} onClick={() => state.setReplyTo(undefined)} />
+                  <Button
+                     label={t('cancelReply')}
+                     size="sm"
+                     variant="ghost"
+                     onClick={() => state.setReplyTo(undefined)}
+                  />
                </HStack>
             )}
             {state.workspaceId && (

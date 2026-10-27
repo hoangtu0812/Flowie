@@ -12,6 +12,7 @@ import { IssueRelations } from '@/components/common/issues/details/issue-relatio
 import { IssuePropertiesPanel } from '@/components/common/issues/details/issue-properties-panel';
 import { MobileIssueProperties } from '@/components/common/issues/details/mobile-issue-properties';
 import { IssueSlaPanel } from '@/features/sla/issue-sla-panel';
+import { IssuePullRequests } from '@/components/common/issues/details/issue-pull-requests';
 
 export function IssueContent({
    issue,
@@ -38,9 +39,12 @@ export function IssueContent({
                <MobileIssueProperties issue={issue} detail={detail} allScreens={compact} />
                <IssueDescription issue={issue} />
                <BugDetails key={issue.id} issue={issue} />
+               <IssuePullRequests issueId={issue.id} orgId={orgId} />
                <IssueSlaPanel issue={issue} />
-               <IssueReactions issueId={issue.id} />
-               <IssueAttachments issueId={issue.id} />
+               <div className="flex flex-wrap items-center gap-2">
+                  <IssueReactions issueId={issue.id} />
+                  <IssueAttachments issueId={issue.id} />
+               </div>
                <IssueSubIssues issueId={issue.id} teamId={issue.teamId} orgId={orgId} />
                <IssueRelations issueId={issue.id} orgId={orgId} />
                <ActivityFeed key={issue.id} issueId={issue.id} />

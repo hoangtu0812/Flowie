@@ -12,6 +12,7 @@ import { useImagePaste } from '@/hooks/use-image-paste';
 import { Issue } from '@/mock-data/issues';
 import { useIssuesStore } from '@/store/issues-store';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Check, Pencil } from 'lucide-react';
 import { useModifierKey } from '@/features/shared/use-modifier-key';
 import { SubmissionGate } from '@/features/shared/submission-gate';
 
@@ -105,12 +106,17 @@ export function IssueDescription({ issue }: { issue: Issue }) {
                <HStack gap={2}>
                   <Button
                      label={tx('Save description')}
+                     icon={<Check className="size-4" />}
+                     variant="primary"
+                     size="sm"
                      clickAction={save}
                      isLoading={saving}
                      isDisabled={uploading}
                   />
                   <Button
                      label={tx('Cancel editing')}
+                     variant="ghost"
+                     size="sm"
                      onClick={() => {
                         setDraft(issue.description);
                         setEditing(false);
@@ -125,20 +131,24 @@ export function IssueDescription({ issue }: { issue: Issue }) {
                </Text>
             </>
          ) : (
-            <>
-               {issue.description.trim() ? (
-                  <MarkdownPreview content={issue.description} appearance="issue" />
-               ) : (
-                  <Text type="supporting">{tx('No description yet.')}</Text>
-               )}
+            <HStack gap={2} vAlign="start" className="min-w-0">
+               <VStack className="min-w-0 flex-1">
+                  {issue.description.trim() ? (
+                     <MarkdownPreview content={issue.description} appearance="issue" />
+                  ) : (
+                     <Text type="supporting">{tx('No description yet.')}</Text>
+                  )}
+               </VStack>
                <Button
                   label={tx('Edit description')}
+                  tooltip={tx('Edit description')}
+                  icon={<Pencil className="size-4" />}
+                  isIconOnly
                   variant="ghost"
                   size="sm"
-                  className="self-start text-muted-foreground"
                   onClick={() => setEditing(true)}
                />
-            </>
+            </HStack>
          )}
       </VStack>
    );
