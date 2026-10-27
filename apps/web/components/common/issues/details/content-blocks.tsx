@@ -243,19 +243,31 @@ export type { ContentBlock };
 export { ImagePlaceholder, VideoPlaceholder };
 
 /** Small helper used by lists of referenced issues in the side panel. */
-export function IssueRefRow({ identifier }: { identifier: string }) {
+/**
+ * Link row for a referenced issue. The status icon comes from the issue store; an issue that is
+ * not loaded there (a task page opened directly) still renders with its identifier and the
+ * caller's title instead of disappearing.
+ * VI: Dòng liên kết tới issue được tham chiếu. Icon trạng thái lấy từ store issue; issue chưa có
+ * VI: trong store (mở trực tiếp trang task) vẫn hiển thị mã và tiêu đề do component cha truyền
+ * VI: vào thay vì biến mất.
+ */
+export function IssueRefRow({ identifier, title }: { identifier: string; title?: string }) {
    const { orgId } = useParams<{ orgId: string }>();
    const { issues } = useIssuesStore();
    const issue = issues.find((candidate) => candidate.identifier === identifier);
-   if (!issue) return null;
+   if (!issue && !title) return null;
 
    return (
       <Link
          href={`/${orgId ?? 'lndev-ui'}/issue/${identifier}`}
          className="flex items-center gap-2 py-1 text-sm hover:bg-sidebar/50 rounded px-1.5 -mx-1.5 min-w-0"
       >
-         <issue.status.icon />
-         <span className="truncate">{issue.title}</span>
+         {issue ? (
+            <issue.status.icon />
+         ) : (
+            <span className="shrink-0 text-xs text-muted-foreground">{identifier}</span>
+         )}
+         <span className="truncate">{issue?.title ?? title}</span>
       </Link>
    );
 }

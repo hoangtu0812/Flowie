@@ -23,6 +23,7 @@ import {
    X,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 /**
@@ -30,6 +31,21 @@ import { useEffect, useState } from 'react';
  * VI: Số ô trong thanh diff kiểu GitHub; mỗi ô tương ứng một phần năm số dòng thay đổi.
  */
 const DIFF_SQUARES = 5;
+
+/**
+ * Message key for a pull request's state; a draft is reported by providers as an open PR with
+ * the draft flag set.
+ * VI: Khoá thông điệp cho trạng thái pull request; provider báo bản nháp là PR đang mở có cờ
+ * VI: draft.
+ */
+const stateKey = (review: CodeReview) =>
+   review.state === 'OPEN'
+      ? review.isDraft
+         ? 'Draft'
+         : 'Open'
+      : review.state === 'MERGED'
+        ? 'Merged'
+        : 'Closed';
 
 function PullRequestStateIcon({ review }: { review: CodeReview }) {
    const className = 'size-4 shrink-0';
@@ -120,14 +136,7 @@ function ReviewerChip({ reviewer }: { reviewer: ReviewReviewer }) {
 function PullRequestCard({ review, orgId }: { review: CodeReview; orgId: string }) {
    const tx = useMessages(messages);
    const { locale } = useLocale();
-   const stateLabel =
-      review.state === 'OPEN' && review.isDraft
-         ? tx('Draft')
-         : review.state === 'OPEN'
-           ? tx('Open')
-           : review.state === 'MERGED'
-             ? tx('Merged')
-             : tx('Closed');
+   const stateLabel = tx(stateKey(review));
    return (
       <div className="flex flex-col gap-2 rounded-lg border border-border/70 bg-container p-3 transition-colors hover:border-border">
          <div className="flex min-w-0 items-start gap-2">
@@ -205,23 +214,14 @@ function PullRequestCard({ review, orgId }: { review: CodeReview; orgId: string 
 }
 
 /**
- * Lists pull requests linked to the issue (GitHub/Azure DevOps reviews synced by the SCM
- * integration) with state, branches, head commit and diff size. When none are linked it says
- * how to link one, since an empty, hidden section reads as a missing feature.
- * VI: Liệt kê pull request liên kết với issue (review GitHub/Azure DevOps được đồng bộ qua
- * VI: tích hợp SCM) kèm trạng thái, branch, commit mới nhất và độ lớn diff. Khi chưa có PR thì
- * VI: hướng dẫn cách liên kết, vì phần bị ẩn khi trống dễ bị hiểu là thiếu tính năng.
+ * Loads the pull requests linked to an issue once, so the main column and the properties
+ * sidebar share one request. Returns undefined while loading and an empty list when the request
+ * fails, because a missing SCM integration must not break the task page.
+ * VI: Tải pull request liên kết với issue một lần để cột chính và sidebar thuộc tính dùng chung
+ * VI: một request. Trả về undefined khi đang tải và danh sách rỗng khi request lỗi, vì thiếu tích
+ * VI: hợp SCM không được làm hỏng trang task.
  */
-export function IssuePullRequests({
-   issueId,
-   identifier,
-   orgId,
-}: {
-   issueId: string;
-   identifier: string;
-   orgId: string;
-}) {
-   const tx = useMessages(messages);
+export function useIssueReviews(issueId: string) {
    const workspaceId = useIssuesStore((state) => state.workspaceId);
    const [reviews, setReviews] = useState<CodeReview[]>();
 
@@ -236,27 +236,74 @@ export function IssuePullRequests({
       };
    }, [workspaceId, issueId]);
 
-   if (!reviews) return null;
+   return reviews;
+}
+
+/**
+ * Detailed cards for the linked pull requests in the main column: branches, head commit, diff
+ * size and reviewers. Renders nothing without linked PRs; the sidebar's Diffs section carries the
+ * hint for linking one.
+ * VI: Thẻ chi tiết của pull request liên kết ở cột chính: branch, commit mới nhất, độ lớn diff
+ * VI: và reviewer. Không hiển thị gì khi chưa có PR; mục Diffs ở sidebar chứa hướng dẫn liên kết.
+ */
+export function IssuePullRequests({ reviews, orgId }: { reviews?: CodeReview[]; orgId: string }) {
+   const tx = useMessages(messages);
+   if (!reviews?.length) return null;
    return (
       <section className="flex flex-col gap-2" aria-label={tx('Pull requests')}>
          <h3 className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
             <GitPullRequest className="size-3.5" aria-hidden="true" />
             {tx('Pull requests')}
-            {reviews.length > 0 && <span className="tabular-nums">{reviews.length}</span>}
+            <span className="tabular-nums">{reviews.length}</span>
          </h3>
-         {!reviews.length && (
-            <p className="text-xs text-muted-foreground">
-               {tx(
-                  'No linked pull requests. Put {identifier} in a branch name or PR title to link one.',
-                  {
-                     identifier,
-                  }
-               )}
-            </p>
-         )}
          {reviews.map((review) => (
             <PullRequestCard key={review.id} review={review} orgId={orgId} />
          ))}
       </section>
+   );
+}
+
+/**
+ * Compact one-line rows for the properties sidebar: state icon, PR number, title and a state
+ * badge, linking to the in-app review page. Without linked PRs it says how to link one, since an
+ * empty, hidden section reads as a missing feature.
+ * VI: Dòng gọn cho sidebar thuộc tính: icon trạng thái, số PR, tiêu đề và nhãn trạng thái, liên
+ * VI: kết tới trang review trong ứng dụng. Khi chưa có PR thì hướng dẫn cách liên kết, vì phần bị
+ * VI: ẩn khi trống dễ bị hiểu là thiếu tính năng.
+ */
+export function IssueDiffs({ reviews, identifier }: { reviews: CodeReview[]; identifier: string }) {
+   const tx = useMessages(messages);
+   const { orgId } = useParams<{ orgId: string }>();
+   if (!reviews.length)
+      return (
+         <p className="text-xs text-muted-foreground">
+            {tx(
+               'No linked pull requests. Put {identifier} in a branch name or PR title to link one.',
+               { identifier }
+            )}
+         </p>
+      );
+   return (
+      <div className="flex flex-col">
+         {reviews.map((review) => (
+            <Link
+               key={review.id}
+               href={`/${orgId}/review/${review.id}`}
+               title={`${review.title}\n${review.repositoryName} · ${review.sourceRef} → ${review.targetRef}`}
+               className="-mx-1.5 flex min-w-0 items-center gap-2 rounded px-1.5 py-1 text-sm hover:bg-sidebar/50"
+            >
+               <PullRequestStateIcon review={review} />
+               {review.number !== null && (
+                  <span className="shrink-0 tabular-nums text-muted-foreground">
+                     #{review.number}
+                  </span>
+               )}
+               <span className="min-w-0 flex-1 truncate">{review.title}</span>
+               <span className="shrink-0 rounded bg-accent px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {tx(stateKey(review))}
+               </span>
+            </Link>
+         ))}
+      </div>
    );
 }

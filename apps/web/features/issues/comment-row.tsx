@@ -58,7 +58,7 @@ export function CommentRow({
          as="article"
          gap={3}
          padding={4}
-         className="min-w-0 rounded-lg border border-border/60 bg-background"
+         className="group min-w-0 rounded-lg border border-border/60 bg-background"
       >
          <HStack gap={2} wrap="wrap">
             <Avatar className="size-6 shrink-0">
@@ -73,7 +73,14 @@ export function CommentRow({
                {relativeTime(comment.createdAt, Date.now(), locale)}
                {comment.version > 1 ? tx(' · edited') : ''}
             </Text>
-            <HStack gap={0.5} className="ml-auto text-muted-foreground">
+            {/* Actions appear on hover or keyboard focus where a pointer can hover, and stay visible on
+                touch screens, which have no hover state.
+                VI: Thao tác hiện khi rê chuột hoặc focus bàn phím trên thiết bị có hover, và luôn hiện
+                trên màn hình cảm ứng vì không có trạng thái hover. */}
+            <HStack
+               gap={0.5}
+               className="ml-auto text-muted-foreground transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:hover)]:opacity-0"
+            >
                {!comment.parentCommentId && (
                   <Button
                      label={tx('Reply')}

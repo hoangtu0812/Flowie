@@ -133,6 +133,8 @@ function EventRow({ activity }: { activity: NativeActivity }) {
                   </>
                )}
                {text}
+               {' · '}
+               {relativeTime(activity.createdAt, Date.now(), locale)}
             </Text>
             {changes.map((change) => (
                <Text key={change.field} type="supporting" className="break-words">
@@ -144,9 +146,6 @@ function EventRow({ activity }: { activity: NativeActivity }) {
                </Text>
             ))}
          </VStack>
-         <Text type="supporting" className="shrink-0">
-            {relativeTime(activity.createdAt, Date.now(), locale)}
-         </Text>
       </HStack>
    );
 }

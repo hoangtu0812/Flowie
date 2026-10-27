@@ -2,6 +2,7 @@
 
 import { AttachmentImage } from '@/components/common/attachment-image';
 import { Button } from '@astryxdesign/core/Button';
+import { X } from 'lucide-react';
 import { VStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
 import { imageReferences, removeImageReference } from '@/lib/markdown-images';
@@ -46,6 +47,9 @@ export function DraftImages({
                   </figcaption>
                   <Button
                      label={removeLabel}
+                     tooltip={removeLabel}
+                     icon={<X className="size-4" />}
+                     isIconOnly
                      variant="ghost"
                      size="sm"
                      className="self-start text-muted-foreground"
