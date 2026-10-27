@@ -188,7 +188,7 @@ async def create_connection(
     request: Request,
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
-) -> JSONResponse:
+) -> dict[str, Any]:
     await _workspace_manager(db, payload.workspaceId, user['id'])
     connection_settings, bundle = _validated_connection(payload, request)
     now = _utcnow()
@@ -253,7 +253,11 @@ async def create_connection(
     if payload.provider == 'AZURE_DEVOPS':
         data['webhookUsername'] = 'flowie'
         data['webhookSecret'] = bundle['webhookSecret']
-    return JSONResponse({'data': data}, status_code=201)
+    # The row carries datetime values; returning a dict lets the UTC router and FastAPI serialize
+    # them, while a raw JSONResponse fails after the connection is already committed.
+    # VI: Dòng dữ liệu chứa giá trị datetime; trả về dict để router UTC và FastAPI tuần tự hoá,
+    # VI: còn JSONResponse thô sẽ lỗi sau khi kết nối đã được commit.
+    return {'data': data}
 
 
 @router.get('/repositories')

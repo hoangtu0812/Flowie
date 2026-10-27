@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
+- Connecting a GitHub or Azure DevOps account in Settings → Code & reviews no longer fails with "The request could not be completed." The connection was saved but its response could not be encoded; an account added before this fix already exists and appears after reloading the page. (#PR)
+  VI: Kết nối tài khoản GitHub hoặc Azure DevOps trong Settings → Code & reviews không còn báo lỗi "The request could not be completed." Kết nối đã được lưu nhưng phản hồi không mã hoá được; tài khoản thêm trước bản sửa này đã tồn tại và hiện ra sau khi tải lại trang.
+
 - The local runner resolves a configured provider binary through a PATHEXT-aware PATH lookup before starting it. On Windows npm installs Claude Code and Codex as a `.CMD` shim, which `CreateProcess` never finds from a bare name, so the documented `"claude": "claude"` configuration could not start the provider at all; a binary missing from PATH is now rejected with a clear error instead of a bare file-not-found.
 
 ### Changed
