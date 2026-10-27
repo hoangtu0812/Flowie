@@ -24,13 +24,11 @@ import { IssueDetail } from '@/mock-data/issue-details';
 import { Issue } from '@/mock-data/issues';
 import { useIssuesStore } from '@/store/issues-store';
 import {
-   Ban,
    Box,
    CalendarDays,
    CalendarPlus,
    CalendarRange,
    Check,
-   GitPullRequestArrow,
    Plus,
    Timer,
 } from 'lucide-react';
@@ -40,11 +38,14 @@ import { AssigneeUser } from '../assignee-user';
 import { LabelBadge } from '../label-badge';
 import { PrioritySelector } from '../priority-selector';
 import { StatusSelector } from '../status-selector';
-import { IssueRefRow } from './content-blocks';
+import type { CodeReview } from '@/lib/scm';
+import { IssueDiffs } from './issue-pull-requests';
+import { IssueRelations } from './issue-relations';
 
 interface IssuePropertiesPanelProps {
    issue: Issue;
    detail: IssueDetail;
+   reviews?: CodeReview[];
 }
 
 const formatDay = (value: string | undefined) => {
@@ -64,8 +65,10 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 /**
  * Right sidebar of the issue page: editable properties (status, priority,
  * assignee), cycle, labels, project + milestone, relations and linked PRs.
+ * VI: Sidebar phải của trang issue: thuộc tính chỉnh sửa được (trạng thái, độ ưu tiên,
+ * VI: người thực hiện), cycle, nhãn, dự án + milestone, quan hệ và PR liên kết.
  */
-export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProps) {
+export function IssuePropertiesPanel({ issue, detail, reviews }: IssuePropertiesPanelProps) {
    const tx = useMessages(messages);
 
    const {
@@ -447,48 +450,11 @@ export function IssuePropertiesPanel({ issue, detail }: IssuePropertiesPanelProp
             )}
          </Section>
 
-         {detail.blockedByIds && detail.blockedByIds.length > 0 && (
-            <Section title={tx('Blocked by')}>
-               <div className="flex flex-col">
-                  {detail.blockedByIds.map((identifier) => (
-                     <div key={identifier} className="flex items-center gap-1.5 min-w-0">
-                        <Ban className="size-3.5 text-red-500 shrink-0" />
-                        <IssueRefRow identifier={identifier} />
-                     </div>
-                  ))}
-               </div>
-            </Section>
-         )}
+         <IssueRelations issueId={issue.id} />
 
-         {detail.relatedIds && detail.relatedIds.length > 0 && (
-            <Section title={tx('Related')}>
-               <div className="flex flex-col">
-                  {detail.relatedIds.map((identifier) => (
-                     <IssueRefRow key={identifier} identifier={identifier} />
-                  ))}
-               </div>
-            </Section>
-         )}
-
-         {detail.prLinks && detail.prLinks.length > 0 && (
+         {reviews && (
             <Section title={tx('Diffs')}>
-               <div className="flex flex-col gap-1">
-                  {detail.prLinks.map((pr) => (
-                     <div key={pr.id} className="flex items-center gap-2 text-sm min-w-0">
-                        <GitPullRequestArrow
-                           className={
-                              'size-3.5 shrink-0 ' +
-                              (pr.status === 'merged' ? 'text-purple-400' : 'text-green-500')
-                           }
-                        />
-                        <span className="text-muted-foreground shrink-0">{pr.id}</span>
-                        <span className="truncate">{pr.title}</span>
-                        <span className="ml-auto shrink-0 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-accent text-muted-foreground">
-                           {pr.status}
-                        </span>
-                     </div>
-                  ))}
-               </div>
+               <IssueDiffs reviews={reviews} identifier={issue.identifier} />
             </Section>
          )}
       </div>

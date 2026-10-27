@@ -8,11 +8,13 @@ import { IssueDescription } from '@/components/common/issues/details/issue-descr
 import { IssueAttachments } from '@/components/common/issues/details/issue-attachments';
 import { IssueReactions } from '@/components/common/issues/details/issue-reactions';
 import { IssueSubIssues } from '@/components/common/issues/details/issue-sub-issues';
-import { IssueRelations } from '@/components/common/issues/details/issue-relations';
 import { IssuePropertiesPanel } from '@/components/common/issues/details/issue-properties-panel';
 import { MobileIssueProperties } from '@/components/common/issues/details/mobile-issue-properties';
 import { IssueSlaPanel } from '@/features/sla/issue-sla-panel';
-import { IssuePullRequests } from '@/components/common/issues/details/issue-pull-requests';
+import {
+   IssuePullRequests,
+   useIssueReviews,
+} from '@/components/common/issues/details/issue-pull-requests';
 
 export function IssueContent({
    issue,
@@ -24,6 +26,7 @@ export function IssueContent({
    compact?: boolean;
 }) {
    const detail = { identifier: issue.identifier, description: [], activity: [] };
+   const reviews = useIssueReviews(issue.id);
    return (
       <HStack height="100%" gap={0} align="stretch" className="min-h-0 min-w-0 overflow-hidden">
          <VStack isScrollable className="min-h-0 min-w-0 flex-1" align="center">
@@ -36,17 +39,21 @@ export function IssueContent({
                <Heading level={compact ? 2 : 1} textWrap="balance" className="break-words">
                   {issue.title}
                </Heading>
-               <MobileIssueProperties issue={issue} detail={detail} allScreens={compact} />
+               <MobileIssueProperties
+                  issue={issue}
+                  detail={detail}
+                  reviews={reviews}
+                  allScreens={compact}
+               />
                <IssueDescription issue={issue} />
                <BugDetails key={issue.id} issue={issue} />
-               <IssuePullRequests issueId={issue.id} identifier={issue.identifier} orgId={orgId} />
+               <IssuePullRequests reviews={reviews} orgId={orgId} />
                <IssueSlaPanel issue={issue} />
                <div className="flex flex-wrap items-center gap-2">
                   <IssueReactions issueId={issue.id} />
                   <IssueAttachments issueId={issue.id} />
                </div>
                <IssueSubIssues issueId={issue.id} teamId={issue.teamId} orgId={orgId} />
-               <IssueRelations issueId={issue.id} orgId={orgId} />
                <ActivityFeed key={issue.id} issueId={issue.id} />
             </VStack>
          </VStack>
@@ -58,7 +65,7 @@ export function IssueContent({
                padding={5}
                className="hidden min-h-0 shrink-0 border-l border-border/60 bg-muted/10 lg:flex"
             >
-               <IssuePropertiesPanel issue={issue} detail={detail} />
+               <IssuePropertiesPanel issue={issue} detail={detail} reviews={reviews} />
             </VStack>
          )}
       </HStack>

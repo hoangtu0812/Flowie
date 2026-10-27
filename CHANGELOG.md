@@ -20,6 +20,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Changed
 
+- The task detail sidebar lists linked pull requests under Diffs, one line each with a colored state icon, PR number, title and an Open/Draft/Merged/Closed badge, and shows the hint for linking a PR when there is none; the main column keeps the detailed PR cards only when PRs exist. Blocked-by and related tasks moved to the sidebar and show their title even when the task was opened directly. Activity rows show their time inline, comment actions appear on hover or keyboard focus (always on touch screens), and removing a pasted image uses an icon button. No API or schema change. (#PR)
+  VI: Sidebar chi tiết task liệt kê pull request liên kết trong mục Diffs, mỗi PR một dòng gồm icon trạng thái có màu, số PR, tiêu đề và nhãn Open/Draft/Merged/Closed, và hiện hướng dẫn liên kết PR khi chưa có; cột chính chỉ giữ thẻ PR chi tiết khi có PR. Task bị chặn bởi và task liên quan chuyển sang sidebar và hiện tiêu đề cả khi task được mở trực tiếp. Dòng hoạt động hiện thời gian ngay sau nội dung, thao tác bình luận hiện khi rê chuột hoặc focus bàn phím (luôn hiện trên màn hình cảm ứng), và nút xoá ảnh đã dán là nút icon. Không thay đổi API hay schema.
+
 - Contribution rules require bilingual English and Vietnamese source comments that explain in detail what the code handles, and bilingual changelog entries that reference their pull request and, after release, their merge commit. Change history stays in the changelog instead of source comments. Existing comments and entries are unchanged. (#19)
   VI: Quy tắc đóng góp yêu cầu comment mã nguồn song ngữ Anh – Việt, giải thích chi tiết đoạn mã xử lý gì, và mục changelog song ngữ ghi số pull request, sau khi release thì thêm commit merge. Lịch sử thay đổi được ghi trong changelog thay vì trong comment mã nguồn. Comment và mục changelog hiện có giữ nguyên.
 
