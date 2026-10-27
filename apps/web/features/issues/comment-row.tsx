@@ -21,12 +21,16 @@ import { AgentBadge } from './agent-badge';
 export function CommentRow({
    comment,
    workspaceId,
+   memberNames,
    onChange,
    onDelete,
    onReply,
 }: {
    comment: IssueComment;
    workspaceId: string;
+   /** Team member names by id, used to highlight this comment's mentions. */
+   /** VI: Tên thành viên team theo id, dùng để highlight mention của comment này. */
+   memberNames?: Map<string, string>;
    onChange: (comment: IssueComment) => void;
    onDelete: () => void;
    onReply: () => void;
@@ -178,7 +182,11 @@ export function CommentRow({
                </HStack>
             </>
          ) : (
-            <MarkdownPreview content={comment.content} appearance="issue" />
+            <MarkdownPreview
+               content={comment.content}
+               appearance="issue"
+               mentions={comment.mentionIds.flatMap((id) => memberNames?.get(id) ?? [])}
+            />
          )}
          {error && <Text role="alert">{error}</Text>}
          {confirmDelete && (

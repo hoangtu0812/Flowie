@@ -26,3 +26,35 @@ export function insertMention(draft: string, name: string): string {
    if (trailingMentionQuery(draft) !== null) return draft.replace(/@[^\s@]{0,30}$/, mention);
    return `${draft}${draft && !/\s$/.test(draft) ? ' ' : ''}${mention}`;
 }
+
+export type MentionPart = string | { mention: string };
+
+/**
+ * Splits rendered comment text into plain runs and `@Name` mentions of the given names, so the
+ * comment can highlight exactly the members it notified. Longer names win when one name starts
+ * another ("@Tu" vs "@Tu Pham"); a match needs a non-word character (or nothing) on both sides,
+ * so e-mail addresses and "@Tuan" for "Tu" stay plain. Without names the text comes back whole.
+ * VI: Tách nội dung comment thành đoạn chữ thường và mention `@Tên` theo danh sách tên, để
+ * VI: comment highlight đúng những thành viên đã được thông báo. Tên dài hơn được ưu tiên khi
+ * VI: một tên là phần đầu của tên khác ("@Tu" và "@Tu Pham"); hai bên mention phải là ký tự
+ * VI: không thuộc từ (hoặc đầu/cuối chuỗi), nên email và "@Tuan" với tên "Tu" vẫn là chữ thường.
+ * VI: Không có tên nào thì trả nguyên văn bản.
+ */
+export function splitMentions(text: string, names: string[]): MentionPart[] {
+   const unique = [...new Set(names.filter(Boolean))].sort((a, b) => b.length - a.length);
+   if (!unique.length) return [text];
+   const pattern = new RegExp(
+      `(^|[^\\p{L}\\p{N}_@])@(${unique.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?![\\p{L}\\p{N}_])`,
+      'gu'
+   );
+   const parts: MentionPart[] = [];
+   let last = 0;
+   for (const match of text.matchAll(pattern)) {
+      const start = match.index + match[1].length;
+      if (start > last) parts.push(text.slice(last, start));
+      parts.push({ mention: `@${match[2]}` });
+      last = start + match[2].length + 1;
+   }
+   if (last < text.length) parts.push(text.slice(last));
+   return parts;
+}

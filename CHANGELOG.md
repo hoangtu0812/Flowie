@@ -39,6 +39,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
+- Comment mentions are easier to spot: the `@` suggestion list shows member avatars, and each `@Name` a comment notified is highlighted. Mentions inside code or link text stay plain. (#36)
+  VI: Mention trong comment dễ nhận ra hơn: danh sách gợi ý khi gõ `@` hiển thị avatar thành viên, và mỗi `@Tên` đã được comment thông báo được highlight. Mention trong code hoặc nhãn link vẫn là chữ thường.
+
 - Screenshots in issue descriptions and comments load again after Flowie moves to another domain or sub-path: links saved with the old host, such as `https://flowie.dtd.bsr.com.vn/api/v1/attachments/…/preview`, are now fetched from the current API by attachment id. Rebuild the `web` service to apply it. (#35)
   VI: Ảnh chụp màn hình trong mô tả và comment hiển thị lại sau khi Flowie chuyển sang domain hoặc sub-path khác: link lưu với host cũ, ví dụ `https://flowie.dtd.bsr.com.vn/api/v1/attachments/…/preview`, giờ được tải từ API hiện tại theo id đính kèm. Build lại service `web` để áp dụng.
 

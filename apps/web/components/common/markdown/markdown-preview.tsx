@@ -3,15 +3,60 @@ import remarkGfm from 'remark-gfm';
 import { VStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { AttachmentImage } from '@/components/common/attachment-image';
+import { splitMentions } from '@/features/issues/mention-text';
 import { cn } from '@/lib/utils';
 
-/** CommonMark/GFM rendering without raw HTML or executable URL protocols. */
+type MarkdownNode = { type: string; value?: string; children?: MarkdownNode[]; data?: object };
+
+/**
+ * Remark plugin that wraps `@Name` for the given names in a highlighted span. It rewrites
+ * text nodes only, so code spans, code blocks and link labels keep their literal text.
+ * VI: Plugin remark bọc `@Tên` của các tên được truyền vào trong span có highlight. Chỉ sửa
+ * VI: node text, nên inline code, code block và nhãn link giữ nguyên văn bản.
+ */
+function remarkMentions(names: string[]) {
+   return () => (tree: MarkdownNode) => {
+      const walk = (node: MarkdownNode) => {
+         if (!node.children || node.type === 'link' || node.type === 'linkReference') return;
+         node.children = node.children.flatMap((child): MarkdownNode[] => {
+            if (child.type !== 'text') {
+               walk(child);
+               return [child];
+            }
+            return splitMentions(child.value ?? '', names).map((part) =>
+               typeof part === 'string'
+                  ? { type: 'text', value: part }
+                  : {
+                       type: 'strong',
+                       data: {
+                          hName: 'span',
+                          hProperties: {
+                             className: 'rounded bg-primary/10 px-0.5 font-medium text-primary',
+                          },
+                       },
+                       children: [{ type: 'text', value: part.mention }],
+                    }
+            );
+         });
+      };
+      walk(tree);
+   };
+}
+
+/**
+ * CommonMark/GFM rendering without raw HTML or executable URL protocols. `mentions` lists the
+ * member names whose `@Name` should be highlighted.
+ * VI: Hiển thị CommonMark/GFM không có HTML thô hay giao thức URL thực thi được. `mentions` là
+ * VI: danh sách tên thành viên cần highlight `@Tên`.
+ */
 export function MarkdownPreview({
    content,
    appearance = 'default',
+   mentions = [],
 }: {
    content: string;
    appearance?: 'default' | 'issue';
+   mentions?: string[];
 }) {
    const readable = appearance === 'issue';
    if (!content.trim()) return <Text type="supporting">This content is empty.</Text>;
@@ -19,7 +64,7 @@ export function MarkdownPreview({
       <VStack gap={4} className={cn('min-w-0', readable && 'text-sm leading-7 break-words')}>
          <Markdown
             skipHtml
-            remarkPlugins={[remarkGfm]}
+            remarkPlugins={mentions.length ? [remarkGfm, remarkMentions(mentions)] : [remarkGfm]}
             components={{
                h1: ({ children }) => (
                   <Heading level={readable ? 2 : 1} accessibilityLevel={1}>

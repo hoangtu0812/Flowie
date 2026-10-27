@@ -14,7 +14,7 @@ import { useIssuesStore } from '@/store/issues-store';
 import { useImagePaste } from '@/hooks/use-image-paste';
 import { DraftImages } from '@/components/common/markdown/draft-images';
 import { AgentBadge } from '@/features/issues/agent-badge';
-import type { AgentIdentity } from '@/features/issues/comments-api';
+import { mentionOptions, type AgentIdentity } from '@/features/issues/comments-api';
 import {
    Ban,
    Bell,
@@ -28,7 +28,7 @@ import {
    Tag,
    Unlock,
 } from 'lucide-react';
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { relativeTime } from '@/lib/time';
 
 type Actor = { id: string; name: string; avatarUrl?: string | null } | null;
@@ -165,6 +165,25 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
       store.issues.find((candidate) => candidate.id === issueId)
    );
    const updateSubscription = useIssuesStore((store) => store.updateIssueSubscription);
+   // Names of the members a comment can mention, loaded once per issue to highlight `@Name`.
+   // shortcut: a mentioned member who later left the team is no longer highlighted; return
+   // mention names with each comment from the API if that matters.
+   // VI: Tên các thành viên có thể được mention, tải một lần cho mỗi issue để highlight `@Tên`.
+   // VI: Thành viên đã rời team sau khi được mention sẽ không còn được highlight; nếu cần thì
+   // VI: trả tên mention kèm mỗi comment từ API.
+   const [memberNames, setMemberNames] = useState<Map<string, string>>();
+   useEffect(() => {
+      if (!state.workspaceId) return;
+      let current = true;
+      mentionOptions(state.workspaceId, issueId)
+         .then((members) => {
+            if (current) setMemberNames(new Map(members.map((member) => [member.id, member.name])));
+         })
+         .catch(() => undefined);
+      return () => {
+         current = false;
+      };
+   }, [state.workspaceId, issueId]);
    const composer = (
       <TextArea
          label={t('comment')}
@@ -252,6 +271,7 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
                         <CommentRow
                            comment={comment}
                            workspaceId={state.workspaceId!}
+                           memberNames={memberNames}
                            onChange={state.changeComment}
                            onDelete={() => state.deleteComment(comment.id)}
                            onReply={() => state.setReplyTo(comment)}
@@ -267,6 +287,7 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
                                  <CommentRow
                                     comment={reply}
                                     workspaceId={state.workspaceId!}
+                                    memberNames={memberNames}
                                     onChange={state.changeComment}
                                     onDelete={() => state.deleteComment(reply.id)}
                                     onReply={() => state.setReplyTo(comment)}
