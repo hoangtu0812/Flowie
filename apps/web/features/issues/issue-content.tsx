@@ -31,6 +31,7 @@ export function IssueContent({
       <HStack height="100%" gap={0} align="stretch" className="min-h-0 min-w-0 overflow-hidden">
          <VStack isScrollable className="min-h-0 min-w-0 flex-1" align="center">
             <VStack
+               data-image-gallery
                width="100%"
                maxWidth={768}
                gap={6}

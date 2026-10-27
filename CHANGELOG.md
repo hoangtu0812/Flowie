@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- Clicking an image in a task's description or comments opens a full-screen viewer: ← / → move through the task's images, + / − / 0 zoom and reset, a button downloads the original, and Esc, the close button or a click on the backdrop closes it. The sidebar no longer shows a horizontal scrollbar. (DTD-16, #38)
+  VI: Click vào ảnh trong mô tả hoặc comment của task sẽ mở trình xem toàn màn hình: ← / → chuyển giữa các ảnh của task, + / − / 0 để phóng to, thu nhỏ và đặt lại, có nút tải ảnh gốc, và đóng bằng Esc, nút đóng hoặc click ra nền. Sidebar không còn thanh cuộn ngang. (DTD-16)
+
 - Statuses can be marked "Required before start": once a workspace or team has one, an issue enters a Started status only from such a status and with a target end date. Moves between Started statuses stay free, and workspaces without a marked status are unchanged. Adds the `issue_statuses.required_before_start` column through a Prisma migration. (#33)
   VI: Status có thể bật "Bắt buộc trước khi làm": khi workspace hoặc team có status như vậy, issue chỉ được vào nhóm Đang thực hiện từ status đó và phải có ngày kết thúc dự kiến. Chuyển giữa các status Đang thực hiện vẫn tự do; workspace chưa bật status nào giữ nguyên hành vi. Thêm cột `issue_statuses.required_before_start` qua migration Prisma.
 
