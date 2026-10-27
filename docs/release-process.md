@@ -11,6 +11,10 @@ under `Unreleased` using the category that describes the outcome: `Added`,
 operational impact, migration requirements, and configuration requirements;
 avoid a chronological account of implementation steps.
 
+Write each entry in English, followed by an indented `VI:` line with the
+Vietnamese translation. Once the pull request exists, end the English text with
+its number, for example `(#19)`.
+
 ## Deployment contract
 
 The GitHub Actions production workflow builds the `migrate`, `api`, `web`, and
@@ -25,7 +29,9 @@ containers in place and blocks the new deployment.
    minor for backward-compatible features, and major for incompatible changes.
 2. In the release commit, promote all `Unreleased` entries to
    `## [x.y.z] — YYYY-MM-DD HH:MM +07`, using the intended production deploy
-   time in Vietnam time, then recreate an empty `Unreleased` heading.
+   time in Vietnam time, append each entry's merge commit short hash next to
+   its pull request number, for example `(#19, 431edd6)`, then recreate an
+   empty `Unreleased` heading.
 3. Push the release commit to `main` and wait for the deployment workflow,
    migration service, and API readiness check to succeed.
 4. Tag the verified commit as `vX.Y.Z` and publish a GitHub release using the
