@@ -18,7 +18,7 @@ from ..mcp.policy import AccessPolicy
 from .contracts import RepositoryInput, AutomationInput
 from .contracts import RunPageInput
 from .contracts import RunInput
-from .service import RunService
+from .service import RunService, notify_run_finished
 from .audit import management_audit
 
 router = APIRouter(prefix="/api/v1/agent-runs", tags=["agent-run-management"])
@@ -224,6 +224,7 @@ async def cancel_run(
     if not row:
         raise ApiError(404, "Active run not found.", "Not Found")
     await management_audit(db, workspaceId, user["id"], "run.canceled", run_id)
+    await notify_run_finished(db, {"id": run_id}, "CANCELED", user)
     await db.commit()
     return {"data": {"id": run_id, "state": "CANCELED"}}
 

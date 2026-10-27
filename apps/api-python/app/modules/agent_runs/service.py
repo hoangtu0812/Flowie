@@ -14,6 +14,59 @@ from ..mcp.policy import AccessPolicy
 from ..mcp.queries import QueryService
 from ..work_items.comments import create_comment
 from ..work_items.contracts import CreateCommentInput
+from ..notifications.outbox import stage_notifications
+from ...services.notification_events import create_notification_batch
+
+# Run end states mapped to Inbox event suffixes; AWAITING_REVIEW is a finished run.
+# VI: Ánh xạ trạng thái kết thúc run sang hậu tố sự kiện Inbox; AWAITING_REVIEW là run đã xong.
+FINISHED_EVENTS = {
+    "AWAITING_REVIEW": ("completed", "agent run finished and awaits review"),
+    "FAILED": ("failed", "agent run failed"),
+    "CANCELED": ("canceled", "agent run was canceled"),
+}
+
+
+async def notify_run_finished(db, run, state: str, actor) -> None:
+    """Stage Inbox notifications for a run that reached an end state.
+
+    Recipients are the owner of the run's MCP connection (the person whose agent
+    claimed the run, or whose connection an automation rule routes to) and the
+    issue assignee. The actor is excluded by ``create_notification_batch``, so the
+    agent path uses a system actor without a user id to keep the owner notified.
+    VI: Đưa thông báo Inbox vào hàng đợi khi run kết thúc. Người nhận là chủ kết nối
+    MCP của run (người có agent nhận run, hoặc kết nối mà rule tự động định tuyến
+    tới) và người được giao issue. ``create_notification_batch`` loại actor khỏi
+    người nhận, nên luồng agent dùng actor hệ thống không có user id để chủ kết nối
+    vẫn nhận được thông báo.
+    """
+    suffix, message = FINISHED_EVENTS[state]
+    issue = (
+        (
+            await db.execute(
+                text("""SELECT i.id,i.workspace_id,i.identifier,i.title,i.assignee_id,c.user_id AS owner_id
+                FROM agent_runs r JOIN issues i ON i.id=r.issue_id JOIN mcp_connections c ON c.id=r.connection_id
+                WHERE r.id=:id"""),
+                {"id": run["id"]},
+            )
+        )
+        .mappings()
+        .one()
+    )
+    batch = await create_notification_batch(
+        db,
+        workspace_id=issue["workspace_id"],
+        recipient_ids={v for v in (issue["owner_id"], issue["assignee_id"]) if v},
+        actor=actor,
+        event_type="issue.agent_run_" + suffix,
+        entity_type="issue",
+        entity_id=issue["id"],
+        title=issue["title"],
+        message=message,
+        entity_path="/issue/" + issue["identifier"],
+        entity_label=issue["identifier"],
+        discord=False,
+    )
+    await stage_notifications(db, batch, workspace_id=issue["workspace_id"])
 
 
 def present(row, principal) -> dict:
@@ -245,6 +298,12 @@ class RunService:
                 self.principal.user,
                 self.db,
             )
+        await notify_run_finished(
+            self.db,
+            self.target,
+            state,
+            {"id": None, "name": "Flowie agent", "avatar_url": None},
+        )
         return {
             "id": self.target["id"],
             "state": state,

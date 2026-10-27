@@ -14,6 +14,11 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ## Unreleased
 
+### Added
+
+- Agent runs that finish, fail or are canceled now send an Inbox notification to the agent connection's owner and the issue assignee.
+  VI: Run của agent khi hoàn thành, thất bại hoặc bị hủy sẽ gửi thông báo Inbox cho chủ kết nối agent và người được giao issue.
+
 ### Fixed
 
 - Connecting a GitHub or Azure DevOps account in Settings → Code & reviews no longer fails with "The request could not be completed." The connection was saved but its response could not be encoded; an account added before this fix already exists and appears after reloading the page. (#25)
