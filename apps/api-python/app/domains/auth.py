@@ -11,6 +11,7 @@ import re
 from secrets import choice, token_urlsafe
 from string import digits
 from typing import Any
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import jwt
@@ -174,6 +175,19 @@ def _microsoft_flow_token(
         settings.auth_jwt_secret,
         algorithm='HS256',
     )
+
+
+def _microsoft_flow_cookie_path(settings: Settings) -> str:
+    # Scopes the sign-in flow cookie to the directory of AZURE_AD_REDIRECT_URI so it
+    # follows a proxy prefix: '/flowie/api/v1/auth/microsoft/callback' gives
+    # '/flowie/api/v1/auth/microsoft', which covers both /start and /callback.
+    # A fixed '/api/v1/...' path is never sent back under '/flowie/api/...'.
+    # VI: Giới hạn cookie luồng đăng nhập theo thư mục của AZURE_AD_REDIRECT_URI để
+    # theo tiền tố proxy: '/flowie/api/v1/auth/microsoft/callback' cho ra
+    # '/flowie/api/v1/auth/microsoft', bao cả /start và /callback. Path cố định
+    # '/api/v1/...' sẽ không được trình duyệt gửi lại dưới '/flowie/api/...'.
+    path = urlsplit(settings.azure_ad_redirect_uri).path.rsplit('/', 1)[0]
+    return path or '/api/v1/auth/microsoft'
 
 
 def _decode_microsoft_flow(token: str, settings: Settings) -> dict[str, Any]:
@@ -747,7 +761,7 @@ async def microsoft_start(
         httponly=True,
         secure=settings.auth_cookie_secure,
         samesite='lax',
-        path='/api/v1/auth/microsoft',
+        path=_microsoft_flow_cookie_path(settings),
     )
     return response
 
@@ -778,7 +792,7 @@ async def microsoft_callback(
             f'{settings.app_url}/auth/login?azure_error=Microsoft+sign-in+could+not+be+completed.',
             status_code=302,
         )
-        login.delete_cookie(MICROSOFT_FLOW_COOKIE, path='/api/v1/auth/microsoft')
+        login.delete_cookie(MICROSOFT_FLOW_COOKIE, path=_microsoft_flow_cookie_path(settings))
         return login
 
     # A transient Graph or object-storage failure must not turn identity login
@@ -810,7 +824,7 @@ async def microsoft_callback(
     if challenge:
         await db.commit()
         response = RedirectResponse(f'{settings.app_url}/auth/mfa', status_code=302)
-        response.delete_cookie(MICROSOFT_FLOW_COOKIE, path='/api/v1/auth/microsoft')
+        response.delete_cookie(MICROSOFT_FLOW_COOKIE, path=_microsoft_flow_cookie_path(settings))
         _clear_cookies(response, settings)
         challenge_cookie(response, challenge, settings)
         return response
@@ -819,7 +833,7 @@ async def microsoft_callback(
     next_path = _safe_app_path(stored.get('next'))
     destination = next_path or '/'
     response = RedirectResponse(f'{settings.app_url}{destination}', status_code=302)
-    response.delete_cookie(MICROSOFT_FLOW_COOKIE, path='/api/v1/auth/microsoft')
+    response.delete_cookie(MICROSOFT_FLOW_COOKIE, path=_microsoft_flow_cookie_path(settings))
     _set_cookies(response, access_token, refresh_token, settings)
     return response
 

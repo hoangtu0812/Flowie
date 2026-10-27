@@ -33,6 +33,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
+- Microsoft sign-in no longer fails with "The Microsoft sign-in request has expired." when Flowie runs under a path such as `/flowie`. The sign-in cookie now follows the path of `AZURE_AD_REDIRECT_URI`; rebuild the `api` service to apply it.
+  VI: Đăng nhập Microsoft không còn báo "The Microsoft sign-in request has expired." khi Flowie chạy dưới đường dẫn như `/flowie`. Cookie đăng nhập giờ theo đường dẫn của `AZURE_AD_REDIRECT_URI`; build lại service `api` để áp dụng.
+
 - Connecting a GitHub or Azure DevOps account in Settings → Code & reviews no longer fails with "The request could not be completed." The connection was saved but its response could not be encoded; an account added before this fix already exists and appears after reloading the page. (#25)
   VI: Kết nối tài khoản GitHub hoặc Azure DevOps trong Settings → Code & reviews không còn báo lỗi "The request could not be completed." Kết nối đã được lưu nhưng phản hồi không mã hoá được; tài khoản thêm trước bản sửa này đã tồn tại và hiện ra sau khi tải lại trang.
 
