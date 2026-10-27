@@ -9,6 +9,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useLiveProjectData } from '@/components/common/projects/details/use-live-project';
 import { cn } from '@/lib/utils';
 import { useRightPanelStore } from '@/store/right-panel-store';
+import { DisplayOptions } from '../display-options';
 import {
    BarChart3,
    Box,
@@ -69,6 +70,7 @@ function PanelToggles() {
          {pathname.endsWith('/issues') && (
             <>
                <AiScheduleDialog />
+               <DisplayOptions />
                <IssueListActions />
             </>
          )}

@@ -8,6 +8,7 @@ import { applyIssueFilters } from '@/components/common/issues/issue-filter-colum
 import { IssueFilterBar } from '@/components/common/issues/issue-filter-bar';
 import { useFilterStore } from '@/store/filter-store';
 import { useDisplaySettingsStore } from '@/store/display-settings-store';
+import { useViewStore } from '@/store/view-store';
 import { useIssuesStore } from '@/store/issues-store';
 import { useMemo } from 'react';
 import { toProjectDetailUi, toProjectUi } from './project-detail-ui-adapter';
@@ -18,7 +19,12 @@ interface ProjectIssuesProps {
    projectId: string;
 }
 
-/** Project "Issues" tab: the project's issues grouped by status. */
+/**
+ * Project "Issues" tab: the project's issues as a list or board, grouped and ordered by the
+ * shared Display options.
+ * VI: Tab "Issues" của dự án: issue của dự án dạng list hoặc board, nhóm và sắp xếp theo tùy
+ * VI: chọn Display dùng chung.
+ */
 export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
    const queryState = useIssueQuery(undefined, { projectId });
    const queryIssues = useIssuesStore((state) => state.issues);
@@ -34,6 +40,11 @@ export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
    } = useLiveProjectData();
    const { filters } = useFilterStore();
    const showSubIssues = useDisplaySettingsStore((state) => state.showSubIssues);
+   // Same list/board choice as All issues; the group rows read it too, so passing a fixed
+   // value here drew board groups under the list's column header.
+   // VI: Dùng chung lựa chọn list/board với All issues; các dòng nhóm cũng đọc giá trị này,
+   // VI: nên truyền cứng ở đây từng vẽ nhóm kiểu board dưới thanh tiêu đề cột của list.
+   const isViewTypeGrid = useViewStore((state) => state.viewType) === 'grid';
    const project = useMemo(
       () => (liveProject ? toProjectUi(liveProject, liveIssues) : null),
       [liveProject, liveIssues]
@@ -74,7 +85,7 @@ export default function ProjectIssues({ projectId }: ProjectIssuesProps) {
                   issues={displayedIssues}
                   totalIssues={issues}
                   statuses={statuses}
-                  isViewTypeGrid={false}
+                  isViewTypeGrid={isViewTypeGrid}
                   loading={queryState.loading}
                   error={queryError}
                   onRetry={queryState.retry}
