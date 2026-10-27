@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { SubmissionGate } from '@/features/shared/submission-gate';
 import { loadCurrentWorkspaceMembership } from '@/lib/workspaces';
 import {
@@ -34,6 +35,7 @@ export function useMcpSettings() {
    const [canManage, setCanManage] = useState(false);
    const [busy, setBusy] = useState(false);
    const [error, setError] = useState<string>();
+   const [createdId, setCreatedId] = useState<string>();
 
    const refresh = useCallback(async (id: string) => {
       const [nextConnections, nextAudit] = await Promise.all([
@@ -68,36 +70,41 @@ export function useMcpSettings() {
       };
    }, [refresh]);
 
-   function perform(operation: () => Promise<void>) {
-      return gate.current.run(async () => {
+   /** Runs one mutation at a time and reports its outcome in a toast; resolves to true on success. */
+   async function perform(operation: () => Promise<void>, success: string) {
+      let succeeded = false;
+      await gate.current.run(async () => {
          setBusy(true);
-         setError(undefined);
          try {
             await operation();
+            succeeded = true;
+            toast.success(success);
          } catch (cause) {
-            setError(cause instanceof Error ? cause.message : 'The operation failed.');
+            toast.error(cause instanceof Error ? cause.message : 'The operation failed.');
          } finally {
             setBusy(false);
          }
       });
+      return succeeded;
    }
 
    async function create(draft: ConnectionDraft) {
-      if (!workspaceId) return;
-      await perform(async () => {
+      if (!workspaceId) return false;
+      return perform(async () => {
          const result = await createMcpConnection(workspaceId, draft);
          setToken(result.token);
+         setCreatedId(result.id);
          await refresh(workspaceId);
-      });
+      }, `Connection "${draft.name.trim()}" created. Copy its token now.`);
    }
 
    async function revoke(connectionId: string) {
-      if (!workspaceId) return;
-      await perform(async () => {
+      if (!workspaceId) return false;
+      return perform(async () => {
          await revokeMcpConnection(workspaceId, connectionId);
          setToken(undefined);
          await refresh(workspaceId);
-      });
+      }, 'Connection revoked.');
    }
 
    return {
@@ -108,6 +115,7 @@ export function useMcpSettings() {
       connections,
       audit,
       token,
+      createdId,
       loading,
       busy,
       error,

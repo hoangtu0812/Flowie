@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { Ban, FileText, PowerOff, RefreshCw, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { VStack, HStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { Button } from '@astryxdesign/core/Button';
@@ -48,14 +50,15 @@ export function AgentCoordination({
       );
    }, [refresh]);
 
-   async function perform(operation: () => Promise<unknown>) {
+   async function perform(operation: () => Promise<unknown>, success: string) {
       setBusy(true);
       setError(undefined);
       try {
          await operation();
          await refresh();
+         toast.success(success);
       } catch (cause) {
-         setError(cause instanceof Error ? cause.message : 'The operation failed.');
+         toast.error(cause instanceof Error ? cause.message : 'The operation failed.');
       } finally {
          setBusy(false);
       }
@@ -67,10 +70,13 @@ export function AgentCoordination({
             <Heading level={3}>Coding agent runs</Heading>
             <Button
                label="Refresh runs"
+               tooltip="Refresh runs"
+               icon={<RefreshCw className="size-4" />}
+               isIconOnly
                variant="ghost"
                size="sm"
                isLoading={busy}
-               onClick={() => void perform(async () => undefined)}
+               onClick={() => void perform(async () => undefined, 'Agent runs refreshed.')}
             />
          </HStack>
          <Text color="secondary">
@@ -97,13 +103,16 @@ export function AgentCoordination({
                      <HStack gap={2}>
                         <Button
                            label="View evidence"
+                           tooltip="View evidence"
+                           icon={<FileText className="size-4" />}
+                           isIconOnly
+                           variant="ghost"
                            size="sm"
                            clickAction={async () => {
                               try {
-                                 setError(undefined);
                                  setEvidence(await loadRunEvidence(workspaceId, run.id));
                               } catch (reason) {
-                                 setError(
+                                 toast.error(
                                     reason instanceof Error
                                        ? reason.message
                                        : 'Could not load evidence.'
@@ -115,10 +124,17 @@ export function AgentCoordination({
                         ['PENDING', 'RUNNING'].includes(run.state) ? (
                            <Button
                               label="Cancel run"
+                              tooltip="Cancel run"
+                              icon={<Ban className="size-4" />}
+                              isIconOnly
+                              variant="ghost"
                               size="sm"
                               isDisabled={busy}
                               onClick={() =>
-                                 void perform(() => cancelAgentRun(workspaceId, run.id))
+                                 void perform(
+                                    () => cancelAgentRun(workspaceId, run.id),
+                                    `Run for ${run.issueIdentifier} canceled.`
+                                 )
                               }
                            />
                         ) : undefined}
@@ -129,7 +145,18 @@ export function AgentCoordination({
          </List>
          {evidence && (
             <VStack gap={2}>
-               <Heading level={4}>Run evidence · {evidence.state}</Heading>
+               <HStack gap={2} vAlign="center" hAlign="between">
+                  <Heading level={4}>Run evidence · {evidence.state}</Heading>
+                  <Button
+                     label="Close evidence"
+                     tooltip="Close evidence"
+                     icon={<X className="size-4" />}
+                     isIconOnly
+                     variant="ghost"
+                     size="sm"
+                     onClick={() => setEvidence(undefined)}
+                  />
+               </HStack>
                <pre className="overflow-auto rounded bg-muted p-3">
                   <code>
                      {evidence.result
@@ -137,7 +164,6 @@ export function AgentCoordination({
                         : 'The agent has not reported a result yet.'}
                   </code>
                </pre>
-               <Button label="Close evidence" onClick={() => setEvidence(undefined)} />
             </VStack>
          )}
          {!runs.length && <Text color="secondary">No coding agent runs yet.</Text>}
@@ -150,11 +176,18 @@ export function AgentCoordination({
                      description={`${automation.enabled ? 'Enabled' : 'Disabled'} · up to ${automation.dailyLimit} runs per day`}
                      endContent={
                         <Button
-                           label="Disable"
+                           label="Disable automation"
+                           tooltip="Disable automation"
+                           icon={<PowerOff className="size-4" />}
+                           isIconOnly
+                           variant="ghost"
                            size="sm"
                            isDisabled={!automation.enabled || busy}
                            onClick={() =>
-                              void perform(() => disableAgentAutomation(workspaceId, automation.id))
+                              void perform(
+                                 () => disableAgentAutomation(workspaceId, automation.id),
+                                 `Automation "${automation.name}" disabled.`
+                              )
                            }
                         />
                      }

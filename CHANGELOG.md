@@ -173,6 +173,8 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 
 ### Changed
 
+- Settings → Integrations → AI connections (MCP) is more compact: connections are listed first with an active/inactive status dot, expiry, permission and project counts, and the creation form opens from a New connection button. Copy, revoke, dismiss, refresh, evidence, cancel and disable actions are icon buttons with tooltips, and revoking a connection asks for an inline confirmation. Creating or revoking a connection, saving a repository, creating an automation, cancelling a run, disabling an automation and copying values report the result in a toast, and successful creates and saves show an animated check mark. No API or schema change.
+
 - Bug severity uses a compact icon dropdown in creation and editing forms, with the same Unspecified, Low, Medium, High and Critical values and localized labels.
 
 - Issue creation has a compact header and Task/Bug selector, a clearer writing area, labeled property controls and a fixed action footer for long bug forms. Existing creation, team selection, defaults and create-more behavior are preserved; selected native statuses remain visible in the picker.

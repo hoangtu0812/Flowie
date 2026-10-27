@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { VStack } from '@astryxdesign/core/Layout';
+import { Plus, Save } from 'lucide-react';
+import { toast } from 'sonner';
+import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { TextInput } from '@astryxdesign/core/TextInput';
 import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
@@ -9,6 +11,7 @@ import { Selector } from '@astryxdesign/core/Selector';
 import { Button } from '@astryxdesign/core/Button';
 import { configureAgentAutomation, configureProjectRepository } from '@/lib/agent-runs';
 import type { McpConnection, McpResources } from '@/lib/mcp';
+import { SuccessMark } from './success-mark';
 
 function parseCommands(value: string): string[][] {
    const commands: unknown = JSON.parse(value);
@@ -49,18 +52,22 @@ export function AgentConfiguration({
    const [enabled, setEnabled] = useState(false);
    const [dailyLimit, setDailyLimit] = useState('5');
    const [busy, setBusy] = useState(false);
-   const [message, setMessage] = useState<string>();
-   const [error, setError] = useState<string>();
+   /** Cleared before each save so the check mark remounts and replays its animation. */
+   const [saved, setSaved] = useState<'repository' | 'automation'>();
 
-   async function save(operation: () => Promise<unknown>) {
+   async function save(
+      target: 'repository' | 'automation',
+      operation: () => Promise<unknown>,
+      success: string
+   ) {
       setBusy(true);
-      setError(undefined);
-      setMessage(undefined);
+      setSaved(undefined);
       try {
          await operation();
-         setMessage('Configuration saved. Refresh agent runs to see updated automations.');
+         setSaved(target);
+         toast.success(success);
       } catch (cause) {
-         setError(cause instanceof Error ? cause.message : 'Could not save configuration.');
+         toast.error(cause instanceof Error ? cause.message : 'Could not save configuration.');
       } finally {
          setBusy(false);
       }
@@ -113,22 +120,29 @@ export function AgentConfiguration({
                'Example: [["pnpm", "test"]]. Commands run in the external agent environment.'
             }
          />
-         <Button
-            label="Save repository"
-            isLoading={busy}
-            isDisabled={!projectId || repositoryName.trim().length < 2 || !url || !branch}
-            onClick={() =>
-               void save(() =>
-                  configureProjectRepository(workspaceId, {
-                     projectId,
-                     name: repositoryName,
-                     repositoryUrl: url,
-                     baseBranch: branch,
-                     testCommands: parseCommands(commands),
-                  })
-               )
-            }
-         />
+         <HStack gap={2} vAlign="center">
+            <Button
+               label="Save repository"
+               icon={<Save className="size-4" />}
+               isLoading={busy}
+               isDisabled={!projectId || repositoryName.trim().length < 2 || !url || !branch}
+               onClick={() =>
+                  void save(
+                     'repository',
+                     () =>
+                        configureProjectRepository(workspaceId, {
+                           projectId,
+                           name: repositoryName,
+                           repositoryUrl: url,
+                           baseBranch: branch,
+                           testCommands: parseCommands(commands),
+                        }),
+                     `Repository "${repositoryName.trim()}" saved.`
+                  )
+               }
+            />
+            {saved === 'repository' && <SuccessMark label="Repository saved" />}
+         </HStack>
          <Heading level={4}>Queue work by label</Heading>
          <Text color="secondary">
             Matching project issues enter a durable queue. Your coding agent uses MCP to claim and
@@ -162,25 +176,30 @@ export function AgentConfiguration({
             onChange={setEnabled}
             isDisabled={!writesEnabled}
          />
-         <Button
-            label="Create automation"
-            isLoading={busy}
-            isDisabled={!projectId || !connectionId || !labelId || !validLimit}
-            onClick={() =>
-               void save(() =>
-                  configureAgentAutomation(workspaceId, {
-                     name: 'Queue labeled project issues',
-                     projectId,
-                     connectionId,
-                     labelId,
-                     enabled,
-                     dailyLimit: Number(dailyLimit),
-                  })
-               )
-            }
-         />
-         {message && <Text role="status">{message}</Text>}
-         {error && <Text role="alert">{error}</Text>}
+         <HStack gap={2} vAlign="center">
+            <Button
+               label="Create automation"
+               icon={<Plus className="size-4" />}
+               isLoading={busy}
+               isDisabled={!projectId || !connectionId || !labelId || !validLimit}
+               onClick={() =>
+                  void save(
+                     'automation',
+                     () =>
+                        configureAgentAutomation(workspaceId, {
+                           name: 'Queue labeled project issues',
+                           projectId,
+                           connectionId,
+                           labelId,
+                           enabled,
+                           dailyLimit: Number(dailyLimit),
+                        }),
+                     'Automation created. Refresh agent runs to see it.'
+                  )
+               }
+            />
+            {saved === 'automation' && <SuccessMark label="Automation created" />}
+         </HStack>
       </VStack>
    );
 }
