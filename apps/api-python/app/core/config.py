@@ -78,6 +78,15 @@ class Settings:
     # VI: Số giây giữa các lần đồng bộ source-control định kỳ cho server webhook không tới được.
     # 0 là tắt; giá trị dương tối thiểu 60 để bảo vệ giới hạn tần suất của provider.
     scm_sync_interval_seconds: int = 0
+    # Lowercase `host` or `host:port` entries for self-hosted, OpenAI-compatible AI endpoints
+    # (for example a LiteLLM gateway on the internal network). Workspace administrators may save
+    # a provider URL on these hosts over HTTP or HTTPS; every other host must be the provider's
+    # official HTTPS API. Empty keeps the official-host-only SSRF protection.
+    # VI: Danh sách `host` hoặc `host:port` (chữ thường) cho endpoint AI nội bộ tương thích OpenAI
+    # (ví dụ gateway LiteLLM trong mạng nội bộ). Quản trị workspace chỉ được lưu URL provider trên các
+    # host này qua HTTP hoặc HTTPS; mọi host khác phải là API HTTPS chính thức của provider.
+    # Để trống thì giữ nguyên bảo vệ SSRF chỉ cho phép host chính thức.
+    agent_provider_allowed_hosts: tuple[str, ...] = ()
 
     @classmethod
     def from_environment(cls) -> 'Settings':
@@ -119,6 +128,7 @@ class Settings:
             discord_registration_channel_role_id=getenv('DISCORD_REGISTRATION_CHANNEL_ROLE_ID', '').strip(),
             registration_otp_ttl_seconds=int(getenv('REGISTRATION_OTP_TTL_SECONDS', '600')),
             agent_secrets_encryption_key=getenv('AGENT_SECRETS_ENCRYPTION_KEY', '').strip(),
+            agent_provider_allowed_hosts=_origins(getenv('AGENT_PROVIDER_ALLOWED_HOSTS', '').lower()),
             scm_secrets_encryption_key=getenv('SCM_SECRETS_ENCRYPTION_KEY', '').strip(),
             scm_github_app_id=getenv('SCM_GITHUB_APP_ID', '').strip(),
             scm_github_app_private_key=getenv('SCM_GITHUB_APP_PRIVATE_KEY', '').replace('\\n', '\n').strip(),

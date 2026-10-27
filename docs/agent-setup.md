@@ -32,6 +32,23 @@ The server accepts only the matching official HTTPS host for each provider, so
 a workspace key cannot be redirected to an arbitrary URL. The provider key is
 encrypted in PostgreSQL and is never included in an API response.
 
+## Internal AI endpoints
+
+To use a self-hosted, OpenAI-compatible endpoint (for example a LiteLLM
+gateway), the server operator lists its host in the API environment, then
+restarts the `api` service:
+
+```dotenv
+AGENT_PROVIDER_ALLOWED_HOSTS=192.168.98.100:4000
+```
+
+Entries are comma-separated `host` (any port) or `host:port` values; wrap IPv6
+addresses in brackets. A workspace owner or administrator can then save an
+HTTP or HTTPS **Provider URL** on that host under the OpenAI provider, such as
+`http://192.168.98.100:4000/v1`, with the gateway's model name and key. Flowie
+calls `<Provider URL>/chat/completions`. Removing a host from the list blocks
+further calls to it, even for a URL that is already saved.
+
 ## Planning workflow
 
 1. A user submits a request and can attach up to five Markdown, DOCX, or XLSX

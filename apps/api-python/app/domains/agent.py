@@ -56,6 +56,7 @@ PROVIDER_ENDPOINTS = {
     'OPENAI': 'https://api.openai.com/v1',
     'GOOGLE': 'https://generativelanguage.googleapis.com/v1beta',
 }
+PROVIDER_LABELS = {'OPENAI': 'OpenAI', 'GOOGLE': 'Google'}
 
 
 class ProviderInput(BaseModel):
@@ -166,14 +167,43 @@ def _provider_view(row: Any) -> dict[str, Any]:
     }
 
 
-def _validated_endpoint(provider: ProviderName, endpoint: str) -> str:
-    normalized = endpoint.rstrip('/')
+def _is_allowed_internal_host(endpoint: str, allowed_hosts: tuple[str, ...]) -> bool:
+    """Match an HTTP(S) URL against the operator's `host` or `host:port` allowlist.
+
+    URLs with credentials or an invalid port never match, and IPv6 hosts are compared in
+    bracketed form. Only the server operator can extend this list, so a workspace administrator
+    cannot aim the API at arbitrary internal services (SSRF).
+    VI: So khớp URL HTTP(S) với danh sách `host` hoặc `host:port` do người vận hành cấu hình.
+    URL có thông tin đăng nhập hoặc cổng không hợp lệ không bao giờ khớp; host IPv6 được so ở dạng
+    có ngoặc vuông. Chỉ người vận hành server mới mở rộng được danh sách này, nên quản trị workspace
+    không thể trỏ API tới dịch vụ nội bộ tùy ý (SSRF).
+    """
+    parsed = urlsplit(endpoint)
+    if parsed.scheme not in {'http', 'https'} or not parsed.hostname or parsed.username or parsed.password:
+        return False
+    try:
+        port = parsed.port or (443 if parsed.scheme == 'https' else 80)
+    except ValueError:
+        return False
+    host = f'[{parsed.hostname}]' if ':' in parsed.hostname else parsed.hostname
+    return host in allowed_hosts or f'{host}:{port}' in allowed_hosts
+
+
+def _validated_endpoint(provider: ProviderName, endpoint: str, allowed_hosts: tuple[str, ...] = ()) -> str:
+    normalized = endpoint.strip().rstrip('/')
+    if _is_allowed_internal_host(normalized, allowed_hosts):
+        return normalized
     parsed = urlsplit(normalized)
     expected = urlsplit(PROVIDER_ENDPOINTS[provider])
     if parsed.scheme != 'https' or parsed.hostname != expected.hostname:
-        raise ApiError(400, f'{provider.title()} provider URLs must use its official HTTPS API host.', 'Bad Request')
+        raise ApiError(
+            400,
+            f'{PROVIDER_LABELS[provider]} provider URLs must use its official HTTPS API host '
+            'or an internal host listed in AGENT_PROVIDER_ALLOWED_HOSTS.',
+            'Bad Request',
+        )
     if not parsed.path.startswith(expected.path):
-        raise ApiError(400, f'{provider.title()} provider URL must start with {PROVIDER_ENDPOINTS[provider]}.', 'Bad Request')
+        raise ApiError(400, f'{PROVIDER_LABELS[provider]} provider URL must start with {PROVIDER_ENDPOINTS[provider]}.', 'Bad Request')
     return normalized
 
 
@@ -188,6 +218,9 @@ async def _configured_provider(request: Request, db: AsyncSession, workspace_id:
     row = result.mappings().first()
     if not row:
         raise ApiError(409, 'Configure and activate an OpenAI or Google provider in Agent personalization first.', 'Conflict')
+    # Re-checks the saved URL so removing a host from AGENT_PROVIDER_ALLOWED_HOSTS stops calls to it.
+    # VI: Kiểm tra lại URL đã lưu để việc gỡ host khỏi AGENT_PROVIDER_ALLOWED_HOSTS chặn các lệnh gọi tới nó.
+    _validated_endpoint(row['provider'], row['endpoint'], request.app.state.settings.agent_provider_allowed_hosts)
     try:
         api_key = _cipher(request).decrypt(row['api_key_encrypted'].encode('ascii')).decode('utf-8')
     except InvalidToken as error:
@@ -1183,7 +1216,7 @@ async def list_providers(workspaceId: str = Query(min_length=1), user: Any = Dep
 @router.put('/providers/{provider}')
 async def save_provider(provider: ProviderName, payload: ProviderInput, request: Request, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     await _workspace_manager(db, workspaceId, user['id'])
-    endpoint = _validated_endpoint(provider, payload.endpoint)
+    endpoint = _validated_endpoint(provider, payload.endpoint, request.app.state.settings.agent_provider_allowed_hosts)
     current = await db.execute(text('SELECT api_key_encrypted FROM workspace_agent_providers WHERE workspace_id = :workspace_id AND provider = CAST(:provider AS "AgentProvider")'), {'workspace_id': workspaceId, 'provider': provider})
     existing_key = current.scalar_one_or_none()
     if not payload.apiKey and not existing_key:

@@ -557,7 +557,7 @@ export default function AgentPersonalization() {
 
          <SettingsSection
             title={`${PROVIDERS[provider].label} connection`}
-            description="Use the official provider API URL. The key is encrypted before it is stored; leave it blank to keep the existing saved key."
+            description="Use the official provider API URL, or an internal OpenAI-compatible URL on a host the server allows. The key is encrypted before it is stored; leave it blank to keep the existing saved key."
          >
             <div className="grid gap-3">
                <label className="grid gap-1.5 text-sm">
