@@ -334,6 +334,7 @@ test('Help search and project client presets expose meaningful actions', async (
    await expect(help.getByText('Documents & revision history', { exact: true })).toHaveCount(0);
    await page.goto(`/${fixture.slug}/settings/integrations`);
    await expect(page.getByRole('heading', { name: 'AI connections (MCP)' })).toBeVisible();
+   await page.getByRole('button', { name: 'New connection', exact: true }).click();
    await page.getByRole('button', { name: 'Coding project preset' }).click();
    await expect(page.getByRole('checkbox', { name: 'Write comments', exact: true })).toBeChecked();
    await expect(

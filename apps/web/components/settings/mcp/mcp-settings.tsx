@@ -1,12 +1,16 @@
 'use client';
 
 import { useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import { Check, Code2, Copy, Eye, Plus, Trash2, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { VStack, HStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { Button } from '@astryxdesign/core/Button';
 import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
 import { TextInput } from '@astryxdesign/core/TextInput';
 import { List, ListItem } from '@astryxdesign/core/List';
+import { StatusDot } from '@astryxdesign/core/StatusDot';
 import { ClientSetup } from '@/features/ai/client-setup';
 import { READ_PRESET, CODING_PRESET } from '@/features/ai/client-config';
 import { parseInstant } from '@/lib/time';
@@ -14,6 +18,7 @@ import { mcpEndpoint } from '@/lib/mcp';
 import { useMcpSettings } from './use-mcp-settings';
 import { AgentCoordination } from './agent-coordination';
 import { AgentConfiguration } from './agent-configuration';
+import { SuccessMark } from './success-mark';
 
 const SCOPE_LABELS: Record<string, string> = {
    'context:read': 'Read workspace and team information',
@@ -31,17 +36,46 @@ const SCOPE_LABELS: Record<string, string> = {
    'documents:write': 'Write documents',
 };
 
+const reveal = {
+   initial: { opacity: 0, y: -8 },
+   animate: { opacity: 1, y: 0 },
+   exit: { opacity: 0, y: -8 },
+   transition: { duration: 0.18 },
+};
+
+const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
+
+async function copyText(value: string, success: string) {
+   try {
+      await navigator.clipboard.writeText(value);
+      toast.success(success);
+   } catch {
+      toast.error('Clipboard unavailable; copy the value manually.');
+   }
+}
+
 export function McpSettings() {
    const state = useMcpSettings();
+   const [creating, setCreating] = useState(false);
+   const [confirmRevokeId, setConfirmRevokeId] = useState<string>();
    const [name, setName] = useState('');
    const [teamIds, setTeamIds] = useState<string[]>([]);
    const [projectIds, setProjectIds] = useState<string[]>([]);
    const [scopes, setScopes] = useState(READ_PRESET);
    const [preset, setPreset] = useState<'read' | 'coding'>('read');
-   const [clipboardStatus, setClipboardStatus] = useState<string>();
    const [expires, setExpires] = useState('30');
    const validExpiry =
       Number.isInteger(Number(expires)) && Number(expires) >= 1 && Number(expires) <= 90;
+   const endpoint = state.configuration && mcpEndpoint(state.configuration.endpointPath);
+
+   function resetDraft() {
+      setName('');
+      setTeamIds([]);
+      setProjectIds([]);
+      setPreset('read');
+      setScopes(READ_PRESET);
+      setExpires('30');
+   }
 
    return (
       <VStack gap={4}>
@@ -51,211 +85,125 @@ export function McpSettings() {
          </Text>
          {state.loading && <Text>Loading connections…</Text>}
          {state.error && <Text role="alert">{state.error}</Text>}
-         {state.configuration && (
+         {state.configuration && endpoint && (
             <>
-               <Text>
-                  {state.configuration.enabled
-                     ? 'MCP is available.'
-                     : 'MCP is disabled. Ask your administrator to enable it.'}
-               </Text>
-               <TextInput
-                  label="Server URL"
-                  value={mcpEndpoint(state.configuration.endpointPath)}
-                  isReadOnly
-               />
-               {!state.configuration.writesEnabled && (
-                  <Text color="secondary">The server currently allows reading only.</Text>
-               )}
-               <HStack gap={2}>
-                  <Button
-                     label="Read-only project preset"
-                     onClick={() => {
-                        setPreset('read');
-                        setScopes(READ_PRESET);
-                     }}
+               <HStack gap={2} vAlign="center">
+                  <StatusDot
+                     variant={state.configuration.enabled ? 'success' : 'neutral'}
+                     label={state.configuration.enabled ? 'Available' : 'Disabled'}
                   />
-                  <Button
-                     label="Coding project preset"
-                     isDisabled={!state.configuration.writesEnabled}
-                     onClick={() => {
-                        setPreset('coding');
-                        setScopes(CODING_PRESET);
-                     }}
-                  />
+                  <Text type="supporting" color="secondary">
+                     {state.configuration.enabled
+                        ? state.configuration.writesEnabled
+                           ? 'MCP is available.'
+                           : 'MCP is available. The server currently allows reading only.'
+                        : 'MCP is disabled. Ask your administrator to enable it.'}
+                  </Text>
                </HStack>
-               <Text>
-                  {preset === 'read'
-                     ? 'Read project work without changing it.'
-                     : 'Permit work edits, status changes and run evidence within selected projects.'}{' '}
-                  Select at least one project before creating a connection.
-               </Text>
-               <TextInput label="Connection name" value={name} onChange={setName} isRequired />
-               <TextInput
-                  label="Expires in days"
-                  value={expires}
-                  onChange={setExpires}
-                  description="Choose 1 to 90 days."
-               />
-               <Text color="secondary">
-                  Select teams and projects to limit access. Select one or more projects to keep the
-                  connection bounded.
-               </Text>
-               <List header={<Heading level={3}>Allowed teams</Heading>}>
-                  {state.resources.teams.map((team) => (
-                     <ListItem
-                        key={team.id}
-                        label={team.name}
-                        startContent={
-                           <CheckboxInput
-                              label={team.name}
-                              isLabelHidden
-                              value={teamIds.includes(team.id)}
-                              onChange={(checked) => {
-                                 setTeamIds((current) =>
-                                    checked
-                                       ? [...current, team.id]
-                                       : current.filter((id) => id !== team.id)
-                                 );
-                                 setProjectIds([]);
-                              }}
-                           />
-                        }
-                     />
-                  ))}
-               </List>
-               <List header={<Heading level={3}>Allowed projects</Heading>}>
-                  {state.resources.projects
-                     .filter(
-                        (project) =>
-                           !teamIds.length || (project.teamId && teamIds.includes(project.teamId))
-                     )
-                     .map((project) => (
-                        <ListItem
-                           key={project.id}
-                           label={project.name}
-                           startContent={
-                              <CheckboxInput
-                                 label={project.name}
-                                 isLabelHidden
-                                 value={projectIds.includes(project.id)}
-                                 onChange={(checked) =>
-                                    setProjectIds((current) =>
-                                       checked
-                                          ? [...current, project.id]
-                                          : current.filter((id) => id !== project.id)
-                                    )
-                                 }
-                              />
-                           }
-                        />
-                     ))}
-               </List>
-               {state.resources.truncated && (
-                  <Text color="secondary">Only the first 200 teams and projects are shown.</Text>
-               )}
-               <List header={<Heading level={3}>Permissions</Heading>}>
-                  {state.configuration.scopes.map((scope) => (
-                     <ListItem
-                        key={scope}
-                        label={SCOPE_LABELS[scope] ?? scope}
-                        startContent={
-                           <CheckboxInput
-                              label={SCOPE_LABELS[scope] ?? scope}
-                              isLabelHidden
-                              value={scopes.includes(scope)}
-                              isDisabled={
-                                 state.busy ||
-                                 (!state.configuration?.writesEnabled && !scope.endsWith(':read'))
-                              }
-                              onChange={(checked) =>
-                                 setScopes((current) =>
-                                    checked
-                                       ? [...current, scope]
-                                       : current.filter((item) => item !== scope)
-                                 )
-                              }
-                           />
-                        }
-                     />
-                  ))}
-               </List>
-               <HStack gap={2}>
+               <HStack gap={2} vAlign="end">
+                  <TextInput label="Server URL" value={endpoint} isReadOnly width="100%" />
                   <Button
-                     label="Create connection"
-                     variant="primary"
-                     isLoading={state.busy}
-                     isDisabled={
-                        !state.configuration.enabled ||
-                        name.trim().length < 2 ||
-                        !scopes.length ||
-                        !validExpiry ||
-                        !projectIds.length
-                     }
-                     onClick={() =>
-                        void state.create({
-                           name,
-                           scopes,
-                           teamIds,
-                           projectIds,
-                           expiresInDays: Number(expires),
-                        })
-                     }
+                     label="Copy server URL"
+                     tooltip="Copy server URL"
+                     icon={<Copy className="size-4" />}
+                     isIconOnly
+                     variant="ghost"
+                     clickAction={() => copyText(endpoint, 'Server URL copied.')}
                   />
                </HStack>
             </>
          )}
-         {state.token && (
-            <VStack gap={2}>
-               {clipboardStatus && <Text role="status">{clipboardStatus}</Text>}
-               <Text>Copy this token into your AI client. It is shown once.</Text>
-               <TextInput label="Connection token" value={state.token} isReadOnly />
-               <HStack gap={2}>
-                  <Button
-                     label="Copy token"
-                     clickAction={async () => {
-                        try {
-                           await navigator.clipboard.writeText(state.token ?? '');
-                           setClipboardStatus('Token copied.');
-                        } catch {
-                           setClipboardStatus('Clipboard unavailable; copy the token manually.');
-                        }
-                     }}
-                  />
-                  <Button label="Dismiss token" variant="ghost" onClick={state.dismissToken} />
+         <List
+            hasDividers
+            header={
+               <HStack gap={2} vAlign="center" hAlign="between">
+                  <Heading level={3}>Connections ({state.connections.length})</Heading>
+                  {state.configuration && !creating && (
+                     <Button
+                        label="New connection"
+                        size="sm"
+                        variant="primary"
+                        icon={<Plus className="size-4" />}
+                        isDisabled={!state.configuration.enabled}
+                        onClick={() => setCreating(true)}
+                     />
+                  )}
                </HStack>
-            </VStack>
-         )}
-         {state.configuration && (
-            <ClientSetup
-               endpoint={mcpEndpoint(state.configuration.endpointPath)}
-               token={state.token}
-            />
-         )}
-         <List hasDividers header={<Heading level={3}>Connections</Heading>}>
+            }
+         >
             {state.connections.map((connection) => {
                const inactive =
                   Boolean(connection.revokedAt) ||
                   parseInstant(connection.expiresAt).getTime() < Date.now();
+               const confirming = confirmRevokeId === connection.id;
+               const fresh = state.createdId === connection.id;
                return (
                   <ListItem
                      key={connection.id}
                      label={connection.name}
+                     startContent={
+                        <motion.span
+                           className="inline-flex"
+                           initial={fresh ? { scale: 0 } : false}
+                           animate={{ scale: 1 }}
+                           transition={{ type: 'spring', stiffness: 420, damping: 16 }}
+                        >
+                           <StatusDot
+                              variant={inactive ? 'neutral' : 'success'}
+                              label={inactive ? 'Inactive' : 'Active'}
+                              isPulsing={fresh}
+                           />
+                        </motion.span>
+                     }
                      description={
                         <Text type="supporting" color="secondary">
                            {inactive ? 'Inactive' : 'Active'} · Expires{' '}
                            {connection.expiresAt.slice(0, 10)} ·{' '}
-                           {connection.scopes
-                              .map((scope) => SCOPE_LABELS[scope] ?? scope)
-                              .join(', ')}
+                           {plural(connection.scopes.length, 'permission')} ·{' '}
+                           {connection.projectIds.length
+                              ? plural(connection.projectIds.length, 'project')
+                              : 'All projects'}
                         </Text>
                      }
                      endContent={
-                        <Button
-                           label="Revoke"
-                           size="sm"
-                           isDisabled={inactive || state.busy}
-                           onClick={() => void state.revoke(connection.id)}
-                        />
+                        confirming ? (
+                           <HStack gap={1}>
+                              <Button
+                                 label="Confirm revoke"
+                                 tooltip="Confirm revoke"
+                                 icon={<Check className="size-4" />}
+                                 isIconOnly
+                                 size="sm"
+                                 variant="destructive"
+                                 isLoading={state.busy}
+                                 onClick={() =>
+                                    void state
+                                       .revoke(connection.id)
+                                       .then(() => setConfirmRevokeId(undefined))
+                                 }
+                              />
+                              <Button
+                                 label="Keep connection"
+                                 tooltip="Keep connection"
+                                 icon={<X className="size-4" />}
+                                 isIconOnly
+                                 size="sm"
+                                 variant="ghost"
+                                 onClick={() => setConfirmRevokeId(undefined)}
+                              />
+                           </HStack>
+                        ) : (
+                           <Button
+                              label="Revoke connection"
+                              tooltip="Revoke connection"
+                              icon={<Trash2 className="size-4" />}
+                              isIconOnly
+                              size="sm"
+                              variant="ghost"
+                              isDisabled={inactive || state.busy}
+                              onClick={() => setConfirmRevokeId(connection.id)}
+                           />
+                        )
                      }
                   />
                );
@@ -264,6 +212,226 @@ export function McpSettings() {
          {!state.loading && !state.connections.length && (
             <Text color="secondary">No AI connections have been created.</Text>
          )}
+         <AnimatePresence>
+            {state.token && (
+               <motion.div key={state.createdId} {...reveal}>
+                  <VStack gap={2}>
+                     <HStack gap={2} vAlign="center">
+                        <SuccessMark label="Connection created" />
+                        <Text>Copy this token into your AI client. It is shown once.</Text>
+                     </HStack>
+                     <HStack gap={2} vAlign="end">
+                        <TextInput
+                           label="Connection token"
+                           value={state.token}
+                           isReadOnly
+                           width="100%"
+                        />
+                        <Button
+                           label="Copy token"
+                           tooltip="Copy token"
+                           icon={<Copy className="size-4" />}
+                           isIconOnly
+                           clickAction={() => copyText(state.token ?? '', 'Token copied.')}
+                        />
+                        <Button
+                           label="Dismiss token"
+                           tooltip="Dismiss token"
+                           icon={<X className="size-4" />}
+                           isIconOnly
+                           variant="ghost"
+                           onClick={state.dismissToken}
+                        />
+                     </HStack>
+                  </VStack>
+               </motion.div>
+            )}
+         </AnimatePresence>
+         <AnimatePresence>
+            {state.configuration && creating && (
+               <motion.div key="create-connection" {...reveal}>
+                  <VStack gap={4}>
+                     <HStack gap={2} vAlign="center" hAlign="between">
+                        <Heading level={3}>New connection</Heading>
+                        <Button
+                           label="Close new connection form"
+                           tooltip="Close"
+                           icon={<X className="size-4" />}
+                           isIconOnly
+                           size="sm"
+                           variant="ghost"
+                           onClick={() => setCreating(false)}
+                        />
+                     </HStack>
+                     <HStack gap={2}>
+                        <Button
+                           label="Read-only project preset"
+                           icon={<Eye className="size-4" />}
+                           variant={preset === 'read' ? 'primary' : 'secondary'}
+                           size="sm"
+                           aria-pressed={preset === 'read'}
+                           onClick={() => {
+                              setPreset('read');
+                              setScopes(READ_PRESET);
+                           }}
+                        >
+                           Read-only
+                        </Button>
+                        <Button
+                           label="Coding project preset"
+                           icon={<Code2 className="size-4" />}
+                           variant={preset === 'coding' ? 'primary' : 'secondary'}
+                           size="sm"
+                           aria-pressed={preset === 'coding'}
+                           isDisabled={!state.configuration.writesEnabled}
+                           onClick={() => {
+                              setPreset('coding');
+                              setScopes(CODING_PRESET);
+                           }}
+                        >
+                           Coding
+                        </Button>
+                     </HStack>
+                     <Text type="supporting" color="secondary">
+                        {preset === 'read'
+                           ? 'Read project work without changing it.'
+                           : 'Permit work edits, status changes and run evidence within selected projects.'}{' '}
+                        Select at least one project before creating a connection.
+                     </Text>
+                     <HStack gap={3}>
+                        <TextInput
+                           label="Connection name"
+                           value={name}
+                           onChange={setName}
+                           isRequired
+                           width="100%"
+                        />
+                        <TextInput
+                           label="Expires in days"
+                           value={expires}
+                           onChange={setExpires}
+                           description="Choose 1 to 90 days."
+                        />
+                     </HStack>
+                     <List density="compact" header={<Heading level={4}>Allowed teams</Heading>}>
+                        {state.resources.teams.map((team) => (
+                           <ListItem
+                              key={team.id}
+                              label={team.name}
+                              startContent={
+                                 <CheckboxInput
+                                    label={team.name}
+                                    isLabelHidden
+                                    value={teamIds.includes(team.id)}
+                                    onChange={(checked) => {
+                                       setTeamIds((current) =>
+                                          checked
+                                             ? [...current, team.id]
+                                             : current.filter((id) => id !== team.id)
+                                       );
+                                       setProjectIds([]);
+                                    }}
+                                 />
+                              }
+                           />
+                        ))}
+                     </List>
+                     <List density="compact" header={<Heading level={4}>Allowed projects</Heading>}>
+                        {state.resources.projects
+                           .filter(
+                              (project) =>
+                                 !teamIds.length ||
+                                 (project.teamId && teamIds.includes(project.teamId))
+                           )
+                           .map((project) => (
+                              <ListItem
+                                 key={project.id}
+                                 label={project.name}
+                                 startContent={
+                                    <CheckboxInput
+                                       label={project.name}
+                                       isLabelHidden
+                                       value={projectIds.includes(project.id)}
+                                       onChange={(checked) =>
+                                          setProjectIds((current) =>
+                                             checked
+                                                ? [...current, project.id]
+                                                : current.filter((id) => id !== project.id)
+                                          )
+                                       }
+                                    />
+                                 }
+                              />
+                           ))}
+                     </List>
+                     {state.resources.truncated && (
+                        <Text color="secondary">
+                           Only the first 200 teams and projects are shown.
+                        </Text>
+                     )}
+                     <List density="compact" header={<Heading level={4}>Permissions</Heading>}>
+                        {state.configuration.scopes.map((scope) => (
+                           <ListItem
+                              key={scope}
+                              label={SCOPE_LABELS[scope] ?? scope}
+                              startContent={
+                                 <CheckboxInput
+                                    label={SCOPE_LABELS[scope] ?? scope}
+                                    isLabelHidden
+                                    value={scopes.includes(scope)}
+                                    isDisabled={
+                                       state.busy ||
+                                       (!state.configuration?.writesEnabled &&
+                                          !scope.endsWith(':read'))
+                                    }
+                                    onChange={(checked) =>
+                                       setScopes((current) =>
+                                          checked
+                                             ? [...current, scope]
+                                             : current.filter((item) => item !== scope)
+                                       )
+                                    }
+                                 />
+                              }
+                           />
+                        ))}
+                     </List>
+                     <HStack gap={2} hAlign="end">
+                        <Button label="Cancel" variant="ghost" onClick={() => setCreating(false)} />
+                        <Button
+                           label="Create connection"
+                           variant="primary"
+                           icon={<Plus className="size-4" />}
+                           isLoading={state.busy}
+                           isDisabled={
+                              !state.configuration.enabled ||
+                              name.trim().length < 2 ||
+                              !scopes.length ||
+                              !validExpiry ||
+                              !projectIds.length
+                           }
+                           onClick={() =>
+                              void state
+                                 .create({
+                                    name,
+                                    scopes,
+                                    teamIds,
+                                    projectIds,
+                                    expiresInDays: Number(expires),
+                                 })
+                                 .then((created) => {
+                                    if (!created) return;
+                                    resetDraft();
+                                    setCreating(false);
+                                 })
+                           }
+                        />
+                     </HStack>
+                  </VStack>
+               </motion.div>
+            )}
+         </AnimatePresence>
+         {endpoint && <ClientSetup endpoint={endpoint} token={state.token} />}
          <List hasDividers header={<Heading level={3}>Recent activity</Heading>}>
             {state.audit.map((event) => (
                <ListItem key={event.id} label={event.action} description={event.createdAt} />
