@@ -28,6 +28,7 @@ import { toast } from 'sonner';
 import { TeamSettingsDialog, type TeamSettingsEditKind } from './team-settings-dialog';
 import { TeamDispatcherSettings } from './team-dispatcher-settings';
 import { SettingsCard, SettingsRow, SettingsSection } from './shared';
+import { withBasePath } from '@/lib/base-path';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -163,7 +164,9 @@ export default function TeamSettings({ teamId }: { teamId: string }) {
                         trailing={<span>{team.members.length} members</span>}
                         chevron
                         onClick={() =>
-                           window.location.assign(`/${orgId}/team/${team.identifier}/members`)
+                           window.location.assign(
+                              withBasePath(`/${orgId}/team/${team.identifier}/members`)
+                           )
                         }
                      />
                      <SettingsRow
@@ -181,7 +184,9 @@ export default function TeamSettings({ teamId }: { teamId: string }) {
                         title="Issue labels"
                         description="Labels available to this team's issues"
                         chevron
-                        onClick={() => window.location.assign(`/${orgId}/settings/issue-labels`)}
+                        onClick={() =>
+                           window.location.assign(withBasePath(`/${orgId}/settings/issue-labels`))
+                        }
                      />
                      <SettingsRow
                         icon={<FileText className="size-4" />}
@@ -195,7 +200,9 @@ export default function TeamSettings({ teamId }: { teamId: string }) {
                         title="Recurring issues"
                         description="Automatically create issues on a schedule"
                         chevron
-                        onClick={() => window.location.assign(`/${orgId}/settings/recurring`)}
+                        onClick={() =>
+                           window.location.assign(withBasePath(`/${orgId}/settings/recurring`))
+                        }
                      />
                   </SettingsCard>
                </SettingsSection>
@@ -206,7 +213,9 @@ export default function TeamSettings({ teamId }: { teamId: string }) {
                         title="Issue statuses"
                         description="Customize workspace issue statuses"
                         chevron
-                        onClick={() => window.location.assign(`/${orgId}/settings/issue-statuses`)}
+                        onClick={() =>
+                           window.location.assign(withBasePath(`/${orgId}/settings/issue-statuses`))
+                        }
                      />
                      <SettingsRow
                         icon={<Workflow className="size-4" />}

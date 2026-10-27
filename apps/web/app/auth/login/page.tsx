@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AuthProviderStatus, useAuthProviders } from '@/features/identity/auth-providers';
+import { withBasePath } from '@/lib/base-path';
 
 type AuthPayload = {
    data: {
@@ -82,7 +83,7 @@ export default function LoginPage() {
                ? next
                : null;
          // Authentication changes cookies outside Next's router cache; discard anonymous prefetches.
-         window.location.replace(safeNext ?? '/');
+         window.location.replace(withBasePath(safeNext ?? '/'));
       } catch (caughtError) {
          setError(caughtError instanceof Error ? caughtError.message : t('signInFailed'));
       } finally {

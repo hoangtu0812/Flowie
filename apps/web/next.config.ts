@@ -54,11 +54,21 @@ function readRelease(): Release {
 
 const release = readRelease();
 
+// Build-time sub-path for serving Flowie under another site, e.g. '/flowie'
+// behind https://poc-dtd.bsr.com.vn/flowie. Empty keeps Flowie at the host
+// root. A trailing slash is dropped because Next rejects it.
+// VI: Đường dẫn con lúc build để chạy Flowie dưới site khác, ví dụ '/flowie'
+// sau https://poc-dtd.bsr.com.vn/flowie. Để trống thì Flowie chạy ở gốc domain.
+// Dấu '/' cuối bị bỏ vì Next không chấp nhận.
+const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? '').replace(/\/+$/, '');
+
 const nextConfig: NextConfig = {
    /* config options here */
+   basePath,
    devIndicators: false,
    transpilePackages: ['thinking-orbs'],
    env: {
+      NEXT_PUBLIC_BASE_PATH: basePath,
       NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION ?? release.version,
       NEXT_PUBLIC_BUILD_REVISION: process.env.NEXT_PUBLIC_BUILD_REVISION ?? 'local',
       NEXT_PUBLIC_APP_RELEASED_AT: process.env.NEXT_PUBLIC_APP_RELEASED_AT ?? release.releasedAt,

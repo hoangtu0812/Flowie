@@ -19,6 +19,7 @@ import {
 import { authenticatedFetch, type WorkspaceSummary } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
 import { SettingsSection } from './shared';
+import { withBasePath } from '@/lib/base-path';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -43,7 +44,7 @@ export function DeleteWorkspace({ workspace }: { workspace: WorkspaceSummary }) 
          });
          await responseData(response, 'Could not delete workspace. Please try again.');
          // Reload the shell and all workspace stores before selecting a remaining workspace.
-         window.location.assign('/');
+         window.location.assign(withBasePath('/'));
       } catch (cause) {
          setError(cause instanceof Error ? cause.message : 'Could not delete workspace.');
          setPending(false);

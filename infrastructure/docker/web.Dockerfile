@@ -13,9 +13,11 @@ RUN pnpm install --frozen-lockfile
 
 FROM dependencies AS build
 ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_BASE_PATH=
 ARG UI_BUILD_REVISION=local
 ARG FLOWIE_REVISION=local
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_BASE_PATH=$NEXT_PUBLIC_BASE_PATH
 ENV NEXT_PUBLIC_BUILD_REVISION=$FLOWIE_REVISION
 RUN printf '%s' "$UI_BUILD_REVISION" > /tmp/ui-build-revision
 COPY apps/web apps/web
@@ -29,6 +31,10 @@ RUN pnpm --filter @circle/web build
 FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
+# `next start` reloads next.config.ts, so basePath must match the build value.
+# VI: `next start` đọc lại next.config.ts, nên basePath phải khớp giá trị lúc build.
+ARG NEXT_PUBLIC_BASE_PATH=
+ENV NEXT_PUBLIC_BASE_PATH=$NEXT_PUBLIC_BASE_PATH
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/apps/web/.next ./apps/web/.next
 COPY --from=build /app/apps/web/node_modules ./apps/web/node_modules

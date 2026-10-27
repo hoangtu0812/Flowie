@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
+import { appPathname } from '@/lib/base-path';
 
 const lastReport = new Map<string, number>();
 const kinds = ['issue', 'project', 'initiative', 'view', 'settings', 'inbox'];
@@ -9,9 +10,8 @@ export async function reportClientFailure(
    category: 'render' | 'unhandled' | 'network',
    digest?: string
 ) {
-   const routeKind = kinds.includes(window.location.pathname.split('/')[2])
-      ? window.location.pathname.split('/')[2]
-      : 'other';
+   const segment = appPathname().split('/')[2];
+   const routeKind = kinds.includes(segment) ? segment : 'other';
    const safeDigest = digest && /^[A-Za-z0-9_-]{1,64}$/.test(digest) ? digest : undefined;
    const key = `${category}/${routeKind}`;
    if (Date.now() - (lastReport.get(key) ?? 0) < 60000) return;
