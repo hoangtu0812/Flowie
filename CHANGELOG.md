@@ -45,7 +45,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
-- Issue bars on a project's Timeline match the Initiatives timeline: an outline in the status colour over the page background instead of a solid fill, readable text in both themes, and the same compact rows; hovering a bar now highlights it on both timelines. (DTD-25)
+- Issue bars on a project's Timeline match the Initiatives timeline: an outline in the status colour over the page background instead of a solid fill, readable text in both themes, and the same compact rows; hovering a bar now highlights it on both timelines. (DTD-25, #42)
   VI: Thanh issue trên Timeline của dự án giống timeline Initiatives: viền theo màu trạng thái trên nền trang thay vì tô đặc, chữ đọc rõ ở cả hai theme và các dòng gọn như nhau; rê chuột lên thanh giờ làm nổi thanh ở cả hai timeline. (DTD-25)
 
 - A project's Issues tab follows the same list/board choice as All issues and has the Display menu (layout, grouping, ordering, properties); board mode no longer shows the list's column header. (DTD-17, #40)
