@@ -89,8 +89,8 @@ DEFINITIONS = (
     ),
     ToolDefinition(
         "heartbeat_run",
-        "Renew an owned live run lease; use a new key for each heartbeat.",
-        r.LeaseInput,
+        "Renew an owned live run lease and optionally report one line of current progress; use a new key for each heartbeat.",
+        r.HeartbeatInput,
         "runs:write",
         "heartbeat_run",
         True,

@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- A task worked on by the local runner shows an "Agent run" card with the run state, the agent's current step (for example "Editing apps/web/lib/time.ts" or "Running approved test 1/2") updated every few seconds, the pull request once there is one, and a cancel button for the run's owner. Claude Code runs report each file step; Codex runs report the runner's phases. Adds `agent_runs.progress` and `progress_at` through a Prisma migration. Deploy the API before updating the runner checkout: an older API rejects the new heartbeat field and the run fails.
+  VI: Task do runner local xử lý hiển thị thẻ "Agent run" gồm trạng thái run, bước agent đang làm (ví dụ "Editing apps/web/lib/time.ts" hoặc "Running approved test 1/2") cập nhật vài giây một lần, pull request khi đã có, và nút hủy cho chủ run. Run Claude Code báo từng bước với file; run Codex báo theo giai đoạn của runner. Thêm cột `agent_runs.progress` và `progress_at` qua migration Prisma. Deploy API trước khi cập nhật checkout của runner: API cũ từ chối trường heartbeat mới và run sẽ thất bại.
+
 - Clicking an image in a task's description or comments opens a full-screen viewer: ← / → move through the task's images, + / − / 0 zoom and reset, a button downloads the original, and Esc, the close button or a click on the backdrop closes it. The sidebar no longer shows a horizontal scrollbar. (DTD-16, #38)
   VI: Click vào ảnh trong mô tả hoặc comment của task sẽ mở trình xem toàn màn hình: ← / → chuyển giữa các ảnh của task, + / − / 0 để phóng to, thu nhỏ và đặt lại, có nút tải ảnh gốc, và đóng bằng Esc, nút đóng hoặc click ra nền. Sidebar không còn thanh cuộn ngang. (DTD-16)
 

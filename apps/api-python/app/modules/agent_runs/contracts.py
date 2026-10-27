@@ -25,6 +25,20 @@ class LeaseInput(WriteInput, RunInput):
     fencingToken: int = Field(ge=1)
 
 
+class HeartbeatInput(LeaseInput):
+    """Lease renewal that may carry the runner's current activity.
+
+    ``progress`` is one line such as "Editing apps/web/lib/time.ts" or "Running approved
+    test 1/2". It replaces the previous line and is shown live on the task; omit it to
+    renew the lease without changing what the task shows.
+    VI: Gia hạn lease, có thể kèm hoạt động hiện tại của runner. ``progress`` là một dòng
+    VI: như "Editing apps/web/lib/time.ts" hoặc "Running approved test 1/2", thay dòng
+    VI: trước và hiển thị trực tiếp trên task; bỏ trống để chỉ gia hạn lease.
+    """
+
+    progress: str | None = Field(default=None, min_length=1, max_length=300)
+
+
 class TestEvidence(StrictInput):
     """One executed check: what ran, how it ended and how long it took.
 
@@ -95,6 +109,7 @@ class RunPageInput(PageInput):
     # True returns only runs directed at the calling connection, so a runner polls its
     # own queue instead of work routed to another agent.
     assignedToThisConnection: bool | None = None
+    issueId: str | None = None
 
 
 class RepositoryInput(StrictInput):

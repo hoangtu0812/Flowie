@@ -4,6 +4,7 @@ from time import monotonic
 from uuid import uuid4
 
 from .process import run_process
+from .progress import one_line
 from .repository import Repository
 
 # A log tail bounds what a chatty test can push into a run record; failures normally
@@ -12,6 +13,11 @@ LOG_TAIL = 2000
 # Reported when an approved test is stopped at commandTimeout, matching the exit code
 # GNU timeout uses for the same condition.
 TIMEOUT_EXIT_CODE = 124
+# Shortest gap between two progress heartbeats, so a busy agent cannot flood the server
+# while the task still updates within seconds.
+# VI: Khoảng cách tối thiểu giữa hai heartbeat tiến độ, để agent bận không dồn request
+# VI: lên server mà task vẫn cập nhật trong vài giây.
+PROGRESS_INTERVAL = 10
 
 
 def key():
@@ -123,15 +129,37 @@ async def execute(
         "fencingToken": run["fencingToken"],
     }
 
+    # The latest activity line rides on the next heartbeat. A new line wakes the loop at
+    # once (then waits PROGRESS_INTERVAL); with no news the lease is still renewed every
+    # heartbeat_interval without repeating the line.
+    # VI: Dòng hoạt động mới nhất đi kèm heartbeat kế tiếp. Dòng mới đánh thức vòng lặp
+    # VI: ngay (rồi chờ PROGRESS_INTERVAL); không có gì mới thì lease vẫn được gia hạn mỗi
+    # VI: heartbeat_interval mà không gửi lặp lại dòng cũ.
+    latest = {"text": None, "sent": None}
+    wake = asyncio.Event()
+
+    def report(text):
+        latest["text"] = one_line(text)
+        wake.set()
+
     async def heartbeat():
         while True:
-            await asyncio.sleep(heartbeat_interval)
-            await client.call("heartbeat_run", {**lease, "idempotencyKey": key()})
+            try:
+                await asyncio.wait_for(wake.wait(), heartbeat_interval)
+            except asyncio.TimeoutError:
+                pass
+            wake.clear()
+            payload = {**lease, "idempotencyKey": key()}
+            if latest["text"] and latest["text"] != latest["sent"]:
+                payload["progress"] = latest["sent"] = latest["text"]
+            await client.call("heartbeat_run", payload)
+            await asyncio.sleep(min(PROGRESS_INTERVAL, heartbeat_interval))
 
     tests = []
     workspaces = []
 
     async def work():
+        report("Preparing the run worktree")
         workspace = await repo.worktree(run["id"])
         workspaces.append(workspace)
         # Review comes first: a read-only pass writes the plan and target end date
@@ -142,7 +170,11 @@ async def execute(
         # VI: kiến vào issue, sau đó provider mới sửa code theo kế hoạch đó. Version
         # VI: được đọc sau review vì mọi cập nhật issue đều tăng nó; sửa đồng thời
         # VI: vẫn làm update thất bại và dừng run trước khi sửa code.
-        review = await provider.review(config, context, workspace.path)
+        report("Reviewing the issue (read-only)")
+        review = await provider.review(
+            config, context, workspace.path, progress=lambda text: report(f"Review: {text}")
+        )
+        report("Recording the plan and target end date")
         current = await client.call("get_issue", {"issueId": issue_id})
         await client.call(
             "update_issue",
@@ -161,10 +193,12 @@ async def execute(
                 "idempotencyKey": key(),
             },
         )
+        report("Implementing the plan")
         summary = await provider.execute(
-            config, {**context, "plan": review["plan"]}, workspace.path
+            config, {**context, "plan": review["plan"]}, workspace.path, progress=report
         )
         for index, command in enumerate(config.tests):
+            report(f"Running approved test {index + 1}/{len(config.tests)}")
             evidence = await run_approved_test(
                 f"approved-local-test-{index + 1}",
                 command,
@@ -176,9 +210,19 @@ async def execute(
                 raise RuntimeError(
                     "An approved local test failed; no result was marked successful."
                 )
+        report("Committing the changes")
         commit = await workspace.commit(run["id"])
+        if publish:
+            report("Pushing the branch and opening a draft pull request")
         url = await workspace.publish(run["id"]) if publish else None
-        await client.call("heartbeat_run", {**lease, "idempotencyKey": key()})
+        await client.call(
+            "heartbeat_run",
+            {
+                **lease,
+                "idempotencyKey": key(),
+                "progress": one_line(f"Committed {commit[:7]}; reporting the result"),
+            },
+        )
         return {
             "outcome": "AWAITING_REVIEW",
             "summary": summary,

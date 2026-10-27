@@ -67,12 +67,41 @@ async def stop_process(process):
         await process.wait()
 
 
-async def run_process(argv, cwd, timeout, *, stdin=None, capture=False, merge_errors=False):
+# Stream-JSON events can embed whole file contents, so a line may exceed asyncio's 64 KiB
+# default buffer.
+# VI: Sự kiện stream-JSON có thể chứa nguyên nội dung file nên một dòng có thể vượt bộ đệm
+# VI: 64 KiB mặc định của asyncio.
+STREAM_LINE_LIMIT = 16 * 1024 * 1024
+
+
+async def _stream_lines(process, stdin, on_line):
+    if stdin is not None:
+        process.stdin.write(stdin.encode("utf-8"))
+        await process.stdin.drain()
+        process.stdin.close()
+    async for raw in process.stdout:
+        on_line(raw.decode("utf-8", errors="replace").rstrip("\r\n"))
+    await process.wait()
+
+
+async def run_process(
+    argv, cwd, timeout, *, stdin=None, capture=False, merge_errors=False, on_line=None
+):
+    """Run a child process with a hard timeout.
+
+    With ``on_line`` the child's stdout is delivered line by line as it is written and
+    the returned output is empty: the caller keeps whatever it needs from the stream.
+    VI: Chạy tiến trình con với timeout cứng. Khi có ``on_line``, stdout của tiến trình
+    VI: được chuyển từng dòng ngay khi ghi ra và output trả về rỗng: bên gọi tự giữ phần
+    VI: cần dùng từ luồng đó.
+    """
     options = (
         {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
         if os.name == "nt"
         else {"start_new_session": True}
     )
+    if on_line is not None:
+        capture, options["limit"] = True, STREAM_LINE_LIMIT
     program, *arguments = argv
     process = await asyncio.create_subprocess_exec(
         resolve_executable(program),
@@ -89,6 +118,9 @@ async def run_process(argv, cwd, timeout, *, stdin=None, capture=False, merge_er
         **options,
     )
     try:
+        if on_line is not None:
+            await asyncio.wait_for(_stream_lines(process, stdin, on_line), timeout=timeout)
+            return process.returncode, ""
         output, _ = await asyncio.wait_for(
             process.communicate(stdin.encode("utf-8") if stdin is not None else None),
             timeout=timeout,

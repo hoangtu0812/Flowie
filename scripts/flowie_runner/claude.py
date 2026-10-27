@@ -3,6 +3,7 @@ import sys
 from uuid import uuid4
 
 from .process import run_process
+from .progress import describe_claude_event
 from .prompt import (
     REVIEW_SCHEMA,
     SUMMARY_SCHEMA,
@@ -22,6 +23,7 @@ REVIEW_TOOLS = "Read,Glob,Grep"
 REQUIRED_FLAGS = [
     "--print",
     "--output-format",
+    "--verbose",
     "--json-schema",
     "--permission-mode",
     "--permission-prompts",
@@ -55,21 +57,21 @@ class ClaudeProvider:
         if not logged_in:
             raise RuntimeError("Sign in to Claude Code before starting local work.")
 
-    async def review(self, config, context, path):
+    async def review(self, config, context, path, progress=None):
         output = await self._run(
             config, context, path, review_prompt(context), REVIEW_SCHEMA,
-            REVIEW_TOOLS, "default",
+            REVIEW_TOOLS, "default", progress,
         )
         return checked_review(output, "Claude Code")
 
-    async def execute(self, config, context, path):
+    async def execute(self, config, context, path, progress=None):
         output = await self._run(
             config, context, path, task_prompt(context), SUMMARY_SCHEMA,
-            TOOLS, "acceptEdits",
+            TOOLS, "acceptEdits", progress,
         )
         return checked_summary(output, "Claude Code")
 
-    async def _run(self, config, context, path, prompt, schema, tools, mode):
+    async def _run(self, config, context, path, prompt, schema, tools, mode, progress):
         session = str(uuid4())
         identifier = str(context.get("issue", {}).get("identifier") or "run")[:50]
         # The transcript is kept so operators can follow or resume the session; stdout
@@ -81,14 +83,31 @@ class ClaudeProvider:
             file=sys.stderr,
             flush=True,
         )
+        # stream-json reports each step while it happens; only the final "result" event
+        # is kept, and every other event becomes at most one progress line.
+        # VI: stream-json báo từng bước ngay khi diễn ra; chỉ giữ sự kiện "result" cuối,
+        # VI: các sự kiện khác thành tối đa một dòng tiến độ.
+        final = {}
+
+        def on_line(line):
+            try:
+                event = json.loads(line)
+            except ValueError:
+                return
+            if isinstance(event, dict) and event.get("type") == "result":
+                final["value"] = event
+            elif progress and (text := describe_claude_event(event, path)):
+                progress(text)
+
         # --restricted ignores user/project settings and confines file tools to the
         # checkout; --permission-prompts none denies anything acceptEdits would ask.
-        code, output = await run_process(
+        code, _ = await run_process(
             [
                 config.claude,
                 "--print",
                 "--output-format",
-                "json",
+                "stream-json",
+                "--verbose",
                 "--json-schema",
                 json.dumps(schema),
                 "--permission-mode",
@@ -107,15 +126,15 @@ class ClaudeProvider:
             path,
             config.command_timeout,
             stdin=prompt,
-            capture=True,
+            on_line=on_line,
         )
         if code:
             raise RuntimeError(
                 "Claude Code failed; local work was preserved for inspection."
             )
-        if not output or len(output) > 200000:
-            raise RuntimeError("Claude Code returned no bounded result.")
-        value = json.loads(output)
+        value = final.get("value")
+        if value is None:
+            raise RuntimeError("Claude Code returned no result.")
         if value.get("is_error") or value.get("subtype") != "success":
             raise RuntimeError("Claude Code did not finish the task.")
         return value.get("structured_output")

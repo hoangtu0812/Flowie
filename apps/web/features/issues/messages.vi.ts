@@ -195,4 +195,14 @@ export const messages = {
    '{count} files': '{count} tệp',
    'No linked pull requests. Put {identifier} in a branch name or PR title to link one.':
       'Chưa có pull request liên kết. Thêm {identifier} vào tên branch hoặc tiêu đề PR để liên kết.',
+   'Agent run': 'Agent run',
+   'Waiting for a runner': 'Đang chờ runner nhận',
+   'Running': 'Đang chạy',
+   'Awaiting review': 'Chờ review',
+   'Failed': 'Thất bại',
+   'Canceled': 'Đã hủy',
+   'Updated {value0}': 'Cập nhật {value0}',
+   'Cancel run': 'Hủy run',
+   'Pull request': 'Pull request',
+   'Could not cancel the run.': 'Không hủy được run.',
 } as const;

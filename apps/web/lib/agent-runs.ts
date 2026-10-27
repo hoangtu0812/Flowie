@@ -17,7 +17,15 @@ export type AgentRun = {
    issueTitle: string;
    state: string;
    connectionId: string;
+   connectionName?: string | null;
    createdAt: string;
+   startedAt?: string | null;
+   finishedAt?: string | null;
+   /** Latest one-line activity the runner reported, and when. */
+   /** VI: Dòng hoạt động mới nhất runner báo về và thời điểm báo. */
+   progress?: string | null;
+   progressAt?: string | null;
+   pullRequestUrl?: string | null;
 };
 export type AgentRunSummary = { state: string; count: number; averageSeconds: number | null };
 
@@ -31,8 +39,17 @@ async function request<T>(workspaceId: string, path: string, init?: RequestInit)
    return body.data;
 }
 
-export async function loadAgentRuns(workspaceId: string) {
-   return request<{ items: AgentRun[]; nextCursor: string | null }>(workspaceId, 'runs');
+export async function loadAgentRuns(
+   workspaceId: string,
+   filter: { issueId?: string; limit?: number } = {}
+) {
+   const query = new URLSearchParams();
+   if (filter.issueId) query.set('issueId', filter.issueId);
+   if (filter.limit) query.set('limit', String(filter.limit));
+   return request<{ items: AgentRun[]; nextCursor: string | null }>(
+      workspaceId,
+      query.size ? `runs?${query}` : 'runs'
+   );
 }
 export const loadRunEvidence = (workspaceId: string, runId: string) =>
    request<{ id: string; state: string; result: unknown }>(

@@ -3,6 +3,7 @@ import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Heading } from '@astryxdesign/core/Text';
 import type { Issue } from '@/mock-data/issues';
 import { BugDetails } from './bug-details';
+import { IssueAgentRun } from './issue-agent-run';
 import { ActivityFeed } from '@/components/common/issues/details/activity-feed';
 import { IssueDescription } from '@/components/common/issues/details/issue-description';
 import { IssueAttachments } from '@/components/common/issues/details/issue-attachments';
@@ -48,6 +49,7 @@ export function IssueContent({
                />
                <IssueDescription issue={issue} />
                <BugDetails key={issue.id} issue={issue} />
+               <IssueAgentRun key={issue.id} issueId={issue.id} />
                <IssuePullRequests reviews={reviews} orgId={orgId} />
                <IssueSlaPanel issue={issue} />
                <div className="flex flex-wrap items-center gap-2">
