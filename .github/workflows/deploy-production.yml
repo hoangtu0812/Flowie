@@ -13,11 +13,40 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Documentation-only pushes skip verification and deployment; a manual run
+  # always deploys.
+  # VI: Push chỉ đổi tài liệu thì bỏ qua kiểm thử và deploy; chạy thủ công
+  # VI: (workflow_dispatch) thì luôn deploy.
+  scope:
+    name: Detect deployable changes
+    runs-on: ubuntu-latest
+    outputs:
+      deploy: ${{ steps.scope.outputs.deploy }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: scope
+        shell: bash
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            echo deploy=true >> "$GITHUB_OUTPUT"
+          else
+            bash scripts/deploy-scope.sh "$BEFORE" "$GITHUB_SHA" | tee -a "$GITHUB_OUTPUT"
+          fi
+
   verify:
+    needs: scope
+    if: needs.scope.outputs.deploy == 'true'
     uses: ./.github/workflows/verify-mcp.yml
 
   deploy:
-    needs: verify
+    needs: [scope, verify]
+    if: needs.scope.outputs.deploy == 'true'
     name: Build and deploy to CT107
     runs-on: [self-hosted, flowie-production]
     # The host downloads Python wheels at a few kB/s, so a cold build can run

@@ -23,6 +23,11 @@ migrations after PostgreSQL is healthy. `api` and `worker` depend on its
 successful completion. A failed migration leaves the existing application
 containers in place and blocks the new deployment.
 
+`scripts/deploy-scope.sh` skips verification and deployment for a push that
+changes only Markdown files, `docs/`, `llms.txt`, or Unreleased changelog
+entries. A release commit adds a version heading to `CHANGELOG.md`, so it
+always deploys; run the workflow manually to redeploy without a change.
+
 ## Versioned release
 
 1. Select the next semantic version: increment patch for compatible fixes,

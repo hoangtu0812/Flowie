@@ -5,6 +5,10 @@
 - This repository has one deployed environment: **CT107 production**.
 - A push to `main` triggers `.github/workflows/deploy-production.yml`; there is
   no staging, preview, or development deployment target.
+- A push that changes only Markdown files, `docs/`, `llms.txt`, or Unreleased
+  changelog entries skips verification and deployment
+  (`scripts/deploy-scope.sh`). A release heading in `CHANGELOG.md`, any other
+  file, or a manual workflow run deploys.
 - Treat every change that reaches `main` as production-bound. Do not depend on
   a later environment to discover schema, configuration, or deployment errors.
 - Prisma is the database schema owner. The Compose `migrate` service must
