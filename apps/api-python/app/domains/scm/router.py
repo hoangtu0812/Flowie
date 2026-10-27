@@ -25,7 +25,7 @@ from .security import (
     verify_azure_basic_auth,
     verify_github_signature,
 )
-from .service import connection_row, sync_connection
+from .service import connection_row, connection_sync_lock, sync_connection
 
 
 router = APIRouter(prefix='/api/v1/scm', tags=['source-control'])
@@ -626,7 +626,10 @@ async def synchronize_connection(
 ) -> dict[str, dict[str, int]]:
     await _workspace_manager(db, workspaceId, user['id'])
     await connection_row(db, connection_id, workspaceId)
-    result = await sync_connection(db, connection_id, request.app.state.settings)
+    async with connection_sync_lock(request.app.state.session_factory, connection_id) as acquired:
+        if not acquired:
+            raise ApiError(409, 'This connection is already synchronizing. Try again in a moment.', 'Conflict')
+        result = await sync_connection(db, connection_id, request.app.state.settings)
     await _audit(db, workspaceId, user['id'], 'scm.connection.synchronized', connection_id, result)
     await db.commit()
     return {'data': result}
