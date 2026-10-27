@@ -66,6 +66,9 @@ export function readableTime(value: string): string {
 
 export function contentFor(notification: NativeNotification): string {
    const data = notification.data ?? {};
+   // Comments and updates read better as their own text, as in the Circle Inbox.
+   // VI: Bình luận và cập nhật hiển thị chính nội dung của chúng, giống Inbox Circle.
+   if (typeof data.body === 'string' && data.body.trim()) return data.body;
    if (typeof data.message === 'string') return data.message;
    if (notification.type === 'issue.reminder') return 'reminded you about this issue';
    if (typeof data.title === 'string')

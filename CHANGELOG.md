@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- Pasting a single web link into an issue description or comment turns it into a link titled with the page's title. (#28)
+  VI: Dán một link web vào mô tả hoặc bình luận issue sẽ tự đổi thành link mang tiêu đề của trang.
+
 - Agent runs that finish, fail or are canceled now send an Inbox notification to the agent connection's owner and the issue assignee. (#27)
   VI: Run của agent khi hoàn thành, thất bại hoặc bị hủy sẽ gửi thông báo Inbox cho chủ kết nối agent và người được giao issue.
 
@@ -30,6 +33,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 - The local runner resolves a configured provider binary through a PATHEXT-aware PATH lookup before starting it. On Windows npm installs Claude Code and Codex as a `.CMD` shim, which `CreateProcess` never finds from a bare name, so the documented `"claude": "claude"` configuration could not start the provider at all; a binary missing from PATH is now rejected with a clear error instead of a bare file-not-found.
 
 ### Changed
+
+- The Inbox shows comment text in each row and a header with Mark as read and Open actions in the preview, closer to the Circle layout. (#28)
+  VI: Inbox hiển thị nội dung bình luận ở từng dòng và thanh tiêu đề có thao tác Đánh dấu đã đọc và Mở trong khung xem trước, gần với bố cục Circle.
 
 - The task detail sidebar lists linked pull requests under Diffs, one line each with a colored state icon, PR number, title and an Open/Draft/Merged/Closed badge, and shows the hint for linking a PR when there is none; the main column keeps the detailed PR cards only when PRs exist. Blocked-by and related tasks moved to the sidebar and show their title even when the task was opened directly. Activity rows show their time inline, comment actions appear on hover or keyboard focus (always on touch screens), and removing a pasted image uses an icon button. No API or schema change. (#24)
   VI: Sidebar chi tiết task liệt kê pull request liên kết trong mục Diffs, mỗi PR một dòng gồm icon trạng thái có màu, số PR, tiêu đề và nhãn Open/Draft/Merged/Closed, và hiện hướng dẫn liên kết PR khi chưa có; cột chính chỉ giữ thẻ PR chi tiết khi có PR. Task bị chặn bởi và task liên quan chuyển sang sidebar và hiện tiêu đề cả khi task được mở trực tiếp. Dòng hoạt động hiện thời gian ngay sau nội dung, thao tác bình luận hiện khi rê chuột hoặc focus bàn phím (luôn hiện trên màn hình cảm ứng), và nút xoá ảnh đã dán là nút icon. Không thay đổi API hay schema.

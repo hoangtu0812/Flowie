@@ -4,9 +4,11 @@ import {
    imageMarkdown,
    imagesFromClipboard,
    insertAtCursor,
+   linkTitle,
    uploadAttachment,
    type AttachmentEntityType,
 } from '@/lib/attachments';
+import { pastedUrl, titledLink } from '@/lib/link-paste';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -46,7 +48,26 @@ export function useImagePaste({
    const onPaste = useCallback(
       (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
          const images = imagesFromClipboard(event.clipboardData);
-         if (images.length === 0) return;
+         if (images.length === 0) {
+            // A lone pasted link is inserted by the browser as usual, then
+            // swapped for a titled Markdown link once the page title arrives.
+            // VI: Link dán đơn lẻ vẫn được trình duyệt chèn như bình thường, rồi
+            // đổi thành link Markdown có tiêu đề khi lấy được tiêu đề trang.
+            const url = pastedUrl(event.clipboardData.getData('text/plain'));
+            const start = event.currentTarget.selectionStart;
+            if (url && start !== null) {
+               void linkTitle(url)
+                  .then((title) => {
+                     if (!title || currentScope.current !== scope) return;
+                     const next = titledLink(latestValue.current, start, url, title);
+                     if (next === undefined) return;
+                     latestValue.current = next;
+                     onChange(next);
+                  })
+                  .catch(() => undefined);
+            }
+            return;
+         }
          event.preventDefault();
          if (scope.busy) return;
          if (!workspaceId) {

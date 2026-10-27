@@ -34,6 +34,7 @@ from .domains.native_asks import router as asks_router
 from .domains.native_slas import router as slas_router
 from .domains.native_pulse import router as pulse_router
 from .domains.native_emojis import router as emojis_router
+from .domains.link_metadata import router as link_metadata_router
 from .domains.native_notifications import router as notifications_router
 from .domains.native_integrations import router as integrations_router
 from .domains.native_views import router as views_router
@@ -181,6 +182,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(mfa_router)
     app.include_router(pulse_router)
     app.include_router(emojis_router)
+    app.include_router(link_metadata_router)
     app.include_router(notifications_router)
     from .modules.notifications.channels import router as channels_router
     app.include_router(channels_router)
