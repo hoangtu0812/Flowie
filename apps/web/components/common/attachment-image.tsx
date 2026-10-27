@@ -4,7 +4,8 @@ import { attachmentIdFromUrl } from '@/lib/attachment-url';
 import { attachmentPreviewUrl } from '@/lib/attachments';
 import { authenticatedFetch } from '@/lib/workspaces';
 import { cn } from '@/lib/utils';
-import { useEffect, useState } from 'react';
+import { ImageViewer, type ViewerImage } from '@/components/common/image-viewer';
+import { useEffect, useRef, useState } from 'react';
 
 /**
  * Attachments are private, and the session cookie is SameSite=Lax — a bare
@@ -33,6 +34,8 @@ export function AttachmentImage({
    const target = attachmentId ? attachmentPreviewUrl(attachmentId) : src;
    const [objectUrl, setObjectUrl] = useState<string>();
    const [failed, setFailed] = useState(false);
+   const [gallery, setGallery] = useState<{ images: ViewerImage[]; index: number }>();
+   const image = useRef<HTMLImageElement>(null);
 
    useEffect(() => {
       if (!authenticated) return;
@@ -71,14 +74,45 @@ export function AttachmentImage({
       );
    }
 
+   // The gallery is every loaded image inside the nearest `[data-image-gallery]` (a task's
+   // description and comments), in page order; outside one, the image is viewed alone.
+   // VI: Bộ ảnh là mọi ảnh đã tải trong `[data-image-gallery]` gần nhất (mô tả và comment của
+   // VI: task), theo thứ tự trên trang; nằm ngoài vùng đó thì chỉ xem riêng ảnh này.
+   function openViewer() {
+      const own = image.current;
+      const nodes = own?.closest('[data-image-gallery]')?.querySelectorAll('img[data-gallery-src]');
+      const elements = nodes?.length ? Array.from(nodes as NodeListOf<HTMLImageElement>) : [own];
+      const images = elements.flatMap((element) =>
+         element ? [{ src: element.dataset.gallerySrc ?? element.src, alt: element.alt }] : []
+      );
+      setGallery({ images, index: Math.max(0, elements.indexOf(own)) });
+   }
+
    return (
-      // Blob URLs and a private API origin are both outside what next/image
-      // can optimise.
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-         src={resolved}
-         alt={alt}
-         className={cn('my-2 block max-w-full rounded-md border border-border/60', className)}
-      />
+      <>
+         <button
+            type="button"
+            className="block max-w-full cursor-zoom-in rounded-md text-left"
+            aria-label={`Open ${alt || 'image'} in viewer`}
+            onClick={openViewer}
+         >
+            {/* Blob URLs and a private API origin are both outside what next/image can optimise. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+               ref={image}
+               src={resolved}
+               alt={alt}
+               data-gallery-src={resolved}
+               className={cn('my-2 block max-w-full rounded-md border border-border/60', className)}
+            />
+         </button>
+         {gallery && (
+            <ImageViewer
+               images={gallery.images}
+               initialIndex={gallery.index}
+               onClose={() => setGallery(undefined)}
+            />
+         )}
+      </>
    );
 }
