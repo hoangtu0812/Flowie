@@ -1154,6 +1154,19 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             (await self.call("list_runs", projectId=self.project))["items"][0]["id"],
             second["id"],
         )
+        async with self.factory() as db:
+            inbox = (
+                await db.execute(
+                    text(
+                        "SELECT type,data->>'message' FROM notifications WHERE user_id=:user AND entity_id=:issue AND type LIKE 'issue.agent_run_%'"
+                    ),
+                    {"user": self.user["id"], "issue": self.issue["id"]},
+                )
+            ).all()
+        self.assertEqual(
+            inbox,
+            [("issue.agent_run_completed", "agent run finished and awaits review")],
+        )
 
     async def test_modern_sdk_transport(self):
         import httpx2
