@@ -18,7 +18,8 @@ import {
    X,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, usePathname } from 'next/navigation';
+import { isProjectPath, issueHref } from '@/lib/issue-route';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -136,6 +137,7 @@ export function IssuePeekPanel({
    onChanged?: () => void;
 }) {
    const { orgId } = useParams<{ orgId: string }>();
+   const pathname = usePathname();
    const [issue, setIssue] = useState<PeekIssue>();
    const [statuses, setStatuses] = useState<PeekOption[]>([]);
    const [members, setMembers] = useState<PeekOption[]>([]);
@@ -294,12 +296,15 @@ export function IssuePeekPanel({
       <aside className="absolute top-10 right-2 bottom-2 w-[380px] max-w-[calc(100%-1rem)] z-40 overflow-y-auto rounded-xl border bg-container shadow-lg p-4">
          <div className="flex items-start gap-2 pb-4 border-b">
             <Circle className="size-4 mt-1 shrink-0" style={{ color: issue.status.color }} />
-            <Link href={`/${orgId}/issue/${issue.identifier}`} className="min-w-0 flex-1 group">
+            <Link
+               href={issueHref(orgId, issue.identifier, isProjectPath(pathname))}
+               className="min-w-0 flex-1 group"
+            >
                <p className="text-xs text-muted-foreground">{issue.identifier}</p>
                <p className="font-medium leading-5 group-hover:text-foreground/75">{issue.title}</p>
             </Link>
             <Link
-               href={`/${orgId}/issue/${issue.identifier}`}
+               href={issueHref(orgId, issue.identifier, isProjectPath(pathname))}
                aria-label="Open issue"
                className="text-muted-foreground hover:text-foreground"
             >
