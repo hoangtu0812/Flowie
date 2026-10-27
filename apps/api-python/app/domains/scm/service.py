@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any
 
 import httpx
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ...core.config import Settings
 from ...core.errors import ApiError
@@ -301,6 +303,26 @@ async def link_detected_issues(
         ),
         {'review_id': review_id, 'repository_id': repository['id'], 'keys': keys, 'now': _utcnow()},
     )
+
+
+@asynccontextmanager
+async def connection_sync_lock(factory: async_sessionmaker[AsyncSession], connection_id: str) -> AsyncIterator[bool]:
+    # Yields whether this caller owns the connection's synchronization. sync_connection commits
+    # several times, so the transaction-scoped advisory lock lives on its own session that stays
+    # open until the block exits; closing it, or losing the process, releases the lock. Manual
+    # Sync and the periodic loop in every API process share the key, so one connection never
+    # synchronizes twice at once and no schema column is needed.
+    # VI: Trả về việc caller có giữ quyền đồng bộ connection hay không. sync_connection commit
+    # nhiều lần nên advisory lock theo transaction nằm trên một session riêng, mở đến khi thoát
+    # khối; đóng session hoặc process chết sẽ nhả lock. Sync thủ công và vòng lặp định kỳ ở mọi
+    # process API dùng chung khoá, nên một connection không bao giờ đồng bộ hai lần cùng lúc và
+    # không cần thêm cột schema.
+    async with factory() as lock_db:
+        result = await lock_db.execute(
+            text('SELECT pg_try_advisory_xact_lock(hashtextextended(:key,0))'),
+            {'key': f'scm-sync:{connection_id}'},
+        )
+        yield bool(result.scalar())
 
 
 async def sync_connection(db: AsyncSession, connection_id: str, settings: Settings) -> dict[str, int]:

@@ -14,6 +14,11 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ## Unreleased
 
+### Added
+
+- Pull requests and their task links can stay current without webhooks: set `SCM_SYNC_INTERVAL_SECONDS` (off by default, minimum 60) and the API syncs every active or failed GitHub/Azure DevOps connection once per interval, as the Sync button does. Only one sync of a connection runs at a time; pressing Sync while one is running returns "already synchronizing". Recreate the `api` service after setting it. (#26)
+  VI: Pull request và liên kết task có thể luôn cập nhật mà không cần webhook: đặt `SCM_SYNC_INTERVAL_SECONDS` (mặc định tắt, tối thiểu 60) thì API đồng bộ mỗi kết nối GitHub/Azure DevOps đang hoạt động hoặc bị lỗi một lần mỗi chu kỳ, giống nút Sync. Mỗi kết nối chỉ chạy một lượt đồng bộ tại một thời điểm; bấm Sync khi đang đồng bộ sẽ báo "already synchronizing". Tạo lại service `api` sau khi đặt biến.
+
 ### Fixed
 
 - Connecting a GitHub or Azure DevOps account in Settings → Code & reviews no longer fails with "The request could not be completed." The connection was saved but its response could not be encoded; an account added before this fix already exists and appears after reloading the page. (#25)

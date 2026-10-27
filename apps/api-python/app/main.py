@@ -53,6 +53,7 @@ from .jobs.dispatcher import dispatcher_loop
 from .domains.scm.router import router as scm_router
 from .domains.scm.router import webhook_router as scm_webhook_router
 from .jobs.scm_deliveries import scm_delivery_loop
+from .jobs.scm_sync import scm_sync_loop
 from .domains.reviews import router as reviews_router
 from .modules.mcp.api import router as mcp_management_router
 from .modules.notifications.outbox import outbox_loop
@@ -97,6 +98,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         dispatch_task = tracked('team-dispatcher',dispatcher_loop(session_factory, dispatch_stop),dispatch_stop)
         scm_stop = asyncio.Event()
         scm_task = tracked('scm-delivery',scm_delivery_loop(session_factory, runtime, scm_stop),scm_stop)
+        scm_sync_task = tracked('scm-sync',scm_sync_loop(session_factory, runtime, scm_stop),scm_stop) if runtime.scm_sync_interval_seconds > 0 else None
         try:
             yield
         finally:
@@ -106,7 +108,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             digest_stop.set()
             dispatch_stop.set()
             scm_stop.set()
-            await asyncio.gather(*[task for task in [reminder_task,digest_task,dispatch_task,scm_task,outbox_task,channel_task,maintenance_task,agent_runs_task,bulk_task,import_task,recurring_task,sla_task] if task],return_exceptions=True)
+            await asyncio.gather(*[task for task in [reminder_task,digest_task,dispatch_task,scm_task,scm_sync_task,outbox_task,channel_task,maintenance_task,agent_runs_task,bulk_task,import_task,recurring_task,sla_task] if task],return_exceptions=True)
             await mcp_stack.aclose()
             await engine.dispose()
 
