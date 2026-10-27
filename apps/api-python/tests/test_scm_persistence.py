@@ -223,6 +223,32 @@ class ScmPersistenceIntegrationTests(unittest.TestCase):
                             issueId=issue_id,
                         )
                         self.assertEqual(by_issue['meta']['total'], expected)
+                    detected = ProviderReview(
+                        externalReviewId='43',
+                        number=43,
+                        title='Detected link test',
+                        state='OPEN',
+                        externalAuthorId='author-1',
+                        sourceRef='feat/scm-2-detected',
+                        targetRef='main',
+                        headRevision='def456',
+                        latestRevisionKey='def456',
+                        remoteUrl='https://example.invalid/reviews/43',
+                        externalCreatedAt=datetime.now(timezone.utc),
+                        externalUpdatedAt=datetime.now(timezone.utc),
+                    )
+                    detected_id = await upsert_review(db, repository, detected)
+                    await upsert_review(db, repository, detected)
+                    links = (
+                        await db.execute(
+                            text(
+                                '''SELECT issue_id, source::text FROM code_review_issue_links
+                                   WHERE code_review_id = :review'''
+                            ),
+                            {'review': detected_id},
+                        )
+                    ).all()
+                    self.assertEqual([tuple(link) for link in links], [(other_issue, 'DETECTED')])
                     review.reviewers = []
                     second_id = await upsert_review(db, repository, review)
                     self.assertEqual(review_id, second_id)

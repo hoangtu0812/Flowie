@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from datetime import timezone
 
 from sqlalchemy import text
@@ -8,6 +9,10 @@ from ...core.errors import ApiError
 from ...core.clock import _utcnow
 from .pagination import CursorCodec, literal_search
 from .policy import AccessPolicy
+
+
+IMAGE_TYPES = frozenset({"image/png", "image/jpeg", "image/gif", "image/webp"})
+IMAGE_LIMIT = 5 * 1048576
 
 
 class QueryService:
@@ -58,9 +63,11 @@ class QueryService:
 
         return BUG_TEMPLATE
 
-    async def attachment(self, payload) -> dict:
-        from ...storage.minio import MinioStorage
+    async def _authorized_attachment(self, attachment_id: str):
+        """Loads an attachment only after the connection may read the record it belongs to.
 
+        VI: Chỉ tải tệp đính kèm sau khi connection có quyền đọc bản ghi chứa nó.
+        """
         row = (
             (
                 await self.db.execute(
@@ -68,7 +75,7 @@ class QueryService:
                         "SELECT * FROM attachments WHERE id=:id AND workspace_id=:workspace"
                     ),
                     {
-                        "id": payload.attachmentId,
+                        "id": attachment_id,
                         "workspace": self.principal.workspace_id,
                     },
                 )
@@ -92,9 +99,15 @@ class QueryService:
         else:
             raise ApiError(
                 415,
-                "This attachment target is not supported by the text reader.",
+                "This attachment target is not supported.",
                 "Unsupported Media Type",
             )
+        return row
+
+    async def attachment(self, payload) -> dict:
+        from ...storage.minio import MinioStorage
+
+        row = await self._authorized_attachment(payload.attachmentId)
         mime = row["mime_type"].split(";", 1)[0].lower()
         suffix = row["filename"].rsplit(".", 1)[-1].lower()
         if not (
@@ -132,6 +145,38 @@ class QueryService:
             "text": content[payload.offset : end],
             "nextOffset": end if end < len(content) else None,
             "truncated": end < len(content),
+        }
+
+    async def attachment_image(self, payload) -> dict:
+        """Returns an image attachment as base64 so the transport can send it as MCP image content.
+
+        Only formats that vision models accept are served, and the 5 MiB cap is checked on the
+        stored size and again on the downloaded bytes, matching the text reader's two checks.
+        VI: Trả ảnh đính kèm dạng base64 để transport gửi thành nội dung ảnh MCP. Chỉ phục vụ
+        VI: định dạng mà model thị giác nhận, và giới hạn 5 MiB được kiểm tra trên kích thước
+        VI: đã lưu lẫn số byte tải về, giống hai lần kiểm tra của bộ đọc text.
+        """
+        from ...storage.minio import MinioStorage
+
+        row = await self._authorized_attachment(payload.attachmentId)
+        mime = row["mime_type"].split(";", 1)[0].lower()
+        if mime not in IMAGE_TYPES:
+            raise ApiError(
+                415,
+                "Only PNG, JPEG, GIF and WebP image attachments are supported.",
+                "Unsupported Media Type",
+            )
+        if row["size"] > IMAGE_LIMIT:
+            raise ApiError(413, "Image attachments must be at most 5 MiB.", "Payload Too Large")
+        body = await MinioStorage(self.settings).get(row["object_key"])
+        if len(body) > IMAGE_LIMIT:
+            raise ApiError(413, "Image attachments must be at most 5 MiB.", "Payload Too Large")
+        return {
+            "attachmentId": row["id"],
+            "filename": row["filename"],
+            "mimeType": mime,
+            "size": len(body),
+            "imageBase64": base64.b64encode(body).decode("ascii"),
         }
 
     async def projects(self, payload) -> dict:

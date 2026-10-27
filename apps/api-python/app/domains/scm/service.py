@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -245,7 +246,61 @@ async def upsert_review(db: AsyncSession, repository: Any, review: ProviderRevie
                 'now': now,
             },
         )
+    await link_detected_issues(db, repository, review_id, review)
     return review_id
+
+
+# Issue keys such as DTD-6 in any case: branch names are usually lower-case (feat/dtd-6-ui).
+# VI: Mã issue như DTD-6 ở mọi kiểu chữ: tên branch thường viết thường (feat/dtd-6-ui).
+ISSUE_KEY = re.compile(r'(?<![A-Za-z0-9])([A-Za-z][A-Za-z0-9]{0,9})-(\d{1,7})(?![0-9])')
+
+
+def detected_issue_keys(review: ProviderReview) -> list[str]:
+    """Returns upper-cased issue keys named in the branch, title or description of a review.
+
+    VI: Trả về các mã issue (viết hoa) xuất hiện trong branch, tiêu đề hoặc mô tả của review.
+    """
+    haystack = ' '.join(filter(None, [review.sourceRef, review.title, review.description]))
+    return sorted({f'{prefix.upper()}-{number}' for prefix, number in ISSUE_KEY.findall(haystack)})
+
+
+async def link_detected_issues(
+    db: AsyncSession, repository: Any, review_id: str, review: ProviderReview
+) -> None:
+    """Links a review to issues its branch, title or description names, as DETECTED links.
+
+    Only issues of the repository's mapped team are linked, the same rule a manual link must
+    pass. Links are only added: a provider edit that drops a key keeps the link, and the
+    connection creator is recorded as the link author because no Flowie user acted.
+    shortcut: a manually removed detected link returns on the next sync of that review; add an
+    exclusion record if people start unlinking detected links.
+    VI: Liên kết review với các issue được nêu trong branch, tiêu đề hoặc mô tả, dạng DETECTED.
+    VI: Chỉ liên kết issue thuộc team được gán cho repository, cùng quy tắc với liên kết thủ
+    VI: công. Liên kết chỉ được thêm: provider sửa bỏ mã thì liên kết vẫn giữ, và người tạo
+    VI: connection được ghi là tác giả vì không có người dùng Flowie nào thao tác.
+    VI: Liên kết tự nhận diện bị gỡ thủ công sẽ quay lại ở lần đồng bộ review đó kế tiếp.
+    """
+    keys = detected_issue_keys(review)
+    if not keys:
+        return
+    await db.execute(
+        text(
+            '''INSERT INTO code_review_issue_links (
+                   workspace_id, code_review_id, issue_id, source, created_by_id, created_at
+               )
+               SELECT issue.workspace_id, :review_id, issue.id, 'DETECTED',
+                      connection.created_by_id, :now
+               FROM scm_repositories repository
+               JOIN scm_connections connection ON connection.id = repository.connection_id
+               JOIN issues issue ON issue.workspace_id = repository.workspace_id
+                                AND issue.team_id = repository.team_id
+               WHERE repository.id = :repository_id
+                 AND issue.archived_at IS NULL
+                 AND upper(issue.identifier) = ANY(:keys)
+               ON CONFLICT (code_review_id, issue_id) DO NOTHING'''
+        ),
+        {'review_id': review_id, 'repository_id': repository['id'], 'keys': keys, 'now': _utcnow()},
+    )
 
 
 async def sync_connection(db: AsyncSession, connection_id: str, settings: Settings) -> dict[str, int]:

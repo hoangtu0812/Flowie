@@ -39,7 +39,7 @@ export function IssueContent({
                <MobileIssueProperties issue={issue} detail={detail} allScreens={compact} />
                <IssueDescription issue={issue} />
                <BugDetails key={issue.id} issue={issue} />
-               <IssuePullRequests issueId={issue.id} orgId={orgId} />
+               <IssuePullRequests issueId={issue.id} identifier={issue.identifier} orgId={orgId} />
                <IssueSlaPanel issue={issue} />
                <div className="flex flex-wrap items-center gap-2">
                   <IssueReactions issueId={issue.id} />

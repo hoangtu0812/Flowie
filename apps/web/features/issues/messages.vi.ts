@@ -190,4 +190,6 @@ export const messages = {
    'Open on GitHub': 'Mở trên GitHub',
    'Open on Azure DevOps': 'Mở trên Azure DevOps',
    '{count} files': '{count} tệp',
+   'No linked pull requests. Put {identifier} in a branch name or PR title to link one.':
+      'Chưa có pull request liên kết. Thêm {identifier} vào tên branch hoặc tiêu đề PR để liên kết.',
 } as const;
