@@ -134,7 +134,36 @@ async def execute(
     async def work():
         workspace = await repo.worktree(run["id"])
         workspaces.append(workspace)
-        summary = await provider.execute(config, context, workspace.path)
+        # Review comes first: a read-only pass writes the plan and target end date
+        # to the issue, and only then does the provider edit code with that plan.
+        # The version is read after the review because any issue update bumps it; a
+        # concurrent edit still fails the update and stops the run before any edit.
+        # VI: Review chạy trước: một lượt chỉ đọc ghi kế hoạch và ngày kết thúc dự
+        # VI: kiến vào issue, sau đó provider mới sửa code theo kế hoạch đó. Version
+        # VI: được đọc sau review vì mọi cập nhật issue đều tăng nó; sửa đồng thời
+        # VI: vẫn làm update thất bại và dừng run trước khi sửa code.
+        review = await provider.review(config, context, workspace.path)
+        current = await client.call("get_issue", {"issueId": issue_id})
+        await client.call(
+            "update_issue",
+            {
+                "issueId": issue_id,
+                "expectedVersion": current["version"],
+                "targetDate": review["targetDate"],
+                "idempotencyKey": key(),
+            },
+        )
+        await client.call(
+            "add_comment",
+            {
+                "issueId": issue_id,
+                "content": f"Plan before implementation (target end date {review['targetDate']}):\n\n{review['plan']}",
+                "idempotencyKey": key(),
+            },
+        )
+        summary = await provider.execute(
+            config, {**context, "plan": review["plan"]}, workspace.path
+        )
         for index, command in enumerate(config.tests):
             evidence = await run_approved_test(
                 f"approved-local-test-{index + 1}",

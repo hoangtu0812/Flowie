@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+from datetime import date, timedelta
 import inspect
 from contextlib import asynccontextmanager
 from dataclasses import replace
@@ -19,6 +20,7 @@ from flowie_runner.config import RunnerConfig
 from flowie_runner.codex import CodexProvider
 from flowie_runner.orchestrator import LOG_TAIL, execute, log_tail, prepare
 from flowie_runner.process import child_environment, resolve_executable, run_process
+from flowie_runner.prompt import checked_review
 from flowie_runner.repository import Repository
 
 
@@ -92,12 +94,26 @@ def changelog_editor(seen):
     return edit
 
 
+REVIEW = {"plan": "Fixture plan.", "targetDate": date.today().isoformat()}
+
+
+def runner_provider():
+    provider = AsyncMock()
+    provider.review.return_value = REVIEW
+    return provider
+
+
 def client_fixture(repository_url):
     client = AsyncMock()
 
     async def call(name, args):
         if name == "get_issue":
-            return {"id": "issue", "projectId": "project", "title": "Fixture"}
+            return {
+                "id": "issue",
+                "projectId": "project",
+                "title": "Fixture",
+                "version": 3,
+            }
         if name == "get_project_repositories":
             return {
                 "items": [
@@ -165,7 +181,7 @@ def test_pending_lists_only_runs_assigned_to_this_connection(tmp_path):
 def test_failed_run_keeps_its_worktree_and_leaves_the_checkout_clean(tmp_path):
     config = fixture_repository(tmp_path)
     client = client_fixture(config.repository_url)
-    provider, seen = AsyncMock(), {}
+    provider, seen = runner_provider(), {}
 
     async def fail(config_, context, path):
         seen["path"] = Path(path)
@@ -194,7 +210,7 @@ def test_failed_run_keeps_its_worktree_and_leaves_the_checkout_clean(tmp_path):
 def test_failed_run_without_changes_leaves_no_worktree_behind(tmp_path):
     config = fixture_repository(tmp_path)
     client = client_fixture(config.repository_url)
-    provider, seen = AsyncMock(), {}
+    provider, seen = runner_provider(), {}
 
     async def fail(config_, context, path):
         seen["path"] = Path(path)
@@ -209,7 +225,7 @@ def test_failed_run_without_changes_leaves_no_worktree_behind(tmp_path):
 
 def test_runner_records_executed_tests_and_never_auto_publishes(tmp_path):
     config = fixture_repository(tmp_path)
-    client, provider, seen = client_fixture(config.repository_url), AsyncMock(), {}
+    client, provider, seen = client_fixture(config.repository_url), runner_provider(), {}
     provider.execute.side_effect = changelog_editor(seen)
     result = asyncio.run(execute(client, config, "issue", provider))
     assert result["state"] == "AWAITING_REVIEW" and result["pullRequestUrl"] is None
@@ -240,7 +256,7 @@ def test_each_run_starts_from_the_current_origin_base(tmp_path):
     config = fixture_repository(tmp_path)
     stale = git_in(config.repository_path, "rev-parse", "main")
     moved = push_base_commit(tmp_path)
-    client, provider, seen = client_fixture(config.repository_url), AsyncMock(), {}
+    client, provider, seen = client_fixture(config.repository_url), runner_provider(), {}
     provider.execute.side_effect = changelog_editor(seen)
     result = asyncio.run(execute(client, config, "issue", provider))
     # The run branches from the freshly fetched origin base, not the stale local ref.
@@ -260,7 +276,7 @@ def test_failing_approved_test_records_its_output_and_exit_code(tmp_path):
             ),
         ),
     )
-    client, provider, seen = client_fixture(config.repository_url), AsyncMock(), {}
+    client, provider, seen = client_fixture(config.repository_url), runner_provider(), {}
     provider.execute.side_effect = changelog_editor(seen)
     with pytest.raises(RuntimeError):
         asyncio.run(execute(client, config, "issue", provider))
@@ -282,7 +298,7 @@ def test_timed_out_approved_test_is_recorded_as_a_failure(tmp_path):
         tests=((sys.executable, "-c", "import time; time.sleep(30)"),),
         command_timeout=1,
     )
-    client, provider, seen = client_fixture(config.repository_url), AsyncMock(), {}
+    client, provider, seen = client_fixture(config.repository_url), runner_provider(), {}
     provider.execute.side_effect = changelog_editor(seen)
     with pytest.raises(RuntimeError):
         asyncio.run(execute(client, config, "issue", provider))
@@ -329,11 +345,12 @@ def test_providers_accept_the_run_worktree_path():
     # The orchestrator hands every provider the run's worktree instead of the shared
     # checkout; the adapter tests that exercise this end to end need a POSIX shell.
     for provider in (ClaudeProvider(), CodexProvider()):
-        assert list(inspect.signature(provider.execute).parameters) == [
-            "config",
-            "context",
-            "path",
-        ]
+        for method in (provider.review, provider.execute):
+            assert list(inspect.signature(method).parameters) == [
+                "config",
+                "context",
+                "path",
+            ]
 
 
 def test_worktree_root_must_sit_outside_the_checkout(tmp_path):
@@ -346,7 +363,7 @@ def test_worktree_root_must_sit_outside_the_checkout(tmp_path):
 
 def test_lease_loss_cancels_the_provider(tmp_path):
     config = fixture_repository(tmp_path)
-    client, provider = client_fixture(config.repository_url), AsyncMock()
+    client, provider = client_fixture(config.repository_url), runner_provider()
     original = client.call.side_effect
 
     async def revoked(name, args):
@@ -520,3 +537,80 @@ def test_runner_config_selects_provider(tmp_path):
     absolute = tmp_path / "runs"
     path.write_text(json.dumps({**value, "worktreeRoot": str(absolute)}))
     assert RunnerConfig.load(path).worktree_root == absolute.resolve()
+
+
+def test_review_records_plan_and_end_date_before_implementation(tmp_path):
+    config = fixture_repository(tmp_path)
+    client, provider, seen = client_fixture(config.repository_url), runner_provider(), {}
+    edit = changelog_editor(seen)
+
+    async def implement(config, context, path):
+        seen["plan"] = context["plan"]
+        seen["calls"] = [call.args[0] for call in client.call.call_args_list]
+        return await edit(config, context, path)
+
+    provider.execute.side_effect = implement
+    asyncio.run(execute(client, config, "issue", provider))
+    calls = {call.args[0]: call.args[1] for call in client.call.call_args_list}
+    assert seen["plan"] == "Fixture plan."
+    assert {"update_issue", "add_comment"} <= set(seen["calls"])
+    update = calls["update_issue"]
+    assert (update["expectedVersion"], update["targetDate"]) == (3, REVIEW["targetDate"])
+    assert "Fixture plan." in calls["add_comment"]["content"]
+
+
+def test_rejected_review_stops_the_run_before_any_edit(tmp_path):
+    config = fixture_repository(tmp_path)
+    client, provider = client_fixture(config.repository_url), runner_provider()
+    provider.review.side_effect = RuntimeError("invalid target end date")
+    with pytest.raises(RuntimeError):
+        asyncio.run(execute(client, config, "issue", provider))
+    provider.execute.assert_not_called()
+    names = [call.args[0] for call in client.call.call_args_list]
+    assert "update_issue" not in names and "add_comment" not in names
+
+
+def test_checked_review_requires_plan_and_near_future_date():
+    today = date(2026, 10, 27)
+    assert checked_review(
+        {"plan": "Do it.", "targetDate": "2026-10-30"}, "Fixture", today
+    ) == {"plan": "Do it.", "targetDate": "2026-10-30"}
+    for value in (
+        {"plan": "Do it.", "targetDate": "2026-10-26"},
+        {"plan": "Do it.", "targetDate": (today + timedelta(days=366)).isoformat()},
+        {"plan": "Do it.", "targetDate": "next week"},
+        {"plan": "", "targetDate": "2026-10-30"},
+        None,
+    ):
+        with pytest.raises(RuntimeError):
+            checked_review(value, "Fixture", today)
+
+
+def test_review_runs_providers_without_write_access(tmp_path):
+    config = fixture_repository(tmp_path)
+    result = json.dumps(
+        {
+            "type": "result",
+            "subtype": "success",
+            "is_error": False,
+            "structured_output": REVIEW,
+        }
+    )
+    with patch(
+        "flowie_runner.claude.run_process", new=AsyncMock(return_value=(0, result))
+    ) as claude:
+        assert asyncio.run(ClaudeProvider().review(config, {}, tmp_path)) == REVIEW
+    args = claude.call_args.args[0]
+    assert args[args.index("--tools") + 1] == "Read,Glob,Grep"
+    assert args[args.index("--permission-mode") + 1] == "default"
+
+    async def codex(command, *rest, **options):
+        Path(command[command.index("--output-last-message") + 1]).write_text(
+            json.dumps(REVIEW)
+        )
+        return 0, ""
+
+    with patch("flowie_runner.codex.run_process", new=AsyncMock(side_effect=codex)) as run:
+        assert asyncio.run(CodexProvider().review(config, {}, tmp_path)) == REVIEW
+    command = run.call_args.args[0]
+    assert command[command.index("--sandbox") + 1] == "read-only"

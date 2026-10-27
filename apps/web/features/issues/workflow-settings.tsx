@@ -11,6 +11,7 @@ import { Heading, Text } from '@astryxdesign/core/Text';
 import { List, ListItem } from '@astryxdesign/core/List';
 import { TextInput } from '@astryxdesign/core/TextInput';
 import { Selector } from '@astryxdesign/core/Selector';
+import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
 import { DesignSurface } from '@/components/common/design-surface';
 import { authenticatedFetch, loadCurrentWorkspaceMembership } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
@@ -24,9 +25,16 @@ type WorkflowStatus = {
    issueCount: number;
    updatedAt: string;
    teamId: string | null;
+   requiredBeforeStart: boolean;
 };
 const categories = ['TRIAGE', 'BACKLOG', 'UNSTARTED', 'STARTED', 'COMPLETED', 'CANCELED'];
-const blank = { name: '', category: 'UNSTARTED', color: '#99a2b2', position: 0 };
+const blank = {
+   name: '',
+   category: 'UNSTARTED',
+   color: '#99a2b2',
+   position: 0,
+   requiredBeforeStart: false,
+};
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 export default function WorkflowSettings() {
@@ -144,11 +152,13 @@ export default function WorkflowSettings() {
                      <ListItem
                         key={row.id}
                         label={row.name}
-                        description={tx('{value0} · {value1} · {value2} issues', {
-                           value0: enumLabel(row.category),
-                           value1: row.teamId ? 'Team' : 'Workspace',
-                           value2: row.issueCount,
-                        })}
+                        description={
+                           tx('{value0} · {value1} · {value2} issues', {
+                              value0: enumLabel(row.category),
+                              value1: row.teamId ? 'Team' : 'Workspace',
+                              value2: row.issueCount,
+                           }) + (row.requiredBeforeStart ? ` · ${tx('Required before start')}` : '')
+                        }
                         endContent={
                            canEdit ? (
                               <Button
@@ -185,7 +195,15 @@ export default function WorkflowSettings() {
                      label={tx('Workflow category')}
                      value={draft.category}
                      options={categories.map((value) => ({ value, label: enumLabel(value) }))}
-                     onChange={(category) => setDraft({ ...draft, category })}
+                     onChange={(category) =>
+                        setDraft({
+                           ...draft,
+                           category,
+                           requiredBeforeStart:
+                              draft.requiredBeforeStart &&
+                              ['TRIAGE', 'BACKLOG', 'UNSTARTED'].includes(category),
+                        })
+                     }
                   />
                   <TextInput
                      label={tx('Status color')}
@@ -193,6 +211,18 @@ export default function WorkflowSettings() {
                      onChange={(color) => setDraft({ ...draft, color })}
                      description={tx('Hex color, for example #99a2b2')}
                   />
+                  {['TRIAGE', 'BACKLOG', 'UNSTARTED'].includes(draft.category) && (
+                     <CheckboxInput
+                        label={tx('Required before start')}
+                        description={tx(
+                           'Issues must be in this status with a target end date before moving to a Started status.'
+                        )}
+                        value={draft.requiredBeforeStart}
+                        onChange={(requiredBeforeStart) =>
+                           setDraft({ ...draft, requiredBeforeStart })
+                        }
+                     />
+                  )}
                   <HStack gap={3} wrap="wrap">
                      <Button
                         label={tx('Save status')}

@@ -301,13 +301,13 @@ model AccountSecurityEvent {
 }
 
 model AccountMfa {
-  userId          String    @id @map("user_id")
-  secretCipher    String    @map("secret_cipher")
-  enabledAt       DateTime? @map("enabled_at")
-  pendingUntil    DateTime? @map("pending_until")
-  lastCounter     BigInt?   @map("last_counter")
-  recoveryHashes  Json      @default("[]") @map("recovery_hashes")
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String    @id @map("user_id")
+  secretCipher   String    @map("secret_cipher")
+  enabledAt      DateTime? @map("enabled_at")
+  pendingUntil   DateTime? @map("pending_until")
+  lastCounter    BigInt?   @map("last_counter")
+  recoveryHashes Json      @default("[]") @map("recovery_hashes")
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("account_mfa")
 }
@@ -1578,16 +1578,21 @@ model TeamMember {
 }
 
 model IssueStatus {
-  id          String              @id @default(cuid())
-  workspaceId String              @map("workspace_id")
-  teamId      String?             @map("team_id")
-  name        String
-  category    IssueStatusCategory
-  color       String
-  icon        String?
-  position    Int                 @default(0)
-  createdAt   DateTime            @default(now()) @map("created_at")
-  updatedAt   DateTime            @updatedAt @map("updated_at")
+  id                  String              @id @default(cuid())
+  workspaceId         String              @map("workspace_id")
+  teamId              String?             @map("team_id")
+  name                String
+  category            IssueStatusCategory
+  color               String
+  icon                String?
+  position            Int                 @default(0)
+  // When any status in an issue's scope sets this, the issue must sit in one of
+  // those statuses with a target end date before it enters a STARTED status.
+  // VI: Khi có status trong phạm vi issue bật cờ này, issue phải nằm ở một status
+  // VI: như vậy và có ngày kết thúc dự kiến trước khi vào status nhóm STARTED.
+  requiredBeforeStart Boolean             @default(false) @map("required_before_start")
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   issues    Issue[]

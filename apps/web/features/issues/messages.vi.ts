@@ -74,6 +74,9 @@ export const messages = {
    'Workflow category': 'Nhóm trạng thái',
    'Status color': 'Màu trạng thái',
    'Hex color, for example #99a2b2': 'Mã màu hex, ví dụ #99a2b2',
+   'Required before start': 'Bắt buộc trước khi làm',
+   'Issues must be in this status with a target end date before moving to a Started status.':
+      'Issue phải ở trạng thái này và có ngày kết thúc dự kiến trước khi chuyển sang nhóm Đang thực hiện.',
    'Save status': 'Lưu trạng thái',
    'Cancel editing': 'Hủy chỉnh sửa',
    'Delete status': 'Xóa trạng thái',

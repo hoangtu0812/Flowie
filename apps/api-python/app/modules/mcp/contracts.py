@@ -148,6 +148,7 @@ class UpdateIssueTool(VersionInput, IssueInput, BugUpdateFields):
     projectId: str | None = None
     assigneeId: str | None = None
     priority: Literal["NONE", "LOW", "MEDIUM", "HIGH", "URGENT"] | None = None
+    targetDate: str | None = None
     dueDate: str | None = None
     labelIds: list[str] | None = Field(default=None, max_length=100)
 

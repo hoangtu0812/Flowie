@@ -18,6 +18,7 @@ from ...services.notification_events import (
     team_recipient_ids,
 )
 from .issue_rules import (
+    _enforce_start_gate,
     _validate_references,
     _validate_schedule_dates,
     _validate_release_ids,
@@ -43,6 +44,10 @@ async def create_issue(
     )
     _validate_schedule_dates(
         _date(values.get("startDate")), _date(values.get("targetDate"))
+    )
+    await _enforce_start_gate(
+        db, payload.workspaceId, payload.teamId, None, category,
+        _date(values.get("targetDate")),
     )
     explicit_due = bool(values.get("dueDate"))
     sla_policy = (
@@ -225,6 +230,10 @@ async def update_issue(
     )
     category = await _validate_references(
         db, workspaceId, issue["teamId"], values, creating=False
+    )
+    await _enforce_start_gate(
+        db, workspaceId, issue["teamId"], previous_status_id, category,
+        _date(values["targetDate"]) if "targetDate" in values else issue.get("targetDate"),
     )
     if "releaseIds" in values:
         values["releaseIds"] = await _validate_release_ids(
