@@ -1,16 +1,23 @@
 'use client';
 
+import { attachmentIdFromUrl } from '@/lib/attachment-url';
+import { attachmentPreviewUrl } from '@/lib/attachments';
 import { authenticatedFetch } from '@/lib/workspaces';
 import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
-
-const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 /**
  * Attachments are private, and the session cookie is SameSite=Lax — a bare
  * `<img src>` at the API origin would arrive unauthenticated. Fetching the
  * bytes through the same helper the rest of the app uses keeps embedded
- * screenshots working whether or not the API shares the web origin.
+ * screenshots working whether or not the API shares the web origin. Stored
+ * links may name an older host or base path, so the bytes always come from the
+ * current API by attachment id.
+ * VI: Đính kèm là riêng tư và cookie phiên là SameSite=Lax — `<img src>` trần
+ * tới origin API sẽ không kèm đăng nhập. Tải ảnh qua cùng helper với phần còn
+ * lại của app giúp ảnh nhúng hiển thị dù API có chung origin với web hay
+ * không. Link đã lưu có thể mang host hoặc base path cũ, nên ảnh luôn được tải
+ * từ API hiện tại theo id đính kèm.
  */
 export function AttachmentImage({
    src,
@@ -21,7 +28,9 @@ export function AttachmentImage({
    alt: string;
    className?: string;
 }) {
-   const authenticated = src.startsWith(`${api}/attachments/`);
+   const attachmentId = attachmentIdFromUrl(src);
+   const authenticated = attachmentId !== undefined;
+   const target = attachmentId ? attachmentPreviewUrl(attachmentId) : src;
    const [objectUrl, setObjectUrl] = useState<string>();
    const [failed, setFailed] = useState(false);
 
@@ -32,7 +41,7 @@ export function AttachmentImage({
       setFailed(false);
       void (async () => {
          try {
-            const response = await authenticatedFetch(src);
+            const response = await authenticatedFetch(target);
             if (!response.ok) throw new Error('Could not load the image.');
             url = URL.createObjectURL(await response.blob());
             if (revoked) {
@@ -49,7 +58,7 @@ export function AttachmentImage({
          if (url) URL.revokeObjectURL(url);
          setObjectUrl(undefined);
       };
-   }, [authenticated, src]);
+   }, [authenticated, target]);
 
    if (failed) {
       return <span className="text-xs text-muted-foreground">{alt} — image unavailable</span>;
