@@ -45,7 +45,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
-- A project's Issues tab follows the same list/board choice as All issues and has the Display menu (layout, grouping, ordering, properties); board mode no longer shows the list's column header. (DTD-17)
+- A project's Issues tab follows the same list/board choice as All issues and has the Display menu (layout, grouping, ordering, properties); board mode no longer shows the list's column header. (DTD-17, #40)
   VI: Tab Issues của dự án dùng chung lựa chọn list/board với All issues và có menu Display (bố cục, nhóm, sắp xếp, thuộc tính); dạng board không còn thanh tiêu đề cột của list. (DTD-17)
 
 - Work an MCP agent does with your token (comments, status changes, mentions) now reaches your own Inbox, labelled with the agent's name, for example "Pham Hoang Tu · flowie-mcp-desktop". Actions you take yourself still do not notify you. (#37)
@@ -73,7 +73,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Changed
 
-- Settings navigation is regrouped as Account, Workspace, Issues, Projects, Features, and AI & integrations; Project properties and AI operations are now listed, and the settings header shows "Settings › group › page". (DTD-18)
+- Settings navigation is regrouped as Account, Workspace, Issues, Projects, Features, and AI & integrations; Project properties and AI operations are now listed, and the settings header shows "Settings › group › page". (DTD-18, #40)
   VI: Điều hướng Settings được gom lại thành Tài khoản, Workspace, Issues, Projects, Tính năng, và AI & tích hợp; Project properties và Vận hành AI giờ có trong danh sách, và header settings hiển thị "Settings › nhóm › trang". (DTD-18)
 
 - The Inbox shows comment text in each row and a header with Mark as read and Open actions in the preview, closer to the Circle layout. (#28)
