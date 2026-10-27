@@ -4,6 +4,7 @@ import { useMessages } from '@/features/shared/use-messages';
 import { messages } from '@/features/issues/messages.vi';
 
 import { useRef, useState } from 'react';
+import { History, Paperclip, Pencil, Reply, Trash2 } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
@@ -70,6 +71,72 @@ export function CommentRow({
                {relativeTime(comment.createdAt, Date.now(), locale)}
                {comment.version > 1 ? tx(' · edited') : ''}
             </Text>
+            <HStack gap={0.5} className="ml-auto text-muted-foreground">
+               {!comment.parentCommentId && (
+                  <Button
+                     label={tx('Reply')}
+                     tooltip={tx('Reply')}
+                     icon={<Reply className="size-4" />}
+                     isIconOnly
+                     size="sm"
+                     variant="ghost"
+                     onClick={onReply}
+                  />
+               )}
+               {own && (
+                  <>
+                     <Button
+                        label={tx('Edit comment')}
+                        tooltip={tx('Edit comment')}
+                        icon={<Pencil className="size-4" />}
+                        isIconOnly
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                           setDraft(comment.content);
+                           setEditing(true);
+                        }}
+                     />
+                     <Button
+                        label={tx('Delete comment')}
+                        tooltip={tx('Delete comment')}
+                        icon={<Trash2 className="size-4" />}
+                        isIconOnly
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setConfirmDelete(true)}
+                     />
+                  </>
+               )}
+               <Button
+                  label={history ? tx('Hide comment history') : tx('Comment history')}
+                  tooltip={history ? tx('Hide comment history') : tx('Comment history')}
+                  icon={<History className="size-4" />}
+                  isIconOnly
+                  aria-pressed={Boolean(history)}
+                  size="sm"
+                  variant="ghost"
+                  clickAction={() =>
+                     action(async () => {
+                        setHistory(
+                           history ? undefined : await commentHistory(workspaceId, comment.id)
+                        );
+                     })
+                  }
+               />
+               {own && (
+                  <Button
+                     label={tx('Attach to comment')}
+                     tooltip={tx('Attach to comment')}
+                     icon={<Paperclip className="size-4" />}
+                     isIconOnly
+                     size="sm"
+                     variant="ghost"
+                     isLoading={uploading}
+                     onClick={() => picker.current?.click()}
+                  />
+               )}
+            </HStack>
          </HStack>
          {editing ? (
             <>
@@ -77,6 +144,8 @@ export function CommentRow({
                <HStack gap={2}>
                   <Button
                      label={tx('Save comment')}
+                     variant="primary"
+                     size="sm"
                      isDisabled={!draft.trim()}
                      clickAction={() =>
                         action(async () => {
@@ -85,57 +154,17 @@ export function CommentRow({
                         })
                      }
                   />
-                  <Button label={tx('Cancel comment editing')} onClick={() => setEditing(false)} />
+                  <Button
+                     label={tx('Cancel comment editing')}
+                     variant="ghost"
+                     size="sm"
+                     onClick={() => setEditing(false)}
+                  />
                </HStack>
             </>
          ) : (
             <MarkdownPreview content={comment.content} appearance="issue" />
          )}
-         <HStack gap={1} wrap="wrap" className="text-muted-foreground">
-            {!comment.parentCommentId && (
-               <Button label={tx('Reply')} size="sm" variant="ghost" onClick={onReply} />
-            )}
-            {own && (
-               <>
-                  <Button
-                     label={tx('Edit comment')}
-                     size="sm"
-                     variant="ghost"
-                     onClick={() => {
-                        setDraft(comment.content);
-                        setEditing(true);
-                     }}
-                  />
-                  <Button
-                     label={tx('Delete comment')}
-                     size="sm"
-                     variant="ghost"
-                     onClick={() => setConfirmDelete(true)}
-                  />
-               </>
-            )}
-            <Button
-               label={history ? tx('Hide comment history') : tx('Comment history')}
-               size="sm"
-               variant="ghost"
-               clickAction={() =>
-                  action(async () => {
-                     setHistory(
-                        history ? undefined : await commentHistory(workspaceId, comment.id)
-                     );
-                  })
-               }
-            />
-            {own && (
-               <Button
-                  label={tx('Attach to comment')}
-                  size="sm"
-                  variant="ghost"
-                  isLoading={uploading}
-                  onClick={() => picker.current?.click()}
-               />
-            )}
-         </HStack>
          {error && <Text role="alert">{error}</Text>}
          {confirmDelete && (
             <HStack gap={2}>
@@ -143,6 +172,7 @@ export function CommentRow({
                <Button
                   label={tx('Confirm delete comment')}
                   variant="destructive"
+                  size="sm"
                   clickAction={() =>
                      action(async () => {
                         await removeComment(workspaceId, comment.id);
@@ -150,7 +180,12 @@ export function CommentRow({
                      })
                   }
                />
-               <Button label={tx('Cancel deletion')} onClick={() => setConfirmDelete(false)} />
+               <Button
+                  label={tx('Cancel deletion')}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setConfirmDelete(false)}
+               />
             </HStack>
          )}
          {history?.map((revision) => (

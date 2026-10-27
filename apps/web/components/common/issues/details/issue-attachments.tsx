@@ -1,8 +1,8 @@
 'use client';
 
 import { useRef } from 'react';
+import { FileText, Paperclip } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
-import { VStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { useIssuesStore } from '@/store/issues-store';
 import { useIssueAttachments } from '@/features/issues/use-issue-attachments';
@@ -13,7 +13,7 @@ export function IssueAttachments({ issueId }: { issueId: string }) {
    const picker = useRef<HTMLInputElement>(null);
    const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
    return (
-      <VStack gap={2}>
+      <>
          <input
             ref={picker}
             type="file"
@@ -27,29 +27,41 @@ export function IssueAttachments({ issueId }: { issueId: string }) {
          />
          <Button
             label="Attach file"
+            tooltip="Attach file"
+            icon={<Paperclip className="size-4" />}
+            isIconOnly
             size="sm"
             variant="ghost"
-            className="self-start text-muted-foreground"
             onClick={() => picker.current?.click()}
             isDisabled={!workspaceId}
             isLoading={state.uploading}
          />
-         {state.error && <Text role="alert">{state.error}</Text>}
-         {state.attachments.length > 0 && (
-            <Heading level={4} accessibilityLevel={2}>
-               Attachments
-            </Heading>
+         {/* basis-full moves errors and the list below the reaction and attach controls. */}
+         {/* VI: basis-full đẩy lỗi và danh sách tệp xuống dưới hàng nút reaction và đính kèm. */}
+         {state.error && (
+            <Text role="alert" className="basis-full">
+               {state.error}
+            </Text>
          )}
-         {state.attachments.map((attachment) => (
-            <a
-               key={attachment.id}
-               href={`${api}/attachments/${encodeURIComponent(attachment.id)}/download`}
-               target="_blank"
-               rel="noreferrer"
-            >
-               {attachment.filename}
-            </a>
-         ))}
-      </VStack>
+         {state.attachments.length > 0 && (
+            <div className="flex basis-full flex-col gap-1.5">
+               <Heading level={4} accessibilityLevel={2}>
+                  Attachments
+               </Heading>
+               {state.attachments.map((attachment) => (
+                  <a
+                     key={attachment.id}
+                     href={`${api}/attachments/${encodeURIComponent(attachment.id)}/download`}
+                     target="_blank"
+                     rel="noreferrer"
+                     className="inline-flex items-center gap-1.5 text-sm hover:underline"
+                  >
+                     <FileText className="size-4 text-muted-foreground" aria-hidden="true" />
+                     {attachment.filename}
+                  </a>
+               ))}
+            </div>
+         )}
+      </>
    );
 }

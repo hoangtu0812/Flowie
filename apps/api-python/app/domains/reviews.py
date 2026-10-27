@@ -193,6 +193,7 @@ async def list_reviews(
     offset: int = Query(default=0, ge=0, le=10_000),
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
+    issueId: str | None = None,
 ) -> dict[str, Any]:
     await _workspace_access(db, workspaceId, user['id'])
     filters = [
@@ -232,6 +233,18 @@ async def list_reviews(
     if repositoryId:
         filters.append('review.repository_id = :repository_id')
         parameters['repository_id'] = repositoryId
+    if issueId:
+        # Narrows reviews the caller can already see to those linked to one issue; repository
+        # access is still enforced by ACCESS_WHERE, so no hidden review is revealed.
+        # VI: Chỉ lọc trong các review người gọi vốn đã xem được, giữ những review liên kết với
+        # VI: một issue; quyền repository vẫn do ACCESS_WHERE kiểm soát nên không lộ review ẩn.
+        filters.append(
+            '''EXISTS (
+                   SELECT 1 FROM code_review_issue_links issue_link
+                   WHERE issue_link.code_review_id = review.id AND issue_link.issue_id = :issue_id
+               )'''
+        )
+        parameters['issue_id'] = issueId
     if search and search.strip():
         filters.append(
             '''(review.title ILIKE :search OR COALESCE(review.author_name, '') ILIKE :search

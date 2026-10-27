@@ -5,6 +5,7 @@ import { useMessages } from '@/features/shared/use-messages';
 import { messages } from '@/features/sla/messages.vi';
 
 import { useEffect, useRef, useState } from 'react';
+import { History, ListRestart, RefreshCw, RotateCw } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
@@ -120,9 +121,48 @@ function ClockPanel({ workspace, issue }: { workspace: string; issue: Issue }) {
    const current = data?.current;
    return (
       <VStack as="section" gap={3} width="100%" aria-label={tx('Issue SLA')}>
-         <Heading level={4} accessibilityLevel={2}>
-            {tx('Service level')}
-         </Heading>
+         <HStack gap={2} vAlign="center" hAlign="between">
+            <Heading level={4} accessibilityLevel={2}>
+               {tx('Service level')}
+            </Heading>
+            {data && (
+               <HStack gap={0.5}>
+                  <Button
+                     label={tx('Refresh SLA')}
+                     tooltip={tx('Refresh SLA')}
+                     icon={<RefreshCw className="size-4" />}
+                     isIconOnly
+                     variant="ghost"
+                     size="sm"
+                     onClick={() => setRefresh((value) => value + 1)}
+                     isDisabled={busy}
+                  />
+                  <Button
+                     label={tx('Use current SLA policy')}
+                     tooltip={tx('Use current SLA policy')}
+                     icon={<ListRestart className="size-4" />}
+                     isIconOnly
+                     variant="ghost"
+                     size="sm"
+                     onClick={() => setConfirm(true)}
+                     isDisabled={
+                        busy || ['completed', 'canceled'].includes(issue.status.category ?? '')
+                     }
+                  />
+                  <Button
+                     label={history ? tx('Hide SLA history') : tx('Show SLA history')}
+                     tooltip={history ? tx('Hide SLA history') : tx('Show SLA history')}
+                     icon={<History className="size-4" />}
+                     isIconOnly
+                     variant={history ? 'secondary' : 'ghost'}
+                     size="sm"
+                     aria-pressed={history}
+                     onClick={() => setHistory(!history)}
+                     isDisabled={busy}
+                  />
+               </HStack>
+            )}
+         </HStack>
          {data ? (
             <>
                <HStack gap={2} wrap="wrap">
@@ -209,30 +249,13 @@ function ClockPanel({ workspace, issue }: { workspace: string; issue: Issue }) {
                      </Text>
                      <Button
                         label={tx('Retry SLA processing')}
+                        icon={<RotateCw className="size-4" />}
+                        size="sm"
                         onClick={() => void command('retry')}
                         isDisabled={busy}
                      />
                   </>
                )}
-               <HStack gap={2} wrap="wrap">
-                  <Button
-                     label={tx('Refresh SLA')}
-                     onClick={() => setRefresh((value) => value + 1)}
-                     isDisabled={busy}
-                  />
-                  <Button
-                     label={tx('Use current SLA policy')}
-                     onClick={() => setConfirm(true)}
-                     isDisabled={
-                        busy || ['completed', 'canceled'].includes(issue.status.category ?? '')
-                     }
-                  />
-                  <Button
-                     label={history ? tx('Hide SLA history') : tx('Show SLA history')}
-                     onClick={() => setHistory(!history)}
-                     isDisabled={busy}
-                  />
-               </HStack>
                {confirm && (
                   <>
                      <Text>
@@ -243,11 +266,15 @@ function ClockPanel({ workspace, issue }: { workspace: string; issue: Issue }) {
                      <HStack gap={2} wrap="wrap">
                         <Button
                            label={tx('Confirm current SLA')}
+                           variant="primary"
+                           size="sm"
                            onClick={() => void command('apply')}
                            isLoading={busy}
                         />
                         <Button
                            label={tx('Keep existing SLA')}
+                           variant="ghost"
+                           size="sm"
                            onClick={() => setConfirm(false)}
                            isDisabled={busy}
                         />
@@ -312,6 +339,8 @@ function ClockPanel({ workspace, issue }: { workspace: string; issue: Issue }) {
                <Text role="alert">{error}</Text>
                <Button
                   label={tx('Reload SLA')}
+                  icon={<RotateCw className="size-4" />}
+                  size="sm"
                   onClick={() => setRefresh((value) => value + 1)}
                   isDisabled={busy}
                />

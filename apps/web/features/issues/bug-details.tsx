@@ -4,6 +4,7 @@ import { useMessages } from '@/features/shared/use-messages';
 import { messages } from '@/features/issues/messages.vi';
 
 import { useState } from 'react';
+import { Check, Pencil } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
@@ -20,9 +21,32 @@ export function BugDetails({ issue }: { issue: Issue }) {
    const update = useIssuesStore((state) => state.updateIssueBug);
    return (
       <VStack gap={3} as="section">
-         <Heading level={4} accessibilityLevel={2}>
-            {issue.issueType === 'BUG' ? tx('Bug report') : tx('Task details')}
-         </Heading>
+         <HStack gap={2} vAlign="center" hAlign="between">
+            <Heading level={4} accessibilityLevel={2}>
+               {issue.issueType === 'BUG' ? tx('Bug report') : tx('Task details')}
+            </Heading>
+            {!editing && (
+               <Button
+                  label={tx('Edit type and bug details')}
+                  tooltip={tx('Edit type and bug details')}
+                  icon={<Pencil className="size-4" />}
+                  isIconOnly
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                     setDraft({
+                        issueType: issue.issueType ?? 'TASK',
+                        severity: issue.severity,
+                        environment: issue.environment,
+                        reproductionSteps: issue.reproductionSteps,
+                        expectedResult: issue.expectedResult,
+                        actualResult: issue.actualResult,
+                     });
+                     setEditing(true);
+                  }}
+               />
+            )}
+         </HStack>
          {editing ? (
             <>
                <BugFieldsForm value={draft} onChange={setDraft} />
@@ -30,6 +54,9 @@ export function BugDetails({ issue }: { issue: Issue }) {
                <HStack gap={2}>
                   <Button
                      label={tx('Save bug details')}
+                     icon={<Check className="size-4" />}
+                     variant="primary"
+                     size="sm"
                      clickAction={async () => {
                         try {
                            await update(issue.id, draft);
@@ -44,7 +71,12 @@ export function BugDetails({ issue }: { issue: Issue }) {
                         }
                      }}
                   />
-                  <Button label={tx('Cancel bug editing')} onClick={() => setEditing(false)} />
+                  <Button
+                     label={tx('Cancel bug editing')}
+                     variant="ghost"
+                     size="sm"
+                     onClick={() => setEditing(false)}
+                  />
                </HStack>
             </>
          ) : (
@@ -81,23 +113,6 @@ export function BugDetails({ issue }: { issue: Issue }) {
                      ))}
                   </>
                )}
-               <Button
-                  label={tx('Edit type and bug details')}
-                  variant="ghost"
-                  size="sm"
-                  className="self-start text-muted-foreground"
-                  onClick={() => {
-                     setDraft({
-                        issueType: issue.issueType ?? 'TASK',
-                        severity: issue.severity,
-                        environment: issue.environment,
-                        reproductionSteps: issue.reproductionSteps,
-                        expectedResult: issue.expectedResult,
-                        actualResult: issue.actualResult,
-                     });
-                     setEditing(true);
-                  }}
-               />
             </>
          )}
       </VStack>
