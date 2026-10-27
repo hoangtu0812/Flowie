@@ -13,6 +13,7 @@ import { AuthCard } from '@/components/auth/auth-card';
 import { responseData } from '@/lib/http';
 import { authApi } from './types';
 import { useFactorOptions, type FactorKind } from './mfa-client';
+import { withBasePath } from '@/lib/base-path';
 
 export default function MfaSignIn() {
    const tx = useMessages(messages);
@@ -41,7 +42,7 @@ export default function MfaSignIn() {
          );
          setCode('');
          // The authenticated document must not reuse redirects prefetched before MFA completed.
-         window.location.replace(data.next ?? '/');
+         window.location.replace(withBasePath(data.next ?? '/'));
       } catch (reason) {
          setError(reason instanceof Error ? reason.message : tx('Verification failed.'));
       } finally {

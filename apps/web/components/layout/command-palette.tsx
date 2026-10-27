@@ -43,6 +43,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useModifierKey } from '@/features/shared/use-modifier-key';
 import { toast } from 'sonner';
+import { withBasePath } from '@/lib/base-path';
 
 type PaletteRoute =
    | 'root'
@@ -165,7 +166,7 @@ export function CommandPalette() {
    );
 
    const issueUrl = issue
-      ? `${typeof window !== 'undefined' ? window.location.origin : ''}/${orgId}/issue/${issue.identifier}`
+      ? `${typeof window !== 'undefined' ? window.location.origin : ''}${withBasePath(`/${orgId}/issue/${issue.identifier}`)}`
       : '';
    const branchName = issue
       ? `${(members[0]?.name ?? 'user').toLowerCase()}/${issue.identifier.toLowerCase()}-${issue.title

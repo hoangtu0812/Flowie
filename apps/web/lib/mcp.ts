@@ -55,8 +55,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
    return body.data;
 }
 
+// Resolves the API's '/mcp/' against the API root (the URL before '/api/v1'),
+// so a proxy prefix such as https://host/flowie/api/v1 yields
+// https://host/flowie/mcp/ instead of https://host/mcp/.
+// VI: Ghép '/mcp/' của API vào gốc API (phần URL trước '/api/v1'), để tiền tố
+// proxy như https://host/flowie/api/v1 cho ra https://host/flowie/mcp/ thay vì
+// https://host/mcp/.
 export function mcpEndpoint(path: string): string {
-   return new URL(path, api).toString();
+   const root = api.replace(/\/api\/v1\/?$/, '/');
+   return new URL(path.replace(/^\/+/, ''), root).toString();
 }
 
 export function getMcpConfiguration(): Promise<McpConfiguration> {

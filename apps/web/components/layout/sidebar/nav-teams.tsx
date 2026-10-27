@@ -44,6 +44,7 @@ import {
 } from '@/components/common/teams/team-types';
 import { RiDonutChartFill } from '@remixicon/react';
 import { toast } from 'sonner';
+import { withBasePath } from '@/lib/base-path';
 
 export function NavTeams() {
    const tx = useMessages(messages);
@@ -132,7 +133,7 @@ export function NavTeams() {
                                     onSelect={() => {
                                        void navigator.clipboard
                                           .writeText(
-                                             `${window.location.origin}/${orgId}/team/${item.identifier}/overview`
+                                             `${window.location.origin}${withBasePath(`/${orgId}/team/${item.identifier}/overview`)}`
                                           )
                                           .then(() => toast.success(tx('Team link copied.')))
                                           .catch(() =>

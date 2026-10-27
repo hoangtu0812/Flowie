@@ -5,6 +5,7 @@ import './globals.css';
 import '@astryxdesign/core/reset.css';
 import '@astryxdesign/core/astryx.css';
 import '@astryxdesign/theme-neutral/theme.css';
+import { withBasePath } from '@/lib/base-path';
 
 const geistSans = Geist({
    variable: '--font-geist-sans',
@@ -28,9 +29,9 @@ export const metadata: Metadata = {
    description:
       'Open-source project management and team collaboration platform for work of every kind.',
    icons: {
-      icon: '/flowie-icon.svg',
-      shortcut: '/flowie-icon.svg',
-      apple: '/flowie-icon.svg',
+      icon: withBasePath('/flowie-icon.svg'),
+      shortcut: withBasePath('/flowie-icon.svg'),
+      apple: withBasePath('/flowie-icon.svg'),
    },
    openGraph: {
       type: 'website',

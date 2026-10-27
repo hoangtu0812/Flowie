@@ -1,5 +1,6 @@
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 import { responseData } from './http';
+import { appPathname } from './base-path';
 
 /**
  * Refresh tokens are single-use: `/auth/refresh` rotates its secret while
@@ -81,7 +82,7 @@ export async function createWorkspace(name: string): Promise<WorkspaceSummary> {
 
 export function workspaceSlugFromLocation(): string | undefined {
    if (typeof window === 'undefined') return undefined;
-   const segment = window.location.pathname.split('/').filter(Boolean)[0];
+   const segment = appPathname().split('/').filter(Boolean)[0];
    return segment ? decodeURIComponent(segment) : undefined;
 }
 

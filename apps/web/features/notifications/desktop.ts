@@ -1,6 +1,7 @@
 import { authenticatedFetch, workspaceSlugFromLocation } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
 import { loadCurrentUser } from '@/features/identity/current-user';
+import { withBasePath } from '@/lib/base-path';
 
 export async function showDesktopNotification(
    workspaceId: string,
@@ -29,7 +30,7 @@ export async function showDesktopNotification(
       });
       notification.onclick = () => {
          window.focus();
-         window.location.assign(`/${encodeURIComponent(slug ?? '')}/inbox`);
+         window.location.assign(withBasePath(`/${encodeURIComponent(slug ?? '')}/inbox`));
          notification.close();
       };
    } catch {
