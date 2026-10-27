@@ -7,6 +7,8 @@ export const messages = {
    'Account security unavailable': 'Không thể tải bảo mật tài khoản',
    'Loading account security…': 'Đang tải bảo mật tài khoản…',
    'Security & access': 'Bảo mật và truy cập',
+   'Manage your devices, sign-in history, credentials and authenticator':
+      'Quản lý thiết bị, lịch sử đăng nhập, thông tin xác thực và ứng dụng xác thực của bạn',
    'Devices': 'Thiết bị',
    'History': 'Lịch sử',
    'Credentials': 'Thông tin truy cập',

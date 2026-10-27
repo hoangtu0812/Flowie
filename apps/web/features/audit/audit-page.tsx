@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
-import { Heading, Text } from '@astryxdesign/core/Text';
+import { Text } from '@astryxdesign/core/Text';
 import { List, ListItem } from '@astryxdesign/core/List';
 import { Selector } from '@astryxdesign/core/Selector';
 import { TextInput } from '@astryxdesign/core/TextInput';
@@ -14,6 +14,7 @@ import { RecoveryScreen } from '@/features/shared/recovery-screen';
 import { ResourcePagination } from '@/features/shared/resource-pagination';
 import { usePagedResource } from '@/features/shared/use-paged-resource';
 import { downloadFile } from '@/features/shared/download-file';
+import { SettingsShell } from '@/components/common/settings/shared';
 
 type AuditEvent = {
    id: string;
@@ -157,103 +158,106 @@ function AuditCenter({ workspace }: { workspace: string }) {
    };
    return (
       <DesignSurface>
-         <VStack padding={6} gap={4} width="100%" className="h-full overflow-auto">
-            <Heading level={1}>Workspace audit log</Heading>
-            <Text>
-               Events follow your current access. Historical events with an unproven entity scope
-               are excluded; UNKNOWN means the original event did not record its transport source.
-            </Text>
-            <VStack
-               as="form"
-               gap={3}
-               onSubmit={(event) => {
-                  event.preventDefault();
-                  try {
-                     setApplied(filterQuery(workspace, draft));
-                     setError('');
-                     history.reload();
-                  } catch (reason) {
-                     setError(reason instanceof Error ? reason.message : 'Invalid filters.');
-                  }
-               }}
-            >
-               <HStack gap={3} wrap="wrap">
-                  <Selector
-                     label="Audit actor"
-                     value={draft.actor}
-                     onChange={(actor) => setDraft({ ...draft, actor })}
-                     options={[
-                        { value: 'all', label: 'All actors' },
-                        ...[...actors].map(([value, label]) => ({ value, label })),
-                     ]}
-                  />
-                  <Selector
-                     label="Audit entity"
-                     value={draft.entity}
-                     onChange={(entity) => setDraft({ ...draft, entity })}
-                     options={[
-                        'all',
-                        'issue',
-                        'project',
-                        'document',
-                        'initiative',
-                        'comment',
-                        'issue-status',
-                        'mcp-tool',
-                        'mcp-connection',
-                        'agent-run-management',
-                     ].map((value) => ({ value, label: value === 'all' ? 'All entities' : value }))}
-                  />
-                  <Selector
-                     label="Audit source"
-                     value={draft.source}
-                     onChange={(source) => setDraft({ ...draft, source })}
-                     options={['all', 'WEB', 'AI', 'SYSTEM', 'UNKNOWN'].map((value) => ({
-                        value,
-                        label: value === 'all' ? 'All sources' : value,
-                     }))}
-                  />
-               </HStack>
-               <HStack gap={3} wrap="wrap">
-                  <TextInput
-                     label="From date (UTC)"
-                     description="YYYY-MM-DD"
-                     value={draft.from}
-                     onChange={(from) => setDraft({ ...draft, from })}
-                  />
-                  <TextInput
-                     label="Through date (UTC)"
-                     description="YYYY-MM-DD"
-                     value={draft.through}
-                     onChange={(through) => setDraft({ ...draft, through })}
-                  />
-                  <Button label="Apply audit filters" type="submit" />
-                  <Button
-                     label="Export filtered audit CSV"
-                     isLoading={exporting}
-                     onClick={() => void exportCsv()}
-                  />
-               </HStack>
+         <SettingsShell
+            title="Workspace audit log"
+            description="Events follow your current access. Historical events with an unproven entity scope are excluded; UNKNOWN means the original event did not record its transport source."
+         >
+            <VStack gap={4} width="100%">
+               <VStack
+                  as="form"
+                  gap={3}
+                  onSubmit={(event) => {
+                     event.preventDefault();
+                     try {
+                        setApplied(filterQuery(workspace, draft));
+                        setError('');
+                        history.reload();
+                     } catch (reason) {
+                        setError(reason instanceof Error ? reason.message : 'Invalid filters.');
+                     }
+                  }}
+               >
+                  <HStack gap={3} wrap="wrap">
+                     <Selector
+                        label="Audit actor"
+                        value={draft.actor}
+                        onChange={(actor) => setDraft({ ...draft, actor })}
+                        options={[
+                           { value: 'all', label: 'All actors' },
+                           ...[...actors].map(([value, label]) => ({ value, label })),
+                        ]}
+                     />
+                     <Selector
+                        label="Audit entity"
+                        value={draft.entity}
+                        onChange={(entity) => setDraft({ ...draft, entity })}
+                        options={[
+                           'all',
+                           'issue',
+                           'project',
+                           'document',
+                           'initiative',
+                           'comment',
+                           'issue-status',
+                           'mcp-tool',
+                           'mcp-connection',
+                           'agent-run-management',
+                        ].map((value) => ({
+                           value,
+                           label: value === 'all' ? 'All entities' : value,
+                        }))}
+                     />
+                     <Selector
+                        label="Audit source"
+                        value={draft.source}
+                        onChange={(source) => setDraft({ ...draft, source })}
+                        options={['all', 'WEB', 'AI', 'SYSTEM', 'UNKNOWN'].map((value) => ({
+                           value,
+                           label: value === 'all' ? 'All sources' : value,
+                        }))}
+                     />
+                  </HStack>
+                  <HStack gap={3} wrap="wrap">
+                     <TextInput
+                        label="From date (UTC)"
+                        description="YYYY-MM-DD"
+                        value={draft.from}
+                        onChange={(from) => setDraft({ ...draft, from })}
+                     />
+                     <TextInput
+                        label="Through date (UTC)"
+                        description="YYYY-MM-DD"
+                        value={draft.through}
+                        onChange={(through) => setDraft({ ...draft, through })}
+                     />
+                     <Button label="Apply audit filters" type="submit" />
+                     <Button
+                        label="Export filtered audit CSV"
+                        isLoading={exporting}
+                        onClick={() => void exportCsv()}
+                     />
+                  </HStack>
+               </VStack>
+               <Text type="supporting">
+                  Export uses the applied filters, up to 10,000 events and 10 MB. Formula-like text
+                  cells have a leading tab for spreadsheet viewing.
+               </Text>
+               {error && <Text role="alert">{error}</Text>}
+               <List hasDividers>
+                  {history.items.map((row) => (
+                     <ListItem
+                        key={row.id}
+                        label={row.action}
+                        description={`${new Date(row.createdAt).toLocaleString()} · ${row.source} · ${row.actor?.name ?? 'System'} · ${row.entityType} ${row.entityId ?? ''}${row.metadata.fields?.length ? ' · ' + row.metadata.fields.join(', ') : ''}`}
+                     />
+                  ))}
+               </List>
+               {!history.loading && !history.error && !history.items.length && (
+                  <Text>No accessible events match the applied filters.</Text>
+               )}
+               <ResourcePagination count={history.items.length} {...history} label="audit events" />
             </VStack>
-            <Text type="supporting">
-               Export uses the applied filters, up to 10,000 events and 10 MB. Formula-like text
-               cells have a leading tab for spreadsheet viewing.
-            </Text>
-            {error && <Text role="alert">{error}</Text>}
-            <List hasDividers>
-               {history.items.map((row) => (
-                  <ListItem
-                     key={row.id}
-                     label={row.action}
-                     description={`${new Date(row.createdAt).toLocaleString()} · ${row.source} · ${row.actor?.name ?? 'System'} · ${row.entityType} ${row.entityId ?? ''}${row.metadata.fields?.length ? ' · ' + row.metadata.fields.join(', ') : ''}`}
-                  />
-               ))}
-            </List>
-            {!history.loading && !history.error && !history.items.length && (
-               <Text>No accessible events match the applied filters.</Text>
-            )}
-            <ResourcePagination count={history.items.length} {...history} label="audit events" />
-         </VStack>
+         </SettingsShell>
       </DesignSurface>
    );
 }

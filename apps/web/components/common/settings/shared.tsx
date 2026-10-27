@@ -10,21 +10,37 @@ import { cn } from '@/lib/utils';
 import { Check, ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 
-/** Centered settings page: big title, optional description, stacked sections. */
+/**
+ * Body shell shared by every settings page: the page scrolls inside itself, content is centered
+ * at one max width and padding, and the header is a title, a short description and an optional
+ * right-aligned action. Children stack with section spacing, so a page whose toolbar and list
+ * belong together wraps them in one element. Astryx pages render it inside `DesignSurface`.
+ * VI: Khung thân dùng chung cho mọi trang cài đặt: trang tự cuộn bên trong, nội dung căn giữa
+ * với cùng độ rộng tối đa và padding, phần đầu gồm tiêu đề, mô tả ngắn và một thao tác tùy chọn
+ * căn phải. Các con xếp chồng với khoảng cách giữa các section, nên trang có thanh công cụ và
+ * danh sách đi liền nhau phải bọc chúng trong một phần tử. Trang Astryx đặt nó trong `DesignSurface`.
+ */
 export function SettingsShell({
    title,
    description,
+   action,
    children,
 }: {
-   title: string;
-   description?: string;
+   title: React.ReactNode;
+   description: React.ReactNode;
+   action?: React.ReactNode;
    children: React.ReactNode;
 }) {
    return (
       <div className="w-full overflow-y-auto h-full">
-         <div className="max-w-2xl mx-auto px-6 py-10 pb-20">
-            <h1 className="text-2xl font-medium">{title}</h1>
-            {description && <p className="text-sm text-muted-foreground mt-1">{description}</p>}
+         <div className="max-w-4xl mx-auto px-6 py-10 pb-20">
+            <div className="flex items-start justify-between gap-4">
+               <div>
+                  <h1 className="text-2xl font-medium">{title}</h1>
+                  <p className="text-sm text-muted-foreground mt-1">{description}</p>
+               </div>
+               {action}
+            </div>
             <div className="flex flex-col gap-10 mt-10">{children}</div>
          </div>
       </div>

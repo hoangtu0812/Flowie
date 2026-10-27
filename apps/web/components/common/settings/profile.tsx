@@ -167,7 +167,10 @@ export default function Profile() {
 
    return (
       <>
-         <SettingsShell title="Profile">
+         <SettingsShell
+            title="Profile"
+            description="Manage how you appear to other people in this workspace"
+         >
             <SettingsSection>
                <SettingsCard>
                   {isMicrosoftManaged && (

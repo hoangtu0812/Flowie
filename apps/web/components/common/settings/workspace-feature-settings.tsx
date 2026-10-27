@@ -27,6 +27,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DashedSmiley } from './settings-placeholder';
+import { SettingsShell } from './shared';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -269,12 +270,9 @@ export default function WorkspaceFeatureSettings({ feature }: { feature: Feature
       feature === 'documents' ? filteredDocuments.length === 0 : filteredInitiatives.length === 0;
 
    return (
-      <div className="w-full overflow-y-auto h-full">
-         <div className="max-w-4xl mx-auto px-6 py-10">
-            <h1 className="text-2xl font-medium">{section.title}</h1>
-            <p className="text-sm text-muted-foreground mt-1">{section.description}</p>
-
-            <div className="flex items-center justify-between gap-3 mt-6">
+      <SettingsShell title={section.title} description={section.description}>
+         <div>
+            <div className="flex items-center justify-between gap-3">
                <Input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
@@ -475,6 +473,6 @@ export default function WorkspaceFeatureSettings({ feature }: { feature: Feature
                </DialogFooter>
             </DialogContent>
          </Dialog>
-      </div>
+      </SettingsShell>
    );
 }

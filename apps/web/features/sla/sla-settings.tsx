@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
-import { Heading, Text } from '@astryxdesign/core/Text';
+import { Text } from '@astryxdesign/core/Text';
 import { List, ListItem } from '@astryxdesign/core/List';
 import { Token } from '@astryxdesign/core/Token';
 import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
@@ -21,6 +21,7 @@ import { PolicyEditor } from './policy-editor';
 import { RevisionHistory } from './revision-history';
 import { SlaReportSummary } from './report-summary';
 import { slaApi, type SlaPolicy } from './types';
+import { SettingsShell } from '@/components/common/settings/shared';
 
 export default function SlaSettings() {
    const tx = useMessages(messages);
@@ -107,123 +108,124 @@ function SlaCenter({
    };
    return (
       <DesignSurface>
-         <VStack padding={6} gap={5} width="100%" className="h-full overflow-auto">
-            <Heading level={1}>{tx('SLA policies')}</Heading>
-            <Text>
-               {tx(
-                  'Team-specific policies take precedence, followed by priority-specific policies. Ties use the oldest policy. Manual deadlines opt out; applying a current policy on a task starts a new clock.'
-               )}
-            </Text>
-            <HStack gap={2} wrap="wrap">
-               {manager && (
+         <SettingsShell
+            title={tx('SLA policies')}
+            description={tx(
+               'Team-specific policies take precedence, followed by priority-specific policies. Ties use the oldest policy. Manual deadlines opt out; applying a current policy on a task starts a new clock.'
+            )}
+         >
+            <VStack gap={5} width="100%">
+               <HStack gap={2} wrap="wrap">
+                  {manager && (
+                     <Button
+                        label={tx('New SLA')}
+                        variant="primary"
+                        onClick={() => setEditor('new')}
+                        isDisabled={busy || !!editor}
+                     />
+                  )}
                   <Button
-                     label={tx('New SLA')}
-                     variant="primary"
-                     onClick={() => setEditor('new')}
-                     isDisabled={busy || !!editor}
+                     label={tx('Refresh SLA policies')}
+                     onClick={policies.reload}
+                     isDisabled={busy}
                   />
-               )}
-               <Button
-                  label={tx('Refresh SLA policies')}
-                  onClick={policies.reload}
+               </HStack>
+               <CheckboxInput
+                  label={tx('Include archived policies')}
+                  value={archived}
+                  onChange={(value) => {
+                     setArchived(value);
+                     setSelected(undefined);
+                  }}
                   isDisabled={busy}
                />
-            </HStack>
-            <CheckboxInput
-               label={tx('Include archived policies')}
-               value={archived}
-               onChange={(value) => {
-                  setArchived(value);
-                  setSelected(undefined);
-               }}
-               isDisabled={busy}
-            />
-            {editor && (
-               <PolicyEditor
-                  key={editor === 'new' ? 'new' : editor.id}
-                  workspace={workspace}
-                  teams={teams}
-                  policy={editor === 'new' ? undefined : editor}
-                  onSaved={() => {
-                     setEditor(undefined);
-                     setSelected(undefined);
-                     policies.reload();
-                  }}
-                  onCancel={() => setEditor(undefined)}
-               />
-            )}
-            {error && <Text role="alert">{error}</Text>}
-            <List hasDividers>
-               {policies.items.map((row) => (
-                  <ListItem
-                     key={row.id}
-                     label={row.name}
-                     description={
-                        <VStack gap={2} width="100%">
-                           <HStack gap={2} wrap="wrap">
-                              <Token
-                                 label={
-                                    row.archivedAt
-                                       ? tx('Archived')
-                                       : row.enabled
-                                         ? 'Enabled'
-                                         : 'Disabled'
-                                 }
-                              />
-                              <Text>
-                                 {tx('{value0} working minutes · Revision {value1} · {value2}', {
-                                    value0: row.deadlineMinutes,
-                                    value1: row.version,
-                                    value2: row.calendar?.timezone ?? '24/7',
-                                 })}
-                              </Text>
-                           </HStack>
-                           <Text>{`${row.teamId ? (teams.find((team) => team.id === row.teamId)?.name ?? tx('Team policy')) : tx('All teams')} · ${row.priority ?? tx('Any priority')}`}</Text>
-                           <HStack gap={2} wrap="wrap">
-                              <Button
-                                 label={tx('Policy history')}
-                                 onClick={() => setSelected(row)}
-                                 isDisabled={busy || !!editor || policies.loading}
-                              />
-                              {manager && (
-                                 <>
-                                    <Button
-                                       label={tx('Edit SLA')}
-                                       onClick={() => setEditor(row)}
-                                       isDisabled={busy || !!editor}
-                                    />
-                                    <Button
-                                       label={
-                                          row.archivedAt ? tx('Restore SLA') : tx('Archive SLA')
-                                       }
-                                       onClick={() => void command(row)}
-                                       isDisabled={busy || !!editor}
-                                    />
-                                 </>
-                              )}
-                           </HStack>
-                        </VStack>
-                     }
+               {editor && (
+                  <PolicyEditor
+                     key={editor === 'new' ? 'new' : editor.id}
+                     workspace={workspace}
+                     teams={teams}
+                     policy={editor === 'new' ? undefined : editor}
+                     onSaved={() => {
+                        setEditor(undefined);
+                        setSelected(undefined);
+                        policies.reload();
+                     }}
+                     onCancel={() => setEditor(undefined)}
                   />
-               ))}
-            </List>
-            {!policies.loading && !policies.error && !policies.items.length && (
-               <Text>{tx('No accessible SLA policies.')}</Text>
-            )}
-            <ResourcePagination
-               count={policies.items.length}
-               {...policies}
-               label={tx('SLA policies')}
-            />
-            {selected && (
-               <RevisionHistory
-                  key={`${selected.id}:${selected.version}`}
-                  workspace={workspace}
-                  policy={selected}
+               )}
+               {error && <Text role="alert">{error}</Text>}
+               <List hasDividers>
+                  {policies.items.map((row) => (
+                     <ListItem
+                        key={row.id}
+                        label={row.name}
+                        description={
+                           <VStack gap={2} width="100%">
+                              <HStack gap={2} wrap="wrap">
+                                 <Token
+                                    label={
+                                       row.archivedAt
+                                          ? tx('Archived')
+                                          : row.enabled
+                                            ? 'Enabled'
+                                            : 'Disabled'
+                                    }
+                                 />
+                                 <Text>
+                                    {tx('{value0} working minutes · Revision {value1} · {value2}', {
+                                       value0: row.deadlineMinutes,
+                                       value1: row.version,
+                                       value2: row.calendar?.timezone ?? '24/7',
+                                    })}
+                                 </Text>
+                              </HStack>
+                              <Text>{`${row.teamId ? (teams.find((team) => team.id === row.teamId)?.name ?? tx('Team policy')) : tx('All teams')} · ${row.priority ?? tx('Any priority')}`}</Text>
+                              <HStack gap={2} wrap="wrap">
+                                 <Button
+                                    label={tx('Policy history')}
+                                    onClick={() => setSelected(row)}
+                                    isDisabled={busy || !!editor || policies.loading}
+                                 />
+                                 {manager && (
+                                    <>
+                                       <Button
+                                          label={tx('Edit SLA')}
+                                          onClick={() => setEditor(row)}
+                                          isDisabled={busy || !!editor}
+                                       />
+                                       <Button
+                                          label={
+                                             row.archivedAt ? tx('Restore SLA') : tx('Archive SLA')
+                                          }
+                                          onClick={() => void command(row)}
+                                          isDisabled={busy || !!editor}
+                                       />
+                                    </>
+                                 )}
+                              </HStack>
+                           </VStack>
+                        }
+                     />
+                  ))}
+               </List>
+               {!policies.loading && !policies.error && !policies.items.length && (
+                  <Text>{tx('No accessible SLA policies.')}</Text>
+               )}
+               <ResourcePagination
+                  count={policies.items.length}
+                  {...policies}
+                  label={tx('SLA policies')}
                />
-            )}
-            <SlaReportSummary workspace={workspace} teams={teams} />
-         </VStack>
+               {selected && (
+                  <RevisionHistory
+                     key={`${selected.id}:${selected.version}`}
+                     workspace={workspace}
+                     policy={selected}
+                  />
+               )}
+               <SlaReportSummary workspace={workspace} teams={teams} />
+            </VStack>
+         </SettingsShell>
       </DesignSurface>
    );
 }

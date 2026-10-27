@@ -15,6 +15,7 @@ import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
 import { DesignSurface } from '@/components/common/design-surface';
 import { authenticatedFetch, loadCurrentWorkspaceMembership } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
+import { SettingsShell } from '@/components/common/settings/shared';
 
 type WorkflowStatus = {
    id: string;
@@ -123,131 +124,135 @@ export default function WorkflowSettings() {
    };
    return (
       <DesignSurface>
-         <VStack padding={6} gap={5} className="h-full overflow-auto" width="100%">
-            <Heading level={1}>{tx('Issue statuses')}</Heading>
-            <Text>{tx('Workspace workflow. Team statuses are labeled separately.')}</Text>
-            {error && <Text role="alert">{error}</Text>}
-            <HStack gap={3}>
-               <Button
-                  label={tx('Reload workflow')}
-                  onClick={() => void load()}
-                  isDisabled={saving}
-               />
-               {canEdit && (
+         <SettingsShell
+            title={tx('Issue statuses')}
+            description={tx('Workspace workflow. Team statuses are labeled separately.')}
+         >
+            <VStack gap={5} width="100%">
+               {error && <Text role="alert">{error}</Text>}
+               <HStack gap={3}>
                   <Button
-                     label={tx('New status')}
-                     onClick={() => {
-                        setDraft(blank);
-                        setSelected(undefined);
-                        setEditing(true);
-                     }}
+                     label={tx('Reload workflow')}
+                     onClick={() => void load()}
+                     isDisabled={saving}
                   />
-               )}
-            </HStack>
-            {loading ? (
-               <Text role="status">{tx('Loading workflow…')}</Text>
-            ) : (
-               <List hasDividers>
-                  {rows.map((row) => (
-                     <ListItem
-                        key={row.id}
-                        label={row.name}
-                        description={
-                           tx('{value0} · {value1} · {value2} issues', {
-                              value0: enumLabel(row.category),
-                              value1: row.teamId ? 'Team' : 'Workspace',
-                              value2: row.issueCount,
-                           }) + (row.requiredBeforeStart ? ` · ${tx('Required before start')}` : '')
-                        }
-                        endContent={
-                           canEdit ? (
-                              <Button
-                                 label={tx('Edit {value0}', { value0: row.name })}
-                                 onClick={() => {
-                                    setSelected(row);
-                                    setDraft(row);
-                                    setEditing(true);
-                                 }}
-                              />
-                           ) : undefined
-                        }
-                     />
-                  ))}
-               </List>
-            )}
-            {editing && (
-               <VStack
-                  as="form"
-                  gap={4}
-                  onSubmit={(event) => {
-                     event.preventDefault();
-                     void save();
-                  }}
-               >
-                  <Heading level={2}>{selected ? tx('Edit status') : tx('New status')}</Heading>
-                  <TextInput
-                     label={tx('Status name')}
-                     value={draft.name}
-                     onChange={(name) => setDraft({ ...draft, name })}
-                     isRequired
-                  />
-                  <Selector
-                     label={tx('Workflow category')}
-                     value={draft.category}
-                     options={categories.map((value) => ({ value, label: enumLabel(value) }))}
-                     onChange={(category) =>
-                        setDraft({
-                           ...draft,
-                           category,
-                           requiredBeforeStart:
-                              draft.requiredBeforeStart &&
-                              ['TRIAGE', 'BACKLOG', 'UNSTARTED'].includes(category),
-                        })
-                     }
-                  />
-                  <TextInput
-                     label={tx('Status color')}
-                     value={draft.color}
-                     onChange={(color) => setDraft({ ...draft, color })}
-                     description={tx('Hex color, for example #99a2b2')}
-                  />
-                  {['TRIAGE', 'BACKLOG', 'UNSTARTED'].includes(draft.category) && (
-                     <CheckboxInput
-                        label={tx('Required before start')}
-                        description={tx(
-                           'Issues must be in this status with a target end date before moving to a Started status.'
-                        )}
-                        value={draft.requiredBeforeStart}
-                        onChange={(requiredBeforeStart) =>
-                           setDraft({ ...draft, requiredBeforeStart })
-                        }
+                  {canEdit && (
+                     <Button
+                        label={tx('New status')}
+                        onClick={() => {
+                           setDraft(blank);
+                           setSelected(undefined);
+                           setEditing(true);
+                        }}
                      />
                   )}
-                  <HStack gap={3} wrap="wrap">
-                     <Button
-                        label={tx('Save status')}
-                        type="submit"
-                        variant="primary"
-                        isLoading={saving}
-                        isDisabled={!draft.name.trim() || !/^#[0-9a-fA-F]{6}$/.test(draft.color)}
+               </HStack>
+               {loading ? (
+                  <Text role="status">{tx('Loading workflow…')}</Text>
+               ) : (
+                  <List hasDividers>
+                     {rows.map((row) => (
+                        <ListItem
+                           key={row.id}
+                           label={row.name}
+                           description={
+                              tx('{value0} · {value1} · {value2} issues', {
+                                 value0: enumLabel(row.category),
+                                 value1: row.teamId ? 'Team' : 'Workspace',
+                                 value2: row.issueCount,
+                              }) +
+                              (row.requiredBeforeStart ? ` · ${tx('Required before start')}` : '')
+                           }
+                           endContent={
+                              canEdit ? (
+                                 <Button
+                                    label={tx('Edit {value0}', { value0: row.name })}
+                                    onClick={() => {
+                                       setSelected(row);
+                                       setDraft(row);
+                                       setEditing(true);
+                                    }}
+                                 />
+                              ) : undefined
+                           }
+                        />
+                     ))}
+                  </List>
+               )}
+               {editing && (
+                  <VStack
+                     as="form"
+                     gap={4}
+                     onSubmit={(event) => {
+                        event.preventDefault();
+                        void save();
+                     }}
+                  >
+                     <Heading level={2}>{selected ? tx('Edit status') : tx('New status')}</Heading>
+                     <TextInput
+                        label={tx('Status name')}
+                        value={draft.name}
+                        onChange={(name) => setDraft({ ...draft, name })}
+                        isRequired
                      />
-                     <Button
-                        label={tx('Cancel editing')}
-                        onClick={() => setEditing(false)}
-                        isDisabled={saving}
+                     <Selector
+                        label={tx('Workflow category')}
+                        value={draft.category}
+                        options={categories.map((value) => ({ value, label: enumLabel(value) }))}
+                        onChange={(category) =>
+                           setDraft({
+                              ...draft,
+                              category,
+                              requiredBeforeStart:
+                                 draft.requiredBeforeStart &&
+                                 ['TRIAGE', 'BACKLOG', 'UNSTARTED'].includes(category),
+                           })
+                        }
                      />
-                     {selected && (
-                        <Button
-                           label={tx('Delete status')}
-                           variant="destructive"
-                           onClick={() => void save(true)}
-                           isDisabled={saving || selected.issueCount > 0}
+                     <TextInput
+                        label={tx('Status color')}
+                        value={draft.color}
+                        onChange={(color) => setDraft({ ...draft, color })}
+                        description={tx('Hex color, for example #99a2b2')}
+                     />
+                     {['TRIAGE', 'BACKLOG', 'UNSTARTED'].includes(draft.category) && (
+                        <CheckboxInput
+                           label={tx('Required before start')}
+                           description={tx(
+                              'Issues must be in this status with a target end date before moving to a Started status.'
+                           )}
+                           value={draft.requiredBeforeStart}
+                           onChange={(requiredBeforeStart) =>
+                              setDraft({ ...draft, requiredBeforeStart })
+                           }
                         />
                      )}
-                  </HStack>
-               </VStack>
-            )}
-         </VStack>
+                     <HStack gap={3} wrap="wrap">
+                        <Button
+                           label={tx('Save status')}
+                           type="submit"
+                           variant="primary"
+                           isLoading={saving}
+                           isDisabled={!draft.name.trim() || !/^#[0-9a-fA-F]{6}$/.test(draft.color)}
+                        />
+                        <Button
+                           label={tx('Cancel editing')}
+                           onClick={() => setEditing(false)}
+                           isDisabled={saving}
+                        />
+                        {selected && (
+                           <Button
+                              label={tx('Delete status')}
+                              variant="destructive"
+                              onClick={() => void save(true)}
+                              isDisabled={saving || selected.issueCount > 0}
+                           />
+                        )}
+                     </HStack>
+                  </VStack>
+               )}
+            </VStack>
+         </SettingsShell>
       </DesignSurface>
    );
 }

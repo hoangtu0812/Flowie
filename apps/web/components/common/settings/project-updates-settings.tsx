@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DashedSmiley } from './settings-placeholder';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
+import { SettingsShell } from './shared';
 
 type ProjectUpdate = {
    id: string;
@@ -26,7 +27,9 @@ export default function ProjectUpdatesSettings() {
    const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
    const load = useCallback(async () => {
       const workspaceId = (await loadCurrentWorkspace()).id;
-      const response = await authenticatedFetch(`${api}/projects/updates?workspaceId=${workspaceId}`);
+      const response = await authenticatedFetch(
+         `${api}/projects/updates?workspaceId=${workspaceId}`
+      );
       if (!response.ok) throw new Error('Could not load project updates.');
       setUpdates(((await response.json()) as { data: ProjectUpdate[] }).data);
    }, []);
@@ -46,12 +49,11 @@ export default function ProjectUpdatesSettings() {
       );
    }, [query, updates]);
    return (
-      <div className="w-full overflow-y-auto h-full">
-         <div className="max-w-4xl mx-auto px-6 py-10">
-            <h1 className="text-2xl font-medium">Project updates</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-               Review project updates collected across the workspace
-            </p>
+      <SettingsShell
+         title="Project updates"
+         description="Review project updates collected across the workspace"
+      >
+         <div>
             <div className="mt-6">
                <Input
                   placeholder="Filter by project, author or update..."
@@ -110,6 +112,6 @@ export default function ProjectUpdatesSettings() {
                </div>
             )}
          </div>
-      </div>
+      </SettingsShell>
    );
 }
