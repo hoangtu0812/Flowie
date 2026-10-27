@@ -73,6 +73,11 @@ class Settings:
     auth_login_account_limit: int = 20
     auth_login_ip_limit: int = 300
     auth_mfa_encryption_keys: str = ''
+    # Seconds between periodic source-control syncs for servers that webhooks cannot reach.
+    # 0 disables it; positive values are raised to at least 60 to protect provider rate limits.
+    # VI: Số giây giữa các lần đồng bộ source-control định kỳ cho server webhook không tới được.
+    # 0 là tắt; giá trị dương tối thiểu 60 để bảo vệ giới hạn tần suất của provider.
+    scm_sync_interval_seconds: int = 0
 
     @classmethod
     def from_environment(cls) -> 'Settings':
@@ -118,6 +123,7 @@ class Settings:
             scm_github_app_id=getenv('SCM_GITHUB_APP_ID', '').strip(),
             scm_github_app_private_key=getenv('SCM_GITHUB_APP_PRIVATE_KEY', '').replace('\\n', '\n').strip(),
             scm_github_webhook_secret=getenv('SCM_GITHUB_WEBHOOK_SECRET', '').strip(),
+            scm_sync_interval_seconds=_sync_interval(int(getenv('SCM_SYNC_INTERVAL_SECONDS', '0'))),
             smtp_host=getenv('SMTP_HOST', '').strip(),
             smtp_port=int(getenv('SMTP_PORT', '587')),
             smtp_username=getenv('SMTP_USERNAME', '').strip(),
@@ -132,3 +138,7 @@ class Settings:
             mcp_max_result_bytes=max(1024, min(1048576, int(getenv('MCP_MAX_RESULT_BYTES', '262144')))),
             mcp_max_idempotency_keys=max(100,min(100000,int(getenv('MCP_MAX_IDEMPOTENCY_KEYS','10000')))),
         )
+
+
+def _sync_interval(seconds: int) -> int:
+    return 0 if seconds <= 0 else max(60, seconds)

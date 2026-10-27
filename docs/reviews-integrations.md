@@ -68,6 +68,26 @@ provider permission or credential, retry synchronization, and reactivate the
 connection if needed. Repeated webhook deliveries are safe because provider
 delivery IDs and review identities are idempotent.
 
+### Periodic synchronization
+
+Use periodic synchronization instead of webhooks when GitHub or Azure DevOps
+cannot reach the API: an internal-only hostname, a self-signed certificate, or
+a firewall that blocks inbound provider traffic. Set the interval in seconds:
+
+```dotenv
+SCM_SYNC_INTERVAL_SECONDS=300
+```
+
+`0` (the default) disables it; positive values below 60 are raised to 60. The
+`api` service then runs the same synchronization as the Sync button for every
+`ACTIVE` or `ERROR` connection whose last successful sync is at least one
+interval old, one connection at a time, with the same 100-PR window. Manual
+Sync resets that clock, and a connection already synchronizing in any process
+is skipped through a PostgreSQL advisory lock; a manual Sync during that time
+returns 409. Failures are recorded on the connection exactly like manual sync.
+Changes appear up to one interval late, so keep webhooks where they work and
+leave this off there.
+
 ## CT107 rollout checklist
 
 Before the production push:
