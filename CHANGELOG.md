@@ -16,7 +16,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
-- Agent can use an internal, OpenAI-compatible AI server (for example `http://192.168.98.100:4000/v1`): list its host in `AGENT_PROVIDER_ALLOWED_HOSTS`, recreate the `api` service, then save the URL, model and key under Agent personalization → OpenAI connection. Other hosts still require the official HTTPS API.
+- Agent can use an internal, OpenAI-compatible AI server (for example `http://192.168.98.100:4000/v1`): list its host in `AGENT_PROVIDER_ALLOWED_HOSTS`, recreate the `api` service, then save the URL, model and key under Agent personalization → OpenAI connection. Other hosts still require the official HTTPS API. (#29)
   VI: Agent có thể dùng máy chủ AI nội bộ tương thích OpenAI (ví dụ `http://192.168.98.100:4000/v1`): khai báo host trong `AGENT_PROVIDER_ALLOWED_HOSTS`, tạo lại service `api`, rồi lưu URL, model và key tại Agent personalization → OpenAI connection. Các host khác vẫn phải dùng API HTTPS chính thức.
 
 - Pasting a single web link into an issue description or comment turns it into a link titled with the page's title. (#28)
