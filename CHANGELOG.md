@@ -39,7 +39,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
-- An issue opened from a project's page now shows the project in its breadcrumb, and that crumb returns to the project's issue list instead of the team's. Previous / next, reloads and copied links keep it; issues opened elsewhere still show the team.
+- An issue opened from a project's page now shows the project in its breadcrumb, and that crumb returns to the project's issue list instead of the team's. Previous / next, reloads and copied links keep it; issues opened elsewhere still show the team. (#34)
   VI: Issue mở từ trang dự án giờ hiển thị dự án trên breadcrumb, và bấm vào đó quay về danh sách issue của dự án thay vì của team. Nút trước / sau, tải lại trang và link sao chép vẫn giữ breadcrumb này; issue mở từ nơi khác vẫn hiển thị team.
 
 - Signing in under a path such as `/flowie` no longer lands on "Page not found" at `/flowie/flowie`: the web container now applies `NEXT_PUBLIC_BASE_PATH` at runtime as well as at build. Rebuild the `web` service to apply it. (#32)
