@@ -16,7 +16,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
-- Flowie can run under a path of another site, for example `https://poc-dtd.bsr.com.vn/flowie`: set `NEXT_PUBLIC_BASE_PATH=/flowie`, add the same prefix to `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_APP_URL` and `AZURE_AD_REDIRECT_URI`, rebuild `web`, and add the proxy locations in `docs/sub-path-deployment.md`. Left empty, Flowie stays at the domain root.
+- Flowie can run under a path of another site, for example `https://poc-dtd.bsr.com.vn/flowie`: set `NEXT_PUBLIC_BASE_PATH=/flowie`, add the same prefix to `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_APP_URL` and `AZURE_AD_REDIRECT_URI`, rebuild `web`, and add the proxy locations in `docs/sub-path-deployment.md`. Left empty, Flowie stays at the domain root. (#30)
   VI: Flowie có thể chạy dưới một đường dẫn của site khác, ví dụ `https://poc-dtd.bsr.com.vn/flowie`: đặt `NEXT_PUBLIC_BASE_PATH=/flowie`, thêm cùng tiền tố vào `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_APP_URL` và `AZURE_AD_REDIRECT_URI`, build lại `web`, rồi thêm các location proxy theo `docs/sub-path-deployment.md`. Để trống thì Flowie vẫn chạy ở gốc domain.
 
 - Agent can use an internal, OpenAI-compatible AI server (for example `http://192.168.98.100:4000/v1`): list its host in `AGENT_PROVIDER_ALLOWED_HOSTS`, recreate the `api` service, then save the URL, model and key under Agent personalization → OpenAI connection. Other hosts still require the official HTTPS API. (#29)
