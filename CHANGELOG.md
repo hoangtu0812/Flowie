@@ -39,7 +39,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
-- Screenshots in issue descriptions and comments load again after Flowie moves to another domain or sub-path: links saved with the old host, such as `https://flowie.dtd.bsr.com.vn/api/v1/attachments/…/preview`, are now fetched from the current API by attachment id. Rebuild the `web` service to apply it.
+- Screenshots in issue descriptions and comments load again after Flowie moves to another domain or sub-path: links saved with the old host, such as `https://flowie.dtd.bsr.com.vn/api/v1/attachments/…/preview`, are now fetched from the current API by attachment id. Rebuild the `web` service to apply it. (#35)
   VI: Ảnh chụp màn hình trong mô tả và comment hiển thị lại sau khi Flowie chuyển sang domain hoặc sub-path khác: link lưu với host cũ, ví dụ `https://flowie.dtd.bsr.com.vn/api/v1/attachments/…/preview`, giờ được tải từ API hiện tại theo id đính kèm. Build lại service `web` để áp dụng.
 
 - An issue opened from a project's page now shows the project in its breadcrumb, and that crumb returns to the project's issue list instead of the team's. Previous / next, reloads and copied links keep it; issues opened elsewhere still show the team. (#34)
