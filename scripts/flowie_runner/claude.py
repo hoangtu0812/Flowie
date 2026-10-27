@@ -3,10 +3,22 @@ import sys
 from uuid import uuid4
 
 from .process import run_process
-from .prompt import SUMMARY_SCHEMA, checked_summary, task_prompt
+from .prompt import (
+    REVIEW_SCHEMA,
+    SUMMARY_SCHEMA,
+    checked_review,
+    checked_summary,
+    review_prompt,
+    task_prompt,
+)
 
 # File tools only: the parent runner owns shell, test, git and network side effects.
 TOOLS = "Read,Edit,Write,Glob,Grep"
+# The review step reads the checkout only; it must not change files before the plan
+# and target end date are recorded.
+# VI: Bước review chỉ đọc checkout; không được sửa file trước khi kế hoạch và ngày
+# VI: kết thúc dự kiến được ghi nhận.
+REVIEW_TOOLS = "Read,Glob,Grep"
 REQUIRED_FLAGS = [
     "--print",
     "--output-format",
@@ -43,7 +55,21 @@ class ClaudeProvider:
         if not logged_in:
             raise RuntimeError("Sign in to Claude Code before starting local work.")
 
+    async def review(self, config, context, path):
+        output = await self._run(
+            config, context, path, review_prompt(context), REVIEW_SCHEMA,
+            REVIEW_TOOLS, "default",
+        )
+        return checked_review(output, "Claude Code")
+
     async def execute(self, config, context, path):
+        output = await self._run(
+            config, context, path, task_prompt(context), SUMMARY_SCHEMA,
+            TOOLS, "acceptEdits",
+        )
+        return checked_summary(output, "Claude Code")
+
+    async def _run(self, config, context, path, prompt, schema, tools, mode):
         session = str(uuid4())
         identifier = str(context.get("issue", {}).get("identifier") or "run")[:50]
         # The transcript is kept so operators can follow or resume the session; stdout
@@ -64,13 +90,13 @@ class ClaudeProvider:
                 "--output-format",
                 "json",
                 "--json-schema",
-                json.dumps(SUMMARY_SCHEMA),
+                json.dumps(schema),
                 "--permission-mode",
-                "acceptEdits",
+                mode,
                 "--permission-prompts",
                 "none",
                 "--tools",
-                TOOLS,
+                tools,
                 "--restricted",
                 "--strict-mcp-config",
                 "--session-id",
@@ -80,7 +106,7 @@ class ClaudeProvider:
             ],
             path,
             config.command_timeout,
-            stdin=task_prompt(context),
+            stdin=prompt,
             capture=True,
         )
         if code:
@@ -92,4 +118,4 @@ class ClaudeProvider:
         value = json.loads(output)
         if value.get("is_error") or value.get("subtype") != "success":
             raise RuntimeError("Claude Code did not finish the task.")
-        return checked_summary(value.get("structured_output"), "Claude Code")
+        return value.get("structured_output")

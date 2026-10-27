@@ -18,6 +18,48 @@ def _validate_schedule_dates(
         )
 
 
+async def _enforce_start_gate(
+    db: AsyncSession,
+    workspace_id: str,
+    team_id: str | None,
+    previous_status_id: str | None,
+    category: str | None,
+    target_date: datetime | None,
+) -> None:
+    """Require the reviewed status and a target end date before work starts.
+
+    Applies only when the issue enters a STARTED status from outside STARTED
+    (``previous_status_id`` is None on create), and only when the workspace or
+    the issue's team marks at least one status ``required_before_start``. Moves
+    between STARTED statuses (In Progress, Review, Blocked) stay free, and
+    workspaces that never mark a status keep their existing behavior.
+    VI: Bắt buộc qua status đã review và có ngày kết thúc dự kiến trước khi làm.
+    VI: Chỉ áp dụng khi issue vào status STARTED từ ngoài nhóm STARTED
+    VI: (``previous_status_id`` là None khi tạo mới), và chỉ khi workspace hoặc
+    VI: team của issue có ít nhất một status bật ``required_before_start``.
+    VI: Chuyển giữa các status STARTED (In Progress, Review, Blocked) vẫn tự do;
+    VI: workspace không bật cờ nào thì giữ nguyên hành vi cũ.
+    """
+    if category != "STARTED":
+        return
+    rows = (await db.execute(text(
+        '''SELECT id, name, category, required_before_start FROM issue_statuses
+           WHERE workspace_id=:workspace AND (team_id IS NULL OR team_id=:team)
+             AND (required_before_start OR id=:previous)
+           ORDER BY position, name'''
+    ), {'workspace': workspace_id, 'team': team_id, 'previous': previous_status_id})).mappings().all()
+    gates = [row for row in rows if row['required_before_start']]
+    previous = next((row for row in rows if row['id'] == previous_status_id), None)
+    if not gates or (previous and previous['category'] == 'STARTED'):
+        return
+    if not previous or not previous['required_before_start'] or target_date is None:
+        raise ApiError(
+            409,
+            f"Move this issue to {' or '.join(row['name'] for row in gates)} and set a target end date before starting work.",
+            "Conflict",
+        )
+
+
 async def _ensure_circle_issue_statuses(db: AsyncSession, workspace_id: str) -> None:
     """Seed an empty workflow without overwriting administrator customizations."""
     existing_workflow = (await db.execute(text(

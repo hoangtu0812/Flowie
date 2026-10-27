@@ -19,6 +19,7 @@ class StatusValues(BaseModel):
     category: Category
     color: str = Field(pattern=r'^#[0-9a-fA-F]{6}$')
     position: int = Field(default=0, ge=0, le=10000)
+    requiredBeforeStart: bool = False
 
 
 class CreateStatus(StatusValues):
@@ -39,6 +40,7 @@ async def statuses(db, workspace, user):
         ORDER BY s.position,s.name,s.id'''), {'workspace':workspace,'user':user['id']})).mappings().all()
     return [{'id':r['id'],'name':r['name'],'category':r['category'],'color':r['color'],
              'position':r['position'],'teamId':r['team_id'],'issueCount':r['issue_count'],
+             'requiredBeforeStart':r['required_before_start'],
              'updatedAt':r['updated_at']} for r in rows]
 
 
@@ -68,9 +70,13 @@ async def mutate_status(db, workspace, user, values=None, *, identifier=None, ex
     if remove:
         await db.execute(text('DELETE FROM issue_statuses WHERE id=:id'), {'id':identifier})
     else:
-        values = {**values,'name':values['name'].strip()}
+        values = {**values,'name':values['name'].strip(),'requiredBeforeStart':values.get('requiredBeforeStart',False)}
         if not values['name']:
             raise ApiError(400,'Status name is required.','Bad Request')
+        # The start gate is the step before work, so it must sit before STARTED.
+        # VI: Cổng bắt đầu là bước trước khi làm nên phải nằm trước nhóm STARTED.
+        if values['requiredBeforeStart'] and values['category'] not in ('TRIAGE','BACKLOG','UNSTARTED'):
+            raise ApiError(400,'Only Triage, Backlog or Unstarted statuses can be required before start.','Bad Request')
         duplicate = (await db.execute(text('''SELECT id FROM issue_statuses WHERE workspace_id=:workspace
             AND team_id IS NOT DISTINCT FROM :team AND lower(name)=lower(:name) AND id<>:id'''),
             {'workspace':workspace,'team':previous['team_id'] if previous else None,'name':values['name'],'id':identifier or ''})).first()
@@ -78,11 +84,11 @@ async def mutate_status(db, workspace, user, values=None, *, identifier=None, ex
             raise ApiError(409,'A status with this name already exists.','Conflict')
         if identifier:
             await db.execute(text('''UPDATE issue_statuses SET name=:name,category=:category,color=:color,
-                position=:position,updated_at=:now WHERE id=:id'''), {**values,'now':now,'id':identifier})
+                position=:position,required_before_start=:requiredBeforeStart,updated_at=:now WHERE id=:id'''), {**values,'now':now,'id':identifier})
         else:
             identifier = _cuid()
-            await db.execute(text('''INSERT INTO issue_statuses(id,workspace_id,name,category,color,position,created_at,updated_at)
-                VALUES (:id,:workspace,:name,:category,:color,:position,:now,:now)'''), {**values,'id':identifier,'workspace':workspace,'now':now})
+            await db.execute(text('''INSERT INTO issue_statuses(id,workspace_id,name,category,color,position,required_before_start,created_at,updated_at)
+                VALUES (:id,:workspace,:name,:category,:color,:position,:requiredBeforeStart,:now,:now)'''), {**values,'id':identifier,'workspace':workspace,'now':now})
     team=previous['team_id'] if previous else None
     await db.execute(text('''INSERT INTO audit_logs(id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at)
         VALUES (:audit,:workspace,:user,:action,'issue-status',:id,CAST(:metadata AS jsonb),:now)'''), {'audit':_cuid(),'workspace':workspace,'user':user['id'],

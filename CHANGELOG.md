@@ -16,6 +16,12 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- Statuses can be marked "Required before start": once a workspace or team has one, an issue enters a Started status only from such a status and with a target end date. Moves between Started statuses stay free, and workspaces without a marked status are unchanged. Adds the `issue_statuses.required_before_start` column through a Prisma migration.
+  VI: Status có thể bật "Bắt buộc trước khi làm": khi workspace hoặc team có status như vậy, issue chỉ được vào nhóm Đang thực hiện từ status đó và phải có ngày kết thúc dự kiến. Chuyển giữa các status Đang thực hiện vẫn tự do; workspace chưa bật status nào giữ nguyên hành vi. Thêm cột `issue_statuses.required_before_start` qua migration Prisma.
+
+- The local Claude Code and Codex runner reviews each issue read-only first, records the plan as a comment and the estimated target end date on the issue, and only then implements it with that plan. The MCP `update_issue` tool accepts `targetDate`.
+  VI: Runner Claude Code và Codex chạy local giờ review issue ở chế độ chỉ đọc trước, ghi kế hoạch thành comment và ngày kết thúc dự kiến vào issue, rồi mới thực hiện theo kế hoạch đó. Tool MCP `update_issue` nhận thêm `targetDate`.
+
 - Flowie can run under a path of another site, for example `https://poc-dtd.bsr.com.vn/flowie`: set `NEXT_PUBLIC_BASE_PATH=/flowie`, add the same prefix to `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_APP_URL` and `AZURE_AD_REDIRECT_URI`, rebuild `web`, and add the proxy locations in `docs/sub-path-deployment.md`. Left empty, Flowie stays at the domain root. (#30)
   VI: Flowie có thể chạy dưới một đường dẫn của site khác, ví dụ `https://poc-dtd.bsr.com.vn/flowie`: đặt `NEXT_PUBLIC_BASE_PATH=/flowie`, thêm cùng tiền tố vào `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_APP_URL` và `AZURE_AD_REDIRECT_URI`, build lại `web`, rồi thêm các location proxy theo `docs/sub-path-deployment.md`. Để trống thì Flowie vẫn chạy ở gốc domain.
 
