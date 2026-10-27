@@ -1558,6 +1558,43 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result["text"], "one\n")
             self.assertEqual(result["nextOffset"], 4)
 
+    async def test_image_attachment_reader_checks_access_type_and_size(self):
+        from unittest.mock import AsyncMock, patch
+
+        image, denied, text_file, huge = _cuid(), _cuid(), _cuid(), _cuid()
+        async with self.factory() as db:
+            for identifier, issue, mime, size in [
+                (image, self.issue, "image/png", 4),
+                (denied, self.other_issue, "image/png", 4),
+                (text_file, self.issue, "text/plain", 4),
+                (huge, self.issue, "image/png", 5 * 1048576 + 1),
+            ]:
+                await db.execute(
+                    text("""INSERT INTO attachments (id,workspace_id,uploaded_by,entity_type,entity_id,object_key,filename,mime_type,size,created_at)
+                    VALUES (:id,:workspace,:user,'issue',:issue,:id,'shot.png',:mime,:size,:now)"""),
+                    {
+                        "id": identifier,
+                        "workspace": self.workspace,
+                        "user": self.user["id"],
+                        "issue": issue["id"],
+                        "mime": mime,
+                        "size": size,
+                        "now": _utcnow(),
+                    },
+                )
+            await db.commit()
+        with patch(
+            "app.storage.minio.MinioStorage.get",
+            AsyncMock(return_value=b"\x89PNG"),
+        ) as storage:
+            for blocked in (denied, text_file, huge):
+                with self.assertRaises(ApiError):
+                    await self.call("read_attachment_image", attachmentId=blocked)
+            storage.assert_not_called()
+            result = await self.call("read_attachment_image", attachmentId=image)
+            self.assertEqual(result["mimeType"], "image/png")
+            self.assertEqual(result["imageBase64"], "iVBORw==")
+
     async def test_mutation_budget_replays_and_inactive_retention(self):
         from app.modules.mcp.maintenance import cleanup
 

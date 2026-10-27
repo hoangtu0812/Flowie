@@ -68,8 +68,17 @@ class ToolApplication:
                             duration_ms=int((monotonic() - started) * 1000),
                         )
                     result = jsonable_encoder(result)
+                    # Image bytes are capped by the image reader itself; the JSON limit applies
+                    # to every other field.
+                    # VI: Byte ảnh đã có giới hạn riêng trong bộ đọc ảnh; giới hạn JSON áp dụng
+                    # VI: cho mọi trường còn lại.
+                    measured = (
+                        {key: value for key, value in result.items() if key != "imageBase64"}
+                        if isinstance(result, dict)
+                        else result
+                    )
                     if (
-                        len(json.dumps(result).encode())
+                        len(json.dumps(measured).encode())
                         > self.settings.mcp_max_result_bytes
                     ):
                         raise ApiError(

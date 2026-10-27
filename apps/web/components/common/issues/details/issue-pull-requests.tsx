@@ -206,16 +206,24 @@ function PullRequestCard({ review, orgId }: { review: CodeReview; orgId: string 
 
 /**
  * Lists pull requests linked to the issue (GitHub/Azure DevOps reviews synced by the SCM
- * integration) with state, branches, head commit and diff size. Hidden when none are linked
- * or the workspace has no SCM connection, so issues without code stay uncluttered.
+ * integration) with state, branches, head commit and diff size. When none are linked it says
+ * how to link one, since an empty, hidden section reads as a missing feature.
  * VI: Liệt kê pull request liên kết với issue (review GitHub/Azure DevOps được đồng bộ qua
- * VI: tích hợp SCM) kèm trạng thái, branch, commit mới nhất và độ lớn diff. Ẩn khi không có
- * VI: PR liên kết hoặc workspace chưa kết nối SCM để issue không có code luôn gọn.
+ * VI: tích hợp SCM) kèm trạng thái, branch, commit mới nhất và độ lớn diff. Khi chưa có PR thì
+ * VI: hướng dẫn cách liên kết, vì phần bị ẩn khi trống dễ bị hiểu là thiếu tính năng.
  */
-export function IssuePullRequests({ issueId, orgId }: { issueId: string; orgId: string }) {
+export function IssuePullRequests({
+   issueId,
+   identifier,
+   orgId,
+}: {
+   issueId: string;
+   identifier: string;
+   orgId: string;
+}) {
    const tx = useMessages(messages);
    const workspaceId = useIssuesStore((state) => state.workspaceId);
-   const [reviews, setReviews] = useState<CodeReview[]>([]);
+   const [reviews, setReviews] = useState<CodeReview[]>();
 
    useEffect(() => {
       if (!workspaceId) return;
@@ -228,14 +236,24 @@ export function IssuePullRequests({ issueId, orgId }: { issueId: string; orgId: 
       };
    }, [workspaceId, issueId]);
 
-   if (!reviews.length) return null;
+   if (!reviews) return null;
    return (
       <section className="flex flex-col gap-2" aria-label={tx('Pull requests')}>
          <h3 className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
             <GitPullRequest className="size-3.5" aria-hidden="true" />
             {tx('Pull requests')}
-            <span className="tabular-nums">{reviews.length}</span>
+            {reviews.length > 0 && <span className="tabular-nums">{reviews.length}</span>}
          </h3>
+         {!reviews.length && (
+            <p className="text-xs text-muted-foreground">
+               {tx(
+                  'No linked pull requests. Put {identifier} in a branch name or PR title to link one.',
+                  {
+                     identifier,
+                  }
+               )}
+            </p>
+         )}
          {reviews.map((review) => (
             <PullRequestCard key={review.id} review={review} orgId={orgId} />
          ))}

@@ -47,6 +47,10 @@ class AttachmentInput(StrictInput):
     limit: int = Field(default=10000, ge=1, le=10000)
 
 
+class ImageAttachmentInput(StrictInput):
+    attachmentId: str = Field(min_length=1)
+
+
 class PageInput(StrictInput):
     limit: int = Field(default=25, ge=1, le=100)
     cursor: str | None = Field(default=None, max_length=1000)

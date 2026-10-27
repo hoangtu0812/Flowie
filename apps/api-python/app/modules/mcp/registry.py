@@ -49,6 +49,13 @@ DEFINITIONS = (
         "attachment",
     ),
     ToolDefinition(
+        "read_attachment_image",
+        "Read an authorized PNG, JPEG, GIF or WebP attachment of at most 5 MiB as an image, such as a screenshot in a task description or comment. Take the id from attachment lists or from /attachments/<id>/preview links in descriptions and comments.",
+        c.ImageAttachmentInput,
+        "issues:read",
+        "attachment_image",
+    ),
+    ToolDefinition(
         "get_run",
         "Read an authorized agent run; lease secrets are visible only to its owning connection.",
         r.RunInput,
