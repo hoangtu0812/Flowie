@@ -4,7 +4,7 @@ import { useMessages } from '@/features/shared/use-messages';
 import { messages } from '@/features/issues/messages.vi';
 
 import { useRef, useState } from 'react';
-import { History, Paperclip, Pencil, Reply, Trash2 } from 'lucide-react';
+import { Check, History, Paperclip, Pencil, Reply, Trash2, X } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
@@ -16,6 +16,7 @@ import { useCurrentUserId } from '@/components/common/my-issues/use-my-issues';
 import { commentHistory, editComment, removeComment, type IssueComment } from './comments-api';
 import { SubmissionGate } from '@/features/shared/submission-gate';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { AgentBadge } from './agent-badge';
 
 export function CommentRow({
    comment,
@@ -67,6 +68,7 @@ export function CommentRow({
                </AvatarFallback>
             </Avatar>
             <Text weight="medium">{comment.author.name}</Text>
+            {comment.agent && <AgentBadge agent={comment.agent} />}
             <Text type="supporting">
                {relativeTime(comment.createdAt, Date.now(), locale)}
                {comment.version > 1 ? tx(' · edited') : ''}
@@ -144,6 +146,9 @@ export function CommentRow({
                <HStack gap={2}>
                   <Button
                      label={tx('Save comment')}
+                     tooltip={tx('Save comment')}
+                     icon={<Check className="size-4" />}
+                     isIconOnly
                      variant="primary"
                      size="sm"
                      isDisabled={!draft.trim()}
@@ -156,6 +161,9 @@ export function CommentRow({
                   />
                   <Button
                      label={tx('Cancel comment editing')}
+                     tooltip={tx('Cancel comment editing')}
+                     icon={<X className="size-4" />}
+                     isIconOnly
                      variant="ghost"
                      size="sm"
                      onClick={() => setEditing(false)}
@@ -171,6 +179,9 @@ export function CommentRow({
                <Text>{tx('Delete this comment? Replies remain visible.')}</Text>
                <Button
                   label={tx('Confirm delete comment')}
+                  tooltip={tx('Confirm delete comment')}
+                  icon={<Trash2 className="size-4" />}
+                  isIconOnly
                   variant="destructive"
                   size="sm"
                   clickAction={() =>
@@ -182,6 +193,9 @@ export function CommentRow({
                />
                <Button
                   label={tx('Cancel deletion')}
+                  tooltip={tx('Cancel deletion')}
+                  icon={<X className="size-4" />}
+                  isIconOnly
                   variant="ghost"
                   size="sm"
                   onClick={() => setConfirmDelete(false)}

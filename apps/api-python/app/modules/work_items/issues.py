@@ -298,9 +298,6 @@ async def update_issue(
             ),
             {"issue_id": issue_id, "user_id": values["assigneeId"]},
         )
-    await _write_activity(
-        db, workspaceId, issue_id, user["id"], "issue.updated", {"fields": list(values)}
-    )
     recipients = await issue_recipient_ids(db, issue_id, previous_assignee_id)
     entity_path, entity_label = f"/issue/{issue['identifier']}", issue["identifier"]
     status_changed = (
@@ -385,6 +382,21 @@ async def update_issue(
         )
     if "description" in values and values["description"] != issue["description"]:
         changes.append(("Description", "updated"))
+    # Stores each change as a field label and a "before → after" text so the activity feed can
+    # say what changed without re-deriving historical names; "fields" keeps older readers working.
+    # VI: Lưu mỗi thay đổi dạng nhãn trường và chuỗi "trước → sau" để activity feed nói rõ thay
+    # VI: đổi gì mà không phải tra lại tên cũ; "fields" giữ tương thích với phía đọc cũ.
+    await _write_activity(
+        db,
+        workspaceId,
+        issue_id,
+        user["id"],
+        "issue.updated",
+        {
+            "fields": list(values),
+            "changes": [{"field": field, "change": change} for field, change in changes],
+        },
+    )
 
     change_batch = (
         await create_notification_batch(

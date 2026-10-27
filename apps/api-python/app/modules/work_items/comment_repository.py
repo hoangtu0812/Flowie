@@ -44,7 +44,8 @@ async def _comment(
 ) -> dict[str, Any]:
     result = await db.execute(
         text(
-            """SELECT c.*, u.id AS author_id_value, u.name AS author_name, u.avatar_url AS author_avatar_url
+            """SELECT c.*, u.id AS author_id_value, u.name AS author_name, u.avatar_url AS author_avatar_url,
+                      (SELECT COALESCE(a.data->'agent','{}'::jsonb) FROM activities a WHERE a.issue_id=c.issue_id AND a.type='comment.created' AND a.data->>'commentId'=c.id AND a.data->>'source'='AI' LIMIT 1) AS agent
                FROM comments c
                JOIN issues i ON i.id = c.issue_id
                JOIN users u ON u.id = c.author_id
@@ -81,6 +82,7 @@ async def _comment(
         "updatedAt": row["updated_at"],
         "version": row.get("version", 1),
         "deletedAt": row["deleted_at"],
+        "agent": row["agent"],
         "author": {
             "id": row["author_id_value"],
             "name": row["author_name"],

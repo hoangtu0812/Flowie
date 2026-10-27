@@ -58,6 +58,7 @@ async def load_principal(db, connection_id: str) -> Principal:
         frozenset(row["scopes"]),
         tuple(row["team_ids"]),
         tuple(row["project_ids"]),
+        row["name"],
     )
 
 
@@ -95,6 +96,7 @@ async def authenticate(db: AsyncSession, token: str) -> Principal:
         scopes=frozenset(row["scopes"]),
         team_ids=tuple(row["team_ids"]),
         project_ids=tuple(row["project_ids"]),
+        connection_name=row["name"],
     )
 
 

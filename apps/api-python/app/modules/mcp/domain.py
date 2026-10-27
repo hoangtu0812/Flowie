@@ -38,6 +38,7 @@ class Principal:
     scopes: frozenset[str]
     team_ids: tuple[str, ...]
     project_ids: tuple[str, ...]
+    connection_name: str = ""
 
     def require(self, *scopes: str) -> None:
         if not set(scopes).issubset(self.scopes):

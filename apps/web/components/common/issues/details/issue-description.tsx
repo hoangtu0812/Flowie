@@ -12,7 +12,7 @@ import { useImagePaste } from '@/hooks/use-image-paste';
 import { Issue } from '@/mock-data/issues';
 import { useIssuesStore } from '@/store/issues-store';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Pencil } from 'lucide-react';
+import { Check, Pencil, X } from 'lucide-react';
 import { useModifierKey } from '@/features/shared/use-modifier-key';
 import { SubmissionGate } from '@/features/shared/submission-gate';
 
@@ -106,6 +106,8 @@ export function IssueDescription({ issue }: { issue: Issue }) {
                <HStack gap={2}>
                   <Button
                      label={tx('Save description')}
+                     tooltip={tx('Save description')}
+                     isIconOnly
                      icon={<Check className="size-4" />}
                      variant="primary"
                      size="sm"
@@ -115,6 +117,9 @@ export function IssueDescription({ issue }: { issue: Issue }) {
                   />
                   <Button
                      label={tx('Cancel editing')}
+                     tooltip={tx('Cancel editing')}
+                     icon={<X className="size-4" />}
+                     isIconOnly
                      variant="ghost"
                      size="sm"
                      onClick={() => {

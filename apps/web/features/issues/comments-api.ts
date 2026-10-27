@@ -4,6 +4,9 @@ import type { Attachment } from '@/lib/attachments';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 export type ActivityActor = { id: string; name: string; avatarUrl?: string | null } | null;
+/** MCP connection that wrote a record; `{}` when it predates stored connection names. */
+/** VI: MCP connection đã ghi bản ghi; `{}` khi bản ghi có trước lúc lưu tên connection. */
+export type AgentIdentity = { connectionId?: string; name?: string };
 export type IssueActivity = {
    id: string;
    type: string;
@@ -25,6 +28,7 @@ export type IssueComment = {
    createdAt: string;
    author: NonNullable<ActivityActor>;
    reactions: Array<{ emoji: string; count: number; reacted: boolean }>;
+   agent?: AgentIdentity | null;
 };
 
 async function data<T>(response: Response): Promise<T> {

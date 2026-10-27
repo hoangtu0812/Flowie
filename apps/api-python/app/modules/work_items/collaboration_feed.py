@@ -17,7 +17,8 @@ async def comment_rows(
         (
             await db.execute(
                 text("""SELECT c.*,u.name AS author_name,u.avatar_url AS author_avatar_url,
-        (SELECT count(*)::int FROM comments child WHERE child.parent_comment_id=c.id AND child.deleted_at IS NULL) AS reply_count
+        (SELECT count(*)::int FROM comments child WHERE child.parent_comment_id=c.id AND child.deleted_at IS NULL) AS reply_count,
+        (SELECT COALESCE(a.data->'agent','{}'::jsonb) FROM activities a WHERE a.issue_id=c.issue_id AND a.type='comment.created' AND a.data->>'commentId'=c.id AND a.data->>'source'='AI' LIMIT 1) AS agent
         FROM comments c JOIN users u ON u.id=c.author_id JOIN issues i ON i.id=c.issue_id
         WHERE c.id=ANY(CAST(:ids AS text[])) AND i.workspace_id=:workspace AND c.deleted_at IS NULL"""),
                 params,
@@ -47,6 +48,10 @@ async def comment_rows(
         )
     for row in attachments:
         grouped_attachments.setdefault(row["entityId"], []).append(dict(row))
+    # "agent" is the MCP connection a comment was written through, {} for agent comments recorded
+    # before connection names were stored, and None for comments written by a person.
+    # VI: "agent" là MCP connection đã dùng để viết comment, {} với comment của agent được ghi
+    # VI: trước khi lưu tên connection, và None với comment do người viết.
     by_id = {}
     for row in rows:
         by_id[row["id"]] = {
@@ -62,6 +67,7 @@ async def comment_rows(
             "updatedAt": row["updated_at"],
             "deletedAt": row["deleted_at"],
             "replyCount": row["reply_count"],
+            "agent": row["agent"],
             "author": {
                 "id": row["author_id"],
                 "name": row["author_name"],
