@@ -21,7 +21,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { SelectMenu } from './shared';
+import { SelectMenu, SettingsShell } from './shared';
 
 type LabelGroup = {
    id: string;
@@ -92,7 +92,9 @@ export default function IssueLabelsSettings({ scope = 'issue' }: { scope?: 'issu
       }
       setWorkspaceId(id);
       setLabels(((await labelsResponse.json()) as { data: WorkspaceLabel[] }).data);
-      setGroups(groupsResponse ? ((await groupsResponse.json()) as { data: LabelGroup[] }).data : []);
+      setGroups(
+         groupsResponse ? ((await groupsResponse.json()) as { data: LabelGroup[] }).data : []
+      );
    }, [isProject, kind, labelPath]);
 
    useEffect(() => {
@@ -163,7 +165,8 @@ export default function IssueLabelsSettings({ scope = 'issue' }: { scope?: 'issu
                }),
             }
          );
-         if (!response.ok) throw new Error(await errorMessage(response, `Could not save ${kind} label.`));
+         if (!response.ok)
+            throw new Error(await errorMessage(response, `Could not save ${kind} label.`));
          await load();
          setLabelOpen(false);
       } catch (caught) {
@@ -213,7 +216,8 @@ export default function IssueLabelsSettings({ scope = 'issue' }: { scope?: 'issu
             `${api}/${labelPath}/${editingLabel.id}?workspaceId=${workspaceId}`,
             { method: 'DELETE' }
          );
-         if (!response.ok) throw new Error(await errorMessage(response, `Could not delete ${kind} label.`));
+         if (!response.ok)
+            throw new Error(await errorMessage(response, `Could not delete ${kind} label.`));
          await load();
          setLabelOpen(false);
       } catch (caught) {
@@ -244,10 +248,15 @@ export default function IssueLabelsSettings({ scope = 'issue' }: { scope?: 'issu
    };
 
    return (
-      <div className="w-full overflow-y-auto h-full">
-         <div className="max-w-5xl mx-auto px-6 py-10 pb-20">
-            <h1 className="text-2xl font-medium mb-6">{isProject ? 'Project labels' : 'Issue labels'}</h1>
-
+      <SettingsShell
+         title={isProject ? 'Project labels' : 'Issue labels'}
+         description={
+            isProject
+               ? 'Labels that categorize projects across the workspace'
+               : 'Labels that categorize issues across the workspace and its teams'
+         }
+      >
+         <div>
             <div className="flex items-center justify-between gap-3 mb-6">
                <div className="flex items-center gap-2">
                   <Input
@@ -259,9 +268,11 @@ export default function IssueLabelsSettings({ scope = 'issue' }: { scope?: 'issu
                   <SelectMenu options={['Workspace', 'All teams']} />
                </div>
                <div className="flex items-center gap-2">
-                  {!isProject && <Button size="xs" variant="secondary" onClick={showCreateGroup}>
-                     New group
-                  </Button>}
+                  {!isProject && (
+                     <Button size="xs" variant="secondary" onClick={showCreateGroup}>
+                        New group
+                     </Button>
+                  )}
                   <Button size="xs" onClick={showCreateLabel} disabled={state !== 'ready'}>
                      New label
                   </Button>
@@ -301,11 +312,14 @@ export default function IssueLabelsSettings({ scope = 'issue' }: { scope?: 'issu
                         {label.description}
                      </div>
                      <div className="w-[70px] text-xs text-muted-foreground">
-                        {(label._count.issueLinks ?? label._count.projectLinks ?? 0) > 0 && formatCount(label._count.issueLinks ?? label._count.projectLinks ?? 0)}
+                        {(label._count.issueLinks ?? label._count.projectLinks ?? 0) > 0 &&
+                           formatCount(label._count.issueLinks ?? label._count.projectLinks ?? 0)}
                      </div>
-                     {!isProject && <div className="hidden sm:block w-[110px] text-xs text-muted-foreground">
-                        {formatDate(label.lastApplied ?? null)}
-                     </div>}
+                     {!isProject && (
+                        <div className="hidden sm:block w-[110px] text-xs text-muted-foreground">
+                           {formatDate(label.lastApplied ?? null)}
+                        </div>
+                     )}
                      <div className="w-[80px] text-xs text-muted-foreground">
                         {formatDate(label.createdAt)}
                      </div>
@@ -344,7 +358,8 @@ export default function IssueLabelsSettings({ scope = 'issue' }: { scope?: 'issu
                <DialogHeader>
                   <DialogTitle>{editingLabel ? 'Edit label' : 'New label'}</DialogTitle>
                   <DialogDescription>
-                     Create a reusable label for {isProject ? 'projects' : 'issues'} in this workspace.
+                     Create a reusable label for {isProject ? 'projects' : 'issues'} in this
+                     workspace.
                   </DialogDescription>
                </DialogHeader>
                <form onSubmit={saveLabel} className="grid gap-4">
@@ -382,30 +397,32 @@ export default function IssueLabelsSettings({ scope = 'issue' }: { scope?: 'issu
                         />
                      </div>
                   </div>
-                  {!isProject && <div className="grid gap-2">
-                     <Label htmlFor="label-group">Group</Label>
-                     <Select
-                        value={labelDraft.groupId || 'none'}
-                        onValueChange={(value) =>
-                           setLabelDraft((draft) => ({
-                              ...draft,
-                              groupId: value === 'none' ? '' : value,
-                           }))
-                        }
-                     >
-                        <SelectTrigger id="label-group">
-                           <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                           <SelectItem value="none">No group</SelectItem>
-                           {groups.map((group) => (
-                              <SelectItem key={group.id} value={group.id}>
-                                 {group.name}
-                              </SelectItem>
-                           ))}
-                        </SelectContent>
-                     </Select>
-                  </div>}
+                  {!isProject && (
+                     <div className="grid gap-2">
+                        <Label htmlFor="label-group">Group</Label>
+                        <Select
+                           value={labelDraft.groupId || 'none'}
+                           onValueChange={(value) =>
+                              setLabelDraft((draft) => ({
+                                 ...draft,
+                                 groupId: value === 'none' ? '' : value,
+                              }))
+                           }
+                        >
+                           <SelectTrigger id="label-group">
+                              <SelectValue />
+                           </SelectTrigger>
+                           <SelectContent>
+                              <SelectItem value="none">No group</SelectItem>
+                              {groups.map((group) => (
+                                 <SelectItem key={group.id} value={group.id}>
+                                    {group.name}
+                                 </SelectItem>
+                              ))}
+                           </SelectContent>
+                        </Select>
+                     </div>
+                  )}
                   <div className="grid gap-2">
                      <Label htmlFor="label-description">Description</Label>
                      <Textarea
@@ -440,59 +457,70 @@ export default function IssueLabelsSettings({ scope = 'issue' }: { scope?: 'issu
             </DialogContent>
          </Dialog>
 
-         {!isProject && <Dialog open={groupOpen} onOpenChange={setGroupOpen}>
-            <DialogContent>
-               <DialogHeader>
-                  <DialogTitle>{editingGroup ? 'Edit label group' : 'New label group'}</DialogTitle>
-                  <DialogDescription>
-                     Organize labels without changing their use on issues.
-                  </DialogDescription>
-               </DialogHeader>
-               <form onSubmit={saveGroup} className="grid gap-4">
-                  <div className="grid gap-2">
-                     <Label htmlFor="group-name">Name</Label>
-                     <Input
-                        id="group-name"
-                        value={groupDraft.name}
-                        autoFocus
-                        onChange={(event) =>
-                           setGroupDraft((draft) => ({ ...draft, name: event.target.value }))
-                        }
-                     />
-                  </div>
-                  <div className="grid gap-2">
-                     <Label htmlFor="group-description">Description</Label>
-                     <Textarea
-                        id="group-description"
-                        value={groupDraft.description}
-                        onChange={(event) =>
-                           setGroupDraft((draft) => ({ ...draft, description: event.target.value }))
-                        }
-                     />
-                  </div>
-                  {message && <p className="text-sm text-destructive">{message}</p>}
-                  <DialogFooter>
-                     {editingGroup && (
+         {!isProject && (
+            <Dialog open={groupOpen} onOpenChange={setGroupOpen}>
+               <DialogContent>
+                  <DialogHeader>
+                     <DialogTitle>
+                        {editingGroup ? 'Edit label group' : 'New label group'}
+                     </DialogTitle>
+                     <DialogDescription>
+                        Organize labels without changing their use on issues.
+                     </DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={saveGroup} className="grid gap-4">
+                     <div className="grid gap-2">
+                        <Label htmlFor="group-name">Name</Label>
+                        <Input
+                           id="group-name"
+                           value={groupDraft.name}
+                           autoFocus
+                           onChange={(event) =>
+                              setGroupDraft((draft) => ({ ...draft, name: event.target.value }))
+                           }
+                        />
+                     </div>
+                     <div className="grid gap-2">
+                        <Label htmlFor="group-description">Description</Label>
+                        <Textarea
+                           id="group-description"
+                           value={groupDraft.description}
+                           onChange={(event) =>
+                              setGroupDraft((draft) => ({
+                                 ...draft,
+                                 description: event.target.value,
+                              }))
+                           }
+                        />
+                     </div>
+                     {message && <p className="text-sm text-destructive">{message}</p>}
+                     <DialogFooter>
+                        {editingGroup && (
+                           <Button
+                              type="button"
+                              variant="ghost"
+                              className="mr-auto text-destructive"
+                              disabled={saving}
+                              onClick={() => void deleteGroup()}
+                           >
+                              Delete
+                           </Button>
+                        )}
                         <Button
                            type="button"
-                           variant="ghost"
-                           className="mr-auto text-destructive"
-                           disabled={saving}
-                           onClick={() => void deleteGroup()}
+                           variant="secondary"
+                           onClick={() => setGroupOpen(false)}
                         >
-                           Delete
+                           Cancel
                         </Button>
-                     )}
-                     <Button type="button" variant="secondary" onClick={() => setGroupOpen(false)}>
-                        Cancel
-                     </Button>
-                     <Button type="submit" disabled={saving || !groupDraft.name.trim()}>
-                        {saving ? 'Saving...' : editingGroup ? 'Save changes' : 'Create group'}
-                     </Button>
-                  </DialogFooter>
-               </form>
-            </DialogContent>
-         </Dialog>}
-      </div>
+                        <Button type="submit" disabled={saving || !groupDraft.name.trim()}>
+                           {saving ? 'Saving...' : editingGroup ? 'Save changes' : 'Create group'}
+                        </Button>
+                     </DialogFooter>
+                  </form>
+               </DialogContent>
+            </Dialog>
+         )}
+      </SettingsShell>
    );
 }

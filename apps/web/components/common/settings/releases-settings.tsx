@@ -19,6 +19,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Archive, CalendarDays, Package } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DashedSmiley } from './settings-placeholder';
+import { SettingsShell } from './shared';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -207,11 +208,9 @@ export default function ReleasesSettings() {
    };
 
    return (
-      <div className="w-full overflow-y-auto h-full">
-         <div className="max-w-4xl mx-auto px-6 py-10">
-            <h1 className="text-2xl font-medium">Releases</h1>
-
-            <div className="flex items-center justify-between gap-3 mt-6">
+      <SettingsShell title="Releases" description="Plan and track releases across the workspace">
+         <div>
+            <div className="flex items-center justify-between gap-3">
                <Input
                   placeholder="Filter by name..."
                   className="w-72 h-8"
@@ -365,6 +364,6 @@ export default function ReleasesSettings() {
                </DialogFooter>
             </DialogContent>
          </Dialog>
-      </div>
+      </SettingsShell>
    );
 }

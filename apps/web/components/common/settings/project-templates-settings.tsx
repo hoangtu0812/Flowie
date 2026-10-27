@@ -25,6 +25,7 @@ import {
 import { FileStack } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
+import { SettingsShell } from './shared';
 
 type Template = {
    id: string;
@@ -156,11 +157,12 @@ export default function ProjectTemplatesSettings() {
    };
 
    return (
-      <div className="w-full overflow-y-auto h-full">
-         <div className="max-w-4xl mx-auto px-6 py-10">
-            <h1 className="text-2xl font-medium">Project templates</h1>
-
-            <div className="flex items-center justify-between gap-3 mt-6">
+      <SettingsShell
+         title="Project templates"
+         description="Reusable starting points for new projects in this workspace"
+      >
+         <div>
+            <div className="flex items-center justify-between gap-3">
                <Input
                   placeholder="Filter by name..."
                   value={query}
@@ -322,6 +324,6 @@ export default function ProjectTemplatesSettings() {
                </AlertDialogFooter>
             </AlertDialogContent>
          </AlertDialog>
-      </div>
+      </SettingsShell>
    );
 }

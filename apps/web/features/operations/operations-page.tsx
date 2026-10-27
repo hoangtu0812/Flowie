@@ -8,6 +8,7 @@ import { List, ListItem } from '@astryxdesign/core/List';
 import { DesignSurface } from '@/components/common/design-surface';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
+import { SettingsShell } from '@/components/common/settings/shared';
 
 type Operations = {
    revision: string;
@@ -55,57 +56,61 @@ export default function OperationsPage() {
    const error = result?.scope === orgId ? result.error : undefined;
    return (
       <DesignSurface>
-         <VStack padding={6} gap={5} className="h-full overflow-auto">
-            <Heading level={1}>Operations</Heading>
-            <Button label="Refresh operations" onClick={reload} />
-            {error && <Text role="alert">{error}</Text>}
-            {!data && !error && <Text role="status">Loading operations…</Text>}
-            {data && (
-               <>
-                  <Text>Build: {data.revision}</Text>
-                  <Heading level={2}>Delivery queues</Heading>
-                  <List hasDividers>
-                     {data.queues.map((queue) => (
-                        <ListItem
-                           key={queue.name}
-                           label={queue.name}
-                           description={`${queue.pending} pending · ${queue.failed} failed · ${queue.lagSeconds}s queue lag`}
-                        />
-                     ))}
-                  </List>
-                  <Heading level={2}>Background tasks</Heading>
-                  <Text>
-                     Heartbeats track process liveness; progress records the last completed scan.
-                     The list shows live instances and the latest state for each job.
-                  </Text>
-                  {data.jobsTruncated && (
-                     <Text role="alert">
-                        More than 100 recent job instances match. Some instances are omitted.
+         <SettingsShell
+            title="Operations"
+            description="Delivery queues, background tasks and browser errors for this deployment"
+         >
+            <VStack gap={5} width="100%">
+               <Button label="Refresh operations" onClick={reload} />
+               {error && <Text role="alert">{error}</Text>}
+               {!data && !error && <Text role="status">Loading operations…</Text>}
+               {data && (
+                  <>
+                     <Text>Build: {data.revision}</Text>
+                     <Heading level={2}>Delivery queues</Heading>
+                     <List hasDividers>
+                        {data.queues.map((queue) => (
+                           <ListItem
+                              key={queue.name}
+                              label={queue.name}
+                              description={`${queue.pending} pending · ${queue.failed} failed · ${queue.lagSeconds}s queue lag`}
+                           />
+                        ))}
+                     </List>
+                     <Heading level={2}>Background tasks</Heading>
+                     <Text>
+                        Heartbeats track process liveness; progress records the last completed scan.
+                        The list shows live instances and the latest state for each job.
                      </Text>
-                  )}
-                  <List hasDividers>
-                     {data.jobs.map((job) => (
-                        <ListItem
-                           key={`${job.instance}/${job.job}`}
-                           label={`${job.job} · ${job.status}`}
-                           description={`Seen ${new Date(job.lastSeenAt).toLocaleString()} · Progress ${job.lastProgressAt ? new Date(job.lastProgressAt).toLocaleString() : 'not yet recorded'} · ${job.failures} failures${job.lastErrorCode ? ' · ' + job.lastErrorCode : ''}`}
-                        />
-                     ))}
-                  </List>
-                  <Heading level={2}>Browser errors in the last 24 hours</Heading>
-                  {!data.clientErrors.length && <Text>No browser errors reported.</Text>}
-                  <List hasDividers>
-                     {data.clientErrors.map((row) => (
-                        <ListItem
-                           key={`${row.category}/${row.route_kind}`}
-                           label={`${row.category} · ${row.route_kind}`}
-                           description={`${row.count} reports`}
-                        />
-                     ))}
-                  </List>
-               </>
-            )}
-         </VStack>
+                     {data.jobsTruncated && (
+                        <Text role="alert">
+                           More than 100 recent job instances match. Some instances are omitted.
+                        </Text>
+                     )}
+                     <List hasDividers>
+                        {data.jobs.map((job) => (
+                           <ListItem
+                              key={`${job.instance}/${job.job}`}
+                              label={`${job.job} · ${job.status}`}
+                              description={`Seen ${new Date(job.lastSeenAt).toLocaleString()} · Progress ${job.lastProgressAt ? new Date(job.lastProgressAt).toLocaleString() : 'not yet recorded'} · ${job.failures} failures${job.lastErrorCode ? ' · ' + job.lastErrorCode : ''}`}
+                           />
+                        ))}
+                     </List>
+                     <Heading level={2}>Browser errors in the last 24 hours</Heading>
+                     {!data.clientErrors.length && <Text>No browser errors reported.</Text>}
+                     <List hasDividers>
+                        {data.clientErrors.map((row) => (
+                           <ListItem
+                              key={`${row.category}/${row.route_kind}`}
+                              label={`${row.category} · ${row.route_kind}`}
+                              description={`${row.count} reports`}
+                           />
+                        ))}
+                     </List>
+                  </>
+               )}
+            </VStack>
+         </SettingsShell>
       </DesignSurface>
    );
 }

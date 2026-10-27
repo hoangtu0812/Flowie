@@ -5,13 +5,14 @@ import { messages } from '@/features/data-exchange/messages.vi';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { VStack } from '@astryxdesign/core/Layout';
-import { Heading, Text } from '@astryxdesign/core/Text';
+import { Text } from '@astryxdesign/core/Text';
 import { DesignSurface } from '@/components/common/design-surface';
 import { RecoveryScreen } from '@/features/shared/recovery-screen';
 import { authenticatedFetch, loadCurrentWorkspaceMembership } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
 import { ImportPanel } from './import-panel';
 import { DocumentExportPanel } from './export-panel';
+import { SettingsShell } from '@/components/common/settings/shared';
 
 export default function DataExchangePage() {
    const tx = useMessages(messages);
@@ -67,22 +68,17 @@ export default function DataExchangePage() {
       );
    return (
       <DesignSurface>
-         <VStack
-            padding={6}
-            gap={6}
-            width="100%"
-            className="h-full overflow-auto"
-            key={scope.workspace}
+         <SettingsShell
+            title={tx('Import and export')}
+            description={tx(
+               'Export tasks from the list using Export matching issues CSV. Exports follow the same applied filters and current access, up to 10,000 tasks / 10 MB. Formula-like text has a leading tab for spreadsheet viewing; treat imported CSV cells as text.'
+            )}
          >
-            <Heading level={1}>{tx('Import and export')}</Heading>
-            <Text>
-               {tx(
-                  'Export tasks from the list using Export matching issues CSV. Exports follow the same applied filters and current access, up to 10,000 tasks / 10 MB. Formula-like text has a leading tab for spreadsheet viewing; treat imported CSV cells as text.'
-               )}
-            </Text>
-            <ImportPanel workspace={scope.workspace} teams={scope.teams ?? []} />
-            <DocumentExportPanel workspace={scope.workspace} />
-         </VStack>
+            <VStack gap={6} key={scope.workspace} width="100%">
+               <ImportPanel workspace={scope.workspace} teams={scope.teams ?? []} />
+               <DocumentExportPanel workspace={scope.workspace} />
+            </VStack>
+         </SettingsShell>
       </DesignSurface>
    );
 }

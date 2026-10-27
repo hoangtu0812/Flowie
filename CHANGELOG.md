@@ -73,6 +73,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Changed
 
+- Every settings page shares one layout: a title with a short description, the same centered width and padding, and its own scroll area. Pages that had no description now have one; navigation and page behavior are unchanged. (DTD-18, #41)
+  VI: Mọi trang cài đặt dùng chung một bố cục: tiêu đề kèm mô tả ngắn, cùng độ rộng căn giữa và padding, và vùng cuộn riêng. Các trang trước đây chưa có mô tả nay đã có; điều hướng và hành vi của trang không đổi. (DTD-18)
+
 - Settings navigation is regrouped as Account, Workspace, Issues, Projects, Features, and AI & integrations; Project properties and AI operations are now listed, and the settings header shows "Settings › group › page". (DTD-18, #40)
   VI: Điều hướng Settings được gom lại thành Tài khoản, Workspace, Issues, Projects, Tính năng, và AI & tích hợp; Project properties và Vận hành AI giờ có trong danh sách, và header settings hiển thị "Settings › nhóm › trang". (DTD-18)
 
