@@ -37,6 +37,28 @@ class AgentPlanningTests(unittest.TestCase):
             'https://generativelanguage.googleapis.com/v1beta',
         )
 
+    def test_accepts_an_allowlisted_internal_openai_compatible_endpoint(self) -> None:
+        self.assertEqual(
+            _validated_endpoint('OPENAI', ' http://192.168.98.100:4000/v1/ ', ('192.168.98.100:4000',)),
+            'http://192.168.98.100:4000/v1',
+        )
+        self.assertEqual(
+            _validated_endpoint('OPENAI', 'https://ai.internal/v1', ('ai.internal',)),
+            'https://ai.internal/v1',
+        )
+
+    def test_rejects_internal_endpoints_outside_the_allowlist(self) -> None:
+        with self.assertRaises(ApiError):
+            _validated_endpoint('OPENAI', 'http://192.168.98.100:4000/v1')
+        for endpoint in (
+            'http://192.168.98.100:4001/v1',
+            'http://192.168.98.101:4000/v1',
+            'http://user:pass@192.168.98.100:4000/v1',
+            'ftp://192.168.98.100:4000/v1',
+        ):
+            with self.subTest(endpoint=endpoint), self.assertRaises(ApiError):
+                _validated_endpoint('OPENAI', endpoint, ('192.168.98.100:4000',))
+
     def test_rejects_an_issue_team_outside_the_workspace_catalog(self) -> None:
         proposal = AgentProposal.model_validate(
             {
