@@ -25,6 +25,7 @@ from fastapi import WebSocket
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.audit_context import audit_agent
 from ..domains.auth import _cuid, _utcnow
 from .microsoft_teams import teams_available, teams_message
 
@@ -292,9 +293,18 @@ async def create_notification_batch(
         data['details'] = [{'name': name, 'value': value} for name, value in details if value]
     if body_excerpt:
         data['body'] = body_excerpt
+    # People are not notified of their own actions, except when an MCP agent acted with their
+    # token: the agent's comments, status changes and mentions must still reach that person's
+    # Inbox, labelled with the agent so it is clear who did the work.
+    # VI: Không thông báo cho người về hành động của chính họ, trừ khi agent MCP thao tác bằng
+    # VI: token của họ: comment, đổi trạng thái và mention của agent vẫn phải tới Inbox của
+    # VI: người đó, kèm tên agent để rõ ai đã làm.
+    agent = audit_agent.get()
+    if agent:
+        data['agent'] = agent
     records: list[dict[str, Any]] = []
     from ..modules.notifications.access import readable_recipients
-    recipients=await readable_recipients(db,workspace_id,entity_type,entity_id,set(recipient_ids)-{actor['id']})
+    recipients=await readable_recipients(db,workspace_id,entity_type,entity_id,set(recipient_ids)-(set() if agent else {actor['id']}))
     for recipient_id in recipients:
         notification_id = _cuid()
         await db.execute(

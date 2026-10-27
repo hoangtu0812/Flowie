@@ -124,12 +124,21 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => {
                      ? issuesById.get(notification.entityId)
                      : undefined;
                const actor = notification.data?.actor as Partial<User> | undefined;
+               // Work an MCP agent did with a person's token names the agent next to them.
+               // VI: Việc agent MCP làm bằng token của một người sẽ ghi tên agent cạnh người đó.
+               const agent = notification.data?.agent as { name?: string } | undefined;
                return {
                   ...(issue ?? entityFallback(notification)),
                   id: notification.id,
                   content: contentFor(notification),
                   type: notificationType(notification.type),
-                  user: { ...fallbackUser(), ...actor } as User,
+                  user: {
+                     ...fallbackUser(),
+                     ...actor,
+                     ...(agent?.name && actor?.name
+                        ? { name: `${actor.name} · ${agent.name}` }
+                        : {}),
+                  } as User,
                   timestamp: readableTime(notification.createdAt),
                   notificationCreatedAt: notification.createdAt,
                   snoozedUntil: notification.snoozedUntil,

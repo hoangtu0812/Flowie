@@ -42,6 +42,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
+- Work an MCP agent does with your token (comments, status changes, mentions) now reaches your own Inbox, labelled with the agent's name, for example "Pham Hoang Tu · flowie-mcp-desktop". Actions you take yourself still do not notify you. (#37)
+  VI: Việc agent MCP làm bằng token của bạn (comment, đổi trạng thái, mention) giờ được gửi vào Inbox của chính bạn, kèm tên agent, ví dụ "Pham Hoang Tu · flowie-mcp-desktop". Hành động bạn tự làm vẫn không tạo thông báo cho bạn.
+
 - Comment mentions are easier to spot: the `@` suggestion list shows member avatars, and each `@Name` a comment notified is highlighted. Mentions inside code or link text stay plain. (#36)
   VI: Mention trong comment dễ nhận ra hơn: danh sách gợi ý khi gõ `@` hiển thị avatar thành viên, và mỗi `@Tên` đã được comment thông báo được highlight. Mention trong code hoặc nhãn link vẫn là chữ thường.
 
