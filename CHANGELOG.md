@@ -8,6 +8,10 @@ this file at build time, so the topmost released section is exactly what users
 see under "What's new" — a release that is not written down here is a release
 nobody can identify. Work that has not shipped yet stays under Unreleased.
 
+Each entry is written in English with an indented `VI:` Vietnamese line, and
+ends with its pull request number and, once released, its merge commit, for
+example `(#19, 431edd6)`. Entries written before this rule stay as they are.
+
 ## Unreleased
 
 ### Fixed
@@ -15,6 +19,9 @@ nobody can identify. Work that has not shipped yet stays under Unreleased.
 - The local runner resolves a configured provider binary through a PATHEXT-aware PATH lookup before starting it. On Windows npm installs Claude Code and Codex as a `.CMD` shim, which `CreateProcess` never finds from a bare name, so the documented `"claude": "claude"` configuration could not start the provider at all; a binary missing from PATH is now rejected with a clear error instead of a bare file-not-found.
 
 ### Changed
+
+- Contribution rules require bilingual English and Vietnamese source comments that explain in detail what the code handles, and bilingual changelog entries that reference their pull request and, after release, their merge commit. Change history stays in the changelog instead of source comments. Existing comments and entries are unchanged.
+  VI: Quy tắc đóng góp yêu cầu comment mã nguồn song ngữ Anh – Việt, giải thích chi tiết đoạn mã xử lý gì, và mục changelog song ngữ ghi số pull request, sau khi release thì thêm commit merge. Lịch sử thay đổi được ghi trong changelog thay vì trong comment mã nguồn. Comment và mục changelog hiện có giữ nguyên.
 
 - Agent runs must now report auditable test evidence. Each reported check carries its command, exit code, verdict, duration and a bounded log tail (stdout and stderr merged, last 2000 characters), and a verdict that contradicts its exit code is rejected. A result awaiting review must report at least one check and may not report a failed one; a failed result still may, which is how a failure is recorded. The local runner captures this for every approved command and records a command stopped at `commandTimeout` as a failed check with exit code 124 instead of dropping it. The issue comment lists each check with its exit code, duration and command, and shows a log only for a failed one; the full evidence stays on the run record. Approved test commands must not print secrets, because their arguments and log tail reach Flowie. Clients reporting the previous free-form `tests` shape are rejected with 400. No schema migration is required.
 

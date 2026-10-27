@@ -18,13 +18,27 @@
 - Add the entry under `Unreleased` using `Added`, `Changed`, `Fixed`,
   `Removed`, or `Security`. Describe the externally observable result and any
   deployment constraint; do not write an implementation diary.
+- Write each entry in English and Vietnamese: the English bullet first, then an
+  indented line starting with `VI:` that carries the same meaning. Keep the
+  English sentence first; the Help menu's "What's new" shows its opening words.
+- Reference the change: end the English text with the pull request, for
+  example `(#19)`, by adding it on the pull request branch once the number
+  exists. The release commit appends the merge commit's short hash to each
+  entry it promotes, for example `(#19, 431edd6)`.
+
+   ```md
+   - Integrations show MCP connections first with icon actions. (#18, 431edd6)
+     VI: Trang Integrations hiển thị kết nối MCP trước, thao tác bằng icon.
+   ```
+
 - Keep each change record in the same commit as the code or configuration it
   documents. A commit without its changelog entry is incomplete.
 
 ## Versioned releases
 
 1. Prepare a release commit on `main`: promote `Unreleased` entries to
-   `## [x.y.z] — YYYY-MM-DD HH:MM +07`, increment the semantic version, and
+   `## [x.y.z] — YYYY-MM-DD HH:MM +07`, increment the semantic version, append
+   each entry's merge commit short hash next to its pull request number, and
    leave a new empty `Unreleased` section.
 2. Let the production workflow deploy that exact commit. Verify its workflow,
    API readiness, and migration result before declaring the release complete.
@@ -34,8 +48,22 @@
 
 ## Source comments
 
-- Write source-code comments in English only.
-- Comments must document technical intent, invariants, security constraints,
-  compatibility behavior, or non-obvious operational decisions.
+- Write every new or edited source-code comment in English and Vietnamese:
+  the English text first, then the Vietnamese translation in the same comment
+  block, starting with `VI:`. Both parts carry the same meaning.
+
+   ```ts
+   // Rejects webhook hosts outside Teams Workflows to prevent SSRF.
+   // VI: Từ chối host webhook ngoài Teams Workflows để chống SSRF.
+   ```
+
+- Explain in detail what the code handles and why: inputs and outputs it
+  expects, edge cases, invariants, security constraints, compatibility
+  behavior, and non-obvious operational decisions.
+- Change history (what changed, commit, pull request) belongs in
+  `CHANGELOG.md`, not in source comments: a commit cannot contain its own hash,
+  and history in comments goes stale with every edit.
+- Existing English-only comments stay valid; add the Vietnamese part when you
+  edit one. Generated, vendored, and third-party code is exempt.
 - Do not use conversational comments, status updates, personal attribution, or
   prose addressed to a reader. Delete comments that only restate the code.
