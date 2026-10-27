@@ -16,7 +16,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
-- Agent runs that finish, fail or are canceled now send an Inbox notification to the agent connection's owner and the issue assignee.
+- Agent runs that finish, fail or are canceled now send an Inbox notification to the agent connection's owner and the issue assignee. (#27)
   VI: Run của agent khi hoàn thành, thất bại hoặc bị hủy sẽ gửi thông báo Inbox cho chủ kết nối agent và người được giao issue.
 
 ### Fixed
