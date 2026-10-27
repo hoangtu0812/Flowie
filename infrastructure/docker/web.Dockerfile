@@ -32,10 +32,15 @@ FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 # `next start` reloads next.config.ts, so basePath must match the build value.
+# Without the file the server falls back to basePath '' while the browser
+# bundle keeps '/flowie', which sends logins to '/flowie/flowie'.
 # VI: `next start` đọc lại next.config.ts, nên basePath phải khớp giá trị lúc build.
+# Thiếu file này server dùng basePath '' trong khi bundle trình duyệt vẫn là
+# '/flowie', khiến đăng nhập bị chuyển tới '/flowie/flowie'.
 ARG NEXT_PUBLIC_BASE_PATH=
 ENV NEXT_PUBLIC_BASE_PATH=$NEXT_PUBLIC_BASE_PATH
 COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/apps/web/next.config.ts ./apps/web/next.config.ts
 COPY --from=build /app/apps/web/.next ./apps/web/.next
 COPY --from=build /app/apps/web/node_modules ./apps/web/node_modules
 # Retain assets at both the process root and the Next project root. `next start apps/web`

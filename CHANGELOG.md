@@ -33,6 +33,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
+- Signing in under a path such as `/flowie` no longer lands on "Page not found" at `/flowie/flowie`: the web container now applies `NEXT_PUBLIC_BASE_PATH` at runtime as well as at build. Rebuild the `web` service to apply it. (#32)
+  VI: Đăng nhập khi chạy dưới đường dẫn như `/flowie` không còn rơi vào trang "Page not found" tại `/flowie/flowie`: container web giờ áp dụng `NEXT_PUBLIC_BASE_PATH` cả lúc chạy lẫn lúc build. Build lại service `web` để áp dụng.
+
 - Microsoft sign-in no longer fails with "The Microsoft sign-in request has expired." when Flowie runs under a path such as `/flowie`. The sign-in cookie now follows the path of `AZURE_AD_REDIRECT_URI`; rebuild the `api` service to apply it. (#31)
   VI: Đăng nhập Microsoft không còn báo "The Microsoft sign-in request has expired." khi Flowie chạy dưới đường dẫn như `/flowie`. Cookie đăng nhập giờ theo đường dẫn của `AZURE_AD_REDIRECT_URI`; build lại service `api` để áp dụng.
 
