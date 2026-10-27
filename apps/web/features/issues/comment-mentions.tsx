@@ -6,6 +6,7 @@ import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
 import { TextInput } from '@astryxdesign/core/TextInput';
 import { cn } from '@/lib/utils';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { mentionOptions } from './comments-api';
 import { insertMention, mentionSearchKey as searchKey, trailingMentionQuery } from './mention-text';
 
@@ -132,9 +133,12 @@ export function CommentMentions({
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={() => insert(member)}
                      >
-                        <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium uppercase">
-                           {member.name.slice(0, 1)}
-                        </span>
+                        <Avatar className="size-5 shrink-0">
+                           <AvatarImage src={member.avatarUrl ?? undefined} alt={member.name} />
+                           <AvatarFallback className="text-[10px] font-medium uppercase">
+                              {member.name.slice(0, 1)}
+                           </AvatarFallback>
+                        </Avatar>
                         <span className="truncate">{member.name}</span>
                      </button>
                   ))}

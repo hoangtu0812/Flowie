@@ -111,7 +111,7 @@ export const commentHistory = (workspaceId: string, id: string) =>
       '/revisions'
    );
 export async function mentionOptions(workspaceId: string, issueId: string) {
-   return responseData<{ id: string; name: string }[]>(
+   return responseData<{ id: string; name: string; avatarUrl?: string | null }[]>(
       await authenticatedFetch(
          `${api}/comments/mentions?${new URLSearchParams({ workspaceId, issueId })}`
       )
