@@ -6,7 +6,8 @@ import { useDisplaySettingsStore } from '@/store/display-settings-store';
 import { useIssuesStore } from '@/store/issues-store';
 import { format } from 'date-fns';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, usePathname } from 'next/navigation';
+import { isProjectPath, issueHref } from '@/lib/issue-route';
 import { AssigneeUser } from './assignee-user';
 import { ISSUE_COLUMN, issueListMinWidth } from './issue-columns';
 import { IssueDateCell, IssueEffortCell } from './issue-inline-cells';
@@ -21,6 +22,7 @@ import { IssueContextMenu } from './issue-context-menu';
 
 export function IssueLine({ issue, layoutId = false }: { issue: Issue; layoutId?: boolean }) {
    const { orgId } = useParams<{ orgId: string }>();
+   const pathname = usePathname();
    const { displayProperties } = useDisplaySettingsStore();
    const { cycles } = useIssuesStore();
    const cycle =
@@ -50,7 +52,7 @@ export function IssueLine({ issue, layoutId = false }: { issue: Issue; layoutId?
                   )}
                </div>
                <Link
-                  href={`/${orgId ?? 'lndev-ui'}/issue/${issue.identifier}`}
+                  href={issueHref(orgId ?? 'lndev-ui', issue.identifier, isProjectPath(pathname))}
                   className="flex-1 min-w-0 flex items-center justify-start mr-1 ml-0.5"
                >
                   <span className="text-xs sm:text-sm font-medium sm:font-semibold truncate">

@@ -4,7 +4,8 @@ import { Issue } from '@/mock-data/issues';
 import { useDisplaySettingsStore } from '@/store/display-settings-store';
 import { format } from 'date-fns';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, usePathname } from 'next/navigation';
+import { isProjectPath, issueHref } from '@/lib/issue-route';
 import { motion } from 'motion/react';
 import { useEffect, useRef } from 'react';
 import { DragSourceMonitor, useDrag, useDragLayer, useDrop } from 'react-dnd';
@@ -80,6 +81,7 @@ export function CustomDragLayer() {
 export function IssueGrid({ issue }: IssueGridProps) {
    const ref = useRef<HTMLDivElement>(null);
    const { orgId } = useParams<{ orgId: string }>();
+   const pathname = usePathname();
    const { displayProperties } = useDisplaySettingsStore();
 
    // Set up drag functionality.
@@ -131,7 +133,9 @@ export function IssueGrid({ issue }: IssueGridProps) {
                      <StatusSelector status={issue.status} issueId={issue.id} />
                   )}
                </div>
-               <Link href={`/${orgId ?? 'lndev-ui'}/issue/${issue.identifier}`}>
+               <Link
+                  href={issueHref(orgId ?? 'lndev-ui', issue.identifier, isProjectPath(pathname))}
+               >
                   <h3 className="text-sm font-semibold mb-3 line-clamp-2">{issue.title}</h3>
                </Link>
                <div className="flex flex-wrap gap-1.5 mb-3 min-h-[1.5rem]">
