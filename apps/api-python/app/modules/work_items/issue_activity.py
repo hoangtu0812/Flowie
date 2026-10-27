@@ -5,7 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from ...core.clock import _utcnow
 from ...core.identifiers import _cuid
-from ...core.audit_context import audit_source
+from ...core.audit_context import audit_agent, audit_source
 
 
 async def _write_activity(
@@ -27,7 +27,13 @@ async def _write_activity(
             "issue_id": issue_id,
             "actor_id": user_id,
             "action": action,
-            "data": json.dumps({**data,'source':audit_source.get()}),
+            "data": json.dumps(
+                {
+                    **data,
+                    "source": audit_source.get(),
+                    **({"agent": agent} if (agent := audit_agent.get()) else {}),
+                }
+            ),
             "now": _utcnow(),
         },
     )

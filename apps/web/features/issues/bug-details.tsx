@@ -4,7 +4,7 @@ import { useMessages } from '@/features/shared/use-messages';
 import { messages } from '@/features/issues/messages.vi';
 
 import { useState } from 'react';
-import { Check, Pencil } from 'lucide-react';
+import { Check, Pencil, X } from 'lucide-react';
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
@@ -54,6 +54,8 @@ export function BugDetails({ issue }: { issue: Issue }) {
                <HStack gap={2}>
                   <Button
                      label={tx('Save bug details')}
+                     tooltip={tx('Save bug details')}
+                     isIconOnly
                      icon={<Check className="size-4" />}
                      variant="primary"
                      size="sm"
@@ -73,6 +75,9 @@ export function BugDetails({ issue }: { issue: Issue }) {
                   />
                   <Button
                      label={tx('Cancel bug editing')}
+                     tooltip={tx('Cancel bug editing')}
+                     icon={<X className="size-4" />}
+                     isIconOnly
                      variant="ghost"
                      size="sm"
                      onClick={() => setEditing(false)}

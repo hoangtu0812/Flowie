@@ -16,6 +16,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from sqlalchemy import text
 
+from ...core.audit_context import audit_agent
 from ...core.errors import ApiError
 from ...core.clock import _utcnow
 from .application import ToolApplication
@@ -81,9 +82,13 @@ class ConnectionAuthMiddleware:
                 {"error": "MCP is temporarily unavailable."}, status_code=503
             )(scope, receive, send)
         context_token = principal_context.set(principal)
+        agent_token = audit_agent.set(
+            {"connectionId": principal.connection_id, "name": principal.connection_name}
+        )
         try:
             await self.app(scope, receive, send)
         finally:
+            audit_agent.reset(agent_token)
             principal_context.reset(context_token)
 
 
