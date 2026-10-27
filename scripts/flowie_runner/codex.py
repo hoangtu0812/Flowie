@@ -35,7 +35,9 @@ class CodexProvider:
         if code:
             raise RuntimeError("Sign in to Codex CLI before starting local work.")
 
-    async def review(self, config, context, path):
+    # Codex reports no live steps here; the orchestrator's phase lines cover its runs.
+    # VI: Codex không báo từng bước ở đây; các dòng theo giai đoạn của orchestrator bao quát.
+    async def review(self, config, context, path, progress=None):
         # Read-only sandbox: the review must not change files before its plan is recorded.
         # VI: Sandbox chỉ đọc: bước review không được sửa file trước khi ghi kế hoạch.
         output = await self._run(
@@ -43,7 +45,7 @@ class CodexProvider:
         )
         return checked_review(output, "Codex")
 
-    async def execute(self, config, context, path):
+    async def execute(self, config, context, path, progress=None):
         output = await self._run(
             config, path, task_prompt(context), SUMMARY_SCHEMA, "workspace-write"
         )

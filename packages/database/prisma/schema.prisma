@@ -378,6 +378,10 @@ model AgentRun {
   startedAt    DateTime?     @map("started_at")
   finishedAt   DateTime?     @map("finished_at")
   result       Json?
+  // Latest one-line activity the runner reported with a heartbeat, shown live on the task.
+  // VI: Dòng hoạt động mới nhất runner gửi kèm heartbeat, hiển thị trực tiếp trên task.
+  progress     String?
+  progressAt   DateTime?     @map("progress_at")
   createdAt    DateTime      @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'::text)")) @map("created_at")
   updatedAt    DateTime      @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'::text)")) @map("updated_at")
   workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)

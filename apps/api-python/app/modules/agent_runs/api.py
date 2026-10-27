@@ -37,6 +37,7 @@ async def list_runs(
     workspaceId: str = Query(min_length=1),
     limit: int = Query(default=25, ge=1, le=100),
     cursor: str | None = None,
+    issueId: str | None = Query(default=None, min_length=1),
     user=Depends(current_user),
     db=Depends(get_session),
 ):
@@ -44,7 +45,7 @@ async def list_runs(
     principal = Principal("", workspaceId, user, frozenset(), (), ())
     return {
         "data": await RunService(db, principal, request.app.state.settings).list(
-            RunPageInput(limit=limit, cursor=cursor)
+            RunPageInput(limit=limit, cursor=cursor, issueId=issueId)
         )
     }
 

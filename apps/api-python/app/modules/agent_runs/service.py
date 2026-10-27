@@ -80,6 +80,8 @@ def present(row, principal) -> dict:
         "startedAt": row["started_at"],
         "finishedAt": row["finished_at"],
         "result": row["result"],
+        "progress": row["progress"],
+        "progressAt": row["progress_at"],
     }
     if (
         row["connection_id"] == principal.connection_id
@@ -235,14 +237,19 @@ class RunService:
                     "The run exceeded its two-hour budget. Release it before starting again.",
                     "Conflict",
                 )
+            progress = getattr(payload, "progress", None)
             await self.db.execute(
                 text(
-                    "UPDATE agent_runs SET lease_until=:until,updated_at=:now WHERE id=:id"
+                    """UPDATE agent_runs SET lease_until=:until,updated_at=:now,
+                    progress=COALESCE(CAST(:progress AS text),progress),
+                    progress_at=CASE WHEN CAST(:progress AS text) IS NULL THEN progress_at ELSE :now END
+                    WHERE id=:id"""
                 ),
                 {
                     "id": self.target["id"],
                     "until": now + timedelta(minutes=5),
                     "now": now,
+                    "progress": progress,
                 },
             )
             return {
@@ -334,12 +341,17 @@ class RunService:
             payload,
             f"""SELECT r.id,r.issue_id AS "issueId",i.identifier AS "issueIdentifier",i.title AS "issueTitle",r.state,r.connection_id AS "connectionId",r.created_at AS "createdAt",
             EXISTS(SELECT 1 FROM mcp_connections own WHERE own.id=r.connection_id AND own.user_id=:user) AS "ownedByCurrentUser",
-            r.connection_id=:connection AS "assignedToThisConnection"
+            r.connection_id=:connection AS "assignedToThisConnection",
+            r.started_at AS "startedAt",r.finished_at AS "finishedAt",r.progress,r.progress_at AS "progressAt",
+            r.result->>'pullRequestUrl' AS "pullRequestUrl",
+            (SELECT c.name FROM mcp_connections c WHERE c.id=r.connection_id) AS "connectionName"
             FROM agent_runs r JOIN issues i ON i.id=r.issue_id WHERE {self.policy.issue_clause()}
             AND (CAST(:state AS text) IS NULL OR r.state=CAST(:state AS text))
             AND (CAST(:project AS text) IS NULL OR i.project_id=CAST(:project AS text))
-            AND (CAST(:assigned AS boolean) IS NULL OR (r.connection_id=:connection)=CAST(:assigned AS boolean))""",
+            AND (CAST(:assigned AS boolean) IS NULL OR (r.connection_id=:connection)=CAST(:assigned AS boolean))
+            AND (CAST(:issue AS text) IS NULL OR r.issue_id=CAST(:issue AS text))""",
             {
+                "issue": payload.issueId,
                 "state": payload.state,
                 "project": payload.projectId,
                 "connection": self.principal.connection_id,

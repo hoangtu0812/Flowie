@@ -1103,6 +1103,22 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             leaseToken=first["leaseToken"],
             fencingToken=1,
             idempotencyKey="heartbeat-key",
+            progress="Editing apps/web/lib/time.ts",
+        )
+        # A heartbeat without progress renews the lease and keeps the last activity line.
+        await self.call(
+            "heartbeat_run",
+            runId=first["id"],
+            leaseToken=first["leaseToken"],
+            fencingToken=1,
+            idempotencyKey="heartbeat-quiet-key",
+        )
+        live = await self.call("get_run", runId=first["id"])
+        self.assertEqual(live["progress"], "Editing apps/web/lib/time.ts")
+        self.assertIsNotNone(live["progressAt"])
+        (listed,) = (await self.call("list_runs", issueId=self.issue["id"]))["items"]
+        self.assertEqual(
+            (listed["id"], listed["progress"]), (first["id"], "Editing apps/web/lib/time.ts")
         )
         async with self.factory() as db:
             await db.execute(

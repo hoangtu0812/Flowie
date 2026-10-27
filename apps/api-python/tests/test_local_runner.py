@@ -21,6 +21,7 @@ from flowie_runner.codex import CodexProvider
 from flowie_runner.orchestrator import LOG_TAIL, execute, log_tail, prepare
 from flowie_runner.process import child_environment, resolve_executable, run_process
 from flowie_runner.prompt import checked_review
+from flowie_runner.progress import describe_claude_event, one_line
 from flowie_runner.repository import Repository
 
 
@@ -83,7 +84,7 @@ def push_base_commit(tmp_path):
 
 
 def changelog_editor(seen):
-    async def edit(config, context, path):
+    async def edit(config, context, path, progress=None):
         seen["path"] = Path(path)
         changelog = Path(path) / "CHANGELOG.md"
         changelog.write_text(
@@ -183,7 +184,7 @@ def test_failed_run_keeps_its_worktree_and_leaves_the_checkout_clean(tmp_path):
     client = client_fixture(config.repository_url)
     provider, seen = runner_provider(), {}
 
-    async def fail(config_, context, path):
+    async def fail(config_, context, path, progress=None):
         seen["path"] = Path(path)
         (Path(path) / "work.txt").write_text("preserved")
         raise RuntimeError("provider failed")
@@ -212,7 +213,7 @@ def test_failed_run_without_changes_leaves_no_worktree_behind(tmp_path):
     client = client_fixture(config.repository_url)
     provider, seen = runner_provider(), {}
 
-    async def fail(config_, context, path):
+    async def fail(config_, context, path, progress=None):
         seen["path"] = Path(path)
         raise RuntimeError("provider failed before editing")
 
@@ -350,6 +351,7 @@ def test_providers_accept_the_run_worktree_path():
                 "config",
                 "context",
                 "path",
+                "progress",
             ]
 
 
@@ -374,7 +376,7 @@ def test_lease_loss_cancels_the_provider(tmp_path):
     client.call.side_effect = revoked
     canceled = []
 
-    async def wait(*args):
+    async def wait(*args, **kwargs):
         try:
             await asyncio.sleep(60)
         except asyncio.CancelledError:
@@ -447,6 +449,8 @@ else:
         handle.write("- Fixture fixed.\\n")
     with open({record!r}, "w") as handle:
         json.dump({{"args": args, "env": sorted(os.environ), "prompt": prompt}}, handle)
+    print(json.dumps({{"type": "assistant", "message": {{"content": [{{"type": "tool_use",
+                      "name": "Edit", "input": {{"file_path": os.path.abspath("CHANGELOG.md")}}}}]}}}}))
     print(json.dumps({{"type": "result", "subtype": "success", "is_error": False,
                       "structured_output": {{"summary": "Fixture fixed by Claude."}}}}))
 """
@@ -486,14 +490,17 @@ def test_claude_adapter_edits_checkout_without_tokens(tmp_path, monkeypatch, cap
     monkeypatch.setenv("GH_TOKEN", "never-pass-scm")
     monkeypatch.setenv("DATABASE_URL", "private-database")
     config = replace(fixture_repository(tmp_path), claude=fake_claude(tmp_path))
+    lines = []
     summary = asyncio.run(
         ClaudeProvider().execute(
             config,
             {"issue": {"identifier": "FL-7", "title": "Fixture"}},
             config.repository_path,
+            progress=lines.append,
         )
     )
     assert summary == "Fixture fixed by Claude."
+    assert lines == ["Editing CHANGELOG.md"]
     assert "Fixture fixed" in (config.repository_path / "CHANGELOG.md").read_text()
     record = json.loads((tmp_path / "record.json").read_text())
     assert not {"FLOWIE_MCP_TOKEN", "GH_TOKEN", "DATABASE_URL"}.intersection(
@@ -544,7 +551,7 @@ def test_review_records_plan_and_end_date_before_implementation(tmp_path):
     client, provider, seen = client_fixture(config.repository_url), runner_provider(), {}
     edit = changelog_editor(seen)
 
-    async def implement(config, context, path):
+    async def implement(config, context, path, progress=None):
         seen["plan"] = context["plan"]
         seen["calls"] = [call.args[0] for call in client.call.call_args_list]
         return await edit(config, context, path)
@@ -596,8 +603,12 @@ def test_review_runs_providers_without_write_access(tmp_path):
             "structured_output": REVIEW,
         }
     )
+    async def stream(command, *rest, on_line=None, **options):
+        on_line(result)
+        return 0, ""
+
     with patch(
-        "flowie_runner.claude.run_process", new=AsyncMock(return_value=(0, result))
+        "flowie_runner.claude.run_process", new=AsyncMock(side_effect=stream)
     ) as claude:
         assert asyncio.run(ClaudeProvider().review(config, {}, tmp_path)) == REVIEW
     args = claude.call_args.args[0]
@@ -614,3 +625,55 @@ def test_review_runs_providers_without_write_access(tmp_path):
         assert asyncio.run(CodexProvider().review(config, {}, tmp_path)) == REVIEW
     command = run.call_args.args[0]
     assert command[command.index("--sandbox") + 1] == "read-only"
+
+
+def test_claude_events_become_one_relative_progress_line(tmp_path):
+    def event(*content):
+        return {"type": "assistant", "message": {"content": list(content)}}
+
+    edit = {"type": "tool_use", "name": "Edit", "input": {"file_path": str(tmp_path / "a" / "b.ts")}}
+    assert describe_claude_event(event(edit), tmp_path) == "Editing a/b.ts"
+    outside = {"type": "tool_use", "name": "Read", "input": {"file_path": "/etc/private/x.py"}}
+    assert describe_claude_event(event(outside), tmp_path) == "Reading x.py"
+    grep = {"type": "tool_use", "name": "Grep", "input": {"pattern": "relativeTime"}}
+    assert describe_claude_event(event(grep), tmp_path) == "Searching for relativeTime"
+    assert describe_claude_event(event({"type": "text", "text": "Now  the\ntests."}), tmp_path) == "Now the tests."
+    for other in ({"type": "result"}, {"type": "system"}, event(), "noise"):
+        assert describe_claude_event(other, tmp_path) is None
+    assert len(one_line("x" * 500)) == 300
+
+
+def test_run_progress_reaches_heartbeats(tmp_path):
+    config = fixture_repository(tmp_path)
+    client, provider, seen = client_fixture(config.repository_url), runner_provider(), {}
+    edit = changelog_editor(seen)
+
+    async def implement(config, context, path, progress=None):
+        progress("Editing CHANGELOG.md")
+        await asyncio.sleep(0.2)
+        return await edit(config, context, path)
+
+    provider.execute.side_effect = implement
+    asyncio.run(execute(client, config, "issue", provider, heartbeat_interval=0.01))
+    sent = [
+        call.args[1]["progress"]
+        for call in client.call.call_args_list
+        if call.args[0] == "heartbeat_run" and "progress" in call.args[1]
+    ]
+    assert sent[0] == "Preparing the run worktree"
+    assert "Editing CHANGELOG.md" in sent
+    assert sent[-1].startswith("Committed ") and len(set(sent)) == len(sent)
+
+
+def test_run_process_streams_lines_as_they_arrive(tmp_path):
+    lines = []
+    code, output = asyncio.run(
+        run_process(
+            [sys.executable, "-c", "import sys; print('one'); print(sys.stdin.read())"],
+            tmp_path,
+            10,
+            stdin="two",
+            on_line=lines.append,
+        )
+    )
+    assert (code, output, lines) == (0, "", ["one", "two"])
