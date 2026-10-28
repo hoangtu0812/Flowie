@@ -45,7 +45,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
-- Issue bars on the Projects, Initiatives and project timelines follow the issue's schedule: they start at the target start and end at the target end, falling back to the creation day and the due date only when the schedule is missing. (DTD-26)
+- Issue bars on the Projects, Initiatives and project timelines follow the issue's schedule: they start at the target start and end at the target end, falling back to the creation day and the due date only when the schedule is missing. (DTD-26, #43)
   VI: Thanh issue trên timeline Projects, Initiatives và timeline của dự án theo schedule của issue: bắt đầu ở ngày bắt đầu dự kiến và kết thúc ở ngày kết thúc dự kiến, chỉ dùng ngày tạo và due date khi chưa có schedule. (DTD-26)
 
 - Issue bars on a project's Timeline match the Initiatives timeline: an outline in the status colour over the page background instead of a solid fill, readable text in both themes, and the same compact rows; hovering a bar now highlights it on both timelines. (DTD-25, #42)
