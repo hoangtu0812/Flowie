@@ -1,4 +1,5 @@
 'use client';
+import type { DocStatus, DocType } from '@/lib/document-tree';
 
 import { useCallback, useEffect, useState } from 'react';
 import { authenticatedFetch, loadCurrentWorkspaceMembership } from '@/lib/workspaces';
@@ -46,6 +47,8 @@ export type LiveDocument = {
    sourceType: 'markdown' | 'flowie' | 'upload' | 'link';
    sourceUrl: string | null;
    sourceAttachment: { id: string; filename: string; mimeType: string; size: number } | null;
+   docType?: DocType;
+   status?: DocStatus;
    pinned: boolean;
    position: number;
    createdAt: string;

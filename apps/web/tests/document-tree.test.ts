@@ -1,0 +1,90 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { buildTree, filterTree, type TreeDocument, type TreeFolder } from '../lib/document-tree';
+import { documentTemplate, documentTitle } from '../lib/document-templates';
+import { markdownHeadings } from '../lib/markdown-headings';
+
+const folder = (id: string, parentId: string | null, name: string, position = 0): TreeFolder => ({
+   id,
+   parentId,
+   kind: 'general',
+   name,
+   icon: '📁',
+   position,
+});
+const doc = (
+   id: string,
+   folderId: string | null,
+   title: string,
+   extra: Partial<TreeDocument> = {}
+) =>
+   ({
+      id,
+      folderId,
+      title,
+      content: '',
+      icon: '📄',
+      docType: 'OTHER',
+      status: 'DRAFT',
+      updatedAt: '2026-10-28',
+      ...extra,
+   }) as TreeDocument;
+
+test('folders nest under parents and documents file into them', () => {
+   const { roots, unfiled } = buildTree(
+      [
+         folder('m', 'root', 'Module'),
+         folder('root', null, 'Project'),
+         folder('x', 'gone', 'Orphan', 1),
+      ],
+      [doc('a', 'm', 'Spec'), doc('b', 'm', 'Linked', { linked: true }), doc('c', null, 'Loose')]
+   );
+   assert.deepEqual(
+      roots.map((node) => node.folder.id),
+      ['root', 'x']
+   );
+   assert.equal(roots[0].children[0].documents[0].id, 'a');
+   assert.deepEqual(
+      unfiled.map((d) => d.id),
+      ['b', 'c']
+   );
+});
+
+test('filtering keeps matching documents, their folders and folder-name matches', () => {
+   const { roots } = buildTree(
+      [folder('root', null, 'Dự án'), folder('m', 'root', 'Tài liệu'), folder('n', 'root', 'Khác')],
+      [
+         doc('a', 'm', 'FDS · Cây', { docType: 'FDS', content: 'Đồng bộ SharePoint' }),
+         doc('b', 'n', 'Ghi chú'),
+      ]
+   );
+   const byContent = filterTree(roots, 'dong bo', 'ALL');
+   assert.deepEqual(
+      byContent[0].children.map((n) => n.folder.id),
+      ['m']
+   );
+   assert.equal(filterTree(roots, '', 'TDS').length, 0);
+   assert.deepEqual(
+      filterTree(roots, 'khac', 'ALL')[0].children.map((n) => n.folder.id),
+      ['n']
+   );
+   assert.equal(filterTree(roots, '', 'ALL'), roots);
+});
+
+test('templates and titles follow the FDS/TDS convention', () => {
+   assert.equal(documentTitle('FDS', ' Timeline '), 'FDS · Timeline');
+   assert.equal(documentTitle('GUIDE', 'Runbook'), 'Runbook');
+   assert.match(documentTemplate('TDS', 'Timeline'), /^# TDS · Timeline/);
+   assert.equal(documentTemplate('OTHER', 'x'), '');
+});
+
+test('table of contents reads headings outside code with unique anchors', () => {
+   const headings = markdownHeadings(
+      '# Tổng quan\n```\n# not a heading\n```\n## Luồng **chính**\n## Luồng chính\n#### Deep'
+   );
+   assert.deepEqual(headings, [
+      { level: 1, text: 'Tổng quan', id: 'tong-quan' },
+      { level: 2, text: 'Luồng chính', id: 'luong-chinh' },
+      { level: 2, text: 'Luồng chính', id: 'luong-chinh-2' },
+   ]);
+});

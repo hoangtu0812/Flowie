@@ -202,7 +202,9 @@ class CommandService:
                 values = dict(revision)
             if not values or any(value is None for value in values.values()):
                 raise ApiError(
-                    400, "Provide a non-null title or content.", "Bad Request"
+                    400,
+                    "Provide a non-null title, content, docType or status.",
+                    "Bad Request",
                 )
             return (
                 await documents.update_document(

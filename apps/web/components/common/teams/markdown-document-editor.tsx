@@ -15,12 +15,51 @@ import { MarkdownPreview } from '@/components/common/markdown/markdown-preview';
 import { useDocumentDraft, type DocumentDraft } from '@/features/documents/use-document-draft';
 import type { LiveDocument } from './use-live-team';
 import { DocumentHistory } from '@/features/documents/document-history';
+import { Selector } from '@astryxdesign/core/Selector';
+import { DOC_STATUSES, DOC_TYPES } from '@/features/documents/document-badges';
+import { markdownHeadings } from '@/lib/markdown-headings';
+import type { DocStatus, DocType } from '@/lib/document-tree';
+
+/**
+ * Table of contents for the view mode, shown once a document has three or more headings.
+ * Links scroll inside the editor dialog instead of changing the page URL.
+ * VI: Mục lục ở chế độ xem, hiện khi tài liệu có từ ba heading trở lên. Link cuộn bên trong
+ * VI: hộp thoại editor thay vì đổi URL của trang.
+ */
+function TableOfContents({ content, label }: { content: string; label: string }) {
+   const headings = markdownHeadings(content);
+   if (headings.length < 3) return null;
+   return (
+      <nav aria-label={label} className="rounded-md border border-border/60 p-3 text-sm">
+         <p className="mb-1 text-xs font-medium text-muted-foreground uppercase">{label}</p>
+         <ul className="space-y-0.5">
+            {headings.map((heading) => (
+               <li key={heading.id} style={{ paddingLeft: (heading.level - 1) * 12 }}>
+                  <a
+                     href={`#${heading.id}`}
+                     className="text-muted-foreground hover:text-foreground"
+                     onClick={(event) => {
+                        event.preventDefault();
+                        document
+                           .getElementById(heading.id)
+                           ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                     }}
+                  >
+                     {heading.text}
+                  </a>
+               </li>
+            ))}
+         </ul>
+      </nav>
+   );
+}
 
 export function MarkdownDocumentEditor({
    document,
    open,
    onOpenChange,
    onUpdate,
+   onMetadataChange,
 }: {
    document?: LiveDocument;
    open: boolean;
@@ -29,6 +68,12 @@ export function MarkdownDocumentEditor({
       id: string,
       draft: DocumentDraft & { expectedVersion: number }
    ) => Promise<LiveDocument>;
+   /** Saves type/status right away; without it the pickers are hidden. */
+   /** VI: Lưu ngay loại/trạng thái; không truyền thì không hiện ô chọn. */
+   onMetadataChange?: (
+      id: string,
+      metadata: { docType?: DocType; status?: DocStatus }
+   ) => Promise<void>;
 }) {
    const tx = useMessages(messages);
 
@@ -204,8 +249,36 @@ export function MarkdownDocumentEditor({
                               }}
                            />
                         )}
+                        {document && onMetadataChange && (
+                           <HStack gap={3} wrap="wrap">
+                              <Selector
+                                 label={tx('Document type')}
+                                 value={document.docType ?? 'OTHER'}
+                                 options={DOC_TYPES.map((value) => ({ value, label: value }))}
+                                 onChange={(value) =>
+                                    void onMetadataChange(document.id, {
+                                       docType: value as DocType,
+                                    })
+                                 }
+                              />
+                              <Selector
+                                 label={tx('Document status')}
+                                 value={document.status ?? 'DRAFT'}
+                                 options={DOC_STATUSES.map((item) => ({
+                                    value: item.value,
+                                    label: tx(item.label),
+                                 }))}
+                                 onChange={(value) =>
+                                    void onMetadataChange(document.id, {
+                                       status: value as DocStatus,
+                                    })
+                                 }
+                              />
+                           </HStack>
+                        )}
                         {mode === 'view' ? (
                            <VStack as="article" maxWidth="80ch" gap={4}>
+                              <TableOfContents content={content} label={tx('Contents')} />
                               <MarkdownPreview content={content} />
                            </VStack>
                         ) : (

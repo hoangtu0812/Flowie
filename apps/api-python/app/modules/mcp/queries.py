@@ -366,6 +366,9 @@ class QueryService:
             "truncated": end < len(row["content"]),
             "version": row["version"],
             "teamId": row["team_id"],
+            "folderId": row["folder_id"],
+            "docType": row["doc_type"],
+            "status": row["status"],
             "updatedAt": row["updated_at"],
         }
 

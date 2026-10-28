@@ -66,6 +66,8 @@ class CreateDocumentInput(BaseModel):
     icon: str | None = Field(default=None, min_length=1, max_length=32)
     sourceType: Literal["markdown", "flowie", "upload", "link"] = "markdown"
     sourceUrl: str | None = Field(default=None, max_length=2048)
+    docType: Literal["FDS", "TDS", "ADR", "RCA", "GUIDE", "OTHER"] = "OTHER"
+    status: Literal["DRAFT", "IN_REVIEW", "APPROVED"] = "DRAFT"
     pinned: bool = False
     position: int | None = Field(default=None, ge=0)
 
@@ -78,10 +80,12 @@ class UpdateDocumentInput(BaseModel):
     icon: str | None = Field(default=None, min_length=1, max_length=32)
     sourceType: Literal["markdown", "flowie", "upload", "link"] | None = None
     sourceUrl: str | None = Field(default=None, max_length=2048)
+    docType: Literal["FDS", "TDS", "ADR", "RCA", "GUIDE", "OTHER"] | None = None
+    status: Literal["DRAFT", "IN_REVIEW", "APPROVED"] | None = None
     pinned: bool | None = None
     position: int | None = Field(default=None, ge=0)
 
-    @field_validator('title', 'content', 'sourceType', 'pinned', 'position')
+    @field_validator('title', 'content', 'sourceType', 'docType', 'status', 'pinned', 'position')
     @classmethod
     def reject_explicit_null(cls, value):
         if value is None:

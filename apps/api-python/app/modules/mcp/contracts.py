@@ -179,6 +179,8 @@ class UpdateCommentTool(VersionInput):
 class CreateDocumentTool(WriteInput):
     title: str = Field(min_length=2, max_length=250)
     content: str = Field(default="", max_length=100000)
+    docType: Literal["FDS", "TDS", "ADR", "RCA", "GUIDE", "OTHER"] | None = None
+    status: Literal["DRAFT", "IN_REVIEW", "APPROVED"] | None = None
     teamId: str | None = None
     folderId: str | None = None
     projectId: str | None = None
@@ -196,6 +198,8 @@ class CreateDocumentTool(WriteInput):
 class UpdateDocumentTool(VersionInput, DocumentInput):
     title: str | None = Field(default=None, min_length=2, max_length=250)
     content: str | None = Field(default=None, max_length=100000)
+    docType: Literal["FDS", "TDS", "ADR", "RCA", "GUIDE", "OTHER"] | None = None
+    status: Literal["DRAFT", "IN_REVIEW", "APPROVED"] | None = None
 
 
 class LinkDocumentTool(WriteInput, DocumentInput):

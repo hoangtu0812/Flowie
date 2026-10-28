@@ -4,6 +4,7 @@ import { Heading } from '@astryxdesign/core/Text';
 import type { Issue } from '@/mock-data/issues';
 import { BugDetails } from './bug-details';
 import { IssueAgentRun } from './issue-agent-run';
+import { IssueDocuments } from '@/features/documents/issue-documents';
 import { ActivityFeed } from '@/components/common/issues/details/activity-feed';
 import { IssueDescription } from '@/components/common/issues/details/issue-description';
 import { IssueAttachments } from '@/components/common/issues/details/issue-attachments';
@@ -51,6 +52,7 @@ export function IssueContent({
                <BugDetails key={issue.id} issue={issue} />
                <IssueAgentRun key={issue.id} issueId={issue.id} />
                <IssuePullRequests reviews={reviews} orgId={orgId} />
+               <IssueDocuments key={`docs-${issue.id}`} issueId={issue.id} />
                <IssueSlaPanel issue={issue} />
                <div className="flex flex-wrap items-center gap-2">
                   <IssueReactions issueId={issue.id} />
