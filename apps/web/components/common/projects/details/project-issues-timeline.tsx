@@ -20,6 +20,7 @@ import {
    type TimelineZoom,
 } from '@/components/common/timeline/timeline-scale';
 import { cn } from '@/lib/utils';
+import { issueSpan } from '@/lib/issue-span';
 import { TimelineIssueBar } from '@/components/common/timeline/timeline-issue-bar';
 import { IssuePeekPanel } from '@/components/common/issues/issue-peek-panel';
 import type { Issue } from '@/mock-data/issues';
@@ -30,19 +31,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 const MIN_DATED_BAR_WIDTH = 20;
 const MIN_UNSCHEDULED_BAR_WIDTH = 130;
 
-/**
- * An issue occupies its planned work window. A due date is a deadline rather
- * than a duration, so it must not stretch the timeline after the target end.
- */
-function span(issue: Issue): { start: string; end: string | null } {
-   return {
-      start: issue.startDate?.slice(0, 10) ?? issue.createdAt.slice(0, 10),
-      end: issue.targetDate?.slice(0, 10) ?? null,
-   };
-}
-
 function rangeLabel(issue: Issue): string {
-   const { start, end } = span(issue);
+   const { start, end } = issueSpan(issue);
    const startLabel = format(parseISO(start), 'MMM d');
    return end && end !== start ? `${startLabel} – ${format(parseISO(end), 'MMM d')}` : startLabel;
 }
@@ -56,7 +46,7 @@ function IssueBar({
    monthWidth: number;
    onSelect: (issueId: string) => void;
 }) {
-   const { start, end } = span(issue);
+   const { start, end } = issueSpan(issue);
    const left = offsetFor(start, monthWidth);
    const width = end
       ? Math.max(offsetFor(end, monthWidth) - left, MIN_DATED_BAR_WIDTH)

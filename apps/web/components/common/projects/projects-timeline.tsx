@@ -10,6 +10,7 @@ import {
    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { issueSpan } from '@/lib/issue-span';
 import { TimelineIssueBar } from '@/components/common/timeline/timeline-issue-bar';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import type { Project } from '@/types/projects';
@@ -67,15 +68,18 @@ type TimelineIssue = {
    identifier: string;
    title: string;
    createdAt: string;
+   startDate: string | null;
+   targetDate: string | null;
    dueDate: string | null;
    status: { name: string; color: string };
    assignee: { name: string; avatarUrl: string | null } | null;
 };
 
 /**
- * An issue spans the days it is worked over: opened until due. Without a due
- * date there is no length to draw, so the bar keeps a readable minimum and
- * says so with a dashed edge.
+ * An issue spans its planned schedule (see `issueSpan`). Without any end date there is no
+ * length to draw, so the bar keeps a readable minimum and says so with a dashed edge.
+ * VI: Một issue trải theo schedule dự kiến (xem `issueSpan`). Không có ngày kết thúc nào thì
+ * VI: không có độ dài để vẽ, nên thanh giữ độ rộng tối thiểu và có viền nét đứt.
  */
 function IssueRow({
    issue,
@@ -94,8 +98,7 @@ function IssueRow({
    expanded?: boolean;
    onToggle?: () => void;
 }) {
-   const start = issue.createdAt.slice(0, 10);
-   const end = issue.dueDate?.slice(0, 10) ?? null;
+   const { start, end } = issueSpan(issue);
    const left = offsetFor(start, monthWidth);
    const width = end ? Math.max(offsetFor(end, monthWidth) - left, 20) : 120;
    const label = `${format(parseISO(start), 'MMM d')}${end ? ` - ${format(parseISO(end), 'MMM d')}` : ''}`;
