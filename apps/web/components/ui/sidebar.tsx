@@ -9,6 +9,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import {
    Sheet,
@@ -346,17 +347,27 @@ function SidebarSeparator({ className, ...props }: React.ComponentProps<typeof S
    );
 }
 
+/**
+ * Vertical scroll region of the sidebar, using ScrollArea for a thin overlay scrollbar.
+ * Radix wraps the viewport children in `display: table`, which lets long names widen the
+ * content and brings back a horizontal scrollbar; forcing that wrapper to `block` keeps the
+ * width fixed so `truncate` still clips labels. `className` and props go to the inner flex
+ * column, as before.
+ * VI: Vùng cuộn dọc của sidebar, dùng ScrollArea để có thanh cuộn nổi mỏng. Radix bọc nội
+ * VI: dung viewport trong `display: table`, khiến tên dài nới rộng nội dung và làm xuất hiện
+ * VI: lại thanh cuộn ngang; ép lớp bọc đó về `block` giữ chiều rộng cố định để `truncate`
+ * VI: vẫn cắt nhãn. `className` và props áp vào cột flex bên trong như trước.
+ */
 function SidebarContent({ className, ...props }: React.ComponentProps<'div'>) {
    return (
-      <div
-         data-slot="sidebar-content"
-         data-sidebar="content"
-         className={cn(
-            'flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-x-hidden overflow-y-auto group-data-[collapsible=icon]:overflow-hidden',
-            className
-         )}
-         {...props}
-      />
+      <ScrollArea className="min-h-0 min-w-0 flex-1 [&_[data-slot=scroll-area-viewport]>div]:block!">
+         <div
+            data-slot="sidebar-content"
+            data-sidebar="content"
+            className={cn('flex min-w-0 flex-col gap-2', className)}
+            {...props}
+         />
+      </ScrollArea>
    );
 }
 
