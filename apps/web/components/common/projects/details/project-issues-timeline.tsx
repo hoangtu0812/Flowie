@@ -20,6 +20,7 @@ import {
    type TimelineZoom,
 } from '@/components/common/timeline/timeline-scale';
 import { cn } from '@/lib/utils';
+import { TimelineIssueBar } from '@/components/common/timeline/timeline-issue-bar';
 import { IssuePeekPanel } from '@/components/common/issues/issue-peek-panel';
 import type { Issue } from '@/mock-data/issues';
 import { format, parseISO } from 'date-fns';
@@ -62,28 +63,15 @@ function IssueBar({
       : MIN_UNSCHEDULED_BAR_WIDTH;
 
    return (
-      <div className="absolute inset-0">
-         <button
-            type="button"
-            onClick={() => onSelect(issue.id)}
-            title={`${issue.identifier} · ${issue.title} — ${rangeLabel(issue)}`}
-            aria-label={`${issue.identifier} · ${issue.title} — ${rangeLabel(issue)}`}
-            className={cn(
-               'absolute top-1 h-7 rounded-md border transition-opacity hover:opacity-85',
-               !end && 'border-dashed'
-            )}
-            style={{
-               left,
-               width,
-               backgroundColor: issue.status.color,
-               borderColor: issue.status.color,
-            }}
-         >
-            <span className="block truncate px-2 text-xs font-medium text-foreground drop-shadow-sm">
-               {issue.title}
-            </span>
-         </button>
-      </div>
+      <TimelineIssueBar
+         left={left}
+         width={width}
+         color={issue.status.color}
+         dashed={!end}
+         title={issue.title}
+         label={`${issue.identifier} · ${issue.title} — ${rangeLabel(issue)}`}
+         onClick={() => onSelect(issue.id)}
+      />
    );
 }
 
@@ -260,9 +248,9 @@ export function ProjectIssuesTimeline({ issues }: { issues: Issue[] }) {
                <div className="relative z-[5] pb-8">
                   {groups.map((group) => (
                      <div key={group.name}>
-                        <div className="sticky left-0 flex items-center gap-2 px-4 h-9 text-sm font-medium bg-[color-mix(in_oklab,var(--accent)_30%,var(--container))] border-y border-border/40 w-screen max-w-full">
+                        <div className="sticky left-0 flex items-center gap-2 px-4 h-8 text-xs font-medium bg-container border-y border-border/50 w-screen max-w-full">
                            <span
-                              className="size-2.5 rounded-full shrink-0"
+                              className="size-2 rounded-full shrink-0"
                               style={{ backgroundColor: group.color }}
                            />
                            {group.name}
@@ -275,7 +263,7 @@ export function ProjectIssuesTimeline({ issues }: { issues: Issue[] }) {
                               const children = childrenByParent.get(issue.id) ?? [];
                               const expanded = expandedParents.has(issue.id);
                               const renderRow = (item: Issue, nested = false) => (
-                                 <div key={item.id} className="relative h-9 flex items-center">
+                                 <div key={item.id} className="relative h-8 flex items-center">
                                     <IssueBar
                                        issue={item}
                                        monthWidth={monthWidth}
@@ -287,7 +275,7 @@ export function ProjectIssuesTimeline({ issues }: { issues: Issue[] }) {
                                     />
                                     <div
                                        className={cn(
-                                          'sticky left-0 z-10 flex items-center gap-1.5 w-56 shrink-0 pr-4 h-9 bg-container/95 backdrop-blur-sm text-xs border-r border-border/40',
+                                          'sticky left-0 z-10 flex items-center gap-1.5 w-56 shrink-0 pr-4 h-8 bg-container/95 backdrop-blur-sm text-[11px] border-r border-border/40',
                                           nested ? 'pl-9' : 'pl-4'
                                        )}
                                     >
@@ -328,7 +316,9 @@ export function ProjectIssuesTimeline({ issues }: { issues: Issue[] }) {
                                        <span className="text-muted-foreground shrink-0">
                                           {item.identifier}
                                        </span>
-                                       <span className="truncate flex-1">{item.title}</span>
+                                       <span className="truncate flex-1 text-muted-foreground">
+                                          {item.title}
+                                       </span>
                                        {item.assignee && (
                                           <Avatar className="size-4 shrink-0">
                                              <AvatarImage

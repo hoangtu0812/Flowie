@@ -10,6 +10,7 @@ import {
    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { TimelineIssueBar } from '@/components/common/timeline/timeline-issue-bar';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import type { Project } from '@/types/projects';
 import { useProjectsDisplayStore } from '@/store/projects-display-store';
@@ -101,28 +102,15 @@ function IssueRow({
 
    return (
       <div className="relative h-8 flex items-center">
-         <div className="absolute inset-0">
-            <button
-               type="button"
-               onClick={() => onSelect(issue.id)}
-               title={`${issue.identifier} · ${issue.title} - ${label}`}
-               aria-label={`${issue.identifier} · ${issue.title} - ${label}`}
-               className={cn(
-                  'absolute top-1 h-6 rounded border shadow-xs transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  !end && 'border-dashed'
-               )}
-               style={{
-                  left,
-                  width,
-                  backgroundColor: 'var(--container)',
-                  borderColor: issue.status.color,
-               }}
-            >
-               <span className="relative z-10 block truncate px-2 text-xs font-medium text-foreground">
-                  {issue.title}
-               </span>
-            </button>
-         </div>
+         <TimelineIssueBar
+            left={left}
+            width={width}
+            color={issue.status.color}
+            dashed={!end}
+            title={issue.title}
+            label={`${issue.identifier} · ${issue.title} - ${label}`}
+            onClick={() => onSelect(issue.id)}
+         />
          <div
             className={cn(
                'sticky left-0 z-10 flex items-center gap-1.5 w-56 shrink-0 pr-4 h-8 bg-container/95 backdrop-blur-sm text-[11px] border-r border-border/40',
