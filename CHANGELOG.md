@@ -85,6 +85,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Changed
 
+- Scrollbars across the app are thin with a neutral thumb that follows the light, dark and color themes and darkens on hover; arrow buttons are gone. The sidebar uses an overlay scrollbar that appears on hover or while scrolling and never scrolls sideways. Native controls follow the app theme instead of the OS theme. Scrolling behavior is unchanged, and browsers without scrollbar styling keep their default. (DTD-32)
+  VI: Thanh cuộn trong toàn app mỏng, thumb màu trung tính theo theme sáng, tối và các theme màu, đậm hơn khi hover; bỏ nút mũi tên. Sidebar dùng thanh cuộn nổi chỉ hiện khi hover hoặc đang cuộn, không cuộn ngang. Control native theo theme của app thay vì theme của hệ điều hành. Cách cuộn không đổi; trình duyệt không hỗ trợ tùy biến giữ thanh cuộn mặc định. (DTD-32)
+
 - Every settings page shares one layout: a title with a short description, the same centered width and padding, and its own scroll area. Pages that had no description now have one; navigation and page behavior are unchanged. (DTD-18, #41)
   VI: Mọi trang cài đặt dùng chung một bố cục: tiêu đề kèm mô tả ngắn, cùng độ rộng căn giữa và padding, và vùng cuộn riêng. Các trang trước đây chưa có mô tả nay đã có; điều hướng và hành vi của trang không đổi. (DTD-18)
 
