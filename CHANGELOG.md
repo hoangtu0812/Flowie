@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- Projects have a Docs tab with a document tree (project → module → feature → bugs & changes): search by title or content, filter by type, create folders and FDS/TDS documents from templates, and a one-click standard structure. Documents have a type (FDS, TDS, ADR, RCA, GUIDE, OTHER) and a review status, Mermaid diagrams render in previews, long documents get a table of contents, and an issue lists its linked documents. Adds `document_folders.parent_id`, `project_id`, `kind` and `documents.doc_type`, `status` through a Prisma migration; existing folders become roots. (DTD-19)
+  VI: Dự án có tab Docs với cây tài liệu (dự án → module → tính năng → bugs & thay đổi): tìm theo tiêu đề hoặc nội dung, lọc theo loại, tạo thư mục và tài liệu FDS/TDS từ mẫu, và tạo khung chuẩn bằng một nút. Tài liệu có loại (FDS, TDS, ADR, RCA, GUIDE, OTHER) và trạng thái duyệt, sơ đồ Mermaid hiển thị trong preview, tài liệu dài có mục lục, và issue liệt kê tài liệu liên kết. Thêm `document_folders.parent_id`, `project_id`, `kind` và `documents.doc_type`, `status` qua migration Prisma; thư mục hiện có trở thành thư mục gốc. (DTD-19)
+
 - A task worked on by the local runner shows an "Agent run" card with the run state, the agent's current step (for example "Editing apps/web/lib/time.ts" or "Running approved test 1/2") updated every few seconds, the pull request once there is one, and a cancel button for the run's owner. Claude Code runs report each file step; Codex runs report the runner's phases. Adds `agent_runs.progress` and `progress_at` through a Prisma migration. Deploy the API before updating the runner checkout: an older API rejects the new heartbeat field and the run fails. (#39)
   VI: Task do runner local xử lý hiển thị thẻ "Agent run" gồm trạng thái run, bước agent đang làm (ví dụ "Editing apps/web/lib/time.ts" hoặc "Running approved test 1/2") cập nhật vài giây một lần, pull request khi đã có, và nút hủy cho chủ run. Run Claude Code báo từng bước với file; run Codex báo theo giai đoạn của runner. Thêm cột `agent_runs.progress` và `progress_at` qua migration Prisma. Deploy API trước khi cập nhật checkout của runner: API cũ từ chối trường heartbeat mới và run sẽ thất bại.
 
@@ -44,6 +47,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
   VI: Pull request và liên kết task có thể luôn cập nhật mà không cần webhook: đặt `SCM_SYNC_INTERVAL_SECONDS` (mặc định tắt, tối thiểu 60) thì API đồng bộ mỗi kết nối GitHub/Azure DevOps đang hoạt động hoặc bị lỗi một lần mỗi chu kỳ, giống nút Sync. Mỗi kết nối chỉ chạy một lượt đồng bộ tại một thời điểm; bấm Sync khi đang đồng bộ sẽ báo "already synchronizing". Tạo lại service `api` sau khi đặt biến.
 
 ### Fixed
+
+- Creating a document for a team with no document folders, including through the MCP `create_document` tool, now creates a "General" folder instead of failing with "Document folder not found". (DTD-19)
+  VI: Tạo tài liệu cho team chưa có thư mục tài liệu, kể cả qua tool MCP `create_document`, giờ tự tạo thư mục "General" thay vì lỗi "Document folder not found". (DTD-19)
 
 - Issue bars on the Projects, Initiatives and project timelines follow the issue's schedule: they start at the target start and end at the target end, falling back to the creation day and the due date only when the schedule is missing. (DTD-26, #43)
   VI: Thanh issue trên timeline Projects, Initiatives và timeline của dự án theo schedule của issue: bắt đầu ở ngày bắt đầu dự kiến và kết thúc ở ngày kết thúc dự kiến, chỉ dùng ngày tạo và due date khi chưa có schedule. (DTD-26)

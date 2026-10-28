@@ -34,8 +34,8 @@ async def create_document(
         ).scalar_one()
     document_id, now = _cuid(), _utcnow()
     await db.execute(
-        text("""INSERT INTO documents (id, workspace_id, team_id, folder_id, title, content, icon, source_type, source_url, pinned, position, created_by, updated_by, created_at, updated_at)
-                            VALUES (:id, :workspace_id, :team_id, :folder_id, :title, :content, :icon, :source_type, :source_url, :pinned, :position, :user_id, :user_id, :now, :now)"""),
+        text("""INSERT INTO documents (id, workspace_id, team_id, folder_id, title, content, icon, source_type, source_url, doc_type, status, pinned, position, created_by, updated_by, created_at, updated_at)
+                            VALUES (:id, :workspace_id, :team_id, :folder_id, :title, :content, :icon, :source_type, :source_url, :doc_type, :status, :pinned, :position, :user_id, :user_id, :now, :now)"""),
         {
             "id": document_id,
             "workspace_id": payload.workspaceId,
@@ -46,6 +46,8 @@ async def create_document(
             "icon": payload.icon or "📄",
             "source_type": payload.sourceType,
             "source_url": _source_url(payload.sourceType, payload.sourceUrl),
+            "doc_type": payload.docType,
+            "status": payload.status,
             "pinned": payload.pinned,
             "position": position or 0,
             "user_id": user["id"],
@@ -108,6 +110,8 @@ async def update_document(
         "icon": "icon",
         "sourceType": "source_type",
         "sourceUrl": "source_url",
+        "docType": "doc_type",
+        "status": "status",
         "pinned": "pinned",
         "position": "position",
     }

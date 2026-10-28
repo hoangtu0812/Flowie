@@ -28,6 +28,7 @@ const PROJECT_TABS = [
    { label: 'Activity', segment: 'activity' },
    { label: 'Issues', segment: 'issues' },
    { label: 'Timeline', segment: 'timeline' },
+   { label: 'Docs', segment: 'docs' },
 ];
 
 function ProjectTabs({ projectId }: { projectId: string }) {

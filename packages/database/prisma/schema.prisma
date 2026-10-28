@@ -1125,6 +1125,7 @@ model TeamDispatcherSettings {
 model Project {
   repositories     ProjectRepository[]
   agentAutomations AgentAutomation[]
+  documentFolders  DocumentFolder[]
   documentLinks    DocumentLink[]
   id               String              @id @default(cuid())
   workspaceId      String              @map("workspace_id")
@@ -1837,18 +1838,30 @@ model DocumentFolder {
   id          String   @id @default(cuid())
   workspaceId String   @map("workspace_id")
   teamId      String   @map("team_id")
+  // Tree parent; children are removed with their parent, documents keep living unfiled.
+  // VI: Thư mục cha trong cây; thư mục con bị xoá theo cha, tài liệu chuyển thành chưa xếp thư mục.
+  parentId    String?  @map("parent_id")
+  // Project whose document tree this folder belongs to; children inherit it.
+  // VI: Dự án sở hữu cây tài liệu chứa thư mục này; thư mục con kế thừa giá trị này.
+  projectId   String?  @map("project_id")
+  // project | module | feature | changes | general
+  kind        String   @default("general")
   name        String
   icon        String   @default("📁")
   position    Int      @default(0)
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  team      Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  workspace Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  team      Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  parent    DocumentFolder?  @relation("DocumentFolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  DocumentFolder[] @relation("DocumentFolderTree")
+  project   Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
   documents Document[]
 
-  @@unique([teamId, name])
+  @@unique([teamId, parentId, name])
   @@index([workspaceId, teamId, position])
+  @@index([projectId])
   @@map("document_folders")
 }
 
@@ -1863,6 +1876,10 @@ model Document {
   icon        String    @default("📄")
   sourceType  String    @default("markdown") @map("source_type")
   sourceUrl   String?   @map("source_url")
+  // FDS | TDS | ADR | RCA | GUIDE | OTHER
+  docType     String    @default("OTHER") @map("doc_type")
+  // DRAFT | IN_REVIEW | APPROVED
+  status      String    @default("DRAFT")
   pinned      Boolean   @default(false)
   position    Int       @default(0)
   createdById String    @map("created_by")

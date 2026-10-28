@@ -4,6 +4,8 @@ import { VStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { AttachmentImage } from '@/components/common/attachment-image';
 import { splitMentions } from '@/features/issues/mention-text';
+import { createSlugger } from '@/lib/markdown-headings';
+import { MermaidDiagram } from './mermaid-diagram';
 import { cn } from '@/lib/utils';
 
 type MarkdownNode = { type: string; value?: string; children?: MarkdownNode[]; data?: object };
@@ -43,6 +45,38 @@ function remarkMentions(names: string[]) {
    };
 }
 
+type HtmlNode = {
+   type: string;
+   tagName?: string;
+   value?: string;
+   properties?: Record<string, unknown>;
+   children?: HtmlNode[];
+};
+
+const textOf = (node: HtmlNode): string =>
+   node.type === 'text' ? (node.value ?? '') : (node.children ?? []).map(textOf).join('');
+
+/**
+ * Rehype plugin giving every heading an anchor id from its text, in document order, with
+ * the same slugs `markdownHeadings` produces for the table of contents.
+ * VI: Plugin rehype gán id neo cho mọi heading theo văn bản, theo thứ tự trong tài liệu,
+ * VI: dùng cùng slug mà `markdownHeadings` tạo cho mục lục.
+ */
+function rehypeHeadingIds() {
+   return (tree: HtmlNode) => {
+      const slug = createSlugger();
+      const walk = (node: HtmlNode) => {
+         if (node.type === 'element' && /^h[1-6]$/.test(node.tagName ?? ''))
+            node.properties = { ...node.properties, id: slug(textOf(node)) };
+         node.children?.forEach(walk);
+      };
+      walk(tree);
+   };
+}
+
+const isMermaid = (className: unknown) =>
+   (Array.isArray(className) ? className : [className]).includes('language-mermaid');
+
 /**
  * CommonMark/GFM rendering without raw HTML or executable URL protocols. `mentions` lists the
  * member names whose `@Name` should be highlighted.
@@ -65,25 +99,38 @@ export function MarkdownPreview({
          <Markdown
             skipHtml
             remarkPlugins={mentions.length ? [remarkGfm, remarkMentions(mentions)] : [remarkGfm]}
+            rehypePlugins={[rehypeHeadingIds]}
             components={{
-               h1: ({ children }) => (
-                  <Heading level={readable ? 2 : 1} accessibilityLevel={1}>
+               h1: ({ children, id }) => (
+                  <Heading id={id} level={readable ? 2 : 1} accessibilityLevel={1}>
                      {children}
                   </Heading>
                ),
-               h2: ({ children }) => (
-                  <Heading level={readable ? 3 : 2} accessibilityLevel={2}>
+               h2: ({ children, id }) => (
+                  <Heading id={id} level={readable ? 3 : 2} accessibilityLevel={2}>
                      {children}
                   </Heading>
                ),
-               h3: ({ children }) => (
-                  <Heading level={readable ? 4 : 3} accessibilityLevel={3}>
+               h3: ({ children, id }) => (
+                  <Heading id={id} level={readable ? 4 : 3} accessibilityLevel={3}>
                      {children}
                   </Heading>
                ),
-               h4: ({ children }) => <Heading level={4}>{children}</Heading>,
-               h5: ({ children }) => <Heading level={5}>{children}</Heading>,
-               h6: ({ children }) => <Heading level={6}>{children}</Heading>,
+               h4: ({ children, id }) => (
+                  <Heading id={id} level={4}>
+                     {children}
+                  </Heading>
+               ),
+               h5: ({ children, id }) => (
+                  <Heading id={id} level={5}>
+                     {children}
+                  </Heading>
+               ),
+               h6: ({ children, id }) => (
+                  <Heading id={id} level={6}>
+                     {children}
+                  </Heading>
+               ),
                p: ({ children }) => (
                   <Text as="p" type={readable ? 'inherit' : 'body'}>
                      {children}
@@ -99,20 +146,32 @@ export function MarkdownPreview({
                      {children}
                   </a>
                ),
-               pre: ({ children }) => (
-                  <pre
-                     className={cn(
-                        'overflow-auto rounded bg-muted p-4',
-                        readable &&
-                           'max-w-full border border-border/60 bg-muted/30 text-xs leading-6'
-                     )}
-                  >
-                     {children}
-                  </pre>
-               ),
-               code: ({ children, className }) => (
-                  <code className={className ?? 'rounded bg-muted px-1 font-mono'}>{children}</code>
-               ),
+               // A mermaid block renders as a diagram, so it must not sit inside <pre>.
+               // VI: Khối mermaid được vẽ thành sơ đồ nên không được nằm trong <pre>.
+               pre: ({ children, node }) =>
+                  isMermaid(
+                     (node?.children?.[0] as HtmlNode | undefined)?.properties?.className
+                  ) ? (
+                     <>{children}</>
+                  ) : (
+                     <pre
+                        className={cn(
+                           'overflow-auto rounded bg-muted p-4',
+                           readable &&
+                              'max-w-full border border-border/60 bg-muted/30 text-xs leading-6'
+                        )}
+                     >
+                        {children}
+                     </pre>
+                  ),
+               code: ({ children, className }) =>
+                  className === 'language-mermaid' ? (
+                     <MermaidDiagram code={String(children).replace(/\n$/, '')} />
+                  ) : (
+                     <code className={className ?? 'rounded bg-muted px-1 font-mono'}>
+                        {children}
+                     </code>
+                  ),
                ul: ({ children }) => <ul className="list-disc space-y-1 pl-6">{children}</ul>,
                ol: ({ children, start }) => (
                   <ol start={start} className="list-decimal space-y-1 pl-6">

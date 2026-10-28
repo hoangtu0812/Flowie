@@ -38,6 +38,8 @@ def _document(row: Any) -> dict[str, Any]:
         if row["source_type"] == "flowie"
         else row["source_type"],
         "sourceUrl": row["source_url"],
+        "docType": row.get("doc_type", "OTHER"),
+        "status": row.get("status", "DRAFT"),
         "sourceAttachment": (
             {
                 "id": row["source_attachment_id"],
@@ -150,15 +152,9 @@ async def _resolve_folder(
                 400, "Document folder belongs to another team.", "Bad Request"
             )
         return folder
-    result = await db.execute(
-        text("""SELECT * FROM document_folders WHERE workspace_id = :workspace_id AND team_id = :team_id
-                ORDER BY position ASC, created_at ASC, id ASC LIMIT 1"""),
-        {"workspace_id": workspace_id, "team_id": team_id},
-    )
-    folder = result.mappings().first()
-    if not folder:
-        raise ApiError(404, "Document folder not found.", "Not Found")
-    return folder
+    from .document_tree import default_folder
+
+    return await default_folder(db, workspace_id, team_id)
 
 
 def _source_url(source_type: str, source_url: str | None) -> str | None:

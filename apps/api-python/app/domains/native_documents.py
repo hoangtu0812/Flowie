@@ -9,7 +9,6 @@ from fastapi import Depends, Query
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..modules.work_items.contracts import CreateDocumentInput, UpdateDocumentInput
@@ -22,9 +21,17 @@ from .teams import _workspace_role
 router = APIRouter(prefix='/api/v1/documents', tags=['documents'])
 
 
+FolderKind = Literal['project', 'module', 'feature', 'changes', 'general']
+
+
 class CreateFolderInput(BaseModel):
     workspaceId: str = Field(min_length=1)
-    teamId: str = Field(min_length=1)
+    # A root folder names its team or project; a child takes both from `parentId`.
+    # VI: Thư mục gốc chỉ rõ team hoặc dự án; thư mục con lấy cả hai từ `parentId`.
+    teamId: str | None = Field(default=None, min_length=1)
+    projectId: str | None = Field(default=None, min_length=1)
+    parentId: str | None = Field(default=None, min_length=1)
+    kind: FolderKind = 'general'
     name: str = Field(min_length=2, max_length=100)
     icon: str | None = Field(default=None, min_length=1, max_length=32)
 
@@ -33,24 +40,14 @@ class UpdateFolderInput(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=100)
     icon: str | None = Field(default=None, min_length=1, max_length=32)
     position: int | None = Field(default=None, ge=0)
+    kind: FolderKind | None = None
+    # null moves the folder to its team root. VI: null đưa thư mục về gốc của team.
+    parentId: str | None = None
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+class ProjectTreeInput(BaseModel):
+    workspaceId: str = Field(min_length=1)
+    projectId: str = Field(min_length=1)
 
 
 @router.get('')
@@ -61,6 +58,8 @@ async def list_documents(workspaceId: str = Query(min_length=1), teamId: str | N
 
 @router.get('/folders')
 async def list_folders(workspaceId: str = Query(min_length=1), teamId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
+    from ..modules.work_items.document_tree import folder_payload
+
     await _team_access(db, workspaceId, teamId, user['id'])
     result = await db.execute(
         text('''SELECT * FROM document_folders WHERE workspace_id = :workspace_id AND team_id = :team_id
@@ -68,40 +67,54 @@ async def list_folders(workspaceId: str = Query(min_length=1), teamId: str = Que
         {'workspace_id': workspaceId, 'team_id': teamId},
     )
     return {'data': [
-        {'id': row['id'], 'name': row['name'], 'icon': row['icon'], 'position': row['position'],
-         'documents': await _documents(db, workspaceId, teamId, row['id'])}
+        {**folder_payload(row), 'documents': await _documents(db, workspaceId, teamId, row['id'])}
         for row in result.mappings().all()
     ]}
 
 
 @router.post('/folders')
 async def create_folder(payload: CreateFolderInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _team_access(db, payload.workspaceId, payload.teamId, user['id'])
-    position = (await db.execute(text('SELECT COALESCE(MAX(position), -1) + 1 FROM document_folders WHERE workspace_id = :workspace_id AND team_id = :team_id'), {'workspace_id': payload.workspaceId, 'team_id': payload.teamId})).scalar_one()
-    now, folder_id = _utcnow(), _cuid()
-    try:
-        await db.execute(text('''INSERT INTO document_folders (id, workspace_id, team_id, name, icon, position, created_at, updated_at)
-                                VALUES (:id, :workspace_id, :team_id, :name, :icon, :position, :now, :now)'''), {'id': folder_id, 'workspace_id': payload.workspaceId, 'team_id': payload.teamId, 'name': payload.name.strip(), 'icon': payload.icon or '📁', 'position': position, 'now': now})
-        await db.commit()
-    except IntegrityError as error:
-        await db.rollback()
-        raise ApiError(409, 'A document folder with this name already exists.', 'Conflict') from error
-    return {'data': {'id': folder_id, 'name': payload.name.strip(), 'icon': payload.icon or '📁', 'position': position, 'documents': []}}
+    from ..modules.work_items.document_tree import create_folder as operation
+
+    folder = await operation(
+        db, workspace_id=payload.workspaceId, user_id=user['id'], team_id=payload.teamId,
+        name=payload.name, icon=payload.icon, parent_id=payload.parentId,
+        project_id=payload.projectId, kind=payload.kind,
+    )
+    await db.commit()
+    return {'data': {**folder, 'documents': []}}
 
 
 @router.patch('/folders/{folder_id}')
 async def update_folder(folder_id: str, payload: UpdateFolderInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    folder = await _folder(db, folder_id, workspaceId)
-    await _team_access(db, workspaceId, folder['team_id'], user['id'])
-    values = payload.model_dump(exclude_unset=True)
-    if values:
-        values['now'] = _utcnow()
-        values['id'] = folder_id
-        sets = ', '.join(f"{('name' if key == 'name' else key)} = :{key}" for key in values if key not in {'id', 'now'})
-        await db.execute(text(f'UPDATE document_folders SET {sets}, updated_at = :now WHERE id = :id'), {**values, 'name': values.get('name', '').strip() if 'name' in values else None})
-        await db.commit()
-    updated = await _folder(db, folder_id, workspaceId)
-    return {'data': {'id': updated['id'], 'name': updated['name'], 'icon': updated['icon'], 'position': updated['position']}}
+    from ..modules.work_items.document_tree import update_folder as operation
+
+    folder = await operation(db, workspace_id=workspaceId, user_id=user['id'], folder_id=folder_id, values=payload.model_dump(exclude_unset=True))
+    await db.commit()
+    return {'data': folder}
+
+
+@router.get('/project-tree')
+async def read_project_tree(workspaceId: str = Query(min_length=1), projectId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    from ..modules.work_items.document_tree import project_tree
+
+    return {'data': await project_tree(db, workspace_id=workspaceId, user_id=user['id'], project_id=projectId)}
+
+
+@router.post('/project-tree/scaffold')
+async def scaffold_project_tree(payload: ProjectTreeInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    from ..modules.work_items.document_tree import project_tree, scaffold_project_tree as operation
+
+    await operation(db, workspace_id=payload.workspaceId, user_id=user['id'], project_id=payload.projectId)
+    await db.commit()
+    return {'data': await project_tree(db, workspace_id=payload.workspaceId, user_id=user['id'], project_id=payload.projectId)}
+
+
+@router.get('/issue-links')
+async def read_issue_documents(workspaceId: str = Query(min_length=1), issueId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
+    from ..modules.work_items.document_tree import issue_documents
+
+    return {'data': await issue_documents(db, workspace_id=workspaceId, user_id=user['id'], issue_id=issueId)}
 
 
 @router.post('')
