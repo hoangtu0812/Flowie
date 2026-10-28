@@ -16,7 +16,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
-- Projects have a Docs tab with a document tree (project → module → feature → bugs & changes): search by title or content, filter by type, create folders and FDS/TDS documents from templates, and a one-click standard structure. Documents have a type (FDS, TDS, ADR, RCA, GUIDE, OTHER) and a review status, Mermaid diagrams render in previews, long documents get a table of contents, and an issue lists its linked documents. Adds `document_folders.parent_id`, `project_id`, `kind` and `documents.doc_type`, `status` through a Prisma migration; existing folders become roots. (DTD-19)
+- Projects have a Docs tab with a document tree (project → module → feature → bugs & changes): search by title or content, filter by type, create folders and FDS/TDS documents from templates, and a one-click standard structure. Documents have a type (FDS, TDS, ADR, RCA, GUIDE, OTHER) and a review status, Mermaid diagrams render in previews, long documents get a table of contents, and an issue lists its linked documents. Adds `document_folders.parent_id`, `project_id`, `kind` and `documents.doc_type`, `status` through a Prisma migration; existing folders become roots. (DTD-19, #44)
   VI: Dự án có tab Docs với cây tài liệu (dự án → module → tính năng → bugs & thay đổi): tìm theo tiêu đề hoặc nội dung, lọc theo loại, tạo thư mục và tài liệu FDS/TDS từ mẫu, và tạo khung chuẩn bằng một nút. Tài liệu có loại (FDS, TDS, ADR, RCA, GUIDE, OTHER) và trạng thái duyệt, sơ đồ Mermaid hiển thị trong preview, tài liệu dài có mục lục, và issue liệt kê tài liệu liên kết. Thêm `document_folders.parent_id`, `project_id`, `kind` và `documents.doc_type`, `status` qua migration Prisma; thư mục hiện có trở thành thư mục gốc. (DTD-19)
 
 - A task worked on by the local runner shows an "Agent run" card with the run state, the agent's current step (for example "Editing apps/web/lib/time.ts" or "Running approved test 1/2") updated every few seconds, the pull request once there is one, and a cancel button for the run's owner. Claude Code runs report each file step; Codex runs report the runner's phases. Adds `agent_runs.progress` and `progress_at` through a Prisma migration. Deploy the API before updating the runner checkout: an older API rejects the new heartbeat field and the run fails. (#39)
@@ -48,7 +48,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
-- Creating a document for a team with no document folders, including through the MCP `create_document` tool, now creates a "General" folder instead of failing with "Document folder not found". (DTD-19)
+- Creating a document for a team with no document folders, including through the MCP `create_document` tool, now creates a "General" folder instead of failing with "Document folder not found". (DTD-19, #44)
   VI: Tạo tài liệu cho team chưa có thư mục tài liệu, kể cả qua tool MCP `create_document`, giờ tự tạo thư mục "General" thay vì lỗi "Document folder not found". (DTD-19)
 
 - Issue bars on the Projects, Initiatives and project timelines follow the issue's schedule: they start at the target start and end at the target end, falling back to the creation day and the due date only when the schedule is missing. (DTD-26, #43)
