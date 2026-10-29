@@ -51,3 +51,31 @@ async def validate_parent(
     if cycle.first():
         raise ApiError(400, "An issue cannot be moved under its own sub-issue.", "Bad Request")
     return dict(parent)
+
+
+async def issue_ancestors(db: AsyncSession, workspace_id: str, issue_id: str) -> list[dict]:
+    """Return the unarchived parents of ``issue_id``, from the top-level issue down to its parent.
+
+    The issue page breadcrumb shows this chain so a sub-issue reads ``Team › A › B › C``. The walk
+    stops at the first archived or missing parent, since the page cannot link to it, and at depth
+    50 as a safety net: ``issue_parent_guard`` already prevents cycles. Parents always share the
+    child's workspace and team (``validate_parent``), so a reader of the child may see them.
+    VI: Trả về các issue cha chưa archive của ``issue_id``, từ issue cấp cao nhất xuống cha trực tiếp.
+    VI: Breadcrumb trang issue hiển thị chuỗi này để sub-issue đọc thành ``Team › A › B › C``. Việc đi
+    VI: lên dừng ở cha đầu tiên đã archive hoặc không còn, vì trang không thể liên kết tới nó, và ở độ
+    VI: sâu 50 để an toàn: ``issue_parent_guard`` đã chặn vòng. Cha luôn cùng workspace và team với con
+    VI: (``validate_parent``), nên người đọc được con cũng xem được cha.
+    """
+    rows = await db.execute(
+        text("""WITH RECURSIVE chain(id, identifier, title, parent_issue_id, depth) AS (
+                    SELECT p.id, p.identifier, p.title, p.parent_issue_id, 1
+                    FROM issues c JOIN issues p ON p.id = c.parent_issue_id
+                    WHERE c.id = :issue AND p.workspace_id = :workspace AND p.archived_at IS NULL
+                    UNION ALL
+                    SELECT p.id, p.identifier, p.title, p.parent_issue_id, chain.depth + 1
+                    FROM chain JOIN issues p ON p.id = chain.parent_issue_id
+                    WHERE p.workspace_id = :workspace AND p.archived_at IS NULL AND chain.depth < 50
+                ) SELECT id, identifier, title FROM chain ORDER BY depth DESC"""),
+        {"issue": issue_id, "workspace": workspace_id},
+    )
+    return [dict(row) for row in rows.mappings()]

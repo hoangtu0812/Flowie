@@ -12,6 +12,7 @@ from ..modules.work_items.issue_activity import _write_activity as _write_activi
 
 from ..modules.work_items.issue_rules import _validate_schedule_dates as _validate_schedule_dates, _ensure_circle_issue_statuses as _ensure_circle_issue_statuses, _validate_references as _validate_references, _validate_release_ids as _validate_release_ids, _validate_template_references as _validate_template_references
 
+from ..modules.work_items.issue_hierarchy import issue_ancestors
 from ..modules.work_items.issue_queries import _issue_row as _issue_row, _relation_summary as _relation_summary, _template_row as _template_row, _status_name as _status_name, _person_name as _person_name, _project_name as _project_name
 
 import json
@@ -190,7 +191,13 @@ async def lookup_issue(reference: str, workspaceId: str = Query(min_length=1), u
     row = (await db.execute(text('SELECT id FROM issues WHERE workspace_id=:workspace AND (id=:reference OR identifier=:reference) AND archived_at IS NULL LIMIT 1'), {'workspace': workspaceId, 'reference': reference})).mappings().first()
     if not row:
         raise ApiError(404, 'Issue not found.', 'Not Found')
-    return {'data': await _issue_row(db, row['id'], workspaceId, user['id'])}
+    issue = await _issue_row(db, row['id'], workspaceId, user['id'])
+    # Only the issue page reads this endpoint, so the parent chain for its breadcrumb is added here
+    # instead of to every list row.
+    # VI: Chỉ trang issue đọc endpoint này, nên chuỗi cha cho breadcrumb được thêm ở đây thay vì vào
+    # VI: mọi dòng danh sách.
+    issue['ancestors'] = await issue_ancestors(db, workspaceId, row['id'])
+    return {'data': issue}
 
 
 @router.get('/options')

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
-from app.domains.native_issues import archive_issue, get_issue, list_sub_issues
+from app.domains.native_issues import archive_issue, get_issue, list_sub_issues, lookup_issue
 from app.modules.work_items.contracts import CreateIssueInput, UpdateIssueInput
 from app.modules.work_items.issues import create_issue, update_issue
 
@@ -95,6 +95,14 @@ async def verify_issue_parenting():
             attached = await set_parent(b, a["id"])
             assert attached["parent"] == {"id": a["id"], "identifier": a["identifier"], "title": "Task A"}
             assert await children(a) == [b["id"]] and await children(b) == [c["id"]]
+
+            # The issue page lookup carries the parent chain, top-level issue first.
+            async def ancestors(issue):
+                found = (await lookup_issue(issue["identifier"], workspace, owner, db))["data"]
+                return [item["identifier"] for item in found["ancestors"]]
+
+            assert await ancestors(c) == [a["identifier"], b["identifier"]]
+            assert await ancestors(a) == []
 
             # Moving B keeps its subtree and updates both parents' lists.
             await set_parent(b, d["id"])

@@ -12,10 +12,20 @@ import { useImagePaste } from '@/hooks/use-image-paste';
 import { Issue } from '@/mock-data/issues';
 import { useIssuesStore } from '@/store/issues-store';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Pencil, X } from 'lucide-react';
+import { Pencil } from 'lucide-react';
 import { useModifierKey } from '@/features/shared/use-modifier-key';
 import { SubmissionGate } from '@/features/shared/submission-gate';
 
+/**
+ * Issue description: rendered Markdown with an edit button, or an editor that saves only on an
+ * explicit Save (button or Ctrl/⌘+Enter), like a comment; there is no autosave. Esc leaves the
+ * editor only while the draft is unchanged, so a stray key never drops typed text; Cancel discards
+ * it. The draft lives here and survives tab switches because the Overview tab stays mounted.
+ * VI: Mô tả issue: Markdown đã hiển thị kèm nút sửa, hoặc ô soạn chỉ lưu khi bấm Save (nút hoặc
+ * VI: Ctrl/⌘+Enter), giống bình luận; không tự động lưu. Esc chỉ thoát khi bản nháp chưa đổi, để
+ * VI: lỡ tay bấm phím không làm mất nội dung đã gõ; Cancel mới bỏ bản nháp. Bản nháp nằm ở đây và
+ * VI: còn nguyên khi đổi tab vì tab Overview luôn được giữ mount.
+ */
 export function IssueDescription({ issue }: { issue: Issue }) {
    const tx = useMessages(messages);
 
@@ -75,10 +85,7 @@ export function IssueDescription({ issue }: { issue: Issue }) {
          className="min-w-0"
          onKeyDown={(event) => {
             if (!editing || event.nativeEvent.isComposing || saving) return;
-            if (event.key === 'Escape') {
-               setDraft(issue.description);
-               setEditing(false);
-            }
+            if (event.key === 'Escape' && draft === issue.description) setEditing(false);
             if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
                event.preventDefault();
                void save();
@@ -103,37 +110,33 @@ export function IssueDescription({ issue }: { issue: Issue }) {
                   isDisabled={saving || uploading}
                />
                {error && <Text role="alert">{error}</Text>}
-               <HStack gap={2}>
-                  <Button
-                     label={tx('Save description')}
-                     tooltip={tx('Save description')}
-                     isIconOnly
-                     icon={<Check className="size-4" />}
-                     variant="primary"
-                     size="sm"
-                     clickAction={save}
-                     isLoading={saving}
-                     isDisabled={uploading}
-                  />
-                  <Button
-                     label={tx('Cancel editing')}
-                     tooltip={tx('Cancel editing')}
-                     icon={<X className="size-4" />}
-                     isIconOnly
-                     variant="ghost"
-                     size="sm"
-                     onClick={() => {
-                        setDraft(issue.description);
-                        setEditing(false);
-                     }}
-                     isDisabled={saving}
-                  />
+               <HStack gap={2} vAlign="center" hAlign="between" wrap="wrap">
+                  <Text type="supporting">
+                     {uploading
+                        ? tx('Uploading image…')
+                        : `${modifier}+Enter to save · paste to add an image`}
+                  </Text>
+                  <HStack gap={2}>
+                     <Button
+                        label={tx('Cancel')}
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                           setDraft(issue.description);
+                           setEditing(false);
+                        }}
+                        isDisabled={saving}
+                     />
+                     <Button
+                        label={tx('Save')}
+                        variant="primary"
+                        size="sm"
+                        clickAction={save}
+                        isLoading={saving}
+                        isDisabled={uploading}
+                     />
+                  </HStack>
                </HStack>
-               <Text type="supporting">
-                  {uploading
-                     ? tx('Uploading image…')
-                     : `${modifier}+Enter to save · Esc to cancel · paste to add an image`}
-               </Text>
             </>
          ) : (
             <HStack gap={2} vAlign="start" className="min-w-0">

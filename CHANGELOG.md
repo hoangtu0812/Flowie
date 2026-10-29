@@ -151,6 +151,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Changed
 
+- The issue page makes each part mean something: the Task/Bug type is an Issue type control in the properties panel (bug fields typed earlier are kept when switching back), and the body shows a Bug report block only for bugs instead of an empty "Task details" block. A sub-issue's header breadcrumb keeps its parent chain (for example DTD › DTD-24 › DTD-99), with each parent linking back. Editing a description has labelled Save and Cancel buttons like comments, never autosaves, Esc no longer drops an edited draft, and switching to Activity or Attachments keeps the draft. `GET /issues/lookup/{reference}` adds `ancestors`; no schema change, deploy `api` and `web` together. (DTD-116)
+  VI: Trang issue rõ nghĩa hơn: loại Task/Bug là ô Issue type trong panel Properties (các trường bug đã nhập vẫn còn khi chuyển lại), và phần thân chỉ hiện khối Bug report với bug thay vì khối "Task details" trống. Breadcrumb trên header của sub-issue giữ chuỗi task cha (ví dụ DTD › DTD-24 › DTD-99), mỗi cấp cha là link quay lại. Sửa mô tả có nút Save và Cancel có chữ như bình luận, không tự động lưu, Esc không còn bỏ bản nháp đã sửa, và sang tab Activity hoặc Attachments vẫn giữ bản nháp. `GET /issues/lookup/{reference}` thêm `ancestors`; không đổi schema, deploy `api` và `web` cùng lúc. (DTD-116)
+
 - `AGENTS.md` names the Flowie project and team this repository belongs to and lists the other projects reachable through the same MCP connection with their repositories, so agents do not implement another project's task here. Documentation only; nothing deploys. (#61)
   VI: `AGENTS.md` ghi rõ dự án và team Flowie tương ứng với repository này, kèm danh sách các dự án khác truy cập được qua cùng kết nối MCP và repository của chúng, để agent không làm task của dự án khác trong repo này. Chỉ là tài liệu; không deploy.
 

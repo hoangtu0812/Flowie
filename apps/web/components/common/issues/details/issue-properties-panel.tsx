@@ -23,15 +23,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { IssueDetail } from '@/mock-data/issue-details';
 import { Issue } from '@/mock-data/issues';
 import { useIssuesStore } from '@/store/issues-store';
-import {
-   Box,
-   CalendarDays,
-   CalendarPlus,
-   CalendarRange,
-   Check,
-   Plus,
-   Timer,
-} from 'lucide-react';
+import { Box, CalendarDays, CalendarPlus, CalendarRange, Check, Plus, Timer } from 'lucide-react';
 import { format } from 'date-fns';
 import { useState } from 'react';
 import { AssigneeUser } from '../assignee-user';
@@ -41,6 +33,8 @@ import { StatusSelector } from '../status-selector';
 import type { CodeReview } from '@/lib/scm';
 import { IssueDiffs } from './issue-pull-requests';
 import { IssueRelations } from './issue-relations';
+import { IssueTypeSelector } from '@/features/issues/bug-fields';
+import { toast } from 'sonner';
 
 interface IssuePropertiesPanelProps {
    issue: Issue;
@@ -82,6 +76,7 @@ export function IssuePropertiesPanel({ issue, detail, reviews }: IssueProperties
       updateIssueEffort,
       updateIssueDueDate,
       updateIssueProject,
+      updateIssueBug,
    } = useIssuesStore();
    const [scheduleOpen, setScheduleOpen] = useState(false);
    const [startDate, setStartDate] = useState('');
@@ -145,6 +140,19 @@ export function IssuePropertiesPanel({ issue, detail, reviews }: IssueProperties
       );
    };
 
+   // Only the type is sent, so bug fields typed earlier survive a switch to Task and back.
+   // VI: Chỉ gửi loại, nên các trường bug đã nhập vẫn còn khi chuyển sang Task rồi quay lại.
+   const setIssueType = async (issueType: 'TASK' | 'BUG' | undefined) => {
+      if (!issueType || issueType === (issue.issueType ?? 'TASK')) return;
+      try {
+         await updateIssueBug(issue.id, { issueType });
+      } catch (reason) {
+         toast.error(
+            reason instanceof Error ? reason.message : tx('Could not change the issue type.')
+         );
+      }
+   };
+
    const toggleLabel = async (labelId: string) => {
       const label = labels.find((candidate) => candidate.id === labelId);
       if (!label) return;
@@ -172,6 +180,12 @@ export function IssuePropertiesPanel({ issue, detail, reviews }: IssueProperties
                   <span className="text-sm">
                      {issue.assignee ? issue.assignee.name : tx('Assign')}
                   </span>
+               </div>
+               <div className="mt-0.5">
+                  <IssueTypeSelector
+                     value={{ issueType: issue.issueType ?? 'TASK' }}
+                     onChange={(next) => void setIssueType(next.issueType)}
+                  />
                </div>
                <button
                   type="button"
