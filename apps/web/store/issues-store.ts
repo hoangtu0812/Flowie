@@ -44,6 +44,7 @@ type NativeIssue = BugFields & {
    teamId: string | null;
    parentIssueId?: string | null;
    parent?: { id: string; identifier: string; title: string } | null;
+   ancestors?: { id: string; identifier: string; title: string }[];
    subIssueCount?: number;
    completedSubIssueCount?: number;
    identifier: string;
@@ -193,6 +194,11 @@ function asIssue(native: NativeIssue): Issue {
       version: native.version,
       parentIssueId: native.parentIssueId ?? undefined,
       parent: native.parent ?? undefined,
+      // Only the lookup returns the parent chain; leaving the key out keeps a cached chain when a
+      // later PATCH response replaces the row.
+      // VI: Chỉ lookup trả chuỗi cha; không đặt key này để giữ chuỗi đã cache khi response PATCH
+      // VI: sau đó thay dòng issue.
+      ...(native.ancestors ? { ancestors: native.ancestors } : {}),
       subIssueCount: native.subIssueCount,
       completedSubIssueCount: native.completedSubIssueCount,
       creatorId: native.creator?.id,

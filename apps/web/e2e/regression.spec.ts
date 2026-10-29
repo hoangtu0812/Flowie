@@ -279,8 +279,12 @@ test('structured bug fields and comment attachments persist through the API', as
 }) => {
    const issue = fixture.issues[1];
    await page.goto(`/${fixture.slug}/issue/${issue.identifier}`);
-   await page.getByRole('button', { name: 'Edit type and bug details', exact: true }).click();
-   await page.getByRole('button', { name: 'Bug', exact: true }).click();
+   await expect(page.getByRole('heading', { name: 'Bug report', exact: true })).toHaveCount(0);
+   await page
+      .getByRole('group', { name: 'Issue type', exact: true })
+      .getByRole('button', { name: 'Bug', exact: true })
+      .click();
+   await page.getByRole('button', { name: 'Edit bug details', exact: true }).click();
    await page.getByRole('combobox', { name: 'Severity', exact: true }).click();
    await page.getByRole('option', { name: 'CRITICAL', exact: true }).click();
    await page.getByLabel('Environment', { exact: true }).fill('Windows / Chromium regression');
@@ -321,6 +325,47 @@ test('structured bug fields and comment attachments persist through the API', as
          .filter({ hasText: content })
          .getByRole('link', { name: 'regression-log.txt' })
    ).toBeVisible();
+});
+
+// The description saves only on an explicit Save; Esc and a tab switch keep an edited draft.
+// VI: Mô tả chỉ lưu khi bấm Save; Esc và đổi tab vẫn giữ bản nháp đã sửa.
+test('description edits save explicitly and keep the draft across tabs', async ({
+   page,
+   context,
+}) => {
+   const created = await context.request.post(`${api}/issues`, {
+      data: {
+         workspaceId: fixture.workspace_id,
+         teamId: fixture.team_id,
+         title: `Description save ${Date.now()}`,
+      },
+   });
+   expect(created.ok(), await created.text()).toBeTruthy();
+   const issue = (await created.json()).data as { id: string; identifier: string };
+   try {
+      await page.goto(`/${fixture.slug}/issue/${issue.identifier}`);
+      await page.getByRole('button', { name: 'Edit description', exact: true }).click();
+      const editor = page.getByRole('textbox', { name: 'Issue description', exact: true });
+      await editor.fill('Draft that must survive');
+      await editor.press('Escape');
+      await expect(editor).toHaveValue('Draft that must survive');
+      await page.getByRole('tab', { name: 'Activity', exact: true }).click();
+      await page.getByRole('tab', { name: 'Overview', exact: true }).click();
+      await expect(editor).toHaveValue('Draft that must survive');
+      await page.getByRole('button', { name: 'Save', exact: true }).click();
+      await expect(editor).toHaveCount(0);
+      await expect(page.getByText('Draft that must survive', { exact: true })).toBeVisible();
+      const native = (
+         await (
+            await context.request.get(
+               `${api}/issues/lookup/${issue.identifier}?workspaceId=${fixture.workspace_id}`
+            )
+         ).json()
+      ).data;
+      expect(native.description).toBe('Draft that must survive');
+   } finally {
+      await context.request.delete(`${api}/issues/${issue.id}?workspaceId=${fixture.workspace_id}`);
+   }
 });
 
 test('Help search and project client presets expose meaningful actions', async ({ page }) => {

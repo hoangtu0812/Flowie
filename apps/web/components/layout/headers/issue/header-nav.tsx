@@ -35,12 +35,12 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 
 /**
- * Issue page header: breadcrumb (team › cycle › identifier + title, or
- * project › identifier + title when opened from a project page) and
- * previous / next navigation across the issue list.
- * VI: Header trang issue: breadcrumb (team › cycle › mã + tiêu đề, hoặc
- * dự án › mã + tiêu đề khi mở từ trang dự án) và nút issue trước / sau
- * trong danh sách issue.
+ * Issue page header: breadcrumb (team › cycle › parent issues › identifier + title,
+ * or project › parent issues › identifier + title when opened from a project page)
+ * and previous / next navigation across the issue list.
+ * VI: Header trang issue: breadcrumb (team › cycle › các issue cha › mã + tiêu đề,
+ * hoặc dự án › các issue cha › mã + tiêu đề khi mở từ trang dự án) và nút issue
+ * trước / sau trong danh sách issue.
  */
 export default function HeaderNav() {
    const tx = useMessages(messages);
@@ -61,6 +61,16 @@ export default function HeaderNav() {
       !project && issue?.cycleId
          ? cycles.find((candidate) => candidate.id === issue.cycleId)
          : undefined;
+
+   // Parent crumbs, top-level first. The cached chain is trusted only while it still ends at the
+   // current parent; after a parent change it falls back to the direct parent until a reload.
+   // VI: Crumb cha, cấp cao nhất trước. Chuỗi đã cache chỉ được dùng khi vẫn kết thúc ở cha hiện
+   // VI: tại; sau khi đổi cha thì chỉ hiện cha trực tiếp cho tới lần tải lại.
+   const ancestors = issue?.parent
+      ? issue.ancestors?.at(-1)?.id === issue.parent.id
+         ? issue.ancestors
+         : [issue.parent]
+      : [];
 
    const previousIssue = index > 0 ? issues[index - 1] : undefined;
    const nextIssue = index >= 0 && index < issues.length - 1 ? issues[index + 1] : undefined;
@@ -111,6 +121,26 @@ export default function HeaderNav() {
                   </Link>
                </>
             )}
+            {ancestors.map((ancestor, position) => (
+               <span
+                  key={ancestor.id}
+                  // Narrow screens keep only the direct parent.
+                  // VI: Màn hình hẹp chỉ giữ cha trực tiếp.
+                  className={cn(
+                     'items-center gap-2 shrink-0',
+                     position === ancestors.length - 1 ? 'flex' : 'hidden sm:flex'
+                  )}
+               >
+                  <ChevronRight className="size-3.5 text-muted-foreground shrink-0" />
+                  <Link
+                     href={issueHref(orgId, ancestor.identifier, fromProject)}
+                     title={ancestor.title}
+                     className="text-sm font-medium text-muted-foreground hover:text-foreground"
+                  >
+                     {ancestor.identifier}
+                  </Link>
+               </span>
+            ))}
             <ChevronRight className="size-3.5 text-muted-foreground shrink-0" />
             {issue && (
                <span className="text-sm min-w-0 truncate">

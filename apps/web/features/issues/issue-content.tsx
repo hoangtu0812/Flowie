@@ -94,7 +94,17 @@ export function IssueContent({
                            ` (${attachments.attachments.length})`}
                      </TabsTrigger>
                   </TabsList>
-                  <TabsContent value="overview" className="flex flex-col gap-6">
+                  {/*
+                   * Overview stays mounted while hidden so an unsaved description or bug report
+                   * draft survives a look at Activity or Attachments, like the comment draft.
+                   * VI: Tab Overview vẫn mount khi ẩn để bản nháp mô tả hoặc Bug report chưa lưu
+                   * VI: còn nguyên khi xem Activity hay Attachments, giống bản nháp bình luận.
+                   */}
+                  <TabsContent
+                     value="overview"
+                     forceMount
+                     className="flex flex-col gap-6 data-[state=inactive]:hidden"
+                  >
                      <IssueDescription issue={issue} />
                      <BugDetails key={issue.id} issue={issue} />
                      <IssueAgentRun key={issue.id} issueId={issue.id} />

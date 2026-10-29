@@ -33,6 +33,11 @@ export interface Issue {
    parentIssueId?: string;
    /** Identifier and title of the parent, so the issue page can link to it. */
    parent?: { id: string; identifier: string; title: string };
+   /**
+    * Parent chain from the top-level issue down to `parent`, returned by the issue lookup only.
+    * VI: Chuỗi cha từ issue cấp cao nhất xuống `parent`, chỉ API lookup issue trả về.
+    */
+   ancestors?: { id: string; identifier: string; title: string }[];
    /** Active direct children and how many of them are completed. */
    subIssueCount?: number;
    completedSubIssueCount?: number;

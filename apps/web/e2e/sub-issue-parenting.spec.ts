@@ -89,6 +89,13 @@ test('existing issues can be attached, moved and detached across three levels', 
       await page.reload();
       await expect(page.getByRole('link', { name: new RegExp(a.title) })).toBeVisible();
 
+      // The header breadcrumb keeps the parent chain (Team › A › B › C) and links back up.
+      // VI: Breadcrumb trên header giữ chuỗi cha (Team › A › B › C) và liên kết ngược lên.
+      await open(c);
+      await expect(page.getByRole('link', { name: a.identifier, exact: true })).toBeVisible();
+      await page.getByRole('link', { name: b.identifier, exact: true }).click();
+      await expect(page.getByRole('heading', { name: b.title, exact: true })).toBeVisible();
+
       await open(a);
       await page.getByRole('button', { name: 'Set parent', exact: true }).click();
       await pick(page, c);
