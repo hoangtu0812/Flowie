@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Check, Code2, Copy, Eye, Plus, Trash2, X } from 'lucide-react';
+import { Check, Code2, Copy, Eye, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { VStack, HStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
@@ -14,11 +14,12 @@ import { StatusDot } from '@astryxdesign/core/StatusDot';
 import { ClientSetup } from '@/features/ai/client-setup';
 import { READ_PRESET, CODING_PRESET } from '@/features/ai/client-config';
 import { parseInstant } from '@/lib/time';
-import { mcpEndpoint } from '@/lib/mcp';
+import { mcpEndpoint, type McpConnection } from '@/lib/mcp';
 import { useMcpSettings } from './use-mcp-settings';
 import { AgentCoordination } from './agent-coordination';
 import { AgentConfiguration } from './agent-configuration';
 import { SuccessMark } from './success-mark';
+import { McpActivity } from './mcp-activity';
 
 const SCOPE_LABELS: Record<string, string> = {
    'context:read': 'Read workspace and team information',
@@ -57,6 +58,9 @@ async function copyText(value: string, success: string) {
 export function McpSettings() {
    const state = useMcpSettings();
    const [creating, setCreating] = useState(false);
+   /** Connection whose grant the form edits; the token and expiry stay as they are. */
+   /** VI: Kết nối đang được sửa quyền trong form; token và hạn dùng giữ nguyên. */
+   const [editingId, setEditingId] = useState<string>();
    const [confirmRevokeId, setConfirmRevokeId] = useState<string>();
    const [name, setName] = useState('');
    const [teamIds, setTeamIds] = useState<string[]>([]);
@@ -76,6 +80,25 @@ export function McpSettings() {
       setScopes(READ_PRESET);
       setExpires('30');
    }
+
+   function closeForm() {
+      resetDraft();
+      setCreating(false);
+      setEditingId(undefined);
+   }
+
+   function startEdit(connection: McpConnection) {
+      setName(connection.name);
+      setTeamIds(connection.teamIds);
+      setProjectIds(connection.projectIds);
+      setScopes(connection.scopes);
+      setPreset(connection.scopes.includes('issues:write') ? 'coding' : 'read');
+      setCreating(false);
+      setEditingId(connection.id);
+   }
+
+   const formOpen = creating || Boolean(editingId);
+   const draft = { name, scopes, teamIds, projectIds };
 
    return (
       <VStack gap={4}>
@@ -118,7 +141,7 @@ export function McpSettings() {
             header={
                <HStack gap={2} vAlign="center" hAlign="between">
                   <Heading level={3}>Connections ({state.connections.length})</Heading>
-                  {state.configuration && !creating && (
+                  {state.configuration && !formOpen && (
                      <Button
                         label="New connection"
                         size="sm"
@@ -193,16 +216,30 @@ export function McpSettings() {
                               />
                            </HStack>
                         ) : (
-                           <Button
-                              label="Revoke connection"
-                              tooltip="Revoke connection"
-                              icon={<Trash2 className="size-4" />}
-                              isIconOnly
-                              size="sm"
-                              variant="ghost"
-                              isDisabled={inactive || state.busy}
-                              onClick={() => setConfirmRevokeId(connection.id)}
-                           />
+                           <HStack gap={1}>
+                              {connection.ownedByCurrentUser && !inactive && (
+                                 <Button
+                                    label={`Edit ${connection.name}`}
+                                    tooltip="Edit permissions and projects"
+                                    icon={<Pencil className="size-4" />}
+                                    isIconOnly
+                                    size="sm"
+                                    variant="ghost"
+                                    isDisabled={state.busy || !state.configuration?.enabled}
+                                    onClick={() => startEdit(connection)}
+                                 />
+                              )}
+                              <Button
+                                 label="Revoke connection"
+                                 tooltip="Revoke connection"
+                                 icon={<Trash2 className="size-4" />}
+                                 isIconOnly
+                                 size="sm"
+                                 variant="ghost"
+                                 isDisabled={inactive || state.busy}
+                                 onClick={() => setConfirmRevokeId(connection.id)}
+                              />
+                           </HStack>
                         )
                      }
                   />
@@ -248,19 +285,23 @@ export function McpSettings() {
             )}
          </AnimatePresence>
          <AnimatePresence>
-            {state.configuration && creating && (
-               <motion.div key="create-connection" {...reveal}>
+            {state.configuration && formOpen && (
+               <motion.div key={editingId ?? 'create-connection'} {...reveal}>
                   <VStack gap={4}>
                      <HStack gap={2} vAlign="center" hAlign="between">
-                        <Heading level={3}>New connection</Heading>
+                        <Heading level={3}>
+                           {editingId ? 'Edit connection' : 'New connection'}
+                        </Heading>
                         <Button
-                           label="Close new connection form"
+                           label={
+                              editingId ? 'Close edit connection form' : 'Close new connection form'
+                           }
                            tooltip="Close"
                            icon={<X className="size-4" />}
                            isIconOnly
                            size="sm"
                            variant="ghost"
-                           onClick={() => setCreating(false)}
+                           onClick={closeForm}
                         />
                      </HStack>
                      <HStack gap={2}>
@@ -296,7 +337,9 @@ export function McpSettings() {
                         {preset === 'read'
                            ? 'Read project work without changing it.'
                            : 'Permit work edits, status changes and run evidence within selected projects.'}{' '}
-                        Select at least one project before creating a connection.
+                        {editingId
+                           ? 'Changes apply from the next MCP call; the token stays the same.'
+                           : 'Select at least one project before creating a connection.'}
                      </Text>
                      <HStack gap={3}>
                         <TextInput
@@ -306,12 +349,14 @@ export function McpSettings() {
                            isRequired
                            width="100%"
                         />
-                        <TextInput
-                           label="Expires in days"
-                           value={expires}
-                           onChange={setExpires}
-                           description="Choose 1 to 90 days."
-                        />
+                        {!editingId && (
+                           <TextInput
+                              label="Expires in days"
+                              value={expires}
+                              onChange={setExpires}
+                              description="Choose 1 to 90 days."
+                           />
+                        )}
                      </HStack>
                      <List density="compact" header={<Heading level={4}>Allowed teams</Heading>}>
                         {state.resources.teams.map((team) => (
@@ -397,33 +442,29 @@ export function McpSettings() {
                         ))}
                      </List>
                      <HStack gap={2} hAlign="end">
-                        <Button label="Cancel" variant="ghost" onClick={() => setCreating(false)} />
+                        <Button label="Cancel" variant="ghost" onClick={closeForm} />
                         <Button
-                           label="Create connection"
+                           label={editingId ? 'Save connection' : 'Create connection'}
                            variant="primary"
-                           icon={<Plus className="size-4" />}
+                           icon={
+                              editingId ? <Save className="size-4" /> : <Plus className="size-4" />
+                           }
                            isLoading={state.busy}
                            isDisabled={
                               !state.configuration.enabled ||
                               name.trim().length < 2 ||
                               !scopes.length ||
-                              !validExpiry ||
+                              (!editingId && !validExpiry) ||
                               !projectIds.length
                            }
                            onClick={() =>
-                              void state
-                                 .create({
-                                    name,
-                                    scopes,
-                                    teamIds,
-                                    projectIds,
-                                    expiresInDays: Number(expires),
-                                 })
-                                 .then((created) => {
-                                    if (!created) return;
-                                    resetDraft();
-                                    setCreating(false);
-                                 })
+                              void (
+                                 editingId
+                                    ? state.update(editingId, draft)
+                                    : state.create({ ...draft, expiresInDays: Number(expires) })
+                              ).then((saved) => {
+                                 if (saved) closeForm();
+                              })
                            }
                         />
                      </HStack>
@@ -432,11 +473,9 @@ export function McpSettings() {
             )}
          </AnimatePresence>
          {endpoint && <ClientSetup endpoint={endpoint} token={state.token} />}
-         <List hasDividers header={<Heading level={3}>Recent activity</Heading>}>
-            {state.audit.map((event) => (
-               <ListItem key={event.id} label={event.action} description={event.createdAt} />
-            ))}
-         </List>
+         {state.workspaceId && (
+            <McpActivity workspaceId={state.workspaceId} connections={state.connections} />
+         )}
          {state.workspaceId && (
             <AgentCoordination workspaceId={state.workspaceId} canManage={state.canManage} />
          )}

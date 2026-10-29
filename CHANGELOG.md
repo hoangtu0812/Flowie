@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- Settings → Integrations → AI connections: an MCP connection's owner can edit its name, permissions, teams and projects (for example to add a new project) without a new token, and each edit is audited; Recent activity loads 20 events at a time with Load more, readable labels, the connection name, relative times and filters by connection and by outcome so failed or denied calls stand out; External coding agent configuration lists each project's repositories, supports several repositories per project, and lets admins edit or remove them. No schema change; deploy `api` and `web` together because the activity list reads a new API response. (DTD-64, #60)
+  VI: Settings → Integrations → AI connections: chủ kết nối MCP sửa được tên, quyền, nhóm và dự án (ví dụ thêm dự án mới) mà không cần token mới, mỗi lần sửa đều ghi audit; Recent activity tải 20 sự kiện mỗi lần kèm Tải thêm, nhãn dễ đọc, tên kết nối, thời gian tương đối và bộ lọc theo kết nối và theo kết quả để lời gọi lỗi hoặc bị từ chối nổi bật; External coding agent configuration liệt kê repository của từng dự án, hỗ trợ nhiều repository cho một dự án và cho quản trị viên sửa hoặc xoá. Không đổi schema; deploy `api` và `web` cùng lúc vì danh sách hoạt động đọc response API mới. (DTD-64)
+
 - The task Attachments tab shows files as cards (image thumbnails, type icons, size and date) and adds **New**, which opens a Markdown editor and saves the text as a `.md` attachment; clicking a `.md` card shows it rendered, with a download link. (DTD-55, #58)
   VI: Tab Tệp đính kèm của task hiển thị tệp dạng thẻ (thumbnail ảnh, icon theo loại, dung lượng và ngày) và có nút **Mới** mở trình soạn Markdown để lưu nội dung thành tệp `.md` đính kèm; bấm vào thẻ `.md` để xem nội dung đã hiển thị, kèm link tải xuống. (DTD-55)
 

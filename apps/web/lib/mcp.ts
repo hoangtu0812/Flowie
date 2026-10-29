@@ -26,8 +26,12 @@ export type McpAudit = {
    id: string;
    action: string;
    createdAt: string;
-   metadata: { connectionId?: string; tool?: string; outcome?: string };
+   connectionId: string | null;
+   connectionName: string | null;
+   metadata: { connectionId?: string; tool?: string; outcome?: string; durationMs?: number };
 };
+
+export type McpAuditFilter = { connectionId?: string; outcome?: 'succeeded' | 'failed' };
 
 export type ConnectionDraft = {
    name: string;
@@ -92,6 +96,29 @@ export function revokeMcpConnection(workspaceId: string, connectionId: string): 
    );
 }
 
-export function listMcpAudit(workspaceId: string): Promise<McpAudit[]> {
-   return request(`audit?workspaceId=${encodeURIComponent(workspaceId)}`);
+export function updateMcpConnection(
+   workspaceId: string,
+   connectionId: string,
+   draft: Omit<ConnectionDraft, 'expiresInDays'>
+): Promise<McpConnection> {
+   return request(
+      `connections/${encodeURIComponent(connectionId)}?workspaceId=${encodeURIComponent(workspaceId)}`,
+      {
+         method: 'PATCH',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify(draft),
+      }
+   );
+}
+
+export function listMcpAudit(
+   workspaceId: string,
+   filter: McpAuditFilter = {},
+   cursor?: string
+): Promise<{ items: McpAudit[]; nextCursor: string | null }> {
+   const query = new URLSearchParams({ workspaceId });
+   if (filter.connectionId) query.set('connectionId', filter.connectionId);
+   if (filter.outcome) query.set('outcome', filter.outcome);
+   if (cursor) query.set('cursor', cursor);
+   return request(`audit?${query}`);
 }
