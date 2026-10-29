@@ -6,15 +6,24 @@ và không xóa gì trên SharePoint.
 
 ## Cách hoạt động
 
-- Một tài liệu được phát hành khi đủ các điều kiện sau:
-  - có trạng thái **Đã duyệt**;
+- Mỗi lần bấm **Duyệt** tạo một **phiên bản phát hành** (v1, v2…). Một tài liệu
+  được phát hành khi đủ các điều kiện sau:
+  - có ít nhất một phiên bản đã duyệt;
   - nằm trong cây **Docs** của một dự án;
   - dự án đã gán **thư mục SharePoint**;
   - kết nối SharePoint của workspace đang bật.
-- **Vị trí file:** `<thư mục của dự án>/<module>/<tính năng>/<tiêu đề>.md`. Ký tự
-  không hợp lệ trên SharePoint (`" * : < > ? / \ | # %`) được thay bằng `-`.
-- **Khi nào tải lên:** job trong API chạy mỗi phút. Mỗi version mới của tài liệu
-  đã duyệt được tải lại và ghi đè file cũ.
+- **Vị trí file:** mỗi phiên bản ghi hai file. Ký tự không hợp lệ trên SharePoint
+  (`" * : < > ? / \ | # %`) được thay bằng `-`.
+  - `<thư mục của dự án>/<module>/<tính năng>/<tiêu đề>.md`: luôn là phiên bản mới
+    nhất (link cố định, bị ghi đè mỗi lần duyệt);
+  - `<thư mục của dự án>/<module>/<tính năng>/_versions/<tiêu đề>_vN.md`: bản lưu
+    của từng phiên bản, không bị ghi đè.
+- **Nội dung file:** nội dung lúc duyệt (không phải bản nháp đang sửa), mở đầu bằng
+  front matter ghi `title`, `version`, `approved_by`, `approved_at` (giờ Việt Nam)
+  và `document_id`.
+- **Khi nào tải lên:** job trong API chạy mỗi phút và tải phiên bản mới nhất chưa
+  được phát hành. Sửa tài liệu đã duyệt sẽ đưa nó về **Nháp**; file trên SharePoint
+  giữ nguyên cho tới khi phiên bản kế tiếp được duyệt.
 - **Khi lỗi:** lỗi được lưu và hiện ở khung xem trước của tài liệu. Hệ thống tự
   thử lại sau 2, 4, 8… phút, tối đa mỗi giờ một lần.
 - **Giới hạn của bản đầu:**
@@ -83,8 +92,9 @@ Server chạy Flowie phải ra được Internet tới `login.microsoftonline.co
      Link dạng `.../Forms/AllItems.aspx?id=...` cũng dùng được;
    - bấm **Kiểm tra**: Flowie đăng nhập và tìm thư mục, không tải file;
    - bấm **Lưu**.
-4. Đổi trạng thái một tài liệu sang **Đã duyệt**. Khoảng một phút sau, khung xem
-   trước hiện **Đã phát hành vN** kèm link mở trên SharePoint.
+4. Trong khung xem trước của một tài liệu, bấm **Duyệt** rồi **Xác nhận duyệt vN**.
+   Khoảng một phút sau, khung xem trước hiện **Đã phát hành vN** kèm link mở trên
+   SharePoint.
 
 ## Xử lý lỗi thường gặp
 

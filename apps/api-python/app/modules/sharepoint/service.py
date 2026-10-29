@@ -1,20 +1,26 @@
 """SharePoint publishing: workspace connection, per-project folder and the publish job.
 
-Flowie stays the source of truth. A document is published when it is Approved, filed in a
-project's Docs tree, the project has a SharePoint folder and the workspace connection is
-enabled; each new version is uploaded again as `<folder>/<module>/<feature>/<title>.md`.
+Flowie stays the source of truth. A document is published when it has an approved release,
+is filed in a project's Docs tree, the project has a SharePoint folder and the workspace
+connection is enabled. Each new release (v1, v2 …) is uploaded as the latest copy
+`<folder>/<module>/<feature>/<title>.md` and as the kept copy `…/_versions/<title>_vN.md`,
+both with the content frozen at approval, never the draft being edited.
 Nothing is read back from SharePoint (one-way, as agreed for the first phase).
 VI: Phát hành SharePoint: kết nối của workspace, thư mục cho từng dự án và job phát hành.
-VI: Flowie vẫn là nguồn chính. Tài liệu được phát hành khi ở trạng thái Đã duyệt, nằm trong
-VI: cây Docs của dự án, dự án có thư mục SharePoint và kết nối workspace đang bật; mỗi version
-VI: mới được tải lại thành `<thư mục>/<module>/<tính năng>/<tiêu đề>.md`. Không đọc ngược từ
-VI: SharePoint (một chiều, theo thống nhất cho giai đoạn đầu).
+VI: Flowie vẫn là nguồn chính. Tài liệu được phát hành khi có phiên bản đã duyệt, nằm trong
+VI: cây Docs của dự án, dự án có thư mục SharePoint và kết nối workspace đang bật. Mỗi phiên
+VI: bản mới (v1, v2 …) được tải lên thành bản mới nhất `<thư mục>/<module>/<tính năng>/<tiêu đề>.md`
+VI: và bản lưu `…/_versions/<tiêu đề>_vN.md`, cả hai mang nội dung chụp lúc duyệt, không bao giờ
+VI: là bản nháp đang sửa. Không đọc ngược từ SharePoint (một chiều, theo thống nhất cho giai đoạn đầu).
 """
 
 from __future__ import annotations
 
+import json
 import logging
+from datetime import timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 from sqlalchemy import text
@@ -108,28 +114,64 @@ async def _folder_names(db, folder_id: str) -> list[str]:
     return [row["name"] for row in rows if not (row["kind"] == "project" and row["parent_id"] is None)]
 
 
-def publish_path(folder_path: str, folders: list[str], title: str) -> str:
-    """`<folder from URL>/<module>/<feature>/<title>.md` with SharePoint-safe names.
-    VI: `<thư mục từ URL>/<module>/<tính năng>/<tiêu đề>.md` với tên hợp lệ cho SharePoint."""
+def publish_path(folder_path: str, folders: list[str], title: str, release: int | None = None) -> str:
+    """`<folder from URL>/<module>/<feature>/<title>.md` with SharePoint-safe names; with a
+    release, the kept copy `…/<feature>/_versions/<title>_vN.md` instead.
+    VI: `<thư mục từ URL>/<module>/<tính năng>/<tiêu đề>.md` với tên hợp lệ cho SharePoint; khi có
+    VI: release thì là bản lưu `…/<tính năng>/_versions/<tiêu đề>_vN.md`."""
     parts = [folder_path.strip("/")] if folder_path.strip("/") else []
     parts += [safe_name(name) for name in folders]
-    parts.append(f"{safe_name(title)}.md")
+    if release is None:
+        parts.append(f"{safe_name(title)}.md")
+    else:
+        parts += ["_versions", f"{safe_name(title)}_v{release}.md"]
     return "/".join(parts)
 
 
+VIETNAM = ZoneInfo("Asia/Ho_Chi_Minh")
+
+
+def release_markdown(release: Any) -> str:
+    """Release content behind a YAML front matter naming its version, approver and approval
+    time (Vietnam time), so a copy read outside Flowie still says what was approved and when.
+    Strings are written with `json.dumps`, which is valid double-quoted YAML.
+    VI: Nội dung phiên bản kèm front matter YAML ghi version, người duyệt và thời điểm duyệt (giờ
+    VI: Việt Nam), để bản đọc ngoài Flowie vẫn biết nội dung nào đã được duyệt và khi nào.
+    VI: Chuỗi được ghi bằng `json.dumps`, là chuỗi YAML trong ngoặc kép hợp lệ."""
+    approved = release["approved_at"].replace(tzinfo=timezone.utc).astimezone(VIETNAM)
+    header = [
+        "---",
+        f"title: {json.dumps(release['title'], ensure_ascii=False)}",
+        f"version: v{release['release']}",
+        f"approved_by: {json.dumps(release['approver'] or '', ensure_ascii=False)}",
+        f"approved_at: {approved:%Y-%m-%d %H:%M} +07",
+        f"document_id: {release['id']}",
+        "---",
+    ]
+    return "\n".join(header) + "\n\n" + release["content"]
+
+
+# The latest release decides what is due, not the document status: a document back in Draft
+# keeps its last release published until the next approval.
+# VI: Phiên bản mới nhất quyết định việc đến hạn, không phải trạng thái tài liệu: tài liệu đã
+# VI: về Nháp vẫn giữ phiên bản cuối đã phát hành cho tới lần duyệt kế tiếp.
 DUE_QUERY = """
-SELECT d.id, d.workspace_id, d.title, d.content, d.version, d.folder_id,
-       p.id AS project_id, p.sharepoint_folder_url
+SELECT d.id, d.workspace_id, d.folder_id, r.release, r.revision, r.title, r.content,
+       r.approved_at, u.name AS approver, p.id AS project_id, p.sharepoint_folder_url
 FROM documents d
+JOIN LATERAL (
+  SELECT * FROM document_releases WHERE document_id = d.id ORDER BY release DESC LIMIT 1
+) r ON TRUE
+LEFT JOIN users u ON u.id = r.approved_by
 JOIN document_folders f ON f.id = d.folder_id
 JOIN projects p ON p.id = f.project_id AND p.archived_at IS NULL
 JOIN sharepoint_connections c ON c.workspace_id = d.workspace_id AND c.enabled
 LEFT JOIN document_publications pub ON pub.document_id = d.id
-WHERE d.status = 'APPROVED' AND d.archived_at IS NULL AND p.sharepoint_folder_url IS NOT NULL
-  AND (pub.version IS NULL OR pub.version < d.version)
+WHERE d.archived_at IS NULL AND p.sharepoint_folder_url IS NOT NULL
+  AND (pub.release IS NULL OR pub.release < r.release)
   AND (pub.attempted_at IS NULL OR pub.last_error IS NULL OR pub.attempted_at <
        CAST(:now AS timestamp) - make_interval(mins => LEAST(CAST(:cap AS int), power(2, LEAST(pub.attempts, 6))::int)))
-ORDER BY d.updated_at
+ORDER BY r.approved_at
 LIMIT :limit
 """
 
@@ -138,10 +180,11 @@ async def _record(db, document: Any, *, now, path=None, item=None, error=None) -
     await db.execute(
         text(
             """INSERT INTO document_publications
-               (document_id, workspace_id, version, path, item_id, web_url, published_at, attempted_at, attempts, last_error)
-               VALUES (:document, :workspace, :version, :path, :item, :url, :published, :now, :attempts, :error)
+               (document_id, workspace_id, version, release, path, item_id, web_url, published_at, attempted_at, attempts, last_error)
+               VALUES (:document, :workspace, :version, :release, :path, :item, :url, :published, :now, :attempts, :error)
                ON CONFLICT (document_id) DO UPDATE SET
                  version = COALESCE(EXCLUDED.version, document_publications.version),
+                 release = COALESCE(EXCLUDED.release, document_publications.release),
                  path = COALESCE(EXCLUDED.path, document_publications.path),
                  item_id = COALESCE(EXCLUDED.item_id, document_publications.item_id),
                  web_url = COALESCE(EXCLUDED.web_url, document_publications.web_url),
@@ -152,7 +195,8 @@ async def _record(db, document: Any, *, now, path=None, item=None, error=None) -
         ),
         {
             "document": document["id"], "workspace": document["workspace_id"],
-            "version": None if error else document["version"], "path": path,
+            "version": None if error else document["revision"],
+            "release": None if error else document["release"], "path": path,
             "item": item and item.get("id"), "url": item and item.get("webUrl"),
             "published": None if error else now, "now": now, "attempts": 1 if error else 0,
             "error": error,
@@ -161,12 +205,12 @@ async def _record(db, document: Any, *, now, path=None, item=None, error=None) -
 
 
 async def publish_due(factory, settings: Settings, http: httpx.AsyncClient | None = None) -> int:
-    """Upload due Approved documents; returns how many were published.
+    """Upload the latest release of due documents; returns how many were published.
 
     One run at a time across API replicas (transaction advisory lock). A failure is stored
     on the document's publication row and retried later with backoff; it never stops the
     other documents. A folder URL is resolved once per project per run.
-    VI: Tải lên các tài liệu Đã duyệt đến hạn; trả về số tài liệu đã phát hành. Chỉ một lượt
+    VI: Tải lên phiên bản mới nhất của tài liệu đến hạn; trả về số tài liệu đã phát hành. Chỉ một lượt
     VI: chạy cùng lúc giữa các bản API (advisory lock theo transaction). Lỗi được lưu vào dòng
     VI: publication của tài liệu và thử lại sau với thời gian chờ tăng dần; lỗi không chặn tài
     VI: liệu khác. URL thư mục chỉ được phân giải một lần cho mỗi dự án trong mỗi lượt.
@@ -198,10 +242,19 @@ async def publish_due(factory, settings: Settings, http: httpx.AsyncClient | Non
                     if document["project_id"] not in folders:
                         folders[document["project_id"]] = await client.resolve_folder(document["sharepoint_folder_url"])
                     target = folders[document["project_id"]]
-                    path = publish_path(
-                        target["folderPath"], await _folder_names(db, document["folder_id"]), document["title"]
+                    names = await _folder_names(db, document["folder_id"])
+                    body = release_markdown(document).encode("utf-8")
+                    # The kept copy goes first: a failure between the two uploads is retried in
+                    # full, and PUT overwrites, so repeating either upload is harmless.
+                    # VI: Bản lưu được tải trước: lỗi giữa hai lần tải sẽ được thử lại cả hai, và
+                    # VI: PUT ghi đè nên tải lại lần nào cũng an toàn.
+                    await client.upload(
+                        target["driveId"],
+                        publish_path(target["folderPath"], names, document["title"], document["release"]),
+                        body,
                     )
-                    item = await client.upload(target["driveId"], path, document["content"].encode("utf-8"))
+                    path = publish_path(target["folderPath"], names, document["title"])
+                    item = await client.upload(target["driveId"], path, body)
                     await _record(db, document, now=now, path=path, item=item)
                     published += 1
                 except (SharePointError, ApiError, httpx.HTTPError) as error:

@@ -49,6 +49,8 @@ export type LiveDocument = {
    sourceAttachment: { id: string; filename: string; mimeType: string; size: number } | null;
    docType?: DocType;
    status?: DocStatus;
+   /** Latest approved release (vN), null before the first approval. VI: Phiên bản đã duyệt mới nhất (vN), null khi chưa duyệt. */
+   release?: number | null;
    pinned: boolean;
    position: number;
    createdAt: string;

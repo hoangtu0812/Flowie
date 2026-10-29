@@ -40,6 +40,9 @@ def _document(row: Any) -> dict[str, Any]:
         "sourceUrl": row["source_url"],
         "docType": row.get("doc_type", "OTHER"),
         "status": row.get("status", "DRAFT"),
+        # Latest approved release (vN), or None before the first approval.
+        # VI: Phiên bản đã duyệt mới nhất (vN), hoặc None khi chưa duyệt lần nào.
+        "release": row.get("latest_release"),
         "sourceAttachment": (
             {
                 "id": row["source_attachment_id"],
@@ -100,7 +103,8 @@ async def _documents(
                         source_attachment.id AS source_attachment_id,
                         source_attachment.filename AS source_attachment_filename,
                         source_attachment.mime_type AS source_attachment_mime_type,
-                        source_attachment.size AS source_attachment_size
+                        source_attachment.size AS source_attachment_size,
+                        (SELECT MAX(r.release) FROM document_releases r WHERE r.document_id = d.id) AS latest_release
                  FROM documents d
                  JOIN users creator ON creator.id = d.created_by
                  JOIN users updater ON updater.id = d.updated_by

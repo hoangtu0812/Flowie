@@ -1,7 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CloudUpload, Download, ExternalLink, FileText, Pencil } from 'lucide-react';
+import {
+   BadgeCheck,
+   CloudUpload,
+   Download,
+   ExternalLink,
+   FileText,
+   Pencil,
+   Send,
+   Undo2,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
    Select,
@@ -16,9 +25,16 @@ import { useMessages } from '@/features/shared/use-messages';
 import { messages } from '@/features/documents/messages.vi';
 import { attachmentPreviewUrl } from '@/lib/attachments';
 import type { DocStatus, TreeFile } from '@/lib/document-tree';
+import { parseInstant } from '@/lib/time';
 import { authenticatedFetch } from '@/lib/workspaces';
-import type { ProjectTreeDocument } from './project-docs-api';
-import { DOC_STATUSES, DocTypeBadge } from './document-badges';
+import { useUiPreferencesStore } from '@/store/ui-preferences-store';
+import {
+   loadRelease,
+   loadReleases,
+   type DocumentRelease,
+   type ProjectTreeDocument,
+} from './project-docs-api';
+import { DocStatusBadge, DocTypeBadge } from './document-badges';
 
 function PreviewHeader({
    children,
@@ -36,14 +52,14 @@ function PreviewHeader({
 }
 
 /**
- * Read-only view of a Markdown document beside the tree: title, type, current version, a
- * status picker (Draft → In review → Approved; Approved is what publishes to SharePoint),
- * the SharePoint state, table of contents and the rendered content (Mermaid included).
- * Edit opens the full editor, where revision history lives.
- * VI: Xem chỉ đọc tài liệu Markdown cạnh cây: tiêu đề, loại, version hiện tại, ô chọn trạng
- * VI: thái (Nháp → Đang duyệt → Đã duyệt; Đã duyệt là điều kiện phát hành lên SharePoint),
- * VI: trạng thái SharePoint, mục lục và nội dung đã render (gồm Mermaid). Nút Sửa mở editor
- * VI: đầy đủ, nơi có lịch sử phiên bản.
+ * Read-only view of a Markdown document beside the tree: title, type, status, the latest
+ * approved release (vN), the SharePoint state, review buttons, a picker to read earlier
+ * releases, table of contents and the rendered content (Mermaid included). Edit opens the
+ * full editor, where revision history lives.
+ * VI: Xem chỉ đọc tài liệu Markdown cạnh cây: tiêu đề, loại, trạng thái, phiên bản đã duyệt
+ * VI: mới nhất (vN), trạng thái SharePoint, các nút duyệt, ô chọn để đọc các phiên bản trước,
+ * VI: mục lục và nội dung đã render (gồm Mermaid). Nút Sửa mở editor đầy đủ, nơi có lịch sử
+ * VI: phiên bản.
  */
 export function DocumentPreview({
    document,
@@ -60,40 +76,64 @@ export function DocumentPreview({
    onConfigureSharepoint: () => void;
 }) {
    const tx = useMessages(messages);
+   const locale = useUiPreferencesStore((state) => state.locale);
+   const [releases, setReleases] = useState<DocumentRelease[]>([]);
+   const [selected, setSelected] = useState('current');
+   const [shown, setShown] = useState<DocumentRelease>();
+   const [releaseError, setReleaseError] = useState(false);
+   const when = (value: string) => parseInstant(value).toLocaleString(locale);
+
+   // A different document, or a new approval, starts again from the current text.
+   // VI: Đổi tài liệu, hoặc có lần duyệt mới, thì quay lại nội dung hiện tại.
+   useEffect(() => {
+      let active = true;
+      setSelected('current');
+      setReleases([]);
+      if (document.release)
+         void loadReleases(document.id)
+            .then((page) => active && setReleases(page.items))
+            .catch(() => active && setReleaseError(true));
+      return () => {
+         active = false;
+      };
+   }, [document.id, document.release]);
+   useEffect(() => {
+      let active = true;
+      setShown(undefined);
+      setReleaseError(false);
+      if (selected !== 'current')
+         void loadRelease(document.id, Number(selected))
+            .then((release) => active && setShown(release))
+            .catch(() => active && setReleaseError(true));
+      return () => {
+         active = false;
+      };
+   }, [document.id, selected]);
+
+   const content = shown?.content ?? document.content;
    return (
       <div className="flex h-full min-h-0 flex-col">
          <PreviewHeader
             actions={
-               <Button size="xs" variant="secondary" onClick={onEdit}>
-                  <Pencil className="size-3.5" />
-                  {tx('Edit')}
-               </Button>
+               <>
+                  <ReviewActions document={document} onStatusChange={onStatusChange} />
+                  <Button size="xs" variant="secondary" onClick={onEdit}>
+                     <Pencil className="size-3.5" />
+                     {tx('Edit')}
+                  </Button>
+               </>
             }
          >
             <span aria-hidden>{document.icon}</span>
             <h2 className="truncate text-sm font-medium">{document.title}</h2>
             <DocTypeBadge type={document.docType} />
-            <span className="shrink-0 text-xs text-muted-foreground" title={tx('Version')}>
-               v{document.version}
-            </span>
-            <Select
-               value={document.status ?? 'DRAFT'}
-               onValueChange={(value) => onStatusChange(value as DocStatus)}
+            <DocStatusBadge status={document.status} />
+            <span
+               className="shrink-0 text-xs text-muted-foreground"
+               title={tx('Latest approved version')}
             >
-               <SelectTrigger
-                  className="h-7 w-auto gap-1 text-xs"
-                  aria-label={tx('Document status')}
-               >
-                  <SelectValue />
-               </SelectTrigger>
-               <SelectContent>
-                  {DOC_STATUSES.map((item) => (
-                     <SelectItem key={item.value} value={item.value}>
-                        {tx(item.label)}
-                     </SelectItem>
-                  ))}
-               </SelectContent>
-            </Select>
+               {document.release ? `v${document.release}` : tx('Not released')}
+            </span>
             <PublicationStatus
                document={document}
                publishing={publishing}
@@ -102,8 +142,41 @@ export function DocumentPreview({
          </PreviewHeader>
          <div className="min-h-0 flex-1 overflow-auto">
             <div className="mx-auto max-w-3xl space-y-4 px-6 py-5">
-               <TableOfContents content={document.content} label={tx('Contents')} />
-               <MarkdownPreview content={document.content} />
+               {releases.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                     <Select value={selected} onValueChange={setSelected}>
+                        <SelectTrigger
+                           className="h-7 w-auto gap-1 text-xs"
+                           aria-label={tx('Approved versions')}
+                        >
+                           <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                           <SelectItem value="current">{tx('Current version')}</SelectItem>
+                           {releases.map((release) => (
+                              <SelectItem key={release.release} value={String(release.release)}>
+                                 v{release.release} · {when(release.approvedAt)}
+                                 {release.approvedBy.name ? ` · ${release.approvedBy.name}` : ''}
+                              </SelectItem>
+                           ))}
+                        </SelectContent>
+                     </Select>
+                     {shown && (
+                        <span role="status">
+                           {tx('Viewing v{value0}, approved {value1} by {value2}.', {
+                              value0: String(shown.release),
+                              value1: when(shown.approvedAt),
+                              value2: shown.approvedBy.name ?? '—',
+                           })}
+                        </span>
+                     )}
+                     {releaseError && (
+                        <span role="alert">{tx('Could not load this version.')}</span>
+                     )}
+                  </div>
+               )}
+               <TableOfContents content={content} label={tx('Contents')} />
+               <MarkdownPreview content={content} />
             </div>
          </div>
       </div>
@@ -111,12 +184,70 @@ export function DocumentPreview({
 }
 
 /**
- * SharePoint publishing state: a link to the published file with its version, "waiting"
- * until the next publish run (about a minute), the last error, or — for an Approved
- * document of a project without SharePoint — a button that opens the folder settings.
- * VI: Trạng thái phát hành SharePoint: link tới file đã phát hành kèm version, "đang chờ"
- * VI: cho tới lượt phát hành kế tiếp (khoảng một phút), lỗi gần nhất, hoặc — với tài liệu
- * VI: Đã duyệt của dự án chưa có SharePoint — nút mở phần cấu hình thư mục.
+ * Review buttons in place of a status picker: Draft offers Submit for review, In review offers
+ * Return to draft, and both offer Approve, which asks for a second click naming the release it
+ * will create. Approved documents show no buttons; editing one returns it to Draft on the server.
+ * VI: Các nút duyệt thay cho ô chọn trạng thái: Nháp có Gửi duyệt, Đang duyệt có Trả về nháp, và
+ * VI: cả hai có Duyệt, cần bấm lần hai ghi rõ phiên bản sẽ tạo. Tài liệu Đã duyệt không có nút;
+ * VI: sửa nó thì server tự đưa về Nháp.
+ */
+function ReviewActions({
+   document,
+   onStatusChange,
+}: {
+   document: ProjectTreeDocument;
+   onStatusChange: (status: DocStatus) => void;
+}) {
+   const tx = useMessages(messages);
+   const [confirming, setConfirming] = useState(false);
+   useEffect(() => setConfirming(false), [document.id, document.version]);
+   if (document.status === 'APPROVED') return null;
+   if (confirming)
+      return (
+         <>
+            <Button
+               size="xs"
+               onClick={() => {
+                  setConfirming(false);
+                  onStatusChange('APPROVED');
+               }}
+            >
+               <BadgeCheck className="size-3.5" />
+               {tx('Confirm approval v{value0}', { value0: String((document.release ?? 0) + 1) })}
+            </Button>
+            <Button size="xs" variant="ghost" onClick={() => setConfirming(false)}>
+               {tx('Cancel')}
+            </Button>
+         </>
+      );
+   return (
+      <>
+         {document.status === 'IN_REVIEW' ? (
+            <Button size="xs" variant="ghost" onClick={() => onStatusChange('DRAFT')}>
+               <Undo2 className="size-3.5" />
+               {tx('Return to draft')}
+            </Button>
+         ) : (
+            <Button size="xs" variant="ghost" onClick={() => onStatusChange('IN_REVIEW')}>
+               <Send className="size-3.5" />
+               {tx('Submit for review')}
+            </Button>
+         )}
+         <Button size="xs" variant="ghost" onClick={() => setConfirming(true)}>
+            <BadgeCheck className="size-3.5" />
+            {tx('Approve')}
+         </Button>
+      </>
+   );
+}
+
+/**
+ * SharePoint publishing state of the latest release: a link to the published file with its
+ * version, "waiting" until the next publish run (about a minute), the last error, or — for a
+ * released document of a project without SharePoint — a button that opens the folder settings.
+ * VI: Trạng thái phát hành SharePoint của phiên bản mới nhất: link tới file đã phát hành kèm
+ * VI: version, "đang chờ" cho tới lượt phát hành kế tiếp (khoảng một phút), lỗi gần nhất, hoặc —
+ * VI: với tài liệu đã có phiên bản của dự án chưa có SharePoint — nút mở phần cấu hình thư mục.
  */
 function PublicationStatus({
    document,
@@ -138,7 +269,8 @@ function PublicationStatus({
             {tx('Publishing failed: {value0}', { value0: publication.lastError })}
          </span>
       );
-   if (publication?.webUrl && publication.version === document.version)
+   if (!document.release) return null;
+   if (publication?.webUrl && publication.release === document.release)
       return (
          <a
             href={publication.webUrl}
@@ -148,10 +280,9 @@ function PublicationStatus({
             title={tx('Open in SharePoint')}
          >
             <ExternalLink className="size-3" />
-            {tx('Published v{value0}', { value0: String(publication.version) })}
+            {tx('Published v{value0}', { value0: String(publication.release) })}
          </a>
       );
-   if (document.status !== 'APPROVED') return null;
    if (!publishing)
       return (
          <button

@@ -400,6 +400,7 @@ async def project_tree(
     publications = {
         row["document_id"]: {
             "version": row["version"],
+            "release": row["release"],
             "webUrl": row["web_url"],
             "publishedAt": row["published_at"],
             "lastError": row["last_error"],
@@ -407,7 +408,7 @@ async def project_tree(
         for row in (
             await db.execute(
                 text(
-                    """SELECT document_id, version, web_url, published_at, last_error FROM document_publications
+                    """SELECT document_id, version, release, web_url, published_at, last_error FROM document_publications
                        WHERE document_id = ANY(CAST(:ids AS text[]))"""
                 ),
                 {"ids": [document["id"] for document in documents]},

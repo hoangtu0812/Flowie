@@ -173,6 +173,20 @@ async def get_revision(document_id: str, version: int, workspaceId: str = Query(
     return {'data': await revision_row(db, document_id, version)}
 
 
+@router.get('/{document_id}/releases')
+async def document_releases(document_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict:
+    from ..modules.work_items.document_history import list_releases
+    await accessible_document(db, workspaceId, document_id, user['id'])
+    return {'data': await list_releases(db, document_id)}
+
+
+@router.get('/{document_id}/releases/{release}')
+async def get_release(document_id: str, release: int, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict:
+    from ..modules.work_items.document_history import release_row
+    await accessible_document(db, workspaceId, document_id, user['id'])
+    return {'data': await release_row(db, document_id, release)}
+
+
 @router.get('/{document_id}/diff/{version}')
 async def document_diff(document_id: str, version: int, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict:
     from ..modules.work_items.document_history import revision_row, revision_diff
