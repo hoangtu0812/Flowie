@@ -395,11 +395,35 @@ async def project_tree(
         for document in await _documents(db, workspace_id, user_id=user_id)
         if document["folderId"] in folder_ids or document["id"] in linked
     ]
+    files = (
+        await db.execute(
+            text(
+                """SELECT id, entity_id, filename, mime_type, size, created_at FROM attachments
+                   WHERE workspace_id = :workspace AND entity_type = 'document-folder'
+                     AND entity_id = ANY(CAST(:folders AS text[]))
+                   ORDER BY filename, id"""
+            ),
+            {"workspace": workspace_id, "folders": list(folder_ids)},
+        )
+    ).mappings().all()
     return {
         "projectId": project_id,
         "teamId": team_id,
         "folders": [folder_payload(row) for row in folders],
         "documents": documents,
+        # PDFs uploaded into the tree's folders, previewed through the attachment routes.
+        # VI: File PDF tải lên các thư mục của cây, xem trước qua route đính kèm.
+        "files": [
+            {
+                "id": row["id"],
+                "folderId": row["entity_id"],
+                "filename": row["filename"],
+                "mimeType": row["mime_type"],
+                "size": row["size"],
+                "createdAt": row["created_at"],
+            }
+            for row in files
+        ],
     }
 
 

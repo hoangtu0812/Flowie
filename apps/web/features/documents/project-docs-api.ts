@@ -1,7 +1,8 @@
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
 import type { LiveDocument } from '@/components/common/teams/use-live-team';
-import type { DocStatus, DocType, FolderKind, TreeFolder } from '@/lib/document-tree';
+import type { DocStatus, DocType, FolderKind, TreeFile, TreeFolder } from '@/lib/document-tree';
+import { uploadAttachment } from '@/lib/attachments';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -15,6 +16,7 @@ export type ProjectTree = {
    teamId: string;
    folders: TreeFolder[];
    documents: ProjectTreeDocument[];
+   files: TreeFile[];
 };
 
 async function send<T>(path: string, init?: RequestInit, query: Record<string, string> = {}) {
@@ -62,6 +64,10 @@ export const updateTreeDocument = (id: string, draft: Record<string, unknown>) =
       method: 'PATCH',
       body: JSON.stringify(draft),
    });
+
+/** Upload a PDF into a tree folder. VI: Tải file PDF lên một thư mục của cây. */
+export const uploadFolderFile = async (folderId: string, file: File) =>
+   uploadAttachment((await loadCurrentWorkspace()).id, 'document-folder', folderId, file);
 
 export const loadIssueDocuments = (issueId: string) =>
    send<LiveDocument[]>('/issue-links', undefined, { issueId });
