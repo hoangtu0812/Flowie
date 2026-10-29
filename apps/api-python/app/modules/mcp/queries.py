@@ -372,6 +372,11 @@ class QueryService:
             "updatedAt": row["updated_at"],
         }
 
+    async def feature_docs(self, payload) -> dict:
+        from .feature_docs import read_feature_docs
+
+        return await read_feature_docs(self.db, self.policy, payload.issueId)
+
     async def revisions(self, payload) -> dict:
         from ..work_items.document_history import list_revisions
         await self.policy.document(payload.documentId)

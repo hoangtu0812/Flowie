@@ -3,6 +3,7 @@ import sys
 from time import monotonic
 from uuid import uuid4
 
+from .feature_docs import read_feature_docs, save_feature_docs
 from .process import run_process
 from .progress import one_line
 from .repository import Repository
@@ -82,6 +83,7 @@ async def prepare(client, config, issue_id):
         "issue": issue,
         "context": context,
         "repositoryInstructions": selected.get("instructions", ""),
+        "featureDocs": await read_feature_docs(client, issue["id"]),
     }
 
 
@@ -174,6 +176,15 @@ async def execute(
         review = await provider.review(
             config, context, workspace.path, progress=lambda text: report(f"Review: {text}")
         )
+        # FDS/TDS are saved before the plan comment so the comment can name their
+        # versions, and before implementation so the code follows the documents.
+        # VI: FDS/TDS được lưu trước comment kế hoạch để comment ghi được version, và
+        # VI: trước khi code để code đi theo tài liệu.
+        report("Saving FDS/TDS")
+        doc_notes = await save_feature_docs(
+            client, issue_id, review["featureDocs"], context["featureDocs"], key
+        )
+        docs_text = "\n\nFDS/TDS:\n" + "\n".join(f"- {note}" for note in doc_notes) if doc_notes else ""
         report("Recording the plan and target end date")
         current = await client.call("get_issue", {"issueId": issue_id})
         await client.call(
@@ -189,7 +200,7 @@ async def execute(
             "add_comment",
             {
                 "issueId": issue_id,
-                "content": f"Plan before implementation (target end date {review['targetDate']}):\n\n{review['plan']}",
+                "content": f"Plan before implementation (target end date {review['targetDate']}):\n\n{review['plan']}{docs_text}",
                 "idempotencyKey": key(),
             },
         )
@@ -225,7 +236,7 @@ async def execute(
         )
         return {
             "outcome": "AWAITING_REVIEW",
-            "summary": summary,
+            "summary": summary + docs_text,
             "commit": commit,
             "pullRequestUrl": url,
             "tests": tests,

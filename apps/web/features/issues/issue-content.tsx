@@ -52,7 +52,11 @@ export function IssueContent({
                <BugDetails key={issue.id} issue={issue} />
                <IssueAgentRun key={issue.id} issueId={issue.id} />
                <IssuePullRequests reviews={reviews} orgId={orgId} />
-               <IssueDocuments key={`docs-${issue.id}`} issueId={issue.id} />
+               <IssueDocuments
+                  key={`docs-${issue.id}`}
+                  issueId={issue.id}
+                  projectId={issue.project?.id}
+               />
                <IssueSlaPanel issue={issue} />
                <div className="flex flex-wrap items-center gap-2">
                   <IssueReactions issueId={issue.id} />

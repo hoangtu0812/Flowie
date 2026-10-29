@@ -202,6 +202,22 @@ class UpdateDocumentTool(VersionInput, DocumentInput):
     status: Literal["DRAFT", "IN_REVIEW", "APPROVED"] | None = None
 
 
+class UpsertFeatureDocTool(WriteInput, IssueInput):
+    """FDS/TDS of one module/feature of the issue's project.
+    VI: FDS/TDS của một module/tính năng thuộc dự án của issue."""
+
+    module: str = Field(min_length=2, max_length=120)
+    feature: str = Field(min_length=2, max_length=120)
+    docType: Literal["FDS", "TDS"]
+    content: str = Field(min_length=1, max_length=95000)
+    changeSummary: str = Field(min_length=3, max_length=500)
+
+    @field_validator("module", "feature", "changeSummary", mode="before")
+    @classmethod
+    def strip_text(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+
 class LinkDocumentTool(WriteInput, DocumentInput):
     projectId: str | None = None
     issueId: str | None = None

@@ -50,6 +50,22 @@
    release whose notes are the matching `CHANGELOG.md` section. Never tag a
    revision that has not deployed successfully.
 
+## Feature documents (FDS/TDS)
+
+- A task that changes behaviour or design keeps its feature's FDS (behaviour,
+  rules, acceptance criteria) and TDS (design, data, API, tests) current in the
+  project's Docs tree, under `<project> / <module> / <feature>`.
+- Before coding a Flowie task, call the Flowie MCP tool `get_feature_docs` with
+  the issue. Update or create the documents with `upsert_feature_doc`: send the
+  full updated Markdown, keep existing sections, and give a one-sentence
+  `changeSummary`. The tool adds the change-log row and links the document to
+  the issue.
+- The order for a task is: comment the plan → set the end date → move to In
+  Progress → FDS/TDS → code → pull request.
+- Skip the documents only when the change alters no documented behaviour or
+  design (for example a pure refactor or a dependency bump), and say so in the
+  plan comment. A missing FDS/TDS is a warning for now, not a blocker.
+
 ## Source comments
 
 - Write every new or edited source-code comment in English and Vietnamese:

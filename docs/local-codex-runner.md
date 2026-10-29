@@ -4,7 +4,7 @@ Runner dùng Codex CLI hoặc Claude Code đã đăng nhập trên máy (chọn 
 
 ## Chuẩn bị
 
-1. Quản trị workspace khai báo repository của project trong AI settings và cấp connection có các scope `context:read`, `projects:read`, `issues:read`, `comments:read`, `documents:read`, `activities:read`, `reviews:read`, `runs:read`, `runs:write`, `comments:write`. Chọn đúng project; backend phải bật MCP và MCP writes.
+1. Quản trị workspace khai báo repository của project trong AI settings và cấp connection có các scope `context:read`, `projects:read`, `issues:read`, `comments:read`, `documents:read`, `activities:read`, `reviews:read`, `runs:read`, `runs:write`, `comments:write`, và `documents:write` để runner lưu FDS/TDS (thiếu scope này thì run vẫn chạy nhưng comment kế hoạch có cảnh báo). Chọn đúng project; backend phải bật MCP và MCP writes.
 2. Clone repository về máy. `origin` phải khớp URL đã duyệt. Mỗi lượt chạy tự `git fetch` base từ `origin` và làm việc trong worktree riêng, nên checkout dùng chung không cần sạch và không bị runner sửa; `baseRef` luôn được hiểu là nhánh trên `origin` (`main` và `origin/main` là một).
 3. Cài dependency Python theo `apps/api-python/requirements.txt`; kiểm tra `codex exec --help`. Runner yêu cầu sandbox `workspace-write`, `--ephemeral`, `--ignore-user-config`, `--output-schema` và `--output-last-message`. CLI cũ thiếu flag sẽ bị từ chối.
 4. Tạo file JSON **ngoài Git**, duyệt các test command local dưới dạng argv. Command từ cấu hình server không tự được thực thi. Không đặt token/password trong JSON hay argv test, và chỉ duyệt command không in secret ra output: argv cùng phần cuối log của mỗi test được gửi lên Flowie làm bằng chứng. Ưu tiên chế độ ít output (ví dụ `-q`) vì runner giữ toàn bộ output trong bộ nhớ trước khi cắt.

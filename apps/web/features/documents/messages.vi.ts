@@ -101,6 +101,8 @@ export const messages = {
    'Published v{value0}': 'Đã phát hành v{value0}',
    'Waiting to publish': 'Đang chờ phát hành',
    'Publishing failed: {value0}': 'Phát hành lỗi: {value0}',
+   'This task has no FDS/TDS yet.': 'Task này chưa có FDS/TDS.',
+   'Open Docs': 'Mở Docs',
    'File uploaded.': 'Đã tải file lên.',
    'Download': 'Tải xuống',
    'Open in new tab': 'Mở tab mới',
