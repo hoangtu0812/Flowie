@@ -132,7 +132,11 @@ export const settingsNav: SettingsNavGroup[] = [
 
 // Administrator pages stay out of members' navigation; the API enforces the same rule.
 // VI: Trang dành cho quản trị viên không hiện với thành viên; API cũng áp dụng quy tắc này.
-const ADMIN_ONLY = new Set(['/settings/operations', '/settings/audit', '/settings/ai-operations']);
+export const ADMIN_ONLY = new Set([
+   '/settings/operations',
+   '/settings/audit',
+   '/settings/ai-operations',
+]);
 
 export function NavSettings() {
    const tx = useMessages(messages);

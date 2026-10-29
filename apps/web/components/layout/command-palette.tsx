@@ -44,6 +44,22 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useModifierKey } from '@/features/shared/use-modifier-key';
 import { toast } from 'sonner';
 import { withBasePath } from '@/lib/base-path';
+import { ADMIN_ONLY, settingsNav } from '@/components/layout/sidebar/nav-settings';
+import { loadCurrentWorkspaceMembership } from '@/lib/workspaces';
+
+/**
+ * Window event that opens the palette from controls outside its tree, such as the sidebar search
+ * button. The palette is mounted once per workspace layout, so one listener serves every page.
+ * VI: Sự kiện window mở palette từ control nằm ngoài cây component của nó, ví dụ nút tìm kiếm
+ * VI: ở sidebar. Palette chỉ mount một lần trong layout workspace nên một listener phục vụ mọi trang.
+ */
+const OPEN_EVENT = 'flowie:open-command-palette';
+
+export const openCommandPalette = () => window.dispatchEvent(new Event(OPEN_EVENT));
+
+// Typed matches stay short so the palette remains a launcher; /search covers full results.
+// VI: Kết quả khi gõ được giới hạn để palette vẫn gọn; /search trả đầy đủ kết quả.
+const MATCH_LIMIT = 8;
 
 type PaletteRoute =
    | 'root'
@@ -91,6 +107,7 @@ export function CommandPalette() {
    const [query, setQuery] = useState('');
    /** When true, the issue context chip was dismissed with ⌫. */
    const [contextCleared, setContextCleared] = useState(false);
+   const [isAdmin, setIsAdmin] = useState(false);
 
    const pathname = usePathname();
    const router = useRouter();
@@ -148,9 +165,57 @@ export function CommandPalette() {
             });
          }
       };
+      const onOpen = () => setOpen(true);
       window.addEventListener('keydown', onKeyDown);
-      return () => window.removeEventListener('keydown', onKeyDown);
+      window.addEventListener(OPEN_EVENT, onOpen);
+      return () => {
+         window.removeEventListener('keydown', onKeyDown);
+         window.removeEventListener(OPEN_EVENT, onOpen);
+      };
    }, [reset]);
+
+   // Admin-only settings pages are hidden from members, as in the Settings sidebar; a failed
+   // membership load hides them too. The API still enforces access on those pages.
+   // VI: Trang settings chỉ dành cho admin bị ẩn với thành viên, giống sidebar Settings; tải
+   // VI: membership lỗi cũng ẩn chúng. API vẫn kiểm tra quyền ở các trang đó.
+   useEffect(() => {
+      if (!open) return;
+      let current = true;
+      void loadCurrentWorkspaceMembership(orgId)
+         .then((member) => {
+            if (current) setIsAdmin(member.role !== 'MEMBER');
+         })
+         .catch(() => {
+            if (current) setIsAdmin(false);
+         });
+      return () => {
+         current = false;
+      };
+   }, [open, orgId]);
+
+   const needle = query.trim().toLowerCase();
+   const issueMatches = useMemo(
+      () =>
+         needle
+            ? issues
+                 .filter(
+                    (item) =>
+                       item.identifier.toLowerCase().includes(needle) ||
+                       item.title.toLowerCase().includes(needle)
+                 )
+                 .slice(0, MATCH_LIMIT)
+            : [],
+      [issues, needle]
+   );
+   const projectMatches = useMemo(
+      () =>
+         needle
+            ? projects
+                 .filter((project) => project.name.toLowerCase().includes(needle))
+                 .slice(0, MATCH_LIMIT)
+            : [],
+      [projects, needle]
+   );
 
    const copy = useCallback(
       async (label: string, text: string) => {
@@ -261,6 +326,61 @@ export function CommandPalette() {
                            <FileText /> Search workspace for{' '}
                            {query || 'issues, documents, projects and members'}
                         </CommandItem>
+                     </CommandGroup>
+                  )}
+
+                  {route === 'root' && issueMatches.length > 0 && (
+                     <CommandGroup heading="Issues">
+                        {issueMatches.map((match) => (
+                           <CommandItem
+                              key={match.id}
+                              value={`issue ${match.identifier} ${match.title}`}
+                              onSelect={() => go(`/issue/${match.identifier}`)}
+                           >
+                              <CircleDot className="text-muted-foreground" />
+                              <span className="text-muted-foreground shrink-0">
+                                 {match.identifier}
+                              </span>
+                              <span className="truncate">{match.title}</span>
+                           </CommandItem>
+                        ))}
+                     </CommandGroup>
+                  )}
+
+                  {route === 'root' && projectMatches.length > 0 && (
+                     <CommandGroup heading="Projects">
+                        {projectMatches.map((project) => (
+                           <CommandItem
+                              key={project.id}
+                              value={`project ${project.name} ${project.id}`}
+                              onSelect={() => go(`/project/${project.id}/overview`)}
+                           >
+                              <Box className="text-muted-foreground" />
+                              <span className="truncate">{project.name}</span>
+                           </CommandItem>
+                        ))}
+                     </CommandGroup>
+                  )}
+
+                  {route === 'root' && needle && (
+                     <CommandGroup heading="Settings">
+                        {settingsNav.flatMap((group) =>
+                           group.items
+                              .filter((item) => isAdmin || !ADMIN_ONLY.has(item.url))
+                              .map((item) => (
+                                 <CommandItem
+                                    key={item.url}
+                                    value={`settings ${group.label} ${item.name} ${item.url}`}
+                                    onSelect={() => go(item.url)}
+                                 >
+                                    <item.icon className="text-muted-foreground" />
+                                    <span className="text-muted-foreground shrink-0">
+                                       {group.label} ·
+                                    </span>
+                                    {item.name}
+                                 </CommandItem>
+                              ))
+                        )}
                      </CommandGroup>
                   )}
 
