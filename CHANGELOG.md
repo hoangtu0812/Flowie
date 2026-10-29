@@ -16,7 +16,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
-- Help → Feature guide has a "Project Docs" topic: how to create the standard structure, module and feature folders, FDS/TDS documents from templates, document types and review statuses, Mermaid diagrams, search and linked documents. (DTD-19)
+- Help → Feature guide has a "Project Docs" topic: how to create the standard structure, module and feature folders, FDS/TDS documents from templates, document types and review statuses, Mermaid diagrams, search and linked documents. (DTD-19, #46)
   VI: Trợ giúp → Hướng dẫn chức năng có mục "Tài liệu dự án (Docs)": cách tạo khung chuẩn, thư mục module và tính năng, tài liệu FDS/TDS từ mẫu, loại và trạng thái duyệt tài liệu, sơ đồ Mermaid, tìm kiếm và tài liệu liên kết. (DTD-19)
 
 - Projects have a Docs tab with a document tree (project → module → feature → bugs & changes): search by title or content, filter by type, create folders and FDS/TDS documents from templates, and a one-click standard structure. Documents have a type (FDS, TDS, ADR, RCA, GUIDE, OTHER) and a review status, Mermaid diagrams render in previews, long documents get a table of contents, and an issue lists its linked documents. Adds `document_folders.parent_id`, `project_id`, `kind` and `documents.doc_type`, `status` through a Prisma migration; existing folders become roots. (DTD-19, #44)
@@ -51,7 +51,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
-- Load-error screens show a centred icon, the message and a small Retry button instead of a Retry bar stretched across the page. (DTD-19)
+- Load-error screens show a centred icon, the message and a small Retry button instead of a Retry bar stretched across the page. (DTD-19, #46)
   VI: Màn hình lỗi tải dữ liệu hiển thị icon, thông báo và nút Thử lại nhỏ ở giữa, thay cho nút Thử lại kéo dài hết trang. (DTD-19)
 
 - Creating a document for a team with no document folders, including through the MCP `create_document` tool, now creates a "General" folder instead of failing with "Document folder not found". (DTD-19, #44)
