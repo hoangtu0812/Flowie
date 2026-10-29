@@ -121,6 +121,13 @@ const catalog = {
    pasteScreenshot: ['Paste a screenshot to attach it', 'Dán ảnh chụp màn hình để đính kèm'],
    imagesInComment: ['Images in this comment', 'Ảnh trong bình luận'],
    removeImage: ['Remove image', 'Xoá ảnh'],
+   overview: ['Overview', 'Tổng quan'],
+   comments: ['Comments', 'Bình luận'],
+   sendComment: ['Send comment', 'Gửi bình luận'],
+   attachments: ['Attachments', 'Tệp đính kèm'],
+   attachFile: ['Attach file', 'Đính kèm tệp'],
+   noAttachments: ['No attachments yet.', 'Chưa có tệp đính kèm.'],
+   issueSections: ['Issue sections', 'Các phần của công việc'],
    language: ['Language', 'Ngôn ngữ'],
 } as const;
 export type MessageKey = keyof typeof catalog;

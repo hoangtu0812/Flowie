@@ -1,10 +1,7 @@
 'use client';
 import { useEffect, useState, type ReactNode } from 'react';
-import { AtSign } from 'lucide-react';
-import { Button } from '@astryxdesign/core/Button';
-import { HStack, VStack } from '@astryxdesign/core/Layout';
+import { VStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
-import { TextInput } from '@astryxdesign/core/TextInput';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { mentionOptions } from './comments-api';
@@ -13,13 +10,14 @@ import { insertMention, mentionSearchKey as searchKey, trailingMentionQuery } fr
 type Member = { id: string; name: string; avatarUrl?: string | null };
 
 /**
- * Wraps the comment textarea with `@` autocomplete and a member picker. Choosing a member
- * inserts `@Name` into the draft and adds their id to the mention list; removing that text
- * from the draft drops the mention again, so the notification list always matches what the
- * comment shows.
- * VI: Bọc ô nhập comment với gợi ý `@` và bộ chọn thành viên. Chọn một thành viên sẽ chèn
- * VI: `@Tên` vào bản nháp và thêm id vào danh sách mention; xoá đoạn đó khỏi bản nháp thì bỏ
- * VI: mention, để danh sách nhận thông báo luôn khớp với nội dung comment.
+ * Wraps the comment textarea with `@` autocomplete. Choosing a member inserts `@Name` into
+ * the draft and adds their id to the mention list; removing that text from the draft drops
+ * the mention again, so the notification list always matches what the comment shows.
+ * Typing `@` is the only way to mention; there is no separate picker button.
+ * VI: Bọc ô nhập comment với gợi ý khi gõ `@`. Chọn một thành viên sẽ chèn `@Tên` vào bản
+ * VI: nháp và thêm id vào danh sách mention; xoá đoạn đó khỏi bản nháp thì bỏ mention, để danh
+ * VI: sách nhận thông báo luôn khớp với nội dung comment. Gõ `@` là cách duy nhất để mention;
+ * VI: không còn nút chọn thành viên riêng.
  */
 export function CommentMentions({
    workspaceId,
@@ -28,7 +26,6 @@ export function CommentMentions({
    onChange,
    draft,
    onDraftChange,
-   disabled,
    children,
 }: {
    workspaceId: string;
@@ -37,22 +34,19 @@ export function CommentMentions({
    onChange: (ids: string[]) => void;
    draft: string;
    onDraftChange: (value: string) => void;
-   disabled: boolean;
    children: ReactNode;
 }) {
    const [members, setMembers] = useState<Member[]>([]);
-   const [search, setSearch] = useState('');
    const [error, setError] = useState<string>();
-   const [open, setOpen] = useState(false);
    const [active, setActive] = useState(0);
    const [dismissed, setDismissed] = useState<string>();
    const query = draft !== dismissed ? trailingMentionQuery(draft) : null;
 
-   // Members load when the picker opens or an `@` is typed, and reload for the next session so
-   // newly added team members appear without a page refresh.
-   // VI: Danh sách thành viên tải khi mở bộ chọn hoặc gõ `@`, và tải lại ở lần sau để thành viên
-   // VI: mới vào nhóm xuất hiện mà không cần tải lại trang.
-   const wanted = open || query !== null;
+   // Members load when an `@` is typed, and reload for the next one so newly added team
+   // members appear without a page refresh.
+   // VI: Danh sách thành viên tải khi gõ `@`, và tải lại ở lần sau để thành viên mới vào nhóm
+   // VI: xuất hiện mà không cần tải lại trang.
+   const wanted = query !== null;
    useEffect(() => {
       if (!wanted) return;
       let current = true;
@@ -145,49 +139,7 @@ export function CommentMentions({
                </div>
             )}
          </div>
-         <HStack gap={2} vAlign="center">
-            <Button
-               label={open ? 'Hide mention picker' : `Mention members (${selected.length})`}
-               tooltip={open ? 'Hide mention picker' : 'Mention members (or type @)'}
-               icon={<AtSign className="size-4" />}
-               isIconOnly={!selected.length}
-               size="sm"
-               variant={open ? 'secondary' : 'ghost'}
-               aria-pressed={open}
-               isDisabled={disabled}
-               onClick={() => setOpen(!open)}
-            >
-               {selected.length ? String(selected.length) : undefined}
-            </Button>
-            {error && <Text role="alert">{error}</Text>}
-         </HStack>
-         {open && (
-            <>
-               <TextInput label="Find a member to mention" value={search} onChange={setSearch} />
-               <Text type="supporting">
-                  Selected members receive a notification when you submit.
-               </Text>
-               <HStack gap={2} wrap="wrap">
-                  {members
-                     .filter((member) => searchKey(member.name).includes(searchKey(search)))
-                     .map((member) => (
-                        <Button
-                           key={member.id}
-                           label={`@${member.name}`}
-                           size="sm"
-                           aria-pressed={selected.includes(member.id)}
-                           isDisabled={disabled}
-                           variant={selected.includes(member.id) ? 'primary' : 'secondary'}
-                           onClick={() =>
-                              selected.includes(member.id)
-                                 ? onChange(selected.filter((id) => id !== member.id))
-                                 : insert(member)
-                           }
-                        />
-                     ))}
-               </HStack>
-            </>
-         )}
+         {error && <Text role="alert">{error}</Text>}
       </VStack>
    );
 }

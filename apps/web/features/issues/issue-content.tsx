@@ -1,11 +1,18 @@
 'use client';
+import { useState } from 'react';
+import { parseAsStringLiteral, useQueryState } from 'nuqs';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Heading } from '@astryxdesign/core/Text';
 import type { Issue } from '@/mock-data/issues';
 import { BugDetails } from './bug-details';
 import { IssueAgentRun } from './issue-agent-run';
 import { IssueDocuments } from '@/features/documents/issue-documents';
-import { ActivityFeed } from '@/components/common/issues/details/activity-feed';
+import { ActivityEvents, CommentsSection } from '@/components/common/issues/details/activity-feed';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useLocale } from '@/features/shared/use-locale';
+import { useIssuesStore } from '@/store/issues-store';
+import { useIssueActivity } from './use-issue-activity';
+import { useIssueAttachments } from './use-issue-attachments';
 import { IssueDescription } from '@/components/common/issues/details/issue-description';
 import { IssueAttachments } from '@/components/common/issues/details/issue-attachments';
 import { IssueReactions } from '@/components/common/issues/details/issue-reactions';
@@ -18,6 +25,21 @@ import {
    useIssueReviews,
 } from '@/components/common/issues/details/issue-pull-requests';
 
+const TABS = ['overview', 'activity', 'attachments'] as const;
+type IssueTab = (typeof TABS)[number];
+
+/**
+ * Issue detail body: title and properties, then three tabs so a long task stays readable.
+ * Overview holds the description, details, sub-issues and comments; Activity the change
+ * history; Attachments the files. Activity and attachment state live here, so a hidden tab
+ * keeps the comment draft and the attachment count. The page keeps the tab in `?tab=` to share
+ * a link to it; the compact Inbox preview keeps it locally so the host page URL never changes.
+ * VI: Phần thân chi tiết công việc: tiêu đề và thuộc tính, rồi ba tab để task dài vẫn dễ đọc.
+ * VI: Tổng quan gồm mô tả, chi tiết, sub-issue và bình luận; Hoạt động là lịch sử thay đổi; Tệp
+ * VI: đính kèm là các tệp. State hoạt động và đính kèm nằm ở đây, nên tab ẩn vẫn giữ bản nháp
+ * VI: bình luận và số tệp. Trang task lưu tab vào `?tab=` để chia sẻ link; khung xem nhanh ở
+ * VI: Inbox giữ tab cục bộ để không đổi URL của trang chứa.
+ */
 export function IssueContent({
    issue,
    orgId,
@@ -29,6 +51,18 @@ export function IssueContent({
 }) {
    const detail = { identifier: issue.identifier, description: [], activity: [] };
    const reviews = useIssueReviews(issue.id);
+   const { t } = useLocale();
+   const workspaceId = useIssuesStore((state) => state.workspaceId);
+   const activity = useIssueActivity(issue.id);
+   const attachments = useIssueAttachments(workspaceId, issue.id);
+   const [urlTab, setUrlTab] = useQueryState(
+      'tab',
+      parseAsStringLiteral(TABS).withDefault('overview')
+   );
+   const [localTab, setLocalTab] = useState<IssueTab>('overview');
+   const tab = compact ? localTab : urlTab;
+   const setTab = (next: string) =>
+      compact ? setLocalTab(next as IssueTab) : void setUrlTab(next as IssueTab);
    return (
       <HStack height="100%" gap={0} align="stretch" className="min-h-0 min-w-0 overflow-hidden">
          <VStack isScrollable className="min-h-0 min-w-0 flex-1" align="center">
@@ -48,22 +82,38 @@ export function IssueContent({
                   reviews={reviews}
                   allScreens={compact}
                />
-               <IssueDescription issue={issue} />
-               <BugDetails key={issue.id} issue={issue} />
-               <IssueAgentRun key={issue.id} issueId={issue.id} />
-               <IssuePullRequests reviews={reviews} orgId={orgId} />
-               <IssueDocuments
-                  key={`docs-${issue.id}`}
-                  issueId={issue.id}
-                  projectId={issue.project?.id}
-               />
-               <IssueSlaPanel issue={issue} />
-               <div className="flex flex-wrap items-center gap-2">
-                  <IssueReactions issueId={issue.id} />
-                  <IssueAttachments issueId={issue.id} />
-               </div>
-               <IssueSubIssues issueId={issue.id} teamId={issue.teamId} orgId={orgId} />
-               <ActivityFeed key={issue.id} issueId={issue.id} />
+               <Tabs value={tab} onValueChange={setTab} className="gap-6">
+                  <TabsList aria-label={t('issueSections')}>
+                     <TabsTrigger value="overview">{t('overview')}</TabsTrigger>
+                     <TabsTrigger value="activity">{t('activity')}</TabsTrigger>
+                     <TabsTrigger value="attachments">
+                        {t('attachments')}
+                        {attachments.attachments.length > 0 &&
+                           ` (${attachments.attachments.length})`}
+                     </TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="overview" className="flex flex-col gap-6">
+                     <IssueDescription issue={issue} />
+                     <BugDetails key={issue.id} issue={issue} />
+                     <IssueAgentRun key={issue.id} issueId={issue.id} />
+                     <IssuePullRequests reviews={reviews} orgId={orgId} />
+                     <IssueDocuments
+                        key={`docs-${issue.id}`}
+                        issueId={issue.id}
+                        projectId={issue.project?.id}
+                     />
+                     <IssueSlaPanel issue={issue} />
+                     <IssueReactions issueId={issue.id} />
+                     <IssueSubIssues issueId={issue.id} teamId={issue.teamId} orgId={orgId} />
+                     <CommentsSection issueId={issue.id} state={activity} />
+                  </TabsContent>
+                  <TabsContent value="activity">
+                     <ActivityEvents state={activity} />
+                  </TabsContent>
+                  <TabsContent value="attachments">
+                     <IssueAttachments workspaceId={workspaceId} state={attachments} />
+                  </TabsContent>
+               </Tabs>
             </VStack>
          </VStack>
          {!compact && (
