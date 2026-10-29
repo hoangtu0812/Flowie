@@ -26,7 +26,10 @@ export const messages = {
       'Nhóm công việc hiện khớp bộ lọc theo dự án. Không gán tổng công sức vào ngày làm việc suy đoán. Sự kiện hoàn tất thuộc khoảng đã chọn, gồm cả hoàn tất lại sau khi mở lại.',
    'Open project': 'Mở dự án',
    'project groups': 'nhóm dự án',
-   'Captured activity:': 'Hoạt động đã ghi nhận:',
+   'Activity · {day}': 'Hoạt động · {day}',
+   'created': 'đã tạo',
+   'completed': 'đã hoàn thành',
+   'reopened': 'đã mở lại',
    'Close day activity': 'Đóng hoạt động trong ngày',
    'No captured activity on this day.': 'Không có hoạt động được ghi nhận trong ngày này.',
    'day events': 'sự kiện trong ngày',
@@ -81,7 +84,6 @@ export const messages = {
       '{value0} việc đang mở · {value1} ngày công ước tính · {value2} chưa ước tính · {value3} quá hạn',
    '{value0} tasks · {value1} open · {value2} created in period · {value3} observed completions · Estimated {value4} / actual {value5} mandays':
       '{value0} việc · {value1} đang mở · {value2} tạo trong kỳ · {value3} lần hoàn tất ghi nhận · Ước tính {value4} / thực tế {value5} ngày công',
-   'Open {value0}': 'Mở {value0}',
    'Last {value0} days': '{value0} ngày gần nhất',
    '{value0} completion events; a reopened task can complete again.':
       '{value0} sự kiện hoàn tất; công việc mở lại có thể hoàn tất thêm lần nữa.',

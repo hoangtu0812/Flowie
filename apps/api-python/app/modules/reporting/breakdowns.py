@@ -16,9 +16,9 @@ async def change_page(
     ctes = (
         history_ctes(scope)
         + """, changes AS (
-        SELECT 'created:'||i.id AS id,i.id AS issue_id,i.identifier,i.title,i.created_at AS occurred_at,'CREATED' AS kind FROM scoped i
+        SELECT 'created:'||i.id AS id,i.id AS issue_id,i.identifier,i.title,i.created_at AS occurred_at,'CREATED' AS kind,i.creator_id AS actor_id FROM scoped i
             WHERE i.created_at>=:start AND i.created_at<:until AND i.created_at<=:now
-        UNION ALL SELECT 'event:'||e.id,e.issue_id,i.identifier,i.title,e.occurred_at,CASE WHEN e.completes THEN 'COMPLETED' ELSE 'REOPENED' END
+        UNION ALL SELECT 'event:'||e.id,e.issue_id,i.identifier,i.title,e.occurred_at,CASE WHEN e.completes THEN 'COMPLETED' ELSE 'REOPENED' END,e.actor_id
             FROM events e JOIN scoped i ON i.id=e.issue_id WHERE e.readable AND e.occurred_at>=:start AND e.occurred_at<:until
             AND (e.completes OR (e.from_category='COMPLETED' AND e.to_category NOT IN ('COMPLETED','CANCELED') AND e.to_archived_at IS NULL))
     ) """
@@ -35,15 +35,18 @@ async def change_page(
     predicate = ""
     if cursor:
         params["after"], params["after_id"] = codec.decode(cursor)
-        predicate = " WHERE (occurred_at,id)<(:after,:after_id)"
+        predicate = " WHERE (c.occurred_at,c.id)<(:after,:after_id)"
     rows = (
         (
             await db.execute(
                 text(
                     ctes
-                    + "SELECT * FROM changes"
+                    # The users join is on its primary key, so it keeps one row per change and the cursor order.
+                    # VI: Join users theo khóa chính nên vẫn một dòng cho mỗi thay đổi và giữ thứ tự con trỏ.
+                    + "SELECT c.*,u.name AS actor_name,u.avatar_url AS actor_avatar_url FROM changes c"
+                    + " LEFT JOIN users u ON u.id=c.actor_id"
                     + predicate
-                    + " ORDER BY occurred_at DESC,id DESC LIMIT :limit"
+                    + " ORDER BY c.occurred_at DESC,c.id DESC LIMIT :limit"
                 ),
                 {**params, "limit": limit + 1},
             )
@@ -60,6 +63,15 @@ async def change_page(
                 "title": row["title"],
                 "occurredAt": row["occurred_at"],
                 "kind": row["kind"],
+                # Creator for CREATED, status changer otherwise; null for system or deleted users.
+                # VI: Người tạo với CREATED, người đổi trạng thái với loại khác; null nếu là hệ thống hoặc user đã xóa.
+                "actor": {
+                    "id": row["actor_id"],
+                    "name": row["actor_name"],
+                    "avatarUrl": row["actor_avatar_url"],
+                }
+                if row["actor_name"] is not None
+                else None,
             }
             for row in rows[:limit]
         ],

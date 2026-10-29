@@ -66,7 +66,7 @@ test('original dashboard composition keeps complete scoped data and advanced rep
       await page.getByRole('button', { name: 'Clear focus', exact: true }).click();
    }
    await page.getByRole('button', { name: 'Show daily activity', exact: true }).click();
-   await expect(page.getByRole('heading', { name: /^Captured activity:/ })).toBeVisible();
+   await expect(page.getByRole('heading', { name: /^Activity · / })).toBeVisible();
    await page.getByRole('button', { name: 'Close day activity', exact: true }).click();
    expect(Math.abs(left.y - right.y)).toBeLessThan(10);
    expect(left.width / right.width).toBeGreaterThan(1.7);

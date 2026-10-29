@@ -5,7 +5,7 @@ def scoped_sql(workspace, user, options):
     scope, params = issue_scope(workspace, user, options)
     return (
         """SELECT i.id,i.workspace_id,i.team_id,i.status_id,i.project_id,i.assignee_id,i.identifier,i.title,
-        i.issue_type,i.created_at,i.due_date,i.start_date,i.estimated_effort,i.actual_effort,s.category::text AS category """
+        i.issue_type,i.created_at,i.creator_id,i.due_date,i.start_date,i.estimated_effort,i.actual_effort,s.category::text AS category """
         + scope,
         params,
     )

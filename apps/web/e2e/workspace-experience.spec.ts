@@ -267,7 +267,7 @@ test('reports keep filters, daily drilldown and recovery usable at desktop and m
    await expect.poll(() => state.queries.at(-1)?.timezone).toBe('UTC');
    await page.getByRole('button', { name: 'Show daily values' }).click();
    await page.getByText('2026-10-19', { exact: true }).click();
-   await expect(page.getByRole('heading', { name: 'Captured activity: 2026-10-19' })).toBeVisible();
+   await expect(page.getByRole('heading', { name: /^Activity · / })).toBeVisible();
    await page.getByRole('button', { name: 'Close day activity' }).click();
    await page.setViewportSize({ width: 390, height: 844 });
    await page

@@ -225,6 +225,14 @@ async def verify_report():
                 db, workspace, user, query, "report-secret", limit=50, now=asof
             )
             assert changes["meta"]["total"] == 154
+            # Creations carry their creator; synthetic status events have no actor.
+            # VI: Dòng tạo issue mang người tạo; sự kiện trạng thái tổng hợp không có người thực hiện.
+            actors = {
+                (row["kind"], (row["actor"] or {}).get("name"))
+                for row in changes["data"]
+            }
+            assert ("CREATED", "Reporting owner") in actors
+            assert all(kind == "CREATED" or name is None for kind, name in actors)
             next_page = await change_page(
                 db,
                 workspace,
