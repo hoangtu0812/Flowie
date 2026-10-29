@@ -122,7 +122,7 @@ test('comment submit is single and author edits/replies survive reload', async (
    await expect(row).toContainText('edited');
    await row.getByRole('button', { name: 'Reply', exact: true }).click();
    await page.getByRole('textbox', { name: 'Comment', exact: true }).fill(content + ' reply');
-   await page.getByRole('button', { name: 'Comment', exact: true }).click();
+   await page.getByRole('button', { name: 'Send comment', exact: true }).click();
    await expect(page.getByRole('article').filter({ hasText: content + ' reply' })).toBeVisible();
    await page.reload();
    await expect(page.getByText(content + ' edited', { exact: true })).toBeVisible();
@@ -257,11 +257,11 @@ test('failed comment send retains the draft and retry posts one comment', async 
    const content = `Offline draft ${Date.now()}`;
    await page.getByRole('textbox', { name: 'Comment', exact: true }).fill(content);
    await page.route('**/api/v1/comments', (route) => route.abort('failed'));
-   await page.getByRole('button', { name: 'Comment', exact: true }).click();
+   await page.getByRole('button', { name: 'Send comment', exact: true }).click();
    await expect(page.getByRole('textbox', { name: 'Comment', exact: true })).toHaveValue(content);
    await expect(page.locator('[data-comment-composer]').getByRole('alert')).toBeVisible();
    await page.unroute('**/api/v1/comments');
-   await page.getByRole('button', { name: 'Comment', exact: true }).click();
+   await page.getByRole('button', { name: 'Send comment', exact: true }).click();
    await expect(page.getByRole('article').filter({ hasText: content })).toHaveCount(1);
    const saved = (
       await (
@@ -302,7 +302,7 @@ test('structured bug fields and comment attachments persist through the API', as
    expect(native.reproductionSteps).toBe('Open the issue on a narrow viewport');
    const content = `Attachment comment ${Date.now()}`;
    await page.getByRole('textbox', { name: 'Comment', exact: true }).fill(content);
-   await page.getByRole('button', { name: 'Comment', exact: true }).click();
+   await page.getByRole('button', { name: 'Send comment', exact: true }).click();
    const row = page.getByRole('article').filter({ hasText: content });
    await expect(row).toBeVisible();
    await row.getByLabel('Select comment attachments').setInputFiles({
@@ -465,10 +465,11 @@ test('Inbox opens an uncached task, sends comments and exposes attachments and p
    ).toBeVisible();
    const content = `Inbox comment ${Date.now()}`;
    await page.getByRole('textbox', { name: 'Comment', exact: true }).fill(content);
-   await page.getByRole('button', { name: 'Comment', exact: true }).click();
+   await page.getByRole('button', { name: 'Send comment', exact: true }).click();
    await expect(page.getByRole('article').filter({ hasText: content })).toBeVisible();
    await page.getByRole('button', { name: 'Properties', exact: true }).click();
    await expect(page.getByRole('combobox', { name: /Status:/ }).first()).toBeVisible();
+   await page.getByRole('tab', { name: 'Attachments', exact: true }).click();
    await expect(page.getByRole('button', { name: 'Attach file', exact: true })).toBeVisible();
    const saved = (
       await (
@@ -683,7 +684,7 @@ test('Vietnamese account locale applies to Inbox search and issue activity', asy
             exact: true,
          })
          .click();
-      await expect(page.getByRole('heading', { name: 'Hoạt động', exact: true })).toBeVisible();
+      await expect(page.getByRole('tab', { name: 'Hoạt động', exact: true })).toBeVisible();
       await expect(page.getByRole('textbox', { name: 'Bình luận', exact: true })).toBeVisible();
    } finally {
       const current = (await (await context.request.get(endpoint)).json()).data;

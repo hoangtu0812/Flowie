@@ -66,6 +66,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
+- Browser regression tests use the task page's new Send comment button, Attachments tab and Activity tab, so verification on `main` passes again after the task-tab change. (DTD-55, #56)
+  VI: Test hồi quy trên trình duyệt dùng nút Gửi bình luận, tab Tệp đính kèm và tab Hoạt động mới của trang task, nên bước kiểm tra trên `main` chạy qua lại sau thay đổi chia tab. (DTD-55)
+
 - Closing a document opened from a link (search, a task, a shared URL) returns to the page it was opened from, or to Docs when it was opened in a new tab, instead of always going to Search. (DTD-54, #53)
   VI: Đóng tài liệu mở từ link (tìm kiếm, task, URL được chia sẻ) sẽ quay về trang đã mở nó, hoặc về Docs nếu mở ở tab mới, thay vì luôn chuyển sang Tìm kiếm. (DTD-54)
 
