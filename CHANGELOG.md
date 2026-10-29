@@ -121,6 +121,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Changed
 
+- The Flowie MCP server now tells every connected agent (Codex, Claude, ChatGPT …) the task workflow when it connects: read the task and screenshots, comment the plan, set the end date, move to In Progress, update the feature FDS/TDS, open a pull request, comment the result, and move to Technical Review after merge. Agents no longer depend on a repository `AGENTS.md` to follow it. Reconnect MCP clients after deploying `api` to pick up the new instructions. (#59)
+  VI: MCP server Flowie gửi quy trình xử lý task cho mọi agent kết nối (Codex, Claude, ChatGPT …) ngay khi kết nối: đọc task và ảnh, comment kế hoạch, đặt end date, chuyển In Progress, cập nhật FDS/TDS của tính năng, mở pull request, comment kết quả và chuyển Technical Review sau khi merge. Agent không còn phụ thuộc vào `AGENTS.md` của repo để làm theo. Kết nối lại client MCP sau khi deploy `api` để nhận hướng dẫn mới.
+
 - The task page is split into Overview, Activity and Attachments tabs (the open tab is kept in `?tab=`). Comments stay in Overview with the composer on top and the newest comment first; replies keep their order under the comment they answer. The send button now sits inside the comment box and the separate @ button is gone — type `@` to mention someone. (DTD-55, #55)
   VI: Trang task được chia thành các tab Tổng quan, Hoạt động và Tệp đính kèm (tab đang mở được lưu trong `?tab=`). Bình luận nằm ở Tổng quan với ô nhập ở đầu và bình luận mới nhất trước; trả lời vẫn giữ thứ tự dưới bình luận gốc. Nút gửi giờ nằm trong khung ô bình luận và không còn nút @ riêng — gõ `@` để mention. (DTD-55)
 
