@@ -7,7 +7,11 @@
 
 @custom-variant dark (&:is(.dark *));
 
-@theme {
+/* Inline so font utilities read next/font's variables, which exist on <body>, not :root;
+ * a :root copy would resolve empty and fall back to the inherited font.
+ * VI: Dùng inline để utility font đọc biến của next/font, vốn đặt trên <body> chứ không ở :root;
+ * VI: bản sao ở :root sẽ rỗng và rơi về font kế thừa. */
+@theme inline {
    --font-sans: var(--font-geist-sans);
    --font-mono: var(--font-geist-mono);
 }
