@@ -10,6 +10,13 @@ export type ProjectTreeDocument = LiveDocument & {
    docType: DocType;
    status: DocStatus;
    linked: boolean;
+   /** Last SharePoint upload, or null when never published. VI: Lần phát hành SharePoint gần nhất. */
+   publication: {
+      version: number | null;
+      webUrl: string | null;
+      publishedAt: string | null;
+      lastError: string | null;
+   } | null;
 };
 export type ProjectTree = {
    projectId: string;

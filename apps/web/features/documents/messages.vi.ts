@@ -84,6 +84,23 @@ export const messages = {
    'Related documents': 'Tài liệu liên quan',
    'Diagram could not be rendered.': 'Không vẽ được sơ đồ.',
    'Upload PDF': 'Tải PDF lên',
+   'SharePoint': 'SharePoint',
+   'Publish to SharePoint': 'Phát hành lên SharePoint',
+   'Approved documents are published to this folder as Markdown, keeping the module/feature folders.':
+      'Tài liệu đã duyệt được phát hành vào thư mục này dưới dạng Markdown, giữ cấu trúc thư mục module/tính năng.',
+   'SharePoint folder URL': 'URL thư mục SharePoint',
+   'Open the folder in SharePoint and copy the address bar.':
+      'Mở thư mục trên SharePoint và sao chép địa chỉ trên thanh trình duyệt.',
+   'The workspace SharePoint connection is not set up or is paused (Settings → Integrations).':
+      'Kết nối SharePoint của workspace chưa được cấu hình hoặc đang tạm dừng (Settings → Integrations).',
+   'Found {value0} / {value1}.': 'Đã tìm thấy {value0} / {value1}.',
+   'SharePoint folder saved.': 'Đã lưu thư mục SharePoint.',
+   'Test': 'Kiểm tra',
+   'Save': 'Lưu',
+   'Open in SharePoint': 'Mở trên SharePoint',
+   'Published v{value0}': 'Đã phát hành v{value0}',
+   'Waiting to publish': 'Đang chờ phát hành',
+   'Publishing failed: {value0}': 'Phát hành lỗi: {value0}',
    'File uploaded.': 'Đã tải file lên.',
    'Download': 'Tải xuống',
    'Open in new tab': 'Mở tab mới',

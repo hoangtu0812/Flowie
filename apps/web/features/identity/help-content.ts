@@ -149,6 +149,19 @@ export const helpTopics: HelpTopic[] = [
       path: '/projects',
    },
    {
+      id: 'sharepoint',
+      title: ['Publish documents to SharePoint', 'Phát hành tài liệu lên SharePoint'],
+      meaning: [
+         'Flowie stays the place where documents are written. When a document in a project’s Docs tree is Approved, Flowie uploads it as a .md file to the project’s SharePoint folder, keeping the module/feature folders, and uploads it again for every new version. Nothing is read back from SharePoint.',
+         'Flowie vẫn là nơi soạn tài liệu. Khi tài liệu trong cây Docs của dự án được Đã duyệt, Flowie tải nó lên thư mục SharePoint của dự án dưới dạng file .md, giữ cấu trúc thư mục module/tính năng, và tải lại mỗi khi có version mới. Không đọc ngược dữ liệu từ SharePoint.',
+      ],
+      steps: [
+         '1) IT: in Microsoft Entra ID, register an app, add the Microsoft Graph application permission Sites.Selected, grant admin consent, create a client secret, and grant the app write access on the SharePoint site (see docs/sharepoint-publishing.md). 2) A workspace admin opens Settings → Integrations → SharePoint and enters the tenant ID, client ID and secret. 3) In each project, open Docs → SharePoint, paste the URL of the target folder (open it in SharePoint and copy the address bar), choose Test, then Save. 4) Set a document’s status to Approved; within about a minute its preview shows Published vN with a link, or the error to fix. Errors are retried automatically.',
+         '1) IT: trên Microsoft Entra ID, đăng ký một app, thêm quyền application Microsoft Graph Sites.Selected, cấp admin consent, tạo client secret, và cấp cho app quyền ghi trên site SharePoint (xem docs/sharepoint-publishing.md). 2) Quản trị viên workspace mở Settings → Integrations → SharePoint, nhập tenant ID, client ID và secret. 3) Ở mỗi dự án, mở Docs → SharePoint, dán URL thư mục đích (mở thư mục trên SharePoint và sao chép thanh địa chỉ), bấm Kiểm tra rồi Lưu. 4) Đổi trạng thái tài liệu sang Đã duyệt; khoảng một phút sau, khung xem trước hiện Đã phát hành vN kèm link, hoặc lỗi cần xử lý. Lỗi được tự động thử lại.',
+      ],
+      path: '/settings/integrations',
+   },
+   {
       id: 'comments',
       title: ['Comments & collaboration', 'Bình luận & cộng tác'],
       meaning: [

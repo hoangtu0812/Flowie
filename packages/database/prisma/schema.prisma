@@ -637,6 +637,8 @@ model Workspace {
   notificationPreferences NotificationPreference[]
   discordWebhook          DiscordWebhook?
   teamsWebhook            TeamsWebhook?
+  sharepointConnection    SharepointConnection?
+  documentPublications    DocumentPublication[]
   projectCustomFields     ProjectCustomField[]
   projectTemplates        ProjectTemplate[]
   projectMilestones       ProjectMilestone[]
@@ -1123,26 +1125,29 @@ model TeamDispatcherSettings {
 }
 
 model Project {
-  repositories     ProjectRepository[]
-  agentAutomations AgentAutomation[]
-  documentFolders  DocumentFolder[]
-  documentLinks    DocumentLink[]
-  id               String              @id @default(cuid())
-  workspaceId      String              @map("workspace_id")
-  teamId           String?             @map("team_id")
-  name             String
-  identifier       String
-  description      String?
-  type             ProjectType         @default(GENERAL)
-  status           String              @default("planned")
-  priority         String              @default("none")
-  health           String              @default("no-update")
-  leadId           String?             @map("lead_id")
-  startDate        DateTime?           @map("start_date")
-  targetDate       DateTime?           @map("target_date")
-  archivedAt       DateTime?           @map("archived_at")
-  createdAt        DateTime            @default(now()) @map("created_at")
-  updatedAt        DateTime            @updatedAt @map("updated_at")
+  repositories        ProjectRepository[]
+  agentAutomations    AgentAutomation[]
+  documentFolders     DocumentFolder[]
+  documentLinks       DocumentLink[]
+  id                  String              @id @default(cuid())
+  workspaceId         String              @map("workspace_id")
+  teamId              String?             @map("team_id")
+  name                String
+  identifier          String
+  description         String?
+  type                ProjectType         @default(GENERAL)
+  status              String              @default("planned")
+  priority            String              @default("none")
+  health              String              @default("no-update")
+  leadId              String?             @map("lead_id")
+  startDate           DateTime?           @map("start_date")
+  targetDate          DateTime?           @map("target_date")
+  /// SharePoint folder that receives this project's approved documents (one-way publish).
+  /// VI: Thư mục SharePoint nhận tài liệu đã duyệt của dự án (phát hành một chiều).
+  sharepointFolderUrl String?             @map("sharepoint_folder_url")
+  archivedAt          DateTime?           @map("archived_at")
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
 
   workspace         Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   team              Team?                     @relation(fields: [teamId], references: [id], onDelete: SetNull)
@@ -1888,18 +1893,57 @@ model Document {
   updatedAt   DateTime  @updatedAt @map("updated_at")
   archivedAt  DateTime? @map("archived_at")
 
-  workspace  Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  team       Team?              @relation(fields: [teamId], references: [id], onDelete: SetNull)
-  folder     DocumentFolder?    @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  createdBy  User               @relation("DocumentCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  updatedBy  User               @relation("DocumentUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
-  cycleLinks CycleDocument[]
-  revisions  DocumentRevision[]
-  links      DocumentLink[]
+  workspace   Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  team        Team?                @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  folder      DocumentFolder?      @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  createdBy   User                 @relation("DocumentCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy   User                 @relation("DocumentUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+  cycleLinks  CycleDocument[]
+  revisions   DocumentRevision[]
+  links       DocumentLink[]
+  publication DocumentPublication?
 
   @@index([workspaceId, teamId])
   @@index([folderId, pinned, position])
   @@map("documents")
+}
+
+/// Last SharePoint upload of a document: the version sent, where it landed and the last error.
+/// VI: Lần tải lên SharePoint gần nhất của tài liệu: version đã gửi, vị trí và lỗi gần nhất.
+model DocumentPublication {
+  documentId  String    @id @map("document_id")
+  workspaceId String    @map("workspace_id")
+  version     Int?
+  path        String?
+  itemId      String?   @map("item_id")
+  webUrl      String?   @map("web_url")
+  publishedAt DateTime? @map("published_at")
+  attemptedAt DateTime? @map("attempted_at")
+  attempts    Int       @default(0)
+  lastError   String?   @map("last_error")
+
+  document  Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("document_publications")
+}
+
+/// Workspace app registration (client credentials, Sites.Selected) used to publish to SharePoint.
+/// VI: App registration của workspace (client credentials, Sites.Selected) để phát hành lên SharePoint.
+model SharepointConnection {
+  workspaceId     String   @id @map("workspace_id")
+  tenantId        String   @map("tenant_id")
+  clientId        String   @map("client_id")
+  secretEncrypted String   @map("secret_encrypted")
+  enabled         Boolean  @default(true)
+  updatedById     String?  @map("updated_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("sharepoint_connections")
 }
 
 model Comment {

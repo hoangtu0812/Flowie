@@ -36,9 +36,12 @@ function PreviewHeader({
  */
 export function DocumentPreview({
    document,
+   publishing,
    onEdit,
 }: {
    document: ProjectTreeDocument;
+   /** The project publishes to SharePoint. VI: Dự án đang phát hành lên SharePoint. */
+   publishing: boolean;
    onEdit: () => void;
 }) {
    const tx = useMessages(messages);
@@ -56,6 +59,7 @@ export function DocumentPreview({
             <h2 className="truncate text-sm font-medium">{document.title}</h2>
             <DocTypeBadge type={document.docType} />
             <DocStatusBadge status={document.status} />
+            <PublicationStatus document={document} publishing={publishing} />
          </PreviewHeader>
          <div className="min-h-0 flex-1 overflow-auto">
             <div className="mx-auto max-w-3xl space-y-4 px-6 py-5">
@@ -64,6 +68,51 @@ export function DocumentPreview({
             </div>
          </div>
       </div>
+   );
+}
+
+/**
+ * SharePoint publishing state of an Approved document: a link to the published file with
+ * its version, "waiting" until the next publish run, or the last error. "Waiting" needs the
+ * project to publish (folder set and connection enabled).
+ * VI: Trạng thái phát hành SharePoint của tài liệu Đã duyệt: link tới file đã phát hành kèm
+ * VI: version, "đang chờ" cho tới lượt phát hành kế tiếp, hoặc lỗi gần nhất. "Đang chờ" chỉ
+ * VI: hiện khi dự án đang phát hành (đã gán thư mục và kết nối đang bật).
+ */
+function PublicationStatus({
+   document,
+   publishing,
+}: {
+   document: ProjectTreeDocument;
+   publishing: boolean;
+}) {
+   const tx = useMessages(messages);
+   const publication = document.publication;
+   if (publication?.lastError)
+      return (
+         <span
+            className="truncate text-xs text-amber-700 dark:text-amber-300"
+            title={publication.lastError}
+         >
+            {tx('Publishing failed: {value0}', { value0: publication.lastError })}
+         </span>
+      );
+   if (publication?.webUrl && publication.version === document.version)
+      return (
+         <a
+            href={publication.webUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            title={tx('Open in SharePoint')}
+         >
+            <ExternalLink className="size-3" />
+            {tx('Published v{value0}', { value0: String(publication.version) })}
+         </a>
+      );
+   if (!publishing || document.status !== 'APPROVED') return null;
+   return (
+      <span className="shrink-0 text-xs text-muted-foreground">{tx('Waiting to publish')}</span>
    );
 }
 
