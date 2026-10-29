@@ -34,9 +34,14 @@ export function useIssueAttachments(workspaceId: string | undefined, issueId: st
             setError(caught instanceof Error ? caught.message : 'Could not load attachments.')
       );
    }, [load, scope]);
-   const upload = async (files: FileList | null) => {
-      if (!files || !workspaceId) return;
+   // Resolves true when every file was stored, so a caller such as the Markdown dialog knows
+   // whether it may close; a failure keeps `error` set and resolves false.
+   // VI: Trả về true khi mọi tệp đã được lưu, để nơi gọi như hộp thoại Markdown biết có được
+   // VI: đóng hay không; khi lỗi thì `error` được đặt và trả về false.
+   const upload = async (files: FileList | File[] | null) => {
+      if (!files || !workspaceId) return false;
       const selected = Array.from(files);
+      let stored = false;
       await gate.current.run(async () => {
          setUploading(true);
          setError(undefined);
@@ -44,6 +49,7 @@ export function useIssueAttachments(workspaceId: string | undefined, issueId: st
             for (const file of selected)
                await uploadAttachment(workspaceId, 'issue', issueId, file);
             await load();
+            stored = true;
          } catch (caught) {
             if (scopeRef.current === scope)
                setError(caught instanceof Error ? caught.message : 'Could not upload file.');
@@ -51,6 +57,7 @@ export function useIssueAttachments(workspaceId: string | undefined, issueId: st
             if (scopeRef.current === scope) setUploading(false);
          }
       });
+      return stored;
    };
    const retry = async () => {
       try {
