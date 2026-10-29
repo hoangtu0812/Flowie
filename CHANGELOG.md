@@ -63,6 +63,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
+- Code blocks, inline code and other monospace text render in Geist Mono instead of the proportional body font; the body font is unchanged, and the command palette's shortcut keys now use Geist. (#52)
+  VI: Khối code, code inline và chữ monospace khác hiển thị bằng Geist Mono thay vì font thân trang tỷ lệ; font thân trang giữ nguyên, phím tắt trong command palette giờ dùng Geist.
+
 - Load-error screens show a centred icon, the message and a small Retry button instead of a Retry bar stretched across the page. (DTD-19, #46)
   VI: Màn hình lỗi tải dữ liệu hiển thị icon, thông báo và nút Thử lại nhỏ ở giữa, thay cho nút Thử lại kéo dài hết trang. (DTD-19)
 
