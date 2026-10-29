@@ -100,7 +100,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Changed
 
-- The Docs preview shows the document's version and a status picker (Draft → In review → Approved), so a document can be released without opening the editor. Its SharePoint state is always visible: published version with a link, waiting, the last error, or "SharePoint not set up" with a shortcut to the folder settings. Published documents carry a green cloud in the tree. (DTD-19)
+- The Docs preview shows the document's version and a status picker (Draft → In review → Approved), so a document can be released without opening the editor. Its SharePoint state is always visible: published version with a link, waiting, the last error, or "SharePoint not set up" with a shortcut to the folder settings. Published documents carry a green cloud in the tree. (DTD-19, #50)
   VI: Khung xem trước trong Docs hiển thị version của tài liệu và ô chọn trạng thái (Nháp → Đang duyệt → Đã duyệt), nên duyệt tài liệu không cần mở editor. Trạng thái SharePoint luôn hiện: version đã phát hành kèm link, đang chờ, lỗi gần nhất, hoặc "Chưa cấu hình SharePoint" kèm lối tắt tới phần cấu hình thư mục. Tài liệu đã phát hành có biểu tượng đám mây xanh trên cây. (DTD-19)
 
 - Scrollbars across the app are thin with a neutral thumb that follows the light, dark and color themes and darkens on hover; arrow buttons are gone. The sidebar uses an overlay scrollbar that appears on hover or while scrolling and never scrolls sideways. Native controls follow the app theme instead of the OS theme. Scrolling behavior is unchanged, and browsers without scrollbar styling keep their default. (DTD-32, #45)
