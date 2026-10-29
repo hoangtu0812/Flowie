@@ -764,6 +764,53 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 idempotencyKey="move-outside-key",
             )
 
+    async def test_update_issue_parent_uses_scope_version_and_cycle_rules(self):
+        child = (
+            await self.call(
+                "create_issue",
+                teamId=self.team,
+                projectId=self.project,
+                statusId=self.status,
+                title="Child task",
+                idempotencyKey="parent-child-create",
+            )
+        )["data"]
+
+        async def parent_of(issue_id):
+            async with self.factory() as db:
+                return (
+                    await db.execute(
+                        text("SELECT parent_issue_id FROM issues WHERE id=:id"),
+                        {"id": issue_id},
+                    )
+                ).scalar_one()
+
+        moved = await self.call(
+            "update_issue",
+            issueId=child["id"],
+            parentIssueId=self.issue["identifier"],
+            expectedVersion=1,
+            idempotencyKey="parent-set-key",
+        )
+        self.assertNotIn("parent", moved["data"])
+        self.assertEqual(await parent_of(child["id"]), self.issue["id"])
+        for key, arguments, status in [
+            ("parent-cycle-key", {"issueId": self.issue["id"], "parentIssueId": child["id"], "expectedVersion": 1}, 400),
+            ("parent-scope-key", {"issueId": child["id"], "parentIssueId": self.other_issue["id"], "expectedVersion": 2}, 404),
+            ("parent-stale-key", {"issueId": child["id"], "parentIssueId": None, "expectedVersion": 1}, 409),
+        ]:
+            with self.subTest(key=key), self.assertRaises(ApiError) as error:
+                await self.call("update_issue", idempotencyKey=key, **arguments)
+            self.assertEqual(error.exception.status_code, status)
+        await self.call(
+            "update_issue",
+            issueId=child["id"],
+            parentIssueId=None,
+            expectedVersion=2,
+            idempotencyKey="parent-remove-key",
+        )
+        self.assertIsNone(await parent_of(child["id"]))
+
     async def test_document_links_history_restore_and_isolation(self):
         created = await self.call(
             "create_document",

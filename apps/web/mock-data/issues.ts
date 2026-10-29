@@ -31,6 +31,8 @@ export interface Issue {
    dueDate?: string;
    /** Parent issue when this record is a sub-issue. */
    parentIssueId?: string;
+   /** Identifier and title of the parent, so the issue page can link to it. */
+   parent?: { id: string; identifier: string; title: string };
 }
 
 /* -------------------------------------------------------------------------- */

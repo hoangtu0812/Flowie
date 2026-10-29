@@ -150,6 +150,9 @@ class UpdateIssueTool(VersionInput, IssueInput, BugUpdateFields):
     title: str | None = Field(default=None, min_length=2, max_length=500)
     description: str | None = Field(default=None, max_length=10000)
     projectId: str | None = None
+    # Issue id or identifier of the new parent; null removes the parent.
+    # VI: Id hoặc mã của issue cha mới; null để gỡ cha.
+    parentIssueId: str | None = Field(default=None, min_length=1, max_length=100)
     assigneeId: str | None = None
     priority: Literal["NONE", "LOW", "MEDIUM", "HIGH", "URGENT"] | None = None
     targetDate: str | None = None

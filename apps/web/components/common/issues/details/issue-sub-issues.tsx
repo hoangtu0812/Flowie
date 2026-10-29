@@ -13,11 +13,12 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useIssuesStore } from '@/store/issues-store';
 import { authenticatedFetch } from '@/lib/workspaces';
-import { Circle, CircleCheck, CircleDashed, CircleX, Plus } from 'lucide-react';
+import { Circle, CircleCheck, CircleDashed, CircleX, ListPlus, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { AssigneeUser } from '../assignee-user';
 import type { User } from '@/mock-data/users';
+import { IssueSearchDialog } from './issue-search-dialog';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -57,17 +58,27 @@ const StatusIcon = ({ status }: { status: SubIssue['status'] }) => {
    return <Icon className="size-4 shrink-0" style={{ color: status.color }} />;
 };
 
-/** Original Issue-detail sub-issue area backed by a parent-child Issue relationship. */
+/**
+ * Issue-detail sub-issue area backed by the parent-child Issue relationship. A sub-issue is
+ * created new or picked from existing issues ("Add existing"); picking one that has another
+ * parent asks to confirm the move. The progress count covers direct children only.
+ * VI: Khu sub-issue của chi tiết issue, dựa trên quan hệ cha–con. Sub-issue được tạo mới hoặc
+ * VI: chọn từ issue có sẵn ("Add existing"); chọn issue đang có cha khác sẽ hỏi xác nhận chuyển.
+ * VI: Bộ đếm tiến độ chỉ tính con trực tiếp.
+ */
 export function IssueSubIssues({
    issueId,
+   identifier,
    teamId,
    orgId,
 }: {
    issueId: string;
+   identifier: string;
    teamId?: string;
    orgId: string;
 }) {
-   const { workspaceId, retryIssues } = useIssuesStore();
+   const { workspaceId, retryIssues, setIssueParent } = useIssuesStore();
+   const [pickerOpen, setPickerOpen] = useState(false);
    const [subIssues, setSubIssues] = useState<SubIssue[]>([]);
    const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
    const [dialogOpen, setDialogOpen] = useState(false);
@@ -92,6 +103,12 @@ export function IssueSubIssues({
          .then(() => setState('ready'))
          .catch(() => setState('error'));
    }, [load, workspaceId]);
+
+   useEffect(() => {
+      const reload = () => void load().catch(() => setState('error'));
+      window.addEventListener('flowie:sub-issues-changed', reload);
+      return () => window.removeEventListener('flowie:sub-issues-changed', reload);
+   }, [load]);
 
    const createSubIssue = async () => {
       if (!workspaceId || title.trim().length < 2) return;
@@ -136,14 +153,24 @@ export function IssueSubIssues({
             <p className="mt-3 text-sm text-destructive">Could not load sub-issues.</p>
          )}
          {state === 'ready' && subIssues.length === 0 && (
-            <button
-               type="button"
-               onClick={() => setDialogOpen(true)}
-               className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-            >
-               <Plus className="size-4" />
-               Add sub-issues
-            </button>
+            <div className="flex items-center gap-4">
+               <button
+                  type="button"
+                  onClick={() => setDialogOpen(true)}
+                  className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+               >
+                  <Plus className="size-4" />
+                  Add sub-issues
+               </button>
+               <button
+                  type="button"
+                  onClick={() => setPickerOpen(true)}
+                  className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+               >
+                  <ListPlus className="size-4" />
+                  Add existing
+               </button>
+            </div>
          )}
          {state === 'ready' && subIssues.length > 0 && (
             <>
@@ -152,15 +179,21 @@ export function IssueSubIssues({
                      Sub-issues{' '}
                      <span className="text-muted-foreground">
                         {
-                           subIssues.filter((subIssue) => subIssue.status.category === 'completed')
-                              .length
+                           subIssues.filter(
+                              (subIssue) => subIssue.status.category.toLowerCase() === 'completed'
+                           ).length
                         }
                         /{subIssues.length}
                      </span>
                   </h2>
-                  <Button size="xs" variant="ghost" onClick={() => setDialogOpen(true)}>
-                     <Plus className="size-3.5" /> New
-                  </Button>
+                  <div className="flex items-center gap-1">
+                     <Button size="xs" variant="ghost" onClick={() => setDialogOpen(true)}>
+                        <Plus className="size-3.5" /> New
+                     </Button>
+                     <Button size="xs" variant="ghost" onClick={() => setPickerOpen(true)}>
+                        <ListPlus className="size-3.5" /> Add existing
+                     </Button>
+                  </div>
                </div>
                <div className="flex flex-col border-t border-border/50">
                   {subIssues.map((subIssue) => (
@@ -182,6 +215,19 @@ export function IssueSubIssues({
                </div>
             </>
          )}
+
+         <IssueSearchDialog
+            open={pickerOpen}
+            onOpenChange={setPickerOpen}
+            title="Add existing sub-issue"
+            description="Pick an issue of this team to place under this issue."
+            teamId={teamId}
+            excludeIds={[issueId, ...subIssues.map((subIssue) => subIssue.id)]}
+            moveTarget={{ id: issueId, identifier }}
+            onPick={async (picked) => {
+               await setIssueParent(picked.id, issueId);
+            }}
+         />
 
          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogContent className="sm:max-w-[480px]">

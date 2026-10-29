@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { issueSpan } from '@/lib/issue-span';
+import { issueTree } from '@/lib/issue-tree';
 import { TimelineIssueBar } from '@/components/common/timeline/timeline-issue-bar';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import type { Project } from '@/types/projects';
@@ -29,7 +30,7 @@ import {
 } from '@/components/common/timeline/timeline-scale';
 import { format, parseISO } from 'date-fns';
 import { ArrowLeft, ArrowRight, Check, ChevronDown, ChevronRight, Plus } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ProjectPeekPanel } from './project-peek-panel';
 import { ProjectGroup } from './projects';
@@ -85,7 +86,7 @@ function IssueRow({
    issue,
    monthWidth,
    onSelect,
-   nested = false,
+   depth = 0,
    childCount = 0,
    expanded = false,
    onToggle,
@@ -93,7 +94,7 @@ function IssueRow({
    issue: TimelineIssue;
    monthWidth: number;
    onSelect: (issueId: string) => void;
-   nested?: boolean;
+   depth?: number;
    childCount?: number;
    expanded?: boolean;
    onToggle?: () => void;
@@ -115,31 +116,28 @@ function IssueRow({
             onClick={() => onSelect(issue.id)}
          />
          <div
-            className={cn(
-               'sticky left-0 z-10 flex items-center gap-1.5 w-56 shrink-0 pr-4 h-8 bg-container/95 backdrop-blur-sm text-[11px] border-r border-border/40',
-               nested ? 'pl-15' : 'pl-10'
-            )}
+            className="sticky left-0 z-10 flex items-center gap-1.5 w-56 shrink-0 pr-4 h-8 bg-container/95 backdrop-blur-sm text-[11px] border-r border-border/40"
+            style={{ paddingLeft: 40 + depth * 20 }}
          >
-            {!nested &&
-               (childCount > 0 ? (
-                  <button
-                     type="button"
-                     aria-label={
-                        expanded
-                           ? `Hide sub-issues of ${issue.title}`
-                           : `Show sub-issues of ${issue.title}`
-                     }
-                     aria-expanded={expanded}
-                     onClick={onToggle}
-                     className="text-muted-foreground hover:text-foreground"
-                  >
-                     <ChevronRight
-                        className={cn('size-3.5 transition-transform', expanded && 'rotate-90')}
-                     />
-                  </button>
-               ) : (
-                  <span className="size-3.5 shrink-0" aria-hidden="true" />
-               ))}
+            {childCount > 0 ? (
+               <button
+                  type="button"
+                  aria-label={
+                     expanded
+                        ? `Hide sub-issues of ${issue.title}`
+                        : `Show sub-issues of ${issue.title}`
+                  }
+                  aria-expanded={expanded}
+                  onClick={onToggle}
+                  className="text-muted-foreground hover:text-foreground"
+               >
+                  <ChevronRight
+                     className={cn('size-3.5 transition-transform', expanded && 'rotate-90')}
+                  />
+               </button>
+            ) : (
+               <span className="size-3.5 shrink-0" aria-hidden="true" />
+            )}
             <span className="text-muted-foreground shrink-0">{issue.identifier}</span>
             <span className="truncate flex-1 text-muted-foreground">{issue.title}</span>
             {issue.assignee && (
@@ -183,52 +181,35 @@ function ExpandedIssues({
          </div>
       );
    }
-   const childrenByParent = new Map<string, TimelineIssue[]>();
-   for (const issue of issues) {
-      if (!issue.parentIssueId) continue;
-      const children = childrenByParent.get(issue.parentIssueId) ?? [];
-      children.push(issue);
-      childrenByParent.set(issue.parentIssueId, children);
-   }
-   return (
-      <>
-         {issues
-            .filter((issue) => !issue.parentIssueId)
-            .map((issue) => {
-               const children = childrenByParent.get(issue.id) ?? [];
-               const expanded = expandedParents.has(issue.id);
-               return (
-                  <div key={issue.id}>
-                     <IssueRow
-                        issue={issue}
-                        monthWidth={monthWidth}
-                        onSelect={onSelect}
-                        childCount={children.length}
-                        expanded={expanded}
-                        onToggle={() =>
-                           setExpandedParents((current) => {
-                              const next = new Set(current);
-                              if (next.has(issue.id)) next.delete(issue.id);
-                              else next.add(issue.id);
-                              return next;
-                           })
-                        }
-                     />
-                     {expanded &&
-                        children.map((child) => (
-                           <IssueRow
-                              key={child.id}
-                              issue={child}
-                              monthWidth={monthWidth}
-                              onSelect={onSelect}
-                              nested
-                           />
-                        ))}
-                  </div>
-               );
-            })}
-      </>
-   );
+   const { roots, children: childrenByParent } = issueTree(issues);
+   // Each level opens on its own and indents by depth, so A → B → C trees show every level.
+   // VI: Mỗi cấp mở độc lập và thụt lề theo độ sâu, nên cây A → B → C hiển thị đủ mọi cấp.
+   const renderBranch = (issue: TimelineIssue, depth: number): ReactNode => {
+      const children = childrenByParent.get(issue.id) ?? [];
+      const expanded = expandedParents.has(issue.id);
+      return (
+         <div key={issue.id}>
+            <IssueRow
+               issue={issue}
+               monthWidth={monthWidth}
+               onSelect={onSelect}
+               depth={depth}
+               childCount={children.length}
+               expanded={expanded}
+               onToggle={() =>
+                  setExpandedParents((current) => {
+                     const next = new Set(current);
+                     if (next.has(issue.id)) next.delete(issue.id);
+                     else next.add(issue.id);
+                     return next;
+                  })
+               }
+            />
+            {expanded && children.map((child) => renderBranch(child, depth + 1))}
+         </div>
+      );
+   };
+   return <>{roots.map((issue) => renderBranch(issue, 0))}</>;
 }
 
 /**

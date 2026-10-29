@@ -21,6 +21,7 @@ async def _issue_rows(
                       s.name AS status_name, s.category AS status_category, s.color AS status_color,
                       p.id AS project_id_value, p.name AS project_name, p.identifier AS project_identifier,
                       c.id AS creator_id_value, c.name AS creator_name, c.avatar_url AS creator_avatar_url,
+                      parent.identifier AS parent_identifier, parent.title AS parent_title,
                       a.id AS assignee_id_value, a.name AS assignee_name, a.avatar_url AS assignee_avatar_url, a.last_seen_at AS assignee_last_seen_at,
                       EXISTS(SELECT 1 FROM issue_subscriptions sub WHERE sub.issue_id = i.id AND sub.user_id = :user_id) AS is_subscribed,
                       EXISTS(SELECT 1 FROM issue_favorites favorite WHERE favorite.issue_id = i.id AND favorite.user_id = :user_id) AS is_favorite,
@@ -33,6 +34,7 @@ async def _issue_rows(
                LEFT JOIN projects p ON p.id = i.project_id
                JOIN users c ON c.id = i.creator_id
                LEFT JOIN users a ON a.id = i.assignee_id
+               LEFT JOIN issues parent ON parent.id = i.parent_issue_id AND parent.archived_at IS NULL
                WHERE i.id = ANY(CAST(:issue_ids AS text[])) AND i.workspace_id = :workspace_id AND i.archived_at IS NULL
                AND t.archived_at IS NULL
                AND (i.team_id IS NULL OR EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=i.team_id AND tm.user_id=:user_id))
@@ -117,6 +119,13 @@ def _present_issue(row, labels, cycles, releases, user_id):
         "statusId": row["status_id"],
         "projectId": row["project_id"],
         "parentIssueId": row["parent_issue_id"],
+        # Identifier and title let the issue page link to its parent without another request.
+        # VI: Mã và tiêu đề giúp trang issue liên kết tới cha mà không cần thêm request.
+        "parent": {
+            "id": row["parent_issue_id"],
+            "identifier": row["parent_identifier"],
+            "title": row["parent_title"],
+        } if row["parent_identifier"] else None,
         "duplicateOfId": row["duplicate_of_id"],
         "identifier": row["identifier"],
         "number": row["number"],

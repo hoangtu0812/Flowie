@@ -352,6 +352,7 @@ class QueryService:
         )
         # Related identifiers are resolved independently by get_issue_context.
         result.pop("parentIssueId", None)
+        result.pop("parent", None)
         result.pop("duplicateOfId", None)
         return result
 
