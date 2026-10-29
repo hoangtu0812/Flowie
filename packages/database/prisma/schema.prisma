@@ -480,6 +480,26 @@ model DocumentRevision {
   @@map("document_revisions")
 }
 
+// An approved release (v1, v2 …) of a document: a frozen copy of its title and content at
+// approval. Rows are written by the `document_release` trigger, never by application code.
+// VI: Một phiên bản phát hành (v1, v2 …) của tài liệu: bản chụp tiêu đề và nội dung lúc
+// VI: duyệt. Dòng do trigger `document_release` ghi, không do code ứng dụng ghi.
+model DocumentRelease {
+  id         String   @id
+  documentId String   @map("document_id")
+  release    Int
+  // documents.version at approval. VI: documents.version lúc duyệt.
+  revision   Int
+  title      String
+  content    String
+  approvedBy String   @map("approved_by")
+  approvedAt DateTime @default(now()) @map("approved_at")
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, release])
+  @@map("document_releases")
+}
+
 model DocumentLink {
   id          String    @id @default(cuid())
   documentId  String    @map("document_id")
@@ -1900,6 +1920,7 @@ model Document {
   updatedBy   User                 @relation("DocumentUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
   cycleLinks  CycleDocument[]
   revisions   DocumentRevision[]
+  releases    DocumentRelease[]
   links       DocumentLink[]
   publication DocumentPublication?
 
@@ -1914,6 +1935,9 @@ model DocumentPublication {
   documentId  String    @id @map("document_id")
   workspaceId String    @map("workspace_id")
   version     Int?
+  // Release (vN) last published; NULL means publish the latest release again.
+  // VI: Phiên bản (vN) đã phát hành gần nhất; NULL nghĩa là phát hành lại phiên bản mới nhất.
+  release     Int?
   path        String?
   itemId      String?   @map("item_id")
   webUrl      String?   @map("web_url")

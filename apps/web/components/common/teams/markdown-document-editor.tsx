@@ -15,7 +15,7 @@ import { useDocumentDraft, type DocumentDraft } from '@/features/documents/use-d
 import type { LiveDocument } from './use-live-team';
 import { DocumentHistory } from '@/features/documents/document-history';
 import { Selector } from '@astryxdesign/core/Selector';
-import { DOC_STATUSES, DOC_TYPES } from '@/features/documents/document-badges';
+import { DOC_TYPES } from '@/features/documents/document-badges';
 import { markdownHeadings } from '@/lib/markdown-headings';
 import type { DocStatus, DocType } from '@/lib/document-tree';
 
@@ -67,8 +67,10 @@ export function MarkdownDocumentEditor({
       id: string,
       draft: DocumentDraft & { expectedVersion: number }
    ) => Promise<LiveDocument>;
-   /** Saves type/status right away; without it the pickers are hidden. */
-   /** VI: Lưu ngay loại/trạng thái; không truyền thì không hiện ô chọn. */
+   /** Saves the type right away; without it the picker is hidden. Status changes live in the
+    * Docs preview's review buttons, so the editor never approves. */
+   /** VI: Lưu ngay loại tài liệu; không truyền thì không hiện ô chọn. Trạng thái đổi bằng các nút
+    * VI: duyệt ở khung xem trước Docs, nên editor không bao giờ duyệt. */
    onMetadataChange?: (
       id: string,
       metadata: { docType?: DocType; status?: DocStatus }
@@ -257,19 +259,6 @@ export function MarkdownDocumentEditor({
                                  onChange={(value) =>
                                     void onMetadataChange(document.id, {
                                        docType: value as DocType,
-                                    })
-                                 }
-                              />
-                              <Selector
-                                 label={tx('Document status')}
-                                 value={document.status ?? 'DRAFT'}
-                                 options={DOC_STATUSES.map((item) => ({
-                                    value: item.value,
-                                    label: tx(item.label),
-                                 }))}
-                                 onChange={(value) =>
-                                    void onMetadataChange(document.id, {
-                                       status: value as DocStatus,
                                     })
                                  }
                               />

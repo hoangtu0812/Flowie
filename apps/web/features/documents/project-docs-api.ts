@@ -13,6 +13,8 @@ export type ProjectTreeDocument = LiveDocument & {
    /** Last SharePoint upload, or null when never published. VI: Lần phát hành SharePoint gần nhất. */
    publication: {
       version: number | null;
+      /** Release (vN) last published. VI: Phiên bản (vN) đã phát hành gần nhất. */
+      release: number | null;
       webUrl: string | null;
       publishedAt: string | null;
       lastError: string | null;
@@ -71,6 +73,22 @@ export const updateTreeDocument = (id: string, draft: Record<string, unknown>) =
       method: 'PATCH',
       body: JSON.stringify(draft),
    });
+
+/** An approved release; `content` is only loaded for one release. VI: Một phiên bản đã duyệt; chỉ tải `content` khi xem một phiên bản. */
+export type DocumentRelease = {
+   release: number;
+   revision: number;
+   title: string;
+   approvedAt: string;
+   approvedBy: { id: string | null; name: string | null };
+   content?: string;
+};
+
+export const loadReleases = (id: string) =>
+   send<{ items: DocumentRelease[] }>(`/${encodeURIComponent(id)}/releases`);
+
+export const loadRelease = (id: string, release: number) =>
+   send<DocumentRelease>(`/${encodeURIComponent(id)}/releases/${release}`);
 
 /** Upload a PDF into a tree folder. VI: Tải file PDF lên một thư mục của cây. */
 export const uploadFolderFile = async (folderId: string, file: File) =>

@@ -162,12 +162,14 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
          <HStack gap={2} vAlign="center">
             <DocTypeBadge type={document.docType} />
             <DocStatusBadge status={document.status} />
-            {document.publication?.webUrl && document.publication.version === document.version && (
-               <CloudUpload
-                  className="size-3.5 text-emerald-600 dark:text-emerald-400"
-                  aria-label={tx('Published to SharePoint')}
-               />
-            )}
+            {document.release != null &&
+               document.publication?.webUrl &&
+               document.publication.release === document.release && (
+                  <CloudUpload
+                     className="size-3.5 text-emerald-600 dark:text-emerald-400"
+                     aria-label={tx('Published to SharePoint')}
+                  />
+               )}
             <Text type="supporting" size="sm">
                {relativeTime(document.updatedAt, Date.now(), locale)}
             </Text>
@@ -342,10 +344,22 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
                      publishing={publishing}
                      onEdit={() => setOpen(previewDocument)}
                      onStatusChange={(status) =>
+                        // expectedVersion makes Approve fail if someone edited the document after
+                        // it was shown, so only the reviewed text becomes a release. A refused
+                        // change reloads the tree to show the newer text.
+                        // VI: expectedVersion làm thao tác Duyệt thất bại nếu có người sửa tài liệu
+                        // VI: sau khi nó được hiển thị, để chỉ nội dung đã xem mới thành phiên bản.
+                        // VI: Thay đổi bị từ chối sẽ tải lại cây để hiện nội dung mới hơn.
                         void act(
-                           () => updateTreeDocument(previewDocument.id, { status }),
+                           () =>
+                              updateTreeDocument(previewDocument.id, {
+                                 status,
+                                 expectedVersion: previewDocument.version,
+                              }),
                            tx('Status updated.')
-                        )
+                        ).then((saved) => {
+                           if (!saved) void reload();
+                        })
                      }
                      onConfigureSharepoint={() => setDialog('sharepoint')}
                   />

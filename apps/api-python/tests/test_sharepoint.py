@@ -29,10 +29,11 @@ def test_folder_urls_and_names():
             parse_folder_url(bad)
     assert safe_name(' a:b/c? ') == "a-b-c-"
     assert publish_path("Flowie", ["Docs", "Tree"], "FDS · Tree") == "Flowie/Docs/Tree/FDS · Tree.md"
+    assert publish_path("Flowie", ["Docs"], "FDS · Tree", 2) == "Flowie/Docs/_versions/FDS · Tree_v2.md"
 
 
 @pytest.mark.skipif(not os.getenv("MCP_TEST_DATABASE_URL"), reason="Test database not configured")
-def test_approved_documents_publish_once_per_version_and_failures_back_off():
+def test_releases_publish_once_with_kept_copies_and_failures_back_off():
     asyncio.run(verify_publishing())
 
 
@@ -92,11 +93,25 @@ async def verify_publishing():
             await update_document(doc["id"], UpdateDocumentInput(status="APPROVED"), workspace, user, db)
             await db.commit()
         assert await publish_due(factory, settings, http) == 1
-        assert uploads == [("/v1.0/drives/drive/root:/Flowie/Docs/Tree/FDS · Tree.md:/content", "# v1")]
+        base = "/v1.0/drives/drive/root:/Flowie/Docs/Tree/"
+        assert [path for path, _ in uploads] == [
+            base + "_versions/FDS · Tree_v1.md:/content",
+            base + "FDS · Tree.md:/content",
+        ]
+        body = uploads[0][1]
+        assert uploads[1][1] == body and body.endswith("\n---\n\n# v1")
+        assert '\ntitle: "FDS · Tree"\nversion: v1\napproved_by: "Publisher"\n' in body
         assert await publish_due(factory, settings, http) == 0
 
+        # Editing returns the document to Draft; SharePoint keeps v1 until v2 is approved.
+        # VI: Sửa đưa tài liệu về Nháp; SharePoint giữ v1 cho tới khi v2 được duyệt.
         async with factory() as db:
-            await update_document(doc["id"], UpdateDocumentInput(content="# v2"), workspace, user, db)
+            edited = await update_document(doc["id"], UpdateDocumentInput(content="# v2"), workspace, user, db)
+            assert (edited["data"]["status"], edited["data"]["release"]) == ("DRAFT", 1)
+            await db.commit()
+        assert await publish_due(factory, settings, http) == 0
+        async with factory() as db:
+            await update_document(doc["id"], UpdateDocumentInput(status="APPROVED"), workspace, user, db)
             await db.commit()
         mode["fail"] = True
         assert await publish_due(factory, settings, http) == 0
