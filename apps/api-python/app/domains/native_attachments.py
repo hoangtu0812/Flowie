@@ -23,10 +23,13 @@ router = APIRouter(prefix='/api/v1/_native/attachments', tags=['native-attachmen
 # Storage authorization is entity-aware and already native. Expose this
 # contract ahead of the attachment panel adapter without changing its UI.
 public_router = APIRouter(prefix='/api/v1/attachments', tags=['attachments'])
-EntityType = Literal['issue', 'comment', 'project', 'project-update', 'document']
+EntityType = Literal['issue', 'comment', 'project', 'project-update', 'document', 'document-folder']
 MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 INLINE_IMAGE_MIME_TYPES = frozenset({'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif'})
 DOCUMENT_FILE_EXTENSIONS = ('.docx', '.pdf', '.md')
+# Files filed in a document-tree folder are previewed beside the tree; PDF only for now.
+# VI: File đặt trong thư mục của cây tài liệu được xem trước cạnh cây; hiện chỉ nhận PDF.
+FOLDER_FILE_EXTENSIONS = ('.pdf',)
 
 
 async def _entity_team_id(db: AsyncSession, workspace_id: str, entity_type: EntityType, entity_id: str) -> str | None:
@@ -36,6 +39,7 @@ async def _entity_team_id(db: AsyncSession, workspace_id: str, entity_type: Enti
         'project': 'SELECT team_id FROM projects WHERE id = :entity_id AND workspace_id = :workspace_id AND archived_at IS NULL',
         'project-update': 'SELECT p.team_id FROM project_updates pu JOIN projects p ON p.id = pu.project_id WHERE pu.id = :entity_id AND pu.workspace_id = :workspace_id AND p.archived_at IS NULL',
         'document': 'SELECT team_id FROM documents WHERE id = :entity_id AND workspace_id = :workspace_id AND archived_at IS NULL',
+        'document-folder': 'SELECT team_id FROM document_folders WHERE id = :entity_id AND workspace_id = :workspace_id',
     }
     result = await db.execute(text(queries[entity_type]), {'entity_id': entity_id, 'workspace_id': workspace_id})
     row = result.mappings().first()
@@ -79,6 +83,10 @@ async def create_attachment(request: Request, workspaceId: str = Form(), entityT
     filename = sub(r'[^a-zA-Z0-9._-]', '_', file.filename or 'attachment')[:180] or 'attachment'
     if entityType == 'document' and not filename.lower().endswith(DOCUMENT_FILE_EXTENSIONS):
         raise ApiError(400, 'Documents accept DOCX, PDF, or Markdown files only.', 'Bad Request')
+    # The %PDF- signature check stops a renamed file from being served inline as a PDF.
+    # VI: Kiểm tra chữ ký %PDF- để file đổi đuôi không được phục vụ inline như PDF.
+    if entityType == 'document-folder' and (not filename.lower().endswith(FOLDER_FILE_EXTENSIONS) or not body.startswith(b'%PDF-')):
+        raise ApiError(400, 'Document folders accept PDF files only.', 'Bad Request')
     object_key = f'{workspaceId}/{user["id"]}/{token_urlsafe(18)}-{filename}'
     storage = MinioStorage(request.app.state.settings)
     await storage.put(object_key, body, file.content_type or 'application/octet-stream')

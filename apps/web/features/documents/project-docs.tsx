@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FilePlus2, FolderPlus, LayoutTemplate, Search } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FilePlus2, FileText, FileUp, FolderPlus, LayoutTemplate, Search } from 'lucide-react';
 import { TreeList } from '@astryxdesign/core/TreeList';
 import type { TreeListItemData } from '@astryxdesign/core/TreeList';
 import { HStack } from '@astryxdesign/core/Layout';
@@ -36,6 +36,7 @@ import {
    filterTree,
    type DocType,
    type FolderKind,
+   type TreeFile,
    type TreeNode,
 } from '@/lib/document-tree';
 import { relativeTime } from '@/lib/time';
@@ -45,10 +46,12 @@ import {
    loadProjectTree,
    scaffoldProjectTree,
    updateTreeDocument,
+   uploadFolderFile,
    type ProjectTree,
    type ProjectTreeDocument,
 } from './project-docs-api';
 import { DocStatusBadge, DocTypeBadge, DOC_TYPES } from './document-badges';
+import { DocumentPreview, EmptyPreview, PdfPreview } from './doc-preview';
 
 const FOLDER_KINDS: { value: FolderKind; label: keyof typeof messages }[] = [
    { value: 'module', label: 'Module' },
@@ -60,11 +63,14 @@ const FOLDER_KINDS: { value: FolderKind; label: keyof typeof messages }[] = [
 /**
  * Project "Docs" tab: the project's document tree (project → module → feature → bugs &
  * changes), filterable by document type and searchable by title and content, with folders
- * and FDS/TDS documents created in the selected folder. Documents open in the shared
- * Markdown editor.
+ * and FDS/TDS documents created and PDFs uploaded in the selected folder. The tree sits on
+ * the left; a selected document or PDF is previewed on the right, and Edit opens the shared
+ * Markdown editor. Below the lg breakpoint the preview stacks under the tree.
  * VI: Tab "Docs" của dự án: cây tài liệu (dự án → module → tính năng → bugs & changes), lọc
- * VI: theo loại và tìm theo tiêu đề, nội dung; tạo thư mục và tài liệu FDS/TDS trong thư mục
- * VI: đang chọn. Tài liệu mở trong editor Markdown dùng chung.
+ * VI: theo loại và tìm theo tiêu đề, nội dung; tạo thư mục, tài liệu FDS/TDS và tải PDF lên
+ * VI: thư mục đang chọn. Cây nằm bên trái; tài liệu hoặc PDF được chọn hiển thị xem trước
+ * VI: bên phải, nút Sửa mở editor Markdown dùng chung. Dưới breakpoint lg, khung xem trước
+ * VI: nằm dưới cây.
  */
 export function ProjectDocs({ projectId }: { projectId: string }) {
    const tx = useMessages(messages);
@@ -76,7 +82,9 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
    const [selected, setSelected] = useState<string>();
    const [dialog, setDialog] = useState<'folder' | 'document'>();
    const [open, setOpen] = useState<LiveDocument>();
+   const [preview, setPreview] = useState<{ kind: 'document' | 'file'; id: string }>();
    const [busy, setBusy] = useState(false);
+   const upload = useRef<HTMLInputElement>(null);
 
    const reload = useCallback(async () => {
       try {
@@ -92,7 +100,7 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
    }, [reload]);
 
    const { roots, unfiled } = useMemo(
-      () => buildTree(tree?.folders ?? [], tree?.documents ?? []),
+      () => buildTree(tree?.folders ?? [], tree?.documents ?? [], tree?.files ?? []),
       [tree]
    );
    const visible = useMemo(() => filterTree(roots, query, docType), [roots, query, docType]);
@@ -117,10 +125,20 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
    if (error) return <QueryState message={error} onRetry={() => void reload()} />;
    if (!tree) return <LoadingState label={tx('Loading documents…')} />;
 
+   // Preview targets are looked up by id so a reload after editing shows fresh content.
+   // VI: Đối tượng xem trước được tra theo id để sau khi sửa và tải lại thì nội dung mới.
+   const previewDocument =
+      preview?.kind === 'document'
+         ? tree.documents.find((document) => document.id === preview.id)
+         : undefined;
+   const previewFile =
+      preview?.kind === 'file' ? tree.files.find((file) => file.id === preview.id) : undefined;
+
    const documentItem = (document: ProjectTreeDocument): TreeListItemData => ({
       id: document.id,
       label: document.title,
       startContent: document.icon,
+      isSelected: previewDocument?.id === document.id,
       endContent: (
          <HStack gap={2} vAlign="center">
             <DocTypeBadge type={document.docType} />
@@ -130,7 +148,20 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
             </Text>
          </HStack>
       ),
-      onClick: () => setOpen(document),
+      onClick: () => {
+         setPreview({ kind: 'document', id: document.id });
+         if (document.folderId && !document.linked) setSelected(document.folderId);
+      },
+   });
+   const fileItem = (file: TreeFile): TreeListItemData => ({
+      id: file.id,
+      label: file.filename,
+      startContent: <FileText className="size-4 text-red-600 dark:text-red-400" />,
+      isSelected: previewFile?.id === file.id,
+      onClick: () => {
+         setPreview({ kind: 'file', id: file.id });
+         setSelected(file.folderId);
+      },
    });
    const folderItem = (node: TreeNode<ProjectTreeDocument>): TreeListItemData => {
       const kind = FOLDER_KINDS.find((option) => option.value === node.folder.kind);
@@ -147,7 +178,11 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
          isExpanded: true,
          isSelected: target === node.folder.id,
          onClick: () => setSelected(node.folder.id),
-         children: [...node.children.map(folderItem), ...node.documents.map(documentItem)],
+         children: [
+            ...node.children.map(folderItem),
+            ...node.documents.map(documentItem),
+            ...node.files.map(fileItem),
+         ],
       };
    };
 
@@ -207,9 +242,30 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
                <FilePlus2 className="size-4" />
                {tx('New document')}
             </Button>
+            <Button
+               size="xs"
+               variant="ghost"
+               disabled={busy || !target}
+               onClick={() => upload.current?.click()}
+            >
+               <FileUp className="size-4" />
+               {tx('Upload PDF')}
+            </Button>
+            <input
+               ref={upload}
+               type="file"
+               accept="application/pdf,.pdf"
+               hidden
+               onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = '';
+                  if (file && target)
+                     void act(() => uploadFolderFile(target, file), tx('File uploaded.'));
+               }}
+            />
          </div>
-         <div className="flex-1 overflow-auto">
-            <div className="mx-auto max-w-4xl px-6 py-4">
+         <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,2fr)_minmax(0,3fr)] lg:grid-cols-[minmax(260px,360px)_minmax(0,1fr)] lg:grid-rows-1">
+            <div className="min-h-0 overflow-auto border-b px-3 py-3 lg:border-r lg:border-b-0">
                {roots.length === 0 ? (
                   <div className="flex flex-col items-center gap-3 py-24 text-center text-sm text-muted-foreground">
                      <p>{tx('This project has no document tree yet.')}</p>
@@ -250,6 +306,18 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
                   </section>
                )}
             </div>
+            <div className="min-h-0 overflow-hidden">
+               {previewDocument ? (
+                  <DocumentPreview
+                     document={previewDocument}
+                     onEdit={() => setOpen(previewDocument)}
+                  />
+               ) : previewFile ? (
+                  <PdfPreview file={previewFile} />
+               ) : (
+                  <EmptyPreview />
+               )}
+            </div>
          </div>
          {dialog === 'folder' && target && (
             <NewFolderDialog
@@ -281,8 +349,9 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
                         docType: type,
                      });
                   }, tx('Document created.'));
-                  if (ok) {
+                  if (ok && created) {
                      setDialog(undefined);
+                     setPreview({ kind: 'document', id: created.id });
                      setOpen(created);
                   }
                }}

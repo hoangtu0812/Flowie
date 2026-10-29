@@ -83,4 +83,12 @@ export const messages = {
    'Contents': 'Mục lục',
    'Related documents': 'Tài liệu liên quan',
    'Diagram could not be rendered.': 'Không vẽ được sơ đồ.',
+   'Upload PDF': 'Tải PDF lên',
+   'File uploaded.': 'Đã tải file lên.',
+   'Download': 'Tải xuống',
+   'Open in new tab': 'Mở tab mới',
+   'Select a document or PDF to preview it here.':
+      'Chọn tài liệu hoặc file PDF để xem trước tại đây.',
+   'Could not load the file.': 'Không tải được file.',
+   'No projects yet.': 'Chưa có dự án nào.',
 } as const;

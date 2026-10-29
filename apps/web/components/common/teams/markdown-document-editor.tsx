@@ -26,7 +26,7 @@ import type { DocStatus, DocType } from '@/lib/document-tree';
  * VI: Mục lục ở chế độ xem, hiện khi tài liệu có từ ba heading trở lên. Link cuộn bên trong
  * VI: hộp thoại editor thay vì đổi URL của trang.
  */
-function TableOfContents({ content, label }: { content: string; label: string }) {
+export function TableOfContents({ content, label }: { content: string; label: string }) {
    const headings = markdownHeadings(content);
    if (headings.length < 3) return null;
    return (

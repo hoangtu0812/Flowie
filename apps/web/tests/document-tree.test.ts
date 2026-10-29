@@ -71,6 +71,31 @@ test('filtering keeps matching documents, their folders and folder-name matches'
    assert.equal(filterTree(roots, '', 'ALL'), roots);
 });
 
+test('files sit in their folder and match only "all types" by filename', () => {
+   const file = (id: string, folderId: string, filename: string) => ({
+      id,
+      folderId,
+      filename,
+      mimeType: 'application/pdf',
+      size: 1,
+      createdAt: '2026-10-29',
+   });
+   const { roots } = buildTree(
+      [folder('root', null, 'Dự án'), folder('m', 'root', 'Module')],
+      [doc('a', 'root', 'FDS · Cây', { docType: 'FDS' })],
+      [file('f', 'm', 'Đặc tả.pdf'), file('g', 'gone', 'lost.pdf')]
+   );
+   assert.deepEqual(
+      roots[0].children[0].files.map((f) => f.id),
+      ['f']
+   );
+   assert.deepEqual(
+      filterTree(roots, 'dac ta', 'ALL')[0].children[0].files.map((f) => f.id),
+      ['f']
+   );
+   assert.equal(filterTree(roots, '', 'FDS')[0].children.length, 0);
+});
+
 test('templates and titles follow the FDS/TDS convention', () => {
    assert.equal(documentTitle('FDS', ' Timeline '), 'FDS · Timeline');
    assert.equal(documentTitle('GUIDE', 'Runbook'), 'Runbook');

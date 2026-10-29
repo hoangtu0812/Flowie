@@ -145,6 +145,15 @@ async def verify_document_tree():
             by_id = {document["id"]: document for document in tree["documents"]}
             assert by_id[fds["id"]]["linked"] is False
             assert by_id[first["id"]]["linked"] is True
+            # PDFs attached to a tree folder come back as files of that folder.
+            await db.execute(
+                text(
+                    "INSERT INTO attachments(id,workspace_id,uploaded_by,entity_type,entity_id,object_key,filename,mime_type,size,created_at) VALUES (:id,:workspace,:user,'document-folder',:folder,'k','spec.pdf','application/pdf',5,:now)"
+                ),
+                {"id": _cuid(), "workspace": workspace, "user": user["id"], "folder": feature["id"], "now": now},
+            )
+            tree = await project_tree(db, workspace_id=workspace, user_id=user["id"], project_id=project)
+            assert [(f["folderId"], f["filename"]) for f in tree["files"]] == [(feature["id"], "spec.pdf")]
             linked = await issue_documents(db, workspace_id=workspace, user_id=user["id"], issue_id=issue["id"])
             assert [document["id"] for document in linked] == [first["id"]]
             await db.rollback()

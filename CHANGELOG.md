@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- The Docs tab shows the document tree on the left and a preview on the right: clicking a document renders it read-only with its table of contents and Mermaid diagrams, and Edit opens the editor. Folders accept PDF uploads (up to 10 MB), which preview in the browser's PDF viewer and can be opened in a new tab or downloaded. A Docs entry in the sidebar opens the same view for any project chosen at the top. Deploy the API with the web build: an older API rejects folder uploads. (DTD-19, #47)
+  VI: Tab Docs hiển thị cây tài liệu bên trái và khung xem trước bên phải: bấm vào tài liệu để xem chỉ đọc kèm mục lục và sơ đồ Mermaid, nút Sửa mở editor. Thư mục nhận file PDF tải lên (tối đa 10 MB), xem bằng trình xem PDF của trình duyệt, mở tab mới hoặc tải xuống được. Mục Tài liệu trên sidebar mở cùng giao diện cho dự án chọn ở phía trên. Deploy API cùng bản web: API cũ từ chối tải file vào thư mục. (DTD-19)
+
 - Help → Feature guide has a "Project Docs" topic: how to create the standard structure, module and feature folders, FDS/TDS documents from templates, document types and review statuses, Mermaid diagrams, search and linked documents. (DTD-19, #46)
   VI: Trợ giúp → Hướng dẫn chức năng có mục "Tài liệu dự án (Docs)": cách tạo khung chuẩn, thư mục module và tính năng, tài liệu FDS/TDS từ mẫu, loại và trạng thái duyệt tài liệu, sơ đồ Mermaid, tìm kiếm và tài liệu liên kết. (DTD-19)
 
