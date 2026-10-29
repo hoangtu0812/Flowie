@@ -27,6 +27,7 @@ from .issue_queries import _issue_row, _status_name, _person_name, _project_name
 from .issue_activity import _write_activity, _transition
 from .lifecycle import actor_context
 from .issue_numbering import allocate_issue_number
+from .issue_hierarchy import validate_parent
 
 
 async def create_issue(
@@ -239,12 +240,36 @@ async def update_issue(
         values["releaseIds"] = await _validate_release_ids(
             db, workspaceId, values["releaseIds"]
         )
+    # A parent change (set, move or remove with null) only rewrites this issue's parent, so its
+    # own sub-issues stay under it; validate_parent rejects self, descendants and other teams.
+    # VI: Đổi cha (đặt, chuyển hoặc gỡ bằng null) chỉ ghi lại cha của issue này nên các con của
+    # VI: nó vẫn giữ nguyên; validate_parent từ chối chính nó, hậu duệ và team khác.
+    parent_transition = None
+    if "parentIssueId" in values:
+        if values["parentIssueId"] == issue["parentIssueId"]:
+            values.pop("parentIssueId")
+        else:
+            parent = (
+                await validate_parent(
+                    db, workspaceId, issue["teamId"], issue_id, values["parentIssueId"]
+                )
+                if values["parentIssueId"]
+                else None
+            )
+            before = (
+                await db.execute(
+                    text("SELECT identifier FROM issues WHERE id = :id"),
+                    {"id": issue["parentIssueId"]},
+                )
+            ).scalar_one_or_none() if issue["parentIssueId"] else None
+            parent_transition = _transition(before, parent["identifier"] if parent else None)
     columns = {
         **BUG_COLUMNS,
         "title": "title",
         "description": "description",
         "statusId": "status_id",
         "projectId": "project_id",
+        "parentIssueId": "parent_issue_id",
         "assigneeId": "assignee_id",
         "priority": "priority",
         "estimatedEffort": "estimated_effort",
@@ -350,6 +375,8 @@ async def update_issue(
                 ),
             )
         )
+    if parent_transition:
+        changes.append(("Parent", parent_transition))
     if "startDate" in values:
         before = (
             issue["startDate"].date().isoformat() if issue.get("startDate") else None

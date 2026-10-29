@@ -17,6 +17,7 @@ import { IssueDescription } from '@/components/common/issues/details/issue-descr
 import { IssueAttachments } from '@/components/common/issues/details/issue-attachments';
 import { IssueReactions } from '@/components/common/issues/details/issue-reactions';
 import { IssueSubIssues } from '@/components/common/issues/details/issue-sub-issues';
+import { IssueParent } from '@/components/common/issues/details/issue-parent';
 import { IssuePropertiesPanel } from '@/components/common/issues/details/issue-properties-panel';
 import { MobileIssueProperties } from '@/components/common/issues/details/mobile-issue-properties';
 import { IssueSlaPanel } from '@/features/sla/issue-sla-panel';
@@ -76,6 +77,7 @@ export function IssueContent({
                <Heading level={compact ? 2 : 1} textWrap="balance" className="break-words">
                   {issue.title}
                </Heading>
+               <IssueParent issue={issue} orgId={orgId} />
                <MobileIssueProperties
                   issue={issue}
                   detail={detail}
@@ -104,7 +106,12 @@ export function IssueContent({
                      />
                      <IssueSlaPanel issue={issue} />
                      <IssueReactions issueId={issue.id} />
-                     <IssueSubIssues issueId={issue.id} teamId={issue.teamId} orgId={orgId} />
+                     <IssueSubIssues
+                        issueId={issue.id}
+                        identifier={issue.identifier}
+                        teamId={issue.teamId}
+                        orgId={orgId}
+                     />
                      <CommentsSection issueId={issue.id} state={activity} />
                   </TabsContent>
                   <TabsContent value="activity">

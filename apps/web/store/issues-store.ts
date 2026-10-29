@@ -43,6 +43,7 @@ type NativeIssue = BugFields & {
    version: number;
    teamId: string | null;
    parentIssueId?: string | null;
+   parent?: { id: string; identifier: string; title: string } | null;
    identifier: string;
    title: string;
    description?: string | null;
@@ -189,6 +190,7 @@ function asIssue(native: NativeIssue): Issue {
       teamId: native.teamId ?? undefined,
       version: native.version,
       parentIssueId: native.parentIssueId ?? undefined,
+      parent: native.parent ?? undefined,
       creatorId: native.creator?.id,
       identifier: native.identifier,
       title: native.title,
@@ -326,6 +328,7 @@ interface IssuesState {
    updateIssueBug: (issueId: string, fields: BugFields) => Promise<Issue>;
    updateIssueTitle: (issueId: string, title: string) => Promise<Issue>;
    updateIssueDescription: (issueId: string, description: string) => Promise<Issue>;
+   setIssueParent: (issueId: string, parentIssueId: string | null) => Promise<Issue>;
    moveIssue: (issueId: string, teamId: string | null) => Promise<Issue>;
    classifyIssue: (
       issueId: string,
@@ -1107,6 +1110,30 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
       }
       const issue = asIssue(((await response.json()) as { data: NativeIssue }).data);
       get().updateIssue(issueId, issue);
+      return issue;
+   },
+
+   // Sets, moves or (with null) removes the parent. Sub-issue panels listen for the event and
+   // reload, so the old and the new parent both show their current children.
+   // VI: Đặt, chuyển hoặc (với null) gỡ cha. Khu sub-issue lắng nghe sự kiện và tải lại, nên cả
+   // VI: cha cũ lẫn cha mới đều hiển thị đúng danh sách con.
+   setIssueParent: async (issueId, parentIssueId) => {
+      const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
+      const response = await authenticatedFetch(
+         `${api}/issues/${issueId}?${new URLSearchParams({ workspaceId })}`,
+         {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ parentIssueId }),
+         }
+      );
+      if (!response.ok) {
+         const body = (await response.json().catch(() => null)) as { message?: string } | null;
+         throw new Error(body?.message ?? 'Could not change the parent issue.');
+      }
+      const issue = asIssue(((await response.json()) as { data: NativeIssue }).data);
+      get().updateIssue(issueId, issue);
+      window.dispatchEvent(new CustomEvent('flowie:sub-issues-changed'));
       return issue;
    },
 

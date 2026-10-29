@@ -247,7 +247,7 @@ DEFINITIONS = (
     ),
     ToolDefinition(
         "update_issue",
-        "Update issue fields with expectedVersion; use transition_issue for status changes.",
+        "Update issue fields with expectedVersion; set parentIssueId (id or identifier, null removes it) to move the issue under another issue; use transition_issue for status changes.",
         c.UpdateIssueTool,
         "issues:write",
         "update_issue",

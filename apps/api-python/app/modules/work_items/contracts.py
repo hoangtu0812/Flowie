@@ -32,6 +32,7 @@ class UpdateIssueInput(BugUpdateFields):
     description: str | None = Field(default=None, max_length=10_000)
     statusId: str | None = None
     projectId: str | None = None
+    parentIssueId: str | None = None
     assigneeId: str | None = None
     priority: IssuePriority | None = None
     startDate: str | None = None

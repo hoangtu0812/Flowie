@@ -142,6 +142,9 @@ record. Keep test artifacts inside the test workspace.
   retry stale content with the newly read version.
 - `transition_issue` also requires `comments:write` because it records the reason
   in a comment. Status cannot be changed through `update_issue`.
+- `update_issue` moves an issue under another issue with `parentIssueId` (id or
+  identifier; `null` removes the parent). The parent must be in the connection's
+  scope, in the same team, unarchived and not a descendant of the issue.
 - `create_document` uses an existing team folder. Create a team folder in Flowie
   first if that team has no folder. A project-limited connection must link its
   new document to an allowed project or issue.

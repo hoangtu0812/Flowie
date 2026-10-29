@@ -22,12 +22,19 @@ class CommandService:
         self.db, self.principal = db, principal
         self.policy = AccessPolicy(db, principal)
         self.target: dict | None = None
+        self.parent_id: str | None = None
 
     async def prepare(self, name: str, payload) -> None:
         if name in {"update_issue", "transition_issue", "add_comment"}:
             self.target = await self.policy.issue(payload.issueId, lock=True)
             if name == "update_issue" and "projectId" in payload.model_fields_set:
                 await self.policy.destination(payload.projectId, self.target["team_id"])
+            # The parent must be inside this connection's scope; team, archive and cycle rules
+            # run in issues.update_issue so MCP and the web app share them.
+            # VI: Issue cha phải nằm trong scope của kết nối; quy tắc team, archive và chu trình
+            # VI: chạy trong issues.update_issue để MCP và web dùng chung.
+            if name == "update_issue" and payload.parentIssueId:
+                self.parent_id = (await self.policy.issue(payload.parentIssueId))["id"]
         elif name == "update_comment":
             self.target = await self.policy.comment(payload.commentId, lock=True)
             if self.target["author_id"] != self.principal.user["id"]:
@@ -129,6 +136,8 @@ class CommandService:
                 raise ApiError(
                     400, "At least one update field is required.", "Bad Request"
                 )
+            elif values.get("parentIssueId"):
+                values["parentIssueId"] = self.parent_id
             result = (
                 await issues.update_issue(
                     self.target["id"],

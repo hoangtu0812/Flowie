@@ -225,6 +225,7 @@ class ToolApplication:
         data = jsonable_encoder(await service.execute(tool.name, payload))
         if tool.name in {"create_issue", "update_issue", "transition_issue"}:
             data.pop("parentIssueId", None)
+            data.pop("parent", None)
             data.pop("duplicateOfId", None)
         result = {
             "data": data,
