@@ -57,7 +57,18 @@ export const createDocumentFolder = async (draft: {
    projectId?: string;
    name: string;
    kind: FolderKind;
+   number?: number;
 }) => send<TreeFolder>('/folders', { method: 'POST', body: await withWorkspace(draft) });
+
+/** Rename or renumber a folder; `number: null` removes the number. VI: Đổi tên hoặc số của thư mục; `number: null` xoá số. */
+export const updateDocumentFolder = (
+   id: string,
+   draft: { name?: string; number?: number | null }
+) =>
+   send<TreeFolder>(`/folders/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(draft),
+   });
 
 export const createTreeDocument = async (draft: {
    teamId: string;

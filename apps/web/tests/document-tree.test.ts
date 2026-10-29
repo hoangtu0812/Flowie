@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildTree, filterTree, type TreeDocument, type TreeFolder } from '../lib/document-tree';
+import {
+   buildTree,
+   filterTree,
+   folderLabel,
+   type TreeDocument,
+   type TreeFolder,
+} from '../lib/document-tree';
 import { documentTemplate, documentTitle } from '../lib/document-templates';
 import { markdownHeadings } from '../lib/markdown-headings';
 
@@ -112,4 +118,25 @@ test('table of contents reads headings outside code with unique anchors', () => 
       { level: 2, text: 'Luồng chính', id: 'luong-chinh' },
       { level: 2, text: 'Luồng chính', id: 'luong-chinh-2' },
    ]);
+});
+
+test('numbered folders show a two-digit prefix, sort by number and match it in search', () => {
+   const { roots } = buildTree(
+      [
+         folder('root', null, 'Project'),
+         { ...folder('ops', 'root', 'Vận hành', 1), number: 99 },
+         { ...folder('mod', 'root', 'Turn Around', 2), number: 1 },
+         { ...folder('gen', 'root', 'Tổng quan', 5), number: 0 },
+         folder('loose', 'root', 'Loose', 0),
+      ],
+      []
+   );
+   assert.deepEqual(
+      roots[0].children.map((node) => folderLabel(node.folder)),
+      ['00 · Tổng quan', '01 · Turn Around', '99 · Vận hành', 'Loose']
+   );
+   assert.deepEqual(
+      filterTree(roots, '01', 'ALL')[0].children.map((node) => node.folder.id),
+      ['mod']
+   );
 });

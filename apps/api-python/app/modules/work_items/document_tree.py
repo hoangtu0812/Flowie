@@ -33,7 +33,18 @@ DocStatus = Literal["DRAFT", "IN_REVIEW", "APPROVED"]
 # VI: còn dễ duyệt và việc dò thư mục tổ tiên vẫn nhẹ.
 MAX_FOLDER_DEPTH = 8
 DEFAULT_FOLDER_NAME = "General"
-SCAFFOLD_FOLDERS = ("00 · Tổng quan", "99 · Vận hành")
+# Standard folders of a project tree with their fixed numbers: overview first, operations last,
+# so modules numbered 01, 02 … sit between them.
+# VI: Thư mục chuẩn của cây dự án cùng số cố định: tổng quan đứng đầu, vận hành đứng cuối, để
+# VI: các module đánh số 01, 02 … nằm giữa.
+SCAFFOLD_FOLDERS = ((0, "Tổng quan"), (99, "Vận hành"))
+LAST_FOLDER_NUMBER = 99
+
+
+def folder_label(name: str, number: int | None) -> str:
+    """`NN · name` for a numbered folder, the bare name otherwise; used by SharePoint paths.
+    VI: `NN · tên` với thư mục có số, chỉ tên nếu không có số; dùng cho đường dẫn SharePoint."""
+    return name if number is None else f"{number:02d} · {name}"
 
 
 def folder_payload(row: Any) -> dict[str, Any]:
@@ -46,6 +57,7 @@ def folder_payload(row: Any) -> dict[str, Any]:
         "name": row["name"],
         "icon": row["icon"],
         "position": row["position"],
+        "number": row["number"],
     }
 
 
@@ -177,6 +189,66 @@ async def _ensure_unique_name(
         raise ApiError(409, "A document folder with this name already exists here.", "Conflict")
 
 
+async def _ensure_unique_number(
+    db: AsyncSession, parent_id: str | None, number: int | None, exclude_id: str | None = None
+) -> None:
+    # Roots are not checked: the unique index treats NULL parents as distinct too.
+    # VI: Không kiểm tra thư mục gốc: unique index cũng coi parent NULL là khác nhau.
+    if number is None or parent_id is None:
+        return
+    taken = (
+        await db.execute(
+            text(
+                """SELECT 1 FROM document_folders WHERE parent_id = :parent AND number = :number
+                   AND id <> COALESCE(:exclude, '') LIMIT 1"""
+            ),
+            {"parent": parent_id, "number": number, "exclude": exclude_id},
+        )
+    ).first()
+    if taken:
+        raise ApiError(409, f"Folder number {number:02d} is already used here.", "Conflict")
+
+
+async def _next_number(db: AsyncSession, parent_id: str) -> int | None:
+    """Next free number among the children of `parent_id`: one above the highest number below
+    99, starting at 01; None once that would reach 99, which stays reserved for the last slot.
+    VI: Số trống kế tiếp trong các thư mục con của `parent_id`: lớn hơn một so với số lớn nhất
+    VI: dưới 99, bắt đầu từ 01; trả None khi chạm 99, vì 99 dành cho ô cuối."""
+    number = (
+        await db.execute(
+            text(
+                """SELECT COALESCE(MAX(number) FILTER (WHERE number < :last), 0) + 1
+                   FROM document_folders WHERE parent_id = :parent"""
+            ),
+            {"parent": parent_id, "last": LAST_FOLDER_NUMBER},
+        )
+    ).scalar_one()
+    return number if number < LAST_FOLDER_NUMBER else None
+
+
+async def _republish_below(db: AsyncSession, folder_id: str) -> None:
+    """Make the publish job upload the documents under `folder_id` again, at their new path.
+
+    Renaming, renumbering or moving a folder changes the SharePoint path of everything below
+    it; clearing the published release re-uploads the latest approved release there. Files at
+    the old path stay on SharePoint (Flowie never deletes there).
+    VI: Cho job phát hành tải lại các tài liệu bên dưới `folder_id` theo đường dẫn mới. Đổi tên,
+    VI: đổi số hoặc di chuyển thư mục làm đổi đường dẫn SharePoint của mọi thứ bên dưới; xoá
+    VI: release đã phát hành để tải lại phiên bản đã duyệt mới nhất ở đó. File ở đường dẫn cũ vẫn
+    VI: nằm trên SharePoint (Flowie không xoá gì ở đó).
+    """
+    await db.execute(
+        text(
+            """WITH RECURSIVE below(id) AS (
+                   SELECT id FROM document_folders WHERE id = :id
+                   UNION ALL SELECT f.id FROM document_folders f JOIN below ON f.parent_id = below.id)
+               UPDATE document_publications SET release = NULL
+               WHERE document_id IN (SELECT d.id FROM documents d WHERE d.folder_id IN (SELECT id FROM below))"""
+        ),
+        {"id": folder_id},
+    )
+
+
 async def create_folder(
     db: AsyncSession,
     *,
@@ -188,14 +260,17 @@ async def create_folder(
     parent_id: str | None = None,
     project_id: str | None = None,
     kind: str = "general",
+    number: int | None = None,
 ) -> dict[str, Any]:
     """Create a folder at the root of a team or project tree, or under `parent_id`.
 
     A child takes its team and project from the parent; a root project folder takes the
-    team of `project_id`. Names are unique per parent, ignoring case.
+    team of `project_id`. Names are unique per parent, ignoring case. Without `number`, a
+    child inside a project tree takes the next free number; numbers are unique per parent.
     VI: Tạo thư mục ở gốc cây của team hoặc dự án, hoặc dưới `parent_id`. Thư mục con lấy
     VI: team và dự án từ cha; thư mục gốc của dự án lấy team của `project_id`. Tên không
-    VI: được trùng trong cùng thư mục cha, không phân biệt hoa thường.
+    VI: được trùng trong cùng thư mục cha, không phân biệt hoa thường. Không truyền `number`
+    VI: thì thư mục con trong cây dự án nhận số trống kế tiếp; số không trùng trong cùng cha.
     """
     name = name.strip()
     if len(name) < 2:
@@ -215,6 +290,9 @@ async def create_folder(
     await _team_access(db, workspace_id, team_id, user_id)
     await _lock_team_folders(db, team_id)
     await _ensure_unique_name(db, team_id, parent_id, name)
+    if number is None and parent_id and project_id:
+        number = await _next_number(db, parent_id)
+    await _ensure_unique_number(db, parent_id, number)
     position = (
         await db.execute(
             text(
@@ -228,8 +306,8 @@ async def create_folder(
     await db.execute(
         text(
             """INSERT INTO document_folders
-               (id, workspace_id, team_id, parent_id, project_id, kind, name, icon, position, created_at, updated_at)
-               VALUES (:id, :workspace, :team, :parent, :project, :kind, :name, :icon, :position, :now, :now)"""
+               (id, workspace_id, team_id, parent_id, project_id, kind, name, icon, position, number, created_at, updated_at)
+               VALUES (:id, :workspace, :team, :parent, :project, :kind, :name, :icon, :position, :number, :now, :now)"""
         ),
         {
             "id": folder_id,
@@ -241,6 +319,7 @@ async def create_folder(
             "name": name,
             "icon": icon or "📁",
             "position": position,
+            "number": number,
             "now": now,
         },
     )
@@ -259,6 +338,10 @@ async def update_folder(
     VI: thư mục cha thuộc team khác, thư mục cha nằm trong chính nhánh con của nó (vòng lặp)
     VI: và kết quả sâu hơn MAX_FOLDER_DEPTH; nhánh được chuyển nhận dự án của cha mới.
     VI: `parentId: null` đưa thư mục về gốc của team.
+    `number` (null clears it) must stay unique among the new siblings. A change of name,
+    number or parent re-publishes the documents below to SharePoint at the new path.
+    VI: `number` (null để xoá số) không được trùng với các thư mục cùng cha mới. Đổi tên, số
+    VI: hoặc thư mục cha sẽ phát hành lại các tài liệu bên dưới lên SharePoint theo đường dẫn mới.
     """
     folder = await _folder_row(db, workspace_id, folder_id)
     await _team_access(db, workspace_id, folder["team_id"], user_id)
@@ -278,10 +361,13 @@ async def update_folder(
     name = values["name"].strip() if values.get("name") else folder["name"]
     if "name" in values or "parentId" in values:
         await _ensure_unique_name(db, folder["team_id"], parent_id, name, exclude_id=folder_id)
+    number = values["number"] if "number" in values else folder["number"]
+    if "number" in values or "parentId" in values:
+        await _ensure_unique_number(db, parent_id, number, exclude_id=folder_id)
     await db.execute(
         text(
             """UPDATE document_folders SET name = :name, icon = :icon, position = :position, kind = :kind,
-               parent_id = :parent, updated_at = :now WHERE id = :id"""
+               parent_id = :parent, number = :number, updated_at = :now WHERE id = :id"""
         ),
         {
             "id": folder_id,
@@ -290,9 +376,12 @@ async def update_folder(
             "position": values.get("position", folder["position"]),
             "kind": values.get("kind") or folder["kind"],
             "parent": parent_id,
+            "number": number,
             "now": _utcnow(),
         },
     )
+    if (name, number, parent_id) != (folder["name"], folder["number"], folder["parent_id"]):
+        await _republish_below(db, folder_id)
     if project_id != folder["project_id"]:
         await db.execute(
             text(
@@ -311,9 +400,12 @@ async def scaffold_project_tree(
 ) -> None:
     """Create the project's root folder with "00 · Tổng quan" and "99 · Vận hành".
 
-    Safe to repeat: existing folders are kept and only missing ones are added.
+    Safe to repeat: existing folders are kept and only missing ones are added (matched by
+    name). A standard number already used by another folder is left to that folder and the
+    missing standard folder takes the next free number instead.
     VI: Tạo thư mục gốc của dự án cùng "00 · Tổng quan" và "99 · Vận hành". Chạy lại an
-    VI: toàn: giữ thư mục đã có, chỉ thêm thư mục còn thiếu.
+    VI: toàn: giữ thư mục đã có, chỉ thêm thư mục còn thiếu (so theo tên). Số chuẩn đã bị thư
+    VI: mục khác dùng thì giữ cho thư mục đó, thư mục chuẩn còn thiếu nhận số trống kế tiếp.
     """
     team_id = await _project_team(db, workspace_id, project_id, user_id)
     project_name = (
@@ -340,16 +432,25 @@ async def scaffold_project_tree(
             kind="project",
         )
     )["id"]
-    for name in SCAFFOLD_FOLDERS:
-        exists = (
+    for number, name in SCAFFOLD_FOLDERS:
+        siblings = (
             await db.execute(
-                text("SELECT 1 FROM document_folders WHERE parent_id = :parent AND lower(name) = lower(:name)"),
-                {"parent": root_id, "name": name},
+                text(
+                    """SELECT bool_or(lower(name) = lower(:name)) AS named, bool_or(number = :number) AS numbered
+                       FROM document_folders WHERE parent_id = :parent"""
+                ),
+                {"parent": root_id, "name": name, "number": number},
             )
-        ).first()
-        if not exists:
+        ).mappings().one()
+        if not siblings["named"]:
             await create_folder(
-                db, workspace_id=workspace_id, user_id=user_id, team_id=team_id, name=name, parent_id=root_id
+                db,
+                workspace_id=workspace_id,
+                user_id=user_id,
+                team_id=team_id,
+                name=name,
+                parent_id=root_id,
+                number=None if siblings["numbered"] else number,
             )
 
 

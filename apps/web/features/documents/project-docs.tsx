@@ -9,6 +9,7 @@ import {
    FolderPlus,
    FolderUp,
    LayoutTemplate,
+   Pencil,
    Search,
 } from 'lucide-react';
 import { TreeList } from '@astryxdesign/core/TreeList';
@@ -43,9 +44,11 @@ import { documentTemplate, documentTitle } from '@/lib/document-templates';
 import {
    buildTree,
    filterTree,
+   folderLabel,
    type DocType,
    type FolderKind,
    type TreeFile,
+   type TreeFolder,
    type TreeNode,
 } from '@/lib/document-tree';
 import { relativeTime } from '@/lib/time';
@@ -54,6 +57,7 @@ import {
    createTreeDocument,
    loadProjectTree,
    scaffoldProjectTree,
+   updateDocumentFolder,
    updateTreeDocument,
    uploadFolderFile,
    type ProjectTree,
@@ -91,7 +95,7 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
    const [query, setQuery] = useState('');
    const [docType, setDocType] = useState<DocType | 'ALL'>('ALL');
    const [selected, setSelected] = useState<string>();
-   const [dialog, setDialog] = useState<'folder' | 'document' | 'sharepoint'>();
+   const [dialog, setDialog] = useState<'folder' | 'edit-folder' | 'document' | 'sharepoint'>();
    const [open, setOpen] = useState<LiveDocument>();
    const [preview, setPreview] = useState<{ kind: 'document' | 'file'; id: string }>();
    const [busy, setBusy] = useState(false);
@@ -125,6 +129,11 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
    const visible = useMemo(() => filterTree(roots, query, docType), [roots, query, docType]);
    const root = roots.find((node) => node.folder.kind === 'project') ?? roots[0];
    const target = selected ?? root?.folder.id;
+   // The project root is named after the project and stays unnumbered, so it is not editable here.
+   // VI: Thư mục gốc mang tên dự án và không đánh số, nên không sửa ở đây.
+   const editable = tree?.folders.find(
+      (folder) => folder.id === target && folder.kind !== 'project'
+   );
 
    async function act(operation: () => Promise<unknown>, success: string) {
       setBusy(true);
@@ -194,7 +203,7 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
       const kind = FOLDER_KINDS.find((option) => option.value === node.folder.kind);
       return {
          id: node.folder.id,
-         label: node.folder.name,
+         label: folderLabel(node.folder),
          startContent: node.folder.icon,
          endContent:
             node.folder.kind === 'project' ? undefined : kind ? (
@@ -259,6 +268,15 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
             >
                <FolderPlus className="size-4" />
                {tx('New folder')}
+            </Button>
+            <Button
+               size="xs"
+               variant="ghost"
+               disabled={busy || !editable}
+               onClick={() => setDialog('edit-folder')}
+            >
+               <Pencil className="size-4" />
+               {tx('Edit folder')}
             </Button>
             <Button
                size="xs"
@@ -380,14 +398,36 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
             />
          )}
          {dialog === 'folder' && target && (
-            <NewFolderDialog
+            <FolderDialog
                busy={busy}
                onClose={() => setDialog(undefined)}
-               onCreate={async (name, kind) => {
+               onSave={async (name, number, kind) => {
                   if (
                      await act(
-                        () => createDocumentFolder({ parentId: target, name, kind }),
+                        () =>
+                           createDocumentFolder({
+                              parentId: target,
+                              name,
+                              kind,
+                              number: number ?? undefined,
+                           }),
                         tx('Folder created.')
+                     )
+                  )
+                     setDialog(undefined);
+               }}
+            />
+         )}
+         {dialog === 'edit-folder' && editable && (
+            <FolderDialog
+               folder={editable}
+               busy={busy}
+               onClose={() => setDialog(undefined)}
+               onSave={async (name, number) => {
+                  if (
+                     await act(
+                        () => updateDocumentFolder(editable.id, { name, number }),
+                        tx('Folder updated.')
                      )
                   )
                      setDialog(undefined);
@@ -442,56 +482,88 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
    );
 }
 
-function NewFolderDialog({
+/**
+ * Creates a folder, or renames and renumbers `folder` when given. The number is typed as one or
+ * two digits; empty means the next free number on create and no number on edit.
+ * VI: Tạo thư mục, hoặc đổi tên và số của `folder` khi được truyền vào. Số nhập một hoặc hai chữ
+ * VI: số; để trống nghĩa là lấy số trống kế tiếp khi tạo và không đánh số khi sửa.
+ */
+function FolderDialog({
+   folder,
    busy,
    onClose,
-   onCreate,
+   onSave,
 }: {
+   folder?: TreeFolder;
    busy: boolean;
    onClose: () => void;
-   onCreate: (name: string, kind: FolderKind) => Promise<void>;
+   onSave: (name: string, number: number | null, kind: FolderKind) => Promise<void>;
 }) {
    const tx = useMessages(messages);
-   const [name, setName] = useState('');
+   const [name, setName] = useState(folder?.name ?? '');
+   const [number, setNumber] = useState(
+      folder?.number == null ? '' : String(folder.number).padStart(2, '0')
+   );
    const [kind, setKind] = useState<FolderKind>('module');
+   const numberValid = /^\d{0,2}$/.test(number.trim());
    return (
       <Dialog open onOpenChange={(next) => !next && onClose()}>
          <DialogContent>
             <DialogHeader>
-               <DialogTitle>{tx('New folder')}</DialogTitle>
+               <DialogTitle>{tx(folder ? 'Edit folder' : 'New folder')}</DialogTitle>
             </DialogHeader>
             <form
                className="grid gap-3"
                onSubmit={(event) => {
                   event.preventDefault();
-                  void onCreate(name, kind);
+                  void onSave(name, number.trim() ? Number(number) : null, kind);
                }}
             >
-               <Input
-                  autoFocus
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder={tx('Folder name')}
-                  aria-label={tx('Folder name')}
-               />
-               <Select value={kind} onValueChange={(value) => setKind(value as FolderKind)}>
-                  <SelectTrigger aria-label={tx('Folder type')}>
-                     <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                     {FOLDER_KINDS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                           {tx(option.label)}
-                        </SelectItem>
-                     ))}
-                  </SelectContent>
-               </Select>
+               <div className="grid grid-cols-[5rem_minmax(0,1fr)] gap-2">
+                  <Input
+                     value={number}
+                     onChange={(event) => setNumber(event.target.value)}
+                     inputMode="numeric"
+                     maxLength={2}
+                     placeholder="NN"
+                     aria-label={tx('Folder number')}
+                     aria-invalid={!numberValid}
+                  />
+                  <Input
+                     autoFocus
+                     value={name}
+                     onChange={(event) => setName(event.target.value)}
+                     placeholder={tx('Folder name')}
+                     aria-label={tx('Folder name')}
+                  />
+               </div>
+               <p className="text-xs text-muted-foreground">
+                  {tx(
+                     folder
+                        ? 'Number (00–99), empty for none'
+                        : 'Number (00–99), empty for the next free one'
+                  )}
+               </p>
+               {!folder && (
+                  <Select value={kind} onValueChange={(value) => setKind(value as FolderKind)}>
+                     <SelectTrigger aria-label={tx('Folder type')}>
+                        <SelectValue />
+                     </SelectTrigger>
+                     <SelectContent>
+                        {FOLDER_KINDS.map((option) => (
+                           <SelectItem key={option.value} value={option.value}>
+                              {tx(option.label)}
+                           </SelectItem>
+                        ))}
+                     </SelectContent>
+                  </Select>
+               )}
                <DialogFooter>
                   <Button type="button" variant="ghost" onClick={onClose}>
                      {tx('Cancel')}
                   </Button>
-                  <Button type="submit" disabled={busy || name.trim().length < 2}>
-                     {tx('Create')}
+                  <Button type="submit" disabled={busy || !numberValid || name.trim().length < 2}>
+                     {tx(folder ? 'Save' : 'Create')}
                   </Button>
                </DialogFooter>
             </form>

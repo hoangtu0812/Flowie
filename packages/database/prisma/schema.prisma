@@ -1877,6 +1877,11 @@ model DocumentFolder {
   name        String
   icon        String   @default("📁")
   position    Int      @default(0)
+  // Two-digit folder number (0-99) shown as the "NN · name" prefix in the Docs tree and in
+  // SharePoint paths; null shows the bare name. Unique among siblings.
+  // VI: Số thư mục hai chữ số (0-99) hiển thị thành tiền tố "NN · tên" trên cây Docs và trong
+  // VI: đường dẫn SharePoint; null thì chỉ hiện tên. Không trùng giữa các thư mục cùng cha.
+  number      Int?
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -1888,6 +1893,7 @@ model DocumentFolder {
   documents Document[]
 
   @@unique([teamId, parentId, name])
+  @@unique([parentId, number])
   @@index([workspaceId, teamId, position])
   @@index([projectId])
   @@map("document_folders")

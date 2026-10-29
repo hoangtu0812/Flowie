@@ -15,6 +15,7 @@ from app.modules.work_items.contracts import (
 )
 from app.modules.work_items.document_tree import (
     create_folder,
+    folder_label,
     issue_documents,
     project_tree,
     scaffold_project_tree,
@@ -79,7 +80,7 @@ async def verify_document_tree():
             await scaffold_project_tree(db, workspace_id=workspace, user_id=user["id"], project_id=project)
             await scaffold_project_tree(db, workspace_id=workspace, user_id=user["id"], project_id=project)
             tree = await project_tree(db, workspace_id=workspace, user_id=user["id"], project_id=project)
-            names = sorted(folder["name"] for folder in tree["folders"])
+            names = sorted(folder_label(folder["name"], folder["number"]) for folder in tree["folders"])
             assert names == ["00 · Tổng quan", "99 · Vận hành", "Flowie"]
             root = next(f for f in tree["folders"] if f["kind"] == "project")
 
@@ -92,6 +93,36 @@ async def verify_document_tree():
                 name="Tree", parent_id=module["id"], kind="feature",
             )
             assert (feature["projectId"], feature["teamId"]) == (project, team)
+            # Children of a project tree take the next number after the highest below 99.
+            # VI: Thư mục con trong cây dự án nhận số kế tiếp sau số lớn nhất dưới 99.
+            assert (module["number"], feature["number"]) == (1, 1)
+            second = await create_folder(
+                db, workspace_id=workspace, user_id=user["id"], team_id=None,
+                name="Release", parent_id=root["id"], kind="module",
+            )
+            assert second["number"] == 2
+            assert await rejected(create_folder(
+                db, workspace_id=workspace, user_id=user["id"], team_id=None,
+                name="Clash", parent_id=root["id"], number=1,
+            )) == 409
+            assert await rejected(update_folder(
+                db, workspace_id=workspace, user_id=user["id"],
+                folder_id=second["id"], values={"number": 99},
+            )) == 409
+            renumbered = await update_folder(
+                db, workspace_id=workspace, user_id=user["id"],
+                folder_id=second["id"], values={"number": 5, "name": "Releases"},
+            )
+            assert folder_label(renumbered["name"], renumbered["number"]) == "05 · Releases"
+            cleared = await update_folder(
+                db, workspace_id=workspace, user_id=user["id"],
+                folder_id=second["id"], values={"number": None},
+            )
+            assert cleared["number"] is None
+            team_folder = await create_folder(
+                db, workspace_id=workspace, user_id=user["id"], team_id=team, name="Team only"
+            )
+            assert team_folder["number"] is None
             assert await rejected(create_folder(
                 db, workspace_id=workspace, user_id=user["id"], team_id=None,
                 name="tree", parent_id=module["id"],
