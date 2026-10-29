@@ -62,6 +62,7 @@ async def project_summaries(db, workspace, user, identifiers):
         "workspaceId": "workspace_id",
         "teamId": "team_id",
         "name": "name",
+        "icon": "icon",
         "identifier": "identifier",
         "description": "description",
         "type": "type",

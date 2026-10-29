@@ -3,8 +3,16 @@ import { useMessages } from '@/features/shared/use-messages';
 import { messages } from '@/features/navigation/messages.vi';
 
 import { AiScheduleDialog } from '@/components/common/projects/details/ai-schedule-dialog';
+import { ProjectSettingsDialog } from '@/components/common/projects/details/project-settings-dialog';
+import { projectIcon } from '@/components/common/projects/project-icon';
 import { IssueListActions } from '@/features/issues/issue-list-actions';
 import { Button } from '@/components/ui/button';
+import {
+   DropdownMenu,
+   DropdownMenuContent,
+   DropdownMenuItem,
+   DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useLiveProjectData } from '@/components/common/projects/details/use-live-project';
 import { cn } from '@/lib/utils';
@@ -12,15 +20,16 @@ import { useRightPanelStore } from '@/store/right-panel-store';
 import { DisplayOptions } from '../display-options';
 import {
    BarChart3,
-   Box,
    ChevronRight,
    Link2,
    MoreHorizontal,
    PanelRight,
+   Settings,
    Star,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
+import { useState } from 'react';
 import { toast } from 'sonner';
 
 const PROJECT_TABS = [
@@ -101,6 +110,8 @@ export default function Header({ projectId }: { projectId: string }) {
    const { orgId } = useParams<{ orgId: string }>();
    const { project, toggleFavorite } = useLiveProjectData();
    const favorited = Boolean(project?.favorites.length);
+   const [settingsOpen, setSettingsOpen] = useState(false);
+   const ProjectIcon = projectIcon(project?.icon);
 
    const onToggleFavorite = async () => {
       try {
@@ -135,7 +146,7 @@ export default function Header({ projectId }: { projectId: string }) {
                   </Link>
                   <ChevronRight className="size-3.5 text-muted-foreground shrink-0" />
                   <span className="inline-flex size-5 bg-muted/50 items-center justify-center rounded shrink-0">
-                     <Box className="size-3.5" />
+                     <ProjectIcon className="size-3.5" />
                   </span>
                   <span className="font-medium truncate">{project?.name ?? 'Project'}</span>
                   <Button
@@ -165,9 +176,24 @@ export default function Header({ projectId }: { projectId: string }) {
                >
                   <Link2 className="size-4" />
                </Button>
-               <Button variant="ghost" size="icon" className="size-7 text-muted-foreground">
-                  <MoreHorizontal className="size-4" />
-               </Button>
+               <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                     <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 text-muted-foreground"
+                        aria-label={tx('Project actions')}
+                     >
+                        <MoreHorizontal className="size-4" />
+                     </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                     <DropdownMenuItem disabled={!project} onSelect={() => setSettingsOpen(true)}>
+                        <Settings className="size-4" /> {tx('Project settings')}
+                     </DropdownMenuItem>
+                  </DropdownMenuContent>
+               </DropdownMenu>
+               <ProjectSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
             </div>
          </div>
          <div className="w-full flex justify-between items-center border-b py-1.5 px-6 h-10">

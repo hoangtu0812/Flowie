@@ -1,5 +1,6 @@
 'use client';
 
+import { IconPicker } from '@/components/common/icon-picker';
 import { LoadingState } from '@/components/common/loading-state';
 import { ContentBlocks } from '@/components/common/issues/details/content-blocks';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -27,6 +28,7 @@ import {
    toProjectDetailUi,
    toProjectUi,
 } from './project-detail-ui-adapter';
+import { projectNameError } from './project-settings-dialog';
 import { ProjectSidePanel } from './project-side-panel';
 import { useLiveProjectData } from './use-live-project';
 
@@ -78,6 +80,12 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
    const [propertyTargetDate, setPropertyTargetDate] = useState('');
    const [propertyTeamId, setPropertyTeamId] = useState('unassigned');
    const [savingProperty, setSavingProperty] = useState(false);
+   const [nameDraft, setNameDraft] = useState<string>();
+   // Set once Enter, Escape or blur ends a rename, so the blur fired while the input unmounts
+   // cannot save the draft a second time.
+   // VI: Được bật khi Enter, Escape hoặc blur kết thúc việc đổi tên, để sự kiện blur phát ra
+   // lúc ô nhập bị gỡ không lưu bản nháp lần thứ hai.
+   const nameEditDone = useRef(false);
    if (loading) return <LoadingState label="Loading project…" />;
    if (error || !liveProject)
       return (
@@ -99,6 +107,34 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
    const selectedPriority = priorities.find((option) => option.id === propertyPriority);
    const selectedLead = availableMembers.find((member) => member.userId === propertyLeadId)?.user;
    const selectedTeam = availableTeams.find((option) => option.id === propertyTeamId);
+
+   // Quick edit from the Overview heading. Unchanged values never call the API, and a failed
+   // save keeps the last saved value on screen because the shared project is only replaced
+   // by the server response.
+   // VI: Sửa nhanh từ tiêu đề Overview. Giá trị không đổi thì không gọi API; lưu lỗi thì màn
+   // hình vẫn giữ giá trị đã lưu vì dự án dùng chung chỉ được thay bằng phản hồi của server.
+   const saveQuickEdit = async (data: { name?: string; icon?: string | null }) => {
+      try {
+         await updateProject(data);
+         toast.success('Project updated.');
+      } catch (caught) {
+         toast.error(caught instanceof Error ? caught.message : 'Could not update the project.');
+      }
+   };
+
+   const commitNameDraft = () => {
+      if (nameDraft === undefined || nameEditDone.current) return;
+      nameEditDone.current = true;
+      const name = nameDraft.trim();
+      setNameDraft(undefined);
+      if (name === liveProject.name) return;
+      const invalid = projectNameError(name);
+      if (invalid) {
+         toast.error(invalid);
+         return;
+      }
+      void saveQuickEdit({ name });
+   };
 
    const submitResource = async () => {
       if (!resourceLabel.trim() || !resourceUrl.trim()) return;
@@ -218,10 +254,54 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
             <DocumentOutline items={outlineItems} scrollRef={scrollRef} />
             <div ref={scrollRef} className="h-full overflow-y-auto">
                <div className="max-w-3xl mx-auto px-6 lg:px-10 py-10">
-                  <div className="inline-flex size-10 bg-muted/50 items-center justify-center rounded-md mb-4">
-                     <project.icon className="size-6" />
-                  </div>
-                  <h1 className="text-3xl font-semibold tracking-tight">{project.name}</h1>
+                  <IconPicker
+                     value={liveProject.icon ?? undefined}
+                     onChange={(icon) => {
+                        if (icon !== liveProject.icon) void saveQuickEdit({ icon });
+                     }}
+                     trigger={
+                        <button
+                           type="button"
+                           aria-label="Change project icon"
+                           title="Change project icon"
+                           className="inline-flex size-10 bg-muted/50 items-center justify-center rounded-md mb-4 text-2xl hover:bg-muted transition-colors"
+                        >
+                           <project.icon className="size-6" />
+                        </button>
+                     }
+                  />
+                  {nameDraft === undefined ? (
+                     <h1 className="text-3xl font-semibold tracking-tight">
+                        <button
+                           type="button"
+                           title="Rename project"
+                           className="text-left rounded-sm hover:bg-muted/50 transition-colors"
+                           onClick={() => {
+                              nameEditDone.current = false;
+                              setNameDraft(project.name);
+                           }}
+                        >
+                           {project.name}
+                        </button>
+                     </h1>
+                  ) : (
+                     <Input
+                        aria-label="Project name"
+                        value={nameDraft}
+                        maxLength={120}
+                        autoFocus
+                        className="h-auto py-1 text-3xl md:text-3xl font-semibold tracking-tight"
+                        onChange={(event) => setNameDraft(event.target.value)}
+                        onBlur={commitNameDraft}
+                        onKeyDown={(event) => {
+                           if (event.key === 'Enter') commitNameDraft();
+                           if (event.key === 'Escape') {
+                              nameEditDone.current = true;
+                              setNameDraft(undefined);
+                           }
+                        }}
+                     />
+                  )}
                   <p className="mt-3 text-muted-foreground leading-relaxed">{detail.summary}</p>
 
                   {/* Inline properties */}

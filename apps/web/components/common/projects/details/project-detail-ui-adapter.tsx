@@ -12,8 +12,9 @@ import {
    type StatusCategory,
 } from '@/lib/status-presentations';
 import type { User } from '@/types/users';
-import { Circle, CircleCheck, CircleDashed, CirclePlay, CircleX, FolderKanban } from 'lucide-react';
+import { Circle, CircleCheck, CircleDashed, CirclePlay, CircleX } from 'lucide-react';
 import { createElement } from 'react';
+import { projectIcon } from '../project-icon';
 import type {
    LiveActivity,
    LiveMilestone,
@@ -167,7 +168,7 @@ export function toProjectUi(
       id: project.id,
       name: project.name,
       status: projectStatusPresentation(project.status),
-      icon: FolderKanban,
+      icon: projectIcon(project.icon),
       percentComplete: issues.length ? Math.round((completed / issues.length) * 100) : 0,
       startDate: project.startDate ?? project.createdAt,
       persistedStartDate: project.startDate,
