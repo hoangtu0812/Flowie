@@ -52,6 +52,13 @@ test('workspace issues support unassigned backlog, bug views and direct details'
          for (const issue of created)
             await expect(page.getByText(issue.title, { exact: true }).first()).toBeVisible();
       }
+      const backlogGroup = page.getByRole('button', { name: /^Backlog, \d+ issues?$/ });
+      await backlogGroup.click();
+      await expect(backlogGroup).toHaveAttribute('aria-expanded', 'false');
+      await expect(page.getByText(created[0].title, { exact: true })).toHaveCount(0);
+      await backlogGroup.press('Enter');
+      await expect(backlogGroup).toHaveAttribute('aria-expanded', 'true');
+      await expect(page.getByText(created[0].title, { exact: true }).first()).toBeVisible();
       await page.goto(`/${fixture.slug}/issues/bugs`);
       await expect(page.getByText(created[1].title, { exact: true }).first()).toBeVisible();
       await expect(page.getByText(created[0].title, { exact: true })).toHaveCount(0);
