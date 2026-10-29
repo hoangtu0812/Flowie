@@ -395,6 +395,27 @@ async def project_tree(
         for document in await _documents(db, workspace_id, user_id=user_id)
         if document["folderId"] in folder_ids or document["id"] in linked
     ]
+    # Last SharePoint upload of each document, shown beside its preview.
+    # VI: Lần tải lên SharePoint gần nhất của từng tài liệu, hiển thị cạnh khung xem trước.
+    publications = {
+        row["document_id"]: {
+            "version": row["version"],
+            "webUrl": row["web_url"],
+            "publishedAt": row["published_at"],
+            "lastError": row["last_error"],
+        }
+        for row in (
+            await db.execute(
+                text(
+                    """SELECT document_id, version, web_url, published_at, last_error FROM document_publications
+                       WHERE document_id = ANY(CAST(:ids AS text[]))"""
+                ),
+                {"ids": [document["id"] for document in documents]},
+            )
+        ).mappings().all()
+    }
+    for document in documents:
+        document["publication"] = publications.get(document["id"])
     files = (
         await db.execute(
             text(

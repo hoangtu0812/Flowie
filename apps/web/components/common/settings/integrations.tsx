@@ -11,8 +11,13 @@ import {
    microsoftSignInEnabled,
    type TeamsStatus,
 } from '@/components/settings/teams-integration';
+import {
+   SharepointIntegrationDialog,
+   loadSharepointConnection,
+   type SharepointConnection,
+} from '@/components/settings/sharepoint-integration';
 import { Button } from '@/components/ui/button';
-import { ArrowUpRight, MessagesSquare } from 'lucide-react';
+import { ArrowUpRight, FolderUp, MessagesSquare } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { INTEGRATION_LOGOS } from './integration-logos';
 import { McpSettings } from '@/components/settings/mcp/mcp-settings';
@@ -26,8 +31,13 @@ export default function Integrations() {
    const [teamsAvailable, setTeamsAvailable] = useState(false);
    const [teamsOpen, setTeamsOpen] = useState(false);
    const [teamsStatus, setTeamsStatus] = useState<TeamsStatus>();
+   const [sharepointOpen, setSharepointOpen] = useState(false);
+   const [sharepoint, setSharepoint] = useState<SharepointConnection>();
 
    useEffect(() => {
+      void loadSharepointConnection()
+         .then(setSharepoint)
+         .catch(() => setSharepoint(undefined));
       void loadDiscordStatus()
          .then(setStatus)
          .catch(() => setStatus(null));
@@ -44,7 +54,7 @@ export default function Integrations() {
       <>
          <SettingsShell
             title="Integrations"
-            description="Connect Discord or Microsoft Teams notifications and authorize AI access to project work."
+            description="Connect Discord or Microsoft Teams notifications, SharePoint publishing, and authorize AI access to project work."
          >
             <section className="flex flex-col gap-3">
                <h2 className="text-base font-medium">Discord</h2>
@@ -85,8 +95,32 @@ export default function Integrations() {
                   </div>
                </section>
             )}
+            <section className="flex flex-col gap-3">
+               <h2 className="text-base font-medium">SharePoint</h2>
+               <div className="flex items-center gap-3 rounded-lg border bg-container p-4">
+                  <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-md border bg-background">
+                     <FolderUp className="size-5 text-[#038387]" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                     <p className="text-sm font-medium">SharePoint</p>
+                     <p className="mt-0.5 text-xs text-muted-foreground">
+                        Publish approved project documents to each project&apos;s SharePoint folder
+                        as Markdown.
+                     </p>
+                  </div>
+                  <Button size="xs" variant="ghost" onClick={() => setSharepointOpen(true)}>
+                     {sharepoint?.configured ? 'Configured' : 'Connect'}
+                     <ArrowUpRight className="size-3.5" />
+                  </Button>
+               </div>
+            </section>
             <McpSettings />
          </SettingsShell>
+         <SharepointIntegrationDialog
+            open={sharepointOpen}
+            onOpenChange={setSharepointOpen}
+            onSaved={setSharepoint}
+         />
          <DiscordIntegrationDialog
             open={dialogOpen}
             onOpenChange={setDialogOpen}

@@ -1,7 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FilePlus2, FileText, FileUp, FolderPlus, LayoutTemplate, Search } from 'lucide-react';
+import {
+   FilePlus2,
+   FileText,
+   FileUp,
+   FolderPlus,
+   FolderUp,
+   LayoutTemplate,
+   Search,
+} from 'lucide-react';
 import { TreeList } from '@astryxdesign/core/TreeList';
 import type { TreeListItemData } from '@astryxdesign/core/TreeList';
 import { HStack } from '@astryxdesign/core/Layout';
@@ -52,6 +60,8 @@ import {
 } from './project-docs-api';
 import { DocStatusBadge, DocTypeBadge, DOC_TYPES } from './document-badges';
 import { DocumentPreview, EmptyPreview, PdfPreview } from './doc-preview';
+import { ProjectSharepointDialog } from './project-sharepoint';
+import { loadProjectSharepoint } from '@/components/settings/sharepoint-integration';
 
 const FOLDER_KINDS: { value: FolderKind; label: keyof typeof messages }[] = [
    { value: 'module', label: 'Module' },
@@ -80,7 +90,7 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
    const [query, setQuery] = useState('');
    const [docType, setDocType] = useState<DocType | 'ALL'>('ALL');
    const [selected, setSelected] = useState<string>();
-   const [dialog, setDialog] = useState<'folder' | 'document'>();
+   const [dialog, setDialog] = useState<'folder' | 'document' | 'sharepoint'>();
    const [open, setOpen] = useState<LiveDocument>();
    const [preview, setPreview] = useState<{ kind: 'document' | 'file'; id: string }>();
    const [busy, setBusy] = useState(false);
@@ -98,6 +108,14 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
    useEffect(() => {
       void reload();
    }, [reload]);
+
+   const [publishing, setPublishing] = useState(false);
+   const loadPublishing = useCallback(() => {
+      void loadProjectSharepoint(projectId)
+         .then((value) => setPublishing(Boolean(value.folderUrl && value.connectionEnabled)))
+         .catch(() => setPublishing(false));
+   }, [projectId]);
+   useEffect(loadPublishing, [loadPublishing]);
 
    const { roots, unfiled } = useMemo(
       () => buildTree(tree?.folders ?? [], tree?.documents ?? [], tree?.files ?? []),
@@ -263,6 +281,10 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
                      void act(() => uploadFolderFile(target, file), tx('File uploaded.'));
                }}
             />
+            <Button size="xs" variant="ghost" onClick={() => setDialog('sharepoint')}>
+               <FolderUp className="size-4" />
+               {tx('SharePoint')}
+            </Button>
          </div>
          <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,2fr)_minmax(0,3fr)] lg:grid-cols-[minmax(260px,360px)_minmax(0,1fr)] lg:grid-rows-1">
             <div className="min-h-0 overflow-auto border-b px-3 py-3 lg:border-r lg:border-b-0">
@@ -310,6 +332,7 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
                {previewDocument ? (
                   <DocumentPreview
                      document={previewDocument}
+                     publishing={publishing}
                      onEdit={() => setOpen(previewDocument)}
                   />
                ) : previewFile ? (
@@ -319,6 +342,15 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
                )}
             </div>
          </div>
+         {dialog === 'sharepoint' && (
+            <ProjectSharepointDialog
+               projectId={projectId}
+               onClose={() => {
+                  setDialog(undefined);
+                  loadPublishing();
+               }}
+            />
+         )}
          {dialog === 'folder' && target && (
             <NewFolderDialog
                busy={busy}

@@ -89,6 +89,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         recurring_task=tracked('recurring-issues',recurring_loop(session_factory,outbox_stop),outbox_stop)
         from .modules.sla.worker import sla_loop
         sla_task=tracked('sla-clocks',sla_loop(session_factory,outbox_stop),outbox_stop)
+        from .modules.sharepoint.worker import sharepoint_loop
+        sharepoint_task=tracked('sharepoint-publish',sharepoint_loop(session_factory,runtime,outbox_stop),outbox_stop)
         agent_runs_stop = asyncio.Event()
         agent_runs_task = tracked('agent-dispatcher',agent_run_dispatcher_loop(session_factory, agent_runs_stop),agent_runs_stop) if runtime.mcp_enabled and runtime.mcp_writes_enabled else None
         reminder_stop = asyncio.Event()
@@ -109,7 +111,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             digest_stop.set()
             dispatch_stop.set()
             scm_stop.set()
-            await asyncio.gather(*[task for task in [reminder_task,digest_task,dispatch_task,scm_task,scm_sync_task,outbox_task,channel_task,maintenance_task,agent_runs_task,bulk_task,import_task,recurring_task,sla_task] if task],return_exceptions=True)
+            await asyncio.gather(*[task for task in [reminder_task,digest_task,dispatch_task,scm_task,scm_sync_task,outbox_task,channel_task,maintenance_task,agent_runs_task,bulk_task,import_task,recurring_task,sla_task,sharepoint_task] if task],return_exceptions=True)
             await mcp_stack.aclose()
             await engine.dispose()
 
@@ -171,6 +173,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(native_initiatives_router)
     app.include_router(initiatives_router)
     app.include_router(native_documents_router)
+    from .modules.sharepoint.api import router as sharepoint_router
+    app.include_router(sharepoint_router)
     app.include_router(customer_requests_router)
     app.include_router(asks_router)
     app.include_router(slas_router)
