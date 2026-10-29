@@ -133,6 +133,22 @@ export const helpTopics: HelpTopic[] = [
       path: '/teams',
    },
    {
+      id: 'project-docs',
+      title: [
+         'Project Docs: FDS, TDS & document tree',
+         'Tài liệu dự án (Docs): FDS, TDS & cây tài liệu',
+      ],
+      meaning: [
+         'The Docs tab keeps a project’s documents in one tree: project → module → feature → bugs & changes. Each document has a type (FDS functional spec, TDS technical design, ADR decision, RCA root cause, GUIDE, OTHER) and a review status (Draft, In review, Approved).',
+         'Tab Docs gom tài liệu của dự án vào một cây: dự án → module → tính năng → bugs & thay đổi. Mỗi tài liệu có loại (FDS đặc tả chức năng, TDS thiết kế kỹ thuật, ADR quyết định, RCA nguyên nhân lỗi, GUIDE hướng dẫn, OTHER) và trạng thái duyệt (Nháp, Đang duyệt, Đã duyệt).',
+      ],
+      steps: [
+         'Open Projects → a project → Docs. The first time, choose Standard structure (or Create standard structure on an empty tab): it adds the project folder with 00 · Tổng quan and 99 · Vận hành, and is safe to run again. Select a folder in the tree, then New folder: name it and pick Module, Feature or Bugs & changes (for example Module "Documents" → Feature "Tree"). Select the feature and choose New document: FDS and TDS start from a template with sections and a Mermaid diagram; other types start blank. In the editor, write Markdown with live preview, set the type and status at the top, and use the table of contents for long documents; ```mermaid code blocks render as diagrams. Use the search box (title and content, accents optional) and the type filter to find documents. Documents linked to the project but filed elsewhere appear under Linked to this project, and a task shows its linked documents under Related documents.',
+         'Mở Projects → chọn dự án → Docs. Lần đầu, bấm Khung chuẩn (hoặc Tạo khung thư mục chuẩn khi tab còn trống): hệ thống tạo thư mục dự án kèm 00 · Tổng quan và 99 · Vận hành; bấm lại không tạo trùng. Chọn một thư mục trong cây, rồi bấm Thư mục mới: đặt tên và chọn loại Module, Tính năng hoặc Bugs & thay đổi (ví dụ Module "Tài liệu" → Tính năng "Cây thư mục"). Chọn tính năng và bấm Tài liệu mới: FDS và TDS có sẵn mẫu với các mục và sơ đồ Mermaid; loại khác bắt đầu trống. Trong editor, viết Markdown và xem trước song song, đổi loại và trạng thái ở phía trên, dùng Mục lục cho tài liệu dài; code block ```mermaid hiển thị thành sơ đồ. Dùng ô tìm kiếm (theo tiêu đề và nội dung, không cần gõ dấu) và bộ lọc loại để tìm tài liệu. Tài liệu liên kết với dự án nhưng nằm ở nơi khác hiện trong mục Liên kết với dự án; trang công việc liệt kê tài liệu liên kết trong mục Tài liệu liên quan.',
+      ],
+      path: '/projects',
+   },
+   {
       id: 'comments',
       title: ['Comments & collaboration', 'Bình luận & cộng tác'],
       meaning: [
