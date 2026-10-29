@@ -4,7 +4,6 @@ import { useLocale } from '@/features/shared/use-locale';
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
-import { TextArea } from '@astryxdesign/core/TextArea';
 import { DesignSurface } from '@/components/common/design-surface';
 import { useUiPreferencesStore } from '@/store/ui-preferences-store';
 import { CommentRow } from '@/features/issues/comment-row';
@@ -16,6 +15,7 @@ import { DraftImages } from '@/components/common/markdown/draft-images';
 import { AgentBadge } from '@/features/issues/agent-badge';
 import { mentionOptions, type AgentIdentity } from '@/features/issues/comments-api';
 import {
+   ArrowUp,
    Ban,
    Bell,
    BellOff,
@@ -150,9 +150,48 @@ function EventRow({ activity }: { activity: NativeActivity }) {
    );
 }
 
-export function ActivityFeed({ issueId }: { issueId: string }) {
+type ActivityState = ReturnType<typeof useIssueActivity>;
+
+/**
+ * Change history of an issue, newest first; older pages load at the bottom.
+ * VI: Lịch sử thay đổi của công việc, mới nhất trước; trang cũ hơn tải ở cuối danh sách.
+ */
+export function ActivityEvents({ state }: { state: ActivityState }) {
    const { t } = useLocale();
-   const state = useIssueActivity(issueId);
+   return (
+      <VStack gap={2} className="min-w-0">
+         {state.loading && <Text role="status">{t('loadingActivity')}</Text>}
+         {state.error && (
+            <VStack gap={2}>
+               <Text role="alert">{state.error}</Text>
+               <Button label={t('retryActivity')} onClick={state.retry} />
+            </VStack>
+         )}
+         {[...state.activities].reverse().map((activity) => (
+            <EventRow key={activity.id} activity={activity as NativeActivity} />
+         ))}
+         {state.activityCursor && (
+            <Button
+               label={t('olderActivity')}
+               isLoading={state.paging}
+               clickAction={() => state.loadMore('activities')}
+            />
+         )}
+      </VStack>
+   );
+}
+
+/**
+ * Comments of an issue: the composer first, then top-level comments newest first so the
+ * latest discussion is read without scrolling. Replies stay oldest first under their parent
+ * so a thread reads in order. The feed state is owned by the parent, so switching tabs keeps
+ * the draft and does not reload.
+ * VI: Bình luận của công việc: ô nhập ở đầu, rồi bình luận gốc mới nhất trước để đọc trao đổi
+ * VI: gần nhất mà không cần cuộn. Trả lời giữ thứ tự cũ → mới dưới bình luận gốc để đọc mạch
+ * VI: lạc. State do component cha giữ, nên đổi tab không mất bản nháp và không tải lại.
+ */
+export function CommentsSection({ issueId, state }: { issueId: string; state: ActivityState }) {
+   const { t } = useLocale();
    const submitMode = useUiPreferencesStore((store) => store.commentSubmitMode);
    const { onPaste, uploading } = useImagePaste({
       workspaceId: state.workspaceId,
@@ -184,16 +223,44 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
          current = false;
       };
    }, [state.workspaceId, issueId]);
+   const disabled = state.sending || !state.workspaceId;
+   const canSend = Boolean(state.draft.trim()) && Boolean(state.workspaceId) && !uploading;
+   // The send button and the paste hint sit inside the composer frame, like a chat input.
+   // VI: Nút gửi và dòng gợi ý dán ảnh nằm trong khung ô nhập, giống ô nhập chat.
    const composer = (
-      <TextArea
-         label={t('comment')}
-         value={state.draft}
-         onChange={state.setDraft}
-         onPaste={onPaste}
-         rows={3}
-         placeholder={t('commentPlaceholder')}
-         isDisabled={state.sending || !state.workspaceId}
-      />
+      <div className="rounded-lg border border-input bg-background focus-within:ring-1 focus-within:ring-ring">
+         <textarea
+            aria-label={t('comment')}
+            value={state.draft}
+            onChange={(event) => state.setDraft(event.target.value)}
+            onPaste={onPaste}
+            rows={3}
+            placeholder={t('commentPlaceholder')}
+            disabled={disabled}
+            className="block w-full resize-none bg-transparent px-3 pt-2.5 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60"
+         />
+         <HStack justify="between" vAlign="center" gap={2} className="px-3 pb-2">
+            <Text type="supporting" size="sm">
+               {uploading ? t('uploadingImage') : t('pasteScreenshot')}
+            </Text>
+            <Button
+               label={t('sendComment')}
+               tooltip={t('sendComment')}
+               icon={<ArrowUp className="size-4" />}
+               isIconOnly
+               size="sm"
+               variant="primary"
+               clickAction={state.submit}
+               isLoading={state.sending}
+               isDisabled={!canSend}
+            />
+         </HStack>
+      </div>
+   );
+   const roots = state.comments.filter(
+      (comment) =>
+         !comment.parentCommentId ||
+         !state.comments.some((parent) => parent.id === comment.parentCommentId)
    );
    return (
       <DesignSurface>
@@ -218,7 +285,7 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
          >
             <HStack justify="between" gap={2}>
                <Heading level={4} accessibilityLevel={2}>
-                  {t('activity')}
+                  {t('comments')}
                </Heading>
                <Button
                   label={issue?.isSubscribed ? t('unsubscribe') : t('subscribe')}
@@ -239,79 +306,6 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
                   }}
                />
             </HStack>
-            {state.loading && <Text role="status">{t('loadingActivity')}</Text>}
-            {state.error && (
-               <VStack gap={2}>
-                  <Text role="alert">{state.error}</Text>
-                  <Button label={t('retryActivity')} onClick={state.retry} />
-               </VStack>
-            )}
-            {state.activities.map((activity) => (
-               <EventRow key={activity.id} activity={activity as NativeActivity} />
-            ))}
-            {state.activityCursor && (
-               <Button
-                  label={t('olderActivity')}
-                  isLoading={state.paging}
-                  clickAction={() => state.loadMore('activities')}
-               />
-            )}
-            {state.workspaceId &&
-               state.comments
-                  .filter(
-                     (comment) =>
-                        !comment.parentCommentId ||
-                        !state.comments.some((parent) => parent.id === comment.parentCommentId)
-                  )
-                  .map((comment) => (
-                     <VStack key={comment.id} gap={2}>
-                        {comment.parentCommentId && (
-                           <Text type="supporting">{t('deletedCommentReply')}</Text>
-                        )}
-                        <CommentRow
-                           comment={comment}
-                           workspaceId={state.workspaceId!}
-                           memberNames={memberNames}
-                           onChange={state.changeComment}
-                           onDelete={() => state.deleteComment(comment.id)}
-                           onReply={() => state.setReplyTo(comment)}
-                        />
-                        {state.comments
-                           .filter((reply) => reply.parentCommentId === comment.id)
-                           .map((reply) => (
-                              <VStack
-                                 key={reply.id}
-                                 paddingInlineStart={4}
-                                 className="border-l border-border/60"
-                              >
-                                 <CommentRow
-                                    comment={reply}
-                                    workspaceId={state.workspaceId!}
-                                    memberNames={memberNames}
-                                    onChange={state.changeComment}
-                                    onDelete={() => state.deleteComment(reply.id)}
-                                    onReply={() => state.setReplyTo(comment)}
-                                 />
-                              </VStack>
-                           ))}
-                        {(comment.replyCount ?? 0) >
-                           state.comments.filter((item) => item.parentCommentId === comment.id)
-                              .length && (
-                           <Button
-                              label={`${t('moreReplies')} ${comment.author.name}`}
-                              isLoading={state.paging}
-                              clickAction={() => state.loadMore('comments', comment.id)}
-                           />
-                        )}
-                     </VStack>
-                  ))}
-            {state.commentCursor && (
-               <Button
-                  label={t('olderComments')}
-                  isLoading={state.paging}
-                  clickAction={() => state.loadMore('comments')}
-               />
-            )}
             {state.replyTo && (
                <HStack gap={2}>
                   <Text>
@@ -334,7 +328,6 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
                      onChange={state.setMentionIds}
                      draft={state.draft}
                      onDraftChange={state.setDraft}
-                     disabled={state.sending}
                   >
                      {composer}
                   </CommentMentions>
@@ -349,20 +342,57 @@ export function ActivityFeed({ issueId }: { issueId: string }) {
                   isDisabled={state.sending || uploading}
                />
                {state.submitError && <Text role="alert">{state.submitError}</Text>}
-               <HStack justify="between" gap={2}>
-                  <Text type="supporting">
-                     {uploading ? t('uploadingImage') : t('pasteScreenshot')}
-                  </Text>
-                  <Button
-                     label={t('comment')}
-                     size="sm"
-                     variant="primary"
-                     clickAction={state.submit}
-                     isLoading={state.sending}
-                     isDisabled={!state.draft.trim() || !state.workspaceId || uploading}
-                  />
-               </HStack>
             </VStack>
+            {state.workspaceId &&
+               [...roots].reverse().map((comment) => (
+                  <VStack key={comment.id} gap={2}>
+                     {comment.parentCommentId && (
+                        <Text type="supporting">{t('deletedCommentReply')}</Text>
+                     )}
+                     <CommentRow
+                        comment={comment}
+                        workspaceId={state.workspaceId!}
+                        memberNames={memberNames}
+                        onChange={state.changeComment}
+                        onDelete={() => state.deleteComment(comment.id)}
+                        onReply={() => state.setReplyTo(comment)}
+                     />
+                     {state.comments
+                        .filter((reply) => reply.parentCommentId === comment.id)
+                        .map((reply) => (
+                           <VStack
+                              key={reply.id}
+                              paddingInlineStart={4}
+                              className="border-l border-border/60"
+                           >
+                              <CommentRow
+                                 comment={reply}
+                                 workspaceId={state.workspaceId!}
+                                 memberNames={memberNames}
+                                 onChange={state.changeComment}
+                                 onDelete={() => state.deleteComment(reply.id)}
+                                 onReply={() => state.setReplyTo(comment)}
+                              />
+                           </VStack>
+                        ))}
+                     {(comment.replyCount ?? 0) >
+                        state.comments.filter((item) => item.parentCommentId === comment.id)
+                           .length && (
+                        <Button
+                           label={`${t('moreReplies')} ${comment.author.name}`}
+                           isLoading={state.paging}
+                           clickAction={() => state.loadMore('comments', comment.id)}
+                        />
+                     )}
+                  </VStack>
+               ))}
+            {state.commentCursor && (
+               <Button
+                  label={t('olderComments')}
+                  isLoading={state.paging}
+                  clickAction={() => state.loadMore('comments')}
+               />
+            )}
          </VStack>
       </DesignSurface>
    );

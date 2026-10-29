@@ -112,6 +112,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Changed
 
+- The task page is split into Overview, Activity and Attachments tabs (the open tab is kept in `?tab=`). Comments stay in Overview with the composer on top and the newest comment first; replies keep their order under the comment they answer. The send button now sits inside the comment box and the separate @ button is gone — type `@` to mention someone. (DTD-55)
+  VI: Trang task được chia thành các tab Tổng quan, Hoạt động và Tệp đính kèm (tab đang mở được lưu trong `?tab=`). Bình luận nằm ở Tổng quan với ô nhập ở đầu và bình luận mới nhất trước; trả lời vẫn giữ thứ tự dưới bình luận gốc. Nút gửi giờ nằm trong khung ô bình luận và không còn nút @ riêng — gõ `@` để mention. (DTD-55)
+
 - The Docs preview shows the document's version and a status picker (Draft → In review → Approved), so a document can be released without opening the editor. Its SharePoint state is always visible: published version with a link, waiting, the last error, or "SharePoint not set up" with a shortcut to the folder settings. Published documents carry a green cloud in the tree. (DTD-19, #50)
   VI: Khung xem trước trong Docs hiển thị version của tài liệu và ô chọn trạng thái (Nháp → Đang duyệt → Đã duyệt), nên duyệt tài liệu không cần mở editor. Trạng thái SharePoint luôn hiện: version đã phát hành kèm link, đang chờ, lỗi gần nhất, hoặc "Chưa cấu hình SharePoint" kèm lối tắt tới phần cấu hình thư mục. Tài liệu đã phát hành có biểu tượng đám mây xanh trên cây. (DTD-19)
 
