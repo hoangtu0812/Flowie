@@ -63,6 +63,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
+- Closing a document opened from a link (search, a task, a shared URL) returns to the page it was opened from, or to Docs when it was opened in a new tab, instead of always going to Search. (DTD-54)
+  VI: Đóng tài liệu mở từ link (tìm kiếm, task, URL được chia sẻ) sẽ quay về trang đã mở nó, hoặc về Docs nếu mở ở tab mới, thay vì luôn chuyển sang Tìm kiếm. (DTD-54)
+
 - Load-error screens show a centred icon, the message and a small Retry button instead of a Retry bar stretched across the page. (DTD-19, #46)
   VI: Màn hình lỗi tải dữ liệu hiển thị icon, thông báo và nút Thử lại nhỏ ở giữa, thay cho nút Thử lại kéo dài hết trang. (DTD-19)
 
