@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/sidebar';
 import { usePathname } from 'next/navigation';
 import { BackToApp } from '@/components/layout/sidebar/back-to-app';
+import { SearchButton } from '@/components/layout/sidebar/search-button';
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
    const pathname = usePathname();
@@ -27,6 +28,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <Sidebar collapsible="offcanvas" className="border-r border-sidebar-border" {...props}>
          <SidebarHeader className="border-b border-sidebar-border/70 px-3 py-2">
             {isSettings ? <BackToApp /> : <OrgSwitcher />}
+            <SearchButton />
          </SidebarHeader>
          <SidebarContent className="gap-0 py-2">
             {isSettings ? (
