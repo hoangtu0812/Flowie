@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { TriangleAlert } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import type { LiveDocument } from '@/components/common/teams/use-live-team';
 import { useMessages } from '@/features/shared/use-messages';
@@ -11,14 +12,18 @@ import { loadIssueDocuments } from './project-docs-api';
 
 /**
  * Documents linked to the issue (for example its FDS/TDS), each opening the document page.
- * Renders nothing while loading, on error or when no document is linked.
- * VI: Tài liệu liên kết với issue (ví dụ FDS/TDS), mỗi mục mở trang tài liệu. Không hiển thị
- * VI: gì khi đang tải, khi lỗi hoặc khi chưa có tài liệu liên kết.
+ * A project task without a linked FDS or TDS shows a warning with a link to the project's
+ * Docs tab (the agreed "warn first" level; nothing is blocked). Renders nothing while
+ * loading or on error, and nothing for a task outside a project with no documents.
+ * VI: Tài liệu liên kết với issue (ví dụ FDS/TDS), mỗi mục mở trang tài liệu. Task thuộc dự
+ * VI: án mà chưa liên kết FDS hoặc TDS sẽ hiện cảnh báo kèm link tới tab Docs của dự án (mức
+ * VI: "cảnh báo trước" đã thống nhất; không chặn gì). Không hiển thị khi đang tải hoặc lỗi,
+ * VI: và không hiển thị với task ngoài dự án chưa có tài liệu.
  */
-export function IssueDocuments({ issueId }: { issueId: string }) {
+export function IssueDocuments({ issueId, projectId }: { issueId: string; projectId?: string }) {
    const tx = useMessages(messages);
    const { orgId } = useParams<{ orgId: string }>();
-   const [documents, setDocuments] = useState<LiveDocument[]>([]);
+   const [documents, setDocuments] = useState<LiveDocument[]>();
 
    useEffect(() => {
       let current = true;
@@ -32,10 +37,22 @@ export function IssueDocuments({ issueId }: { issueId: string }) {
       };
    }, [issueId]);
 
-   if (!documents.length) return null;
+   if (!documents) return null;
+   const missingSpec =
+      projectId && !documents.some((document) => ['FDS', 'TDS'].includes(document.docType ?? ''));
+   if (!documents.length && !missingSpec) return null;
    return (
       <section aria-label={tx('Related documents')} className="space-y-1">
          <h2 className="text-xs font-medium text-muted-foreground">{tx('Related documents')}</h2>
+         {missingSpec && (
+            <p className="flex items-center gap-1.5 px-2 text-xs text-amber-700 dark:text-amber-300">
+               <TriangleAlert className="size-3.5 shrink-0" />
+               {tx('This task has no FDS/TDS yet.')}
+               <Link href={`/${orgId}/project/${projectId}/docs`} className="underline">
+                  {tx('Open Docs')}
+               </Link>
+            </p>
+         )}
          <ul className="space-y-0.5">
             {documents.map((document) => (
                <li key={document.id}>

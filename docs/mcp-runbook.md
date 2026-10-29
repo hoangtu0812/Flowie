@@ -150,6 +150,13 @@ record. Keep test artifacts inside the test workspace.
   ones. `get_document_revision` and `get_document_diff` support review before restoring.
   Current and historical reads expose character offsets for bounded text pages.
   Partial section editing is not a separate tool in this version.
+- `get_feature_docs` returns the FDS/TDS linked to an issue with their content,
+  the project's `module / feature` folders with their FDS/TDS, and a `warning`
+  while the issue has none. `upsert_feature_doc` creates missing project,
+  module and feature folders, creates or updates the feature's FDS or TDS (a new
+  revision), appends a change-log row naming the issue and `changeSummary`, and
+  links the document to the issue. It needs `documents:write` with
+  `documents:read` and `issues:read`, and the issue must belong to a project.
 
 Write tools also require their corresponding read scopes so an update response
 cannot bypass a read restriction. Comment writes require issue and comment reads.

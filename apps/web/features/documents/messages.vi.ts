@@ -84,6 +84,8 @@ export const messages = {
    'Related documents': 'Tài liệu liên quan',
    'Diagram could not be rendered.': 'Không vẽ được sơ đồ.',
    'Upload PDF': 'Tải PDF lên',
+   'This task has no FDS/TDS yet.': 'Task này chưa có FDS/TDS.',
+   'Open Docs': 'Mở Docs',
    'File uploaded.': 'Đã tải file lên.',
    'Download': 'Tải xuống',
    'Open in new tab': 'Mở tab mới',

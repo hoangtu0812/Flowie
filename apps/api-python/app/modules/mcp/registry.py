@@ -28,6 +28,14 @@ DEFINITIONS = (
         "revision",
     ),
     ToolDefinition(
+        "get_feature_docs",
+        "Read the FDS/TDS linked to an issue (with content), the module/feature folders of its project with their FDS/TDS, and a warning when the issue has no FDS/TDS yet.",
+        c.IssueInput,
+        "documents:read",
+        "feature_docs",
+        extra_scopes=("issues:read",),
+    ),
+    ToolDefinition(
         "get_document_diff",
         "Compare an authorized historical document revision with another revision or the current document.",
         c.DocumentDiffInput,
@@ -290,6 +298,15 @@ DEFINITIONS = (
         "update_document",
         True,
         extra_scopes=("documents:read",),
+    ),
+    ToolDefinition(
+        "upsert_feature_doc",
+        "Create or update the FDS or TDS of a module/feature in the issue's project document tree (missing folders are created), add a change-log row for the issue and link the document to it. Call get_feature_docs first and send the full updated content.",
+        c.UpsertFeatureDocTool,
+        "documents:write",
+        "upsert_feature_doc",
+        True,
+        extra_scopes=("documents:read", "issues:read"),
     ),
     ToolDefinition(
         "link_document",

@@ -95,7 +95,7 @@ def changelog_editor(seen):
     return edit
 
 
-REVIEW = {"plan": "Fixture plan.", "targetDate": date.today().isoformat()}
+REVIEW = {"plan": "Fixture plan.", "targetDate": date.today().isoformat(), "featureDocs": []}
 
 
 def runner_provider():
@@ -127,6 +127,10 @@ def client_fixture(repository_url):
             }
         if name == "get_issue_context":
             return {"comments": []}
+        if name == "get_feature_docs":
+            return {"linked": [], "features": [], "warning": "No FDS/TDS is linked."}
+        if name == "upsert_feature_doc":
+            return {"title": f"{args['docType']} · {args['feature']}", "version": 2}
         if name == "claim_issue":
             return {
                 "id": "fixture-run",
@@ -581,7 +585,7 @@ def test_checked_review_requires_plan_and_near_future_date():
     today = date(2026, 10, 27)
     assert checked_review(
         {"plan": "Do it.", "targetDate": "2026-10-30"}, "Fixture", today
-    ) == {"plan": "Do it.", "targetDate": "2026-10-30"}
+    ) == {"plan": "Do it.", "targetDate": "2026-10-30", "featureDocs": []}
     for value in (
         {"plan": "Do it.", "targetDate": "2026-10-26"},
         {"plan": "Do it.", "targetDate": (today + timedelta(days=366)).isoformat()},
@@ -591,6 +595,65 @@ def test_checked_review_requires_plan_and_near_future_date():
     ):
         with pytest.raises(RuntimeError):
             checked_review(value, "Fixture", today)
+
+
+def test_checked_review_validates_feature_doc_drafts():
+    today = date(2026, 10, 27)
+    draft = {
+        "module": " Docs ",
+        "feature": "Tree",
+        "docType": "FDS",
+        "content": "# FDS",
+        "changeSummary": "Adds preview.",
+    }
+    value = {"plan": "Do it.", "targetDate": "2026-10-30", "featureDocs": [draft]}
+    assert checked_review(value, "Fixture", today)["featureDocs"][0]["module"] == "Docs"
+    for bad in ({**draft, "docType": "ADR"}, {**draft, "content": ""}, "text"):
+        with pytest.raises(RuntimeError):
+            checked_review({**value, "featureDocs": [bad]}, "Fixture", today)
+    with pytest.raises(RuntimeError):
+        checked_review({**value, "featureDocs": [draft] * 5}, "Fixture", today)
+
+
+def test_reviewed_feature_docs_are_saved_before_the_plan_comment(tmp_path):
+    config = fixture_repository(tmp_path)
+    client, provider, seen = client_fixture(config.repository_url), runner_provider(), {}
+    draft = {
+        "module": "Docs",
+        "feature": "Tree",
+        "docType": "FDS",
+        "content": "# FDS",
+        "changeSummary": "Adds preview.",
+    }
+    provider.review.return_value = {**REVIEW, "featureDocs": [draft, {**draft, "docType": "TDS"}]}
+    provider.execute.side_effect = changelog_editor(seen)
+    original = client.call.side_effect
+
+    async def call(name, args):
+        if name == "upsert_feature_doc" and args["docType"] == "TDS":
+            raise RuntimeError("Flowie tool upsert_feature_doc failed.")
+        return await original(name, args)
+
+    client.call.side_effect = call
+    result = asyncio.run(execute(client, config, "issue", provider))
+    names = [c.args[0] for c in client.call.call_args_list]
+    assert names.index("upsert_feature_doc") < names.index("add_comment")
+    comment = next(c.args[1] for c in client.call.call_args_list if c.args[0] == "add_comment")
+    # The failed TDS is a warning: the run still reaches review with the FDS recorded.
+    assert "- FDS · Tree v2" in comment["content"]
+    assert "⚠ TDS · Tree was not saved" in comment["content"]
+    assert result["state"] == "AWAITING_REVIEW"
+    reported = next(c.args[1] for c in client.call.call_args_list if c.args[0] == "report_run_result")
+    assert "FDS · Tree v2" in str(reported)
+
+
+def test_review_without_drafts_repeats_the_missing_docs_warning(tmp_path):
+    config = fixture_repository(tmp_path)
+    client, provider, seen = client_fixture(config.repository_url), runner_provider(), {}
+    provider.execute.side_effect = changelog_editor(seen)
+    asyncio.run(execute(client, config, "issue", provider))
+    comment = next(c.args[1] for c in client.call.call_args_list if c.args[0] == "add_comment")
+    assert "⚠ No FDS/TDS is linked." in comment["content"]
 
 
 def test_review_runs_providers_without_write_access(tmp_path):
