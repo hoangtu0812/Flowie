@@ -6,8 +6,8 @@ import { useIssuesStore } from '@/store/issues-store';
 import { useViewStore } from '@/store/view-store';
 import { useCreateIssueStore } from '@/store/create-issue-store';
 import { cn } from '@/lib/utils';
-import { Plus } from 'lucide-react';
-import { FC, ReactNode, useRef } from 'react';
+import { ChevronDown, Plus } from 'lucide-react';
+import { FC, ReactNode, useRef, useState } from 'react';
 import { useDrop } from 'react-dnd';
 import { AnimatePresence, motion } from 'motion/react';
 import { Button } from '../../ui/button';
@@ -38,6 +38,18 @@ export function GroupIssues({ group, issues, count }: GroupIssuesProps) {
    const { viewType } = useViewStore();
    const isViewTypeGrid = viewType === 'grid';
    const { openModal } = useCreateIssueStore();
+   // List groups collapse from their header row; the state is per mounted group
+   // (keyed by group id upstream), starts expanded and is not persisted.
+   // VI: Nhóm ở chế độ List thu gọn từ dòng tiêu đề; state gắn với từng nhóm đang
+   // hiển thị (key theo id nhóm ở component cha), mặc định mở và không được lưu lại.
+   const [collapsed, setCollapsed] = useState(false);
+   const groupLabel = (
+      <>
+         {group.icon}
+         <span className="text-sm font-medium">{group.name}</span>
+         <span className="text-sm text-muted-foreground">{count}</span>
+      </>
+   );
 
    return (
       <div
@@ -64,11 +76,29 @@ export function GroupIssues({ group, issues, count }: GroupIssuesProps) {
                   backgroundColor: isViewTypeGrid ? `${group.color}10` : `${group.color}08`,
                }}
             >
-               <div className="flex items-center gap-2">
-                  {group.icon}
-                  <span className="text-sm font-medium">{group.name}</span>
-                  <span className="text-sm text-muted-foreground">{count}</span>
-               </div>
+               {isViewTypeGrid ? (
+                  <div className="flex items-center gap-2">{groupLabel}</div>
+               ) : (
+                  // The whole row except "+" is the toggle, so it is easy to hit; "+" stays
+                  // a sibling because a button cannot contain another button.
+                  // VI: Cả dòng (trừ nút "+") là nút thu gọn để dễ bấm; "+" là phần tử anh em
+                  // vì button không được lồng button khác.
+                  <button
+                     type="button"
+                     aria-expanded={!collapsed}
+                     aria-label={`${group.name}, ${count} ${count === 1 ? 'issue' : 'issues'}`}
+                     onClick={() => setCollapsed((value) => !value)}
+                     className="flex flex-1 h-full items-center gap-2 -ml-5 text-left"
+                  >
+                     <ChevronDown
+                        className={cn(
+                           'size-3.5 text-muted-foreground transition-transform',
+                           collapsed && '-rotate-90'
+                        )}
+                     />
+                     {groupLabel}
+                  </button>
+               )}
 
                <Button
                   aria-label={`Create issue in ${group.name}`}
@@ -86,11 +116,13 @@ export function GroupIssues({ group, issues, count }: GroupIssuesProps) {
          </div>
 
          {viewType === 'list' ? (
-            <div className="space-y-0">
-               {issues.map((issue) => (
-                  <IssueLine key={issue.id} issue={issue} layoutId={true} />
-               ))}
-            </div>
+            !collapsed && (
+               <div className="space-y-0">
+                  {issues.map((issue) => (
+                     <IssueLine key={issue.id} issue={issue} layoutId={true} />
+                  ))}
+               </div>
+            )
          ) : (
             <IssueGridList issues={issues} status={group.status} />
          )}
