@@ -6,12 +6,11 @@ import { useEffect, useState } from 'react';
 import { Button } from '@astryxdesign/core/Button';
 import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
 import { HStack, Layout, LayoutContent, LayoutFooter, VStack } from '@astryxdesign/core/Layout';
-import { Grid } from '@astryxdesign/core/Grid';
 import { Text } from '@astryxdesign/core/Text';
 import { TextInput } from '@astryxdesign/core/TextInput';
-import { TextArea } from '@astryxdesign/core/TextArea';
 import { DesignSurface } from '@/components/common/design-surface';
 import { MarkdownPreview } from '@/components/common/markdown/markdown-preview';
+import { MarkdownEditor } from '@/components/common/markdown/markdown-editor';
 import { useDocumentDraft, type DocumentDraft } from '@/features/documents/use-document-draft';
 import type { LiveDocument } from './use-live-team';
 import { DocumentHistory } from '@/features/documents/document-history';
@@ -282,27 +281,18 @@ export function MarkdownDocumentEditor({
                               <MarkdownPreview content={content} />
                            </VStack>
                         ) : (
-                           <Grid columns={{ minWidth: 320, max: 2, repeat: 'fit' }} gap={6}>
-                              <VStack gap={3}>
-                                 <TextInput
-                                    label={tx('Document title')}
-                                    value={title}
-                                    onChange={(value) => state.update({ title: value, content })}
-                                    isRequired
-                                 />
-                                 <TextArea
-                                    label={tx('Markdown content')}
-                                    value={content}
-                                    onChange={(value) => state.update({ title, content: value })}
-                                    rows={18}
-                                    hasSpellCheck={false}
-                                 />
-                              </VStack>
-                              <VStack as="article" gap={4}>
-                                 <Text type="label">{tx('Preview')}</Text>
-                                 <MarkdownPreview content={content} />
-                              </VStack>
-                           </Grid>
+                           <VStack gap={3}>
+                              <TextInput
+                                 label={tx('Document title')}
+                                 value={title}
+                                 onChange={(value) => state.update({ title: value, content })}
+                                 isRequired
+                              />
+                              <MarkdownEditor
+                                 value={content}
+                                 onChange={(value) => state.update({ title, content: value })}
+                              />
+                           </VStack>
                         )}
                      </VStack>
                   </LayoutContent>
