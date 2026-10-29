@@ -57,6 +57,7 @@ export type ReportChange = {
    title: string;
    occurredAt: string;
    kind: string;
+   actor: { id: string; name: string; avatarUrl: string | null } | null;
 };
 export function localToday(timezone: string) {
    const parts = new Intl.DateTimeFormat('en-CA', {

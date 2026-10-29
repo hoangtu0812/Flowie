@@ -6,6 +6,11 @@ import { Button } from '@astryxdesign/core/Button';
 import { VStack, HStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { List, ListItem } from '@astryxdesign/core/List';
+import { StatusDot } from '@astryxdesign/core/StatusDot';
+import Link from 'next/link';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useAccountTime } from '@/features/shared/account-time';
+import { parseInstant, relativeTime } from '@/lib/time';
 import { Grid } from '@astryxdesign/core/Grid';
 import { Collapsible } from '@astryxdesign/core/Collapsible';
 import { usePagedResource } from '@/features/shared/use-paged-resource';
@@ -131,6 +136,21 @@ export function ReportBreakdowns({
       </Grid>
    );
 }
+const KIND_DOT = { CREATED: 'neutral', COMPLETED: 'success', REOPENED: 'warning' } as const;
+const KIND_VERB = { CREATED: 'created', COMPLETED: 'completed', REOPENED: 'reopened' } as const;
+
+/**
+ * Lists one day's captured issue events newest first: "<actor> <verb> <issue link>" with the
+ * issue title truncated below, so the link stays visible on narrow screens, and a relative time
+ * whose tooltip is the full instant in the report time zone. The day is the heading, so rows are
+ * not grouped again. Events without an actor (system changes or deleted users) are attributed
+ * to Flowie, as in the issue activity feed.
+ * VI: Liệt kê sự kiện issue của một ngày, mới nhất trước: "<người> <động từ> <liên kết issue>",
+ * VI: tiêu đề issue cắt gọn ở dòng dưới để liên kết luôn hiện trên màn hình hẹp, và thời gian tương
+ * VI: đối có tooltip là thời điểm đầy đủ theo múi giờ báo cáo. Ngày đã là tiêu đề nên không gom
+ * VI: nhóm lại. Sự kiện không có người thực hiện (hệ thống hoặc user đã xóa) ghi là Flowie, giống
+ * VI: activity feed của issue.
+ */
 export function DayChanges({
    workspace,
    org,
@@ -144,7 +164,8 @@ export function DayChanges({
    day: string;
    onClose: () => void;
 }) {
-   const tx = useMessages(messages);
+   const tx = useMessages(messages),
+      { locale } = useAccountTime();
 
    const body = JSON.stringify({ ...query, fromDate: day, toDate: day });
    const changes = usePagedResource<ReportChange>(
@@ -152,33 +173,68 @@ export function DayChanges({
       undefined,
       body
    );
+   const fullTime = new Intl.DateTimeFormat(locale, {
+      dateStyle: 'medium',
+      timeStyle: 'medium',
+      timeZone: query.timezone,
+   });
+   // The day is a calendar date, so it is formatted in UTC to avoid shifting it a day.
+   // VI: Ngày là ngày lịch nên định dạng theo UTC để không bị lệch sang ngày khác.
+   const heading = new Intl.DateTimeFormat(locale, { dateStyle: 'full', timeZone: 'UTC' }).format(
+      new Date(`${day}T00:00:00Z`)
+   );
    return (
-      <VStack gap={3} width="100%">
-         <HStack gap={2} wrap="wrap">
-            <Heading level={2}>
-               {tx('Captured activity:')} {day}
-            </Heading>
-            <Button label={tx('Close day activity')} onClick={onClose} />
+      <VStack gap={2} width="100%">
+         <HStack gap={2} wrap="wrap" align="center" justify="between">
+            <Heading level={2}>{tx('Activity · {day}', { day: heading })}</Heading>
+            <Button label={tx('Close day activity')} size="sm" variant="ghost" onClick={onClose} />
          </HStack>
          <List hasDividers>
-            {changes.items.map((row) => (
-               <ListItem
-                  key={row.id}
-                  label={`${row.identifier}: ${row.title}`}
-                  description={
-                     <VStack gap={2}>
-                        <Text>{`${row.kind} · ${new Date(row.occurredAt).toLocaleString(undefined, { timeZone: query.timezone })}`}</Text>
-                        <Button
-                           label={tx('Open {value0}', { value0: row.identifier })}
-                           href={`/${org}/issue/${row.identifier}`}
-                        />
-                     </VStack>
-                  }
-               />
-            ))}
+            {changes.items.map((row) => {
+               const at = parseInstant(row.occurredAt),
+                  name = row.actor?.name ?? 'Flowie',
+                  kind = row.kind as keyof typeof KIND_VERB;
+               return (
+                  <ListItem
+                     key={row.id}
+                     startContent={
+                        <Avatar className="size-6">
+                           <AvatarImage src={row.actor?.avatarUrl ?? undefined} alt="" />
+                           <AvatarFallback>{name[0]}</AvatarFallback>
+                        </Avatar>
+                     }
+                     label={
+                        <Text>
+                           <Text weight="medium">{name}</Text> {tx(KIND_VERB[kind])}{' '}
+                           <Link
+                              href={`/${org}/issue/${row.identifier}`}
+                              className="whitespace-nowrap font-medium underline-offset-2 hover:underline"
+                           >
+                              {row.identifier}
+                           </Link>
+                        </Text>
+                     }
+                     description={
+                        <Text type="supporting" color="secondary" className="block truncate">
+                           {row.title}
+                        </Text>
+                     }
+                     endContent={
+                        <HStack gap={2} align="center" className="shrink-0">
+                           <StatusDot variant={KIND_DOT[kind]} label={tx(KIND_VERB[kind])} />
+                           <Text type="supporting" color="secondary">
+                              <time dateTime={at.toISOString()} title={fullTime.format(at)}>
+                                 {relativeTime(row.occurredAt, Date.now(), locale)}
+                              </time>
+                           </Text>
+                        </HStack>
+                     }
+                  />
+               );
+            })}
          </List>
          {!changes.loading && !changes.error && !changes.items.length && (
-            <Text>{tx('No captured activity on this day.')}</Text>
+            <Text color="secondary">{tx('No captured activity on this day.')}</Text>
          )}
          <ResourcePagination count={changes.items.length} {...changes} label={tx('day events')} />
       </VStack>

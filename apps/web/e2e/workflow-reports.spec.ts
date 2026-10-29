@@ -95,10 +95,11 @@ test('workflow reports use captured events, scoped filters, day drilldown and mo
          .getByRole('listitem')
          .filter({ has: page.getByText(today, { exact: true }) });
       await day.click();
-      await expect(
-         page.getByRole('heading', { name: 'Captured activity: ' + today, exact: true })
-      ).toBeVisible();
+      await expect(page.getByRole('heading', { name: /^Activity · / })).toBeVisible();
       await expect(page.getByText('4 of 4 day events loaded', { exact: true })).toBeVisible();
+      await expect(
+         page.getByRole('listitem').filter({ hasText: ' created ' }).getByRole('link').first()
+      ).toHaveAttribute('href', /\/issue\//);
       await page.screenshot({
          path: `test-results/workflow-reports-${browserName}.png`,
          animations: 'disabled',
