@@ -37,11 +37,25 @@ async def dashboard_report(db, workspace, user, query, *, now=None):
         SELECT * FROM project_groups ORDER BY created+completed DESC,id LIMIT 8
     ), effort_top AS (
         SELECT * FROM project_groups ORDER BY estimated+actual DESC,id LIMIT 8
+    ), member_groups AS (
+        -- Current status per assignee over readable scoped issues only; canceled work is excluded.
+        -- VI: Trạng thái hiện tại theo người được giao, chỉ trên issue đọc được; bỏ issue đã hủy.
+        SELECT COALESCE(i.assignee_id,'none') AS id,i.assignee_id,u.name,
+            COUNT(*) FILTER(WHERE i.category NOT IN ('STARTED','COMPLETED')) AS todo,
+            COUNT(*) FILTER(WHERE i.category='STARTED') AS started,
+            COUNT(*) FILTER(WHERE i.category='COMPLETED') AS done,
+            COALESCE(SUM(i.estimated_effort),0) AS estimated,COALESCE(SUM(i.actual_effort),0) AS actual
+        FROM scoped i LEFT JOIN users u ON u.id=i.assignee_id
+        WHERE i.category<>'CANCELED' GROUP BY i.assignee_id,u.name
+    ), member_top AS (
+        SELECT * FROM member_groups ORDER BY todo+started+done DESC,name,id LIMIT 10
     ) SELECT
         COALESCE((SELECT json_agg(effort ORDER BY day) FROM effort),'[]'::json) AS effort,
         COALESCE((SELECT json_agg(throughput_top ORDER BY created+completed DESC,id) FROM throughput_top),'[]'::json) AS "projectThroughput",
         COALESCE((SELECT json_agg(effort_top ORDER BY estimated+actual DESC,id) FROM effort_top),'[]'::json) AS "projectEffort",
         (SELECT COUNT(*) FROM project_groups) AS "projectGroups",
+        COALESCE((SELECT json_agg(member_top ORDER BY todo+started+done DESC,name,id) FROM member_top),'[]'::json) AS "memberGroups",
+        (SELECT COUNT(*) FROM member_groups) AS "memberCount",
         (SELECT COUNT(*) FROM scoped WHERE estimated_effort IS NOT NULL AND start_date IS NULL) AS "missingEstimatedDates",
         (SELECT COUNT(*) FROM scoped i WHERE actual_effort IS NOT NULL AND NOT EXISTS(
             SELECT 1 FROM latest_completion c WHERE c.issue_id=i.id)) AS "missingActualDates"

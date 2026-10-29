@@ -13,6 +13,7 @@ import {
    Link as LinkIcon,
    MoreHorizontal,
    Settings,
+   Users,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -220,6 +221,14 @@ export function NavTeams() {
                                  <Link href={`/${orgId}/team/${item.identifier}/views`}>
                                     <Layers size={14} />
                                     <span>{tx('Views')}</span>
+                                 </Link>
+                              </SidebarMenuSubButton>
+                           </SidebarMenuSubItem>
+                           <SidebarMenuSubItem>
+                              <SidebarMenuSubButton asChild>
+                                 <Link href={`/${orgId}/team/${item.identifier}/members`}>
+                                    <Users size={14} />
+                                    <span>{tx('Members')}</span>
                                  </Link>
                               </SidebarMenuSubButton>
                            </SidebarMenuSubItem>

@@ -7,6 +7,8 @@ import { useTeamsDisplayStore } from '@/store/teams-display-store';
 import { Box, Check, Play } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { useState } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
 
 interface TeamLineProps {
    team: WorkspaceTeam;
@@ -24,6 +26,10 @@ export default function TeamLine({ team, onJoin }: TeamLineProps) {
    const { displayProperties } = useTeamsDisplayStore();
    const owner = team.members.find((member) => member.role === 'LEAD') ?? team.members[0];
    const [joining, setJoining] = useState(false);
+   const { orgId } = useParams<{ orgId: string }>();
+   // Team pages require membership, so only joined teams link to their overview and members page.
+   // VI: Trang team yêu cầu là thành viên, nên chỉ team đã tham gia mới có link tới Overview và Members.
+   const teamHref = team.joined ? `/${orgId}/team/${team.identifier}` : undefined;
 
    const join = async () => {
       setJoining(true);
@@ -41,7 +47,13 @@ export default function TeamLine({ team, onJoin }: TeamLineProps) {
             <span className="inline-flex size-6 bg-muted/50 items-center justify-center rounded shrink-0 text-sm">
                {team.icon}
             </span>
-            <span className="font-medium truncate">{team.name}</span>
+            {teamHref ? (
+               <Link href={`${teamHref}/overview`} className="font-medium truncate hover:underline">
+                  {team.name}
+               </Link>
+            ) : (
+               <span className="font-medium truncate">{team.name}</span>
+            )}
             <span className="text-xs text-muted-foreground uppercase tracking-wide shrink-0">
                {team.identifier}
             </span>
@@ -89,19 +101,16 @@ export default function TeamLine({ team, onJoin }: TeamLineProps) {
 
          {displayProperties.members && (
             <div className="w-[150px] shrink-0 flex items-center gap-1.5">
-               {team.members.length > 0 && (
-                  <>
-                     <span className="flex -space-x-1.5">
-                        {team.members.slice(0, 6).map((member) => (
-                           <Avatar key={member.id} className="size-5 border-2 border-container">
-                              <AvatarImage src={member.avatarUrl ?? undefined} alt={member.name} />
-                              <AvatarFallback>{member.name[0]}</AvatarFallback>
-                           </Avatar>
-                        ))}
-                     </span>
-                     <span className="text-xs text-muted-foreground">{team.members.length}</span>
-                  </>
+               {team.members.length > 0 && teamHref && (
+                  <Link
+                     href={`${teamHref}/members`}
+                     aria-label={`${team.name} members (${team.members.length})`}
+                     className="flex items-center gap-1.5 rounded hover:bg-muted/50"
+                  >
+                     <MemberStack members={team.members} />
+                  </Link>
                )}
+               {team.members.length > 0 && !teamHref && <MemberStack members={team.members} />}
             </div>
          )}
 
@@ -135,5 +144,21 @@ export default function TeamLine({ team, onJoin }: TeamLineProps) {
             </div>
          )}
       </div>
+   );
+}
+
+function MemberStack({ members }: { members: WorkspaceTeam['members'] }) {
+   return (
+      <>
+         <span className="flex -space-x-1.5">
+            {members.slice(0, 6).map((member) => (
+               <Avatar key={member.id} className="size-5 border-2 border-container">
+                  <AvatarImage src={member.avatarUrl ?? undefined} alt={member.name} />
+                  <AvatarFallback>{member.name[0]}</AvatarFallback>
+               </Avatar>
+            ))}
+         </span>
+         <span className="text-xs text-muted-foreground">{members.length}</span>
+      </>
    );
 }

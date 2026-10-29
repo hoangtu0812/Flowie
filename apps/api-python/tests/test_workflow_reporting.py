@@ -207,6 +207,20 @@ async def verify_report():
             assert dashboard["projectThroughput"][0]["completed"] == 2
             assert dashboard["projectGroups"] == 1
             assert dashboard["missingEstimatedDates"] >= 1
+            assert dashboard["memberCount"] == 2
+            assert [
+                (
+                    row["assignee_id"],
+                    row["name"],
+                    row["todo"],
+                    row["started"],
+                    row["done"],
+                )
+                for row in dashboard["memberGroups"]
+            ] == [
+                (user["id"], "Reporting owner", 98, 0, 0),
+                (None, None, 52, 1, 2),
+            ]
             changes = await change_page(
                 db, workspace, user, query, "report-secret", limit=50, now=asof
             )

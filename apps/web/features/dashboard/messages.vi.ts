@@ -58,4 +58,15 @@ export const messages = {
    'Show daily activity': 'Xem hoạt động ngày',
    'Activity day': 'Ngày hoạt động',
    'Click a slice to focus the dashboard.': 'Chọn trạng thái để lọc dashboard.',
+   'Issues by member': 'Công việc theo thành viên',
+   'Current status of issues per assignee in this scope.':
+      'Trạng thái hiện tại của công việc theo người được giao trong phạm vi này.',
+   'Current status of issues per assignee. Top {shown} of {total} members.':
+      'Trạng thái hiện tại của công việc theo người được giao. {shown} trên {total} thành viên nhiều việc nhất.',
+   'Unassigned': 'Chưa giao',
+   'To do': 'Chưa làm',
+   'In progress': 'Đang làm',
+   'No assigned work in this scope.': 'Không có công việc trong phạm vi này.',
+   'Effort: {estimated} estimated · {actual} actual':
+      'Công sức: {estimated} ước tính · {actual} thực tế',
 } as const;
