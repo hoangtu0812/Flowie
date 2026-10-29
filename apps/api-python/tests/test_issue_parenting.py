@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
-from app.domains.native_issues import list_sub_issues
+from app.domains.native_issues import archive_issue, get_issue, list_sub_issues
 from app.modules.work_items.contracts import CreateIssueInput, UpdateIssueInput
 from app.modules.work_items.issues import create_issue, update_issue
 
@@ -142,6 +142,33 @@ async def verify_issue_parenting():
                 assert error.value.status_code == 400
                 await second.rollback()
             assert await parent_of(p) == q["id"] and await parent_of(q) is None
+
+            # The descendant tree spans every level; counts and archive follow the hierarchy.
+            goal = await new_issue("Goal")
+            step = await new_issue("Step", parent=goal["id"])
+            leaf = await new_issue("Leaf", parent=step["id"])
+            await new_issue("Leaf 2", parent=step["id"])
+            tree = (await list_sub_issues(goal["id"], workspace, owner, db, descendants=True))["data"]
+            assert len(tree) == 3 and step["id"] in {row["id"] for row in tree}
+            assert {row["parentIssueId"] for row in tree} == {goal["id"], step["id"]}
+            assert await children(goal) == [step["id"]]
+            counted = (await get_issue(step["id"], workspace, owner, db))["data"]
+            assert (counted["subIssueCount"], counted["completedSubIssueCount"]) == (2, 0)
+            await db.commit()
+
+            # Archiving without the flag keeps children; an archived leaf drops out of the tree.
+            await archive_issue(leaf["id"], workspace, owner, db)
+            remaining = await children(step)
+            assert len(remaining) == 1
+            archived_ids = (await archive_issue(
+                goal["id"], workspace, owner, db, includeSubIssues=True
+            ))["data"]["archivedIds"]
+            assert archived_ids == [goal["id"], step["id"], remaining[0]]
+            active = (await db.execute(
+                text("SELECT count(*) FROM issues WHERE id = ANY(CAST(:ids AS text[])) AND archived_at IS NULL"),
+                {"ids": archived_ids},
+            )).scalar_one()
+            assert active == 0
         finally:
             await db.rollback()
             await db.execute(text("DELETE FROM workspaces WHERE id=:id"), {"id": workspace})

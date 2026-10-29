@@ -11,6 +11,7 @@ import {
    AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
    Dialog,
    DialogContent,
@@ -78,6 +79,9 @@ export function IssueActionDialog() {
    } = useIssuesStore();
    const [value, setValue] = useState('');
    const [saving, setSaving] = useState(false);
+   // Archiving sub-issues along with the parent is opt-in for every dialog opening.
+   // VI: Archive kèm sub-issue là lựa chọn chủ động, đặt lại mỗi lần mở hộp thoại.
+   const [withSubIssues, setWithSubIssues] = useState(false);
    const [error, setError] = useState<string>();
 
    const issue = issueId ? getIssueById(issueId) : undefined;
@@ -181,8 +185,9 @@ export function IssueActionDialog() {
       setSaving(true);
       setError(undefined);
       try {
-         await archiveIssue(issue.id);
-         toast.success('Issue archived');
+         await archiveIssue(issue.id, withSubIssues);
+         toast.success(withSubIssues ? 'Issue and sub-issues archived' : 'Issue archived');
+         setWithSubIssues(false);
          close();
       } catch {
          setError('Could not archive issue.');
@@ -294,7 +299,14 @@ export function IssueActionDialog() {
                </form>
             </DialogContent>
          </Dialog>
-         <AlertDialog open={kind === 'archive'} onOpenChange={(open) => !open && close()}>
+         <AlertDialog
+            open={kind === 'archive'}
+            onOpenChange={(open) => {
+               if (open) return;
+               setWithSubIssues(false);
+               close();
+            }}
+         >
             <AlertDialogContent>
                <AlertDialogHeader>
                   <AlertDialogTitle>Archive {issue?.identifier ?? 'issue'}?</AlertDialogTitle>
@@ -302,6 +314,18 @@ export function IssueActionDialog() {
                      The issue will be removed from active work while its history is preserved.
                   </AlertDialogDescription>
                </AlertDialogHeader>
+               {Boolean(issue?.subIssueCount) && (
+                  <Label className="flex items-center gap-2 text-sm font-normal">
+                     <Checkbox
+                        checked={withSubIssues}
+                        onCheckedChange={(checked) => setWithSubIssues(checked === true)}
+                        disabled={saving}
+                     />
+                     This issue has {issue?.subIssueCount} sub-issue
+                     {issue?.subIssueCount === 1 ? '' : 's'}. Also archive them and their own
+                     sub-issues.
+                  </Label>
+               )}
                {error && <p className="text-sm text-destructive">{error}</p>}
                <AlertDialogFooter>
                   <AlertDialogCancel disabled={saving}>Cancel</AlertDialogCancel>

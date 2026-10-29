@@ -13,10 +13,23 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useIssuesStore } from '@/store/issues-store';
 import { authenticatedFetch } from '@/lib/workspaces';
-import { Circle, CircleCheck, CircleDashed, CircleX, ListPlus, Plus } from 'lucide-react';
+import { directProgress, issueTree } from '@/lib/issue-tree';
+import {
+   ChevronRight,
+   ChevronsDownUp,
+   ChevronsUpDown,
+   Circle,
+   CircleCheck,
+   CircleDashed,
+   CircleX,
+   ListPlus,
+   Plus,
+} from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { AssigneeUser } from '../assignee-user';
+import { IssueDateCell } from '../issue-inline-cells';
 import type { User } from '@/mock-data/users';
 import { IssueSearchDialog } from './issue-search-dialog';
 
@@ -26,6 +39,8 @@ type SubIssue = {
    id: string;
    identifier: string;
    title: string;
+   parentIssueId: string | null;
+   dueDate: string | null;
    status: { id: string; name: string; color: string; category: string };
    assignee: { id: string; name: string; avatarUrl: string | null } | null;
 };
@@ -58,13 +73,42 @@ const StatusIcon = ({ status }: { status: SubIssue['status'] }) => {
    return <Icon className="size-4 shrink-0" style={{ color: status.color }} />;
 };
 
+const ProgressBadge = ({ items }: { items: SubIssue[] | undefined }) => {
+   const { completed, total } = directProgress(items);
+   if (!total) return null;
+   return (
+      <span
+         className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
+         title="Completed / total direct sub-issues"
+      >
+         <span className="h-1.5 w-10 overflow-hidden rounded-full bg-muted">
+            <span
+               className="block h-full bg-green-500"
+               style={{ width: `${(completed / total) * 100}%` }}
+            />
+         </span>
+         {completed}/{total}
+      </span>
+   );
+};
+
+const isOverdue = (subIssue: SubIssue) =>
+   Boolean(subIssue.dueDate) &&
+   !['completed', 'canceled'].includes(subIssue.status.category.toLowerCase()) &&
+   new Date(subIssue.dueDate as string) < new Date(new Date().toDateString());
+
 /**
- * Issue-detail sub-issue area backed by the parent-child Issue relationship. A sub-issue is
- * created new or picked from existing issues ("Add existing"); picking one that has another
- * parent asks to confirm the move. The progress count covers direct children only.
- * VI: Khu sub-issue của chi tiết issue, dựa trên quan hệ cha–con. Sub-issue được tạo mới hoặc
- * VI: chọn từ issue có sẵn ("Add existing"); chọn issue đang có cha khác sẽ hỏi xác nhận chuyển.
- * VI: Bộ đếm tiến độ chỉ tính con trực tiếp.
+ * Issue-detail sub-issue area backed by the parent-child Issue relationship. It loads every level
+ * of descendants and shows them as an indented tree (Redmine style): each row has its own
+ * expand/collapse toggle, status, progress of its direct children, due date and assignee, and the
+ * last two are edited in place through PATCH /issues/{id}. All levels start expanded. A sub-issue
+ * is created new or picked from existing issues ("Add existing"); picking one that has another
+ * parent asks to confirm the move. Progress counts direct children only.
+ * VI: Khu sub-issue của chi tiết issue, dựa trên quan hệ cha–con. Khu này tải mọi cấp hậu duệ và
+ * VI: hiển thị thành cây thụt lề (kiểu Redmine): mỗi hàng có nút mở/thu riêng, trạng thái, tiến độ
+ * VI: theo con trực tiếp, due date và assignee; hai trường cuối sửa ngay tại chỗ qua PATCH
+ * VI: /issues/{id}. Mọi cấp mặc định mở. Sub-issue được tạo mới hoặc chọn từ issue có sẵn ("Add
+ * VI: existing"); chọn issue đang có cha khác sẽ hỏi xác nhận chuyển. Tiến độ chỉ tính con trực tiếp.
  */
 export function IssueSubIssues({
    issueId,
@@ -86,10 +130,12 @@ export function IssueSubIssues({
    const [description, setDescription] = useState('');
    const [saving, setSaving] = useState(false);
    const [error, setError] = useState<string>();
+   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+   const { roots, children } = useMemo(() => issueTree(subIssues), [subIssues]);
 
    const load = useCallback(async () => {
       if (!workspaceId) return;
-      const query = new URLSearchParams({ workspaceId });
+      const query = new URLSearchParams({ workspaceId, descendants: 'true' });
       const response = await authenticatedFetch(`${api}/issues/${issueId}/sub-issues?${query}`);
       if (!response.ok) throw new Error('Could not load sub-issues.');
       const payload = (await response.json()) as { data: SubIssue[] };
@@ -109,6 +155,95 @@ export function IssueSubIssues({
       window.addEventListener('flowie:sub-issues-changed', reload);
       return () => window.removeEventListener('flowie:sub-issues-changed', reload);
    }, [load]);
+
+   const patchSubIssue = async (id: string, body: Record<string, unknown>) => {
+      if (!workspaceId) return false;
+      const response = await authenticatedFetch(
+         `${api}/issues/${id}?${new URLSearchParams({ workspaceId })}`,
+         {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(body),
+         }
+      );
+      if (!response.ok) {
+         const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+         toast.error(payload?.message ?? 'Could not update the sub-issue.');
+         return false;
+      }
+      await load().catch(() => setState('error'));
+      return true;
+   };
+
+   const toggle = (id: string) =>
+      setCollapsed((current) => {
+         const next = new Set(current);
+         if (!next.delete(id)) next.add(id);
+         return next;
+      });
+
+   const renderRows = (items: SubIssue[], depth: number): ReactNode =>
+      items.map((subIssue) => {
+         const nested = children.get(subIssue.id);
+         const open = !collapsed.has(subIssue.id);
+         return (
+            <div key={subIssue.id}>
+               <div
+                  className="flex items-center gap-2 h-10 pr-1 border-b border-border/50 hover:bg-sidebar/50 text-sm min-w-0"
+                  style={{ paddingLeft: depth * 20 + 4 }}
+                  data-testid="sub-issue-row"
+               >
+                  {nested ? (
+                     <button
+                        type="button"
+                        onClick={() => toggle(subIssue.id)}
+                        aria-expanded={open}
+                        aria-label={`${open ? 'Collapse' : 'Expand'} ${subIssue.identifier}`}
+                        className="flex size-4 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
+                     >
+                        <ChevronRight
+                           className={`size-3.5 transition-transform ${open ? 'rotate-90' : ''}`}
+                        />
+                     </button>
+                  ) : (
+                     <span className="size-4 shrink-0" />
+                  )}
+                  <StatusIcon status={subIssue.status} />
+                  <Link
+                     href={`/${orgId}/issue/${subIssue.identifier}`}
+                     className="flex min-w-0 flex-1 items-center gap-2"
+                  >
+                     <span className="text-muted-foreground shrink-0 text-xs font-medium">
+                        {subIssue.identifier}
+                     </span>
+                     <span className="truncate font-medium">{subIssue.title}</span>
+                  </Link>
+                  <ProgressBadge items={nested} />
+                  <span className="w-20 shrink-0">
+                     <IssueDateCell
+                        issueId={subIssue.id}
+                        value={subIssue.dueDate ?? undefined}
+                        kind="due"
+                        accent={isOverdue(subIssue)}
+                        onSave={(dueDate) =>
+                           patchSubIssue(subIssue.id, { dueDate: dueDate ?? null })
+                        }
+                     />
+                  </span>
+                  <span className="shrink-0">
+                     <AssigneeUser
+                        user={asUser(subIssue.assignee)}
+                        issueId={subIssue.id}
+                        onAssign={(assignee) =>
+                           patchSubIssue(subIssue.id, { assigneeId: assignee?.id ?? null })
+                        }
+                     />
+                  </span>
+               </div>
+               {nested && open && renderRows(nested, depth + 1)}
+            </div>
+         );
+      });
 
    const createSubIssue = async () => {
       if (!workspaceId || title.trim().length < 2) return;
@@ -175,18 +310,29 @@ export function IssueSubIssues({
          {state === 'ready' && subIssues.length > 0 && (
             <>
                <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-sm font-medium mb-1">
-                     Sub-issues{' '}
-                     <span className="text-muted-foreground">
-                        {
-                           subIssues.filter(
-                              (subIssue) => subIssue.status.category.toLowerCase() === 'completed'
-                           ).length
-                        }
-                        /{subIssues.length}
-                     </span>
+                  <h2 className="flex items-center gap-2 text-sm font-medium mb-1">
+                     Sub-issues <ProgressBadge items={roots} />
                   </h2>
                   <div className="flex items-center gap-1">
+                     {children.size > 0 && (
+                        <Button
+                           size="xs"
+                           variant="ghost"
+                           onClick={() =>
+                              setCollapsed(collapsed.size ? new Set() : new Set(children.keys()))
+                           }
+                        >
+                           {collapsed.size ? (
+                              <>
+                                 <ChevronsUpDown className="size-3.5" /> Expand all
+                              </>
+                           ) : (
+                              <>
+                                 <ChevronsDownUp className="size-3.5" /> Collapse all
+                              </>
+                           )}
+                        </Button>
+                     )}
                      <Button size="xs" variant="ghost" onClick={() => setDialogOpen(true)}>
                         <Plus className="size-3.5" /> New
                      </Button>
@@ -195,24 +341,7 @@ export function IssueSubIssues({
                      </Button>
                   </div>
                </div>
-               <div className="flex flex-col border-t border-border/50">
-                  {subIssues.map((subIssue) => (
-                     <Link
-                        key={subIssue.id}
-                        href={`/${orgId}/issue/${subIssue.identifier}`}
-                        className="flex items-center gap-2.5 h-10 px-1 border-b border-border/50 hover:bg-sidebar/50 text-sm min-w-0"
-                     >
-                        <StatusIcon status={subIssue.status} />
-                        <span className="text-muted-foreground shrink-0 text-xs font-medium">
-                           {subIssue.identifier}
-                        </span>
-                        <span className="truncate font-medium">{subIssue.title}</span>
-                        <span className="ml-auto shrink-0">
-                           <AssigneeUser user={asUser(subIssue.assignee)} />
-                        </span>
-                     </Link>
-                  ))}
-               </div>
+               <div className="flex flex-col border-t border-border/50">{renderRows(roots, 0)}</div>
             </>
          )}
 
@@ -222,7 +351,7 @@ export function IssueSubIssues({
             title="Add existing sub-issue"
             description="Pick an issue of this team to place under this issue."
             teamId={teamId}
-            excludeIds={[issueId, ...subIssues.map((subIssue) => subIssue.id)]}
+            excludeIds={[issueId, ...roots.map((subIssue) => subIssue.id)]}
             moveTarget={{ id: issueId, identifier }}
             onPick={async (picked) => {
                await setIssueParent(picked.id, issueId);

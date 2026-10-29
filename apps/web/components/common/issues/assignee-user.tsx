@@ -17,9 +17,15 @@ interface AssigneeUserProps {
    user: User | null;
    /** Persists the choice when supplied; without it the control stays read-only. */
    issueId?: string;
+   /**
+    * Saves the choice instead of the issues store, for issues the store has not loaded (sub-issue
+    * tree rows). VI: Lưu lựa chọn thay cho issues store, cho issue mà store chưa tải (hàng của cây
+    * sub-issue).
+    */
+   onAssign?: (assignee: User | null) => Promise<unknown>;
 }
 
-export function AssigneeUser({ user, issueId }: AssigneeUserProps) {
+export function AssigneeUser({ user, issueId, onAssign }: AssigneeUserProps) {
    const [open, setOpen] = useState(false);
    const [saving, setSaving] = useState(false);
    const { members, updateIssueAssignee } = useIssuesStore();
@@ -28,7 +34,7 @@ export function AssigneeUser({ user, issueId }: AssigneeUserProps) {
       setOpen(false);
       if (!issueId || nextAssignee?.id === user?.id) return;
       setSaving(true);
-      await updateIssueAssignee(issueId, nextAssignee);
+      await (onAssign ? onAssign(nextAssignee) : updateIssueAssignee(issueId, nextAssignee));
       setSaving(false);
    };
 

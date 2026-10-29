@@ -383,6 +383,37 @@ async def delete_issue_template(
     return {'data': {'id': template_id, 'deleted': True}}
 
 
+# Upper bound on sub-issue tree depth. The parent-cycle trigger makes deeper trees unreachable in
+# practice; the bound only stops a recursive query on rows written before that trigger existed.
+# VI: Giới hạn độ sâu cây sub-issue. Trigger chặn chu trình khiến cây sâu hơn gần như không có; giới
+# VI: hạn này chỉ để truy vấn đệ quy dừng với dữ liệu ghi trước khi có trigger.
+SUB_ISSUE_MAX_DEPTH = 50
+
+
+async def _descendant_ids(db: AsyncSession, workspace_id: str, team_id: str | None, issue_id: str) -> list[str]:
+    """Ids of every active descendant of an issue in the same team, parents before children.
+    An archived issue hides its whole branch, matching what the sub-issue tree shows.
+    VI: Id của mọi hậu duệ chưa archive cùng team của một issue, cha đứng trước con. Issue đã
+    VI: archive ẩn cả nhánh của nó, khớp với những gì cây sub-issue hiển thị.
+    """
+    result = await db.execute(
+        text(
+            '''WITH RECURSIVE tree AS (
+                   SELECT child.id, 1 AS depth FROM issues child
+                   WHERE child.workspace_id = :workspace_id AND child.team_id IS NOT DISTINCT FROM :team_id
+                     AND child.parent_issue_id = :issue_id AND child.archived_at IS NULL
+                   UNION ALL
+                   SELECT child.id, tree.depth + 1 FROM issues child JOIN tree ON child.parent_issue_id = tree.id
+                   WHERE child.workspace_id = :workspace_id AND child.team_id IS NOT DISTINCT FROM :team_id
+                     AND child.archived_at IS NULL AND tree.depth < :max_depth
+               )
+               SELECT id FROM tree GROUP BY id ORDER BY min(depth)'''
+        ),
+        {'workspace_id': workspace_id, 'team_id': team_id, 'issue_id': issue_id, 'max_depth': SUB_ISSUE_MAX_DEPTH},
+    )
+    return list(result.scalars().all())
+
+
 @router.get('/{issue_id}/sub-issues')
 @public_router.get('/{issue_id}/sub-issues')
 async def list_sub_issues(
@@ -390,11 +421,31 @@ async def list_sub_issues(
     workspaceId: str = Query(min_length=1),
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
+    descendants: Annotated[bool, Query()] = False,
 ) -> dict[str, list[dict[str, Any]]]:
+    """Direct children of an issue, or with `descendants=true` every level of its sub-issue tree.
+    Each row carries `parentIssueId` so the client can rebuild the tree, plus the status, assignee
+    and due date the tree rows show and edit.
+    VI: Con trực tiếp của issue, hoặc mọi cấp của cây sub-issue khi `descendants=true`. Mỗi dòng
+    VI: có `parentIssueId` để client dựng lại cây, cùng trạng thái, assignee và due date mà các
+    VI: hàng của cây hiển thị và cho sửa.
+    """
     parent = await _issue_row(db, issue_id, workspaceId, user['id'])
+    if descendants:
+        ids = await _descendant_ids(db, workspaceId, parent['teamId'], parent['id'])
+    else:
+        ids = list((await db.execute(
+            text(
+                '''SELECT id FROM issues
+                   WHERE workspace_id = :workspace_id AND team_id IS NOT DISTINCT FROM :team_id
+                     AND parent_issue_id = :parent_issue_id AND archived_at IS NULL'''
+            ),
+            {'workspace_id': workspaceId, 'team_id': parent['teamId'], 'parent_issue_id': parent['id']},
+        )).scalars().all())
     result = await db.execute(
         text(
-            '''SELECT child.id, child.identifier, child.title,
+            '''SELECT child.id, child.identifier, child.title, child.parent_issue_id, child.due_date,
+                      child.priority::text AS priority,
                       status.id AS status_id, status.name AS status_name,
                       status.color AS status_color, status.category AS status_category,
                       assignee.id AS assignee_id, assignee.name AS assignee_name,
@@ -402,21 +453,19 @@ async def list_sub_issues(
                FROM issues child
                JOIN issue_statuses status ON status.id = child.status_id
                LEFT JOIN users assignee ON assignee.id = child.assignee_id
-               WHERE child.workspace_id = :workspace_id AND child.team_id IS NOT DISTINCT FROM :team_id
-                 AND child.parent_issue_id = :parent_issue_id AND child.archived_at IS NULL
+               WHERE child.id = ANY(CAST(:ids AS text[]))
                ORDER BY child.updated_at DESC, child.created_at DESC'''
         ),
-        {
-            'workspace_id': workspaceId,
-            'team_id': parent['teamId'],
-            'parent_issue_id': parent['id'],
-        },
+        {'ids': ids},
     )
     return {'data': [
         {
             'id': row['id'],
             'identifier': row['identifier'],
             'title': row['title'],
+            'parentIssueId': row['parent_issue_id'],
+            'dueDate': row['due_date'],
+            'priority': row['priority'],
             'status': {
                 'id': row['status_id'],
                 'name': row['status_name'],
@@ -835,19 +884,37 @@ async def archive_issue(
     workspaceId: str = Query(min_length=1),
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
+    includeSubIssues: Annotated[bool, Query()] = False,
 ) -> dict[str, dict[str, Any]]:
-    await _issue_row(db, issue_id, workspaceId, user['id'])
+    """Archives an issue; with `includeSubIssues=true` also every active descendant in the same
+    team, in one transaction with an `issue.archived` activity per issue. Without the flag the
+    children stay active and become roots wherever the parent is no longer shown.
+    VI: Archive một issue; khi `includeSubIssues=true` archive luôn mọi hậu duệ chưa archive cùng
+    VI: team trong cùng transaction, mỗi issue có activity `issue.archived`. Không có cờ thì các
+    VI: con vẫn hoạt động và thành gốc ở nơi không còn hiển thị cha.
+    """
+    issue = await _issue_row(db, issue_id, workspaceId, user['id'])
     from ..modules.sla.synchronization import locked_issue, sync_issue
     from ..modules.work_items.lifecycle import actor_context
     await locked_issue(db, issue_id)
     await actor_context(db, user['id'])
     await _issue_row(db, issue_id, workspaceId, user['id'])
+    archived_ids = [issue_id]
+    if includeSubIssues:
+        descendant_ids = await _descendant_ids(db, workspaceId, issue['teamId'], issue_id)
+        for descendant_id in descendant_ids:
+            await locked_issue(db, descendant_id)
+        archived_ids += descendant_ids
     now = _utcnow()
-    await db.execute(text('UPDATE issues SET archived_at = :now, updated_at = :now WHERE id = :issue_id AND workspace_id = :workspace_id'), {'issue_id': issue_id, 'workspace_id': workspaceId, 'now': now})
-    await _write_activity(db, workspaceId, issue_id, user['id'], 'issue.archived', {})
-    await sync_issue(db, issue_id)
+    await db.execute(
+        text('UPDATE issues SET archived_at = :now, updated_at = :now WHERE id = ANY(CAST(:ids AS text[])) AND workspace_id = :workspace_id AND archived_at IS NULL'),
+        {'ids': archived_ids, 'workspace_id': workspaceId, 'now': now},
+    )
+    for archived_id in archived_ids:
+        await _write_activity(db, workspaceId, archived_id, user['id'], 'issue.archived', {})
+        await sync_issue(db, archived_id)
     await db.commit()
-    return {'data': {'id': issue_id, 'archivedAt': now}}
+    return {'data': {'id': issue_id, 'archivedAt': now, 'archivedIds': archived_ids}}
 
 
 @public_router.get('/c{issue_suffix}')
@@ -877,8 +944,9 @@ async def public_archive_issue(
     workspaceId: str = Query(min_length=1),
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
+    includeSubIssues: Annotated[bool, Query()] = False,
 ) -> dict[str, dict[str, Any]]:
-    return await archive_issue(f'c{issue_suffix}', workspaceId, user, db)
+    return await archive_issue(f'c{issue_suffix}', workspaceId, user, db, includeSubIssues)
 
 
 @router.post('/{issue_id}/subscribers/me')

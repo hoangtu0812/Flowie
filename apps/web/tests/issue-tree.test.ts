@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { issueTree } from '../lib/issue-tree';
+import { directProgress, issueTree } from '../lib/issue-tree';
 
 test('three levels nest and an issue whose parent is not listed stays visible as a root', () => {
    const { roots, children } = issueTree([
