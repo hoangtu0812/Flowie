@@ -122,3 +122,31 @@ export function listMcpAudit(
    if (cursor) query.set('cursor', cursor);
    return request(`audit?${query}`);
 }
+
+/** The workflow agents receive at MCP initialize, after the fixed preamble. */
+/** VI: Quy trình agent nhận lúc MCP initialize, sau câu cố định. */
+export type McpInstructions = {
+   preamble: string;
+   workflow: string;
+   defaultWorkflow: string;
+   custom: boolean;
+};
+
+export const MAX_MCP_WORKFLOW_LENGTH = 20000;
+
+export function getMcpInstructions(workspaceId: string): Promise<McpInstructions> {
+   return request(`instructions?workspaceId=${encodeURIComponent(workspaceId)}`);
+}
+
+/** Saves the workspace workflow; null resets it to the built-in one. */
+/** VI: Lưu quy trình của workspace; null đặt lại về quy trình có sẵn. */
+export function saveMcpInstructions(
+   workspaceId: string,
+   workflow: string | null
+): Promise<McpInstructions> {
+   return request(`instructions?workspaceId=${encodeURIComponent(workspaceId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workflow }),
+   });
+}

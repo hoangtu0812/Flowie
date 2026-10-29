@@ -39,6 +39,9 @@ class Principal:
     team_ids: tuple[str, ...]
     project_ids: tuple[str, ...]
     connection_name: str = ""
+    # The workspace's saved MCP workflow, None when it uses the built-in one.
+    # VI: Quy trình MCP đã lưu của workspace, None khi dùng quy trình có sẵn.
+    instructions: str | None = None
 
     def require(self, *scopes: str) -> None:
         if not set(scopes).issubset(self.scopes):

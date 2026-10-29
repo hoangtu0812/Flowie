@@ -389,6 +389,26 @@ test('Help search and project client presets expose meaningful actions', async (
    await expect(page.getByText(/Bearer.*FLOWIE_MCP_TOKEN/)).toBeVisible();
 });
 
+test('Admins edit and reset the MCP agent instructions as plain text', async ({ page }) => {
+   await page.goto(`/${fixture.slug}/settings/integrations`);
+   await expect(page.getByRole('heading', { name: 'Agent instructions' })).toBeVisible();
+   const workflow = page.getByRole('textbox', { name: /^Workflow/ });
+   await expect(workflow).toHaveValue(/^When asked to handle a task/);
+   await workflow.fill('<b>Regression workflow</b>');
+   await page.getByRole('button', { name: 'Save instructions', exact: true }).click();
+   await expect(page.getByText('Custom', { exact: true })).toBeVisible();
+   await page.reload();
+   await expect(page.getByRole('textbox', { name: /^Workflow/ })).toHaveValue(
+      '<b>Regression workflow</b>'
+   );
+   await page.getByRole('button', { name: 'Reset to default', exact: true }).click();
+   await page.getByRole('button', { name: 'Confirm reset', exact: true }).click();
+   await expect(page.getByText('Default', { exact: true })).toBeVisible();
+   await expect(page.getByRole('textbox', { name: /^Workflow/ })).toHaveValue(
+      /^When asked to handle a task/
+   );
+});
+
 test('SLA request Ask and emoji settings create persisted records', async ({ page }) => {
    const suffix = String(Date.now());
    await page.goto(`/${fixture.slug}/settings/slas`);

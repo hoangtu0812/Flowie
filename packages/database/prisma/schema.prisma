@@ -636,6 +636,7 @@ model Workspace {
   issueSequence          Int                   @default(0) @map("issue_sequence")
   issueDisplayDefaults   Json?                 @map("issue_display_defaults")
   issueInsightDefaults   Json?                 @map("issue_insight_defaults")
+  mcpInstructions        String?               @map("mcp_instructions")
   createdAt              DateTime              @default(now()) @map("created_at")
   updatedAt              DateTime              @updatedAt @map("updated_at")
 

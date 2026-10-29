@@ -18,6 +18,7 @@ import { mcpEndpoint, type McpConnection } from '@/lib/mcp';
 import { useMcpSettings } from './use-mcp-settings';
 import { AgentCoordination } from './agent-coordination';
 import { AgentConfiguration } from './agent-configuration';
+import { AgentInstructions } from './agent-instructions';
 import { SuccessMark } from './success-mark';
 import { McpActivity } from './mcp-activity';
 
@@ -478,6 +479,9 @@ export function McpSettings() {
          )}
          {state.workspaceId && (
             <AgentCoordination workspaceId={state.workspaceId} canManage={state.canManage} />
+         )}
+         {state.workspaceId && state.canManage && (
+            <AgentInstructions workspaceId={state.workspaceId} />
          )}
          {state.workspaceId && state.canManage && (
             <AgentConfiguration

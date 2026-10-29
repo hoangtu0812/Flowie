@@ -10,8 +10,8 @@ from ...core.pagination import CursorCodec
 from ...db.session import get_session
 from ...domains.auth import current_user
 from ..access.membership import _workspace_role
-from . import connections
-from .contracts import ConnectionInput, ConnectionUpdateInput
+from . import connections, instructions
+from .contracts import ConnectionInput, ConnectionUpdateInput, InstructionsInput
 from .domain import ALL_SCOPES
 from .domain import Principal
 from .policy import AccessPolicy
@@ -122,6 +122,25 @@ async def revoke_connection(
 ):
     await connections.revoke(db, workspaceId, user, connection_id)
     return {"data": {"id": connection_id, "revoked": True}}
+
+
+@router.get("/instructions")
+async def read_instructions(
+    workspaceId: str = Query(min_length=1),
+    user=Depends(current_user),
+    db=Depends(get_session),
+):
+    return {"data": await instructions.read(db, workspaceId, user)}
+
+
+@router.put("/instructions")
+async def save_instructions(
+    payload: InstructionsInput,
+    workspaceId: str = Query(min_length=1),
+    user=Depends(current_user),
+    db=Depends(get_session),
+):
+    return {"data": await instructions.save(db, workspaceId, user, payload.workflow)}
 
 
 # Tool events carry the connection in metadata; create/update/revoke events name it
