@@ -13,6 +13,7 @@ from ..work_items.contracts import (
     UpdateDocumentInput,
     UpdateIssueInput,
 )
+from .feature_docs import require_feature_project, upsert_feature_doc
 from .policy import AccessPolicy
 
 
@@ -35,6 +36,8 @@ class CommandService:
             self.target = await self.policy.document(payload.documentId, lock=True)
             if name == "link_document":
                 await self.link_target(payload)
+        elif name == "upsert_feature_doc":
+            self.target = await require_feature_project(self.policy, payload.issueId)
         elif name == "create_issue":
             await self.policy.destination(payload.projectId, payload.teamId)
             if payload.parentIssueId:
@@ -215,6 +218,8 @@ class CommandService:
                     self.db,
                 )
             )["data"]
+        if name == "upsert_feature_doc":
+            return await upsert_feature_doc(self.db, self.principal, self.target, payload)
         if name == "link_document":
             await self.add_link(payload.documentId, payload)
             return {"documentId": payload.documentId, "linked": True}

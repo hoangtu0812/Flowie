@@ -831,6 +831,50 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ApiError):
             await self.call("get_document", documentId=private_doc)
 
+    async def test_feature_docs_warn_then_upsert_and_link(self):
+        before = await self.call("get_feature_docs", issueId=self.issue["identifier"])
+        self.assertEqual(before["linked"], [])
+        self.assertIsNotNone(before["warning"])
+        arguments = {
+            "issueId": self.issue["id"],
+            "module": "Documents",
+            "feature": "Tree",
+            "docType": "FDS",
+            "content": "# FDS · Tree\n\nScope.",
+            "changeSummary": "First draft",
+        }
+        created = (
+            await self.call("upsert_feature_doc", **arguments, idempotencyKey="feature-doc-1")
+        )["data"]
+        self.assertTrue(created["created"])
+        self.assertEqual((created["title"], created["version"]), ("FDS · Tree", 1))
+        updated = (
+            await self.call(
+                "upsert_feature_doc",
+                **{**arguments, "module": "documents", "content": "# FDS · Tree\n\nScope v2."},
+                idempotencyKey="feature-doc-2",
+            )
+        )["data"]
+        # Same folder (case-insensitive) and document, one more revision.
+        self.assertEqual((updated["id"], updated["folderId"]), (created["id"], created["folderId"]))
+        self.assertEqual((updated["created"], updated["version"]), (False, 2))
+        after = await self.call("get_feature_docs", issueId=self.issue["id"])
+        self.assertIsNone(after["warning"])
+        [linked] = after["linked"]
+        self.assertIn("Scope v2.", linked["content"])
+        self.assertIn(f"| {self.issue['identifier']} | First draft |", linked["content"])
+        self.assertEqual(
+            [(f["module"], f["feature"], len(f["documents"])) for f in after["features"]],
+            [("Documents", "Tree", 1)],
+        )
+        with self.assertRaises(ApiError) as error:
+            await self.call(
+                "upsert_feature_doc",
+                **{**arguments, "issueId": self.other_issue["id"]},
+                idempotencyKey="feature-doc-3",
+            )
+        self.assertEqual(error.exception.status_code, 404)
+
     async def test_revocation_and_membership_change(self):
         async with self.factory() as db:
             await revoke(db, self.workspace, self.user, self.connection["id"])
