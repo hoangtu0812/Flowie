@@ -124,7 +124,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Changed
 
-- `AGENTS.md` names the Flowie project and team this repository belongs to and lists the other projects reachable through the same MCP connection with their repositories, so agents do not implement another project's task here. Documentation only; nothing deploys.
+- `AGENTS.md` names the Flowie project and team this repository belongs to and lists the other projects reachable through the same MCP connection with their repositories, so agents do not implement another project's task here. Documentation only; nothing deploys. (#61)
   VI: `AGENTS.md` ghi rõ dự án và team Flowie tương ứng với repository này, kèm danh sách các dự án khác truy cập được qua cùng kết nối MCP và repository của chúng, để agent không làm task của dự án khác trong repo này. Chỉ là tài liệu; không deploy.
 
 - The Flowie MCP server now tells every connected agent (Codex, Claude, ChatGPT …) the task workflow when it connects: read the task and screenshots, comment the plan, set the end date, move to In Progress, update the feature FDS/TDS, open a pull request, comment the result, and move to Technical Review after merge. Agents no longer depend on a repository `AGENTS.md` to follow it. Reconnect MCP clients after deploying `api` to pick up the new instructions. (#59)
