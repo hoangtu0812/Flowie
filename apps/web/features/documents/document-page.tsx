@@ -39,7 +39,17 @@ export function DocumentPage() {
          document={document}
          open
          onOpenChange={(open) => {
-            if (!open) router.push(`/${orgId}/search`);
+            if (open) return;
+            // Closing returns to the page that opened the document (search, a task, Docs). A
+            // document opened in a fresh tab has nothing behind it, so it falls back to Docs.
+            // shortcut: a tab that visited another site first goes back to that site; track
+            // in-app navigation if that becomes a complaint.
+            // VI: Đóng thì quay về trang đã mở tài liệu (tìm kiếm, task, Docs). Tài liệu mở ở tab
+            // VI: mới không có trang trước, nên chuyển về Docs.
+            // VI: shortcut: tab đã vào site khác trước đó sẽ quay về site đó; nếu bị phàn nàn thì
+            // VI: theo dõi điều hướng trong app.
+            if (window.history.length > 1) router.back();
+            else router.push(`/${orgId}/docs`);
          }}
          onUpdate={async (id, draft) => {
             const updated = await documentRequest<LiveDocument>(id, '', {
