@@ -71,6 +71,9 @@ class CreateProjectInput(BaseModel):
 
 class UpdateProjectInput(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=120)
+    # Emoji or short symbol, same limit as team icons; blank or null restores the default icon.
+    # VI: Emoji hoặc ký hiệu ngắn, cùng giới hạn với icon team; rỗng hoặc null trả về icon mặc định.
+    icon: str | None = Field(default=None, max_length=16)
     description: str | None = Field(default=None, max_length=2000)
     status: str | None = Field(default=None, max_length=32)
     priority: str | None = Field(default=None, max_length=32)
@@ -639,7 +642,7 @@ async def _project(db: AsyncSession, project_id: str, workspace_id: str, user_id
     issues = await db.execute(text('''SELECT i.id, i.identifier, i.title, i.priority, i.updated_at, s.id AS status_id_value, s.name AS status_name, s.category AS status_category, s.color AS status_color, a.id AS assignee_id_value, a.name AS assignee_name, a.avatar_url AS assignee_avatar_url FROM issues i JOIN issue_statuses s ON s.id = i.status_id LEFT JOIN users a ON a.id = i.assignee_id WHERE i.project_id = :project_id AND i.archived_at IS NULL AND (i.team_id IS NULL OR EXISTS(SELECT 1 FROM team_members tm JOIN teams scoped_team ON scoped_team.id=tm.team_id WHERE tm.team_id=i.team_id AND tm.user_id=:user_id AND scoped_team.archived_at IS NULL)) ORDER BY i.updated_at DESC'''), {'project_id': project_id,'user_id':user_id})
     issue_records=issues.mappings().all()
     return {
-        'id': row['id'], 'workspaceId': row['workspace_id'], 'teamId': row['team_id'], 'name': row['name'], 'identifier': row['identifier'], 'description': row['description'], 'type': row['type'], 'status': row['status'], 'priority': row['priority'], 'health': row['health'], 'leadId': row['lead_id'], 'startDate': row['start_date'], 'targetDate': row['target_date'], 'archivedAt': row['archived_at'], 'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
+        'id': row['id'], 'workspaceId': row['workspace_id'], 'teamId': row['team_id'], 'name': row['name'], 'icon': row['icon'], 'identifier': row['identifier'], 'description': row['description'], 'type': row['type'], 'status': row['status'], 'priority': row['priority'], 'health': row['health'], 'leadId': row['lead_id'], 'startDate': row['start_date'], 'targetDate': row['target_date'], 'archivedAt': row['archived_at'], 'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
         'team': team,
         'lead': {'id': row['lead_id_value'], 'name': row['lead_name'], 'avatarUrl': row['lead_avatar_url']} if row['lead_id_value'] else None,
         '_count': {'issues': len(issue_records)}, 'labelLinks': [{'label': {'id': label['id'], 'workspaceId': label['workspace_id'], 'name': label['name'], 'color': label['color'], 'description': label['description'], 'createdAt': label['created_at'], 'updatedAt': label['updated_at']}} for label in labels.mappings().all()],
@@ -703,8 +706,16 @@ async def get_project(project_id: str, workspaceId: str = Query(min_length=1), u
 
 @router.patch('/{project_id}')
 async def update_project(project_id: str, payload: UpdateProjectInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    # _project only checks team membership, so a project without a team needs the workspace check here.
+    # VI: _project chỉ kiểm tra thành viên team, nên dự án không thuộc team cần kiểm tra workspace ở đây.
+    await _workspace_access(db, workspaceId, user['id'])
     current = await _project(db, project_id, workspaceId, user['id'])
     values = payload.model_dump(exclude_unset=True)
+    # The length rule runs before strip(), so a null or whitespace-only name is rejected here.
+    # VI: Giới hạn độ dài chạy trước strip(), nên tên null hoặc toàn khoảng trắng bị từ chối ở đây.
+    if 'name' in values and len((values['name'] or '').strip()) < 2:
+        raise ApiError(400, 'Project name must have at least 2 characters.', 'Bad Request')
+    if 'icon' in values: values['icon'] = (values['icon'] or '').strip() or None
     if values.get('leadId'):
         lead = await db.execute(text("SELECT 1 FROM workspace_members WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'"), {'workspace_id': workspaceId, 'user_id': values['leadId']})
         if lead.scalar_one_or_none() is None: raise ApiError(404, 'Project lead must be an active workspace member.', 'Not Found')
@@ -719,7 +730,7 @@ async def update_project(project_id: str, payload: UpdateProjectInput, workspace
         if ids:
             labels = await db.execute(text('SELECT COUNT(*) FROM project_labels WHERE workspace_id = :workspace_id AND id = ANY(:ids)'), {'workspace_id': workspaceId, 'ids': ids})
             if labels.scalar_one() != len(ids): raise ApiError(404, 'One or more project labels are not available in this workspace.', 'Not Found')
-    column_map = {'name':'name','description':'description','status':'status','priority':'priority','health':'health','leadId':'lead_id','teamId':'team_id','startDate':'start_date','targetDate':'target_date','type':'type'}
+    column_map = {'name':'name','icon':'icon','description':'description','status':'status','priority':'priority','health':'health','leadId':'lead_id','teamId':'team_id','startDate':'start_date','targetDate':'target_date','type':'type'}
     params, sets = {'id': project_id, 'now': _utcnow()}, []
     for key, column in column_map.items():
         if key in values:
@@ -733,6 +744,7 @@ async def update_project(project_id: str, payload: UpdateProjectInput, workspace
     updated = await _project(db, project_id, workspaceId, user['id'])
     tracked = {
         'name': 'Name',
+        'icon': 'Icon',
         'status': 'Status',
         'priority': 'Priority',
         'health': 'Health',

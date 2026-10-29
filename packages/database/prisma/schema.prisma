@@ -1154,6 +1154,9 @@ model Project {
   teamId              String?             @map("team_id")
   name                String
   identifier          String
+  /// Emoji or short symbol shown next to the project name; NULL shows the default folder icon.
+  /// VI: Emoji hoặc ký hiệu ngắn hiển thị cạnh tên dự án; NULL hiển thị biểu tượng thư mục mặc định.
+  icon                String?
   description         String?
   type                ProjectType         @default(GENERAL)
   status              String              @default("planned")

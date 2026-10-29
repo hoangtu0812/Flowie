@@ -6,7 +6,7 @@ import type { Status } from '@/lib/status-presentations';
 import { status as circleStatuses } from '@/mock-data/status';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import type { Project } from '@/types/projects';
-import { FolderKanban } from 'lucide-react';
+import { projectIcon } from '@/components/common/projects/project-icon';
 import {
    createContext,
    type ReactNode,
@@ -24,6 +24,7 @@ import { RecoveryScreen } from '@/features/shared/recovery-screen';
 type ApiProject = {
    id: string;
    name: string;
+   icon?: string | null;
    status: string;
    priority: string;
    health: string;
@@ -150,7 +151,7 @@ const mapProject = (project: ApiProject): Project & { issueCount: number } => {
       id: project.id,
       name: project.name,
       status: mapStatus(project.status),
-      icon: FolderKanban,
+      icon: projectIcon(project.icon),
       percentComplete: total ? Math.round((completed / total) * 100) : 0,
       startDate: project.startDate ?? project.createdAt,
       targetDate: project.targetDate ?? undefined,

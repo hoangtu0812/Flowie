@@ -19,6 +19,7 @@ import { useIssuesStore } from '@/store/issues-store';
 export type LiveProject = {
    id: string;
    name: string;
+   icon?: string | null;
    identifier: string;
    description: string | null;
    status: string;

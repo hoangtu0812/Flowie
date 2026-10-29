@@ -89,6 +89,8 @@ export const messages: Readonly<Record<string, string>> = {
    'Remove project from favorites': 'Bỏ dự án khỏi yêu thích',
    'Add project to favorites': 'Thêm dự án vào yêu thích',
    'Copy project link': 'Sao chép liên kết dự án',
+   'Project actions': 'Thao tác dự án',
+   'Project settings': 'Cài đặt dự án',
    'Remove from favorites': 'Bỏ yêu thích',
    'Add to favorites': 'Thêm vào yêu thích',
    'Issue actions': 'Thao tác công việc',
