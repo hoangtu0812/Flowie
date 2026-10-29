@@ -16,7 +16,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
-- Grouped issue lists (Display → grouping by project, assignee, status or priority) collapse and expand a group when you click anywhere on its header row, or press Enter/Space on it; the arrow shows the state and the "+" button still creates an issue in the group. Board view is unchanged and collapsed groups reopen on reload. (DTD-68)
+- Grouped issue lists (Display → grouping by project, assignee, status or priority) collapse and expand a group when you click anywhere on its header row, or press Enter/Space on it; the arrow shows the state and the "+" button still creates an issue in the group. Board view is unchanged and collapsed groups reopen on reload. (DTD-68, #62)
   VI: Danh sách task theo nhóm (Display → nhóm theo dự án, người phụ trách, trạng thái hoặc độ ưu tiên) thu gọn và mở rộng một nhóm khi bấm vào bất kỳ đâu trên dòng tiêu đề nhóm, hoặc nhấn Enter/Space; mũi tên cho biết trạng thái và nút "+" vẫn tạo task trong nhóm. Chế độ Board không đổi và nhóm đã thu gọn sẽ mở lại khi tải lại trang. (DTD-68)
 
 - Settings → Integrations → AI connections: an MCP connection's owner can edit its name, permissions, teams and projects (for example to add a new project) without a new token, and each edit is audited; Recent activity loads 20 events at a time with Load more, readable labels, the connection name, relative times and filters by connection and by outcome so failed or denied calls stand out; External coding agent configuration lists each project's repositories, supports several repositories per project, and lets admins edit or remove them. No schema change; deploy `api` and `web` together because the activity list reads a new API response. (DTD-64, #60)
