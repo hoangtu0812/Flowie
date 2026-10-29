@@ -4,7 +4,8 @@ import { FilterSelector } from '@/components/data-table-filter/components/filter
 import { useDataTableFilters } from '@/components/data-table-filter/hooks/use-data-table-filters';
 import { useFilterStore } from '@/store/filter-store';
 import { useIssuesStore } from '@/store/issues-store';
-import { issueFilterColumns } from './issue-filter-columns';
+import { useMemo } from 'react';
+import { createIssueFilterColumns } from './issue-filter-columns';
 
 /**
  * Standalone "Filter" button for the header toolbars, on the same row as
@@ -13,13 +14,17 @@ import { issueFilterColumns } from './issue-filter-columns';
  * filter is active.
  */
 export function IssueFilterTrigger() {
-   const { issues } = useIssuesStore();
+   const { issues, members, projects } = useIssuesStore();
    const { filters, setFilters } = useFilterStore();
+   const columnsConfig = useMemo(
+      () => createIssueFilterColumns(members, projects),
+      [members, projects]
+   );
 
    const { columns, actions, strategy } = useDataTableFilters({
       strategy: 'client',
       data: issues,
-      columnsConfig: issueFilterColumns,
+      columnsConfig,
       filters,
       onFiltersChange: setFilters,
    });
