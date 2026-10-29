@@ -16,7 +16,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
-- Projects can be renamed and given an icon (emoji or short symbol) from the "…" menu → Project settings, or by clicking the name or icon on Overview; the new name and icon show in the header, Overview and project lists, an empty name is rejected, and success or failure shows a toast. Adds the nullable `projects.icon` column through a Prisma migration (existing projects keep the default folder icon); deploy `api` and `web` together. (DTD-33)
+- Projects can be renamed and given an icon (emoji or short symbol) from the "…" menu → Project settings, or by clicking the name or icon on Overview; the new name and icon show in the header, Overview and project lists, an empty name is rejected, and success or failure shows a toast. Adds the nullable `projects.icon` column through a Prisma migration (existing projects keep the default folder icon); deploy `api` and `web` together. (DTD-33, #65)
   VI: Dự án có thể đổi tên và đặt icon (emoji hoặc ký hiệu ngắn) từ menu "…" → Project settings, hoặc bấm vào tên hay icon ở Overview; tên và icon mới hiển thị ở header, Overview và danh sách dự án, tên rỗng bị từ chối, và có toast báo thành công hoặc thất bại. Thêm cột `projects.icon` (cho phép null) qua migration Prisma (dự án cũ giữ biểu tượng thư mục mặc định); deploy `api` và `web` cùng lúc. (DTD-33)
 
 - Grouped issue lists (Display → grouping by project, assignee, status or priority) collapse and expand a group when you click anywhere on its header row, or press Enter/Space on it; the arrow shows the state and the "+" button still creates an issue in the group. Board view is unchanged and collapsed groups reopen on reload. (DTD-68, #62)
@@ -184,7 +184,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Security
 
-- Updating a project that belongs to no team now requires active membership of its workspace, like every other project read and write. (DTD-33)
+- Updating a project that belongs to no team now requires active membership of its workspace, like every other project read and write. (DTD-33, #65)
   VI: Cập nhật dự án không thuộc team nào giờ yêu cầu là thành viên đang hoạt động của workspace, giống mọi thao tác đọc và ghi dự án khác. (DTD-33)
 
 - A queued or running agent run is now directed at exactly one MCP connection. Automation routes a run to its rule's connection and a direct claim creates a run for the calling connection; any other connection claiming that issue is rejected with 409, including after the lease expires, so an expired lease is no longer a takeover window for a different agent. Returning an issue to the shared pool requires canceling its run. `list_runs` returns `assignedToThisConnection` and accepts it as a filter, and the local runner's `pending` command lists only runs directed at its own connection. Each runner host must therefore use its own connection. No schema migration is required.
