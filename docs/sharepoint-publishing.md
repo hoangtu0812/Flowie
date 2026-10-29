@@ -14,6 +14,8 @@ và không xóa gì trên SharePoint.
   - kết nối SharePoint của workspace đang bật.
 - **Vị trí file:** mỗi phiên bản ghi hai file. Ký tự không hợp lệ trên SharePoint
   (`" * : < > ? / \ | # %`) được thay bằng `-`.
+  - Thư mục trên SharePoint dùng đúng nhãn có số của cây Docs, ví dụ
+    `01 · Turn Around/01 · Tích hợp P6`.
   - `<thư mục của dự án>/<module>/<tính năng>/<tiêu đề>.md`: luôn là phiên bản mới
     nhất (link cố định, bị ghi đè mỗi lần duyệt);
   - `<thư mục của dự án>/<module>/<tính năng>/_versions/<tiêu đề>_vN.md`: bản lưu
@@ -29,6 +31,9 @@ và không xóa gì trên SharePoint.
 - **Giới hạn của bản đầu:**
   - đổi tên hoặc di chuyển tài liệu sẽ tạo file mới ở vị trí mới; file cũ vẫn
     nằm trên SharePoint;
+  - đổi tên, đổi số hoặc di chuyển thư mục (và lần deploy đánh số thư mục) làm
+    phiên bản mới nhất của các tài liệu bên dưới được tải lại vào thư mục mới;
+    thư mục và file cũ vẫn nằm trên SharePoint, cần dọn thủ công nếu muốn;
   - sửa file trực tiếp trên SharePoint sẽ bị ghi đè ở lần phát hành sau.
 
 ## Bước 1 — IT tạo app registration (một lần)

@@ -9,7 +9,20 @@ export interface TreeFolder {
    name: string;
    icon: string;
    position: number;
+   /** Two-digit folder number, or null when unnumbered. VI: Số thư mục hai chữ số, null nếu không đánh số. */
+   number?: number | null;
 }
+
+/**
+ * `NN · name` for a numbered folder, the bare name otherwise; the API builds SharePoint paths
+ * from the same label.
+ * VI: `NN · tên` với thư mục có số, chỉ tên nếu không có số; API dựng đường dẫn SharePoint từ
+ * VI: cùng nhãn này.
+ */
+export const folderLabel = (folder: { name: string; number?: number | null }) =>
+   folder.number == null
+      ? folder.name
+      : `${String(folder.number).padStart(2, '0')} · ${folder.name}`;
 
 export interface TreeDocument {
    id: string;
@@ -41,8 +54,10 @@ export interface TreeNode<D extends TreeDocument = TreeDocument> {
    files: TreeFile[];
 }
 
+// Numbered folders first, by number; unnumbered ones after them by position, then name.
+// VI: Thư mục có số đứng trước, theo số; thư mục không số đứng sau theo vị trí, rồi tên.
 const byPosition = (a: TreeFolder, b: TreeFolder) =>
-   a.position - b.position || a.name.localeCompare(b.name);
+   (a.number ?? 100) - (b.number ?? 100) || a.position - b.position || a.name.localeCompare(b.name);
 
 /**
  * Nests folders under their parents and files documents into them. Folders whose parent is
@@ -103,7 +118,8 @@ export function filterTree<D extends TreeDocument>(
       (docType === 'ALL' || document.docType === docType) &&
       (!needle || fold(`${document.title}\n${document.content}`).includes(needle));
    const visit = (node: TreeNode<D>): TreeNode<D> | null => {
-      if (needle && docType === 'ALL' && fold(node.folder.name).includes(needle)) return node;
+      if (needle && docType === 'ALL' && fold(folderLabel(node.folder)).includes(needle))
+         return node;
       const children = node.children.map(visit).filter((child): child is TreeNode<D> => !!child);
       const documents = node.documents.filter(keep);
       const files = node.files.filter(

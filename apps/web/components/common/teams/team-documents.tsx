@@ -49,6 +49,7 @@ import {
 import { useParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { folderLabel } from '@/lib/document-tree';
 import { type LiveDocument, useLiveTeam } from './use-live-team';
 
 const timeAgo = relativeTime;
@@ -202,7 +203,7 @@ export default function TeamDocuments() {
                      <button className="flex-1 flex items-center gap-2 px-6 h-10 text-sm text-left">
                         <ChevronRight className="size-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
                         <span className="text-base leading-none">{folder.icon}</span>
-                        <span className="font-medium">{folder.name}</span>
+                        <span className="font-medium">{folderLabel(folder)}</span>
                         <span className="text-muted-foreground">{folder.documents.length}</span>
                      </button>
                   </CollapsibleTrigger>
@@ -217,7 +218,7 @@ export default function TeamDocuments() {
                            )
                         )
                      }
-                     label={`Change icon for ${folder.name}`}
+                     label={`Change icon for ${folderLabel(folder)}`}
                      compact
                      className="size-7 p-0 mr-4 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
                   />
@@ -401,7 +402,7 @@ export default function TeamDocuments() {
                      <SelectContent>
                         {documentFolders.map((folder) => (
                            <SelectItem key={folder.id} value={folder.id}>
-                              {folder.icon} {folder.name}
+                              {folder.icon} {folderLabel(folder)}
                            </SelectItem>
                         ))}
                      </SelectContent>

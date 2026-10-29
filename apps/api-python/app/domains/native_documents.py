@@ -34,6 +34,9 @@ class CreateFolderInput(BaseModel):
     kind: FolderKind = 'general'
     name: str = Field(min_length=2, max_length=100)
     icon: str | None = Field(default=None, min_length=1, max_length=32)
+    # Two-digit folder number; omitted, a folder inside a project tree takes the next free one.
+    # VI: Số thư mục hai chữ số; bỏ trống thì thư mục trong cây dự án nhận số trống kế tiếp.
+    number: int | None = Field(default=None, ge=0, le=99)
 
 
 class UpdateFolderInput(BaseModel):
@@ -41,6 +44,8 @@ class UpdateFolderInput(BaseModel):
     icon: str | None = Field(default=None, min_length=1, max_length=32)
     position: int | None = Field(default=None, ge=0)
     kind: FolderKind | None = None
+    # null removes the number. VI: null xoá số của thư mục.
+    number: int | None = Field(default=None, ge=0, le=99)
     # null moves the folder to its team root. VI: null đưa thư mục về gốc của team.
     parentId: str | None = None
 
@@ -79,7 +84,7 @@ async def create_folder(payload: CreateFolderInput, user: Any = Depends(current_
     folder = await operation(
         db, workspace_id=payload.workspaceId, user_id=user['id'], team_id=payload.teamId,
         name=payload.name, icon=payload.icon, parent_id=payload.parentId,
-        project_id=payload.projectId, kind=payload.kind,
+        project_id=payload.projectId, kind=payload.kind, number=payload.number,
     )
     await db.commit()
     return {'data': {**folder, 'documents': []}}

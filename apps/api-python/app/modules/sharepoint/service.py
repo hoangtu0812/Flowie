@@ -29,6 +29,7 @@ from ...core.clock import _utcnow
 from ...core.config import Settings
 from ...core.errors import ApiError
 from ...domains.scm.security import decrypt_secret_bundle, encrypt_secret_bundle
+from ..work_items.document_tree import folder_label
 from .graph import GraphClient, SharePointError, parse_folder_url, safe_name
 
 logger = logging.getLogger(__name__)
@@ -96,22 +97,28 @@ def graph_client(http: httpx.AsyncClient, settings: Settings, row: Any) -> Graph
 
 
 async def _folder_names(db, folder_id: str) -> list[str]:
-    """Folder names from below the project root down to `folder_id`.
-    VI: Tên các thư mục từ dưới thư mục gốc dự án xuống tới `folder_id`."""
+    """Folder labels (`NN · name` when numbered) from below the project root down to `folder_id`,
+    so SharePoint mirrors the numbered Docs tree.
+    VI: Nhãn thư mục (`NN · tên` khi có số) từ dưới thư mục gốc dự án xuống tới `folder_id`, để
+    VI: SharePoint giống cây Docs có đánh số."""
     rows = (
         await db.execute(
             text(
                 """WITH RECURSIVE chain AS (
-                     SELECT id, parent_id, name, kind, 0 AS depth FROM document_folders WHERE id = :id
+                     SELECT id, parent_id, name, number, kind, 0 AS depth FROM document_folders WHERE id = :id
                      UNION ALL
-                     SELECT f.id, f.parent_id, f.name, f.kind, chain.depth + 1
+                     SELECT f.id, f.parent_id, f.name, f.number, f.kind, chain.depth + 1
                      FROM document_folders f JOIN chain ON f.id = chain.parent_id WHERE chain.depth < 16)
-                   SELECT name, kind, parent_id FROM chain ORDER BY depth DESC"""
+                   SELECT name, number, kind, parent_id FROM chain ORDER BY depth DESC"""
             ),
             {"id": folder_id},
         )
     ).mappings().all()
-    return [row["name"] for row in rows if not (row["kind"] == "project" and row["parent_id"] is None)]
+    return [
+        folder_label(row["name"], row["number"])
+        for row in rows
+        if not (row["kind"] == "project" and row["parent_id"] is None)
+    ]
 
 
 def publish_path(folder_path: str, folders: list[str], title: str, release: int | None = None) -> str:

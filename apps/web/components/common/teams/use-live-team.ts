@@ -64,6 +64,7 @@ export type LiveDocumentFolder = {
    name: string;
    icon: string;
    position: number;
+   number?: number | null;
    documents: LiveDocument[];
 };
 

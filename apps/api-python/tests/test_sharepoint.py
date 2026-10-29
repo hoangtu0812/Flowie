@@ -14,7 +14,7 @@ from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
 from app.modules.sharepoint.graph import SharePointError, parse_folder_url, safe_name
 from app.modules.sharepoint.service import publish_due, publish_path, save_connection
 from app.modules.work_items.contracts import CreateDocumentInput, UpdateDocumentInput
-from app.modules.work_items.document_tree import create_folder, project_tree, scaffold_project_tree
+from app.modules.work_items.document_tree import create_folder, project_tree, scaffold_project_tree, update_folder
 from app.modules.work_items.documents import create_document, update_document
 
 FOLDER = "https://contoso.sharepoint.com/sites/DTD/Shared%20Documents/Flowie"
@@ -93,7 +93,9 @@ async def verify_publishing():
             await update_document(doc["id"], UpdateDocumentInput(status="APPROVED"), workspace, user, db)
             await db.commit()
         assert await publish_due(factory, settings, http) == 1
-        base = "/v1.0/drives/drive/root:/Flowie/Docs/Tree/"
+        # Folder numbers are part of the path, like the Docs tree.
+        # VI: Số thư mục là một phần của đường dẫn, giống cây Docs.
+        base = "/v1.0/drives/drive/root:/Flowie/01 · Docs/01 · Tree/"
         assert [path for path, _ in uploads] == [
             base + "_versions/FDS · Tree_v1.md:/content",
             base + "FDS · Tree.md:/content",
@@ -101,6 +103,20 @@ async def verify_publishing():
         body = uploads[0][1]
         assert uploads[1][1] == body and body.endswith("\n---\n\n# v1")
         assert '\ntitle: "FDS · Tree"\nversion: v1\napproved_by: "Publisher"\n' in body
+        assert await publish_due(factory, settings, http) == 0
+
+        # Renumbering a folder uploads the latest release again at the new path; the old files
+        # are left on SharePoint.
+        # VI: Đổi số thư mục làm tải lại phiên bản mới nhất theo đường dẫn mới; file cũ vẫn để
+        # VI: trên SharePoint.
+        async with factory() as db:
+            await update_folder(db, workspace_id=workspace, user_id=user["id"], folder_id=module["id"], values={"number": 3})
+            await db.commit()
+        assert await publish_due(factory, settings, http) == 1
+        assert [path for path, _ in uploads[2:]] == [
+            "/v1.0/drives/drive/root:/Flowie/03 · Docs/01 · Tree/_versions/FDS · Tree_v1.md:/content",
+            "/v1.0/drives/drive/root:/Flowie/03 · Docs/01 · Tree/FDS · Tree.md:/content",
+        ]
         assert await publish_due(factory, settings, http) == 0
 
         # Editing returns the document to Draft; SharePoint keeps v1 until v2 is approved.
