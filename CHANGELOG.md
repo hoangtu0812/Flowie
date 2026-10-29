@@ -16,7 +16,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
-- The task Attachments tab shows files as cards (image thumbnails, type icons, size and date) and adds **New**, which opens a Markdown editor and saves the text as a `.md` attachment; clicking a `.md` card shows it rendered, with a download link. (DTD-55)
+- The task Attachments tab shows files as cards (image thumbnails, type icons, size and date) and adds **New**, which opens a Markdown editor and saves the text as a `.md` attachment; clicking a `.md` card shows it rendered, with a download link. (DTD-55, #58)
   VI: Tab Tệp đính kèm của task hiển thị tệp dạng thẻ (thumbnail ảnh, icon theo loại, dung lượng và ngày) và có nút **Mới** mở trình soạn Markdown để lưu nội dung thành tệp `.md` đính kèm; bấm vào thẻ `.md` để xem nội dung đã hiển thị, kèm link tải xuống. (DTD-55)
 
 - Project documents have approved releases (v1, v2 …): the Docs preview replaces the status picker with Submit for review, Return to draft and Approve (with a confirm naming the release), shows the latest release beside the title, and lets you read any earlier release as approved. Only Approve creates a release, editing an approved document returns it to Draft, and agents can no longer approve through MCP. SharePoint receives the approved text, not the draft: `<title>.md` holds the latest release and `_versions/<title>_vN.md` keeps each one, both with a front matter naming the version, approver and time. Adds `document_releases`, `document_publications.release` and two triggers through a Prisma migration; documents approved before this become v1 and are uploaded once more in the new layout. Deploy `api` and `web` together. (DTD-58, #54)
