@@ -66,6 +66,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
+- Typing a comment no longer makes the task page and its scrollbar jump: images in the description and comments are no longer reloaded on every keystroke. The comment box now grows with its text up to about 20 lines, then scrolls inside. (DTD-55)
+  VI: Gõ bình luận không còn làm trang task và thanh cuộn nhảy: ảnh trong mô tả và bình luận không bị tải lại ở mỗi phím gõ. Ô bình luận tự giãn theo nội dung tới khoảng 20 dòng rồi cuộn bên trong. (DTD-55)
+
 - Browser regression tests use the task page's new Send comment button, Attachments tab and Activity tab, so verification on `main` passes again after the task-tab change. (DTD-55, #56)
   VI: Test hồi quy trên trình duyệt dùng nút Gửi bình luận, tab Tệp đính kèm và tab Hoạt động mới của trang task, nên bước kiểm tra trên `main` chạy qua lại sau thay đổi chia tab. (DTD-55)
 

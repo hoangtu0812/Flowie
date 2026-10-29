@@ -1,4 +1,4 @@
-import Markdown from 'react-markdown';
+import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { VStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
@@ -78,6 +78,135 @@ const isMermaid = (className: unknown) =>
    (Array.isArray(className) ? className : [className]).includes('language-mermaid');
 
 /**
+ * Element renderers for both appearances, built once at module load. react-markdown compares
+ * component identity on every render, so an inline object would remount each element on any
+ * parent update — an embedded screenshot would then fetch again and fall back to its loading
+ * placeholder, making the page jump while someone types a comment.
+ * VI: Bộ renderer cho cả hai kiểu hiển thị, tạo một lần khi nạp module. react-markdown so sánh
+ * VI: định danh component ở mỗi lần render, nên object tạo trực tiếp sẽ làm mọi phần tử bị
+ * VI: mount lại khi component cha cập nhật — ảnh chụp màn hình nhúng sẽ tải lại và về khung chờ,
+ * VI: làm trang nhảy khi người dùng đang gõ bình luận.
+ */
+function markdownComponents(readable: boolean): Components {
+   return {
+      h1: ({ children, id }) => (
+         <Heading id={id} level={readable ? 2 : 1} accessibilityLevel={1}>
+            {children}
+         </Heading>
+      ),
+      h2: ({ children, id }) => (
+         <Heading id={id} level={readable ? 3 : 2} accessibilityLevel={2}>
+            {children}
+         </Heading>
+      ),
+      h3: ({ children, id }) => (
+         <Heading id={id} level={readable ? 4 : 3} accessibilityLevel={3}>
+            {children}
+         </Heading>
+      ),
+      h4: ({ children, id }) => (
+         <Heading id={id} level={4}>
+            {children}
+         </Heading>
+      ),
+      h5: ({ children, id }) => (
+         <Heading id={id} level={5}>
+            {children}
+         </Heading>
+      ),
+      h6: ({ children, id }) => (
+         <Heading id={id} level={6}>
+            {children}
+         </Heading>
+      ),
+      p: ({ children }) => (
+         <Text as="p" type={readable ? 'inherit' : 'body'}>
+            {children}
+         </Text>
+      ),
+      a: ({ children, href }) => (
+         <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary underline"
+         >
+            {children}
+         </a>
+      ),
+      // A mermaid block renders as a diagram, so it must not sit inside <pre>.
+      // VI: Khối mermaid được vẽ thành sơ đồ nên không được nằm trong <pre>.
+      pre: ({ children, node }) =>
+         isMermaid((node?.children?.[0] as HtmlNode | undefined)?.properties?.className) ? (
+            <>{children}</>
+         ) : (
+            <pre
+               className={cn(
+                  'overflow-auto rounded bg-muted p-4',
+                  readable && 'max-w-full border border-border/60 bg-muted/30 text-xs leading-6'
+               )}
+            >
+               {children}
+            </pre>
+         ),
+      code: ({ children, className }) =>
+         className === 'language-mermaid' ? (
+            <MermaidDiagram code={String(children).replace(/\n$/, '')} />
+         ) : (
+            <code className={className ?? 'rounded bg-muted px-1 font-mono'}>{children}</code>
+         ),
+      ul: ({ children }) => <ul className="list-disc space-y-1 pl-6">{children}</ul>,
+      ol: ({ children, start }) => (
+         <ol start={start} className="list-decimal space-y-1 pl-6">
+            {children}
+         </ol>
+      ),
+      blockquote: ({ children }) => (
+         <blockquote
+            className={cn(
+               'border-l-2 border-border pl-4',
+               readable && 'text-muted-foreground italic'
+            )}
+         >
+            {children}
+         </blockquote>
+      ),
+      table: ({ children }) => (
+         <VStack className="overflow-x-auto">
+            <table className="w-full border-collapse">{children}</table>
+         </VStack>
+      ),
+      th: ({ children }) => (
+         <th scope="col" className="border border-border p-2 text-left">
+            {children}
+         </th>
+      ),
+      td: ({ children }) => <td className="border border-border p-2">{children}</td>,
+      input: ({ checked }) => (
+         <input
+            type="checkbox"
+            checked={checked}
+            disabled
+            readOnly
+            aria-label={checked ? 'Completed task list item' : 'Incomplete task list item'}
+         />
+      ),
+      img: ({ src, alt }) =>
+         typeof src === 'string' ? (
+            // Attachment URLs are private and need the session on the
+            // request, which a bare `<img src>` cannot carry.
+            <AttachmentImage
+               src={src}
+               alt={alt ?? ''}
+               className={cn('max-h-[28rem] w-auto object-contain', readable && 'border-border/50')}
+            />
+         ) : null,
+   };
+}
+
+const COMPONENTS = { default: markdownComponents(false), issue: markdownComponents(true) };
+
+/**
  * CommonMark/GFM rendering without raw HTML or executable URL protocols. `mentions` lists the
  * member names whose `@Name` should be highlighted.
  * VI: Hiển thị CommonMark/GFM không có HTML thô hay giao thức URL thực thi được. `mentions` là
@@ -100,128 +229,7 @@ export function MarkdownPreview({
             skipHtml
             remarkPlugins={mentions.length ? [remarkGfm, remarkMentions(mentions)] : [remarkGfm]}
             rehypePlugins={[rehypeHeadingIds]}
-            components={{
-               h1: ({ children, id }) => (
-                  <Heading id={id} level={readable ? 2 : 1} accessibilityLevel={1}>
-                     {children}
-                  </Heading>
-               ),
-               h2: ({ children, id }) => (
-                  <Heading id={id} level={readable ? 3 : 2} accessibilityLevel={2}>
-                     {children}
-                  </Heading>
-               ),
-               h3: ({ children, id }) => (
-                  <Heading id={id} level={readable ? 4 : 3} accessibilityLevel={3}>
-                     {children}
-                  </Heading>
-               ),
-               h4: ({ children, id }) => (
-                  <Heading id={id} level={4}>
-                     {children}
-                  </Heading>
-               ),
-               h5: ({ children, id }) => (
-                  <Heading id={id} level={5}>
-                     {children}
-                  </Heading>
-               ),
-               h6: ({ children, id }) => (
-                  <Heading id={id} level={6}>
-                     {children}
-                  </Heading>
-               ),
-               p: ({ children }) => (
-                  <Text as="p" type={readable ? 'inherit' : 'body'}>
-                     {children}
-                  </Text>
-               ),
-               a: ({ children, href }) => (
-                  <a
-                     href={href}
-                     target="_blank"
-                     rel="noopener noreferrer"
-                     className="text-primary underline"
-                  >
-                     {children}
-                  </a>
-               ),
-               // A mermaid block renders as a diagram, so it must not sit inside <pre>.
-               // VI: Khối mermaid được vẽ thành sơ đồ nên không được nằm trong <pre>.
-               pre: ({ children, node }) =>
-                  isMermaid(
-                     (node?.children?.[0] as HtmlNode | undefined)?.properties?.className
-                  ) ? (
-                     <>{children}</>
-                  ) : (
-                     <pre
-                        className={cn(
-                           'overflow-auto rounded bg-muted p-4',
-                           readable &&
-                              'max-w-full border border-border/60 bg-muted/30 text-xs leading-6'
-                        )}
-                     >
-                        {children}
-                     </pre>
-                  ),
-               code: ({ children, className }) =>
-                  className === 'language-mermaid' ? (
-                     <MermaidDiagram code={String(children).replace(/\n$/, '')} />
-                  ) : (
-                     <code className={className ?? 'rounded bg-muted px-1 font-mono'}>
-                        {children}
-                     </code>
-                  ),
-               ul: ({ children }) => <ul className="list-disc space-y-1 pl-6">{children}</ul>,
-               ol: ({ children, start }) => (
-                  <ol start={start} className="list-decimal space-y-1 pl-6">
-                     {children}
-                  </ol>
-               ),
-               blockquote: ({ children }) => (
-                  <blockquote
-                     className={cn(
-                        'border-l-2 border-border pl-4',
-                        readable && 'text-muted-foreground italic'
-                     )}
-                  >
-                     {children}
-                  </blockquote>
-               ),
-               table: ({ children }) => (
-                  <VStack className="overflow-x-auto">
-                     <table className="w-full border-collapse">{children}</table>
-                  </VStack>
-               ),
-               th: ({ children }) => (
-                  <th scope="col" className="border border-border p-2 text-left">
-                     {children}
-                  </th>
-               ),
-               td: ({ children }) => <td className="border border-border p-2">{children}</td>,
-               input: ({ checked }) => (
-                  <input
-                     type="checkbox"
-                     checked={checked}
-                     disabled
-                     readOnly
-                     aria-label={checked ? 'Completed task list item' : 'Incomplete task list item'}
-                  />
-               ),
-               img: ({ src, alt }) =>
-                  typeof src === 'string' ? (
-                     // Attachment URLs are private and need the session on the
-                     // request, which a bare `<img src>` cannot carry.
-                     <AttachmentImage
-                        src={src}
-                        alt={alt ?? ''}
-                        className={cn(
-                           'max-h-[28rem] w-auto object-contain',
-                           readable && 'border-border/50'
-                        )}
-                     />
-                  ) : null,
-            }}
+            components={COMPONENTS[appearance]}
          >
             {content}
          </Markdown>

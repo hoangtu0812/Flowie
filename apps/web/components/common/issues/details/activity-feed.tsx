@@ -229,16 +229,33 @@ export function CommentsSection({ issueId, state }: { issueId: string; state: Ac
    // VI: Nút gửi và dòng gợi ý dán ảnh nằm trong khung ô nhập, giống ô nhập chat.
    const composer = (
       <div className="rounded-lg border border-input bg-background focus-within:ring-1 focus-within:ring-ring">
-         <textarea
-            aria-label={t('comment')}
-            value={state.draft}
-            onChange={(event) => state.setDraft(event.target.value)}
-            onPaste={onPaste}
-            rows={3}
-            placeholder={t('commentPlaceholder')}
-            disabled={disabled}
-            className="block w-full resize-none bg-transparent px-3 pt-2.5 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60"
-         />
+         {/*
+          * The box grows with the draft: an invisible copy with the same font, padding and line
+          * height sits in the same grid cell and sets the height, so nothing is measured in
+          * script and the page never shrinks for a moment (which made the scroll position jump).
+          * Past the cap the textarea scrolls inside.
+          * VI: Ô tự giãn theo bản nháp: một bản sao ẩn cùng font, padding và chiều cao dòng nằm cùng
+          * VI: ô lưới và quyết định chiều cao, nên không cần đo bằng script và trang không bị co lại
+          * VI: tạm thời (điều làm vị trí cuộn bị nhảy). Vượt giới hạn thì textarea cuộn bên trong.
+          */}
+         <div className="grid">
+            <div
+               aria-hidden
+               className="invisible max-h-[30rem] min-h-[5.25rem] overflow-hidden px-3 pt-2.5 text-sm leading-6 break-words whitespace-pre-wrap [grid-area:1/1]"
+            >
+               {state.draft + ' '}
+            </div>
+            <textarea
+               aria-label={t('comment')}
+               value={state.draft}
+               onChange={(event) => state.setDraft(event.target.value)}
+               onPaste={onPaste}
+               rows={3}
+               placeholder={t('commentPlaceholder')}
+               disabled={disabled}
+               className="block max-h-[30rem] w-full resize-none overflow-y-auto bg-transparent px-3 pt-2.5 text-sm leading-6 break-words outline-none [grid-area:1/1] placeholder:text-muted-foreground disabled:opacity-60"
+            />
+         </div>
          <HStack justify="between" vAlign="center" gap={2} className="px-3 pb-2">
             <Text type="supporting" size="sm">
                {uploading ? t('uploadingImage') : t('pasteScreenshot')}
