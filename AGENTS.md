@@ -1,5 +1,27 @@
 # Repository Operating Rules
 
+## Flowie project for this repository
+
+- This repository (`https://github.com/hoangtu0812/Flowie.git`, base branch
+  `main`) is the code of Flowie project **Flowie** (identifier `FL`, id
+  `czupvogljb6pm9sceunw3aaat`) in team **DTD** (id
+  `cizp13d9d5jaejvhtknou0bbs`). Create Flowie tasks for work in this repository
+  in that team and project.
+- The same Flowie MCP connection also reaches other projects. Their code lives
+  in other repositories, so do not implement their tasks here:
+
+  | Project | Identifier | Repository |
+  | --- | --- | --- |
+  | Turn Around Platform | `TAM` | `https://dev.azure.com/bsr-its/BSR-Digital-Operations-Platform` (`develop`) |
+  | AI Platform | `AIP` | none configured |
+  | BSR-Meeting | `BSR-MEETING` | none configured |
+
+- Before working on a task, read its project (`get_issue_context`). If it is
+  not `FL`, stop and say which project and repository it belongs to. This
+  table can go out of date: `list_projects` and `get_project_repositories` give
+  the current list (Settings → Integrations → External coding agent
+  configuration).
+
 ## Deployment model
 
 - This repository has one deployed environment: **CT107 production**.
