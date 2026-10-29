@@ -483,7 +483,9 @@ export function FilterValueOptionController<TData>({
       ...o,
       selected: filter?.values.includes(o.value),
       initialSelected: filter?.values.includes(o.value),
-      count: counts?.get(o.value) ?? 0,
+      // No counts (server strategy) leaves `count` undefined so no badge shows.
+      // VI: Không có số đếm (chế độ server) thì để `count` undefined để không hiện số.
+      count: counts ? (counts.get(o.value) ?? 0) : undefined,
     }))
   }, [])
 
@@ -561,7 +563,7 @@ export function FilterValueMultiOptionController<TData>({
         ...o,
         selected,
         initialSelected: selected,
-        count: counts?.get(o.value) ?? 0,
+        count: counts ? (counts.get(o.value) ?? 0) : undefined,
       }
     })
   }, [])

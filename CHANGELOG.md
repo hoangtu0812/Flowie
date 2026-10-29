@@ -75,6 +75,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
+- The issue Filter now works for every section: Status, Labels and Cycle list the workspace's real statuses, labels and cycles instead of demo data, filters apply to all matching issues (not only the loaded page) and stay in the link after a reload, Clear removes them, and "Project is not X" keeps issues without a project. Option counts are no longer shown because they only counted the loaded page. No schema change; deploy `api` and `web` together. (DTD-69, #64)
+  VI: Filter danh sách task hoạt động ở mọi mục: Status, Labels và Cycle hiển thị trạng thái, nhãn và cycle thật của workspace thay cho dữ liệu mẫu, bộ lọc áp dụng trên toàn bộ task khớp (không chỉ trang đã tải) và giữ nguyên trong link khi tải lại, Clear bỏ bộ lọc, và "Project is not X" giữ cả task không thuộc dự án. Không còn hiển thị số đếm cạnh lựa chọn vì số đó chỉ tính trên trang đã tải. Không đổi schema; deploy `api` và `web` cùng lúc. (DTD-69)
+
 - The issue Filter's Assignee and Project sections list the workspace's real members and projects instead of demo data, so picking one filters the list correctly on All issues and the other issue lists. (DTD-63, #63)
   VI: Mục Assignee và Project của Filter danh sách task hiển thị thành viên và dự án thật của workspace thay cho dữ liệu mẫu, nên chọn một mục sẽ lọc đúng ở All issues và các danh sách task khác. (DTD-63)
 

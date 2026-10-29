@@ -4,13 +4,13 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { createColumnConfigHelper } from '@/components/data-table-filter/core/filters';
 import type { ColumnOption, FiltersState } from '@/components/data-table-filter/core/types';
 import { multiOptionFilterFn, optionFilterFn } from '@/components/data-table-filter/lib/filter-fns';
-import { cycles, cycleStatusLabel } from '@/mock-data/cycles';
 import { Issue } from '@/mock-data/issues';
-import { labels } from '@/mock-data/labels';
+import type { LabelInterface } from '@/mock-data/labels';
 import { priorities } from '@/mock-data/priorities';
-import { status, StatusCategory } from '@/mock-data/status';
+import type { Status, StatusCategory } from '@/mock-data/status';
 import type { Project } from '@/mock-data/projects';
 import type { User } from '@/mock-data/users';
+import type { IssueCycle } from '@/store/issues-store';
 import {
    BarChart3,
    CircleCheck,
@@ -25,11 +25,12 @@ import {
 /*                                Option lists                                */
 /* -------------------------------------------------------------------------- */
 
-const statusOptions: ColumnOption[] = status.map((item) => ({
-   value: item.id,
-   label: item.name,
-   icon: <item.icon />,
-}));
+const statusOptions = (statuses: Status[]): ColumnOption[] =>
+   statuses.map((item) => ({
+      value: item.id,
+      label: item.name,
+      icon: <item.icon />,
+   }));
 
 const STATUS_TYPES: { id: StatusCategory; name: string }[] = [
    { id: 'triage', name: 'Triage' },
@@ -46,12 +47,15 @@ const statusTypeOptions: ColumnOption[] = STATUS_TYPES.map((item) => ({
    icon: <CircleDashed className="size-4 text-muted-foreground" />,
 }));
 
-// Assignee and Project choices come from the scope's real members and projects
-// (`GET /issues/options`, kept in the issues store), so their values match the
-// ids the accessors read from loaded issues. Mock ids would match no issue.
-// VI: Lựa chọn Assignee và Project lấy từ thành viên và dự án thật của phạm vi
-// (`GET /issues/options`, lưu trong issues store) để giá trị khớp id mà accessor
-// đọc từ task đã tải. Id dữ liệu mẫu sẽ không khớp task nào.
+// Status, Assignee, Labels, Project and Cycle choices come from the scope's
+// real workflow, members, labels, projects and cycles (`GET /issues/options`,
+// kept in the issues store), so their values match the ids the accessors read
+// from loaded issues and the ids the API filters on. Mock ids would match no
+// issue.
+// VI: Lựa chọn Status, Assignee, Labels, Project và Cycle lấy từ workflow,
+// thành viên, nhãn, dự án và cycle thật của phạm vi (`GET /issues/options`,
+// lưu trong issues store) để giá trị khớp id mà accessor đọc từ task đã tải và
+// id mà API dùng để lọc. Id dữ liệu mẫu sẽ không khớp task nào.
 const assigneeOptions = (members: User[]): ColumnOption[] => [
    {
       value: 'unassigned',
@@ -76,11 +80,12 @@ const priorityOptions: ColumnOption[] = priorities.map((priority) => ({
    icon: <priority.icon className="size-4 text-muted-foreground" />,
 }));
 
-const labelOptions: ColumnOption[] = labels.map((label) => ({
-   value: label.id,
-   label: label.name,
-   icon: <span className="size-2.5 rounded-full" style={{ backgroundColor: label.color }} />,
-}));
+const labelOptions = (labels: LabelInterface[]): ColumnOption[] =>
+   labels.map((label) => ({
+      value: label.id,
+      label: label.name,
+      icon: <span className="size-2.5 rounded-full" style={{ backgroundColor: label.color }} />,
+   }));
 
 const projectOptions = (projects: Project[]): ColumnOption[] =>
    projects.map((project) => ({
@@ -89,7 +94,7 @@ const projectOptions = (projects: Project[]): ColumnOption[] =>
       icon: <project.icon className="size-4 text-muted-foreground" />,
    }));
 
-const cycleOptions: ColumnOption[] = [
+const cycleOptions = (cycles: IssueCycle[]): ColumnOption[] => [
    {
       value: 'no-cycle',
       label: 'No cycle',
@@ -97,7 +102,7 @@ const cycleOptions: ColumnOption[] = [
    },
    ...cycles.map((cycle) => ({
       value: cycle.id,
-      label: `${cycle.name} (${cycleStatusLabel[cycle.status]})`,
+      label: cycle.name,
       icon: <RefreshCcw className="size-4 text-muted-foreground" />,
    })),
 ];
@@ -109,14 +114,33 @@ const cycleOptions: ColumnOption[] = [
 const dtf = createColumnConfigHelper<Issue>();
 
 /**
- * Filterable issue columns for the bazza/ui data-table-filter component.
- * Accessors return the raw values the filter functions compare against.
- * `members` and `projects` are the issues store's lists for the loaded scope.
- * VI: Các cột lọc task cho data-table-filter của bazza/ui. Accessor trả giá trị
- * gốc để hàm lọc so sánh. `members` và `projects` là danh sách của issues store
- * cho phạm vi đang tải.
+ * Option lists of the loaded scope, as kept in the issues store.
+ * VI: Danh sách lựa chọn của phạm vi đang tải, lấy từ issues store.
  */
-export const createIssueFilterColumns = (members: User[], projects: Project[]) =>
+export interface IssueFilterOptions {
+   members: User[];
+   projects: Project[];
+   statuses: Status[];
+   labels: LabelInterface[];
+   cycles: IssueCycle[];
+}
+
+/**
+ * Filterable issue columns for the bazza/ui data-table-filter component.
+ * Accessors return the raw values the filter functions compare against; the
+ * column ids and values are the `filters` contract of `GET /issues`
+ * (`OPTION_COLUMNS` in `issue_search.py`).
+ * VI: Các cột lọc task cho data-table-filter của bazza/ui. Accessor trả giá trị
+ * gốc để hàm lọc so sánh; id cột và giá trị là hợp đồng `filters` của
+ * `GET /issues` (`OPTION_COLUMNS` trong `issue_search.py`).
+ */
+export const createIssueFilterColumns = ({
+   members,
+   projects,
+   statuses,
+   labels,
+   cycles,
+}: IssueFilterOptions) =>
    [
       dtf
          .option()
@@ -124,7 +148,7 @@ export const createIssueFilterColumns = (members: User[], projects: Project[]) =
          .accessor((issue: Issue) => issue.status.id)
          .displayName('Status')
          .icon(CircleCheck)
-         .options(statusOptions)
+         .options(statusOptions(statuses))
          .build(),
       dtf
          .option()
@@ -156,7 +180,7 @@ export const createIssueFilterColumns = (members: User[], projects: Project[]) =
          .accessor((issue: Issue) => issue.labels.map((label) => label.id))
          .displayName('Labels')
          .icon(Tag)
-         .options(labelOptions)
+         .options(labelOptions(labels))
          .build(),
       dtf
          .option()
@@ -172,7 +196,7 @@ export const createIssueFilterColumns = (members: User[], projects: Project[]) =
          .accessor((issue: Issue) => (issue.cycleId === '' ? 'no-cycle' : issue.cycleId))
          .displayName('Cycle')
          .icon(RefreshCcw)
-         .options(cycleOptions)
+         .options(cycleOptions(cycles))
          .build(),
       dtf
          .option()
@@ -203,7 +227,13 @@ export const createIssueFilterColumns = (members: User[], projects: Project[]) =
 // Filtering only reads accessors, which do not depend on the option lists.
 // VI: Việc lọc chỉ dùng accessor, không phụ thuộc danh sách lựa chọn.
 const columnById = new Map<string, ReturnType<typeof createIssueFilterColumns>[number]>(
-   createIssueFilterColumns([], []).map((column) => [column.id, column])
+   createIssueFilterColumns({
+      members: [],
+      projects: [],
+      statuses: [],
+      labels: [],
+      cycles: [],
+   }).map((column) => [column.id, column])
 );
 
 /**
