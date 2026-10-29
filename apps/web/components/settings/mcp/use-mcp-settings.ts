@@ -8,11 +8,10 @@ import {
    createMcpConnection,
    getMcpConfiguration,
    getMcpResources,
-   listMcpAudit,
    listMcpConnections,
    revokeMcpConnection,
+   updateMcpConnection,
    type ConnectionDraft,
-   type McpAudit,
    type McpConfiguration,
    type McpConnection,
    type McpResources,
@@ -23,7 +22,6 @@ export function useMcpSettings() {
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [configuration, setConfiguration] = useState<McpConfiguration>();
    const [connections, setConnections] = useState<McpConnection[]>([]);
-   const [audit, setAudit] = useState<McpAudit[]>([]);
    const [resources, setResources] = useState<McpResources>({
       teams: [],
       projects: [],
@@ -38,12 +36,7 @@ export function useMcpSettings() {
    const [createdId, setCreatedId] = useState<string>();
 
    const refresh = useCallback(async (id: string) => {
-      const [nextConnections, nextAudit] = await Promise.all([
-         listMcpConnections(id),
-         listMcpAudit(id),
-      ]);
-      setConnections(nextConnections);
-      setAudit(nextAudit);
+      setConnections(await listMcpConnections(id));
    }, []);
 
    useEffect(() => {
@@ -98,6 +91,14 @@ export function useMcpSettings() {
       }, `Connection "${draft.name.trim()}" created. Copy its token now.`);
    }
 
+   async function update(connectionId: string, draft: Omit<ConnectionDraft, 'expiresInDays'>) {
+      if (!workspaceId) return false;
+      return perform(async () => {
+         await updateMcpConnection(workspaceId, connectionId, draft);
+         await refresh(workspaceId);
+      }, `Connection "${draft.name.trim()}" updated. The token is unchanged.`);
+   }
+
    async function revoke(connectionId: string) {
       if (!workspaceId) return false;
       return perform(async () => {
@@ -113,13 +114,13 @@ export function useMcpSettings() {
       canManage,
       resources,
       connections,
-      audit,
       token,
       createdId,
       loading,
       busy,
       error,
       create,
+      update,
       revoke,
       dismissToken: () => setToken(undefined),
    };

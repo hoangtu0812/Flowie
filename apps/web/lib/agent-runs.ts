@@ -27,6 +27,15 @@ export type AgentRun = {
    progressAt?: string | null;
    pullRequestUrl?: string | null;
 };
+export type ProjectRepositoryDraft = {
+   projectId: string;
+   name: string;
+   repositoryUrl: string;
+   baseBranch: string;
+   testCommands: string[][];
+   instructions?: string;
+};
+export type ProjectRepository = ProjectRepositoryDraft & { id: string };
 export type AgentRunSummary = { state: string; count: number; averageSeconds: number | null };
 
 async function request<T>(workspaceId: string, path: string, init?: RequestInit): Promise<T> {
@@ -75,20 +84,31 @@ export async function disableAgentAutomation(workspaceId: string, automationId: 
    });
 }
 
+export async function loadProjectRepositories(workspaceId: string) {
+   return request<ProjectRepository[]>(workspaceId, 'repositories');
+}
+
+/** Creates a repository, or updates the one with this id (its URL may change). */
+/** VI: Tạo repository, hoặc cập nhật repository có id này (được đổi URL). */
 export async function configureProjectRepository(
    workspaceId: string,
-   draft: {
-      projectId: string;
-      name: string;
-      repositoryUrl: string;
-      baseBranch: string;
-      testCommands: string[][];
-   }
+   draft: ProjectRepositoryDraft,
+   repositoryId?: string
 ) {
-   return request(workspaceId, 'repositories', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(draft),
+   return request(
+      workspaceId,
+      repositoryId ? `repositories/${encodeURIComponent(repositoryId)}` : 'repositories',
+      {
+         method: repositoryId ? 'PUT' : 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify(draft),
+      }
+   );
+}
+
+export async function removeProjectRepository(workspaceId: string, repositoryId: string) {
+   return request(workspaceId, `repositories/${encodeURIComponent(repositoryId)}`, {
+      method: 'DELETE',
    });
 }
 

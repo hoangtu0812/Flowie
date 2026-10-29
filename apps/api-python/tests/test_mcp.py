@@ -1315,6 +1315,166 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(limited.status_code, 429)
                 self.assertIn("Retry-After", limited.headers)
 
+    async def test_connection_edit_keeps_token_and_audits_changes(self):
+        from app.modules.mcp.connections import update
+        from app.modules.mcp.contracts import ConnectionUpdateInput
+
+        with self.assertRaises(ApiError):
+            await self.call("get_issue", issueId=self.other_issue["id"])
+        grant = ConnectionUpdateInput(
+            name="Integration test edited",
+            scopes=["issues:read"],
+            projectIds=[self.project, self.other_project],
+        )
+        async with self.factory() as db:
+            updated = await update(
+                db, self.workspace, self.user, self.connection["id"], grant
+            )
+            self.assertNotIn("token", updated)
+            self.assertEqual(updated["projectIds"], sorted(grant.projectIds))
+            self.principal = await authenticate(db, self.connection["token"])
+            metadata = (
+                await db.execute(
+                    text("""SELECT metadata FROM audit_logs WHERE entity_id=:id
+                    AND action='mcp.connection.updated'"""),
+                    {"id": self.connection["id"]},
+                )
+            ).scalar_one()
+            self.assertEqual(metadata["projectIds"]["to"], sorted(grant.projectIds))
+            self.assertNotIn("teamIds", metadata)
+            with self.assertRaises(ApiError):
+                await update(
+                    db,
+                    self.workspace,
+                    self.user,
+                    self.connection["id"],
+                    ConnectionUpdateInput(
+                        name="Unknown", scopes=["issues:read"], projectIds=[_cuid()]
+                    ),
+                )
+            await db.rollback()
+        self.assertEqual(
+            (await self.call("get_issue", issueId=self.other_issue["id"]))["id"],
+            self.other_issue["id"],
+        )
+        with self.assertRaises(ApiError) as error:
+            await self.call("list_comments", issueId=self.issue["id"])
+        self.assertEqual(error.exception.status_code, 403)
+        async with self.factory() as db:
+            await revoke(db, self.workspace, self.user, self.connection["id"])
+            with self.assertRaises(ApiError) as error:
+                await update(db, self.workspace, self.user, self.connection["id"], grant)
+            self.assertEqual(error.exception.status_code, 404)
+
+    async def test_audit_page_filters_and_repository_management(self):
+        from starlette.requests import Request
+        from app.modules.identity.security.sessions import create_session
+
+        await self.call("get_my_access")
+        await self.call("get_my_access")
+        with self.assertRaises(ApiError):
+            await self.call("get_issue", issueId=self.other_issue["id"])
+        host = create_app(self.settings)
+        host.state.session_factory = self.factory
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=host), base_url="http://testserver"
+        ) as client:
+            async with self.factory() as db:
+                browser_token, _ = await create_session(db,self.user,Request({"type":"http","headers":[],"client":("127.0.0.1",1234)}),self.settings)
+                await db.commit()
+            client.cookies.set("flowie_access", browser_token)
+            audit = {"workspaceId": self.workspace, "limit": 2}
+            first = (await client.get("/api/v1/mcp/audit", params=audit)).json()["data"]
+            self.assertEqual(len(first["items"]), 2)
+            self.assertEqual(first["items"][0]["connectionName"], "Integration test")
+            second = (
+                await client.get(
+                    "/api/v1/mcp/audit", params={**audit, "cursor": first["nextCursor"]}
+                )
+            ).json()["data"]
+            self.assertTrue(second["items"])
+            self.assertFalse(
+                {item["id"] for item in first["items"]}
+                & {item["id"] for item in second["items"]}
+            )
+            failed = (
+                await client.get(
+                    "/api/v1/mcp/audit",
+                    params={
+                        **audit,
+                        "outcome": "failed",
+                        "connectionId": self.connection["id"],
+                    },
+                )
+            ).json()["data"]
+            self.assertEqual(
+                [item["action"] for item in failed["items"]], ["mcp.get_issue.denied"]
+            )
+            self.assertIsNone(failed["nextCursor"])
+            reused = await client.get(
+                "/api/v1/mcp/audit",
+                params={**audit, "outcome": "failed", "cursor": first["nextCursor"]},
+            )
+            self.assertEqual(reused.status_code, 400)
+
+            base = "/api/v1/agent-runs/repositories"
+            scope = {"workspaceId": self.workspace}
+            ids = []
+            for name in ["web", "api"]:
+                response = await client.post(
+                    base,
+                    params=scope,
+                    json={
+                        "projectId": self.project,
+                        "name": name,
+                        "repositoryUrl": f"https://github.com/example/{name}.git",
+                        "baseBranch": "main",
+                    },
+                )
+                self.assertEqual(response.status_code, 201, response.text)
+                ids.append(response.json()["data"]["id"])
+            listed = (await client.get(base, params=scope)).json()["data"]
+            self.assertEqual(
+                sorted(item["name"] for item in listed), ["api", "web"]
+            )
+            clash = await client.put(
+                f"{base}/{ids[0]}",
+                params=scope,
+                json={
+                    "projectId": self.project,
+                    "name": "web",
+                    "repositoryUrl": "https://github.com/example/api.git",
+                    "baseBranch": "main",
+                },
+            )
+            self.assertEqual(clash.status_code, 409, clash.text)
+            moved = await client.put(
+                f"{base}/{ids[0]}",
+                params=scope,
+                json={
+                    "projectId": self.project,
+                    "name": "web app",
+                    "repositoryUrl": "https://github.com/example/web-app.git",
+                    "baseBranch": "develop",
+                    "testCommands": [["pnpm", "test"]],
+                },
+            )
+            self.assertEqual(moved.status_code, 200, moved.text)
+            self.assertEqual(
+                (await client.delete(f"{base}/{ids[1]}", params=scope)).status_code,
+                200,
+            )
+            listed = (
+                await client.get(base, params={**scope, "projectId": self.project})
+            ).json()["data"]
+            self.assertEqual(len(listed), 1)
+            self.assertEqual(listed[0]["baseBranch"], "develop")
+            self.assertEqual(listed[0]["testCommands"], [["pnpm", "test"]])
+            self.assertEqual(
+                (await client.delete(f"{base}/{ids[1]}", params=scope)).status_code,
+                404,
+            )
+
     async def test_web_writer_versions(self):
         async with self.factory() as db:
             await db.execute(

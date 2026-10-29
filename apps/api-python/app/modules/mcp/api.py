@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import Depends, Query, Request
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from sqlalchemy import text
 
+from ...core.pagination import CursorCodec
 from ...db.session import get_session
 from ...domains.auth import current_user
 from ..access.membership import _workspace_role
 from . import connections
-from .contracts import ConnectionInput
+from .contracts import ConnectionInput, ConnectionUpdateInput
 from .domain import ALL_SCOPES
 from .domain import Principal
 from .policy import AccessPolicy
@@ -97,6 +100,19 @@ async def create_connection(
     return {"data": await connections.create(db, workspaceId, user, payload)}
 
 
+@router.patch("/connections/{connection_id}")
+async def update_connection(
+    connection_id: str,
+    payload: ConnectionUpdateInput,
+    workspaceId: str = Query(min_length=1),
+    user=Depends(current_user),
+    db=Depends(get_session),
+):
+    return {
+        "data": await connections.update(db, workspaceId, user, connection_id, payload)
+    }
+
+
 @router.delete("/connections/{connection_id}")
 async def revoke_connection(
     connection_id: str,
@@ -108,25 +124,72 @@ async def revoke_connection(
     return {"data": {"id": connection_id, "revoked": True}}
 
 
+# Tool events carry the connection in metadata; create/update/revoke events name it
+# as the audited entity. Both resolve to one connection id for filtering and naming.
+# VI: Sự kiện tool lưu kết nối trong metadata; sự kiện tạo/sửa/thu hồi lưu nó làm
+# VI: thực thể được audit. Cả hai quy về một id kết nối để lọc và lấy tên.
+AUDIT_CONNECTION = (
+    "COALESCE(a.metadata->>'connectionId',"
+    "CASE WHEN a.entity_type='mcp-connection' THEN a.entity_id END)"
+)
+
+
 @router.get("/audit")
 async def connection_audit(
+    request: Request,
     workspaceId: str = Query(min_length=1),
-    limit: int = Query(default=50, ge=1, le=100),
+    limit: int = Query(default=20, ge=1, le=100),
+    cursor: str | None = Query(default=None, max_length=1000),
+    connectionId: str | None = Query(default=None, min_length=1, max_length=100),
+    outcome: Literal["succeeded", "failed"] | None = None,
     user=Depends(current_user),
     db=Depends(get_session),
 ):
     role = await _workspace_role(db, workspaceId, user["id"])
-    rows = (
-        await db.execute(
-            text("""SELECT id,action,entity_id AS "entityId",metadata,created_at AS "createdAt"
-        FROM audit_logs WHERE workspace_id=:workspace AND action LIKE 'mcp.%'
-        AND (:manager OR actor_id=:user) ORDER BY created_at DESC,id DESC LIMIT :limit"""),
-            {
-                "workspace": workspaceId,
-                "manager": role in {"OWNER", "ADMIN"},
-                "user": user["id"],
-                "limit": limit,
-            },
-        )
-    ).mappings()
-    return {"data": [dict(row) for row in rows]}
+    # "failed" also covers denied calls so every unsuccessful call is in one view.
+    # VI: "failed" gồm cả lời gọi bị từ chối để mọi lời gọi không thành công nằm chung một chỗ.
+    codec = CursorCodec(
+        request.app.state.settings.auth_jwt_secret,
+        user["id"],
+        "mcp-audit",
+        {"workspace": workspaceId, "connection": connectionId, "outcome": outcome},
+    )
+    params = {
+        "workspace": workspaceId,
+        "manager": role in {"OWNER", "ADMIN"},
+        "user": user["id"],
+        "connection": connectionId,
+        "outcome": outcome,
+        "limit": limit + 1,
+    }
+    page = ""
+    if cursor:
+        params["after"], params["after_id"] = codec.decode(cursor)
+        page = "AND (a.created_at,a.id)<(:after,:after_id)"
+    rows = [
+        dict(row)
+        for row in (
+            await db.execute(
+                text(f"""SELECT a.id,a.action,a.entity_id AS "entityId",a.metadata,a.created_at AS "createdAt",
+        {AUDIT_CONNECTION} AS "connectionId",c.name AS "connectionName"
+        FROM audit_logs a LEFT JOIN mcp_connections c ON c.id={AUDIT_CONNECTION} AND c.workspace_id=a.workspace_id
+        WHERE a.workspace_id=:workspace AND a.action LIKE 'mcp.%'
+        AND (:manager OR a.actor_id=:user)
+        AND (CAST(:connection AS text) IS NULL OR {AUDIT_CONNECTION}=:connection)
+        AND (CAST(:outcome AS text) IS NULL
+            OR (:outcome='succeeded' AND a.action LIKE '%.succeeded')
+            OR (:outcome='failed' AND (a.action LIKE '%.failed' OR a.action LIKE '%.denied')))
+        {page} ORDER BY a.created_at DESC,a.id DESC LIMIT :limit"""),
+                params,
+            )
+        ).mappings()
+    ]
+    items = rows[:limit]
+    return {
+        "data": {
+            "items": items,
+            "nextCursor": codec.encode(items[-1]["createdAt"], items[-1]["id"])
+            if len(rows) > limit
+            else None,
+        }
+    }

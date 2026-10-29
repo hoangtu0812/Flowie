@@ -18,14 +18,11 @@ class StrictInput(BaseModel):
         return value.strip() if isinstance(value, str) else value
 
 
-class ConnectionInput(StrictInput):
+class ConnectionUpdateInput(StrictInput):
     name: str = Field(min_length=2, max_length=80)
-    scopes: list[str] = Field(
-        default_factory=lambda: sorted(READ_SCOPES), min_length=1, max_length=20
-    )
+    scopes: list[str] = Field(min_length=1, max_length=20)
     teamIds: list[str] = Field(default_factory=list, max_length=100)
     projectIds: list[str] = Field(default_factory=list, max_length=100)
-    expiresInDays: int = Field(default=30, ge=1, le=90)
 
     @model_validator(mode="after")
     def validate_grant(self):
@@ -35,6 +32,13 @@ class ConnectionInput(StrictInput):
         self.teamIds = sorted(set(self.teamIds))
         self.projectIds = sorted(set(self.projectIds))
         return self
+
+
+class ConnectionInput(ConnectionUpdateInput):
+    scopes: list[str] = Field(
+        default_factory=lambda: sorted(READ_SCOPES), min_length=1, max_length=20
+    )
+    expiresInDays: int = Field(default=30, ge=1, le=90)
 
 
 class EmptyInput(StrictInput):
