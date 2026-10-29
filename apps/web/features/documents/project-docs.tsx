@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+   CloudUpload,
    FilePlus2,
    FileText,
    FileUp,
@@ -161,6 +162,12 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
          <HStack gap={2} vAlign="center">
             <DocTypeBadge type={document.docType} />
             <DocStatusBadge status={document.status} />
+            {document.publication?.webUrl && document.publication.version === document.version && (
+               <CloudUpload
+                  className="size-3.5 text-emerald-600 dark:text-emerald-400"
+                  aria-label={tx('Published to SharePoint')}
+               />
+            )}
             <Text type="supporting" size="sm">
                {relativeTime(document.updatedAt, Date.now(), locale)}
             </Text>
@@ -334,6 +341,13 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
                      document={previewDocument}
                      publishing={publishing}
                      onEdit={() => setOpen(previewDocument)}
+                     onStatusChange={(status) =>
+                        void act(
+                           () => updateTreeDocument(previewDocument.id, { status }),
+                           tx('Status updated.')
+                        )
+                     }
+                     onConfigureSharepoint={() => setDialog('sharepoint')}
                   />
                ) : previewFile ? (
                   <PdfPreview file={previewFile} />

@@ -1,17 +1,24 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Download, ExternalLink, FileText, Pencil } from 'lucide-react';
+import { CloudUpload, Download, ExternalLink, FileText, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+   Select,
+   SelectContent,
+   SelectItem,
+   SelectTrigger,
+   SelectValue,
+} from '@/components/ui/select';
 import { MarkdownPreview } from '@/components/common/markdown/markdown-preview';
 import { TableOfContents } from '@/components/common/teams/markdown-document-editor';
 import { useMessages } from '@/features/shared/use-messages';
 import { messages } from '@/features/documents/messages.vi';
 import { attachmentPreviewUrl } from '@/lib/attachments';
-import type { TreeFile } from '@/lib/document-tree';
+import type { DocStatus, TreeFile } from '@/lib/document-tree';
 import { authenticatedFetch } from '@/lib/workspaces';
 import type { ProjectTreeDocument } from './project-docs-api';
-import { DocStatusBadge, DocTypeBadge } from './document-badges';
+import { DOC_STATUSES, DocTypeBadge } from './document-badges';
 
 function PreviewHeader({
    children,
@@ -29,20 +36,28 @@ function PreviewHeader({
 }
 
 /**
- * Read-only view of a Markdown document beside the tree: title, type and status, table of
- * contents and the rendered content (Mermaid included). Edit opens the full editor.
- * VI: Xem chỉ đọc tài liệu Markdown cạnh cây: tiêu đề, loại và trạng thái, mục lục và nội
- * VI: dung đã render (gồm Mermaid). Nút Sửa mở editor đầy đủ.
+ * Read-only view of a Markdown document beside the tree: title, type, current version, a
+ * status picker (Draft → In review → Approved; Approved is what publishes to SharePoint),
+ * the SharePoint state, table of contents and the rendered content (Mermaid included).
+ * Edit opens the full editor, where revision history lives.
+ * VI: Xem chỉ đọc tài liệu Markdown cạnh cây: tiêu đề, loại, version hiện tại, ô chọn trạng
+ * VI: thái (Nháp → Đang duyệt → Đã duyệt; Đã duyệt là điều kiện phát hành lên SharePoint),
+ * VI: trạng thái SharePoint, mục lục và nội dung đã render (gồm Mermaid). Nút Sửa mở editor
+ * VI: đầy đủ, nơi có lịch sử phiên bản.
  */
 export function DocumentPreview({
    document,
    publishing,
    onEdit,
+   onStatusChange,
+   onConfigureSharepoint,
 }: {
    document: ProjectTreeDocument;
    /** The project publishes to SharePoint. VI: Dự án đang phát hành lên SharePoint. */
    publishing: boolean;
    onEdit: () => void;
+   onStatusChange: (status: DocStatus) => void;
+   onConfigureSharepoint: () => void;
 }) {
    const tx = useMessages(messages);
    return (
@@ -58,8 +73,32 @@ export function DocumentPreview({
             <span aria-hidden>{document.icon}</span>
             <h2 className="truncate text-sm font-medium">{document.title}</h2>
             <DocTypeBadge type={document.docType} />
-            <DocStatusBadge status={document.status} />
-            <PublicationStatus document={document} publishing={publishing} />
+            <span className="shrink-0 text-xs text-muted-foreground" title={tx('Version')}>
+               v{document.version}
+            </span>
+            <Select
+               value={document.status ?? 'DRAFT'}
+               onValueChange={(value) => onStatusChange(value as DocStatus)}
+            >
+               <SelectTrigger
+                  className="h-7 w-auto gap-1 text-xs"
+                  aria-label={tx('Document status')}
+               >
+                  <SelectValue />
+               </SelectTrigger>
+               <SelectContent>
+                  {DOC_STATUSES.map((item) => (
+                     <SelectItem key={item.value} value={item.value}>
+                        {tx(item.label)}
+                     </SelectItem>
+                  ))}
+               </SelectContent>
+            </Select>
+            <PublicationStatus
+               document={document}
+               publishing={publishing}
+               onConfigure={onConfigureSharepoint}
+            />
          </PreviewHeader>
          <div className="min-h-0 flex-1 overflow-auto">
             <div className="mx-auto max-w-3xl space-y-4 px-6 py-5">
@@ -72,19 +111,21 @@ export function DocumentPreview({
 }
 
 /**
- * SharePoint publishing state of an Approved document: a link to the published file with
- * its version, "waiting" until the next publish run, or the last error. "Waiting" needs the
- * project to publish (folder set and connection enabled).
- * VI: Trạng thái phát hành SharePoint của tài liệu Đã duyệt: link tới file đã phát hành kèm
- * VI: version, "đang chờ" cho tới lượt phát hành kế tiếp, hoặc lỗi gần nhất. "Đang chờ" chỉ
- * VI: hiện khi dự án đang phát hành (đã gán thư mục và kết nối đang bật).
+ * SharePoint publishing state: a link to the published file with its version, "waiting"
+ * until the next publish run (about a minute), the last error, or — for an Approved
+ * document of a project without SharePoint — a button that opens the folder settings.
+ * VI: Trạng thái phát hành SharePoint: link tới file đã phát hành kèm version, "đang chờ"
+ * VI: cho tới lượt phát hành kế tiếp (khoảng một phút), lỗi gần nhất, hoặc — với tài liệu
+ * VI: Đã duyệt của dự án chưa có SharePoint — nút mở phần cấu hình thư mục.
  */
 function PublicationStatus({
    document,
    publishing,
+   onConfigure,
 }: {
    document: ProjectTreeDocument;
    publishing: boolean;
+   onConfigure: () => void;
 }) {
    const tx = useMessages(messages);
    const publication = document.publication;
@@ -110,7 +151,18 @@ function PublicationStatus({
             {tx('Published v{value0}', { value0: String(publication.version) })}
          </a>
       );
-   if (!publishing || document.status !== 'APPROVED') return null;
+   if (document.status !== 'APPROVED') return null;
+   if (!publishing)
+      return (
+         <button
+            type="button"
+            onClick={onConfigure}
+            className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+         >
+            <CloudUpload className="size-3" />
+            {tx('SharePoint not set up')}
+         </button>
+      );
    return (
       <span className="shrink-0 text-xs text-muted-foreground">{tx('Waiting to publish')}</span>
    );
