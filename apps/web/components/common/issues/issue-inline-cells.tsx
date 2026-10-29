@@ -21,20 +21,27 @@ export function IssueDateCell({
    value,
    kind,
    accent = false,
+   onSave,
 }: {
    issueId: string;
    value: string | undefined;
    kind: 'start' | 'target' | 'due';
    accent?: boolean;
+   /**
+    * Saves the date instead of the issues store, for issues the store has not loaded (sub-issue
+    * tree rows); resolves true when saved. VI: Lưu ngày thay cho issues store, cho issue mà store
+    * chưa tải (hàng của cây sub-issue); trả true khi đã lưu.
+    */
+   onSave?: (value: string | undefined) => Promise<boolean>;
 }) {
    const [open, setOpen] = useState(false);
    const [saving, setSaving] = useState(false);
    const { getIssueById, updateIssueSchedule, updateIssueDueDate } = useIssuesStore();
 
    const save = async (nextValue: string | undefined) => {
-      if (kind === 'due') {
+      if (onSave || kind === 'due') {
          setSaving(true);
-         const saved = await updateIssueDueDate(issueId, nextValue);
+         const saved = await (onSave ? onSave(nextValue) : updateIssueDueDate(issueId, nextValue));
          setSaving(false);
          if (saved) setOpen(false);
          return;

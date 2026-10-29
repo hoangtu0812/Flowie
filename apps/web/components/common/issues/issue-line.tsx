@@ -16,6 +16,7 @@ import { PrioritySelector } from './priority-selector';
 import { ProjectBadge } from './project-badge';
 import { StatusSelector } from './status-selector';
 import { motion } from 'motion/react';
+import { ListTree } from 'lucide-react';
 
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { IssueContextMenu } from './issue-context-menu';
@@ -58,6 +59,16 @@ export function IssueLine({ issue, layoutId = false }: { issue: Issue; layoutId?
                   <span className="text-xs sm:text-sm font-medium sm:font-semibold truncate">
                      {issue.title}
                   </span>
+                  {Boolean(issue.subIssueCount) && (
+                     <span
+                        className="ml-2 inline-flex shrink-0 items-center gap-1 rounded border border-border px-1.5 text-[11px] text-muted-foreground"
+                        title="Completed / total direct sub-issues"
+                        data-testid="sub-issue-progress"
+                     >
+                        <ListTree className="size-3" />
+                        {issue.completedSubIssueCount ?? 0}/{issue.subIssueCount}
+                     </span>
+                  )}
                </Link>
                {/* Fixed columns from here on: they carry the labels printed by
                    IssuesListHeader, so every cell renders even when empty. */}

@@ -44,6 +44,8 @@ type NativeIssue = BugFields & {
    teamId: string | null;
    parentIssueId?: string | null;
    parent?: { id: string; identifier: string; title: string } | null;
+   subIssueCount?: number;
+   completedSubIssueCount?: number;
    identifier: string;
    title: string;
    description?: string | null;
@@ -191,6 +193,8 @@ function asIssue(native: NativeIssue): Issue {
       version: native.version,
       parentIssueId: native.parentIssueId ?? undefined,
       parent: native.parent ?? undefined,
+      subIssueCount: native.subIssueCount,
+      completedSubIssueCount: native.completedSubIssueCount,
       creatorId: native.creator?.id,
       identifier: native.identifier,
       title: native.title,
@@ -336,7 +340,7 @@ interface IssuesState {
       duplicateOfIdentifier?: string
    ) => Promise<Issue>;
    convertIssueToComment: (issueId: string, targetIdentifier: string) => Promise<void>;
-   archiveIssue: (issueId: string) => Promise<void>;
+   archiveIssue: (issueId: string, includeSubIssues?: boolean) => Promise<void>;
 
    // Personal issue state
    updateIssueSubscription: (issueId: string, subscribed: boolean) => Promise<boolean>;
@@ -1183,17 +1187,22 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
       get().deleteIssue(issueId);
    },
 
-   archiveIssue: async (issueId) => {
+   archiveIssue: async (issueId, includeSubIssues = false) => {
       const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
-      const response = await authenticatedFetch(
-         `${api}/issues/${issueId}?${new URLSearchParams({ workspaceId })}`,
-         { method: 'DELETE' }
-      );
+      const query = new URLSearchParams({ workspaceId });
+      if (includeSubIssues) query.set('includeSubIssues', 'true');
+      const response = await authenticatedFetch(`${api}/issues/${issueId}?${query}`, {
+         method: 'DELETE',
+      });
       if (!response.ok) {
          const body = (await response.json().catch(() => null)) as { message?: string } | null;
          throw new Error(body?.message ?? 'Could not archive issue.');
       }
-      get().deleteIssue(issueId);
+      const payload = (await response.json().catch(() => null)) as {
+         data?: { archivedIds?: string[] };
+      } | null;
+      for (const id of payload?.data?.archivedIds ?? [issueId]) get().deleteIssue(id);
+      window.dispatchEvent(new CustomEvent('flowie:sub-issues-changed'));
    },
 
    updateIssueSubscription: async (issueId: string, subscribed: boolean) => {

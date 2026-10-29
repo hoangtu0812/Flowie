@@ -19,3 +19,18 @@ export function issueTree<T extends { id: string; parentIssueId?: string | null 
    }
    return { roots, children };
 }
+
+/**
+ * Progress of a parent from its direct children: completed counts statuses in the Completed
+ * category (any letter case, since mock and API data differ), total counts every listed child.
+ * Grandchildren are left out so one finished task is never counted twice.
+ * VI: Tiến độ của cha theo con trực tiếp: completed đếm trạng thái thuộc nhóm Completed (không
+ * VI: phân biệt hoa thường vì dữ liệu mock và API khác nhau), total đếm mọi con trong danh sách.
+ * VI: Không tính cháu để một task hoàn thành không bị đếm hai lần.
+ */
+export function directProgress(children: { status: { category: string } }[] = []) {
+   const completed = children.filter(
+      (child) => child.status.category.toLowerCase() === 'completed'
+   ).length;
+   return { completed, total: children.length };
+}
