@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator, field_valida
 
 from ..work_items.bug_contracts import BugCreateFields, BugUpdateFields, IssueType, BugSeverity
 from .domain import ALL_SCOPES, READ_SCOPES
+from .instructions import MAX_WORKFLOW_LENGTH
 
 
 class StrictInput(BaseModel):
@@ -32,6 +33,12 @@ class ConnectionUpdateInput(StrictInput):
         self.teamIds = sorted(set(self.teamIds))
         self.projectIds = sorted(set(self.projectIds))
         return self
+
+
+class InstructionsInput(StrictInput):
+    # None or empty text resets the workspace to the built-in workflow.
+    # VI: None hoặc văn bản rỗng đặt lại workspace về quy trình có sẵn.
+    workflow: str | None = Field(default=None, max_length=MAX_WORKFLOW_LENGTH)
 
 
 class ConnectionInput(ConnectionUpdateInput):

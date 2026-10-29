@@ -24,6 +24,7 @@ from app.modules.mcp.contracts import ConnectionInput, UpdateIssueTool
 from app.modules.mcp.domain import ALL_SCOPES
 from app.modules.mcp.pagination import CursorCodec
 from app.modules.mcp.registry import visible_tools
+from app.modules.mcp.transport import SERVER_INSTRUCTIONS
 from app.modules.work_items.contracts import CreateIssueInput
 from app.modules.work_items.issues import create_issue
 
@@ -1412,6 +1413,132 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(ApiError) as error:
                 await update(db, self.workspace, self.user, self.connection["id"], grant)
             self.assertEqual(error.exception.status_code, 404)
+
+    async def test_workspace_instructions_edit_and_initialize(self):
+        from pydantic import ValidationError
+        from app.modules.mcp import instructions
+        from app.modules.mcp.contracts import InstructionsInput
+
+        async def initialize(client, token):
+            response = await client.post(
+                "/mcp/",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json, text/event-stream",
+                    "MCP-Protocol-Version": "2025-11-25",
+                },
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2025-11-25",
+                        "capabilities": {},
+                        "clientInfo": {"name": "test", "version": "1"},
+                    },
+                },
+            )
+            self.assertEqual(response.status_code, 200, response.text)
+            return response.json()["result"]["instructions"]
+
+        member = {"id": _cuid(), "name": "Member", "email": f"{_cuid()}@example.test"}
+        other = {"id": _cuid(), "name": "Other", "email": f"{_cuid()}@example.test"}
+        async with self.factory() as db:
+            now = _utcnow()
+            for person in (member, other):
+                await db.execute(
+                    text("""INSERT INTO users (id,name,email,status,created_at,updated_at)
+                    VALUES (:id,:name,:email,'ACTIVE',:now,:now)"""),
+                    {**person, "now": now},
+                )
+            await db.execute(
+                text("""INSERT INTO workspace_members(id,workspace_id,user_id,role,status,created_at,updated_at)
+                VALUES (:id,:workspace,:user,'MEMBER','ACTIVE',:now,:now)"""),
+                {"id": _cuid(), "workspace": self.workspace, "user": member["id"], "now": now},
+            )
+            other_seed = await create_workspace_bootstrap(
+                db,
+                user_id=other["id"],
+                organization_name="Other",
+                workspace_name=f"Other {_cuid()}",
+                now=now,
+            )
+            await db.commit()
+            other_connection = await create(
+                db,
+                other_seed["workspace_id"],
+                other,
+                ConnectionInput(name="Other workspace", scopes=["issues:read"]),
+            )
+        host = create_app(self.settings)
+        host.state.session_factory = self.factory
+        try:
+            async with host.state.mcp_server.session_manager.run():
+                async with httpx.AsyncClient(
+                    transport=httpx.ASGITransport(app=host), base_url="http://testserver"
+                ) as client:
+                    self.assertEqual(
+                        await initialize(client, self.connection["token"]),
+                        SERVER_INSTRUCTIONS,
+                    )
+                    async with self.factory() as db:
+                        current = await instructions.read(db, self.workspace, member)
+                        self.assertFalse(current["custom"])
+                        self.assertEqual(current["workflow"], instructions.DEFAULT_WORKFLOW)
+                        with self.assertRaises(ApiError) as error:
+                            await instructions.save(db, self.workspace, member, "Mine")
+                        self.assertEqual(error.exception.status_code, 403)
+                        await db.rollback()
+                        with self.assertRaises(ValidationError):
+                            InstructionsInput(
+                                workflow="x" * (instructions.MAX_WORKFLOW_LENGTH + 1)
+                            )
+                        saved = await instructions.save(
+                            db, self.workspace, self.user, "  Run `get_issue` first.  "
+                        )
+                        self.assertEqual(saved["workflow"], "Run `get_issue` first.")
+                        self.assertTrue(saved["custom"])
+                    custom = await initialize(client, self.connection["token"])
+                    self.assertTrue(custom.startswith(instructions.INSTRUCTIONS_PREAMBLE))
+                    self.assertTrue(custom.endswith("\n\nRun `get_issue` first."))
+                    self.assertEqual(
+                        await initialize(client, other_connection["token"]),
+                        SERVER_INSTRUCTIONS,
+                    )
+                    async with self.factory() as db:
+                        reset = await instructions.save(
+                            db, self.workspace, self.user, instructions.DEFAULT_WORKFLOW
+                        )
+                        self.assertFalse(reset["custom"])
+                        actions = (
+                            await db.execute(
+                                text("""SELECT action FROM audit_logs WHERE workspace_id=:workspace
+                                AND entity_type='workspace' ORDER BY created_at,id"""),
+                                {"workspace": self.workspace},
+                            )
+                        ).scalars().all()
+                        self.assertEqual(
+                            actions, ["mcp.instructions.updated", "mcp.instructions.reset"]
+                        )
+                    self.assertEqual(
+                        await initialize(client, self.connection["token"]),
+                        SERVER_INSTRUCTIONS,
+                    )
+        finally:
+            async with self.factory() as db:
+                await db.execute(
+                    text("DELETE FROM workspaces WHERE id=:id"),
+                    {"id": other_seed["workspace_id"]},
+                )
+                await db.execute(
+                    text("DELETE FROM organizations WHERE id=:id"),
+                    {"id": other_seed["organization_id"]},
+                )
+                await db.execute(
+                    text("DELETE FROM users WHERE id = ANY(:ids)"),
+                    {"ids": [member["id"], other["id"]]},
+                )
+                await db.commit()
 
     async def test_audit_page_filters_and_repository_management(self):
         from starlette.requests import Request

@@ -68,8 +68,9 @@ async def authenticate(db: AsyncSession, token: str) -> Principal:
         raise ApiError(401, "Invalid MCP token.", "Unauthorized")
     result = await db.execute(
         text("""
-        SELECT c.*,u.name AS user_name,u.email,u.avatar_url
+        SELECT c.*,u.name AS user_name,u.email,u.avatar_url,w.mcp_instructions
         FROM mcp_connections c JOIN users u ON u.id=c.user_id
+        JOIN workspaces w ON w.id=c.workspace_id
         JOIN workspace_members wm ON wm.workspace_id=c.workspace_id AND wm.user_id=c.user_id
         WHERE c.token_hash=:hash AND c.revoked_at IS NULL AND c.expires_at>:now
         AND u.status='ACTIVE' AND wm.status='ACTIVE'
@@ -98,6 +99,7 @@ async def authenticate(db: AsyncSession, token: str) -> Principal:
         team_ids=tuple(row["team_ids"]),
         project_ids=tuple(row["project_ids"]),
         connection_name=row["name"],
+        instructions=row["mcp_instructions"],
     )
 
 

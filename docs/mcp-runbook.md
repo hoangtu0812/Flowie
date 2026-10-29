@@ -131,6 +131,16 @@ against official configuration documentation, but an SDK test or a template
 parse is not a desktop-client acceptance result. Do not include tokens in the
 record. Keep test artifacts inside the test workspace.
 
+## Agent instructions
+
+At MCP `initialize` every client receives a fixed safety line followed by the
+workspace's task workflow. Owners and Admins edit or reset the workflow in
+Integrations → AI connections (MCP) → Agent instructions
+(`GET`/`PUT /api/v1/mcp/instructions`); a workspace without one uses the
+built-in workflow from `apps/api-python/app/modules/mcp/instructions.py`.
+Clients only read instructions at `initialize`, so restart or reload the MCP
+server in the client after a change.
+
 ## Writing safely
 
 - Use `list_issue_options` before creating or assigning work.
