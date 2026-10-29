@@ -14,15 +14,19 @@ import { createIssueFilterColumns } from './issue-filter-columns';
  * filter is active.
  */
 export function IssueFilterTrigger() {
-   const { issues, members, projects } = useIssuesStore();
+   const { issues, members, projects, statuses, labels, cycles } = useIssuesStore();
    const { filters, setFilters } = useFilterStore();
    const columnsConfig = useMemo(
-      () => createIssueFilterColumns(members, projects),
-      [members, projects]
+      () => createIssueFilterColumns({ members, projects, statuses, labels, cycles }),
+      [members, projects, statuses, labels, cycles]
    );
 
    const { columns, actions, strategy } = useDataTableFilters({
-      strategy: 'client',
+      // The API already filtered `issues` and loads them in pages, so counts
+      // computed from them would be wrong; 'server' shows options without counts.
+      // VI: API đã lọc `issues` và tải theo trang nên số đếm tính từ đó sẽ sai;
+      // 'server' hiển thị lựa chọn mà không có số đếm.
+      strategy: 'server',
       data: issues,
       columnsConfig,
       filters,

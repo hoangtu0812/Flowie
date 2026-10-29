@@ -57,7 +57,13 @@ def filter_sql(raw: str | None) -> tuple[list[str], dict]:
             comparison = f"({expression})=ANY(CAST(:{key} AS text[]))"
             if item.operator in {"is not", "is none of"}:
                 comparison = f"NOT ({comparison})"
-            clauses.append(f"(({expression})<>'' AND {comparison})")
+            # Every expression maps a missing value to a sentinel ('' for no
+            # project), so "is not X" keeps issues without that field and
+            # "project is not ['']" still means "has a project".
+            # VI: Mọi biểu thức quy giá trị thiếu về giá trị đại diện ('' khi
+            # không có dự án), nên "is not X" giữ task thiếu trường đó và
+            # "project is not ['']" vẫn nghĩa là "có dự án".
+            clauses.append(f"({comparison})")
         elif item.type == "multiOption" and item.columnId == "labels":
             count = f"(SELECT COUNT(DISTINCT il.label_id) FROM issue_labels il WHERE il.issue_id=i.id AND il.label_id=ANY(CAST(:{key} AS text[])))"
             comparisons = {
