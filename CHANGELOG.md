@@ -75,7 +75,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
-- The issue Filter's Assignee and Project sections list the workspace's real members and projects instead of demo data, so picking one filters the list correctly on All issues and the other issue lists. (DTD-63)
+- The issue Filter's Assignee and Project sections list the workspace's real members and projects instead of demo data, so picking one filters the list correctly on All issues and the other issue lists. (DTD-63, #63)
   VI: Mục Assignee và Project của Filter danh sách task hiển thị thành viên và dự án thật của workspace thay cho dữ liệu mẫu, nên chọn một mục sẽ lọc đúng ở All issues và các danh sách task khác. (DTD-63)
 
 - Typing a comment no longer makes the task page and its scrollbar jump: images in the description and comments are no longer reloaded on every keystroke. The comment box now grows with its text up to about 20 lines, then scrolls inside. (DTD-55)
