@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- The dashboard has an "Issues by member" chart that splits the filtered issues (for example one project) by assignee into To do, In progress and Done, with effort in the tooltip; it shows the top ten members plus Unassigned and counts only issues the viewer can read. Each team in the sidebar now has a Members item, and on the Teams page the name and members of a joined team link to its overview and Members page. `POST /reports/dashboard` adds `memberGroups` and `memberCount`; no schema change. (DTD-66)
+  VI: Dashboard có biểu đồ "Issues by member" chia các issue đang lọc (ví dụ một dự án) theo người được giao thành Chưa làm, Đang làm và Hoàn tất, tooltip hiện công sức; hiển thị mười thành viên nhiều việc nhất cùng nhóm Chưa giao và chỉ tính issue người xem đọc được. Mỗi team trong sidebar có thêm mục Members, và trên trang Teams tên cùng danh sách thành viên của team đã tham gia mở trang Overview và Members của team. `POST /reports/dashboard` thêm `memberGroups` và `memberCount`; không đổi schema. (DTD-66)
+
 - A Search… box at the top of the sidebar opens the command palette (also ⌘K / Ctrl+K), which now lists matching issues (by ID or title), projects and Settings pages as you type and opens the one you pick; members do not see admin-only Settings pages, and "Search workspace" still opens the full server search. No API or schema change. (DTD-62, #68)
   VI: Ô Search… ở đầu sidebar mở command palette (hoặc ⌘K / Ctrl+K); palette nay hiện issue (theo mã hoặc tiêu đề), dự án và trang Settings khớp với chữ đang gõ và mở mục được chọn; thành viên không thấy trang Settings chỉ dành cho admin, và "Search workspace" vẫn mở trang tìm kiếm đầy đủ phía server. Không đổi API hay schema. (DTD-62)
 

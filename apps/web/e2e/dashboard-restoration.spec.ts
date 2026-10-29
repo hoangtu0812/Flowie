@@ -117,7 +117,12 @@ test('original dashboard composition keeps complete scoped data and advanced rep
       path: `test-results/dashboard-mobile-${browserName}.png`,
       animations: 'disabled',
    });
-   for (const name of ['Effort trend', 'Throughput by project', 'Effort by project'])
+   for (const name of [
+      'Effort trend',
+      'Throughput by project',
+      'Effort by project',
+      'Issues by member',
+   ])
       await expect(page.getByRole('figure', { name, exact: true })).toBeVisible();
    await page.getByRole('figure', { name: 'Effort trend', exact: true }).scrollIntoViewIfNeeded();
    await page.screenshot({

@@ -17,6 +17,7 @@ import { DashboardToolbar } from './dashboard-toolbar';
 import { MetricCards } from './metric-cards';
 import { ThroughputCharts } from './throughput-charts';
 import { EffortCharts } from './effort-charts';
+import { MemberChart } from './member-chart';
 import { messages } from './messages.vi';
 import type { DashboardReport } from './types';
 
@@ -156,6 +157,7 @@ function Dashboard({ org, workspace }: { org: string; workspace: string }) {
                      apply({ ...query, selection: { ...query.selection, projectId } })
                   }
                />
+               <MemberChart data={report.data} />
                <Text type="supporting">
                   {tx(
                      'Completion history starts when events were captured; repeated completions after reopening are counted. Current counts are not historical snapshots.'

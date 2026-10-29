@@ -56,6 +56,17 @@ test('only workspace owners see join and add-member actions', async ({
       role = 'OWNER';
       await page.goto(`/${fixture.workspace_id}/teams`);
       await expect(page.getByText(name, { exact: true })).toBeVisible();
+      // Joined teams open their Members page from the Teams list and the sidebar; unjoined teams stay plain text.
+      // VI: Team đã tham gia mở trang Members từ danh sách Teams và sidebar; team chưa tham gia chỉ là chữ thường.
+      await expect(page.getByRole('link', { name, exact: true })).toHaveCount(0);
+      await page
+         .getByRole('link', { name: /^.+ members \(\d+\)$/ })
+         .first()
+         .click();
+      await expect(page).toHaveURL(/\/team\/[^/]+\/members$/);
+      await expect(page.getByText(fixture.email, { exact: true })).toBeVisible();
+      await expect(page.locator('a[href*="/team/"][href$="/members"]').first()).toBeVisible();
+      await page.goto(`/${fixture.workspace_id}/teams`);
       const joined = page.waitForResponse(
          (response) =>
             response.url().includes(`/teams/${team.id}/join`) &&
