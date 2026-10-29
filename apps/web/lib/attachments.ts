@@ -10,6 +10,8 @@ export type Attachment = {
    filename: string;
    mimeType: string;
    size: number;
+   /** Upload time (UTC) as the API returns it. VI: Thời điểm tải lên (UTC) do API trả về. */
+   createdAt?: string;
 };
 
 /** Image types the API is willing to serve inline through the preview route. */
