@@ -77,12 +77,15 @@ async def default_folder(db: AsyncSession, workspace_id: str, team_id: str) -> A
 
     Documents of a team always live in a folder, so a team without folders used to make
     every document creation fail; the first document now creates the folder instead.
+    Project Docs folders are skipped, so a team document never lands in a project tree.
     VI: Trả về thư mục đầu tiên của team, tạo "General" nếu team chưa có thư mục nào. Tài
     VI: liệu của team luôn nằm trong một thư mục, nên team chưa có thư mục từng làm mọi lần
-    VI: tạo tài liệu thất bại; giờ tài liệu đầu tiên sẽ tạo thư mục này.
+    VI: tạo tài liệu thất bại; giờ tài liệu đầu tiên sẽ tạo thư mục này. Bỏ qua thư mục của
+    VI: cây Docs dự án để tài liệu team không rơi vào cây dự án.
     """
     query = text(
         """SELECT * FROM document_folders WHERE workspace_id = :workspace AND team_id = :team
+           AND project_id IS NULL
            ORDER BY (parent_id IS NOT NULL), position ASC, created_at ASC, id ASC LIMIT 1"""
     )
     params = {"workspace": workspace_id, "team": team_id}
