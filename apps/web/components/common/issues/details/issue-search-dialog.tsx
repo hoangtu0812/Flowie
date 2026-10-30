@@ -129,6 +129,8 @@ export function IssueSearchDialog({
                      {visible.length === 0 && (
                         <p className="px-1 py-3 text-sm text-muted-foreground">No issues found.</p>
                      )}
+                     {/* Rows keep their height (shrink-0); in this capped flex column they would otherwise be squeezed to text height once the results overflow.
+                         VI: Dòng giữ nguyên chiều cao (shrink-0); trong cột flex có chiều cao tối đa này, khi kết quả tràn chúng sẽ bị ép xuống bằng chiều cao chữ. */}
                      {visible.map((issue) => (
                         <button
                            key={issue.id}
@@ -136,7 +138,7 @@ export function IssueSearchDialog({
                            role="listitem"
                            disabled={saving}
                            onClick={() => pick(issue)}
-                           className="flex items-center gap-2 h-9 px-1 rounded-md text-left text-sm hover:bg-sidebar/60 min-w-0"
+                           className="flex shrink-0 items-center gap-2 h-9 px-1 rounded-md text-left text-sm hover:bg-sidebar/60 min-w-0"
                         >
                            <span
                               className="size-2 rounded-full shrink-0"
