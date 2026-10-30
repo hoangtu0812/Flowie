@@ -7,8 +7,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.errors import ApiError
+from pydantic import ValidationError
+
 from app.domains.agent import (
+    TOOL_DETAILS,
     AgentProposal,
+    AnalystText,
+    _is_open_question,
+    _is_report_request,
     ProjectScheduleProposal,
     _apply_personal_skill_defaults,
     _is_initiative_delivery_question,
@@ -192,6 +198,53 @@ class AgentPlanningTests(unittest.TestCase):
             _sse('progress', {'id': 'workspace.catalog'}),
             'event: progress\ndata: {"id": "workspace.catalog"}\n\n',
         )
+
+    def test_detects_leadership_report_requests(self) -> None:
+        for message in (
+            'Tạo báo cáo chi tiết cho lãnh đạo',
+            'Báo cáo tình hình các dự án đang trễ',
+            'Write a detailed status report for leadership.',
+            'weekly report please',
+        ):
+            with self.subTest(message=message):
+                self.assertTrue(_is_report_request(message))
+        for message in (
+            'Tạo issue báo cáo lỗi đăng nhập chi tiết',
+            'create 3 tasks for the weekly report',
+            'Có bao nhiêu issue trễ hạn?',
+        ):
+            with self.subTest(message=message):
+                self.assertFalse(_is_report_request(message))
+
+    def test_report_request_takes_priority_over_fixed_reports(self) -> None:
+        message = 'Báo cáo tình hình các dự án đang trễ'
+        self.assertTrue(_is_project_delivery_question(message))
+        self.assertTrue(_is_report_request(message))
+
+    def test_detects_open_questions_but_not_creation_requests(self) -> None:
+        for message in (
+            'Tình hình các dự án thế nào?',
+            'Dự án FL ra sao',
+            'Which projects need attention?',
+            'ai đang làm nhiều việc nhất',
+        ):
+            with self.subTest(message=message):
+                self.assertTrue(_is_open_question(message))
+        for message in (
+            'Tạo 3 issue cho dự án FL?',
+            'Create a project for onboarding',
+            'Lên danh sách việc cho sprint tới',
+        ):
+            with self.subTest(message=message):
+                self.assertFalse(_is_open_question(message))
+
+    def test_lists_the_analyst_tool(self) -> None:
+        self.assertIn('workspace.analyst', TOOL_DETAILS)
+
+    def test_rejects_an_empty_analyst_answer(self) -> None:
+        with self.assertRaises(ValidationError):
+            AnalystText.model_validate_json('{"body": ""}')
+        self.assertEqual(AnalystText.model_validate_json('{"body": "# Tổng quan", "extra": 1}').body, '# Tổng quan')
 
 
 if __name__ == '__main__':

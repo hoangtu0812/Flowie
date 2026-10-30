@@ -1,6 +1,6 @@
 'use client';
 
-import { InlineText } from '@/components/common/issues/details/content-blocks';
+import { MarkdownPreview } from '@/components/common/markdown/markdown-preview';
 import { Button } from '@/components/ui/button';
 import { authenticatedFetch, loadCurrentWorkspace, WorkspaceSummary } from '@/lib/workspaces';
 import { useAgentChatStore } from '@/store/agent-chat-store';
@@ -104,12 +104,20 @@ const EXAMPLES = [
    'Break this delivery goal into a project plan with dates and owners to confirm.',
    'How many issues are overdue?',
    'Who is overloaded? Suggest assignments for my team.',
+   'How are our projects doing, and which ones need attention?',
+   'Write a detailed status report for leadership.',
 ];
 
+/**
+ * Assistant replies are Markdown: answers and leadership reports use headings,
+ * lists and tables. Raw HTML is skipped by MarkdownPreview.
+ * VI: Câu trả lời của Agent là Markdown: câu trả lời và báo cáo lãnh đạo dùng
+ * VI: tiêu đề, danh sách và bảng. MarkdownPreview bỏ qua HTML thô.
+ */
 function MessageText({ content }: { content: string }) {
    return (
-      <div className="text-sm leading-relaxed whitespace-pre-wrap">
-         <InlineText text={content} />
+      <div className="text-sm leading-relaxed min-w-0 overflow-x-auto">
+         <MarkdownPreview content={content} />
       </div>
    );
 }
