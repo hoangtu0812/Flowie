@@ -10,6 +10,7 @@ import {
    Pencil,
    Send,
    Undo2,
+   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -67,13 +68,20 @@ export function DocumentPreview({
    onEdit,
    onStatusChange,
    onConfigureSharepoint,
+   onClose,
 }: {
    document: ProjectTreeDocument;
    /** The project publishes to SharePoint. VI: Dự án đang phát hành lên SharePoint. */
    publishing: boolean;
    onEdit: () => void;
    onStatusChange: (status: DocStatus) => void;
-   onConfigureSharepoint: () => void;
+   /** Without it an unpublished project shows no SharePoint state, since there is nothing to
+    * open. VI: Không truyền thì dự án chưa phát hành không hiện trạng thái SharePoint, vì không
+    * VI: có gì để mở. */
+   onConfigureSharepoint?: () => void;
+   /** Adds a close button, used when the preview fills the document page.
+    * VI: Thêm nút đóng, dùng khi khung xem trước chiếm cả trang tài liệu. */
+   onClose?: () => void;
 }) {
    const tx = useMessages(messages);
    const locale = useUiPreferencesStore((state) => state.locale);
@@ -121,6 +129,11 @@ export function DocumentPreview({
                      <Pencil className="size-3.5" />
                      {tx('Edit')}
                   </Button>
+                  {onClose && (
+                     <Button size="xs" variant="ghost" onClick={onClose} aria-label={tx('Close')}>
+                        <X className="size-3.5" />
+                     </Button>
+                  )}
                </>
             }
          >
@@ -256,7 +269,7 @@ function PublicationStatus({
 }: {
    document: ProjectTreeDocument;
    publishing: boolean;
-   onConfigure: () => void;
+   onConfigure?: () => void;
 }) {
    const tx = useMessages(messages);
    const publication = document.publication;
@@ -283,6 +296,7 @@ function PublicationStatus({
             {tx('Published v{value0}', { value0: String(publication.release) })}
          </a>
       );
+   if (!publishing && !onConfigure) return null;
    if (!publishing)
       return (
          <button

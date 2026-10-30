@@ -69,8 +69,8 @@ test('Vietnamese core routes retain user content and controls remain usable on m
       ).data;
       await page.waitForLoadState('networkidle');
       await page.goto(`/${fixture.slug}/documents/${fixture.documentId}`);
+      await page.getByRole('button', { name: 'Sửa', exact: true }).click();
       const dialog = page.getByRole('dialog');
-      await dialog.getByRole('button', { name: 'Sửa', exact: true }).click();
       await expect(
          dialog.getByRole('textbox', { name: 'Tiêu đề tài liệu Bắt buộc', exact: true })
       ).toHaveValue(document.title);

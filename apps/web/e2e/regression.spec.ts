@@ -612,7 +612,10 @@ test('workspace search finds server records and opens a document directly', asyn
       .getByLabel('Search issues, documents, projects and members')
       .fill('Regression Markdown');
    await page.getByRole('link', { name: fixture.documentTitle, exact: true }).click();
-   await expect(page.getByRole('dialog')).toBeVisible();
+   await expect(
+      page.getByRole('heading', { name: fixture.documentTitle, exact: true })
+   ).toBeVisible();
+   await expect(page.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
    await expect(page).toHaveURL(new RegExp(`/documents/${fixture.documentId}`));
 });
 
