@@ -454,6 +454,38 @@ async def scaffold_project_tree(
             )
 
 
+async def publications_by_document(
+    db: AsyncSession, document_ids: list[str]
+) -> dict[str, dict[str, Any]]:
+    """Last SharePoint upload per document id; documents never published are absent.
+
+    Only rows of projects with SharePoint publishing exist, so a document without a row
+    either was never approved or belongs to a project that does not publish.
+    VI: Lần tải lên SharePoint gần nhất theo id tài liệu; tài liệu chưa từng phát hành thì
+    VI: không có mặt. Chỉ dự án có phát hành SharePoint mới có dòng, nên tài liệu không có
+    VI: dòng là chưa từng được duyệt hoặc thuộc dự án không phát hành.
+    """
+    rows = (
+        await db.execute(
+            text(
+                """SELECT document_id, version, release, web_url, published_at, last_error FROM document_publications
+                   WHERE document_id = ANY(CAST(:ids AS text[]))"""
+            ),
+            {"ids": document_ids},
+        )
+    ).mappings().all()
+    return {
+        row["document_id"]: {
+            "version": row["version"],
+            "release": row["release"],
+            "webUrl": row["web_url"],
+            "publishedAt": row["published_at"],
+            "lastError": row["last_error"],
+        }
+        for row in rows
+    }
+
+
 async def project_tree(
     db: AsyncSession, *, workspace_id: str, user_id: str, project_id: str
 ) -> dict[str, Any]:
@@ -498,24 +530,7 @@ async def project_tree(
     ]
     # Last SharePoint upload of each document, shown beside its preview.
     # VI: Lần tải lên SharePoint gần nhất của từng tài liệu, hiển thị cạnh khung xem trước.
-    publications = {
-        row["document_id"]: {
-            "version": row["version"],
-            "release": row["release"],
-            "webUrl": row["web_url"],
-            "publishedAt": row["published_at"],
-            "lastError": row["last_error"],
-        }
-        for row in (
-            await db.execute(
-                text(
-                    """SELECT document_id, version, release, web_url, published_at, last_error FROM document_publications
-                       WHERE document_id = ANY(CAST(:ids AS text[]))"""
-                ),
-                {"ids": [document["id"] for document in documents]},
-            )
-        ).mappings().all()
-    }
+    publications = await publications_by_document(db, [document["id"] for document in documents])
     for document in documents:
         document["publication"] = publications.get(document["id"])
     files = (

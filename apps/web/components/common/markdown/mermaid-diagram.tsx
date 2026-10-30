@@ -29,7 +29,18 @@ export function MermaidDiagram({ code }: { code: string }) {
                securityLevel: 'strict',
                theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
             });
-            const result = await mermaid.render(`flowie-mermaid-${++sequence}`, code);
+            // Mermaid ends a statement at `;`, so a sequence message such as `A->>B: draft; review`
+            // fails to parse. A failed diagram containing `;` is drawn once more with each `;`
+            // written as the entity `#59;`, which renders as `;`; valid diagrams never retry.
+            // VI: Mermaid kết thúc câu lệnh tại `;`, nên message như `A->>B: nháp; duyệt` bị lỗi
+            // VI: cú pháp. Sơ đồ lỗi có `;` được vẽ lại một lần với mỗi `;` viết thành mã `#59;`,
+            // VI: hiển thị thành `;`; sơ đồ hợp lệ không bao giờ phải vẽ lại.
+            const render = (source: string) =>
+               mermaid.render(`flowie-mermaid-${++sequence}`, source);
+            const result = await render(code).catch((error: unknown) => {
+               if (!code.includes(';')) throw error;
+               return render(code.replaceAll(';', '#59;'));
+            });
             if (active) setSvg(result.svg);
          } catch {
             if (active) setFailed(true);

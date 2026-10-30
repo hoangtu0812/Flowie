@@ -59,9 +59,13 @@ export function MarkdownDocumentEditor({
    onOpenChange,
    onUpdate,
    onMetadataChange,
+   initialMode = 'view',
 }: {
    document?: LiveDocument;
    open: boolean;
+   /** Mode shown on open; Docs and the document page open straight into editing. */
+   /** VI: Chế độ khi mở; Docs và trang tài liệu mở thẳng vào chế độ sửa. */
+   initialMode?: 'view' | 'edit';
    onOpenChange: (open: boolean) => void;
    onUpdate: (
       id: string,
@@ -80,16 +84,16 @@ export function MarkdownDocumentEditor({
 
    const state = useDocumentDraft(document, open, onUpdate);
    const { title, content } = state.draft;
-   const [mode, setMode] = useState<'view' | 'edit'>('view');
+   const [mode, setMode] = useState<'view' | 'edit'>(initialMode);
    const [history, setHistory] = useState(false);
    const [latest, setLatest] = useState<LiveDocument>();
    const [compareError, setCompareError] = useState<string>();
    useEffect(() => {
-      setMode('view');
+      setMode(initialMode);
       setHistory(false);
       setLatest(undefined);
       setCompareError(undefined);
-   }, [document?.id, open]);
+   }, [document?.id, open, initialMode]);
    const close = async () => {
       if (!state.dirty || (await state.flush())) onOpenChange(false);
    };

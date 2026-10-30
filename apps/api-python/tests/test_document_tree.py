@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
+from app.domains.native_documents import get_document
 from app.modules.work_items.contracts import (
     CreateDocumentInput,
     CreateIssueInput,
@@ -187,6 +188,21 @@ async def verify_document_tree():
             assert [(f["folderId"], f["filename"]) for f in tree["files"]] == [(feature["id"], "spec.pdf")]
             linked = await issue_documents(db, workspace_id=workspace, user_id=user["id"], issue_id=issue["id"])
             assert [document["id"] for document in linked] == [first["id"]]
+            # The document page reads the same SharePoint state as the Docs preview.
+            # VI: Trang tài liệu đọc cùng trạng thái SharePoint như khung xem trước của Docs.
+            page = (await get_document(fds["id"], workspaceId=workspace, user=user, db=db))["data"]
+            assert (page["release"], page["publication"]) == (1, None)
+            await db.execute(
+                text(
+                    "INSERT INTO document_publications(document_id,workspace_id,release,web_url) VALUES (:doc,:workspace,1,'https://example.sharepoint.com/f.md')"
+                ),
+                {"doc": fds["id"], "workspace": workspace},
+            )
+            page = (await get_document(fds["id"], workspaceId=workspace, user=user, db=db))["data"]
+            assert (page["publication"]["release"], page["publication"]["webUrl"]) == (
+                1,
+                "https://example.sharepoint.com/f.md",
+            )
             await db.rollback()
     finally:
         await engine.dispose()

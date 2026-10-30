@@ -33,10 +33,12 @@ import {
    SelectTrigger,
    SelectValue,
 } from '@/components/ui/select';
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { LoadingState } from '@/components/common/loading-state';
 import { QueryState } from '@/components/common/query-state';
 import { MarkdownDocumentEditor } from '@/components/common/teams/markdown-document-editor';
 import type { LiveDocument } from '@/components/common/teams/use-live-team';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useLocale } from '@/features/shared/use-locale';
 import { useMessages } from '@/features/shared/use-messages';
 import { messages } from '@/features/documents/messages.vi';
@@ -80,16 +82,19 @@ const FOLDER_KINDS: { value: FolderKind; label: keyof typeof messages }[] = [
  * changes), filterable by document type and searchable by title and content, with folders
  * and FDS/TDS documents created and PDFs uploaded in the selected folder. The tree sits on
  * the left; a selected document or PDF is previewed on the right, and Edit opens the shared
- * Markdown editor. Below the lg breakpoint the preview stacks under the tree.
+ * Markdown editor in edit mode. A draggable handle resizes the tree (remembered per browser);
+ * below the lg breakpoint the preview stacks under the tree and the handle resizes heights.
  * VI: Tab "Docs" của dự án: cây tài liệu (dự án → module → tính năng → bugs & changes), lọc
  * VI: theo loại và tìm theo tiêu đề, nội dung; tạo thư mục, tài liệu FDS/TDS và tải PDF lên
  * VI: thư mục đang chọn. Cây nằm bên trái; tài liệu hoặc PDF được chọn hiển thị xem trước
- * VI: bên phải, nút Sửa mở editor Markdown dùng chung. Dưới breakpoint lg, khung xem trước
- * VI: nằm dưới cây.
+ * VI: bên phải, nút Sửa mở editor Markdown dùng chung ở chế độ sửa. Thanh kéo đổi độ rộng cây
+ * VI: (nhớ theo trình duyệt); dưới breakpoint lg, khung xem trước nằm dưới cây và thanh kéo
+ * VI: đổi chiều cao.
  */
 export function ProjectDocs({ projectId }: { projectId: string }) {
    const tx = useMessages(messages);
    const { locale } = useLocale();
+   const isMobile = useIsMobile();
    const [tree, setTree] = useState<ProjectTree>();
    const [error, setError] = useState<string>();
    const [query, setQuery] = useState('');
@@ -127,6 +132,7 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
       [tree]
    );
    const visible = useMemo(() => filterTree(roots, query, docType), [roots, query, docType]);
+   const filtering = query.trim() !== '' || docType !== 'ALL';
    const root = roots.find((node) => node.folder.kind === 'project') ?? roots[0];
    const target = selected ?? root?.folder.id;
    // The project root is named after the project and stays unnumbered, so it is not editable here.
@@ -162,28 +168,36 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
    const previewFile =
       preview?.kind === 'file' ? tree.files.find((file) => file.id === preview.id) : undefined;
 
+   // The title keeps one line (cut with "…", full text on hover) and the type, status and
+   // update time sit on the line below, so a narrow tree does not wrap titles word by word.
+   // VI: Tiêu đề nằm trên một dòng (cắt bằng "…", rê chuột xem đủ), loại, trạng thái và thời
+   // VI: gian cập nhật nằm ở dòng dưới, để cây hẹp không bẻ tiêu đề thành nhiều dòng.
    const documentItem = (document: ProjectTreeDocument): TreeListItemData => ({
       id: document.id,
-      label: document.title,
+      label: (
+         <span className="flex min-w-0 flex-col">
+            <span className="truncate" title={document.title}>
+               {document.title}
+            </span>
+            <HStack gap={2} vAlign="center">
+               <DocTypeBadge type={document.docType} />
+               <DocStatusBadge status={document.status} />
+               {document.release != null &&
+                  document.publication?.webUrl &&
+                  document.publication.release === document.release && (
+                     <CloudUpload
+                        className="size-3.5 text-emerald-600 dark:text-emerald-400"
+                        aria-label={tx('Published to SharePoint')}
+                     />
+                  )}
+               <Text type="supporting" size="sm">
+                  {relativeTime(document.updatedAt, Date.now(), locale)}
+               </Text>
+            </HStack>
+         </span>
+      ),
       startContent: document.icon,
       isSelected: previewDocument?.id === document.id,
-      endContent: (
-         <HStack gap={2} vAlign="center">
-            <DocTypeBadge type={document.docType} />
-            <DocStatusBadge status={document.status} />
-            {document.release != null &&
-               document.publication?.webUrl &&
-               document.publication.release === document.release && (
-                  <CloudUpload
-                     className="size-3.5 text-emerald-600 dark:text-emerald-400"
-                     aria-label={tx('Published to SharePoint')}
-                  />
-               )}
-            <Text type="supporting" size="sm">
-               {relativeTime(document.updatedAt, Date.now(), locale)}
-            </Text>
-         </HStack>
-      ),
       onClick: () => {
          setPreview({ kind: 'document', id: document.id });
          if (document.folderId && !document.linked) setSelected(document.folderId);
@@ -203,7 +217,11 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
       const kind = FOLDER_KINDS.find((option) => option.value === node.folder.kind);
       return {
          id: node.folder.id,
-         label: folderLabel(node.folder),
+         label: (
+            <span className="block truncate" title={folderLabel(node.folder)}>
+               {folderLabel(node.folder)}
+            </span>
+         ),
          startContent: node.folder.icon,
          endContent:
             node.folder.kind === 'project' ? undefined : kind ? (
@@ -211,7 +229,11 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
                   {tx(kind.label)}
                </Text>
             ) : undefined,
-         isExpanded: true,
+         // Folders start collapsed below the project root; while searching or filtering every
+         // branch with matches opens. TreeList treats this as the initial state only.
+         // VI: Thư mục bắt đầu thu gọn, trừ gốc dự án; khi tìm kiếm hoặc lọc thì mở mọi nhánh có
+         // VI: kết quả. TreeList chỉ dùng giá trị này làm trạng thái ban đầu.
+         isExpanded: node.folder.kind === 'project' || filtering,
          isSelected: target === node.folder.id,
          onClick: () => setSelected(node.folder.id),
          children: [
@@ -313,49 +335,62 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
                {tx('SharePoint')}
             </Button>
          </div>
-         <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,2fr)_minmax(0,3fr)] lg:grid-cols-[minmax(260px,360px)_minmax(0,1fr)] lg:grid-rows-1">
-            <div className="min-h-0 overflow-auto border-b px-3 py-3 lg:border-r lg:border-b-0">
-               {roots.length === 0 ? (
-                  <div className="flex flex-col items-center gap-3 py-24 text-center text-sm text-muted-foreground">
-                     <p>{tx('This project has no document tree yet.')}</p>
-                     <Button
-                        size="sm"
-                        disabled={busy}
-                        onClick={() =>
-                           void act(
-                              () => scaffoldProjectTree(projectId),
-                              tx('Standard structure is ready.')
-                           )
-                        }
-                     >
-                        <LayoutTemplate className="size-4" />
-                        {tx('Create standard structure')}
-                     </Button>
-                  </div>
-               ) : (
-                  <>
-                     {/* Remounting on a new filter re-expands every branch of the matches. */}
-                     <TreeList
-                        key={`${query}|${docType}`}
-                        aria-label={tx('Project documents')}
-                        density="compact"
-                        items={visible.map(folderItem)}
-                     />
-                     {visible.length === 0 && (
-                        <Text type="supporting">{tx('No documents match.')}</Text>
-                     )}
-                  </>
-               )}
-               {unfiled.length > 0 && (
-                  <section className="mt-6">
-                     <h2 className="mb-1 text-xs font-medium text-muted-foreground uppercase">
-                        {tx('Linked to this project')}
-                     </h2>
-                     <TreeList density="compact" items={unfiled.map(documentItem)} />
-                  </section>
-               )}
-            </div>
-            <div className="min-h-0 overflow-hidden">
+         <ResizablePanelGroup
+            key={isMobile ? 'vertical' : 'horizontal'}
+            direction={isMobile ? 'vertical' : 'horizontal'}
+            autoSaveId={`project-docs-tree-${isMobile ? 'vertical' : 'horizontal'}`}
+            className="min-h-0 flex-1"
+         >
+            <ResizablePanel
+               defaultSize={isMobile ? 40 : 28}
+               minSize={15}
+               maxSize={isMobile ? 80 : 60}
+               className="min-h-0"
+            >
+               <div className="h-full overflow-auto px-3 py-3">
+                  {roots.length === 0 ? (
+                     <div className="flex flex-col items-center gap-3 py-24 text-center text-sm text-muted-foreground">
+                        <p>{tx('This project has no document tree yet.')}</p>
+                        <Button
+                           size="sm"
+                           disabled={busy}
+                           onClick={() =>
+                              void act(
+                                 () => scaffoldProjectTree(projectId),
+                                 tx('Standard structure is ready.')
+                              )
+                           }
+                        >
+                           <LayoutTemplate className="size-4" />
+                           {tx('Create standard structure')}
+                        </Button>
+                     </div>
+                  ) : (
+                     <>
+                        {/* Remounting on a new filter re-applies the initial expansion. */}
+                        <TreeList
+                           key={`${query}|${docType}`}
+                           aria-label={tx('Project documents')}
+                           density="compact"
+                           items={visible.map(folderItem)}
+                        />
+                        {visible.length === 0 && (
+                           <Text type="supporting">{tx('No documents match.')}</Text>
+                        )}
+                     </>
+                  )}
+                  {unfiled.length > 0 && (
+                     <section className="mt-6">
+                        <h2 className="mb-1 text-xs font-medium text-muted-foreground uppercase">
+                           {tx('Linked to this project')}
+                        </h2>
+                        <TreeList density="compact" items={unfiled.map(documentItem)} />
+                     </section>
+                  )}
+               </div>
+            </ResizablePanel>
+            <ResizableHandle withHandle />
+            <ResizablePanel className="min-h-0">
                {previewDocument ? (
                   <DocumentPreview
                      document={previewDocument}
@@ -386,8 +421,8 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
                ) : (
                   <EmptyPreview />
                )}
-            </div>
-         </div>
+            </ResizablePanel>
+         </ResizablePanelGroup>
          {dialog === 'sharepoint' && (
             <ProjectSharepointDialog
                projectId={projectId}
@@ -461,6 +496,7 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
             <MarkdownDocumentEditor
                document={open}
                open
+               initialMode="edit"
                onOpenChange={(next) => {
                   if (!next) {
                      setOpen(undefined);

@@ -161,7 +161,12 @@ async def accessible_document(db: AsyncSession, workspace_id: str, document_id: 
 
 @router.get('/{document_id}')
 async def get_document(document_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict:
-    return {'data': await accessible_document(db, workspaceId, document_id, user['id'])}
+    from ..modules.work_items.document_tree import publications_by_document
+    document = await accessible_document(db, workspaceId, document_id, user['id'])
+    # The document page shows the same SharePoint state as the Docs preview.
+    # VI: Trang tài liệu hiển thị cùng trạng thái SharePoint như khung xem trước của Docs.
+    publications = await publications_by_document(db, [document_id])
+    return {'data': {**document, 'publication': publications.get(document_id)}}
 
 
 @router.get('/{document_id}/revisions')
