@@ -66,8 +66,13 @@ async def list_folders(workspaceId: str = Query(min_length=1), teamId: str = Que
     from ..modules.work_items.document_tree import folder_payload
 
     await _team_access(db, workspaceId, teamId, user['id'])
+    # Project Docs folders carry their project's team too; only team-wide folders belong here,
+    # project trees are read through /project-tree.
+    # VI: Thư mục cây Docs dự án cũng mang team của dự án; ở đây chỉ trả thư mục chung của team,
+    # VI: cây dự án đọc qua /project-tree.
     result = await db.execute(
         text('''SELECT * FROM document_folders WHERE workspace_id = :workspace_id AND team_id = :team_id
+                AND project_id IS NULL
                 ORDER BY position ASC, name ASC, id ASC'''),
         {'workspace_id': workspaceId, 'team_id': teamId},
     )

@@ -102,6 +102,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
+- A team's Documents tab lists only the team's own folders instead of every project Docs folder flattened into one list, and starts with links to the Docs tab of each of the team's projects; New document works even before the team has a folder (it creates "General"), and documents created for a team without a folder never land in a project tree. Pinned documents inside project trees no longer show under the team overview's resources. No schema change and no data is moved or deleted. (DTD-135)
+  VI: Tab Documents của team chỉ liệt kê thư mục riêng của team thay vì gộp phẳng mọi thư mục Docs của các dự án, và có hàng link sang tab Docs của từng dự án thuộc team; New document dùng được cả khi team chưa có thư mục (tạo "General"), và tài liệu tạo cho team không chỉ định thư mục không còn rơi vào cây dự án. Tài liệu được ghim trong cây dự án không còn hiện ở mục resources của team overview. Không đổi schema, không di chuyển hay xoá dữ liệu. (DTD-135)
+
 - The Add existing sub-issue and Set/Change parent dialogs keep every search result at full row height, so a long result list scrolls evenly instead of squeezing rows together under the search box. Web only; no API or schema change. (DTD-120, #74)
   VI: Hộp thoại Add existing sub-issue và Set/Change parent giữ đủ chiều cao cho mọi dòng kết quả tìm kiếm, nên danh sách dài cuộn đều thay vì bị ép các dòng dính nhau dưới ô tìm kiếm. Chỉ đổi web; không đổi API hay schema. (DTD-120)
 

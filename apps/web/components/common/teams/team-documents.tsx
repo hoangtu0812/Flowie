@@ -46,13 +46,44 @@ import {
    Trash2,
    Upload,
 } from 'lucide-react';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { folderLabel } from '@/lib/document-tree';
+import { useProjectsData } from '@/features/projects/projects-data';
 import { type LiveDocument, useLiveTeam } from './use-live-team';
 
 const timeAgo = relativeTime;
+
+/**
+ * Links to the Docs tab of each project of the team. Project document trees live there, so
+ * this tab only lists team-wide folders; hidden when the team has no projects.
+ * VI: Link tới tab Docs của từng dự án thuộc team. Cây tài liệu dự án nằm ở đó, nên tab này
+ * VI: chỉ liệt kê thư mục chung của team; ẩn khi team chưa có dự án.
+ */
+function ProjectDocsLinks() {
+   const { orgId } = useParams<{ orgId: string }>();
+   const { allProjects } = useProjectsData();
+   if (allProjects.length === 0) return null;
+   return (
+      <nav
+         aria-label="Project docs"
+         className="flex flex-wrap items-center gap-2 border-b px-6 py-3 text-sm"
+      >
+         <span className="text-muted-foreground">Project docs</span>
+         {allProjects.map((project) => (
+            <Link
+               key={project.id}
+               href={`/${orgId}/project/${project.id}/docs`}
+               className="inline-flex h-7 items-center rounded-full border px-2.5 text-xs font-medium hover:bg-accent/50"
+            >
+               {project.name}
+            </Link>
+         ))}
+      </nav>
+   );
+}
 
 /** Documents tab backed by FastAPI/PostgreSQL, retaining Circle’s grouped list layout. */
 export default function TeamDocuments() {
@@ -86,7 +117,7 @@ export default function TeamDocuments() {
    const createIntentHandled = useRef(false);
 
    useEffect(() => {
-      if (createIntentHandled.current || !team || documentFolders.length === 0) return;
+      if (createIntentHandled.current || !team) return;
       const requestedType = new URLSearchParams(window.location.search).get('create');
       if (requestedType !== 'markdown' && requestedType !== 'link') return;
       createIntentHandled.current = true;
@@ -94,7 +125,7 @@ export default function TeamDocuments() {
       setDocumentType(requestedType);
       setSourceUrl('');
       setFile(undefined);
-      setFolderId(documentFolders[0].id);
+      setFolderId(documentFolders[0]?.id ?? '');
       setDocumentOpen(true);
       window.history.replaceState({}, '', window.location.pathname);
    }, [documentFolders, team]);
@@ -118,7 +149,6 @@ export default function TeamDocuments() {
    const create = async () => {
       if (
          !title.trim() ||
-         !folderId ||
          (documentType === 'upload' && !file) ||
          (documentType === 'link' && !sourceUrl.trim())
       )
@@ -127,7 +157,9 @@ export default function TeamDocuments() {
       try {
          const document = await createDocument({
             title,
-            folderId,
+            // Without team folders the API files the document under a new "General" folder.
+            // VI: Khi team chưa có thư mục chung, API tạo thư mục "General" để chứa tài liệu.
+            folderId: folderId || undefined,
             sourceType: documentType,
             sourceUrl: documentType === 'link' ? sourceUrl.trim() : undefined,
             icon: documentType === 'link' ? '🔗' : documentType === 'upload' ? '📎' : '📝',
@@ -167,6 +199,7 @@ export default function TeamDocuments() {
 
    return (
       <div className="w-full">
+         <ProjectDocsLinks />
          <div className="relative grid grid-cols-[1fr_64px] md:grid-cols-[1fr_90px_90px_72px] items-center px-6 py-3 text-sm text-muted-foreground">
             <div className="contents">
                <span className="flex items-center gap-1 font-medium">Name ↓</span>
@@ -179,12 +212,7 @@ export default function TeamDocuments() {
                   <FolderPlus className="size-4 md:mr-1" />
                   <span className="hidden md:inline">New folder</span>
                </Button>
-               <Button
-                  size="xs"
-                  variant="secondary"
-                  onClick={openDocument}
-                  disabled={documentFolders.length === 0}
-               >
+               <Button size="xs" variant="secondary" onClick={openDocument}>
                   <Plus className="size-4 md:mr-1" />
                   <span className="hidden md:inline">New document</span>
                </Button>
@@ -395,18 +423,20 @@ export default function TeamDocuments() {
                      placeholder="Document title"
                      autoFocus
                   />
-                  <Select value={folderId} onValueChange={setFolderId}>
-                     <SelectTrigger>
-                        <SelectValue placeholder="Select folder" />
-                     </SelectTrigger>
-                     <SelectContent>
-                        {documentFolders.map((folder) => (
-                           <SelectItem key={folder.id} value={folder.id}>
-                              {folder.icon} {folderLabel(folder)}
-                           </SelectItem>
-                        ))}
-                     </SelectContent>
-                  </Select>
+                  {documentFolders.length > 0 && (
+                     <Select value={folderId} onValueChange={setFolderId}>
+                        <SelectTrigger>
+                           <SelectValue placeholder="Select folder" />
+                        </SelectTrigger>
+                        <SelectContent>
+                           {documentFolders.map((folder) => (
+                              <SelectItem key={folder.id} value={folder.id}>
+                                 {folder.icon} {folderLabel(folder)}
+                              </SelectItem>
+                           ))}
+                        </SelectContent>
+                     </Select>
+                  )}
                   {documentType === 'upload' && (
                      <div className="space-y-1">
                         <Input
@@ -447,7 +477,6 @@ export default function TeamDocuments() {
                      disabled={
                         saving ||
                         title.trim().length < 2 ||
-                        !folderId ||
                         (documentType === 'upload' && (!file || !validFile)) ||
                         (documentType === 'link' && !sourceUrl.trim())
                      }

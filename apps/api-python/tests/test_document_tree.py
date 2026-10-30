@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
-from app.domains.native_documents import get_document
+from app.domains.native_documents import get_document, list_folders
 from app.modules.work_items.contracts import (
     CreateDocumentInput,
     CreateIssueInput,
@@ -142,6 +142,11 @@ async def verify_document_tree():
                 folder_id=loose["id"], values={"parentId": module["id"], "kind": "feature"},
             )
             assert (moved["projectId"], moved["kind"]) == (project, "feature")
+            # The team Documents tab lists team-wide folders only, never the project tree.
+            # VI: Tab Documents của team chỉ liệt kê thư mục chung, không lẫn cây dự án.
+            team_folders = (await list_folders(workspaceId=workspace, teamId=team, user=user, db=db))["data"]
+            assert sorted(folder["name"] for folder in team_folders) == ["General", "Team only"]
+            assert all(folder["projectId"] is None for folder in team_folders)
 
             fds = (
                 await create_document(
