@@ -37,6 +37,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { type LiveProjectCustomField, useLiveProjectData } from './use-live-project';
 import { ProjectTeamsChannel } from './project-teams-channel';
+import { projectPath } from '@/lib/project-route';
 
 interface ProjectPropertiesPanelProps {
    project: ProjectDetailUiProject;
@@ -651,7 +652,7 @@ export function ProjectPropertiesPanel({ project, detail, issues }: ProjectPrope
                <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-medium">Activity</h3>
                   <Link
-                     href={`/${orgId}/project/${project.id}/activity`}
+                     href={projectPath(orgId, project, 'activity')}
                      className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                   >
                      See all

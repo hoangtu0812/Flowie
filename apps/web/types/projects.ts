@@ -15,6 +15,8 @@ export interface Health {
 /** UI shape mapped from the Projects API. It contains no fixture records. */
 export interface Project {
    id: string;
+   /** Readable URL slug; links fall back to the id without it. VI: Slug URL dễ đọc; không có thì link dùng id. */
+   slug?: string;
    name: string;
    status: Status;
    icon: LucideIcon | RemixiconComponentType;

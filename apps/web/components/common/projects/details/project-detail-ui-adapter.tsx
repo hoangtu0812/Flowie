@@ -166,6 +166,7 @@ export function toProjectUi(
    ).length;
    return {
       id: project.id,
+      slug: project.slug,
       name: project.name,
       status: projectStatusPresentation(project.status),
       icon: projectIcon(project.icon),

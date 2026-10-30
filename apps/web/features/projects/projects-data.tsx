@@ -23,6 +23,7 @@ import { RecoveryScreen } from '@/features/shared/recovery-screen';
 
 type ApiProject = {
    id: string;
+   slug?: string;
    name: string;
    icon?: string | null;
    status: string;
@@ -149,6 +150,7 @@ const mapProject = (project: ApiProject): Project & { issueCount: number } => {
 
    return {
       id: project.id,
+      slug: project.slug,
       name: project.name,
       status: mapStatus(project.status),
       icon: projectIcon(project.icon),

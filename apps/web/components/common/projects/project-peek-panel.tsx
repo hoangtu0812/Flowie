@@ -27,6 +27,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ProjectProgressChart } from './details/project-progress-chart';
 import { ProjectTeamsChannel } from './details/project-teams-channel';
+import { projectPath } from '@/lib/project-route';
 
 interface ProjectPeekPanelProps {
    projectId: string;
@@ -199,7 +200,7 @@ export function ProjectPeekPanel({ projectId, onClose, onChanged }: ProjectPeekP
                <project.icon className="size-3.5" />
             </span>
             <Link
-               href={`/${orgId}/project/${project.id}/overview`}
+               href={projectPath(orgId, project, 'overview')}
                className="flex-1 min-w-0 flex items-center gap-1.5 group"
                aria-label="Open project"
             >

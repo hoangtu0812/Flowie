@@ -6,6 +6,7 @@ from ..modules.access.projects import _workspace_access as _workspace_access, _w
 from ..core.dates import _date as _date
 
 import json
+import re
 from datetime import datetime
 from typing import Any, Literal, Annotated
 from urllib.parse import urlparse
@@ -59,12 +60,41 @@ CIRCLE_PROJECT_STATUSES = (
 )
 
 
+PROJECT_SLUG = re.compile(r'[a-z0-9]+(?:-[a-z0-9]+)*')
+# Generated ids are "c" plus 24 lowercase letters or digits; a slug of that shape could be read as
+# an id in /project/<key>, so it is refused.
+# VI: Id sinh ra có dạng "c" cộng 24 chữ thường hoặc số; slug có dạng đó có thể bị hiểu là id trong
+# VI: /project/<key>, nên bị từ chối.
+GENERATED_ID = re.compile(r'c[a-z0-9]{24}')
+
+
+def _project_slug(value: str) -> str:
+    """Validates a project URL slug without rewriting it: 1–63 characters of a-z, 0-9 and single
+    hyphens, no hyphen at either end, and not shaped like a generated id. Uppercase, accents,
+    spaces, underscores and slashes are rejected so what the user typed is exactly what is saved.
+    VI: Kiểm tra slug URL của dự án mà không tự sửa: 1–63 ký tự gồm a-z, 0-9 và dấu gạch nối đơn,
+    VI: không có gạch nối ở hai đầu, và không có dạng giống id sinh ra. Chữ hoa, dấu, khoảng trắng,
+    VI: gạch dưới và dấu gạch chéo bị từ chối để giá trị lưu đúng như người dùng nhập.
+    """
+    if not (1 <= len(value) <= 63 and PROJECT_SLUG.fullmatch(value)):
+        raise ApiError(400, 'Slug must be 1–63 characters of a-z, 0-9 and single hyphens, without a hyphen at the start or end.', 'Bad Request')
+    if GENERATED_ID.fullmatch(value):
+        raise ApiError(400, 'This slug looks like a project id. Choose a more readable slug.', 'Bad Request')
+    return value
+
+
+def _slug_conflict(error: IntegrityError) -> bool:
+    return 'slug' in str(getattr(error, 'orig', error))
+
+
 class CreateProjectInput(BaseModel):
     workspaceId: str = Field(min_length=1)
     templateId: str | None = None
     teamId: str | None = None
     name: str = Field(min_length=2, max_length=120)
     identifier: str = Field(min_length=1, max_length=24)
+    # Omitted: derived from the identifier by the database. VI: Bỏ trống: database tạo từ identifier.
+    slug: str | None = Field(default=None, max_length=63)
     description: str | None = Field(default=None, max_length=2000)
     type: ProjectType | None = None
 
@@ -74,6 +104,7 @@ class UpdateProjectInput(BaseModel):
     # Emoji or short symbol, same limit as team icons; blank or null restores the default icon.
     # VI: Emoji hoặc ký hiệu ngắn, cùng giới hạn với icon team; rỗng hoặc null trả về icon mặc định.
     icon: str | None = Field(default=None, max_length=16)
+    slug: str | None = Field(default=None, max_length=63)
     description: str | None = Field(default=None, max_length=2000)
     status: str | None = Field(default=None, max_length=32)
     priority: str | None = Field(default=None, max_length=32)
@@ -642,7 +673,7 @@ async def _project(db: AsyncSession, project_id: str, workspace_id: str, user_id
     issues = await db.execute(text('''SELECT i.id, i.identifier, i.title, i.priority, i.updated_at, s.id AS status_id_value, s.name AS status_name, s.category AS status_category, s.color AS status_color, a.id AS assignee_id_value, a.name AS assignee_name, a.avatar_url AS assignee_avatar_url FROM issues i JOIN issue_statuses s ON s.id = i.status_id LEFT JOIN users a ON a.id = i.assignee_id WHERE i.project_id = :project_id AND i.archived_at IS NULL AND (i.team_id IS NULL OR EXISTS(SELECT 1 FROM team_members tm JOIN teams scoped_team ON scoped_team.id=tm.team_id WHERE tm.team_id=i.team_id AND tm.user_id=:user_id AND scoped_team.archived_at IS NULL)) ORDER BY i.updated_at DESC'''), {'project_id': project_id,'user_id':user_id})
     issue_records=issues.mappings().all()
     return {
-        'id': row['id'], 'workspaceId': row['workspace_id'], 'teamId': row['team_id'], 'name': row['name'], 'icon': row['icon'], 'identifier': row['identifier'], 'description': row['description'], 'type': row['type'], 'status': row['status'], 'priority': row['priority'], 'health': row['health'], 'leadId': row['lead_id'], 'startDate': row['start_date'], 'targetDate': row['target_date'], 'archivedAt': row['archived_at'], 'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
+        'id': row['id'], 'workspaceId': row['workspace_id'], 'teamId': row['team_id'], 'name': row['name'], 'icon': row['icon'], 'identifier': row['identifier'], 'slug': row['slug'], 'description': row['description'], 'type': row['type'], 'status': row['status'], 'priority': row['priority'], 'health': row['health'], 'leadId': row['lead_id'], 'startDate': row['start_date'], 'targetDate': row['target_date'], 'archivedAt': row['archived_at'], 'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
         'team': team,
         'lead': {'id': row['lead_id_value'], 'name': row['lead_name'], 'avatarUrl': row['lead_avatar_url']} if row['lead_id_value'] else None,
         '_count': {'issues': len(issue_records)}, 'labelLinks': [{'label': {'id': label['id'], 'workspaceId': label['workspace_id'], 'name': label['name'], 'color': label['color'], 'description': label['description'], 'createdAt': label['created_at'], 'updatedAt': label['updated_at']}} for label in labels.mappings().all()],
@@ -680,12 +711,15 @@ async def create_project(payload: CreateProjectInput, user: Any = Depends(curren
     priority = template_config.get('priority', 'none')
     health = template_config.get('health', 'no-update')
     project_id, now = _cuid(), _utcnow()
+    slug = _project_slug(payload.slug) if payload.slug else None
     try:
-        await db.execute(text('''INSERT INTO projects (id, workspace_id, team_id, name, identifier, description, type, status, priority, health, created_at, updated_at) VALUES (:id, :workspace_id, :team_id, :name, :identifier, :description, :type, :status, :priority, :health, :now, :now)'''), {'id': project_id, 'workspace_id': payload.workspaceId, 'team_id': payload.teamId, 'name': payload.name.strip(), 'identifier': payload.identifier.strip().upper(), 'description': description, 'type': project_type, 'status': status, 'priority': priority, 'health': health, 'now': now})
+        await db.execute(text('''INSERT INTO projects (id, workspace_id, team_id, name, identifier, slug, description, type, status, priority, health, created_at, updated_at) VALUES (:id, :workspace_id, :team_id, :name, :identifier, :slug, :description, :type, :status, :priority, :health, :now, :now)'''), {'id': project_id, 'workspace_id': payload.workspaceId, 'team_id': payload.teamId, 'name': payload.name.strip(), 'identifier': payload.identifier.strip().upper(), 'slug': slug, 'description': description, 'type': project_type, 'status': status, 'priority': priority, 'health': health, 'now': now})
         await db.execute(text("INSERT INTO activities (id, workspace_id, project_id, actor_id, type, data, created_at) VALUES (:id, :workspace_id, :project_id, :actor_id, 'project.created', CAST(:data AS jsonb), :now)"), {'id': _cuid(), 'workspace_id': payload.workspaceId, 'project_id': project_id, 'actor_id': user['id'], 'data': '{"source":"python"}', 'now': now})
         await db.commit()
     except IntegrityError as error:
-        await db.rollback(); raise ApiError(409, 'A project with this identifier already exists.', 'Conflict') from error
+        await db.rollback()
+        if _slug_conflict(error): raise ApiError(409, 'This slug is already used by a project in this workspace.', 'Conflict') from error
+        raise ApiError(409, 'A project with this identifier already exists.', 'Conflict') from error
     return {'data': await _project(db, project_id, payload.workspaceId, user['id'], include_favorites=False)}
 
 
@@ -716,6 +750,7 @@ async def update_project(project_id: str, payload: UpdateProjectInput, workspace
     if 'name' in values and len((values['name'] or '').strip()) < 2:
         raise ApiError(400, 'Project name must have at least 2 characters.', 'Bad Request')
     if 'icon' in values: values['icon'] = (values['icon'] or '').strip() or None
+    if 'slug' in values: values['slug'] = _project_slug(values['slug'] or '')
     if values.get('leadId'):
         lead = await db.execute(text("SELECT 1 FROM workspace_members WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'"), {'workspace_id': workspaceId, 'user_id': values['leadId']})
         if lead.scalar_one_or_none() is None: raise ApiError(404, 'Project lead must be an active workspace member.', 'Not Found')
@@ -730,13 +765,21 @@ async def update_project(project_id: str, payload: UpdateProjectInput, workspace
         if ids:
             labels = await db.execute(text('SELECT COUNT(*) FROM project_labels WHERE workspace_id = :workspace_id AND id = ANY(:ids)'), {'workspace_id': workspaceId, 'ids': ids})
             if labels.scalar_one() != len(ids): raise ApiError(404, 'One or more project labels are not available in this workspace.', 'Not Found')
-    column_map = {'name':'name','icon':'icon','description':'description','status':'status','priority':'priority','health':'health','leadId':'lead_id','teamId':'team_id','startDate':'start_date','targetDate':'target_date','type':'type'}
+    column_map = {'name':'name','icon':'icon','slug':'slug','description':'description','status':'status','priority':'priority','health':'health','leadId':'lead_id','teamId':'team_id','startDate':'start_date','targetDate':'target_date','type':'type'}
     params, sets = {'id': project_id, 'now': _utcnow()}, []
     for key, column in column_map.items():
         if key in values:
             value = _date(values[key]) if key in {'startDate','targetDate'} else values[key]
             params[key] = value.strip() if key in {'name','description'} and isinstance(value, str) else value; sets.append(f'{column} = :{key}')
-    if sets: await db.execute(text(f"UPDATE projects SET {', '.join(sets)}, updated_at = :now WHERE id = :id"), params)
+    if sets:
+        try:
+            await db.execute(text(f"UPDATE projects SET {', '.join(sets)}, updated_at = :now WHERE id = :id"), params)
+        except IntegrityError as error:
+            # The slug trigger (current slugs and aliases are one namespace) settles races too.
+            # VI: Trigger slug (slug hiện tại và alias chung một không gian tên) xử lý cả ghi đồng thời.
+            await db.rollback()
+            if _slug_conflict(error): raise ApiError(409, 'This slug is already used by a project in this workspace.', 'Conflict') from error
+            raise
     if label_ids is not None:
         await db.execute(text('DELETE FROM project_label_links WHERE project_id = :project_id'), {'project_id': project_id})
         for label_id in set(label_ids): await db.execute(text('INSERT INTO project_label_links (project_id, label_id) VALUES (:project_id, :label_id)'), {'project_id': project_id, 'label_id': label_id})
@@ -745,6 +788,7 @@ async def update_project(project_id: str, payload: UpdateProjectInput, workspace
     tracked = {
         'name': 'Name',
         'icon': 'Icon',
+        'slug': 'URL slug',
         'status': 'Status',
         'priority': 'Priority',
         'health': 'Health',
@@ -1131,6 +1175,25 @@ async def public_list_projects(workspaceId: str = Query(min_length=1), teamId: s
 @public_router.post('')
 async def public_create_project(payload: CreateProjectInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     return await create_project(payload, user, db)
+
+
+@public_router.get('/resolve')
+async def resolve_project(key: str = Query(min_length=1, max_length=100), workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, str]]:
+    """Turns the key of a /project/<key> link into the project's id and current slug. The key may
+    be the id, the current slug or an earlier slug (alias), always within this workspace; an id
+    wins over a slug. Access is checked like a project read, so knowing a slug grants nothing.
+    VI: Đổi khoá trong link /project/<key> thành id và slug hiện tại của dự án. Khoá có thể là id,
+    VI: slug hiện tại hoặc slug cũ (alias), luôn trong workspace này; id được ưu tiên hơn slug.
+    VI: Quyền được kiểm tra như khi đọc dự án, nên biết slug không cho thêm quyền gì.
+    """
+    await _workspace_access(db, workspaceId, user['id'])
+    row = (await db.execute(text('''SELECT p.id, p.slug, p.team_id FROM projects p
+        WHERE p.workspace_id = :workspace_id AND p.archived_at IS NULL
+          AND (p.id = :key OR p.id = (SELECT s.project_id FROM project_slugs s WHERE s.workspace_id = :workspace_id AND s.slug = lower(:key)))
+        ORDER BY p.id = :key DESC LIMIT 1'''), {'workspace_id': workspaceId, 'key': key})).mappings().first()
+    if not row: raise ApiError(404, 'Project not found.', 'Not Found')
+    if row['team_id']: await _team_access(db, workspaceId, row['team_id'], user['id'])
+    return {'data': {'id': row['id'], 'slug': row['slug']}}
 
 
 @public_router.get('/c{project_suffix}')

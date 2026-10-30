@@ -41,13 +41,17 @@ const PROJECT_TABS = [
 ];
 
 function ProjectTabs({ projectId }: { projectId: string }) {
-   const { orgId } = useParams<{ orgId: string }>();
+   // Tabs reuse the key in the address bar (the slug once the route has redirected), so the
+   // active tab matches the current path and switching tabs needs no redirect.
+   // VI: Tab dùng lại khoá trên thanh địa chỉ (là slug sau khi route đã chuyển hướng), để tab đang
+   // VI: mở khớp với path hiện tại và đổi tab không cần chuyển hướng.
+   const { orgId, projectId: key } = useParams<{ orgId: string; projectId?: string }>();
    const pathname = usePathname();
 
    return (
       <div className="flex items-center gap-1 min-w-0 overflow-x-auto">
          {PROJECT_TABS.map((tab) => {
-            const href = `/${orgId}/project/${projectId}/${tab.segment}`;
+            const href = `/${orgId}/project/${key ?? projectId}/${tab.segment}`;
             const isActive = pathname === href;
             return (
                <Link

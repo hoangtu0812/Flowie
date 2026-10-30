@@ -56,6 +56,7 @@ import {
    LiveWorkspaceProject,
    useLiveInitiatives,
 } from './use-live-initiatives';
+import { projectPath } from '@/lib/project-route';
 
 const TABS = ['overview', 'activity', 'projects'] as const;
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
@@ -144,7 +145,7 @@ function ProjectsSection({
                {group.projects.map((project) => (
                   <Link
                      key={project.id}
-                     href={`/${orgId}/project/${project.id}/overview`}
+                     href={projectPath(orgId, project, 'overview')}
                      className="flex items-center gap-2 py-2 text-sm hover:bg-sidebar/50 rounded-md px-1 -mx-1 transition-colors"
                   >
                      <project.icon className="size-4 text-muted-foreground shrink-0" />

@@ -53,6 +53,7 @@ import { toast } from 'sonner';
 import { folderLabel } from '@/lib/document-tree';
 import { useProjectsData } from '@/features/projects/projects-data';
 import { type LiveDocument, useLiveTeam } from './use-live-team';
+import { projectPath } from '@/lib/project-route';
 
 const timeAgo = relativeTime;
 
@@ -75,7 +76,7 @@ function ProjectDocsLinks() {
          {allProjects.map((project) => (
             <Link
                key={project.id}
-               href={`/${orgId}/project/${project.id}/docs`}
+               href={projectPath(orgId, project, 'docs')}
                className="inline-flex h-7 items-center rounded-full border px-2.5 text-xs font-medium hover:bg-accent/50"
             >
                {project.name}

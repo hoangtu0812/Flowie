@@ -33,6 +33,7 @@ import {
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
+import { projectPath } from '@/lib/project-route';
 
 /**
  * Issue page header: breadcrumb (team › cycle › parent issues › identifier + title,
@@ -94,7 +95,7 @@ export default function HeaderNav() {
             )}
             {project && (
                <Link
-                  href={`/${orgId}/project/${project.id}/issues`}
+                  href={projectPath(orgId, project, 'issues')}
                   className="flex items-center gap-1.5 shrink-0 hover:opacity-80"
                >
                   <project.icon size={16} className="shrink-0" />

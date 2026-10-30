@@ -9,6 +9,7 @@ import { Calendar } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ProjectGroup } from './projects';
+import { projectPath } from '@/lib/project-route';
 
 function ProjectCard({ project }: { project: Project }) {
    const { orgId } = useParams<{ orgId: string }>();
@@ -21,7 +22,7 @@ function ProjectCard({ project }: { project: Project }) {
                <project.icon className="size-4" />
             </span>
             <Link
-               href={`/${orgId}/project/${project.id}/overview`}
+               href={projectPath(orgId, project, 'overview')}
                className="text-sm font-medium leading-snug hover:underline underline-offset-2 min-w-0"
             >
                {project.name}

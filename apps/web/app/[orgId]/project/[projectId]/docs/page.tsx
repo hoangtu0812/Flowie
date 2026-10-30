@@ -1,20 +1,11 @@
-import { ProjectDocs } from '@/features/documents/project-docs';
-import { LiveProjectProvider } from '@/components/common/projects/details/use-live-project';
-import Header from '@/components/layout/headers/project/header';
-import MainLayout from '@/components/layout/main-layout';
+import { ProjectRoute } from '@/components/common/projects/project-route';
 
-interface ProjectDocsPageProps {
+interface ProjectPageProps {
    params: Promise<{ projectId: string }>;
 }
 
-export default async function ProjectDocsPage({ params }: ProjectDocsPageProps) {
+export default async function ProjectPage({ params }: ProjectPageProps) {
    const { projectId } = await params;
 
-   return (
-      <LiveProjectProvider projectId={projectId}>
-         <MainLayout header={<Header projectId={projectId} />}>
-            <ProjectDocs projectId={projectId} />
-         </MainLayout>
-      </LiveProjectProvider>
-   );
+   return <ProjectRoute projectKey={decodeURIComponent(projectId)} view="docs" />;
 }
