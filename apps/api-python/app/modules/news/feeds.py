@@ -214,20 +214,29 @@ async def fetch_feed(url: str, client: httpx.AsyncClient) -> bytes:
     raise ValueError('The feed redirects too many times.')
 
 
-def news_card(category: str, items: list[dict[str, Any]], app_url: str | None) -> dict[str, Any]:
+def news_card(
+    category: str, items: list[dict[str, Any]], app_url: str | None, digest: str | None = None
+) -> dict[str, Any]:
     """Teams Adaptive Card listing up to ``CARD_ITEMS`` new items as Markdown links plus a
     "+N more" line. Brackets and parentheses are neutralised so a title or URL cannot break the
-    link syntax.
+    link syntax. Items arrive ranked by AI risk; a labelled item shows its level and AI summary,
+    and the category's AI digest (already plain text without brackets) opens the card.
     VI: Adaptive Card Teams liệt kê tối đa ``CARD_ITEMS`` tin mới dạng link Markdown và dòng
     VI: "+N more". Ngoặc vuông và ngoặc tròn được vô hiệu để tiêu đề hay URL không phá cú pháp link.
+    VI: Tin đến theo thứ tự rủi ro AI; tin có nhãn hiện mức rủi ro và tóm tắt AI, bản tin AI của
+    VI: nhóm (đã là văn bản thuần, không có ngoặc vuông) mở đầu card.
     """
     lines = [
-        '- [{}]({})'.format(
+        '- {}[{}]({}){}'.format(
+            f"**{item['risk_level']}** " if item.get('risk_level') else '',
             item['title'].replace('[', '(').replace(']', ')'),
             item['url'].replace('(', '%28').replace(')', '%29').replace(' ', '%20'),
+            f" — {item['ai_summary']}" if item.get('ai_summary') else '',
         )
         for item in items[:CARD_ITEMS]
     ]
+    if digest:
+        lines = [digest, '', *lines]
     if len(items) > CARD_ITEMS:
         lines.append(f'+{len(items) - CARD_ITEMS} more')
     return teams_message(

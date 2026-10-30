@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from os import getenv
 from typing import Any
 
@@ -12,6 +13,7 @@ from ...core.clock import _utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import _cuid
 from ...services.microsoft_teams import masked_webhook
+from .ai import analyze_workspace
 from .feeds import fetch_feed, news_card, parse_feed
 
 logger = logging.getLogger(__name__)
@@ -47,7 +49,10 @@ async def news_page(db: AsyncSession, workspace_id: str, user_id: str) -> dict[s
     params = {'workspace_id': workspace_id}
     categories = (
         await db.execute(
-            text('SELECT id, name, webhook_url FROM news_categories WHERE workspace_id = :workspace_id ORDER BY name'),
+            text(
+                'SELECT id, name, webhook_url, digest, digest_at FROM news_categories '
+                'WHERE workspace_id = :workspace_id ORDER BY name'
+            ),
             params,
         )
     ).mappings().all()
@@ -56,6 +61,7 @@ async def news_page(db: AsyncSession, workspace_id: str, user_id: str) -> dict[s
             text(
                 '''SELECT * FROM (
                      SELECT i.id, i.title, i.url, i.summary, i.published_at, s.name AS source_name, s.category_id,
+                            i.risk_level, i.risk_score, i.ai_summary,
                             row_number() OVER (PARTITION BY s.category_id ORDER BY i.published_at DESC) AS position
                      FROM news_items i JOIN news_sources s ON s.id = i.source_id
                      WHERE i.workspace_id = :workspace_id) ranked
@@ -70,6 +76,8 @@ async def news_page(db: AsyncSession, workspace_id: str, user_id: str) -> dict[s
             {
                 'id': row['id'],
                 'name': row['name'],
+                'digest': row['digest'],
+                'digestAt': row['digest_at'],
                 **(
                     {'webhookUrlMasked': masked_webhook(row['webhook_url']) if row['webhook_url'] else None}
                     if manage
@@ -87,6 +95,9 @@ async def news_page(db: AsyncSession, workspace_id: str, user_id: str) -> dict[s
                 'publishedAt': row['published_at'],
                 'sourceName': row['source_name'],
                 'categoryId': row['category_id'],
+                'riskLevel': row['risk_level'],
+                'riskScore': row['risk_score'],
+                'aiSummary': row['ai_summary'],
             }
             for row in items
         ],
@@ -127,14 +138,19 @@ async def due_workspaces(db: AsyncSession, cutoff: Any) -> list[str]:
     return [row[0] for row in rows.all()]
 
 
-async def refresh_workspace(db: AsyncSession, workspace_id: str, due_before: Any = None) -> dict[str, int]:
+async def refresh_workspace(
+    db: AsyncSession, workspace_id: str, due_before: Any = None, settings: Any = None
+) -> dict[str, int]:
     """Fetch the workspace's enabled sources (only those not fetched since ``due_before`` when it
     is given), store new items once per link, then post them to Teams. Each source is committed on
     its own and the transaction is closed before every download, so a slow feed holds no lock and
-    one broken feed only records ``last_error`` on its source.
+    one broken feed only records ``last_error`` on its source. With ``settings`` the new items are
+    labelled by the workspace's AI provider before the Teams post; AI failures never stop the post.
     VI: Lấy các nguồn đang bật của workspace (chỉ nguồn chưa lấy từ ``due_before`` nếu có), lưu
     VI: tin mới một lần theo link, rồi gửi Teams. Mỗi nguồn được commit riêng và transaction được
     VI: đóng trước mỗi lần tải, nên feed chậm không giữ khoá và feed lỗi chỉ ghi ``last_error``.
+    VI: Có ``settings`` thì tin mới được provider AI của workspace gán nhãn trước khi gửi Teams; lỗi
+    VI: AI không bao giờ chặn việc gửi.
     """
     query = 'SELECT id, feed_url FROM news_sources WHERE workspace_id = :workspace_id AND enabled'
     params: dict[str, Any] = {'workspace_id': workspace_id}
@@ -172,8 +188,9 @@ async def refresh_workspace(db: AsyncSession, workspace_id: str, due_before: Any
                 {'now': now, 'error': error, 'id': source['id']},
             )
             await db.commit()
+        analyzed = await analyze_workspace(db, workspace_id, settings) if settings is not None else 0
         notified = await notify_workspace(db, workspace_id, client)
-    return {'fetched': len(sources), 'inserted': inserted, 'notified': notified}
+    return {'fetched': len(sources), 'inserted': inserted, 'analyzed': analyzed, 'notified': notified}
 
 
 async def notify_workspace(db: AsyncSession, workspace_id: str, client: httpx.AsyncClient) -> int:
@@ -187,11 +204,12 @@ async def notify_workspace(db: AsyncSession, workspace_id: str, client: httpx.As
     rows = (
         await db.execute(
             text(
-                '''SELECT c.id AS category_id, c.name, c.webhook_url, i.id, i.title, i.url
+                '''SELECT c.id AS category_id, c.name, c.webhook_url, c.digest, c.digest_at,
+                          i.id, i.title, i.url, i.risk_level, i.ai_summary
                    FROM news_items i JOIN news_sources s ON s.id = i.source_id
                    JOIN news_categories c ON c.id = s.category_id
                    WHERE i.workspace_id = :workspace_id AND i.notified_at IS NULL
-                   ORDER BY i.published_at DESC'''
+                   ORDER BY i.risk_score DESC NULLS LAST, i.published_at DESC'''
             ),
             {'workspace_id': workspace_id},
         )
@@ -201,6 +219,7 @@ async def notify_workspace(db: AsyncSession, workspace_id: str, client: httpx.As
     for row in rows:
         groups.setdefault(row['category_id'], []).append(row)
     base = (getenv('APP_URL') or getenv('NEXT_PUBLIC_APP_URL') or '').rstrip('/')
+    recent = _utcnow() - timedelta(hours=24)
     delivered = 0
     for items in groups.values():
         handled = True
@@ -208,7 +227,12 @@ async def notify_workspace(db: AsyncSession, workspace_id: str, client: httpx.As
             try:
                 response = await client.post(
                     items[0]['webhook_url'],
-                    json=news_card(items[0]['name'], [dict(item) for item in items], f'{base}/{workspace_id}/news' if base else None),
+                    json=news_card(
+                        items[0]['name'],
+                        [dict(item) for item in items],
+                        f'{base}/{workspace_id}/news' if base else None,
+                        items[0]['digest'] if items[0]['digest_at'] and items[0]['digest_at'] >= recent else None,
+                    ),
                 )
                 handled = response.is_success
                 if not handled:

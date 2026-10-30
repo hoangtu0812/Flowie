@@ -147,7 +147,11 @@ ProgressReporter = Callable[[AgentProgress], Awaitable[None]]
 
 
 def _cipher(request: Request) -> Fernet:
-    value = request.app.state.settings.agent_secrets_encryption_key
+    return _settings_cipher(request.app.state.settings)
+
+
+def _settings_cipher(settings: Any) -> Fernet:
+    value = settings.agent_secrets_encryption_key
     if not value:
         raise ApiError(503, 'AGENT_SECRETS_ENCRYPTION_KEY must be configured before saving provider keys.', 'Service Unavailable')
     try:
@@ -208,6 +212,18 @@ def _validated_endpoint(provider: ProviderName, endpoint: str, allowed_hosts: tu
 
 
 async def _configured_provider(request: Request, db: AsyncSession, workspace_id: str) -> dict[str, str]:
+    return await configured_provider(request.app.state.settings, db, workspace_id)
+
+
+async def configured_provider(settings: Any, db: AsyncSession, workspace_id: str) -> dict[str, str]:
+    """Return the workspace's active provider with its decrypted key, or raise 409/503.
+
+    Takes ``Settings`` instead of a request so background jobs (the News analysis) share the same
+    endpoint re-check and key decryption as Agent requests. The key lives only in the returned dict.
+    VI: Trả provider đang bật của workspace kèm key đã giải mã, hoặc báo 409/503. Nhận ``Settings``
+    thay vì request để job nền (phân tích News) dùng chung bước kiểm tra lại endpoint và giải mã
+    key với Agent. Key chỉ nằm trong dict trả về.
+    """
     result = await db.execute(
         text('''SELECT provider, endpoint, model, api_key_encrypted
                 FROM workspace_agent_providers
@@ -220,9 +236,9 @@ async def _configured_provider(request: Request, db: AsyncSession, workspace_id:
         raise ApiError(409, 'Configure and activate an OpenAI or Google provider in Agent personalization first.', 'Conflict')
     # Re-checks the saved URL so removing a host from AGENT_PROVIDER_ALLOWED_HOSTS stops calls to it.
     # VI: Kiểm tra lại URL đã lưu để việc gỡ host khỏi AGENT_PROVIDER_ALLOWED_HOSTS chặn các lệnh gọi tới nó.
-    _validated_endpoint(row['provider'], row['endpoint'], request.app.state.settings.agent_provider_allowed_hosts)
+    _validated_endpoint(row['provider'], row['endpoint'], settings.agent_provider_allowed_hosts)
     try:
-        api_key = _cipher(request).decrypt(row['api_key_encrypted'].encode('ascii')).decode('utf-8')
+        api_key = _settings_cipher(settings).decrypt(row['api_key_encrypted'].encode('ascii')).decode('utf-8')
     except InvalidToken as error:
         raise ApiError(503, 'The saved provider key cannot be decrypted with this server key.', 'Service Unavailable') from error
     return {'provider': row['provider'], 'endpoint': row['endpoint'], 'model': row['model'], 'apiKey': api_key}

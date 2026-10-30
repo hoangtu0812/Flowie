@@ -29,4 +29,11 @@ export const messages: Readonly<Record<string, string>> = {
    'Last fetched {date}': 'Lấy lần cuối {date}',
    'Delete this group with its sources and news?': 'Xoá nhóm này cùng các nguồn và tin của nhóm?',
    'Close': 'Đóng',
+   'Newest': 'Mới nhất',
+   'Highest risk': 'Rủi ro cao nhất',
+   'AI digest': 'Bản tin AI',
+   'Critical': 'Nghiêm trọng',
+   'High': 'Cao',
+   'Medium': 'Trung bình',
+   'Low': 'Thấp',
 };
