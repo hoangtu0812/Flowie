@@ -75,6 +75,7 @@ export function NewsSourcesDialog({
             {data.categories.map((category) => (
                <CategoryEditor
                   key={category.id}
+                  workspaceId={workspaceId}
                   category={category}
                   data={data}
                   busy={busy}
@@ -99,11 +100,13 @@ export function NewsSourcesDialog({
 }
 
 function CategoryEditor({
+   workspaceId,
    category,
    data,
    busy,
    run,
 }: {
+   workspaceId: string;
    category: NewsCategory;
    data: NewsData;
    busy: boolean;
@@ -112,6 +115,7 @@ function CategoryEditor({
    const tx = useMessages(messages);
    const dateLabel = useDateFormatter();
    const [webhook, setWebhook] = useState('');
+   const [testing, setTesting] = useState(false);
    const [sourceName, setSourceName] = useState('');
    const [feedUrl, setFeedUrl] = useState('');
    const sources = (data.sources ?? []).filter((source) => source.categoryId === category.id);
@@ -171,6 +175,36 @@ function CategoryEditor({
                   }
                >
                   {tx('Remove webhook')}
+               </Button>
+            )}
+            {category.webhookUrlMasked && (
+               <Button
+                  variant="ghost"
+                  disabled={busy || testing}
+                  onClick={async () => {
+                     // The API posts a test card to the stored webhook and reports Teams' answer.
+                     // VI: API gửi thẻ thử tới webhook đã lưu và trả về phản hồi của Teams.
+                     setTesting(true);
+                     try {
+                        const result = await newsRequest<{ delivered: boolean; reason?: string }>(
+                           workspaceId,
+                           `/categories/${category.id}/test`,
+                           'POST'
+                        );
+                        if (result.delivered)
+                           toast.success(tx('Test card sent to Microsoft Teams.'));
+                        else
+                           toast.error(
+                              result.reason ?? tx('Microsoft Teams did not accept the test card.')
+                           );
+                     } catch (reason) {
+                        toast.error(reason instanceof Error ? reason.message : String(reason));
+                     } finally {
+                        setTesting(false);
+                     }
+                  }}
+               >
+                  {tx('Test webhook')}
                </Button>
             )}
          </div>

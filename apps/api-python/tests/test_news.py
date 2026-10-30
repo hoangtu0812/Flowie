@@ -105,3 +105,54 @@ def test_news_card_caps_items_and_escapes_markdown():
     assert text.count('\n- ') == 9 and text.endswith('+2 more')
     assert '- [(0) x](https://e.com/a%28b%290)' in text
     assert card['actions'][0]['url'] == 'https://flowie/w/news'
+
+
+class _Rows:
+    def __init__(self, row):
+        self.row = row
+
+    def first(self):
+        return self.row
+
+
+class _Db:
+    def __init__(self, row):
+        self.row, self.params = row, None
+
+    async def execute(self, _statement, params):
+        self.params = params
+        return _Rows(self.row)
+
+
+@pytest.mark.parametrize(('row', 'status'), [(None, 404), (('',), 400), ((None,), 400)])
+def test_webhook_test_requires_a_stored_webhook(monkeypatch, row, status):
+    from app.modules.news import api
+
+    async def allow(*_args):
+        return None
+
+    monkeypatch.setattr(api, 'require_manager', allow)
+    with pytest.raises(ApiError) as error:
+        asyncio.run(api.test_category_webhook('cat', workspaceId='ws', user={'id': 'u'}, db=_Db(row)))
+    assert error.value.status_code == status
+
+
+def test_webhook_test_posts_only_to_the_stored_url(monkeypatch):
+    from app.modules.news import api
+
+    sent = []
+
+    async def allow(*_args):
+        return None
+
+    async def send(url):
+        sent.append(url)
+        return {'delivered': True}
+
+    monkeypatch.setattr(api, 'require_manager', allow)
+    monkeypatch.setattr(api, '_send_teams_test', send)
+    db = _Db(('https://x.logic.azure.com/workflows/a',))
+    result = asyncio.run(api.test_category_webhook('cat', workspaceId='ws', user={'id': 'u'}, db=db))
+    assert result == {'data': {'delivered': True}}
+    assert sent == ['https://x.logic.azure.com/workflows/a']
+    assert db.params == {'id': 'cat', 'workspace_id': 'ws'}

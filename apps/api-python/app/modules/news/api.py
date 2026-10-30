@@ -13,6 +13,7 @@ from ...core.identifiers import _cuid
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
 from ...domains.auth import current_user
+from ...domains.native_integrations import _send_teams_test
 from ...services.microsoft_teams import valid_teams_webhook
 from ..identity.password_reset import limit_request
 from .feeds import feed_url
@@ -140,6 +141,30 @@ async def delete_category(
     result = _found(row, 'News group')
     await db.commit()
     return {'data': result}
+
+
+@router.post('/categories/{category_id}/test')
+async def test_category_webhook(
+    category_id: str,
+    workspaceId: str = Query(min_length=1),
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+):
+    # Posts the Integrations test card to the group's stored webhook only; the client cannot pass
+    # a URL, so the endpoint can never be pointed at another host (SSRF).
+    # VI: Gửi thẻ thử của trang Integrations tới webhook đã lưu của nhóm; client không truyền được
+    # VI: URL nên endpoint không thể bị trỏ tới host khác (SSRF).
+    await require_manager(db, workspaceId, user['id'])
+    row = (
+        await db.execute(
+            text('SELECT webhook_url FROM news_categories WHERE id = :id AND workspace_id = :workspace_id'),
+            {'id': category_id, 'workspace_id': workspaceId},
+        )
+    ).first()
+    _found(row, 'News group')
+    if not row[0]:
+        raise ApiError(400, 'This news group has no Microsoft Teams webhook.', 'Bad Request')
+    return {'data': await _send_teams_test(row[0])}
 
 
 @router.post('/sources')

@@ -71,6 +71,21 @@ test('owners manage news groups and allowlisted sources', async ({ page, context
    );
    expect(webhook.status()).toBe(400);
 
+   // A saved webhook gets a Test webhook button; the fake workflow URL cannot accept the card,
+   // so the toast carries Teams' answer or the unreachable reason.
+   // VI: Webhook đã lưu có nút Test webhook; URL workflow giả không nhận thẻ được, nên toast hiện
+   // VI: phản hồi của Teams hoặc lý do không kết nối được.
+   await section
+      .getByLabel('Teams webhook URL')
+      .fill(
+         'https://prod-00.southeastasia.logic.azure.com/workflows/e2e/triggers/manual/paths/invoke'
+      );
+   await section.getByRole('button', { name: 'Save webhook' }).click();
+   await section.getByRole('button', { name: 'Test webhook' }).click();
+   await expect(page.getByText(/Microsoft Teams (answered|is unreachable)/)).toBeVisible({
+      timeout: 20000,
+   });
+
    page.once('dialog', (confirm) => void confirm.accept());
    await section.getByRole('button', { name: 'Delete group' }).click();
    await expect(dialog.getByRole('region', { name: group })).toHaveCount(0);
