@@ -15,6 +15,7 @@ from ...core.identifiers import _cuid
 from ...core.clock import _utcnow
 from .commands import CommandService
 from .connections import validate_current
+from .log_redaction import failure_details, redact_arguments
 from .queries import QueryService
 from .quotas import consume_quota
 from .registry import TOOLS
@@ -29,22 +30,29 @@ class ToolApplication:
     async def call(self, principal, name: str, arguments: dict) -> dict:
         correlation, started = _cuid(), monotonic()
         tool = TOOLS.get(name)
-        if not tool:
-            raise ApiError(404, "Tool not found.", "Not Found")
         try:
+            if not tool:
+                # Unknown names are client input; the cut keeps the audit action bounded.
+                # VI: Tên tool lạ do client gửi; cắt ngắn để action audit có độ dài giới hạn.
+                name = name[:100]
+                raise ApiError(404, "Tool not found.", "Not Found")
             principal.require(tool.scope, *tool.extra_scopes)
             if tool.write and not self.settings.mcp_writes_enabled:
                 raise ApiError(403, "MCP writes are disabled.", "Forbidden")
             payload = tool.model.model_validate(arguments)
             await consume_quota(self.factory, principal.workspace_id, name)
         except ApiError as error:
-            await self.failed_audit(principal, name, correlation, error, started)
+            await self.failed_audit(
+                principal, name, correlation, error, started, arguments
+            )
             raise
         except ValidationError as error:
             api_error = ApiError(
                 400, "Tool arguments do not match the input schema.", "Bad Request"
             )
-            await self.failed_audit(principal, name, correlation, api_error, started)
+            await self.failed_audit(
+                principal, name, correlation, api_error, started, arguments
+            )
             raise api_error from error
         async with self.factory() as db:
             try:
@@ -98,7 +106,7 @@ class ToolApplication:
                 await db.rollback()
                 if not isinstance(error, asyncio.CancelledError):
                     await self.failed_audit(
-                        principal, name, correlation, error, started
+                        principal, name, correlation, error, started, arguments
                     )
                 if isinstance(error, TimeoutError):
                     raise ApiError(
@@ -256,6 +264,7 @@ class ToolApplication:
         outcome,
         entity_id=None,
         duration_ms=None,
+        details=None,
     ):
         await db.execute(
             text("""INSERT INTO audit_logs (id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at)
@@ -275,12 +284,21 @@ class ToolApplication:
                         "tool": name,
                         "outcome": outcome,
                         "durationMs": duration_ms,
+                        **(details or {}),
                     }
                 ),
             },
         )
 
-    async def failed_audit(self, principal, name, correlation, error, started=None):
+    async def failed_audit(
+        self, principal, name, correlation, error, started=None, arguments=None
+    ):
+        """Records a failed or denied call with its error and masked arguments in its own
+        session, so the caller's rollback cannot drop it. Any failure here is only logged:
+        the client always receives the tool's original error.
+        VI: Ghi lời gọi lỗi hoặc bị từ chối kèm lỗi và tham số đã che trong phiên riêng, để
+        VI: rollback của lời gọi không xóa mất. Lỗi ở đây chỉ được ghi log: client luôn nhận
+        VI: lỗi gốc của tool."""
         logger.warning(
             "MCP tool=%s connection=%s status=%s",
             name,
@@ -301,6 +319,10 @@ class ToolApplication:
                     duration_ms=int((monotonic() - started) * 1000)
                     if started
                     else None,
+                    details={
+                        **failure_details(error),
+                        "arguments": redact_arguments(arguments or {}),
+                    },
                 )
                 await db.commit()
         except Exception:
