@@ -36,6 +36,35 @@ và không xóa gì trên SharePoint.
     thư mục và file cũ vẫn nằm trên SharePoint, cần dọn thủ công nếu muốn;
   - sửa file trực tiếp trên SharePoint sẽ bị ghi đè ở lần phát hành sau.
 
+## Sao chép attachment (tùy chọn)
+
+Bật **Copy attachments** ở **Settings → Integrations → SharePoint** (mặc định tắt) để
+sao chép cả file đính kèm của dự án lên cùng thư mục SharePoint. Dùng chung app
+registration, quyền `Sites.Selected` và thư mục dự án ở trên; IT không phải làm thêm gì.
+
+- **File nào:** file đính kèm của issue và bình luận (issue phải thuộc một dự án đã gán thư
+  mục SharePoint), của dự án, của project update, file PDF trong cây Docs và file gắn vào
+  tài liệu. Issue không thuộc dự án nào thì không được sao chép.
+- **Vị trí** (dưới thư mục của dự án):
+  - issue và bình luận: `Attachments/<mã issue> <tiêu đề issue>/<file>`, ví dụ
+    `Attachments/DTD-137 Phương án đồng bộ attachment lên Sharepoint/spec.pdf`;
+  - dự án và project update: `Attachments/_Project/<file>`;
+  - cây Docs: đúng thư mục module/tính năng có số, như tài liệu.
+- **Trùng tên** (không phân biệt hoa thường) ở cùng chỗ: file sau thành `tên (2).đuôi`,
+  `tên (3).đuôi`… theo thứ tự tải lên.
+- **Khi nào:** cùng job mỗi phút, sau phần tài liệu, tối đa 20 file mỗi lượt. Bật lần đầu sẽ
+  sao chép cả file cũ. File trên 4 MB được tải bằng upload session của Graph.
+- **Một lần, một chiều:** attachment không sửa được sau khi tải lên, nên mỗi file chỉ được sao
+  chép một lần. Flowie không đọc ngược, không xóa và không di chuyển gì trên SharePoint: đổi
+  tên issue hoặc chuyển issue sang dự án khác chỉ ảnh hưởng tới file tải lên sau đó; issue bị
+  archive và bình luận bị xóa vẫn giữ file đã sao chép.
+- **Trạng thái:** thẻ đính kèm trong tab Attachments của issue hiện **Mở trên SharePoint**
+  khi đã sao chép, hoặc **Chưa sao chép được lên SharePoint** (di chuột để xem lỗi) khi đang
+  thử lại.
+- **Quyền xem:** trên SharePoint, quyền do thư mục/site quyết định, không theo team trong
+  Flowie. Ai mở được thư mục của dự án sẽ thấy mọi file đính kèm của dự án đó. Chỉ bật khi
+  phạm vi người xem thư mục tương đương team sở hữu dự án.
+
 ## Bước 1 — IT tạo app registration (một lần)
 
 1. Vào Microsoft Entra admin center → **App registrations** → **New

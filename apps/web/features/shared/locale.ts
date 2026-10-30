@@ -141,6 +141,8 @@ const catalog = {
    save: ['Save', 'Lưu'],
    cancel: ['Cancel', 'Hủy'],
    download: ['Download', 'Tải xuống'],
+   openInSharepoint: ['Open in SharePoint', 'Mở trên SharePoint'],
+   sharepointCopyFailed: ['SharePoint copy failed', 'Chưa sao chép được lên SharePoint'],
    filesCount: ['files', 'tệp'],
    fileCount: ['file', 'tệp'],
    couldNotLoadFile: ['Could not load the file.', 'Không tải được tệp.'],

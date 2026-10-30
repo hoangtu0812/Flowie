@@ -60,14 +60,19 @@ async def _authorize_entity(db: AsyncSession, workspace_id: str, entity_type: En
 
 
 def _present(row: Any) -> dict[str, Any]:
-    return {'id': row['id'], 'workspaceId': row['workspace_id'], 'uploadedById': row['uploaded_by'], 'entityType': row['entity_type'], 'entityId': row['entity_id'], 'objectKey': row['object_key'], 'filename': row['filename'], 'mimeType': row['mime_type'], 'size': row['size'], 'createdAt': row['created_at']}
+    # `sharepoint` is the copy made by the SharePoint job (link or last error); null when the
+    # file has not been copied, which includes every row not read through the list query.
+    # VI: `sharepoint` là bản sao do job SharePoint tạo (link hoặc lỗi gần nhất); null khi file
+    # VI: chưa được sao chép, gồm mọi dòng không đọc qua truy vấn danh sách.
+    sharepoint = {'webUrl': row.get('sp_web_url'), 'lastError': row.get('sp_last_error')}
+    return {'id': row['id'], 'workspaceId': row['workspace_id'], 'uploadedById': row['uploaded_by'], 'entityType': row['entity_type'], 'entityId': row['entity_id'], 'objectKey': row['object_key'], 'filename': row['filename'], 'mimeType': row['mime_type'], 'size': row['size'], 'createdAt': row['created_at'], 'sharepoint': sharepoint if any(sharepoint.values()) else None}
 
 
 @router.get('')
 @public_router.get('')
 async def list_attachments(workspaceId: str = Query(min_length=1), entityType: EntityType = Query(), entityId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
     await _authorize_entity(db, workspaceId, entityType, entityId, user['id'])
-    result = await db.execute(text('SELECT * FROM attachments WHERE workspace_id = :workspace_id AND entity_type = :entity_type AND entity_id = :entity_id ORDER BY created_at DESC'), {'workspace_id': workspaceId, 'entity_type': entityType, 'entity_id': entityId})
+    result = await db.execute(text('SELECT a.*, pub.web_url AS sp_web_url, pub.last_error AS sp_last_error FROM attachments a LEFT JOIN attachment_publications pub ON pub.attachment_id = a.id WHERE a.workspace_id = :workspace_id AND a.entity_type = :entity_type AND a.entity_id = :entity_id ORDER BY a.created_at DESC'), {'workspace_id': workspaceId, 'entity_type': entityType, 'entity_id': entityId})
     return {'data': [_present(row) for row in result.mappings().all()]}
 
 

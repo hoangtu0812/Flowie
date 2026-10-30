@@ -22,6 +22,7 @@ const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 export type SharepointConnection = {
    configured: boolean;
    enabled: boolean;
+   publishAttachments?: boolean;
    tenantId?: string;
    clientId?: string;
    updatedAt?: string;
@@ -69,6 +70,7 @@ function SharepointIntegration({ onSaved }: { onSaved?: (value: SharepointConnec
    const [clientId, setClientId] = useState('');
    const [secret, setSecret] = useState('');
    const [enabled, setEnabled] = useState(true);
+   const [attachments, setAttachments] = useState(false);
    const [configured, setConfigured] = useState(false);
    const [saving, setSaving] = useState(false);
 
@@ -77,6 +79,7 @@ function SharepointIntegration({ onSaved }: { onSaved?: (value: SharepointConnec
          .then((connection) => {
             setConfigured(connection.configured);
             setEnabled(connection.configured ? connection.enabled : true);
+            setAttachments(connection.publishAttachments ?? false);
             setTenantId(connection.tenantId ?? '');
             setClientId(connection.clientId ?? '');
          })
@@ -96,6 +99,7 @@ function SharepointIntegration({ onSaved }: { onSaved?: (value: SharepointConnec
                clientId,
                ...(secret ? { clientSecret: secret } : {}),
                enabled,
+               publishAttachments: attachments,
             }),
          });
          setConfigured(true);
@@ -170,6 +174,17 @@ function SharepointIntegration({ onSaved }: { onSaved?: (value: SharepointConnec
                </p>
             </div>
             <Switch checked={enabled} onCheckedChange={setEnabled} />
+         </div>
+         <div className="flex items-center justify-between gap-4 rounded-md border px-3 py-2.5">
+            <div>
+               <p className="text-sm font-medium">Copy attachments</p>
+               <p className="text-xs text-muted-foreground">
+                  Copies files attached to issues, comments, projects and Docs folders of projects
+                  with a SharePoint folder, existing files included. Anyone who can open that folder
+                  sees them, whatever their Flowie team access.
+               </p>
+            </div>
+            <Switch checked={attachments} onCheckedChange={setAttachments} disabled={!enabled} />
          </div>
          <Button type="submit" disabled={saving}>
             {saving && <Pending />}

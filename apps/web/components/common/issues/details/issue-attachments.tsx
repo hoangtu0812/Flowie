@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
    Download,
+   ExternalLink,
    File as FileIcon,
    FileArchive,
    FileSpreadsheet,
@@ -188,6 +189,24 @@ export function IssueAttachments({
                               {label}
                            </a>
                         )}
+                        {attachment.sharepoint?.webUrl ? (
+                           <a
+                              href={attachment.sharepoint.webUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-1 px-3 pb-2 text-xs text-muted-foreground hover:text-foreground"
+                           >
+                              <ExternalLink className="size-3" />
+                              {t('openInSharepoint')}
+                           </a>
+                        ) : attachment.sharepoint?.lastError ? (
+                           <span
+                              className="block truncate px-3 pb-2 text-xs text-destructive"
+                              title={attachment.sharepoint.lastError}
+                           >
+                              {t('sharepointCopyFailed')}
+                           </span>
+                        ) : null}
                      </div>
                   );
                })}

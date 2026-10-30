@@ -27,6 +27,9 @@ TENANT_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.-]{1,99}$")
 # Characters SharePoint rejects in file and folder names.
 # VI: Ký tự SharePoint không cho phép trong tên file và thư mục.
 INVALID_NAME = re.compile(r'["*:<>?/\\|#%\x00-\x1f]')
+# Largest body Graph accepts in a plain PUT; above it an upload session is required.
+# VI: Kích thước lớn nhất Graph nhận qua PUT thường; lớn hơn phải dùng upload session.
+SIMPLE_UPLOAD_BYTES = 4 * 1024 * 1024
 
 
 class SharePointError(Exception):
@@ -143,13 +146,42 @@ class GraphClient:
         folder = "/".join(rest[best[0] :])
         return {"driveId": best[1]["id"], "folderPath": folder, "library": best[1].get("name")}
 
-    async def upload(self, drive_id: str, path: str, body: bytes) -> dict[str, Any]:
+    async def upload(
+        self, drive_id: str, path: str, body: bytes, content_type: str = "text/markdown; charset=utf-8"
+    ) -> dict[str, Any]:
         """Create or replace the file at `path` in the drive (missing folders are created).
-        VI: Tạo hoặc thay thế file tại `path` trong drive (thư mục thiếu sẽ được tạo)."""
-        return await self._request(
-            "PUT",
-            f"/drives/{drive_id}/root:/{quote(path)}:/content",
-            "uploading the file",
-            content=body,
-            headers={"content-type": "text/markdown; charset=utf-8"},
+
+        Graph accepts a plain PUT only up to 4 MB; larger bodies go through an upload session
+        sent as one range, which Graph allows up to 60 MiB (attachments stop at 10 MB). The
+        session URL comes from Graph and is pre-authenticated, so it gets no bearer token and
+        must be HTTPS on *.sharepoint.com.
+        VI: Tạo hoặc thay thế file tại `path` trong drive (thư mục thiếu sẽ được tạo). Graph chỉ
+        VI: nhận PUT thường tới 4 MB; file lớn hơn đi qua upload session gửi trong một range, Graph
+        VI: cho phép tới 60 MiB (attachment tối đa 10 MB). URL session do Graph trả về và đã kèm
+        VI: xác thực, nên không gửi bearer token và URL phải là HTTPS trên *.sharepoint.com.
+        """
+        if len(body) <= SIMPLE_UPLOAD_BYTES:
+            return await self._request(
+                "PUT",
+                f"/drives/{drive_id}/root:/{quote(path)}:/content",
+                "uploading the file",
+                content=body,
+                headers={"content-type": content_type},
+            )
+        session = await self._request(
+            "POST",
+            f"/drives/{drive_id}/root:/{quote(path)}:/createUploadSession",
+            "starting the upload",
+            json={"item": {"@microsoft.graph.conflictBehavior": "replace"}},
         )
+        target = urlparse(session.get("uploadUrl", ""))
+        if target.scheme != "https" or not (target.hostname or "").lower().endswith(".sharepoint.com"):
+            raise SharePointError("SharePoint returned an unexpected upload address.")
+        response = await self.http.put(
+            session["uploadUrl"],
+            content=body,
+            headers={"content-range": f"bytes 0-{len(body) - 1}/{len(body)}"},
+        )
+        if response.status_code >= 300:
+            raise _failure(response, "uploading the file")
+        return response.json()

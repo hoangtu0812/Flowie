@@ -39,6 +39,7 @@ class ConnectionInput(BaseModel):
     clientId: str = Field(min_length=2, max_length=100)
     clientSecret: str | None = Field(default=None, max_length=500)
     enabled: bool = True
+    publishAttachments: bool = False
 
 
 class FolderInput(BaseModel):
@@ -68,6 +69,7 @@ async def put_connection(
         db, request.app.state.settings, workspaceId, user["id"],
         tenant_id=payload.tenantId.strip(), client_id=payload.clientId.strip(),
         client_secret=(payload.clientSecret or "").strip() or None, enabled=payload.enabled,
+        publish_attachments=payload.publishAttachments,
     )
     await db.commit()
     return {"data": data}
