@@ -25,6 +25,24 @@ test('owners manage news groups and allowlisted sources', async ({ page, context
    await expect(page).toHaveURL(new RegExp(`/${fixture.slug}/news$`));
    await expect(page.getByRole('button', { name: 'Fetch now' })).toBeVisible();
 
+   // Sort and risk filter chips toggle without an AI provider; unlabelled items simply drop out.
+   // VI: Chip sắp xếp và lọc rủi ro bật/tắt được khi không có provider AI; tin chưa có nhãn bị lọc ra.
+   await page.getByRole('button', { name: 'Highest risk' }).click();
+   await expect(page.getByRole('button', { name: 'Highest risk' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+   );
+   await page.getByRole('button', { name: 'Critical' }).click();
+   await expect(page.getByRole('button', { name: 'Critical' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+   );
+   await page.getByRole('button', { name: 'Critical' }).click();
+   await expect(page.getByRole('button', { name: 'Critical' })).toHaveAttribute(
+      'aria-pressed',
+      'false'
+   );
+
    const group = `Security ${Date.now()}`;
    await page.getByRole('button', { name: 'Manage sources' }).click();
    const dialog = page.getByRole('dialog');

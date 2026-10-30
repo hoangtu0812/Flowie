@@ -1,7 +1,15 @@
 import { responseData } from '@/lib/http';
 import { authenticatedFetch } from '@/lib/workspaces';
 
-export type NewsCategory = { id: string; name: string; webhookUrlMasked?: string | null };
+export type NewsCategory = {
+   id: string;
+   name: string;
+   digest: string | null;
+   digestAt: string | null;
+   webhookUrlMasked?: string | null;
+};
+export const RISK_LEVELS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] as const;
+export type RiskLevel = (typeof RISK_LEVELS)[number];
 export type NewsSource = {
    id: string;
    categoryId: string;
@@ -19,6 +27,9 @@ export type NewsItem = {
    publishedAt: string;
    sourceName: string;
    categoryId: string;
+   riskLevel: RiskLevel | null;
+   riskScore: number | null;
+   aiSummary: string | null;
 };
 export type NewsData = {
    canManage: boolean;

@@ -1062,12 +1062,16 @@ model TeamsWebhook {
 /// VI: Nhóm tin (Security, thị trường...) của workspace; mỗi nhóm có thể gửi tin mới vào kênh
 /// VI: Teams Workflows riêng.
 model NewsCategory {
-  id          String   @id @default(cuid())
-  workspaceId String   @map("workspace_id")
+  id          String    @id @default(cuid())
+  workspaceId String    @map("workspace_id")
   name        String
-  webhookUrl  String?  @map("webhook_url")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  webhookUrl  String?   @map("webhook_url")
+  /// Latest AI-written Vietnamese digest of the category's recent items, plain text.
+  /// VI: Bản tin tiếng Việt mới nhất do AI viết cho các tin gần đây của nhóm, văn bản thuần.
+  digest      String?
+  digestAt    DateTime? @map("digest_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   sources   NewsSource[]
@@ -1111,6 +1115,14 @@ model NewsItem {
   publishedAt DateTime  @map("published_at")
   createdAt   DateTime  @default(now()) @map("created_at")
   notifiedAt  DateTime? @map("notified_at")
+  /// AI risk label (CRITICAL, HIGH, MEDIUM or LOW, validated by the API), 0-100 score and short
+  /// Vietnamese summary; analyzedAt stays null until the AI has labelled the item.
+  /// VI: Nhãn rủi ro do AI gán (CRITICAL, HIGH, MEDIUM hoặc LOW, API kiểm tra), điểm 0-100 và
+  /// VI: tóm tắt ngắn tiếng Việt; analyzedAt để null cho tới khi AI đã gán nhãn.
+  riskLevel   String?   @map("risk_level")
+  riskScore   Int?      @map("risk_score")
+  aiSummary   String?   @map("ai_summary")
+  analyzedAt  DateTime? @map("analyzed_at")
 
   workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   source    NewsSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)

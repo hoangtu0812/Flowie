@@ -92,7 +92,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         from .modules.sharepoint.worker import sharepoint_loop
         sharepoint_task=tracked('sharepoint-publish',sharepoint_loop(session_factory,runtime,outbox_stop),outbox_stop)
         from .modules.news.worker import news_loop
-        news_task=tracked('news',news_loop(session_factory,outbox_stop),outbox_stop)
+        news_task=tracked('news',news_loop(session_factory,outbox_stop,runtime),outbox_stop)
         agent_runs_stop = asyncio.Event()
         agent_runs_task = tracked('agent-dispatcher',agent_run_dispatcher_loop(session_factory, agent_runs_stop),agent_runs_stop) if runtime.mcp_enabled and runtime.mcp_writes_enabled else None
         reminder_stop = asyncio.Event()

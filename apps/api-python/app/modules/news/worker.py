@@ -11,7 +11,7 @@ from .service import due_workspaces, refresh_workspace
 logger = logging.getLogger(__name__)
 
 
-async def fetch_due_news(factory) -> int:
+async def fetch_due_news(factory, settings=None) -> int:
     """Refresh every workspace with a source not fetched since the latest 06:30 Asia/Ho_Chi_Minh.
     Because "due" is read from ``last_fetched_at``, a restart neither skips nor repeats a day.
     VI: Lấy tin cho mọi workspace có nguồn chưa lấy kể từ mốc 06:30 giờ Việt Nam gần nhất. Vì
@@ -23,19 +23,19 @@ async def fetch_due_news(factory) -> int:
     for workspace_id in workspaces:
         async with factory() as db:
             try:
-                await refresh_workspace(db, workspace_id, due_before=cutoff)
+                await refresh_workspace(db, workspace_id, due_before=cutoff, settings=settings)
             except Exception:
                 logger.exception('News refresh failed for workspace %s.', workspace_id)
     return len(workspaces)
 
 
-async def news_loop(factory, stop: asyncio.Event, interval_seconds: float = 600) -> None:
+async def news_loop(factory, stop: asyncio.Event, settings=None, interval_seconds: float = 600) -> None:
     """Check for due sources every 10 minutes until stopped; a failed scan is retried next tick.
     VI: Kiểm tra nguồn đến hạn mỗi 10 phút cho tới khi dừng; lượt quét lỗi được thử lại ở lượt sau.
     """
     while not stop.is_set():
         try:
-            refreshed = await progress(factory, 'news', fetch_due_news(factory))
+            refreshed = await progress(factory, 'news', fetch_due_news(factory, settings))
             if refreshed:
                 logger.info('Refreshed news for %s workspace(s).', refreshed)
         except Exception:

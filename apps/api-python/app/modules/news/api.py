@@ -218,4 +218,4 @@ async def refresh(
     # VI: Lấy tin gọi ra trang ngoài, nên mỗi quản trị viên chỉ được chạy tối đa 10 lần mỗi giờ.
     await require_manager(db, workspaceId, user['id'])
     await limit_request(db, request.app.state.settings.auth_jwt_secret, 'news-refresh', user['id'], 10)
-    return {'data': await refresh_workspace(db, workspaceId)}
+    return {'data': await refresh_workspace(db, workspaceId, settings=request.app.state.settings)}
