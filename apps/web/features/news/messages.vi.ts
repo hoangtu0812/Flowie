@@ -1,0 +1,32 @@
+export const messages: Readonly<Record<string, string>> = {
+   'News': 'Tin tức',
+   'All': 'Tất cả',
+   'Fetch now': 'Lấy tin ngay',
+   'Manage sources': 'Quản lý nguồn',
+   'Loading news…': 'Đang tải tin…',
+   'Could not load news.': 'Không tải được tin.',
+   'No news yet.': 'Chưa có tin nào.',
+   'News is fetched every day at 06:30 (Vietnam time).':
+      'Tin được lấy tự động mỗi ngày lúc 06:30 (giờ Việt Nam).',
+   'Fetched {fetched} source(s), {inserted} new item(s).':
+      'Đã lấy {fetched} nguồn, {inserted} tin mới.',
+   'News groups and sources': 'Nhóm tin và nguồn tin',
+   'Each group can post new items to its own Microsoft Teams channel (Teams Workflows webhook).':
+      'Mỗi nhóm có thể gửi tin mới vào kênh Microsoft Teams riêng (webhook Teams Workflows).',
+   'Group name': 'Tên nhóm',
+   'Add group': 'Thêm nhóm',
+   'Delete group': 'Xoá nhóm',
+   'Teams webhook URL': 'URL webhook Teams',
+   'Save webhook': 'Lưu webhook',
+   'Remove webhook': 'Gỡ webhook',
+   'No Teams channel': 'Chưa gửi Teams',
+   'Source name': 'Tên nguồn',
+   'Feed URL (RSS/Atom)': 'URL feed (RSS/Atom)',
+   'Add source': 'Thêm nguồn',
+   'Delete source': 'Xoá nguồn',
+   'Enabled': 'Đang bật',
+   'Not fetched yet': 'Chưa lấy lần nào',
+   'Last fetched {date}': 'Lấy lần cuối {date}',
+   'Delete this group with its sources and news?': 'Xoá nhóm này cùng các nguồn và tin của nhóm?',
+   'Close': 'Đóng',
+};

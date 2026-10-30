@@ -658,6 +658,9 @@ model Workspace {
   notificationPreferences NotificationPreference[]
   discordWebhook          DiscordWebhook?
   teamsWebhook            TeamsWebhook?
+  newsCategories          NewsCategory[]
+  newsSources             NewsSource[]
+  newsItems               NewsItem[]
   sharepointConnection    SharepointConnection?
   documentPublications    DocumentPublication[]
   attachmentPublications  AttachmentPublication[]
@@ -1052,6 +1055,70 @@ model TeamsWebhook {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@map("teams_webhooks")
+}
+
+/// News groups (Security, market...) of a workspace; each may post new items to its own Teams
+/// Workflows channel.
+/// VI: Nhóm tin (Security, thị trường...) của workspace; mỗi nhóm có thể gửi tin mới vào kênh
+/// VI: Teams Workflows riêng.
+model NewsCategory {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  name        String
+  webhookUrl  String?  @map("webhook_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sources   NewsSource[]
+
+  @@unique([workspaceId, name])
+  @@map("news_categories")
+}
+
+/// RSS/Atom feed on an allowlisted host, fetched once a day after 06:30 Asia/Ho_Chi_Minh.
+/// VI: Feed RSS/Atom trên host được cho phép, lấy mỗi ngày một lần sau 06:30 giờ Việt Nam.
+model NewsSource {
+  id            String    @id @default(cuid())
+  workspaceId   String    @map("workspace_id")
+  categoryId    String    @map("category_id")
+  name          String
+  feedUrl       String    @map("feed_url")
+  enabled       Boolean   @default(true)
+  lastFetchedAt DateTime? @map("last_fetched_at")
+  lastError     String?   @map("last_error")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  category  NewsCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  items     NewsItem[]
+
+  @@index([categoryId])
+  @@map("news_sources")
+}
+
+/// One article, stored once per workspace by link; notifiedAt marks it as sent to (or skipped
+/// for) its category's Teams channel.
+/// VI: Một bài tin, lưu một lần mỗi workspace theo link; notifiedAt đánh dấu đã gửi (hoặc bỏ qua)
+/// VI: kênh Teams của nhóm tin.
+model NewsItem {
+  id          String    @id @default(cuid())
+  workspaceId String    @map("workspace_id")
+  sourceId    String    @map("source_id")
+  title       String
+  url         String
+  summary     String?
+  publishedAt DateTime  @map("published_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  notifiedAt  DateTime? @map("notified_at")
+
+  workspace Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  source    NewsSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, url])
+  @@index([workspaceId, publishedAt])
+  @@index([sourceId])
+  @@map("news_items")
 }
 
 model ProjectTeamsChannel {
