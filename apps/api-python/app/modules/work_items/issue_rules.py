@@ -179,6 +179,18 @@ async def _validate_references(
         if assignee.scalar_one_or_none() is None:
             raise ApiError(404, "Assignee is not a workspace member.", "Not Found")
 
+    reporter_id = values.get("reporterId")
+    if reporter_id:
+        reporter = await db.execute(
+            text(
+                """SELECT 1 FROM workspace_members WHERE workspace_id = :workspace_id
+                   AND user_id = :user_id AND status = 'ACTIVE' LIMIT 1"""
+            ),
+            {"workspace_id": workspace_id, "user_id": reporter_id},
+        )
+        if reporter.scalar_one_or_none() is None:
+            raise ApiError(404, "Reporter is not a workspace member.", "Not Found")
+
     label_ids = values.get("labelIds")
     if label_ids is not None:
         unique_ids = list(dict.fromkeys(label_ids))

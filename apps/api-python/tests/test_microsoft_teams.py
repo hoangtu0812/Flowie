@@ -18,7 +18,7 @@ from app.main import create_app
 from app.modules.identity.security.sessions import access_token
 from app.services.notification_events import _teams_webhooks
 from app.modules.notifications.outbox import deliver
-from app.services.microsoft_teams import teams_available, teams_message, valid_teams_webhook
+from app.services.microsoft_teams import teams_available, teams_mention_message, teams_message, valid_teams_webhook
 
 
 def test_teams_webhook_accepts_only_workflow_trigger_hosts():
@@ -174,3 +174,14 @@ async def verify_teams_channels():
             await db.execute(text('DELETE FROM users WHERE id=ANY(CAST(:ids AS text[]))'), {'ids': [owner, member]})
             await db.commit()
         await engine.dispose()
+
+
+def test_teams_mention_message_mentions_each_person_by_entra_id():
+    message = teams_mention_message({'title': 'DTD-1 · Work'}, [{'id': 'oid-a', 'name': 'An'}, {'id': 'oid-b', 'name': 'Bao'}])
+    card = message['attachments'][0]['content']
+    assert card['body'][0]['text'] == '<at>An</at>, <at>Bao</at>'
+    assert card['body'][1]['text'] == 'DTD-1 · Work'
+    assert card['msteams']['entities'] == [
+        {'type': 'mention', 'text': '<at>An</at>', 'mentioned': {'id': 'oid-a', 'name': 'An'}},
+        {'type': 'mention', 'text': '<at>Bao</at>', 'mentioned': {'id': 'oid-b', 'name': 'Bao'}},
+    ]

@@ -21,6 +21,7 @@ async def _issue_rows(
                       s.name AS status_name, s.category AS status_category, s.color AS status_color,
                       p.id AS project_id_value, p.name AS project_name, p.identifier AS project_identifier,
                       c.id AS creator_id_value, c.name AS creator_name, c.avatar_url AS creator_avatar_url,
+                      r.id AS reporter_id_value, r.name AS reporter_name, r.avatar_url AS reporter_avatar_url,
                       parent.identifier AS parent_identifier, parent.title AS parent_title,
                       sub.total AS sub_issue_count, sub.completed AS completed_sub_issue_count,
                       a.id AS assignee_id_value, a.name AS assignee_name, a.avatar_url AS assignee_avatar_url, a.last_seen_at AS assignee_last_seen_at,
@@ -34,6 +35,7 @@ async def _issue_rows(
                JOIN issue_statuses s ON s.id = i.status_id
                LEFT JOIN projects p ON p.id = i.project_id
                JOIN users c ON c.id = i.creator_id
+               JOIN users r ON r.id = COALESCE(i.reporter_id, i.creator_id)
                LEFT JOIN users a ON a.id = i.assignee_id
                LEFT JOIN issues parent ON parent.id = i.parent_issue_id AND parent.archived_at IS NULL
                LEFT JOIN LATERAL (
@@ -178,6 +180,13 @@ def _present_issue(row, labels, cycles, releases, user_id):
             "id": row["creator_id_value"],
             "name": row["creator_name"],
             "avatarUrl": row["creator_avatar_url"],
+        },
+        # Without an explicit reporter the creator is the reporter.
+        # VI: Không đặt reporter thì người tạo là reporter.
+        "reporter": {
+            "id": row["reporter_id_value"],
+            "name": row["reporter_name"],
+            "avatarUrl": row["reporter_avatar_url"],
         },
         "assignee": {
             "id": row["assignee_id_value"],

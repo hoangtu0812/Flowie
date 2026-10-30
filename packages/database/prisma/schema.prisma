@@ -212,6 +212,7 @@ model User {
   organizations            Organization[]           @relation("OrganizationOwner")
   createdIssues            Issue[]                  @relation("IssueCreator")
   assignedIssues           Issue[]                  @relation("IssueAssignee")
+  reportedIssues           Issue[]                  @relation("IssueReporter")
   createdIssueRelations    IssueRelation[]
   issueSubscriptions       IssueSubscription[]
   issueReactions           IssueReaction[]
@@ -1772,6 +1773,9 @@ model Issue {
   dueDate           DateTime?         @map("due_date")
   creatorId         String            @map("creator_id")
   assigneeId        String?           @map("assignee_id")
+  /// Person who reported or requested the issue; NULL means the creator.
+  /// VI: Người báo hoặc yêu cầu issue; NULL nghĩa là người tạo.
+  reporterId        String?           @map("reporter_id")
   completedAt       DateTime?         @map("completed_at")
   canceledAt        DateTime?         @map("canceled_at")
   archivedAt        DateTime?         @map("archived_at")
@@ -1788,6 +1792,7 @@ model Issue {
   duplicates        Issue[]               @relation("IssueDuplicates")
   creator           User                  @relation("IssueCreator", fields: [creatorId], references: [id], onDelete: Restrict)
   assignee          User?                 @relation("IssueAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  reporter          User?                 @relation("IssueReporter", fields: [reporterId], references: [id], onDelete: SetNull)
   cycleLinks        IssueCycle[]
   releaseLinks      IssueRelease[]
   outgoingRelations IssueRelation[]       @relation("IssueRelationSource")
@@ -1817,6 +1822,7 @@ model Issue {
   @@index([parentIssueId])
   @@index([duplicateOfId])
   @@index([assigneeId])
+  @@index([reporterId])
   @@map("issues")
 }
 
@@ -2295,6 +2301,9 @@ model NotificationEmailDelivery {
 model NotificationPreference {
   emailEnabled       Boolean  @default(false) @map("email_enabled")
   desktopEnabled     Boolean  @default(false) @map("desktop_enabled")
+  /// Teams @mention for assignments and comment mentions; on unless the person turns it off.
+  /// VI: @mention trên Teams khi được giao việc hoặc được mention; bật trừ khi người dùng tắt.
+  teamsEnabled       Boolean  @default(true) @map("teams_enabled")
   workspaceId        String   @map("workspace_id")
   userId             String   @map("user_id")
   teamIssueAdded     Boolean  @default(false) @map("team_issue_added")

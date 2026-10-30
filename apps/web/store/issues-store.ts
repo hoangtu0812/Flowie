@@ -34,6 +34,8 @@ declare module '@/mock-data/issues' {
       /** API-only reference used by durable issue actions; never changes Circle presentation. */
       teamId?: string;
       creatorId?: string;
+      /** Reporter of the issue; the API falls back to the creator. VI: Reporter; API mặc định là người tạo. */
+      reporter?: User;
       releaseIds?: string[];
    }
 }
@@ -60,6 +62,7 @@ type NativeIssue = BugFields & {
    updatedAt: string;
    status: { id: string; name: string; color: string; category: string };
    creator?: { id: string; name: string; avatarUrl?: string | null };
+   reporter?: { id: string; name: string; avatarUrl?: string | null };
    assignee?: {
       id: string;
       name: string;
@@ -202,6 +205,19 @@ function asIssue(native: NativeIssue): Issue {
       subIssueCount: native.subIssueCount,
       completedSubIssueCount: native.completedSubIssueCount,
       creatorId: native.creator?.id,
+      reporter: native.reporter
+         ? {
+              id: native.reporter.id,
+              name: native.reporter.name,
+              avatarUrl: native.reporter.avatarUrl ?? '',
+              email: '',
+              status: 'offline' as const,
+              role: 'Member' as const,
+              joinedDate: '',
+              teamIds: [],
+              timezone: 'UTC',
+           }
+         : undefined,
       identifier: native.identifier,
       title: native.title,
       description: native.description ?? '',
@@ -336,6 +352,8 @@ interface IssuesState {
    // Advanced issue actions
    createIssue: (payload: CreateIssuePayload) => Promise<Issue>;
    updateIssueBug: (issueId: string, fields: BugFields) => Promise<Issue>;
+   /** Null resets the reporter to the creator. VI: Null đưa reporter về người tạo. */
+   updateIssueReporter: (issueId: string, reporterId: string | null) => Promise<Issue>;
    updateIssueTitle: (issueId: string, title: string) => Promise<Issue>;
    updateIssueDescription: (issueId: string, description: string) => Promise<Issue>;
    setIssueParent: (issueId: string, parentIssueId: string | null) => Promise<Issue>;
@@ -1079,6 +1097,20 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
                expectedResult,
                actualResult,
             }),
+         }
+      );
+      const issue = asIssue(await responseData<NativeIssue>(response));
+      get().updateIssue(issueId, issue);
+      return issue;
+   },
+   updateIssueReporter: async (issueId, reporterId) => {
+      const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
+      const response = await authenticatedFetch(
+         `${api}/issues/${issueId}?${new URLSearchParams({ workspaceId })}`,
+         {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ reporterId }),
          }
       );
       const issue = asIssue(await responseData<NativeIssue>(response));

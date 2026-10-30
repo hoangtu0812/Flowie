@@ -86,10 +86,10 @@ async def create_issue(
         text(
             """INSERT INTO issues (id, workspace_id, team_id, status_id, project_id, parent_issue_id,
                identifier, number, issue_type, severity, environment, reproduction_steps, expected_result, actual_result, title, description, priority, estimated_effort, actual_effort, start_date, target_date, due_date, creator_id,
-               assignee_id, completed_at, canceled_at, created_at, updated_at,sla_opt_out)
+               reporter_id, assignee_id, completed_at, canceled_at, created_at, updated_at,sla_opt_out)
                VALUES (:id, :workspace_id, :team_id, :status_id, :project_id, :parent_issue_id,
                :identifier, :number, :issueType, :severity, :environment, :reproductionSteps, :expectedResult, :actualResult, :title, :description, :priority, :estimated_effort, :actual_effort, :start_date, :target_date, :due_date, :creator_id,
-               :assignee_id, :completed_at, :canceled_at, :now, :now,:sla_opt_out)"""
+               :reporter_id, :assignee_id, :completed_at, :canceled_at, :now, :now,:sla_opt_out)"""
         ),
         {
             **{field: values.get(field) for field in BUG_COLUMNS},
@@ -110,6 +110,7 @@ async def create_issue(
             "target_date": _date(values.get("targetDate")),
             "due_date": _date(values.get("dueDate")),
             "creator_id": user["id"],
+            "reporter_id": values.get("reporterId") or user["id"],
             "assignee_id": values.get("assigneeId"),
             "completed_at": completed_at,
             "canceled_at": canceled_at,
@@ -129,7 +130,7 @@ async def create_issue(
             ),
             {"issue_id": issue_id, "label_id": label_id},
         )
-    for subscriber_id in {user["id"], values.get("assigneeId")} - {None}:
+    for subscriber_id in {user["id"], values.get("assigneeId"), values.get("reporterId")} - {None}:
         await db.execute(
             text(
                 "INSERT INTO issue_subscriptions (issue_id, user_id) VALUES (:issue_id, :user_id) ON CONFLICT DO NOTHING"
@@ -196,6 +197,7 @@ async def create_issue(
         entity_path=f"/issue/{identifier}",
         entity_label=identifier,
         discord=False,
+        teams_mention=True,
     )
     await stage_notifications(
         db, created_batch, assignment_batch, workspace_id=payload.workspaceId
@@ -271,6 +273,7 @@ async def update_issue(
         "projectId": "project_id",
         "parentIssueId": "parent_issue_id",
         "assigneeId": "assignee_id",
+        "reporterId": "reporter_id",
         "priority": "priority",
         "estimatedEffort": "estimated_effort",
         "actualEffort": "actual_effort",
@@ -325,12 +328,12 @@ async def update_issue(
                 ),
                 {"issue_id": issue_id, "release_id": release_id},
             )
-    if values.get("assigneeId"):
+    for subscriber_id in {values.get("assigneeId"), values.get("reporterId")} - {None}:
         await db.execute(
             text(
                 "INSERT INTO issue_subscriptions (issue_id, user_id) VALUES (:issue_id, :user_id) ON CONFLICT DO NOTHING"
             ),
-            {"issue_id": issue_id, "user_id": values["assigneeId"]},
+            {"issue_id": issue_id, "user_id": subscriber_id},
         )
     recipients = await issue_recipient_ids(db, issue_id, previous_assignee_id)
     entity_path, entity_label = f"/issue/{issue['identifier']}", issue["identifier"]
@@ -361,6 +364,18 @@ async def update_issue(
         )
     if assignee_transition:
         changes.append(("Assignee", assignee_transition))
+    # A null reporter means "the creator" again, so the transition compares effective people.
+    # VI: Reporter null nghĩa là quay về "người tạo", nên so sánh theo người thực tế.
+    if "reporterId" in values and (values["reporterId"] or issue["creator"]["id"]) != issue["reporter"]["id"]:
+        changes.append(
+            (
+                "Reporter",
+                _transition(
+                    issue["reporter"]["name"],
+                    await _person_name(db, values["reporterId"] or issue["creator"]["id"]),
+                ),
+            )
+        )
     if "title" in values and values["title"] != issue["title"]:
         changes.append(("Title", _transition(issue["title"], values["title"])))
     if "priority" in values and values["priority"] != issue["priority"]:
@@ -469,6 +484,7 @@ async def update_issue(
             entity_label=entity_label,
             details=[("Assignee", assignee_transition or "")],
             discord=False,
+            teams_mention=True,
         )
         if assignee_changed and values.get("assigneeId")
         else None

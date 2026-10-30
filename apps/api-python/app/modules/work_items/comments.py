@@ -88,7 +88,7 @@ async def create_comment(
         recipient_ids=set(mention_ids), actor=user, event_type='issue.comment_mention',
         entity_type='issue', entity_id=payload.issueId, title=issue['title'],
         message='mentioned you in a comment', entity_path=f"/issue/{issue['identifier']}",
-        entity_label=issue['identifier'], body=content, discord=False)
+        entity_label=issue['identifier'], body=content, discord=False, teams_mention=True)
     await stage_notifications(db, batch, mention_batch, workspace_id=payload.workspaceId)
     return {"data": await _comment(db, comment_id, payload.workspaceId, user["id"])}
 
@@ -121,4 +121,16 @@ async def update_comment(
             "now": _utcnow(),
         },
     )
+    # Only people added by this edit are told; an edit that keeps or removes mentions sends nothing,
+    # so correcting a typo never repeats a notification.
+    # VI: Chỉ người được thêm bởi lần sửa này mới được báo; sửa mà giữ nguyên hoặc bớt mention thì
+    # VI: không gửi gì, nên sửa lỗi chính tả không bao giờ gửi lặp thông báo.
+    added = set(mention_ids) - set(current['mentionIds'] or [])
+    if added:
+        await stage_notifications(db, await create_notification_batch(db, workspace_id=workspaceId,
+            recipient_ids=added, actor=user, event_type='issue.comment_mention',
+            entity_type='issue', entity_id=issue['id'], title=issue['title'],
+            message='mentioned you in a comment', entity_path=f"/issue/{issue['identifier']}",
+            entity_label=issue['identifier'], body=content, discord=False, teams_mention=True),
+            workspace_id=workspaceId)
     return {"data": await _comment(db, comment_id, workspaceId, user["id"])}

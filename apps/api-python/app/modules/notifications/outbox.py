@@ -61,6 +61,15 @@ async def deliver(payload: dict) -> None:
             for url in payload.get("teams_urls", []):
                 response = await client.post(url, json=teams_message(embed))
                 response.raise_for_status()
+    # Teams cards that @mention a person are rendered when the event is staged, so the outbox only
+    # posts them; a retry may repeat one, matching the other remote channels.
+    # VI: Card Teams @mention người nhận được dựng lúc ghi sự kiện, nên outbox chỉ việc gửi; lần
+    # VI: thử lại có thể gửi lặp, giống các kênh từ xa khác.
+    if payload.get("teams_cards"):
+        async with httpx.AsyncClient(timeout=15) as client:
+            for card in payload["teams_cards"]:
+                response = await client.post(card["url"], json=card["message"])
+                response.raise_for_status()
     for record in payload.get("records", []):
         await notification_hub.publish(record)
 
