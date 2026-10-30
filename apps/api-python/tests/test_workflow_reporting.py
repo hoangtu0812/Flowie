@@ -221,6 +221,30 @@ async def verify_report():
                 (user["id"], "Reporting owner", 98, 0, 0),
                 (None, None, 52, 1, 2),
             ]
+            # The dashboard's sub-issue switch drops child issues from every block; parents stay counted.
+            # VI: Công tắc sub-issue của dashboard bỏ issue con khỏi mọi khối; issue cha vẫn được tính.
+            await db.execute(
+                text("UPDATE issues SET parent_issue_id=:parent WHERE id=:id"),
+                {"parent": issue, "id": legacy_done},
+            )
+            top_level = WorkflowReport(
+                fromDate="2026-10-11",
+                toDate="2026-10-15",
+                timezone="UTC",
+                selection={"includeSubIssues": False},
+            )
+            without_children = (
+                await dashboard_report(db, workspace, user, top_level, now=asof)
+            )["data"]
+            assert without_children["summary"]["total"] == 152
+            assert (None, 52, 1, 1) in [
+                (row["assignee_id"], row["todo"], row["started"], row["done"])
+                for row in without_children["memberGroups"]
+            ]
+            await db.execute(
+                text("UPDATE issues SET parent_issue_id=NULL WHERE id=:id"),
+                {"id": legacy_done},
+            )
             changes = await change_page(
                 db, workspace, user, query, "report-secret", limit=50, now=asof
             )

@@ -2,6 +2,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Button } from '@astryxdesign/core/Button';
 import { Selector } from '@astryxdesign/core/Selector';
+import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
 import { Input } from '@/components/ui/input';
@@ -151,6 +152,15 @@ export function DashboardToolbar({
                   {value.fromDate} – {value.toDate} · {value.timezone}
                </Text>
             </HStack>
+            {/* Applies at once like the period buttons; unchecked drops issues that have a parent from every block.
+                VI: Áp dụng ngay như các nút chọn kỳ; bỏ chọn sẽ loại issue có issue cha khỏi mọi khối. */}
+            <CheckboxInput
+               label={tx('Include sub-issues')}
+               value={value.selection.includeSubIssues ?? true}
+               onChange={(includeSubIssues) =>
+                  onApply({ ...value, selection: { ...value.selection, includeSubIssues } })
+               }
+            />
             {actions}
          </HStack>
          {error && <Text role="alert">{error}</Text>}

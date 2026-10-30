@@ -11,6 +11,7 @@ export const messages = {
    'Apply': 'Áp dụng',
    'Reset': 'Đặt lại',
    'Refresh dashboard': 'Tải lại dashboard',
+   'Include sub-issues': 'Tính cả công việc con',
    '1 week': '1 tuần',
    '1 month': '1 tháng',
    '1 quarter': '1 quý',

@@ -107,6 +107,19 @@ test('original dashboard composition keeps complete scoped data and advanced rep
    await page.getByRole('button', { name: '1 week', exact: true }).click();
    const query = (await week).postDataJSON();
    expect((Date.parse(query.toDate) - Date.parse(query.fromDate)) / 86400000).toBe(6);
+   const subIssues = page.getByRole('checkbox', { name: 'Include sub-issues', exact: true });
+   await expect(subIssues).toBeChecked();
+   const topLevel = page.waitForResponse(
+      (r) =>
+         r.url().includes('/reports/dashboard?') &&
+         r.request().postDataJSON()?.selection.includeSubIssues === false &&
+         r.request().postDataJSON()?.selection.projectId === fixture.projectId &&
+         r.request().postDataJSON()?.fromDate === query.fromDate
+   );
+   await subIssues.uncheck();
+   expect((await topLevel).ok()).toBeTruthy();
+   await expect(subIssues).not.toBeChecked();
+   await subIssues.check();
    await page.waitForLoadState('networkidle');
    await page.setViewportSize({ width: 390, height: 844 });
    await page
