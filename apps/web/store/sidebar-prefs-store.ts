@@ -14,6 +14,7 @@ export type SidebarItemKey =
    | 'initiatives'
    | 'projects'
    | 'docs'
+   | 'news'
    | 'views'
    | 'teams'
    | 'members';
@@ -40,6 +41,7 @@ const DEFAULT_VISIBILITY: Record<SidebarItemKey, SidebarVisibility> = {
    'initiatives': 'always',
    'projects': 'always',
    'docs': 'always',
+   'news': 'always',
    'views': 'always',
    'teams': 'always',
    'members': 'always',
@@ -58,6 +60,7 @@ const DEFAULT_ORDER: Record<SidebarSection, SidebarItemKey[]> = {
       'initiatives',
       'projects',
       'docs',
+      'news',
       'views',
       'teams',
       'members',

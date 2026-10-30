@@ -12,6 +12,7 @@ import {
    LayoutList,
    LucideIcon,
    MoreHorizontal,
+   Newspaper,
    UserRound,
 } from 'lucide-react';
 
@@ -54,6 +55,7 @@ const WORKSPACE_NAV: WorkspaceNavItem[] = [
    { key: 'initiatives', name: 'Initiatives', icon: Compass, url: '/initiatives' },
    { key: 'projects', name: 'Projects', icon: Box, url: '/projects' },
    { key: 'docs', name: 'Docs', icon: FileText, url: '/docs' },
+   { key: 'news', name: 'News', icon: Newspaper, url: '/news' },
    { key: 'views', name: 'Views', icon: Layers, url: '/views' },
    { key: 'teams', name: 'Teams', icon: ContactRound, url: '/teams' },
    { key: 'members', name: 'Members', icon: UserRound, url: '/members' },

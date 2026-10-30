@@ -36,6 +36,7 @@ export const messages: Readonly<Record<string, string>> = {
    'SLAs': 'SLA',
    'Projects': 'Dự án',
    'Docs': 'Tài liệu',
+   'News': 'Tin tức',
    'Updates': 'Cập nhật',
    'Features': 'Tính năng',
    'AI & Agents': 'AI và agent',
