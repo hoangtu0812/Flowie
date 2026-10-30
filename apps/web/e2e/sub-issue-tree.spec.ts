@@ -14,11 +14,11 @@ const api = 'http://localhost:4000/api/v1';
 type Created = { id: string; identifier: string; title: string };
 
 // A goal → step → two leaves tree shows every level on the goal page with per-row progress,
-// collapses and expands a branch, saves a leaf due date in place, and the list row of the goal
-// shows its direct sub-issue progress chip.
+// collapses and expands a branch, saves a leaf due date and status in place (the status raises the
+// step's progress), and the list row of the goal shows its direct sub-issue progress chip.
 // VI: Cây mục tiêu → bước → hai lá hiện đủ mọi cấp ở trang mục tiêu với tiến độ từng hàng, thu và
-// VI: mở một nhánh, lưu due date của lá ngay tại chỗ, và hàng của mục tiêu trên danh sách hiện chip
-// VI: tiến độ sub-issue trực tiếp.
+// VI: mở một nhánh, lưu due date và trạng thái của lá ngay tại chỗ (trạng thái làm tăng tiến độ của
+// VI: bước), và hàng của mục tiêu trên danh sách hiện chip tiến độ sub-issue trực tiếp.
 test('the sub-issue tree shows nested levels with progress and in-place due dates', async ({
    page,
    context,
@@ -70,6 +70,12 @@ test('the sub-issue tree shows nested levels with progress and in-place due date
       await expect(leafRow).toContainText('Jan 15');
       await page.reload();
       await expect(rows.filter({ hasText: leaf.title })).toContainText('Jan 15');
+
+      await page.getByRole('button', { name: `Change status of ${leaf.identifier}` }).click();
+      await page.getByRole('menuitem', { name: 'Done', exact: true }).click();
+      await expect(rows.filter({ hasText: step.title })).toContainText('1/2');
+      await page.reload();
+      await expect(rows.filter({ hasText: step.title })).toContainText('1/2');
 
       await page.goto(`/${fixture.slug}/project/${fixture.projectId}/issues`);
       const goalLine = page.getByRole('link', { name: new RegExp(goal.title) });
