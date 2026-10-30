@@ -700,6 +700,11 @@ test('Inbox snooze persists and notification channel availability is real', asyn
    await expect(
       page.getByText('Private SMTP delivery is not configured.', { exact: true })
    ).toBeVisible();
+   // Without Microsoft sign-in the Teams switch is shown but cannot be used.
+   // VI: Không bật đăng nhập Microsoft thì công tắc Teams hiển thị nhưng không dùng được.
+   await expect(
+      page.getByRole('checkbox', { name: 'Microsoft Teams', exact: true })
+   ).toBeDisabled();
    if (browserName !== 'chromium') return;
    await context.grantPermissions(['notifications'], { origin: new URL(page.url()).origin });
    await page.getByRole('checkbox', { name: 'Desktop notifications', exact: true }).check();

@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { IssueDetail } from '@/mock-data/issue-details';
 import { Issue } from '@/mock-data/issues';
+import type { User } from '@/mock-data/users';
 import { useIssuesStore } from '@/store/issues-store';
 import { Box, CalendarDays, CalendarPlus, CalendarRange, Check, Plus, Timer } from 'lucide-react';
 import { format } from 'date-fns';
@@ -77,6 +78,7 @@ export function IssuePropertiesPanel({ issue, detail, reviews }: IssueProperties
       updateIssueDueDate,
       updateIssueProject,
       updateIssueBug,
+      updateIssueReporter,
    } = useIssuesStore();
    const [scheduleOpen, setScheduleOpen] = useState(false);
    const [startDate, setStartDate] = useState('');
@@ -153,6 +155,16 @@ export function IssuePropertiesPanel({ issue, detail, reviews }: IssueProperties
       }
    };
 
+   const setReporter = async (reporter: User | null) => {
+      try {
+         await updateIssueReporter(issue.id, reporter?.id ?? null);
+      } catch (reason) {
+         toast.error(
+            reason instanceof Error ? reason.message : tx('Could not change the reporter.')
+         );
+      }
+   };
+
    const toggleLabel = async (labelId: string) => {
       const label = labels.find((candidate) => candidate.id === labelId);
       if (!label) return;
@@ -179,6 +191,24 @@ export function IssuePropertiesPanel({ issue, detail, reviews }: IssueProperties
                   <AssigneeUser user={issue.assignee} issueId={issue.id} />
                   <span className="text-sm">
                      {issue.assignee ? issue.assignee.name : tx('Assign')}
+                  </span>
+               </div>
+               <div className="flex items-center gap-2 mt-0.5">
+                  <AssigneeUser
+                     user={issue.reporter ?? null}
+                     issueId={issue.id}
+                     onAssign={setReporter}
+                     labels={{
+                        field: tx('Reporter'),
+                        menu: tx('Reporter'),
+                        empty: tx('Creator'),
+                     }}
+                  />
+                  <span className="w-20 shrink-0 text-xs text-muted-foreground">
+                     {tx('Reporter')}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm">
+                     {issue.reporter?.name ?? '—'}
                   </span>
                </div>
                <div className="mt-0.5">

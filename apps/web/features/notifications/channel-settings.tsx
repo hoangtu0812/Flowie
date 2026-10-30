@@ -10,7 +10,14 @@ import { responseData } from '@/lib/http';
 import { SubmissionGate } from '@/features/shared/submission-gate';
 import { useParams } from 'next/navigation';
 import { SettingsShell } from '@/components/common/settings/shared';
-type ChannelState = { emailAvailable: boolean; emailEnabled: boolean; desktopEnabled: boolean };
+type ChannelState = {
+   emailAvailable: boolean;
+   emailEnabled: boolean;
+   desktopEnabled: boolean;
+   teamsAvailable: boolean;
+   teamsEnabled: boolean;
+};
+type Channels = Pick<ChannelState, 'emailEnabled' | 'desktopEnabled' | 'teamsEnabled'>;
 type Delivery = {
    notificationId: string;
    attempts: number;
@@ -63,14 +70,20 @@ export function ChannelSettings() {
          active = false;
       };
    }, [reload, orgId]);
-   const save = (emailEnabled: boolean, desktopEnabled: boolean) =>
+   const save = (changes: Partial<Channels>) =>
       gate.current.run(async () => {
          if (!workspace || !state) return;
+         const next = { ...state, ...changes };
+         const channels: Channels = {
+            emailEnabled: next.emailEnabled,
+            desktopEnabled: next.desktopEnabled,
+            teamsEnabled: next.teamsEnabled,
+         };
          setSaving(true);
          setError(undefined);
-         setState({ ...state, emailEnabled, desktopEnabled });
+         setState(next);
          try {
-            if (desktopEnabled) {
+            if (changes.desktopEnabled) {
                if (!('Notification' in window))
                   throw new Error('Desktop notifications are not supported by this browser.');
                const permission =
@@ -88,11 +101,11 @@ export function ChannelSettings() {
                   {
                      method: 'PUT',
                      headers: { 'content-type': 'application/json' },
-                     body: JSON.stringify({ emailEnabled, desktopEnabled }),
+                     body: JSON.stringify(channels),
                   }
                )
             );
-            setState({ ...state, emailEnabled, desktopEnabled });
+            setState(next);
          } catch (reason) {
             setState(state);
             setError(
@@ -119,7 +132,7 @@ export function ChannelSettings() {
                         value={state.emailEnabled}
                         isDisabled={!state.emailAvailable || saving}
                         onChange={(checked) => {
-                           void save(checked, state.desktopEnabled);
+                           void save({ emailEnabled: checked });
                         }}
                      />
                      <Text>
@@ -132,12 +145,25 @@ export function ChannelSettings() {
                         value={state.desktopEnabled}
                         isDisabled={saving}
                         onChange={(checked) => {
-                           void save(state.emailEnabled, checked);
+                           void save({ desktopEnabled: checked });
                         }}
                      />
                      <Text>
                         Desktop alerts require permission on each browser and appear while Flowie is
                         in the background. Notification contents are kept private.
+                     </Text>
+                     <CheckboxInput
+                        label="Microsoft Teams"
+                        value={state.teamsEnabled}
+                        isDisabled={!state.teamsAvailable || saving}
+                        onChange={(checked) => {
+                           void save({ teamsEnabled: checked });
+                        }}
+                     />
+                     <Text>
+                        {state.teamsAvailable
+                           ? 'When you are assigned an issue or mentioned in a comment, Flowie @mentions you in the Teams channel of the project, or of the workspace when the project has none.'
+                           : 'Teams is available when Microsoft sign-in is enabled.'}
                      </Text>
                   </>
                )}

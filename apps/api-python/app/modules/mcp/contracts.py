@@ -149,6 +149,8 @@ class CreateIssueTool(WriteInput, BugCreateFields):
     description: str | None = Field(default=None, max_length=10000)
     priority: Literal["NONE", "LOW", "MEDIUM", "HIGH", "URGENT"] = "NONE"
     assigneeId: str | None = None
+    # Defaults to the caller. VI: Mặc định là người gọi.
+    reporterId: str | None = None
     dueDate: str | None = None
     labelIds: list[str] = Field(default_factory=list, max_length=100)
 
@@ -161,6 +163,8 @@ class UpdateIssueTool(VersionInput, IssueInput, BugUpdateFields):
     # VI: Id hoặc mã của issue cha mới; null để gỡ cha.
     parentIssueId: str | None = Field(default=None, min_length=1, max_length=100)
     assigneeId: str | None = None
+    # Null resets the reporter to the creator. VI: Null đưa reporter về người tạo.
+    reporterId: str | None = None
     priority: Literal["NONE", "LOW", "MEDIUM", "HIGH", "URGENT"] | None = None
     targetDate: str | None = None
     dueDate: str | None = None

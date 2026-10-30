@@ -23,9 +23,21 @@ interface AssigneeUserProps {
     * sub-issue).
     */
    onAssign?: (assignee: User | null) => Promise<unknown>;
+   /**
+    * Texts for another person field such as the reporter; defaults describe the assignee.
+    * VI: Nhãn cho trường người khác như reporter; mặc định là nhãn của assignee.
+    */
+   labels?: { field: string; menu: string; empty: string };
 }
 
-export function AssigneeUser({ user, issueId, onAssign }: AssigneeUserProps) {
+const assigneeLabels = { field: 'Assignee', menu: 'Assign to...', empty: 'No assignee' };
+
+export function AssigneeUser({
+   user,
+   issueId,
+   onAssign,
+   labels = assigneeLabels,
+}: AssigneeUserProps) {
    const [open, setOpen] = useState(false);
    const [saving, setSaving] = useState(false);
    const { members, updateIssueAssignee } = useIssuesStore();
@@ -64,7 +76,7 @@ export function AssigneeUser({ user, issueId, onAssign }: AssigneeUserProps) {
       <DropdownMenu open={open} onOpenChange={setOpen}>
          <DropdownMenuTrigger asChild>
             <button
-               aria-label={`Assignee: ${user?.name ?? 'Unassigned'}`}
+               aria-label={`${labels.field}: ${user?.name ?? labels.empty}`}
                className="relative w-fit focus:outline-none disabled:opacity-60"
                disabled={saving}
                onClick={(event) => event.stopPropagation()}
@@ -81,7 +93,7 @@ export function AssigneeUser({ user, issueId, onAssign }: AssigneeUserProps) {
             </button>
          </DropdownMenuTrigger>
          <DropdownMenuContent align="start" className="w-[206px]">
-            <DropdownMenuLabel>Assign to...</DropdownMenuLabel>
+            <DropdownMenuLabel>{labels.menu}</DropdownMenuLabel>
             <DropdownMenuItem
                onClick={(event) => {
                   event.stopPropagation();
@@ -90,7 +102,7 @@ export function AssigneeUser({ user, issueId, onAssign }: AssigneeUserProps) {
             >
                <div className="flex items-center gap-2">
                   <UserIcon className="h-5 w-5" />
-                  <span>No assignee</span>
+                  <span>{labels.empty}</span>
                </div>
                {!user && <CheckIcon className="ml-auto h-4 w-4" />}
             </DropdownMenuItem>

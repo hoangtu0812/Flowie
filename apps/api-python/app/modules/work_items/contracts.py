@@ -18,6 +18,8 @@ class CreateIssueInput(BugCreateFields):
     projectId: str | None = None
     parentIssueId: str | None = None
     assigneeId: str | None = None
+    # Defaults to the creator. VI: Mặc định là người tạo.
+    reporterId: str | None = None
     priority: IssuePriority = "NONE"
     startDate: str | None = None
     targetDate: str | None = None
@@ -34,6 +36,8 @@ class UpdateIssueInput(BugUpdateFields):
     projectId: str | None = None
     parentIssueId: str | None = None
     assigneeId: str | None = None
+    # Null resets the reporter to the creator. VI: Null đưa reporter về người tạo.
+    reporterId: str | None = None
     priority: IssuePriority | None = None
     startDate: str | None = None
     targetDate: str | None = None

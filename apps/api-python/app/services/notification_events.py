@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.audit_context import audit_agent
 from ..domains.auth import _cuid, _utcnow
-from .microsoft_teams import teams_available, teams_message
+from .microsoft_teams import teams_available, teams_mention_message, teams_message
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,9 @@ class NotificationBatch:
     discord_embed: dict[str, Any] | None = None
     # Teams cards are rendered from ``discord_embed`` at delivery time.
     teams_urls: list[str] = field(default_factory=list)
+    # Ready-made Teams messages ``{'url', 'message'}`` that @mention their recipients.
+    # VI: Message Teams dựng sẵn ``{'url', 'message'}`` có @mention người nhận.
+    teams_cards: list[dict[str, Any]] = field(default_factory=list)
 
 
 # One colour per event so a channel can be read at a glance.
@@ -172,6 +175,62 @@ async def _teams_webhooks(
     return list(result.scalars().all())
 
 
+async def _teams_mention_card(
+    db: AsyncSession, workspace_id: str, issue_id: str, recipients: set[str], embed: dict[str, Any]
+) -> dict[str, Any] | None:
+    """One card for the issue's Teams channel that @mentions every reachable recipient.
+
+    ``recipients`` must already be filtered by issue access. The project's channel is preferred so
+    the card lands where the work is discussed; without one the workspace channel is used, and
+    without either nothing is sent. A recipient is mentioned only when they signed in with
+    Microsoft (their Entra object id is the mention id) and have not turned Teams off.
+    VI: Một card cho kênh Teams của issue, @mention mọi người nhận có thể nhận.
+    VI: ``recipients`` phải đã được lọc theo quyền xem issue. Ưu tiên kênh của dự án để card nằm
+    VI: nơi công việc được trao đổi; không có thì dùng kênh workspace, không có cả hai thì không
+    VI: gửi. Chỉ mention người đã đăng nhập bằng Microsoft (Entra object id là id mention) và
+    VI: chưa tắt Teams.
+    """
+
+    if not recipients or not teams_available():
+        return None
+    url = (
+        await db.execute(
+            text(
+                '''SELECT webhook_url FROM (
+                       SELECT c.webhook_url, 0 AS rank FROM project_teams_channels c
+                       JOIN issues i ON i.project_id = c.project_id
+                       WHERE i.id = :issue_id AND c.enabled = TRUE
+                       UNION ALL
+                       SELECT webhook_url, 1 FROM teams_webhooks
+                       WHERE workspace_id = :workspace_id AND enabled = TRUE) channel
+                   ORDER BY rank LIMIT 1'''
+            ),
+            {'issue_id': issue_id, 'workspace_id': workspace_id},
+        )
+    ).scalar_one_or_none()
+    if not url:
+        return None
+    people = (
+        await db.execute(
+            text(
+                '''SELECT DISTINCT ON (u.id) split_part(identity.provider_account_id, ':', 2) AS id, u.name
+                   FROM users u JOIN user_identities identity
+                     ON identity.user_id = u.id AND identity.provider = 'MICROSOFT'
+                   WHERE u.id = ANY(CAST(:users AS text[]))
+                     AND NOT EXISTS(SELECT 1 FROM notification_preferences preference
+                         WHERE preference.workspace_id = :workspace_id AND preference.user_id = u.id
+                           AND NOT preference.teams_enabled)
+                   ORDER BY u.id, identity.updated_at DESC'''
+            ),
+            {'users': sorted(recipients), 'workspace_id': workspace_id},
+        )
+    ).mappings().all()
+    people = [dict(person) for person in people if person['id']]
+    if not people:
+        return None
+    return {'url': url, 'message': teams_mention_message(embed, people)}
+
+
 def _app_url() -> str:
     return (getenv('APP_URL') or getenv('NEXT_PUBLIC_APP_URL') or '').rstrip('/')
 
@@ -269,6 +328,7 @@ async def create_notification_batch(
     details: list[tuple[str, str]] | None = None,
     body: str | None = None,
     discord: bool = True,
+    teams_mention: bool = False,
 ) -> NotificationBatch:
     """Persist one Inbox row per recipient and prepare post-commit delivery.
 
@@ -276,6 +336,11 @@ async def create_notification_batch(
     ``body`` (a comment or an update) are what make a delivered message
     readable without opening the app. They are stored on the Inbox row too, so
     the same detail is available there without another migration.
+
+    ``teams_mention`` (issues only) also prepares a Teams card that @mentions the recipients, for
+    events addressed to a person such as an assignment or a comment mention.
+    VI: ``teams_mention`` (chỉ cho issue) chuẩn bị thêm card Teams @mention người nhận, cho sự kiện
+    VI: gửi đích danh như giao việc hoặc mention trong comment.
     """
 
     now = _utcnow()
@@ -339,30 +404,40 @@ async def create_notification_batch(
             }
         )
 
-    if not discord:
+    if not discord and not teams_mention:
         return NotificationBatch(records=records)
 
     slug = await _workspace_route_id(db, workspace_id)
     app_url = _app_url()
+    embed = _embed(
+        event_type=event_type,
+        entity_type=entity_type,
+        entity_label=entity_label,
+        title=title,
+        message=message,
+        url=f'{app_url}/{slug}{entity_path}' if app_url and slug else None,
+        actor_data=actor_data,
+        details=details,
+        body=body_excerpt,
+        now=now,
+    )
+    card = (
+        await _teams_mention_card(db, workspace_id, entity_id, recipients, embed)
+        if teams_mention and entity_type == 'issue'
+        else None
+    )
+    teams_cards = [card] if card else []
+    if not discord:
+        return NotificationBatch(records=records, teams_cards=teams_cards)
     return NotificationBatch(
         records=records,
         discord_url=await _discord_webhook(db, workspace_id),
         teams_urls=await _teams_webhooks(db, workspace_id, entity_type, entity_id),
+        teams_cards=teams_cards,
         # The optional bot channel is configured globally, rather than per
         # workspace. Keep a payload even when this workspace has no webhook
         # so a bot-only installation still receives the event.
-        discord_embed=_embed(
-            event_type=event_type,
-            entity_type=entity_type,
-            entity_label=entity_label,
-            title=title,
-            message=message,
-            url=f'{app_url}/{slug}{entity_path}' if app_url and slug else None,
-            actor_data=actor_data,
-            details=details,
-            body=body_excerpt,
-            now=now,
-        ),
+        discord_embed=embed,
     )
 
 
@@ -408,10 +483,10 @@ async def _send_discord_bot(embed: dict[str, Any]) -> None:
         logger.warning('Discord bot is unreachable: %s', error)
 
 
-async def _send_teams(url: str, embed: dict[str, Any]) -> None:
+async def _send_teams(url: str, message: dict[str, Any]) -> None:
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.post(url, json=teams_message(embed))
+            response = await client.post(url, json=message)
         if not response.is_success:
             logger.warning(
                 'Microsoft Teams rejected the notification: %s %s',
@@ -431,6 +506,7 @@ async def publish_notification_batches(*batches: NotificationBatch | None) -> No
             continue
         for record in batch.records:
             await notification_hub.publish(record)
+        teams_deliveries.extend((card['url'], card['message']) for card in batch.teams_cards)
         if batch.discord_embed is None:
             continue
         # Several batches can report the same event; deliver each distinct
@@ -441,12 +517,12 @@ async def publish_notification_batches(*batches: NotificationBatch | None) -> No
         bot_deliveries[key] = batch.discord_embed
         if batch.discord_url:
             webhook_deliveries.append((batch.discord_url, batch.discord_embed))
-        teams_deliveries.extend((url, batch.discord_embed) for url in batch.teams_urls)
+        teams_deliveries.extend((url, teams_message(batch.discord_embed)) for url in batch.teams_urls)
     if not webhook_deliveries and bot_deliveries:
         logger.info('Notification has no Discord webhook configured for this workspace.')
     for url, embed in webhook_deliveries:
         asyncio.create_task(_send_discord(url, embed))
     for embed in bot_deliveries.values():
         asyncio.create_task(_send_discord_bot(embed))
-    for url, embed in teams_deliveries:
-        asyncio.create_task(_send_teams(url, embed))
+    for url, message in teams_deliveries:
+        asyncio.create_task(_send_teams(url, message))

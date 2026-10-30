@@ -80,3 +80,34 @@ def teams_message(embed: dict[str, Any]) -> dict[str, Any]:
             {'contentType': 'application/vnd.microsoft.card.adaptive', 'contentUrl': None, 'content': card}
         ],
     }
+
+
+def teams_mention_message(embed: dict[str, Any], people: list[dict[str, str]]) -> dict[str, Any]:
+    """Render ``embed`` as a card that @mentions ``people`` so Teams alerts each of them.
+
+    Each person is ``{'id': <Entra object id>, 'name': <Flowie display name>}``. Teams resolves a
+    mention only when the ``<at>`` text in the body matches an entity exactly, so both are built
+    from the same name. Names come from Flowie accounts, never from comment text.
+    VI: Dựng ``embed`` thành card @mention ``people`` để Teams báo cho từng người.
+    VI: Mỗi người là ``{'id': <Entra object id>, 'name': <tên trong Flowie>}``. Teams chỉ nhận
+    VI: mention khi chuỗi ``<at>`` trong body khớp đúng một entity, nên cả hai dựng từ cùng một
+    VI: tên. Tên lấy từ tài khoản Flowie, không bao giờ từ nội dung comment.
+    """
+
+    message = teams_message(embed)
+    card = message['attachments'][0]['content']
+    card['body'].insert(
+        0,
+        {'type': 'TextBlock', 'text': ', '.join(f'<at>{person["name"]}</at>' for person in people), 'wrap': True},
+    )
+    card['msteams'] = {
+        'entities': [
+            {
+                'type': 'mention',
+                'text': f'<at>{person["name"]}</at>',
+                'mentioned': {'id': person['id'], 'name': person['name']},
+            }
+            for person in people
+        ]
+    }
+    return message
