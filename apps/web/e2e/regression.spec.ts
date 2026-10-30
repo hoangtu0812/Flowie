@@ -386,7 +386,9 @@ test('Help search and project client presets expose meaningful actions', async (
       page.getByRole('button', { name: 'Create connection', exact: true })
    ).toBeDisabled();
    await page.getByRole('button', { name: 'Claude Code', exact: true }).click();
-   await expect(page.getByText(/Bearer.*FLOWIE_MCP_TOKEN/)).toBeVisible();
+   await expect(page.getByText(/claude mcp add .*Bearer <FLOWIE_MCP_TOKEN>/)).toBeVisible();
+   await page.getByRole('button', { name: 'Cursor', exact: true }).click();
+   await expect(page.getByRole('button', { name: 'Add to Cursor', exact: true })).toBeDisabled();
 });
 
 test('Admins edit and reset the MCP agent instructions as plain text', async ({ page }) => {
