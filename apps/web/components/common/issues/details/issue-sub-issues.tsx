@@ -9,12 +9,19 @@ import {
    DialogHeader,
    DialogTitle,
 } from '@/components/ui/dialog';
+import {
+   DropdownMenu,
+   DropdownMenuContent,
+   DropdownMenuItem,
+   DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useIssuesStore } from '@/store/issues-store';
 import { authenticatedFetch } from '@/lib/workspaces';
 import { directProgress, issueTree } from '@/lib/issue-tree';
 import {
+   Check,
    ChevronRight,
    ChevronsDownUp,
    ChevronsUpDown,
@@ -35,13 +42,15 @@ import { IssueSearchDialog } from './issue-search-dialog';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
+type SubIssueStatus = { id: string; name: string; color: string; category: string };
+
 type SubIssue = {
    id: string;
    identifier: string;
    title: string;
    parentIssueId: string | null;
    dueDate: string | null;
-   status: { id: string; name: string; color: string; category: string };
+   status: SubIssueStatus;
    assignee: { id: string; name: string; avatarUrl: string | null } | null;
 };
 
@@ -60,7 +69,7 @@ const asUser = (assignee: SubIssue['assignee']): User | null =>
         }
       : null;
 
-const StatusIcon = ({ status }: { status: SubIssue['status'] }) => {
+const StatusIcon = ({ status }: { status: SubIssueStatus }) => {
    const category = status.category.toLowerCase();
    const Icon =
       category === 'completed'
@@ -100,15 +109,19 @@ const isOverdue = (subIssue: SubIssue) =>
 /**
  * Issue-detail sub-issue area backed by the parent-child Issue relationship. It loads every level
  * of descendants and shows them as an indented tree (Redmine style): each row has its own
- * expand/collapse toggle, status, progress of its direct children, due date and assignee, and the
- * last two are edited in place through PATCH /issues/{id}. All levels start expanded. A sub-issue
- * is created new or picked from existing issues ("Add existing"); picking one that has another
- * parent asks to confirm the move. Progress counts direct children only.
+ * expand/collapse toggle, status, progress of its direct children, due date and assignee. Status,
+ * due date and assignee are edited in place through PATCH /issues/{id}; the status icon opens a
+ * menu of the team's statuses, and since every row shares the open issue's team, one options
+ * request serves the whole tree. All levels start expanded. A sub-issue is created new or picked
+ * from existing issues ("Add existing"); picking one that has another parent asks to confirm the
+ * move. Progress counts direct children only.
  * VI: Khu sub-issue của chi tiết issue, dựa trên quan hệ cha–con. Khu này tải mọi cấp hậu duệ và
  * VI: hiển thị thành cây thụt lề (kiểu Redmine): mỗi hàng có nút mở/thu riêng, trạng thái, tiến độ
- * VI: theo con trực tiếp, due date và assignee; hai trường cuối sửa ngay tại chỗ qua PATCH
- * VI: /issues/{id}. Mọi cấp mặc định mở. Sub-issue được tạo mới hoặc chọn từ issue có sẵn ("Add
- * VI: existing"); chọn issue đang có cha khác sẽ hỏi xác nhận chuyển. Tiến độ chỉ tính con trực tiếp.
+ * VI: theo con trực tiếp, due date và assignee. Trạng thái, due date và assignee sửa ngay tại chỗ qua
+ * VI: PATCH /issues/{id}; icon trạng thái mở menu các trạng thái của team, và vì mọi hàng cùng team
+ * VI: với issue đang mở nên một request options đủ cho cả cây. Mọi cấp mặc định mở. Sub-issue được
+ * VI: tạo mới hoặc chọn từ issue có sẵn ("Add existing"); chọn issue đang có cha khác sẽ hỏi xác
+ * VI: nhận chuyển. Tiến độ chỉ tính con trực tiếp.
  */
 export function IssueSubIssues({
    issueId,
@@ -131,7 +144,25 @@ export function IssueSubIssues({
    const [saving, setSaving] = useState(false);
    const [error, setError] = useState<string>();
    const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+   const [statuses, setStatuses] = useState<SubIssueStatus[]>([]);
    const { roots, children } = useMemo(() => issueTree(subIssues), [subIssues]);
+
+   useEffect(() => {
+      if (!workspaceId) return;
+      // Sub-issues share the open issue's team (or have none), so its statuses are the only valid
+      // picks. On failure the menu stays empty and nothing can be changed.
+      // VI: Sub-issue cùng team với issue đang mở (hoặc cùng không có team) nên chỉ trạng thái của
+      // VI: team đó là hợp lệ. Lỗi thì menu rỗng và không đổi được gì.
+      const query = new URLSearchParams({ workspaceId });
+      if (teamId) query.set('teamId', teamId);
+      else query.set('noTeam', 'true');
+      void authenticatedFetch(`${api}/issues/options?${query}`)
+         .then((response) => (response.ok ? response.json() : null))
+         .then((payload: { data: { statuses: SubIssueStatus[] } } | null) =>
+            setStatuses(payload?.data.statuses ?? [])
+         )
+         .catch(() => setStatuses([]));
+   }, [teamId, workspaceId]);
 
    const load = useCallback(async () => {
       if (!workspaceId) return;
@@ -208,7 +239,37 @@ export function IssueSubIssues({
                   ) : (
                      <span className="size-4 shrink-0" />
                   )}
-                  <StatusIcon status={subIssue.status} />
+                  <DropdownMenu>
+                     <DropdownMenuTrigger
+                        aria-label={`Change status of ${subIssue.identifier}`}
+                        title={subIssue.status.name}
+                        className="flex size-5 shrink-0 items-center justify-center rounded hover:bg-accent"
+                     >
+                        <StatusIcon status={subIssue.status} />
+                     </DropdownMenuTrigger>
+                     <DropdownMenuContent align="start" className="min-w-44">
+                        {statuses.map((status) => (
+                           <DropdownMenuItem
+                              key={status.id}
+                              onSelect={() => {
+                                 if (status.id !== subIssue.status.id)
+                                    void patchSubIssue(subIssue.id, { statusId: status.id });
+                              }}
+                           >
+                              <StatusIcon status={status} />
+                              {status.name}
+                              {status.id === subIssue.status.id && (
+                                 <Check className="ml-auto size-4" />
+                              )}
+                           </DropdownMenuItem>
+                        ))}
+                        {statuses.length === 0 && (
+                           <p className="px-2 py-1.5 text-sm text-muted-foreground">
+                              No statuses available.
+                           </p>
+                        )}
+                     </DropdownMenuContent>
+                  </DropdownMenu>
                   <Link
                      href={`/${orgId}/issue/${subIssue.identifier}`}
                      className="flex min-w-0 flex-1 items-center gap-2"
