@@ -1,12 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import {
    BadgeCheck,
    CloudUpload,
    Download,
    ExternalLink,
    FileText,
+   Link2,
    Pencil,
    Send,
    Undo2,
@@ -26,13 +29,16 @@ import { useMessages } from '@/features/shared/use-messages';
 import { messages } from '@/features/documents/messages.vi';
 import { attachmentPreviewUrl } from '@/lib/attachments';
 import type { DocStatus, TreeFile } from '@/lib/document-tree';
+import { issueHref } from '@/lib/issue-route';
 import { parseInstant } from '@/lib/time';
 import { authenticatedFetch } from '@/lib/workspaces';
 import { useUiPreferencesStore } from '@/store/ui-preferences-store';
 import {
+   loadDocumentIssues,
    loadRelease,
    loadReleases,
    type DocumentRelease,
+   type LinkedIssue,
    type ProjectTreeDocument,
 } from './project-docs-api';
 import { DocStatusBadge, DocTypeBadge } from './document-badges';
@@ -188,11 +194,73 @@ export function DocumentPreview({
                      )}
                   </div>
                )}
+               <LinkedIssues documentId={document.id} />
                <TableOfContents content={content} label={tx('Contents')} />
                <MarkdownPreview content={content} />
             </div>
          </div>
       </div>
+   );
+}
+
+/**
+ * Tasks the document is linked to, each opening the task page; links are made from the task's
+ * Attachments tab or by an agent. Shows nothing while loading, and only tasks the viewer can
+ * read come back from the server.
+ * VI: Các task mà tài liệu đang liên kết, mỗi task mở trang task; liên kết được tạo từ tab
+ * VI: Attachments của task hoặc bởi agent. Không hiển thị gì khi đang tải, và server chỉ trả về
+ * VI: task người xem đọc được.
+ */
+function LinkedIssues({ documentId }: { documentId: string }) {
+   const tx = useMessages(messages);
+   const { orgId } = useParams<{ orgId: string }>();
+   const [issues, setIssues] = useState<LinkedIssue[]>();
+   const [failed, setFailed] = useState(false);
+
+   useEffect(() => {
+      let current = true;
+      setIssues(undefined);
+      setFailed(false);
+      void loadDocumentIssues(documentId)
+         .then((items) => current && setIssues(items))
+         .catch(() => current && setFailed(true));
+      return () => {
+         current = false;
+      };
+   }, [documentId]);
+
+   if (failed)
+      return (
+         <p role="alert" className="text-xs text-muted-foreground">
+            {tx('Could not load linked tasks.')}
+         </p>
+      );
+   if (!issues) return null;
+   return (
+      <section
+         aria-label={tx('Linked tasks')}
+         className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"
+      >
+         <Link2 className="size-3.5" aria-hidden />
+         <span>{tx('Linked tasks')}:</span>
+         {issues.length === 0 && <span>{tx('Not linked to any task.')}</span>}
+         {issues.map((issue) => (
+            <Link
+               key={issue.id}
+               href={issueHref(orgId, issue.identifier)}
+               title={issue.title}
+               className="flex max-w-64 items-center gap-1 rounded-md border px-1.5 py-0.5 text-foreground hover:bg-accent/60"
+            >
+               <span
+                  className="size-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: issue.status.color }}
+                  aria-label={issue.status.name}
+               />
+               <span className="shrink-0 font-medium">{issue.identifier}</span>
+               <span className="truncate">{issue.title}</span>
+            </Link>
+         ))}
+      </section>
    );
 }
 

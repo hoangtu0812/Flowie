@@ -7,6 +7,8 @@ import type { Issue } from '@/mock-data/issues';
 import { BugDetails } from './bug-details';
 import { IssueAgentRun } from './issue-agent-run';
 import { IssueDocuments } from '@/features/documents/issue-documents';
+import { IssueDocumentLinks } from '@/features/documents/issue-document-links';
+import { useIssueDocuments } from '@/features/documents/use-issue-documents';
 import { ActivityEvents, CommentsSection } from '@/components/common/issues/details/activity-feed';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useLocale } from '@/features/shared/use-locale';
@@ -32,13 +34,15 @@ type IssueTab = (typeof TABS)[number];
 /**
  * Issue detail body: title and properties, then three tabs so a long task stays readable.
  * Overview holds the description, details, sub-issues and comments; Activity the change
- * history; Attachments the files. Activity and attachment state live here, so a hidden tab
- * keeps the comment draft and the attachment count. The page keeps the tab in `?tab=` to share
+ * history; Attachments the files and linked Docs documents. Activity, attachment and linked
+ * document state live here, so a hidden tab keeps the comment draft and the attachment count,
+ * and a link made in Attachments shows at once in Overview's related documents. The page keeps the tab in `?tab=` to share
  * a link to it; the compact Inbox preview keeps it locally so the host page URL never changes.
  * VI: Phần thân chi tiết công việc: tiêu đề và thuộc tính, rồi ba tab để task dài vẫn dễ đọc.
  * VI: Tổng quan gồm mô tả, chi tiết, sub-issue và bình luận; Hoạt động là lịch sử thay đổi; Tệp
- * VI: đính kèm là các tệp. State hoạt động và đính kèm nằm ở đây, nên tab ẩn vẫn giữ bản nháp
- * VI: bình luận và số tệp. Trang task lưu tab vào `?tab=` để chia sẻ link; khung xem nhanh ở
+ * VI: đính kèm là các tệp và tài liệu Docs đã liên kết. State hoạt động, đính kèm và tài liệu liên
+ * VI: kết nằm ở đây, nên tab ẩn vẫn giữ bản nháp bình luận và số tệp, và liên kết tạo ở tab Tệp
+ * VI: đính kèm hiện ngay ở mục tài liệu liên quan của Tổng quan. Trang task lưu tab vào `?tab=` để chia sẻ link; khung xem nhanh ở
  * VI: Inbox giữ tab cục bộ để không đổi URL của trang chứa.
  */
 export function IssueContent({
@@ -56,6 +60,7 @@ export function IssueContent({
    const workspaceId = useIssuesStore((state) => state.workspaceId);
    const activity = useIssueActivity(issue.id);
    const attachments = useIssueAttachments(workspaceId, issue.id);
+   const documents = useIssueDocuments(issue.id);
    const [urlTab, setUrlTab] = useQueryState(
       'tab',
       parseAsStringLiteral(TABS).withDefault('overview')
@@ -109,11 +114,7 @@ export function IssueContent({
                      <BugDetails key={issue.id} issue={issue} />
                      <IssueAgentRun key={issue.id} issueId={issue.id} />
                      <IssuePullRequests reviews={reviews} orgId={orgId} />
-                     <IssueDocuments
-                        key={`docs-${issue.id}`}
-                        issueId={issue.id}
-                        projectId={issue.project?.id}
-                     />
+                     <IssueDocuments state={documents} projectId={issue.project?.id} />
                      <IssueSlaPanel issue={issue} />
                      <IssueReactions issueId={issue.id} />
                      <IssueSubIssues
@@ -127,8 +128,9 @@ export function IssueContent({
                   <TabsContent value="activity">
                      <ActivityEvents state={activity} />
                   </TabsContent>
-                  <TabsContent value="attachments">
+                  <TabsContent value="attachments" className="flex flex-col gap-6">
                      <IssueAttachments workspaceId={workspaceId} state={attachments} />
+                     <IssueDocumentLinks state={documents} projectId={issue.project?.id} />
                   </TabsContent>
                </Tabs>
             </VStack>

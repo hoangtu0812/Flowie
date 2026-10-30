@@ -145,4 +145,22 @@ export const messages = {
       'Chọn tài liệu hoặc file PDF để xem trước tại đây.',
    'Could not load the file.': 'Không tải được file.',
    'No projects yet.': 'Chưa có dự án nào.',
+   'Linked documents': 'Tài liệu liên kết',
+   'Link document': 'Liên kết tài liệu',
+   'Only a task in a project can link Docs documents.':
+      'Chỉ task thuộc dự án mới liên kết được tài liệu Docs.',
+   'No linked documents yet.': 'Chưa liên kết tài liệu nào.',
+   'Unlink': 'Gỡ liên kết',
+   'Unlink {value0}': 'Gỡ liên kết {value0}',
+   'Could not unlink the document.': 'Không gỡ được liên kết tài liệu.',
+   'Could not link the document.': 'Không liên kết được tài liệu.',
+   'Could not load Docs.': 'Không tải được Docs.',
+   'Pick a document from this project’s Docs to link to the task.':
+      'Chọn một tài liệu trong Docs của dự án để liên kết với task.',
+   'Search by title': 'Tìm theo tiêu đề',
+   'Search documents': 'Tìm tài liệu',
+   'No documents found.': 'Không tìm thấy tài liệu.',
+   'Linked tasks': 'Task liên kết',
+   'Not linked to any task.': 'Chưa liên kết với task nào.',
+   'Could not load linked tasks.': 'Không tải được task liên kết.',
 } as const;

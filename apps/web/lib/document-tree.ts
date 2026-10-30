@@ -94,7 +94,8 @@ export function buildTree<D extends TreeDocument>(
    return { roots, unfiled };
 }
 
-const fold = (value: string) =>
+/** Lower-cases and drops Vietnamese accents for search. VI: Chữ thường, bỏ dấu tiếng Việt để tìm kiếm. */
+export const fold = (value: string) =>
    value.normalize('NFD').replace(/\p{M}/gu, '').replace(/đ/gi, 'd').toLowerCase();
 
 /**

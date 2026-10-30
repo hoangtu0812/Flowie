@@ -105,5 +105,30 @@ export const loadRelease = (id: string, release: number) =>
 export const uploadFolderFile = async (folderId: string, file: File) =>
    uploadAttachment((await loadCurrentWorkspace()).id, 'document-folder', folderId, file);
 
+/** An issue linked to a document. VI: Một issue liên kết với tài liệu. */
+export type LinkedIssue = {
+   id: string;
+   identifier: string;
+   title: string;
+   status: { name: string; color: string };
+};
+
+export const loadDocumentIssues = (documentId: string) =>
+   send<LinkedIssue[]>(`/${encodeURIComponent(documentId)}/issue-links`);
+
+/** Link a document to an issue; returns the issue's documents. VI: Liên kết tài liệu với issue; trả về tài liệu của issue. */
+export const linkIssueDocument = async (documentId: string, issueId: string) =>
+   send<LiveDocument[]>(`/${encodeURIComponent(documentId)}/issue-links`, {
+      method: 'POST',
+      body: await withWorkspace({ issueId }),
+   });
+
+/** Remove a document–issue link; returns the issue's documents. VI: Gỡ liên kết tài liệu–issue; trả về tài liệu của issue. */
+export const unlinkIssueDocument = (documentId: string, issueId: string) =>
+   send<LiveDocument[]>(
+      `/${encodeURIComponent(documentId)}/issue-links/${encodeURIComponent(issueId)}`,
+      { method: 'DELETE' }
+   );
+
 export const loadIssueDocuments = (issueId: string) =>
    send<LiveDocument[]>('/issue-links', undefined, { issueId });

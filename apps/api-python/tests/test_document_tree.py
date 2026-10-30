@@ -16,8 +16,10 @@ from app.modules.work_items.contracts import (
 )
 from app.modules.work_items.document_tree import (
     create_folder,
+    document_issues,
     folder_label,
     issue_documents,
+    link_issue_document,
     project_tree,
     scaffold_project_tree,
     update_folder,
@@ -193,6 +195,34 @@ async def verify_document_tree():
             assert [(f["folderId"], f["filename"]) for f in tree["files"]] == [(feature["id"], "spec.pdf")]
             linked = await issue_documents(db, workspace_id=workspace, user_id=user["id"], issue_id=issue["id"])
             assert [document["id"] for document in linked] == [first["id"]]
+            # Links are many-to-many, idempotent both ways, and visible from the document side.
+            # VI: Liên kết nhiều-nhiều, gọi lặp lại không lỗi, và xem được từ phía tài liệu.
+            link = dict(db=db, workspace_id=workspace, user_id=user["id"], issue_id=issue["id"])
+            for _ in range(2):
+                await link_issue_document(**link, document_id=fds["id"], linked=True)
+            linked = await issue_documents(db, workspace_id=workspace, user_id=user["id"], issue_id=issue["id"])
+            assert {document["id"] for document in linked} == {first["id"], fds["id"]}
+            issues = await document_issues(db, workspace_id=workspace, user_id=user["id"], document_id=fds["id"])
+            assert [(i["id"], i["identifier"], i["title"]) for i in issues] == [
+                (issue["id"], issue["identifier"], "Docs issue")
+            ]
+            assert issues[0]["status"]["name"]
+            for _ in range(2):
+                await link_issue_document(**link, document_id=fds["id"], linked=False)
+            assert await document_issues(db, workspace_id=workspace, user_id=user["id"], document_id=fds["id"]) == []
+            stranger = _cuid()
+            await db.execute(
+                text(
+                    "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,'Stranger',:email,'ACTIVE',:now,:now)"
+                ),
+                {"id": stranger, "email": _cuid() + "@example.test", "now": now},
+            )
+            assert await rejected(
+                document_issues(db, workspace_id=workspace, user_id=stranger, document_id=first["id"])
+            ) == 403
+            assert await rejected(
+                link_issue_document(**{**link, "user_id": stranger}, document_id=first["id"], linked=True)
+            ) == 403
             # The document page reads the same SharePoint state as the Docs preview.
             # VI: Trang tài liệu đọc cùng trạng thái SharePoint như khung xem trước của Docs.
             page = (await get_document(fds["id"], workspaceId=workspace, user=user, db=db))["data"]

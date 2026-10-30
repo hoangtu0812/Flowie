@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...core.clock import _utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import _cuid
-from .document_repository import _documents, _team_access
+from .document_repository import _document_by_id, _documents, _team_access
 
 FolderKind = Literal["project", "module", "feature", "changes", "general"]
 DocType = Literal["FDS", "TDS", "ADR", "RCA", "GUIDE", "OTHER"]
@@ -586,3 +586,80 @@ async def issue_documents(
     if not linked:
         return []
     return [d for d in await _documents(db, workspace_id, user_id=user_id) if d["id"] in linked]
+
+
+async def _readable_document(
+    db: AsyncSession, workspace_id: str, user_id: str, document_id: str
+) -> dict[str, Any]:
+    document = await _document_by_id(db, document_id, workspace_id)
+    if not document:
+        raise ApiError(404, "Document not found.", "Not Found")
+    await _team_access(db, workspace_id, document["teamId"], user_id)
+    return document
+
+
+async def document_issues(
+    db: AsyncSession, *, workspace_id: str, user_id: str, document_id: str
+) -> list[dict[str, Any]]:
+    """Issues linked to a document, oldest link first, limited to issues the caller can read
+    (archived issues and issues of teams the caller is not in are left out).
+    VI: Các issue liên kết với một tài liệu, liên kết cũ nhất trước, chỉ gồm issue người gọi
+    đọc được (bỏ issue đã lưu trữ và issue của team mà người gọi không thuộc).
+    """
+    from .issue_queries import _issue_rows
+
+    await _readable_document(db, workspace_id, user_id, document_id)
+    ids = (
+        await db.execute(
+            text(
+                """SELECT issue_id FROM document_links
+                   WHERE workspace_id = :workspace AND document_id = :document AND issue_id IS NOT NULL
+                   ORDER BY created_at, id"""
+            ),
+            {"workspace": workspace_id, "document": document_id},
+        )
+    ).scalars().all()
+    return [
+        {
+            "id": issue["id"],
+            "identifier": issue["identifier"],
+            "title": issue["title"],
+            "status": issue["status"],
+        }
+        for issue in await _issue_rows(db, list(ids), workspace_id, user_id)
+    ]
+
+
+async def link_issue_document(
+    db: AsyncSession, *, workspace_id: str, user_id: str, document_id: str, issue_id: str, linked: bool
+) -> None:
+    """Link (`linked=True`) or unlink a document and an issue; both calls are idempotent. The
+    caller must read both, and a team's document links only to that team's issues, the same rule
+    as the MCP `link_document` tool. A document links to many issues and an issue to many
+    documents (`document_links` is unique per document and issue).
+    VI: Liên kết (`linked=True`) hoặc gỡ liên kết một tài liệu với một issue; gọi lặp lại không
+    lỗi. Người gọi phải đọc được cả hai, và tài liệu của một team chỉ liên kết với issue của team
+    đó, cùng quy tắc với tool MCP `link_document`. Một tài liệu liên kết nhiều issue và một issue
+    liên kết nhiều tài liệu (`document_links` duy nhất theo cặp tài liệu và issue).
+    """
+    from .issue_queries import _issue_row
+
+    document = await _readable_document(db, workspace_id, user_id, document_id)
+    issue = await _issue_row(db, issue_id, workspace_id, user_id)
+    if not linked:
+        await db.execute(
+            text(
+                "DELETE FROM document_links WHERE workspace_id = :workspace AND document_id = :document AND issue_id = :issue"
+            ),
+            {"workspace": workspace_id, "document": document_id, "issue": issue["id"]},
+        )
+        return
+    if document["teamId"] and document["teamId"] != issue["teamId"]:
+        raise ApiError(400, "A team document can only link to that team.", "Bad Request")
+    await db.execute(
+        text(
+            """INSERT INTO document_links (id, document_id, workspace_id, issue_id)
+               VALUES (:id, :document, :workspace, :issue) ON CONFLICT DO NOTHING"""
+        ),
+        {"id": _cuid(), "document": document_id, "workspace": workspace_id, "issue": issue["id"]},
+    )

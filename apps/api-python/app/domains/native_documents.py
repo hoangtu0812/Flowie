@@ -127,6 +127,36 @@ async def read_issue_documents(workspaceId: str = Query(min_length=1), issueId: 
     return {'data': await issue_documents(db, workspace_id=workspaceId, user_id=user['id'], issue_id=issueId)}
 
 
+class IssueLinkInput(BaseModel):
+    workspaceId: str = Field(min_length=1)
+    issueId: str = Field(min_length=1)
+
+
+@router.get('/{document_id}/issue-links')
+async def read_document_issues(document_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
+    from ..modules.work_items.document_tree import document_issues
+
+    return {'data': await document_issues(db, workspace_id=workspaceId, user_id=user['id'], document_id=document_id)}
+
+
+@router.post('/{document_id}/issue-links')
+async def link_document_issue(document_id: str, payload: IssueLinkInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
+    from ..modules.work_items.document_tree import issue_documents, link_issue_document
+
+    await link_issue_document(db, workspace_id=payload.workspaceId, user_id=user['id'], document_id=document_id, issue_id=payload.issueId, linked=True)
+    await db.commit()
+    return {'data': await issue_documents(db, workspace_id=payload.workspaceId, user_id=user['id'], issue_id=payload.issueId)}
+
+
+@router.delete('/{document_id}/issue-links/{issue_id}')
+async def unlink_document_issue(document_id: str, issue_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
+    from ..modules.work_items.document_tree import issue_documents, link_issue_document
+
+    await link_issue_document(db, workspace_id=workspaceId, user_id=user['id'], document_id=document_id, issue_id=issue_id, linked=False)
+    await db.commit()
+    return {'data': await issue_documents(db, workspace_id=workspaceId, user_id=user['id'], issue_id=issue_id)}
+
+
 @router.post('')
 async def create_document(payload: CreateDocumentInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     from ..modules.work_items.documents import create_document as operation

@@ -1,14 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { TriangleAlert } from 'lucide-react';
 import { useParams } from 'next/navigation';
-import type { LiveDocument } from '@/components/common/teams/use-live-team';
 import { useMessages } from '@/features/shared/use-messages';
 import { messages } from '@/features/documents/messages.vi';
 import { DocStatusBadge, DocTypeBadge } from './document-badges';
-import { loadIssueDocuments } from './project-docs-api';
+import type { IssueDocumentsState } from './use-issue-documents';
 
 /**
  * Documents linked to the issue (for example its FDS/TDS), each opening the document page.
@@ -20,22 +18,15 @@ import { loadIssueDocuments } from './project-docs-api';
  * VI: "cảnh báo trước" đã thống nhất; không chặn gì). Không hiển thị khi đang tải hoặc lỗi,
  * VI: và không hiển thị với task ngoài dự án chưa có tài liệu.
  */
-export function IssueDocuments({ issueId, projectId }: { issueId: string; projectId?: string }) {
+export function IssueDocuments({
+   state: { documents },
+   projectId,
+}: {
+   state: IssueDocumentsState;
+   projectId?: string;
+}) {
    const tx = useMessages(messages);
    const { orgId } = useParams<{ orgId: string }>();
-   const [documents, setDocuments] = useState<LiveDocument[]>();
-
-   useEffect(() => {
-      let current = true;
-      void loadIssueDocuments(issueId)
-         .then((items) => {
-            if (current) setDocuments(items);
-         })
-         .catch(() => undefined);
-      return () => {
-         current = false;
-      };
-   }, [issueId]);
 
    if (!documents) return null;
    const missingSpec =
