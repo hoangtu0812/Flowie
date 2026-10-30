@@ -12,6 +12,12 @@ export type Attachment = {
    size: number;
    /** Upload time (UTC) as the API returns it. VI: Thời điểm tải lên (UTC) do API trả về. */
    createdAt?: string;
+   /**
+    * Copy made by the SharePoint job: its link, or the last error while it is retried; null
+    * when not copied. VI: Bản sao do job SharePoint tạo: link, hoặc lỗi gần nhất khi đang thử
+    * lại; null khi chưa sao chép.
+    */
+   sharepoint?: { webUrl: string | null; lastError: string | null } | null;
 };
 
 /** Image types the API is willing to serve inline through the preview route. */

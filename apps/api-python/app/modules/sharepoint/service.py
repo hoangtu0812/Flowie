@@ -45,6 +45,7 @@ def connection_payload(row: Any | None) -> dict[str, Any]:
     return {
         "configured": True,
         "enabled": row["enabled"],
+        "publishAttachments": row["publish_attachments"],
         "tenantId": row["tenant_id"],
         "clientId": row["client_id"],
         "updatedAt": row["updated_at"],
@@ -62,7 +63,7 @@ async def connection_row(db, workspace_id: str) -> Any | None:
 
 async def save_connection(
     db, settings: Settings, workspace_id: str, user_id: str, *, tenant_id: str, client_id: str,
-    client_secret: str | None, enabled: bool,
+    client_secret: str | None, enabled: bool, publish_attachments: bool = False,
 ) -> dict[str, Any]:
     """Create or update the workspace connection; the secret is kept when left empty.
     VI: Tạo hoặc cập nhật kết nối của workspace; để trống secret thì giữ secret cũ."""
@@ -77,15 +78,15 @@ async def save_connection(
     await db.execute(
         text(
             """INSERT INTO sharepoint_connections
-               (workspace_id, tenant_id, client_id, secret_encrypted, enabled, updated_by, created_at, updated_at)
-               VALUES (:workspace, :tenant, :client, :secret, :enabled, :user, :now, :now)
+               (workspace_id, tenant_id, client_id, secret_encrypted, enabled, publish_attachments, updated_by, created_at, updated_at)
+               VALUES (:workspace, :tenant, :client, :secret, :enabled, :attachments, :user, :now, :now)
                ON CONFLICT (workspace_id) DO UPDATE SET tenant_id = EXCLUDED.tenant_id,
                  client_id = EXCLUDED.client_id, secret_encrypted = EXCLUDED.secret_encrypted,
-                 enabled = EXCLUDED.enabled, updated_by = EXCLUDED.updated_by, updated_at = EXCLUDED.updated_at"""
+                 enabled = EXCLUDED.enabled, publish_attachments = EXCLUDED.publish_attachments, updated_by = EXCLUDED.updated_by, updated_at = EXCLUDED.updated_at"""
         ),
         {
             "workspace": workspace_id, "tenant": tenant_id, "client": client_id, "secret": secret,
-            "enabled": enabled, "user": user_id, "now": now,
+            "enabled": enabled, "attachments": publish_attachments, "user": user_id, "now": now,
         },
     )
     return connection_payload(await connection_row(db, workspace_id))
