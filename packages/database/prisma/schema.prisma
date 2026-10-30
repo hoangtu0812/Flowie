@@ -618,6 +618,7 @@ model Organization {
 
 model Workspace {
   bulkOperations         BulkOperation[]
+  projectSlugs           ProjectSlug[]
   issueImports           IssueImportBatch[]
   recurringSchedules     RecurringSchedule[]
   issueLifecycleEvents   IssueLifecycleEvent[]
@@ -1236,6 +1237,11 @@ model Project {
   teamId              String?             @map("team_id")
   name                String
   identifier          String
+  /// URL slug ([a-z0-9-], unique in the workspace) used in project links; earlier slugs stay in
+  /// project_slugs as aliases so old links keep working.
+  /// VI: Slug trên URL ([a-z0-9-], duy nhất trong workspace) dùng trong link dự án; slug cũ được
+  /// VI: giữ trong project_slugs làm alias để link cũ vẫn dùng được.
+  slug                String
   /// Emoji or short symbol shown next to the project name; NULL shows the default folder icon.
   /// VI: Emoji hoặc ký hiệu ngắn hiển thị cạnh tên dự án; NULL hiển thị biểu tượng thư mục mặc định.
   icon                String?
@@ -1271,11 +1277,32 @@ model Project {
   updates           ProjectUpdate[]
   resources         ProjectResource[]
   members           ProjectMember[]
+  slugs             ProjectSlug[]
   teamsChannel      ProjectTeamsChannel?
 
   @@unique([workspaceId, identifier])
+  @@unique([workspaceId, slug])
   @@index([workspaceId, teamId])
   @@map("projects")
+}
+
+/// Every slug a project has used in its workspace, current and earlier. The primary key makes
+/// the current slugs and the aliases one namespace, so a slug is never handed to another project
+/// and two concurrent renames to the same slug cannot both succeed.
+/// VI: Mọi slug một dự án đã dùng trong workspace, cả hiện tại lẫn trước đây. Khoá chính gom slug
+/// VI: hiện tại và alias vào một không gian tên, nên slug không bao giờ được cấp cho dự án khác và
+/// VI: hai lần đổi đồng thời sang cùng một slug không thể cùng thành công.
+model ProjectSlug {
+  workspaceId String    @map("workspace_id")
+  slug        String
+  projectId   String    @map("project_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, slug])
+  @@index([projectId])
+  @@map("project_slugs")
 }
 
 model ProjectMember {
@@ -2074,17 +2101,17 @@ model AttachmentPublication {
 /// Workspace app registration (client credentials, Sites.Selected) used to publish to SharePoint.
 /// VI: App registration của workspace (client credentials, Sites.Selected) để phát hành lên SharePoint.
 model SharepointConnection {
-  workspaceId     String   @id @map("workspace_id")
-  tenantId        String   @map("tenant_id")
-  clientId        String   @map("client_id")
-  secretEncrypted String   @map("secret_encrypted")
-  enabled         Boolean  @default(true)
+  workspaceId        String   @id @map("workspace_id")
+  tenantId           String   @map("tenant_id")
+  clientId           String   @map("client_id")
+  secretEncrypted    String   @map("secret_encrypted")
+  enabled            Boolean  @default(true)
   // Also copy attachments (issues, comments, projects, Docs folders); off until an admin opts in.
   // VI: Sao chép cả attachment (issue, comment, dự án, thư mục Docs); tắt cho tới khi quản trị viên bật.
-  publishAttachments Boolean @default(false) @map("publish_attachments")
-  updatedById     String?  @map("updated_by")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  publishAttachments Boolean  @default(false) @map("publish_attachments")
+  updatedById        String?  @map("updated_by")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 

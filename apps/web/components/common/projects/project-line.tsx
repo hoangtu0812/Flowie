@@ -11,6 +11,7 @@ import { LeadSelector } from './lead-selector';
 import { StatusWithPercent } from './status-with-percent';
 import { DatePicker } from './date-picker';
 import { toast } from 'sonner';
+import { projectPath } from '@/lib/project-route';
 
 interface ProjectLineProps {
    project: Project & { issueCount?: number };
@@ -36,7 +37,7 @@ export default function ProjectLine({ project }: ProjectLineProps) {
             </div>
             <div className="flex flex-col items-start overflow-hidden">
                <Link
-                  href={`/${orgId}/project/${project.id}/overview`}
+                  href={projectPath(orgId, project, 'overview')}
                   className="font-medium truncate w-full hover:underline underline-offset-2"
                >
                   {project.name}

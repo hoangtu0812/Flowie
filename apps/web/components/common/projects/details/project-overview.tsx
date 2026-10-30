@@ -31,6 +31,7 @@ import {
 import { projectNameError } from './project-settings-dialog';
 import { ProjectSidePanel } from './project-side-panel';
 import { useLiveProjectData } from './use-live-project';
+import { projectPath } from '@/lib/project-route';
 
 interface ProjectOverviewProps {
    projectId: string;
@@ -444,7 +445,7 @@ export default function ProjectOverview({ projectId }: ProjectOverviewProps) {
 
                   {/* Update CTA */}
                   <Link
-                     href={`/${orgId}/project/${project.id}/activity`}
+                     href={projectPath(orgId, project, 'activity')}
                      className="mt-8 flex items-center justify-center gap-2 border rounded-lg py-4 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/30 transition-colors"
                   >
                      <PenLine className="size-4" />

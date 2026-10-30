@@ -71,3 +71,51 @@ test('Project settings renames the project and changes its icon', async ({ page 
    await expect(dialog).toHaveCount(0);
    await expect(page.getByRole('button', { name: 'Change project icon' })).not.toContainText('🚀');
 });
+
+// A project opened by id moves to its slug (keeping the subpath, query and hash); a new slug
+// moves the tab to the new address and the old slug keeps redirecting. The seeded slug "reg" is
+// restored at the end; going back to an own earlier slug is allowed.
+// VI: Dự án mở bằng id được chuyển sang slug (giữ subpath, query và hash); slug mới chuyển tab sang
+// VI: địa chỉ mới và slug cũ vẫn chuyển hướng. Cuối test trả lại slug "reg" của seed; quay về slug
+// VI: cũ của chính dự án là được phép.
+test('Project settings changes the URL slug and old links redirect to it', async ({ page }) => {
+   const base = `/${fixture.slug}/project`;
+   await page.goto(`${base}/${fixture.projectId}/docs?from=e2e#tree`);
+   await expect(page).toHaveURL(new RegExp(`${base}/reg/docs\\?from=e2e#tree$`));
+
+   const openSettings = async () => {
+      await page.getByRole('button', { name: 'Project actions' }).click();
+      await page.getByRole('menuitem', { name: 'Project settings' }).click();
+      return page.getByRole('dialog', { name: 'Project settings' });
+   };
+   const save = async (dialog: ReturnType<typeof page.getByRole>, slug: string) => {
+      await dialog.getByRole('textbox', { name: 'Slug' }).fill(slug);
+      const saved = page.waitForResponse(
+         (response) =>
+            response.url().startsWith(`${api}/projects/${fixture.projectId}?`) &&
+            response.request().method() === 'PATCH'
+      );
+      await dialog.getByRole('button', { name: 'Save' }).click();
+      expect((await saved).ok()).toBeTruthy();
+   };
+
+   let dialog = await openSettings();
+   await expect(dialog.getByRole('textbox', { name: 'Slug' })).toHaveValue('reg');
+   for (const invalid of ['Bad Slug', 'dự-án', 'a--b']) {
+      await dialog.getByRole('textbox', { name: 'Slug' }).fill(invalid);
+      await expect(dialog.getByRole('button', { name: 'Save' })).toBeDisabled();
+   }
+   const renamed = `regression-${Date.now()}`;
+   await save(dialog, renamed);
+   await expect(page).toHaveURL(new RegExp(`${base}/${renamed}/docs\\?from=e2e#tree$`));
+
+   await page.goto(`${base}/reg/overview`);
+   await expect(page).toHaveURL(new RegExp(`${base}/${renamed}/overview$`));
+   // The project tabs link with the slug, so switching tabs needs no redirect.
+   // VI: Tab dự án dùng slug trong link, nên đổi tab không cần chuyển hướng.
+   await expect(page.locator(`a[href="${base}/${renamed}/issues"]`).first()).toBeVisible();
+
+   dialog = await openSettings();
+   await save(dialog, 'reg');
+   await expect(page).toHaveURL(new RegExp(`${base}/reg/overview$`));
+});

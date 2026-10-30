@@ -1,7 +1,4 @@
-import ProjectIssues from '@/components/common/projects/details/project-issues';
-import { LiveProjectProvider } from '@/components/common/projects/details/use-live-project';
-import Header from '@/components/layout/headers/project/header';
-import MainLayout from '@/components/layout/main-layout';
+import { ProjectRoute } from '@/components/common/projects/project-route';
 
 interface ProjectPageProps {
    params: Promise<{ projectId: string }>;
@@ -10,11 +7,5 @@ interface ProjectPageProps {
 export default async function ProjectPage({ params }: ProjectPageProps) {
    const { projectId } = await params;
 
-   return (
-      <LiveProjectProvider projectId={projectId}>
-         <MainLayout header={<Header projectId={projectId} />}>
-            <ProjectIssues projectId={projectId} />
-         </MainLayout>
-      </LiveProjectProvider>
-   );
+   return <ProjectRoute projectKey={decodeURIComponent(projectId)} view="issues" />;
 }

@@ -21,6 +21,7 @@ import { useSearchStore } from '@/store/search-store';
 import { useViewStore } from '@/store/view-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { InsightsPanel } from '@/components/common/issues/insights-panel';
+import { projectPath } from '@/lib/project-route';
 
 export default function MemberProfile({
    member,
@@ -86,7 +87,7 @@ export default function MemberProfile({
                         ))}
                         <Heading level={3}>Projects</Heading>
                         {profile.projects.map((project) => (
-                           <Link key={project.id} href={`/${orgId}/project/${project.id}/overview`}>
+                           <Link key={project.id} href={projectPath(orgId, project, 'overview')}>
                               {project.name}
                            </Link>
                         ))}
