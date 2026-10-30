@@ -5,6 +5,7 @@ import { Heading, Text } from '@astryxdesign/core/Text';
 import { AttachmentImage } from '@/components/common/attachment-image';
 import { splitMentions } from '@/features/issues/mention-text';
 import { createSlugger } from '@/lib/markdown-headings';
+import { rehypeMathPlugin, remarkMathPlugin } from '@/lib/markdown-math';
 import { MermaidDiagram } from './mermaid-diagram';
 import { cn } from '@/lib/utils';
 
@@ -207,10 +208,10 @@ function markdownComponents(readable: boolean): Components {
 const COMPONENTS = { default: markdownComponents(false), issue: markdownComponents(true) };
 
 /**
- * CommonMark/GFM rendering without raw HTML or executable URL protocols. `mentions` lists the
- * member names whose `@Name` should be highlighted.
- * VI: Hiển thị CommonMark/GFM không có HTML thô hay giao thức URL thực thi được. `mentions` là
- * VI: danh sách tên thành viên cần highlight `@Tên`.
+ * CommonMark/GFM rendering with TeX math, without raw HTML or executable URL protocols.
+ * `mentions` lists the member names whose `@Name` should be highlighted.
+ * VI: Hiển thị CommonMark/GFM kèm công thức TeX, không có HTML thô hay giao thức URL thực thi
+ * VI: được. `mentions` là danh sách tên thành viên cần highlight `@Tên`.
  */
 export function MarkdownPreview({
    content,
@@ -227,8 +228,12 @@ export function MarkdownPreview({
       <VStack gap={4} className={cn('min-w-0', readable && 'text-sm leading-7 break-words')}>
          <Markdown
             skipHtml
-            remarkPlugins={mentions.length ? [remarkGfm, remarkMentions(mentions)] : [remarkGfm]}
-            rehypePlugins={[rehypeHeadingIds]}
+            remarkPlugins={
+               mentions.length
+                  ? [remarkGfm, remarkMathPlugin, remarkMentions(mentions)]
+                  : [remarkGfm, remarkMathPlugin]
+            }
+            rehypePlugins={[rehypeMathPlugin, rehypeHeadingIds]}
             components={COMPONENTS[appearance]}
          >
             {content}

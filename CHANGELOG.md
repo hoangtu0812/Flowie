@@ -126,6 +126,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
+- TeX math in Markdown renders instead of showing its source: `$\rightarrow$` shows an arrow, `$…$` renders inline and `$$…$$` renders as a block, in Docs, task descriptions, comments and Markdown attachments. Code spans and code blocks stay literal, TeX link and image commands are not run, and a literal dollar pair needs `\$`. Web only; no API or schema change. (DTD-179, #88)
+  VI: Công thức TeX trong Markdown được hiển thị thay vì hiện mã nguồn: `$\rightarrow$` hiện mũi tên, `$…$` hiển thị trong dòng và `$$…$$` hiển thị thành khối, ở Docs, mô tả task, comment và attachment Markdown. Code span và code block giữ nguyên văn, lệnh link và ảnh của TeX không được thực thi, và muốn giữ cặp ký tự đô la thì viết `\$`. Chỉ đổi web; không đổi API hay schema. (DTD-179)
+
 - A team's Documents tab lists only the team's own folders instead of every project Docs folder flattened into one list, and starts with links to the Docs tab of each of the team's projects; New document works even before the team has a folder (it creates "General"), and documents created for a team without a folder never land in a project tree. Pinned documents inside project trees no longer show under the team overview's resources. No schema change and no data is moved or deleted. (DTD-135, #78)
   VI: Tab Documents của team chỉ liệt kê thư mục riêng của team thay vì gộp phẳng mọi thư mục Docs của các dự án, và có hàng link sang tab Docs của từng dự án thuộc team; New document dùng được cả khi team chưa có thư mục (tạo "General"), và tài liệu tạo cho team không chỉ định thư mục không còn rơi vào cây dự án. Tài liệu được ghim trong cây dự án không còn hiện ở mục resources của team overview. Không đổi schema, không di chuyển hay xoá dữ liệu. (DTD-135)
 
