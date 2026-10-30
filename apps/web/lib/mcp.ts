@@ -28,10 +28,42 @@ export type McpAudit = {
    createdAt: string;
    connectionId: string | null;
    connectionName: string | null;
-   metadata: { connectionId?: string; tool?: string; outcome?: string; durationMs?: number };
+   actorName?: string | null;
+   metadata: {
+      connectionId?: string;
+      tool?: string;
+      outcome?: string;
+      durationMs?: number;
+      correlationId?: string;
+      statusCode?: number;
+      error?: string;
+      message?: string;
+      arguments?: unknown;
+   };
 };
 
-export type McpAuditFilter = { connectionId?: string; outcome?: 'succeeded' | 'failed' };
+export type McpAuditWindow = '24h' | '7d' | '30d';
+
+export type McpAuditFilter = {
+   connectionId?: string;
+   outcome?: 'succeeded' | 'failed';
+   tool?: string;
+   window?: McpAuditWindow;
+};
+
+type McpCallCounts = { calls: number; failed: number; denied: number };
+
+export type McpAuditSummary = {
+   window: McpAuditWindow;
+   totals: McpCallCounts & { p95Ms: number | null };
+   tools: (McpCallCounts & { tool: string; p95Ms: number | null })[];
+   connections: (McpCallCounts & {
+      connectionId: string | null;
+      connectionName: string | null;
+      ownerName: string | null;
+      lastCallAt: string;
+   })[];
+};
 
 export type ConnectionDraft = {
    name: string;
@@ -119,8 +151,19 @@ export function listMcpAudit(
    const query = new URLSearchParams({ workspaceId });
    if (filter.connectionId) query.set('connectionId', filter.connectionId);
    if (filter.outcome) query.set('outcome', filter.outcome);
+   if (filter.tool) query.set('tool', filter.tool);
+   if (filter.window) query.set('window', filter.window);
    if (cursor) query.set('cursor', cursor);
    return request(`audit?${query}`);
+}
+
+/** Tool-call counts for the MCP logs dashboard, in the caller's log scope. */
+/** VI: Số liệu lời gọi tool cho dashboard MCP logs, trong phạm vi log của người gọi. */
+export function getMcpAuditSummary(
+   workspaceId: string,
+   window: McpAuditWindow
+): Promise<McpAuditSummary> {
+   return request(`audit/summary?${new URLSearchParams({ workspaceId, window })}`);
 }
 
 /** The workflow agents receive at MCP initialize, after the fixed preamble. */

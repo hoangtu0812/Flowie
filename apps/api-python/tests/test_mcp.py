@@ -1540,6 +1540,147 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 )
                 await db.commit()
 
+    async def test_mcp_log_details_summary_and_scope(self):
+        from unittest.mock import patch
+        from starlette.requests import Request
+        from app.modules.identity.security.sessions import create_session
+
+        await self.call("get_my_access")
+        with self.assertRaises(ApiError):
+            await self.call("get_issue", issueId=self.other_issue["id"])
+        with self.assertRaises(ApiError) as invalid:
+            await self.call(
+                "add_comment",
+                issueId=self.issue["id"],
+                idempotencyKey="log-test-key-1",
+                content="Paste Bearer abc.def from https://hooks.example.test/x?sig=1",
+                webhookUrl="https://hooks.example.test/x?sig=1",
+            )
+        self.assertEqual(invalid.exception.status_code, 400)
+        with self.assertRaises(ApiError) as unknown:
+            await self.call("no_such_tool")
+        self.assertEqual(unknown.exception.status_code, 404)
+        # A broken log write must not replace the tool's own error; that call leaves no row.
+        with patch(
+            "app.modules.mcp.application.redact_arguments", side_effect=RuntimeError
+        ):
+            with self.assertRaises(ApiError) as kept:
+                await self.call("get_issue", issueId=self.other_issue["id"])
+        self.assertIn(kept.exception.status_code, {403, 404})
+
+        member = {"id": _cuid(), "name": "Log member", "email": f"{_cuid()}@example.test"}
+        async with self.factory() as db:
+            now = _utcnow()
+            await db.execute(
+                text("""INSERT INTO users (id,name,email,status,created_at,updated_at)
+                VALUES (:id,:name,:email,'ACTIVE',:now,:now)"""),
+                {**member, "now": now},
+            )
+            await db.execute(
+                text("""INSERT INTO workspace_members(id,workspace_id,user_id,role,status,created_at,updated_at)
+                VALUES (:id,:workspace,:user,'MEMBER','ACTIVE',:now,:now)"""),
+                {"id": _cuid(), "workspace": self.workspace, "user": member["id"], "now": now},
+            )
+            await db.commit()
+            member_connection = await create(
+                db,
+                self.workspace,
+                member,
+                ConnectionInput(name="Member log", scopes=["context:read"]),
+            )
+            member_principal = await authenticate(db, member_connection["token"])
+            await db.commit()
+        await self.application.call(member_principal, "get_my_access", {})
+
+        host = create_app(self.settings)
+        host.state.session_factory = self.factory
+        request = Request({"type": "http", "headers": [], "client": ("127.0.0.1", 1234)})
+        try:
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=host), base_url="http://testserver"
+            ) as client:
+                async with self.factory() as db:
+                    admin_token, _ = await create_session(db, self.user, request, self.settings)
+                    member_token, _ = await create_session(db, member, request, self.settings)
+                    await db.commit()
+                client.cookies.set("flowie_access", admin_token)
+                scope = {"workspaceId": self.workspace, "window": "24h"}
+                failed = (
+                    await client.get(
+                        "/api/v1/mcp/audit", params={**scope, "outcome": "failed"}
+                    )
+                ).json()["data"]["items"]
+                by_tool = {item["metadata"]["tool"]: item for item in failed}
+                self.assertEqual(
+                    set(by_tool), {"get_issue", "add_comment", "no_such_tool"}
+                )
+                denied = by_tool["get_issue"]
+                self.assertEqual(denied["actorName"], self.user["name"])
+                self.assertIn(denied["metadata"]["statusCode"], {403, 404})
+                self.assertTrue(denied["metadata"]["message"])
+                self.assertTrue(denied["metadata"]["correlationId"])
+                self.assertEqual(
+                    denied["metadata"]["arguments"], {"issueId": self.other_issue["id"]}
+                )
+                comment = by_tool["add_comment"]["metadata"]
+                self.assertEqual(comment["statusCode"], 400)
+                self.assertEqual(comment["arguments"]["idempotencyKey"], "log-test-key-1")
+                self.assertEqual(comment["arguments"]["webhookUrl"], "[redacted]")
+                stored = str(failed)
+                for leaked in ["abc.def", "sig=1", self.connection["token"]]:
+                    self.assertNotIn(leaked, stored)
+                self.assertEqual(
+                    by_tool["no_such_tool"]["action"], "mcp.no_such_tool.denied"
+                )
+                only_tool = (
+                    await client.get(
+                        "/api/v1/mcp/audit", params={**scope, "tool": "get_my_access"}
+                    )
+                ).json()["data"]["items"]
+                self.assertEqual(len(only_tool), 2)
+                self.assertTrue(
+                    all(item["metadata"]["tool"] == "get_my_access" for item in only_tool)
+                )
+
+                summary = (
+                    await client.get("/api/v1/mcp/audit/summary", params=scope)
+                ).json()["data"]
+                self.assertEqual(summary["totals"]["calls"], 5)
+                self.assertEqual(summary["totals"]["denied"], 2)
+                self.assertEqual(summary["totals"]["failed"], 1)
+                tools = {row["tool"]: row for row in summary["tools"]}
+                self.assertEqual(
+                    (tools["get_issue"]["calls"], tools["get_issue"]["denied"]), (1, 1)
+                )
+                connections = {row["connectionId"]: row for row in summary["connections"]}
+                self.assertEqual(connections[self.connection["id"]]["calls"], 4)
+                self.assertEqual(
+                    connections[member_connection["id"]]["ownerName"], member["name"]
+                )
+
+                client.cookies.set("flowie_access", member_token)
+                mine = (
+                    await client.get("/api/v1/mcp/audit/summary", params=scope)
+                ).json()["data"]
+                self.assertEqual(mine["totals"]["calls"], 1)
+                self.assertEqual(
+                    [row["connectionId"] for row in mine["connections"]],
+                    [member_connection["id"]],
+                )
+                own = (
+                    await client.get("/api/v1/mcp/audit", params=scope)
+                ).json()["data"]["items"]
+                self.assertTrue(own)
+                self.assertTrue(
+                    all(item["connectionId"] == member_connection["id"] for item in own)
+                )
+        finally:
+            async with self.factory() as db:
+                await db.execute(
+                    text("DELETE FROM users WHERE id=:id"), {"id": member["id"]}
+                )
+                await db.commit()
+
     async def test_audit_page_filters_and_repository_management(self):
         from starlette.requests import Request
         from app.modules.identity.security.sessions import create_session

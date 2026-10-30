@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import { useParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'motion/react';
-import { Check, Code2, Copy, Eye, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
+import { Check, Code2, Copy, Eye, Pencil, Plus, Save, ScrollText, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { VStack, HStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
@@ -20,7 +21,6 @@ import { AgentCoordination } from './agent-coordination';
 import { AgentConfiguration } from './agent-configuration';
 import { AgentInstructions } from './agent-instructions';
 import { SuccessMark } from './success-mark';
-import { McpActivity } from './mcp-activity';
 
 const SCOPE_LABELS: Record<string, string> = {
    'context:read': 'Read workspace and team information',
@@ -58,6 +58,7 @@ async function copyText(value: string, success: string) {
 
 export function McpSettings() {
    const state = useMcpSettings();
+   const { orgId } = useParams<{ orgId: string }>();
    const [creating, setCreating] = useState(false);
    /** Connection whose grant the form edits; the token and expiry stay as they are. */
    /** VI: Kết nối đang được sửa quyền trong form; token và hạn dùng giữ nguyên. */
@@ -474,9 +475,16 @@ export function McpSettings() {
             )}
          </AnimatePresence>
          {endpoint && <ClientSetup endpoint={endpoint} token={state.token} />}
-         {state.workspaceId && (
-            <McpActivity workspaceId={state.workspaceId} connections={state.connections} />
-         )}
+         {/* Call history and its dashboard live in Settings → MCP logs. */}
+         {/* VI: Lịch sử lời gọi và dashboard nằm ở Settings → MCP logs. */}
+         <HStack>
+            <Button
+               label="View MCP logs"
+               variant="secondary"
+               icon={<ScrollText className="size-4" />}
+               href={`/${orgId}/settings/mcp-logs`}
+            />
+         </HStack>
          {state.workspaceId && (
             <AgentCoordination workspaceId={state.workspaceId} canManage={state.canManage} />
          )}

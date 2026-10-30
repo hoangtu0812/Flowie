@@ -6,6 +6,7 @@ from fastapi import Depends, Query, Request
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from sqlalchemy import text
 
+from ...core.clock import _utcnow
 from ...core.pagination import CursorCodec
 from ...db.session import get_session
 from ...domains.auth import current_user
@@ -153,6 +154,31 @@ AUDIT_CONNECTION = (
 )
 
 
+# Time windows offered by MCP logs; values are trusted literals bound as SQL intervals.
+# VI: Các khoảng thời gian của MCP logs; giá trị là hằng tin cậy, truyền vào SQL dạng interval.
+AUDIT_WINDOWS = {"24h": "24 hours", "7d": "7 days", "30d": "30 days"}
+AuditWindow = Literal["24h", "7d", "30d"]
+
+# Workspace and visibility shared by the log list and its summary: administrators read
+# every connection's events, members only the events they caused as connection owner.
+# VI: Workspace và phạm vi dùng chung cho danh sách log và phần tổng hợp: quản trị viên đọc
+# VI: sự kiện của mọi kết nối, thành viên chỉ đọc sự kiện họ gây ra với tư cách chủ kết nối.
+AUDIT_SCOPE = """a.workspace_id=:workspace AND a.action LIKE 'mcp.%'
+        AND (:manager OR a.actor_id=:user)
+        AND (CAST(:span AS text) IS NULL OR a.created_at>CAST(:now AS timestamp)-CAST(:span AS interval))"""
+
+
+async def _audit_params(db, workspace_id, user, window):
+    role = await _workspace_role(db, workspace_id, user["id"])
+    return {
+        "workspace": workspace_id,
+        "manager": role in {"OWNER", "ADMIN"},
+        "user": user["id"],
+        "span": AUDIT_WINDOWS.get(window),
+        "now": _utcnow(),
+    }
+
+
 @router.get("/audit")
 async def connection_audit(
     request: Request,
@@ -161,24 +187,30 @@ async def connection_audit(
     cursor: str | None = Query(default=None, max_length=1000),
     connectionId: str | None = Query(default=None, min_length=1, max_length=100),
     outcome: Literal["succeeded", "failed"] | None = None,
+    tool: str | None = Query(default=None, min_length=1, max_length=100),
+    window: AuditWindow | None = None,
     user=Depends(current_user),
     db=Depends(get_session),
 ):
-    role = await _workspace_role(db, workspaceId, user["id"])
     # "failed" also covers denied calls so every unsuccessful call is in one view.
     # VI: "failed" gồm cả lời gọi bị từ chối để mọi lời gọi không thành công nằm chung một chỗ.
     codec = CursorCodec(
         request.app.state.settings.auth_jwt_secret,
         user["id"],
         "mcp-audit",
-        {"workspace": workspaceId, "connection": connectionId, "outcome": outcome},
+        {
+            "workspace": workspaceId,
+            "connection": connectionId,
+            "outcome": outcome,
+            "tool": tool,
+            "window": window,
+        },
     )
     params = {
-        "workspace": workspaceId,
-        "manager": role in {"OWNER", "ADMIN"},
-        "user": user["id"],
+        **await _audit_params(db, workspaceId, user, window),
         "connection": connectionId,
         "outcome": outcome,
+        "tool": tool,
         "limit": limit + 1,
     }
     page = ""
@@ -190,11 +222,12 @@ async def connection_audit(
         for row in (
             await db.execute(
                 text(f"""SELECT a.id,a.action,a.entity_id AS "entityId",a.metadata,a.created_at AS "createdAt",
-        {AUDIT_CONNECTION} AS "connectionId",c.name AS "connectionName"
+        {AUDIT_CONNECTION} AS "connectionId",c.name AS "connectionName",u.name AS "actorName"
         FROM audit_logs a LEFT JOIN mcp_connections c ON c.id={AUDIT_CONNECTION} AND c.workspace_id=a.workspace_id
-        WHERE a.workspace_id=:workspace AND a.action LIKE 'mcp.%'
-        AND (:manager OR a.actor_id=:user)
+        LEFT JOIN users u ON u.id=a.actor_id
+        WHERE {AUDIT_SCOPE}
         AND (CAST(:connection AS text) IS NULL OR {AUDIT_CONNECTION}=:connection)
+        AND (CAST(:tool AS text) IS NULL OR a.metadata->>'tool'=:tool)
         AND (CAST(:outcome AS text) IS NULL
             OR (:outcome='succeeded' AND a.action LIKE '%.succeeded')
             OR (:outcome='failed' AND (a.action LIKE '%.failed' OR a.action LIKE '%.denied')))
@@ -210,5 +243,51 @@ async def connection_audit(
             "nextCursor": codec.encode(items[-1]["createdAt"], items[-1]["id"])
             if len(rows) > limit
             else None,
+        }
+    }
+
+
+@router.get("/audit/summary")
+async def connection_audit_summary(
+    workspaceId: str = Query(min_length=1),
+    window: AuditWindow = "24h",
+    user=Depends(current_user),
+    db=Depends(get_session),
+):
+    """Tool-call counts for the MCP logs dashboard, in the same scope as the log list.
+    Configuration events are not tool calls and are left out.
+    VI: Số liệu lời gọi tool cho dashboard MCP logs, cùng phạm vi với danh sách log. Sự kiện
+    VI: cấu hình không phải lời gọi tool nên không được tính."""
+    params = await _audit_params(db, workspaceId, user, window)
+    counts = """count(*)::int AS calls,
+        count(*) FILTER(WHERE a.metadata->>'outcome'='failed')::int AS failed,
+        count(*) FILTER(WHERE a.metadata->>'outcome'='denied')::int AS denied"""
+    p95 = 'percentile_cont(0.95) WITHIN GROUP(ORDER BY (a.metadata->>\'durationMs\')::int) AS "p95Ms"'
+    scope = f"FROM audit_logs a WHERE {AUDIT_SCOPE} AND a.entity_type='mcp-tool'"
+
+    async def rows(sql):
+        return [dict(row) for row in (await db.execute(text(sql), params)).mappings()]
+
+    totals = (await rows(f"SELECT {counts},{p95} {scope}"))[0]
+    tools = await rows(
+        f"""SELECT a.metadata->>'tool' AS tool,{counts},{p95} {scope}
+        GROUP BY a.metadata->>'tool' ORDER BY count(*) DESC,1 LIMIT 100"""
+    )
+    by_connection = await rows(
+        f"""SELECT s.*,c.name AS "connectionName",u.name AS "ownerName" FROM (
+        SELECT a.metadata->>'connectionId' AS "connectionId",max(a.actor_id) AS actor,{counts},
+        max(a.created_at) AS "lastCallAt" {scope} GROUP BY a.metadata->>'connectionId') s
+        LEFT JOIN mcp_connections c ON c.id=s."connectionId" AND c.workspace_id=:workspace
+        LEFT JOIN users u ON u.id=COALESCE(c.user_id,s.actor)
+        ORDER BY s.calls DESC,s."connectionId" LIMIT 100"""
+    )
+    for row in by_connection:
+        row.pop("actor", None)
+    return {
+        "data": {
+            "window": window,
+            "totals": totals,
+            "tools": tools,
+            "connections": by_connection,
         }
     }
