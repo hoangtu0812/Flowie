@@ -96,7 +96,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
-- The Add existing sub-issue and Set/Change parent dialogs keep every search result at full row height, so a long result list scrolls evenly instead of squeezing rows together under the search box. Web only; no API or schema change. (DTD-120)
+- The Add existing sub-issue and Set/Change parent dialogs keep every search result at full row height, so a long result list scrolls evenly instead of squeezing rows together under the search box. Web only; no API or schema change. (DTD-120, #74)
   VI: Hộp thoại Add existing sub-issue và Set/Change parent giữ đủ chiều cao cho mọi dòng kết quả tìm kiếm, nên danh sách dài cuộn đều thay vì bị ép các dòng dính nhau dưới ô tìm kiếm. Chỉ đổi web; không đổi API hay schema. (DTD-120)
 
 - The issue Filter now works for every section: Status, Labels and Cycle list the workspace's real statuses, labels and cycles instead of demo data, filters apply to all matching issues (not only the loaded page) and stay in the link after a reload, Clear removes them, and "Project is not X" keeps issues without a project. Option counts are no longer shown because they only counted the loaded page. No schema change; deploy `api` and `web` together. (DTD-69, #64)
