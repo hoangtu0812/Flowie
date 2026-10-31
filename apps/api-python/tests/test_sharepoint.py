@@ -5,6 +5,7 @@ from datetime import timedelta
 from urllib.parse import unquote
 
 import httpx
+from tests.document_review_support import approve
 import pytest
 from cryptography.fernet import Fernet
 from sqlalchemy import text
@@ -95,7 +96,7 @@ async def verify_publishing():
         # Nothing is approved yet. VI: Chưa có gì được duyệt.
         assert await publish_due(factory, settings, http) == 0
         async with factory() as db:
-            await update_document(doc["id"], UpdateDocumentInput(status="APPROVED"), workspace, user, db)
+            await approve(db, workspace, team, doc["id"], user)
             await db.commit()
         assert await publish_due(factory, settings, http) == 1
         # Folder numbers are part of the path, like the Docs tree.
@@ -132,7 +133,7 @@ async def verify_publishing():
             await db.commit()
         assert await publish_due(factory, settings, http) == 0
         async with factory() as db:
-            await update_document(doc["id"], UpdateDocumentInput(status="APPROVED"), workspace, user, db)
+            await approve(db, workspace, team, doc["id"], user)
             await db.commit()
         mode["fail"] = True
         assert await publish_due(factory, settings, http) == 0

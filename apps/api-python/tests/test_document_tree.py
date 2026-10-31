@@ -26,6 +26,7 @@ from app.modules.work_items.document_tree import (
 )
 from app.modules.work_items.documents import create_document, update_document
 from app.modules.work_items.issues import create_issue
+from tests.document_review_support import approve
 
 
 @pytest.mark.skipif(
@@ -160,11 +161,7 @@ async def verify_document_tree():
                     db,
                 )
             )["data"]
-            approved = (
-                await update_document(
-                    fds["id"], UpdateDocumentInput(status="APPROVED"), workspace, user, db
-                )
-            )["data"]
+            approved = await approve(db, workspace, team, fds["id"], user)
             assert (approved["docType"], approved["status"]) == ("FDS", "APPROVED")
 
             issue = (

@@ -132,3 +132,43 @@ export const unlinkIssueDocument = (documentId: string, issueId: string) =>
 
 export const loadIssueDocuments = (issueId: string) =>
    send<LiveDocument[]>('/issue-links', undefined, { issueId });
+
+export type ReviewPerson = { id: string; name: string; avatarUrl: string | null };
+/** Review of a document: who approves, who reviews and what the viewer may do.
+ * VI: Trạng thái duyệt tài liệu: ai duyệt cuối, ai review và người xem được làm gì. */
+export type DocumentReview = {
+   documentId: string;
+   status: DocStatus;
+   authorId: string;
+   approvers: ReviewPerson[];
+   reviewers: (ReviewPerson & {
+      decision: 'APPROVED' | 'CHANGES_REQUESTED' | null;
+      note: string | null;
+      decidedAt: string | null;
+   })[];
+   /** Team members a lead may assign; empty for everyone else. VI: Thành viên team lead được chọn; rỗng với người khác. */
+   members: ReviewPerson[];
+   canAssign: boolean;
+   canDecide: boolean;
+   canApprove: boolean;
+   approveBlockedReason: string | null;
+};
+
+export const loadDocumentReview = (documentId: string) =>
+   send<DocumentReview>(`/${encodeURIComponent(documentId)}/review`);
+
+export const setDocumentReviewers = async (documentId: string, reviewerIds: string[]) =>
+   send<DocumentReview>(`/${encodeURIComponent(documentId)}/review/reviewers`, {
+      method: 'PUT',
+      body: await withWorkspace({ reviewerIds }),
+   });
+
+export const decideDocumentReview = async (
+   documentId: string,
+   decision: 'APPROVED' | 'CHANGES_REQUESTED',
+   note?: string
+) =>
+   send<DocumentReview>(`/${encodeURIComponent(documentId)}/review/decision`, {
+      method: 'POST',
+      body: await withWorkspace({ decision, note }),
+   });

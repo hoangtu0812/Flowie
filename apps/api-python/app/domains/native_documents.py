@@ -12,6 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..modules.work_items.contracts import CreateDocumentInput, UpdateDocumentInput
+from ..modules.work_items.document_review import DecisionInput, ReviewersInput
 from ..core.errors import ApiError
 from ..db.session import get_session
 from .auth import _cuid, _utcnow, current_user
@@ -155,6 +156,29 @@ async def unlink_document_issue(document_id: str, issue_id: str, workspaceId: st
     await link_issue_document(db, workspace_id=workspaceId, user_id=user['id'], document_id=document_id, issue_id=issue_id, linked=False)
     await db.commit()
     return {'data': await issue_documents(db, workspace_id=workspaceId, user_id=user['id'], issue_id=issue_id)}
+
+
+@router.get('/{document_id}/review')
+async def read_document_review(document_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    from ..modules.work_items.document_review import review_state
+
+    return {'data': await review_state(db, workspaceId, document_id, user['id'])}
+
+
+@router.put('/{document_id}/review/reviewers')
+async def set_document_reviewers(document_id: str, payload: ReviewersInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    from ..modules.work_items.document_review import set_reviewers
+    from ..db.mutations import commit_mutation
+
+    return {'data': await commit_mutation(db, lambda: set_reviewers(db, document_id, payload, user))}
+
+
+@router.post('/{document_id}/review/decision')
+async def decide_document_review(document_id: str, payload: DecisionInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    from ..modules.work_items.document_review import decide
+    from ..db.mutations import commit_mutation
+
+    return {'data': await commit_mutation(db, lambda: decide(db, document_id, payload, user))}
 
 
 @router.post('')

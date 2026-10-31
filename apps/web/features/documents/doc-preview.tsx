@@ -42,6 +42,8 @@ import {
    type ProjectTreeDocument,
 } from './project-docs-api';
 import { DocStatusBadge, DocTypeBadge } from './document-badges';
+import { DocumentReviewPanel, useDocumentReview } from './doc-review';
+import type { DocumentReview } from './project-docs-api';
 
 function PreviewHeader({
    children,
@@ -75,6 +77,7 @@ export function DocumentPreview({
    onStatusChange,
    onConfigureSharepoint,
    onClose,
+   onReviewChanged,
 }: {
    document: ProjectTreeDocument;
    /** The project publishes to SharePoint. VI: Dự án đang phát hành lên SharePoint. */
@@ -88,9 +91,13 @@ export function DocumentPreview({
    /** Adds a close button, used when the preview fills the document page.
     * VI: Thêm nút đóng, dùng khi khung xem trước chiếm cả trang tài liệu. */
    onClose?: () => void;
+   /** Reloads the document after a review action changed it (a change request returns it to
+    * Draft). VI: Tải lại tài liệu sau thao tác duyệt làm nó đổi (yêu cầu sửa đưa về Nháp). */
+   onReviewChanged?: () => void;
 }) {
    const tx = useMessages(messages);
    const locale = useUiPreferencesStore((state) => state.locale);
+   const { review, run } = useDocumentReview(document, onReviewChanged);
    const [releases, setReleases] = useState<DocumentRelease[]>([]);
    const [selected, setSelected] = useState('current');
    const [shown, setShown] = useState<DocumentRelease>();
@@ -130,7 +137,11 @@ export function DocumentPreview({
          <PreviewHeader
             actions={
                <>
-                  <ReviewActions document={document} onStatusChange={onStatusChange} />
+                  <ReviewActions
+                     document={document}
+                     review={review}
+                     onStatusChange={onStatusChange}
+                  />
                   <Button size="xs" variant="secondary" onClick={onEdit}>
                      <Pencil className="size-3.5" />
                      {tx('Edit')}
@@ -195,6 +206,7 @@ export function DocumentPreview({
                   </div>
                )}
                <LinkedIssues documentId={document.id} />
+               <DocumentReviewPanel documentId={document.id} review={review} run={run} />
                <TableOfContents content={content} label={tx('Contents')} />
                <MarkdownPreview content={content} />
             </div>
@@ -266,17 +278,21 @@ function LinkedIssues({ documentId }: { documentId: string }) {
 
 /**
  * Review buttons in place of a status picker: Draft offers Submit for review, In review offers
- * Return to draft, and both offer Approve, which asks for a second click naming the release it
- * will create. Approved documents show no buttons; editing one returns it to Draft on the server.
+ * Return to draft, and only the team's approver sees Approve, which asks for a second click naming
+ * the release it will create. Approve is disabled with the server's reason while reviewers have
+ * not all agreed. Approved documents show no buttons; editing one returns it to Draft on the server.
  * VI: Các nút duyệt thay cho ô chọn trạng thái: Nháp có Gửi duyệt, Đang duyệt có Trả về nháp, và
- * VI: cả hai có Duyệt, cần bấm lần hai ghi rõ phiên bản sẽ tạo. Tài liệu Đã duyệt không có nút;
- * VI: sửa nó thì server tự đưa về Nháp.
+ * VI: chỉ người duyệt cuối của team thấy Duyệt, cần bấm lần hai ghi rõ phiên bản sẽ tạo. Nút Duyệt
+ * VI: bị khoá kèm lý do từ server khi chưa đủ reviewer đồng ý. Tài liệu Đã duyệt không có nút; sửa
+ * VI: nó thì server tự đưa về Nháp.
  */
 function ReviewActions({
    document,
+   review,
    onStatusChange,
 }: {
    document: ProjectTreeDocument;
+   review: DocumentReview | undefined;
    onStatusChange: (status: DocStatus) => void;
 }) {
    const tx = useMessages(messages);
@@ -314,10 +330,20 @@ function ReviewActions({
                {tx('Submit for review')}
             </Button>
          )}
-         <Button size="xs" variant="ghost" onClick={() => setConfirming(true)}>
-            <BadgeCheck className="size-3.5" />
-            {tx('Approve')}
-         </Button>
+         {document.status === 'IN_REVIEW' &&
+            review &&
+            (review.canApprove || review.approveBlockedReason) && (
+               <Button
+                  size="xs"
+                  variant="ghost"
+                  disabled={!review.canApprove}
+                  title={review.approveBlockedReason ?? undefined}
+                  onClick={() => setConfirming(true)}
+               >
+                  <BadgeCheck className="size-3.5" />
+                  {tx('Approve')}
+               </Button>
+            )}
       </>
    );
 }
