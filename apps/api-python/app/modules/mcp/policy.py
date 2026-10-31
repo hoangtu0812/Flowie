@@ -47,9 +47,25 @@ class AccessPolicy:
             AND {self.project_clause(f"{alias}.project_id")}"""
 
     def document_clause(self, alias: str = "d") -> str:
+        """Documents this connection may see. A connection bound to projects sees a document of
+        an allowed team when it is filed in the Docs tree of an allowed project (the folder's own
+        `project_id`, which moves with the folder) or linked to an allowed project or issue. The
+        folder rule lets an unlinked document be read and linked for the first time; a folder
+        without a project, or of a project outside the grant, adds nothing.
+        VI: Tài liệu kết nối này được thấy. Kết nối giới hạn dự án thấy tài liệu của team được
+        VI: phép khi tài liệu nằm trong cây Docs của dự án được phép (`project_id` của chính thư
+        VI: mục, đổi theo khi thư mục di chuyển) hoặc được liên kết tới dự án hay issue được
+        VI: phép. Quy tắc thư mục cho phép đọc và liên kết lần đầu tài liệu chưa có liên kết; thư
+        VI: mục không thuộc dự án, hoặc thuộc dự án ngoài phạm vi, không mở thêm gì.
+        """
         return f"""{alias}.workspace_id=:workspace AND {alias}.archived_at IS NULL
             AND {self.team_clause(f"{alias}.team_id", shared=True)}
             AND (:all_projects OR EXISTS (
+                SELECT 1 FROM document_folders df JOIN projects fp ON fp.id=df.project_id
+                WHERE df.id={alias}.folder_id AND fp.workspace_id=:workspace
+                AND fp.archived_at IS NULL
+                AND {self.team_clause("fp.team_id", shared=True)}
+                AND fp.id=ANY(CAST(:projects AS text[]))) OR EXISTS (
                 SELECT 1 FROM document_links dl LEFT JOIN issues li ON li.id=dl.issue_id
                 JOIN projects lp ON lp.id=COALESCE(dl.project_id,li.project_id)
                 WHERE dl.document_id={alias}.id AND dl.workspace_id=:workspace

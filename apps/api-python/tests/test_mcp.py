@@ -879,6 +879,59 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ApiError):
             await self.call("get_document", documentId=private_doc)
 
+    async def test_project_docs_tree_documents_are_in_scope_without_links(self):
+        # A document filed in an allowed project's Docs tree is readable and linkable before any
+        # link exists; one in another project's tree or outside any project stays hidden.
+        # VI: Tài liệu nằm trong cây Docs của dự án được phép đọc và liên kết được khi chưa có liên
+        # VI: kết nào; tài liệu trong cây của dự án khác hoặc ngoài mọi dự án vẫn bị ẩn.
+        folders = {"allowed": self.project, "other": self.other_project, "plain": None}
+        documents = {}
+        async with self.factory() as db:
+            now = _utcnow()
+            for name, project in folders.items():
+                folder, document = _cuid(), _cuid()
+                await db.execute(
+                    text("""INSERT INTO document_folders (id,workspace_id,team_id,project_id,name,created_at,updated_at)
+                    VALUES (:id,:workspace,:team,:project,:name,:now,:now)"""),
+                    {
+                        "id": folder,
+                        "workspace": self.workspace,
+                        "team": self.team,
+                        "project": project,
+                        "name": f"Tree {name} {folder}",
+                        "now": now,
+                    },
+                )
+                await db.execute(
+                    text("""INSERT INTO documents (id,workspace_id,team_id,folder_id,title,content,created_by,updated_by,created_at,updated_at)
+                    VALUES (:id,:workspace,:team,:folder,:title,'Spec',:user,:user,:now,:now)"""),
+                    {
+                        "id": document,
+                        "workspace": self.workspace,
+                        "team": self.team,
+                        "folder": folder,
+                        "title": f"Spec {name}",
+                        "user": self.user["id"],
+                        "now": now,
+                    },
+                )
+                documents[name] = document
+            await db.commit()
+        read = await self.call("get_document", documentId=documents["allowed"])
+        self.assertEqual(read["id"], documents["allowed"])
+        await self.call(
+            "link_document",
+            documentId=documents["allowed"],
+            issueId=self.issue["id"],
+            idempotencyKey="tree-document-link",
+        )
+        linked = await self.call("search_documents", issueId=self.issue["id"])
+        self.assertIn(documents["allowed"], [item["id"] for item in linked["items"]])
+        for hidden in (documents["other"], documents["plain"]):
+            with self.assertRaises(ApiError) as error:
+                await self.call("get_document", documentId=hidden)
+            self.assertEqual(error.exception.status_code, 404)
+
     async def test_feature_docs_warn_then_upsert_and_link(self):
         before = await self.call("get_feature_docs", issueId=self.issue["identifier"])
         self.assertEqual(before["linked"], [])
