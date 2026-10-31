@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
 from ..core.slugs import RESERVED_WORKSPACE_SLUGS, url_slug
+from ..modules.access.read_only import ADMIN_READ_ROLES
 from ..db.session import get_session
 from .auth import _cuid, _normalized_email, _utcnow, create_workspace_bootstrap, current_user
 
@@ -163,7 +164,7 @@ def _name(value: str) -> str:
 
 def _role(value: str | None, *, invite: bool) -> str:
     role = (value or 'MEMBER').upper()
-    if role not in {'OWNER', 'ADMIN', 'MEMBER'}:
+    if role not in {'OWNER', 'ADMIN', 'MEMBER', 'ADMIN_VIEWER'}:
         raise ApiError(400, 'role must be a valid enum value', 'Bad Request')
     return 'MEMBER' if invite and role == 'OWNER' else role
 
@@ -237,7 +238,8 @@ async def _authorize_member(db: AsyncSession, workspace_id: str, user_id: str) -
 
 async def _authorize_manager(db: AsyncSession, workspace_id: str, user_id: str) -> Any:
     membership = await _member_row(db, workspace_id, user_id)
-    if not membership or membership['member_status'] != 'ACTIVE' or membership['member_role'] not in {'OWNER', 'ADMIN'}:
+    # ADMIN_VIEWER passes for reads; its writes are refused app-wide. VI: ADMIN_VIEWER qua được khi đọc; thao tác ghi bị chặn toàn app.
+    if not membership or membership['member_status'] != 'ACTIVE' or membership['member_role'] not in ADMIN_READ_ROLES:
         raise ApiError(403, 'Workspace administrator access is required.', 'Forbidden')
     return membership
 

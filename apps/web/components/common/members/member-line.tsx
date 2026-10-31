@@ -11,7 +11,7 @@ import {
    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { useMembersData } from '@/features/members/members-data';
+import { type InvitableRole, useMembersData } from '@/features/members/members-data';
 import { cn } from '@/lib/utils';
 import type { User } from '@/types/users';
 import { format, formatDistanceToNowStrict, isValid } from 'date-fns';
@@ -56,7 +56,7 @@ export default function MemberLine({ user }: MemberLineProps) {
            ? 'Owner'
            : user.role;
 
-   const updateRole = async (role: 'MEMBER' | 'ADMIN') => {
+   const updateRole = async (role: InvitableRole) => {
       try {
          await changeMemberRole(user, role);
          toast.success('Member role updated.');
@@ -171,6 +171,12 @@ export default function MemberLine({ user }: MemberLineProps) {
                               onSelect={() => void updateRole('ADMIN')}
                            >
                               Make admin
+                           </DropdownMenuItem>
+                           <DropdownMenuItem
+                              disabled={user.role === 'Admin (read-only)'}
+                              onSelect={() => void updateRole('ADMIN_VIEWER')}
+                           >
+                              Make read-only admin
                            </DropdownMenuItem>
                         </>
                      )}

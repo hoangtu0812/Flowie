@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...core.clock import _utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import _cuid
+from ..access.read_only import ADMIN_READ_ROLES
 from ...services.microsoft_teams import masked_webhook
 from .ai import analyze_workspace
 from .feeds import fetch_feed, news_card, parse_feed
@@ -35,7 +36,7 @@ async def member_role(db: AsyncSession, workspace_id: str, user_id: str) -> str:
 
 
 async def require_manager(db: AsyncSession, workspace_id: str, user_id: str) -> None:
-    if await member_role(db, workspace_id, user_id) not in ('OWNER', 'ADMIN'):
+    if await member_role(db, workspace_id, user_id) not in ADMIN_READ_ROLES:
         raise ApiError(403, 'Workspace administrator access is required.', 'Forbidden')
 
 

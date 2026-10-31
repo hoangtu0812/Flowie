@@ -1,6 +1,10 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { authenticatedFetch, loadCurrentWorkspaceMembership } from '@/lib/workspaces';
+import {
+   authenticatedFetch,
+   loadCurrentWorkspaceMembership,
+   managesWorkspace,
+} from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
 
 export function useWorkspaceTeams(org: string) {
@@ -25,7 +29,7 @@ export function useWorkspaceTeams(org: string) {
             setResult({
                org,
                workspace: member.workspace.id,
-               manager: member.role !== 'MEMBER',
+               manager: managesWorkspace(member.role),
                teams: teams.filter((row) => row.joined),
             });
       })().catch((reason) => {

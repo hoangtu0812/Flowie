@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { loadCurrentWorkspace } from '@/lib/workspaces';
+import { loadCurrentWorkspace, type WorkspaceRole } from '@/lib/workspaces';
 
 export type LiveMember = {
    id: string;
@@ -13,7 +13,7 @@ export type LiveMember = {
    createdAt: string;
    joinedAt: string;
    timezone: string;
-   workspaceRole: 'OWNER' | 'ADMIN' | 'MEMBER';
+   workspaceRole: WorkspaceRole;
    teams: Array<{
       id: string;
       name: string;

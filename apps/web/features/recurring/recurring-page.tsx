@@ -15,7 +15,11 @@ import { DesignSurface } from '@/components/common/design-surface';
 import { RecoveryScreen } from '@/features/shared/recovery-screen';
 import { ResourcePagination } from '@/features/shared/resource-pagination';
 import { usePagedResource } from '@/features/shared/use-paged-resource';
-import { authenticatedFetch, loadCurrentWorkspaceMembership } from '@/lib/workspaces';
+import {
+   authenticatedFetch,
+   loadCurrentWorkspaceMembership,
+   managesWorkspace,
+} from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
 import { ScheduleEditor } from './schedule-editor';
 import { recurringApi, type Schedule, type Run } from './types';
@@ -46,7 +50,7 @@ export default function RecurringPage() {
             setScope({
                org: orgId,
                workspace: member.workspace.id,
-               manager: member.role !== 'MEMBER',
+               manager: managesWorkspace(member.role),
                teams: teams.filter((row) => row.joined),
             });
       })().catch((reason) => {
