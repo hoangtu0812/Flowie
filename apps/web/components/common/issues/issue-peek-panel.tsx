@@ -22,6 +22,10 @@ import { useParams, usePathname } from 'next/navigation';
 import { isProjectPath, issueHref } from '@/lib/issue-route';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import {
+   priorityPresentation,
+   projectStatusPresentation,
+} from '@/components/common/projects/details/project-detail-ui-adapter';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -38,14 +42,34 @@ type PeekIssue = {
    estimatedEffort?: number | null;
    actualEffort?: number | null;
    statusId: string;
-   status: { name: string; color: string };
+   status: { name: string; color: string; category?: string };
    priority: string;
    assignee: { id: string; name: string; avatarUrl: string | null } | null;
    project: { name: string } | null;
    labelLinks: Array<{ label: { id: string; name: string; color: string } }>;
 };
 
-type PeekOption = { id: string; name: string; color?: string; avatarUrl?: string | null };
+type PeekOption = {
+   id: string;
+   name: string;
+   color?: string;
+   category?: string;
+   avatarUrl?: string | null;
+};
+
+/**
+ * Status and priority glyphs as the issue lists draw them, so the panel reads the same.
+ * VI: Biểu tượng trạng thái và độ ưu tiên giống danh sách issue, để panel hiển thị nhất quán.
+ */
+function StatusGlyph({ name, category }: { name: string; category?: string }) {
+   const Icon = projectStatusPresentation(name, category).icon;
+   return <Icon />;
+}
+
+function PriorityGlyph({ value }: { value: string }) {
+   const Icon = priorityPresentation(value).icon;
+   return <Icon className="size-4" />;
+}
 
 function Property({
    icon,
@@ -222,7 +246,11 @@ export function IssuePeekPanel({
       void patch({ statusId: status.id }, (current) => ({
          ...current,
          statusId: status.id,
-         status: { name: status.name, color: status.color ?? current.status.color },
+         status: {
+            name: status.name,
+            color: status.color ?? current.status.color,
+            category: status.category,
+         },
       }));
 
    const setPriority = (priority: string) =>
@@ -321,7 +349,7 @@ export function IssuePeekPanel({
          </div>
          <div className="py-3 border-b">
             <EditableProperty
-               icon={<Circle className="size-4" style={{ color: issue.status.color }} />}
+               icon={<StatusGlyph name={issue.status.name} category={issue.status.category} />}
                label="Status"
                display={issue.status.name}
                title="Change status"
@@ -334,10 +362,7 @@ export function IssuePeekPanel({
                      onSelect={() => setStatus(status)}
                   >
                      <span className="inline-flex items-center gap-2">
-                        <span
-                           className="size-2.5 rounded-full"
-                           style={{ backgroundColor: status.color }}
-                        />
+                        <StatusGlyph name={status.name} category={status.category} />
                         {status.name}
                      </span>
                   </OptionRow>
@@ -349,9 +374,9 @@ export function IssuePeekPanel({
                )}
             </EditableProperty>
             <EditableProperty
-               icon={<Tag className="size-4" />}
+               icon={<PriorityGlyph value={issue.priority} />}
                label="Priority"
-               display={issue.priority.toLowerCase()}
+               display={priorityPresentation(issue.priority).name}
                title="Change priority"
                {...editorProps('priority')}
             >
@@ -361,7 +386,10 @@ export function IssuePeekPanel({
                      selected={priority.toLowerCase() === issue.priority.toLowerCase()}
                      onSelect={() => setPriority(priority)}
                   >
-                     {priority.toLowerCase()}
+                     <span className="inline-flex items-center gap-2">
+                        <PriorityGlyph value={priority} />
+                        {priorityPresentation(priority).name}
+                     </span>
                   </OptionRow>
                ))}
             </EditableProperty>

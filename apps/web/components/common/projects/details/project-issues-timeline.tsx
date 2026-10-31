@@ -70,7 +70,15 @@ function IssueBar({
  * Project "Timeline" tab: the project's issues on the same month scale the
  * Projects timeline uses, so the two screens read as one instrument.
  */
-export function ProjectIssuesTimeline({ issues }: { issues: Issue[] }) {
+export function ProjectIssuesTimeline({
+   issues,
+   onIssueChanged,
+}: {
+   issues: Issue[];
+   /** Reloads the project after a save in the peek panel so bars move at once.
+    * VI: Tải lại dự án sau khi lưu trong panel để thanh timeline đổi ngay. */
+   onIssueChanged?: () => void;
+}) {
    const [zoom, setZoom] = useState<TimelineZoom>('week');
    const [todayIso, setTodayIso] = useState<string | null>(null);
    const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
@@ -194,7 +202,11 @@ export function ProjectIssuesTimeline({ issues }: { issues: Issue[] }) {
    return (
       <div className="w-full h-full flex flex-col overflow-hidden">
          {peekIssueId !== null && (
-            <IssuePeekPanel issueId={peekIssueId} onClose={() => setPeekIssueId(null)} />
+            <IssuePeekPanel
+               issueId={peekIssueId}
+               onClose={() => setPeekIssueId(null)}
+               onChanged={onIssueChanged}
+            />
          )}
          <div className="flex items-center justify-end gap-2 px-6 h-10 border-b shrink-0">
             <Button

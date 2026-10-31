@@ -138,6 +138,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
+- The project Timeline's issue panel shows status and priority with the same icons and names as the issue lists (for example "High" with its bars instead of "high"), and saving a status, priority, due date or schedule there moves the bar at once without reloading the page. Web only; no API or schema change. (DTD-195)
+  VI: Panel issue của Timeline dự án hiển thị trạng thái và độ ưu tiên với cùng icon và tên như danh sách issue (ví dụ "High" kèm biểu tượng cột thay vì "high"), và lưu trạng thái, độ ưu tiên, ngày đến hạn hoặc lịch trong panel làm thanh timeline đổi ngay mà không cần tải lại trang. Chỉ đổi web; không đổi API hay schema. (DTD-195)
+
 - Live notifications work again after the read-only admin role: the role's write guard also ran for WebSocket connections, where it could not get a request and broke the notification stream. The guard now skips anything but HTTP writes and opens its own short database session only when it must check a role, so streams never hold a database connection. API only; no schema change. (DTD-190, #93)
   VI: Thông báo realtime hoạt động lại sau khi có role quản trị chỉ đọc: lớp chặn ghi của role này chạy cả cho kết nối WebSocket, nơi nó không lấy được request nên làm hỏng luồng thông báo. Giờ lớp chặn bỏ qua mọi thứ không phải thao tác ghi qua HTTP và chỉ mở session database ngắn của riêng nó khi cần kiểm tra role, nên luồng stream không bao giờ giữ kết nối database. Chỉ đổi API; không đổi schema. (DTD-190)
 
