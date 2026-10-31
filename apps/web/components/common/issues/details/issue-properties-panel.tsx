@@ -187,14 +187,21 @@ export function IssuePropertiesPanel({ issue, detail, reviews }: IssueProperties
                   <PrioritySelector priority={issue.priority} issueId={issue.id} />
                   <span className="text-sm">{issue.priority.name}</span>
                </div>
-               <div className="flex items-center gap-2 mt-0.5">
-                  <AssigneeUser user={issue.assignee} issueId={issue.id} />
-                  <span className="text-sm">
-                     {issue.assignee ? issue.assignee.name : tx('Assign')}
-                  </span>
-               </div>
-               <div className="flex items-center gap-2 mt-0.5">
+               <div className="mt-0.5">
                   <AssigneeUser
+                     row
+                     user={issue.assignee}
+                     issueId={issue.id}
+                     labels={{
+                        field: tx('Assignee'),
+                        menu: tx('Assign to...'),
+                        empty: tx('No assignee'),
+                     }}
+                  />
+               </div>
+               <div className="mt-0.5">
+                  <AssigneeUser
+                     row
                      user={issue.reporter ?? null}
                      issueId={issue.id}
                      onAssign={setReporter}
@@ -204,12 +211,6 @@ export function IssuePropertiesPanel({ issue, detail, reviews }: IssueProperties
                         empty: tx('Creator'),
                      }}
                   />
-                  <span className="w-20 shrink-0 text-xs text-muted-foreground">
-                     {tx('Reporter')}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-sm">
-                     {issue.reporter?.name ?? '—'}
-                  </span>
                </div>
                <div className="mt-0.5">
                   <IssueTypeSelector
