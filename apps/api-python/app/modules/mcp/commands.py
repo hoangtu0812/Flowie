@@ -29,7 +29,7 @@ class CommandService:
     async def prepare(self, name: str, payload) -> None:
         if name == "create_attachment_upload":
             self.target = await self.policy.issue(payload.issueId)
-        elif name in {"update_issue", "transition_issue", "add_comment"}:
+        elif name in {"update_issue", "transition_issue", "add_comment", "start_issue", "finish_issue"}:
             self.target = await self.policy.issue(payload.issueId, lock=True)
             if name == "update_issue" and "projectId" in payload.model_fields_set:
                 await self.policy.destination(payload.projectId, self.target["team_id"])
@@ -39,7 +39,7 @@ class CommandService:
             # VI: chạy trong issues.update_issue để MCP và web dùng chung.
             if name == "update_issue" and payload.parentIssueId:
                 self.parent_id = (await self.policy.issue(payload.parentIssueId))["id"]
-            if name == "transition_issue":
+            if name in {"transition_issue", "start_issue", "finish_issue"}:
                 self.status_id = payload.statusId or await self.status_by_name(payload.status)
         elif name == "update_comment":
             self.target = await self.policy.comment(payload.commentId, lock=True)
@@ -153,6 +153,34 @@ class CommandService:
                     CreateIssueInput(workspaceId=workspace, **values), actor, self.db
                 )
             )["data"]
+        if name in {"start_issue", "finish_issue"}:
+            fields = (
+                ("startDate", "targetDate", "dueDate", "estimatedEffort")
+                if name == "start_issue"
+                else ("actualEffort",)
+            )
+            changes = {key: getattr(payload, key) for key in fields if key in payload.model_fields_set}
+            result = (
+                await issues.update_issue(
+                    self.target["id"],
+                    UpdateIssueInput(**changes, statusId=self.status_id),
+                    workspace,
+                    actor,
+                    self.db,
+                )
+            )["data"]
+            comment = (
+                await comments.create_comment(
+                    CreateCommentInput(
+                        workspaceId=workspace,
+                        issueId=self.target["id"],
+                        content=payload.plan if name == "start_issue" else payload.result,
+                    ),
+                    actor,
+                    self.db,
+                )
+            )["data"]
+            return {**result, "commentId": comment["id"]}
         if name in {"update_issue", "transition_issue"}:
             if name == "transition_issue":
                 values = {"statusId": self.status_id}

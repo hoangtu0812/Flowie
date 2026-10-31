@@ -2424,6 +2424,42 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("Rule one.", document["content"])
         self.assertIn("Second rule.", document["content"])
 
+    async def test_start_and_finish_issue_in_one_call_each(self):
+        # Each call writes the schedule or actual effort, the comment and the status together;
+        # a failing part (unknown status) writes nothing.
+        # VI: Mỗi lời gọi ghi lịch hoặc effort thực tế, comment và trạng thái cùng lúc; một phần
+        # VI: lỗi (trạng thái lạ) thì không ghi gì.
+        with self.assertRaises(ApiError):
+            await self.call(
+                "start_issue", issueId=self.issue["id"], expectedVersion=self.issue["version"],
+                plan="Never posted", status="No such status", idempotencyKey="start-unknown",
+            )
+        started = (
+            await self.call(
+                "start_issue", issueId=self.issue["identifier"], expectedVersion=self.issue["version"],
+                plan="Plan: fix it in 1 man-day.", startDate="2099-01-01", targetDate="2099-01-02",
+                dueDate="2099-01-03", estimatedEffort=1, idempotencyKey="start-ok",
+            )
+        )["data"]
+        self.assertEqual(
+            (started["status"]["name"], started["estimatedEffort"], started["planningWarnings"]),
+            ("In Progress", 1, []),
+        )
+        self.assertNotIn("plan", started)
+        finished = (
+            await self.call(
+                "finish_issue", issueId=self.issue["id"], expectedVersion=started["version"],
+                result="Done: PR merged.", actualEffort=0.5, idempotencyKey="finish-ok",
+            )
+        )["data"]
+        self.assertEqual((finished["status"]["name"], finished["actualEffort"]), ("Technical Review", 0.5))
+        comments = (await self.call("list_comments", issueId=self.issue["id"]))["items"]
+        contents = [comment["content"] for comment in comments]
+        self.assertIn("Plan: fix it in 1 man-day.", contents)
+        self.assertIn("Done: PR merged.", contents)
+        self.assertNotIn("Never posted", contents)
+        self.assertEqual({started["commentId"], finished["commentId"]} - {c["id"] for c in comments}, set())
+
     async def test_attachment_upload_url_is_scoped_single_use_and_rechecked(self):
         # The tool signs a URL for an issue in scope; posting a file there stores it once, as the
         # connection owner, and a revoked connection or forged/expired URL stores nothing.

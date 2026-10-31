@@ -16,7 +16,7 @@ ISSUE_FIELDS = (
 # VI: Văn bản dài agent đã có sẵn; gửi lại nó là nguyên nhân làm kết quả ghi lớn.
 LONG_TEXT = {
     "description", "environment", "reproductionSteps", "expectedResult", "actualResult",
-    "resolution", "reason", "content",
+    "resolution", "reason", "content", "plan", "result",
 }
 # Request fields whose stored form has another name in the issue record.
 # VI: Trường gửi lên có tên khác trong bản ghi issue.
