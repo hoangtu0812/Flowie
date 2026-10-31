@@ -56,7 +56,7 @@ type McpCallCounts = { calls: number; failed: number; denied: number };
 export type McpAuditSummary = {
    window: McpAuditWindow;
    totals: McpCallCounts & { p95Ms: number | null };
-   tools: (McpCallCounts & { tool: string; p95Ms: number | null })[];
+   tools: (McpCallCounts & { tool: string; p95Ms: number | null; avgResultBytes: number | null })[];
    connections: (McpCallCounts & {
       connectionId: string | null;
       connectionName: string | null;

@@ -761,8 +761,12 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             reproductionSteps="Open and close the editor",
             idempotencyKey="structured-bug-edit",
         )
+        # Write results leave out long text the agent just sent; get_issue returns it.
+        # VI: Kết quả ghi bỏ văn bản dài agent vừa gửi; get_issue trả lại nó.
+        self.assertNotIn("reproductionSteps", updated["data"])
         self.assertEqual(
-            updated["data"]["reproductionSteps"], "Open and close the editor"
+            (await self.call("get_issue", issueId=bug["id"]))["reproductionSteps"],
+            "Open and close the editor",
         )
         legacy = await self.call("get_issue", issueId=self.issue["id"])
         self.assertEqual(legacy["issueType"], "TASK")
@@ -2301,6 +2305,124 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                     {"workspace": self.workspace, "category": category},
                 )
             ).scalar_one()
+
+    async def test_lean_results_status_names_edits_and_schema_errors(self):
+        # Token savings: short write results, project documents only on request, status by
+        # name, document edits instead of full content, and schema errors that name the field.
+        # VI: Tiết kiệm token: kết quả ghi ngắn, tài liệu dự án chỉ khi yêu cầu, trạng thái theo
+        # VI: tên, sửa tài liệu theo đoạn thay vì gửi cả bài, và lỗi tham số nêu rõ trường.
+        moved = (
+            await self.call(
+                "transition_issue",
+                issueId=self.issue["id"],
+                status="  in PROGRESS ",
+                reason="Start by name",
+                expectedVersion=self.issue["version"],
+                idempotencyKey="lean-status-name",
+            )
+        )["data"]
+        self.assertEqual(moved["status"]["name"], "In Progress")
+        self.assertNotIn("description", moved)
+        self.assertLessEqual(
+            set(moved),
+            {"id", "identifier", "title", "version", "status", "startDate", "targetDate",
+             "dueDate", "estimatedEffort", "actualEffort", "planningWarnings"},
+        )
+        with self.assertRaises(ApiError) as unknown:
+            await self.call(
+                "transition_issue",
+                issueId=self.issue["id"],
+                status="No such status",
+                reason="Unknown status",
+                expectedVersion=moved["version"],
+                idempotencyKey="lean-status-unknown",
+            )
+        self.assertIn("In Progress", unknown.exception.message)
+        updated = (
+            await self.call(
+                "update_issue",
+                issueId=self.issue["id"],
+                priority="HIGH",
+                assigneeId=self.user["id"],
+                description="Long text the agent already has",
+                expectedVersion=moved["version"],
+                idempotencyKey="lean-update",
+            )
+        )["data"]
+        self.assertEqual((updated["priority"], updated["assignee"]["id"]), ("HIGH", self.user["id"]))
+        self.assertNotIn("description", updated)
+        comment = (
+            await self.call(
+                "add_comment", issueId=self.issue["id"], content="Lean comment", idempotencyKey="lean-comment"
+            )
+        )["data"]
+        self.assertEqual(set(comment), {"id", "issueId", "parentCommentId", "version", "createdAt"})
+
+        context = await self.call("get_issue_context", issueId=self.issue["id"])
+        self.assertNotIn("projectDocuments", context)
+        created = await self.call(
+            "create_document", projectId=self.project, title="Lean spec",
+            content="# Spec\n\nOld rule.\n\nKeep me.", idempotencyKey="lean-doc",
+        )
+        document = created["data"]
+        listed = await self.call("get_issue_context", issueId=self.issue["id"], includeProjectDocuments=True)
+        self.assertIn(
+            {"id": document["id"], "title": "Lean spec"},
+            [{key: item[key] for key in ("id", "title")} for item in listed["projectDocuments"]["items"]],
+        )
+        self.assertNotIn("excerpt", listed["projectDocuments"]["items"][0])
+        edited = await self.call(
+            "update_document", documentId=document["id"], expectedVersion=document["version"],
+            edits=[{"oldText": "Old rule.", "newText": "New rule."}], idempotencyKey="lean-edit",
+        )
+        self.assertEqual(edited["data"]["content"], "# Spec\n\nNew rule.\n\nKeep me.")
+        for edits, key in (
+            ([{"oldText": "Missing", "newText": "x"}], "lean-edit-missing"),
+            ([{"oldText": "e", "newText": "x"}], "lean-edit-ambiguous"),
+        ):
+            with self.assertRaises(ApiError) as failed:
+                await self.call(
+                    "update_document", documentId=document["id"], expectedVersion=edited["data"]["version"],
+                    edits=edits, idempotencyKey=key,
+                )
+            self.assertEqual(failed.exception.status_code, 409)
+        with self.assertRaises(ApiError) as wrong:
+            await self.call("get_issue", issue=self.issue["id"])
+        self.assertIn("issueId: Field required", wrong.exception.message)
+        self.assertIn("issue: Extra inputs are not permitted", wrong.exception.message)
+        async with self.factory() as db:
+            sizes = (
+                await db.execute(
+                    text("""SELECT metadata->>'resultBytes' FROM audit_logs WHERE workspace_id=:workspace
+                    AND action='mcp.get_issue_context.succeeded'"""),
+                    {"workspace": self.workspace},
+                )
+            ).scalars().all()
+        self.assertTrue(sizes and all(int(size) > 0 for size in sizes))
+
+    async def test_feature_doc_edits_update_an_existing_document(self):
+        with self.assertRaises(ApiError) as missing:
+            await self.call(
+                "upsert_feature_doc", issueId=self.issue["id"], module="Docs", feature="Edits", docType="FDS",
+                edits=[{"oldText": "a", "newText": "b"}], changeSummary="Edit before create.",
+                idempotencyKey="feature-edit-missing",
+            )
+        self.assertEqual(missing.exception.status_code, 404)
+        await self.call(
+            "upsert_feature_doc", issueId=self.issue["id"], module="Docs", feature="Edits", docType="FDS",
+            content="# FDS\n\nRule one.", changeSummary="Create.", idempotencyKey="feature-edit-create",
+        )
+        updated = (
+            await self.call(
+                "upsert_feature_doc", issueId=self.issue["id"], module="Docs", feature="Edits", docType="FDS",
+                edits=[{"oldText": "Rule one.", "newText": "Rule two."}], changeSummary="Second rule.",
+                idempotencyKey="feature-edit-update",
+            )
+        )["data"]
+        document = await self.call("get_document", documentId=updated["id"])
+        self.assertIn("Rule two.", document["content"])
+        self.assertNotIn("Rule one.", document["content"])
+        self.assertIn("Second rule.", document["content"])
 
     async def test_attachment_upload_url_is_scoped_single_use_and_rechecked(self):
         # The tool signs a URL for an issue in scope; posting a file there stores it once, as the

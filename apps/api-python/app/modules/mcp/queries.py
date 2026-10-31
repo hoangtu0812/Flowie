@@ -393,6 +393,21 @@ class QueryService:
             ],
         }
 
+    async def _project_titles(self, project_id: str) -> dict:
+        """Titles of the project's documents without excerpts, for an agent looking for one.
+        VI: Tiêu đề tài liệu của dự án, không kèm đoạn trích, cho agent đang tìm một tài liệu.
+        """
+        from .contracts import SearchDocumentsInput
+
+        page = await self.documents(SearchDocumentsInput(projectId=project_id, limit=25))
+        return {
+            "items": [
+                {key: item.get(key) for key in ("id", "title", "folderId", "updatedAt")}
+                for item in page.get("items", [])
+            ],
+            "truncated": page.get("truncated", False),
+        }
+
     async def feature_docs(self, payload) -> dict:
         from .feature_docs import read_feature_docs
 
@@ -515,11 +530,13 @@ class QueryService:
         return {
             "issue": detail,
             "planning": planning_summary(detail, hcm_today()),
-            "projectDocuments": await self.documents(
-                SearchDocumentsInput(projectId=issue["project_id"], limit=25)
-            )
-            if issue["project_id"] and "documents:read" in self.principal.scopes
-            else {"unavailable": True},
+            **(
+                {"projectDocuments": await self._project_titles(issue["project_id"])}
+                if payload.includeProjectDocuments
+                and issue["project_id"]
+                and "documents:read" in self.principal.scopes
+                else {}
+            ),
             "comments": comments,
             "attachments": {
                 "items": [dict(row) for row in attachments[: payload.limit]],
