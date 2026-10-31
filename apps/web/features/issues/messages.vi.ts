@@ -105,6 +105,7 @@ export const messages = {
    'Hide properties': 'Ẩn thuộc tính',
    'Properties': 'Thuộc tính',
    'Assign': 'Giao việc',
+   'No assignee': 'Chưa giao',
    'Reporter': 'Người báo',
    'Creator': 'Người tạo',
    'Could not change the reporter.': 'Không đổi được người báo.',
