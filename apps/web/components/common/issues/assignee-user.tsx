@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { statusUserColors, User } from '@/mock-data/users';
 import { useIssuesStore } from '@/store/issues-store';
-import { CheckIcon, CircleUserRound, UserIcon } from 'lucide-react';
+import { CheckIcon, CircleUserRound, UserIcon, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 
 interface AssigneeUserProps {
@@ -29,12 +29,14 @@ interface AssigneeUserProps {
     */
    labels?: { field: string; menu: string; empty: string };
    /**
-    * Renders the trigger as a full property row (avatar, field label, name) aligned with the other
-    * labeled rows of the properties panel, without the presence dot, which belongs to list avatars.
-    * VI: Hiển thị nút chọn thành một dòng thuộc tính đầy đủ (avatar, nhãn, tên) thẳng cột với các
-    * VI: dòng có nhãn khác của panel thuộc tính, không có chấm trạng thái, vốn dành cho avatar ở danh sách.
+    * Renders the trigger as a full property row aligned with the other labeled rows of the
+    * properties panel: this field icon, the field label, then the person's avatar beside their
+    * name. The presence dot is left out; it belongs to list avatars.
+    * VI: Hiển thị nút chọn thành một dòng thuộc tính đầy đủ, thẳng cột với các dòng có nhãn khác
+    * VI: của panel thuộc tính: icon của trường này, nhãn trường, rồi avatar cạnh tên người. Không
+    * VI: có chấm trạng thái, vốn dành cho avatar ở danh sách.
     */
-   row?: boolean;
+   rowIcon?: LucideIcon;
 }
 
 const assigneeLabels = { field: 'Assignee', menu: 'Assign to...', empty: 'No assignee' };
@@ -44,8 +46,9 @@ export function AssigneeUser({
    issueId,
    onAssign,
    labels = assigneeLabels,
-   row = false,
+   rowIcon: RowIcon,
 }: AssigneeUserProps) {
+   const row = Boolean(RowIcon);
    const [open, setOpen] = useState(false);
    const [saving, setSaving] = useState(false);
    const { members, updateIssueAssignee } = useIssuesStore();
@@ -61,12 +64,12 @@ export function AssigneeUser({
    const renderAvatar = () => {
       if (row) {
          return user ? (
-            <Avatar className="size-4 shrink-0">
+            <Avatar className="size-5 shrink-0">
                <AvatarImage src={user.avatarUrl} alt="" />
-               <AvatarFallback className="text-[9px]">{user.name[0]}</AvatarFallback>
+               <AvatarFallback className="text-[10px]">{user.name[0]}</AvatarFallback>
             </Avatar>
          ) : (
-            <CircleUserRound className="size-4 shrink-0 text-muted-foreground" />
+            <CircleUserRound className="size-5 shrink-0 text-muted-foreground" />
          );
       }
       if (user) {
@@ -104,16 +107,19 @@ export function AssigneeUser({
                disabled={saving}
                onClick={(event) => event.stopPropagation()}
             >
-               {renderAvatar()}
-               {row && (
+               {RowIcon ? (
                   <>
+                     <RowIcon className="size-4 shrink-0 text-muted-foreground" />
                      <span className="w-20 shrink-0 text-xs text-muted-foreground">
                         {labels.field}
                      </span>
-                     <span className="min-w-0 flex-1 truncate text-sm">
-                        {user?.name ?? labels.empty}
+                     <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                        {renderAvatar()}
+                        <span className="truncate text-sm">{user?.name ?? labels.empty}</span>
                      </span>
                   </>
+               ) : (
+                  renderAvatar()
                )}
                {!row && user && (
                   <span
