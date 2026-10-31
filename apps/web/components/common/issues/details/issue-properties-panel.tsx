@@ -24,7 +24,17 @@ import { IssueDetail } from '@/mock-data/issue-details';
 import { Issue } from '@/mock-data/issues';
 import type { User } from '@/mock-data/users';
 import { useIssuesStore } from '@/store/issues-store';
-import { Box, CalendarDays, CalendarPlus, CalendarRange, Check, Plus, Timer } from 'lucide-react';
+import {
+   Box,
+   CalendarDays,
+   CalendarPlus,
+   CalendarRange,
+   Check,
+   Plus,
+   Timer,
+   UserPen,
+   UserRound,
+} from 'lucide-react';
 import { format } from 'date-fns';
 import { useState } from 'react';
 import { AssigneeUser } from '../assignee-user';
@@ -189,7 +199,7 @@ export function IssuePropertiesPanel({ issue, detail, reviews }: IssueProperties
                </div>
                <div className="mt-0.5">
                   <AssigneeUser
-                     row
+                     rowIcon={UserRound}
                      user={issue.assignee}
                      issueId={issue.id}
                      labels={{
@@ -201,7 +211,7 @@ export function IssuePropertiesPanel({ issue, detail, reviews }: IssueProperties
                </div>
                <div className="mt-0.5">
                   <AssigneeUser
-                     row
+                     rowIcon={UserPen}
                      user={issue.reporter ?? null}
                      issueId={issue.id}
                      onAssign={setReporter}
