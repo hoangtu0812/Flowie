@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
+from ..core.slugs import RESERVED_WORKSPACE_SLUGS, url_slug
 from ..db.session import get_session
 from .auth import _cuid, _normalized_email, _utcnow, create_workspace_bootstrap, current_user
 
@@ -34,6 +35,8 @@ class CreateWorkspaceInput(BaseModel):
 
 class UpdateWorkspaceInput(BaseModel):
     icon: str | None = Field(default=None, max_length=16)
+    # Only the fields sent are changed. VI: Chỉ đổi các trường được gửi lên.
+    slug: str | None = Field(default=None, max_length=63)
 
 
 class DeleteWorkspaceInput(BaseModel):
@@ -378,6 +381,35 @@ async def _write_display_preferences(
     return {'settings': row['settings'], 'updatedAt': row['updated_at']}
 
 
+@router.get('/resolve')
+async def resolve_workspace(
+    key: str = Query(min_length=1, max_length=100),
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, str]]:
+    """Turns the first URL segment into the workspace id and current slug when the caller is an
+    active member. The key may be the id, the current slug or an earlier slug; an id wins. Anything
+    else, including a workspace the caller is not in, is 404 so slugs reveal nothing.
+    VI: Đổi đoạn URL đầu tiên thành id và slug hiện tại của workspace khi người gọi là thành viên
+    VI: đang hoạt động. Khoá có thể là id, slug hiện tại hoặc slug cũ; id được ưu tiên. Mọi trường hợp
+    VI: khác, kể cả workspace người gọi không thuộc, trả 404 để slug không làm lộ thông tin.
+    """
+    row = (
+        await db.execute(
+            text(
+                '''SELECT w.id, w.slug FROM workspaces w
+                   JOIN workspace_members m ON m.workspace_id = w.id AND m.user_id = :user AND m.status = 'ACTIVE'
+                   WHERE w.id = :key OR w.id = (SELECT s.workspace_id FROM workspace_slugs s WHERE s.slug = lower(:key))
+                   ORDER BY w.id = :key DESC LIMIT 1'''
+            ),
+            {'key': key, 'user': user['id']},
+        )
+    ).mappings().first()
+    if not row:
+        raise ApiError(404, 'Workspace not found.', 'Not Found')
+    return {'data': {'id': row['id'], 'slug': row['slug']}}
+
+
 @router.get('/me')
 async def mine(
     user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)
@@ -526,43 +558,63 @@ async def update_workspace(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
+    """Changes the workspace icon and/or URL slug; OWNER or ADMIN only. Only the fields sent are
+    written, so saving the icon never clears the slug and the reverse. A slug follows the shared
+    rules (`app.core.slugs`) plus the reserved first path segments; one already owned by another
+    workspace, now or earlier, is refused with 409 by the slug trigger, also under concurrency.
+    Each change is written to the audit log with the old and new value.
+    VI: Đổi icon và/hoặc slug URL của workspace; chỉ OWNER hoặc ADMIN. Chỉ ghi các trường được gửi
+    VI: lên, nên lưu icon không bao giờ xoá slug và ngược lại. Slug theo quy tắc dùng chung
+    VI: (`app.core.slugs`) cộng các đoạn path đầu đã dành riêng; slug đã thuộc workspace khác, hiện
+    VI: tại hoặc trước đây, bị trigger slug từ chối với 409, kể cả khi ghi đồng thời. Mỗi thay đổi
+    VI: được ghi vào audit log kèm giá trị cũ và mới.
+    """
     await _authorize_manager(db, workspace_id, user['id'])
-    icon = payload.icon.strip() if payload.icon else None
-    if icon == '':
-        icon = None
-    result = await db.execute(
-        text(
-            '''
-            UPDATE workspaces
-            SET icon = :icon, updated_at = :now
-            WHERE id = :workspace_id
-            RETURNING id
-            '''
-        ),
-        {'workspace_id': workspace_id, 'icon': icon, 'now': _utcnow()},
-    )
-    if not result.scalar_one_or_none():
+    values = payload.model_dump(exclude_unset=True)
+    current = (await db.execute(text('SELECT icon, slug FROM workspaces WHERE id = :id'), {'id': workspace_id})).mappings().first()
+    if not current:
         raise ApiError(404, 'Workspace not found.', 'Not Found')
-    await db.execute(
-        text(
-            '''
-            INSERT INTO audit_logs (
-                id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at
-            ) VALUES (
-                :id, :workspace_id, :actor_id, 'workspace.icon.updated', 'workspace', :entity_id,
-                CAST(:metadata AS jsonb), :now
+    changes: dict[str, Any] = {}
+    if 'icon' in values:
+        changes['icon'] = (values['icon'] or '').strip() or None
+    if 'slug' in values:
+        changes['slug'] = url_slug(values['slug'] or '', reserved=RESERVED_WORKSPACE_SLUGS)
+    if changes:
+        sets = ', '.join(f'{column} = :{column}' for column in changes)
+        try:
+            await db.execute(
+                text(f'UPDATE workspaces SET {sets}, updated_at = :now WHERE id = :workspace_id'),
+                {**changes, 'workspace_id': workspace_id, 'now': _utcnow()},
             )
-            '''
-        ),
-        {
-            'id': _cuid(),
-            'workspace_id': workspace_id,
-            'actor_id': user['id'],
-            'entity_id': workspace_id,
-            'metadata': json.dumps({'icon': icon}),
-            'now': _utcnow(),
-        },
-    )
+        except IntegrityError as error:
+            await db.rollback()
+            if 'slug' in str(getattr(error, 'orig', error)):
+                raise ApiError(409, 'This slug is already used by another workspace.', 'Conflict') from error
+            raise
+    for column, value in changes.items():
+        if value == current[column]:
+            continue
+        await db.execute(
+            text(
+                '''
+                INSERT INTO audit_logs (
+                    id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at
+                ) VALUES (
+                    :id, :workspace_id, :actor_id, :action, 'workspace', :entity_id,
+                    CAST(:metadata AS jsonb), :now
+                )
+                '''
+            ),
+            {
+                'id': _cuid(),
+                'workspace_id': workspace_id,
+                'actor_id': user['id'],
+                'action': f'workspace.{column}.updated',
+                'entity_id': workspace_id,
+                'metadata': json.dumps({column: value, 'previous': current[column]}),
+                'now': _utcnow(),
+            },
+        )
     await db.commit()
     workspace = await _workspace_summary(db, workspace_id)
     if not workspace:

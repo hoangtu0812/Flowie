@@ -18,10 +18,14 @@ export function resolveWorkspaceRoot(input: WorkspaceRootInput): string | null {
    return null;
 }
 
-/** Resolve persisted IDs against current memberships; renamed or revoked workspaces remain safe. */
+/**
+ * Resolves the saved default workspace (stored by id) to its current URL slug; a revoked
+ * membership gives undefined. VI: Đổi workspace mặc định đã lưu (theo id) thành slug URL hiện tại;
+ * VI: membership đã bị thu hồi trả undefined.
+ */
 export function preferredWorkspaceSlug(
    memberships: { workspace: { id: string; slug: string } }[],
    workspaceId?: string | null
 ): string | undefined {
-   return memberships.find(({ workspace }) => workspace.id === workspaceId)?.workspace.id;
+   return memberships.find(({ workspace }) => workspace.id === workspaceId)?.workspace.slug;
 }

@@ -12,7 +12,7 @@ test('only workspace owners see join and add-member actions', async ({
    await page.getByLabel('Email', { exact: true }).fill(fixture.email);
    await page.getByLabel('Password', { exact: true }).fill(fixture.password);
    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-   await expect(page).toHaveURL(new RegExp(`/${fixture.workspace_id}/`));
+   await expect(page).toHaveURL(new RegExp(`/${fixture.slug}/`));
    const name = `Owner-managed ${testInfo.project.name} ${Date.now()}`;
    const created = await context.request.post(`${api}/teams`, {
       data: {

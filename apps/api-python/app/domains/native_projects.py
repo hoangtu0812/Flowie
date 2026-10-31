@@ -6,7 +6,6 @@ from ..modules.access.projects import _workspace_access as _workspace_access, _w
 from ..core.dates import _date as _date
 
 import json
-import re
 from datetime import datetime
 from typing import Any, Literal, Annotated
 from urllib.parse import urlparse
@@ -19,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
+from ..core.slugs import url_slug
 from ..db.session import get_session
 from ..services.notification_events import (
     create_notification_batch,
@@ -60,27 +60,11 @@ CIRCLE_PROJECT_STATUSES = (
 )
 
 
-PROJECT_SLUG = re.compile(r'[a-z0-9]+(?:-[a-z0-9]+)*')
-# Generated ids are "c" plus 24 lowercase letters or digits; a slug of that shape could be read as
-# an id in /project/<key>, so it is refused.
-# VI: Id sinh ra có dạng "c" cộng 24 chữ thường hoặc số; slug có dạng đó có thể bị hiểu là id trong
-# VI: /project/<key>, nên bị từ chối.
-GENERATED_ID = re.compile(r'c[a-z0-9]{24}')
-
-
 def _project_slug(value: str) -> str:
-    """Validates a project URL slug without rewriting it: 1–63 characters of a-z, 0-9 and single
-    hyphens, no hyphen at either end, and not shaped like a generated id. Uppercase, accents,
-    spaces, underscores and slashes are rejected so what the user typed is exactly what is saved.
-    VI: Kiểm tra slug URL của dự án mà không tự sửa: 1–63 ký tự gồm a-z, 0-9 và dấu gạch nối đơn,
-    VI: không có gạch nối ở hai đầu, và không có dạng giống id sinh ra. Chữ hoa, dấu, khoảng trắng,
-    VI: gạch dưới và dấu gạch chéo bị từ chối để giá trị lưu đúng như người dùng nhập.
+    """Validates a project URL slug with the shared rules (`app.core.slugs`), without rewriting it.
+    VI: Kiểm tra slug URL của dự án theo quy tắc dùng chung (`app.core.slugs`), không tự sửa.
     """
-    if not (1 <= len(value) <= 63 and PROJECT_SLUG.fullmatch(value)):
-        raise ApiError(400, 'Slug must be 1–63 characters of a-z, 0-9 and single hyphens, without a hyphen at the start or end.', 'Bad Request')
-    if GENERATED_ID.fullmatch(value):
-        raise ApiError(400, 'This slug looks like a project id. Choose a more readable slug.', 'Bad Request')
-    return value
+    return url_slug(value)
 
 
 def _slug_conflict(error: IntegrityError) -> bool:
