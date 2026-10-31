@@ -13,7 +13,11 @@ import { TextInput } from '@astryxdesign/core/TextInput';
 import { Selector } from '@astryxdesign/core/Selector';
 import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
 import { DesignSurface } from '@/components/common/design-surface';
-import { authenticatedFetch, loadCurrentWorkspaceMembership } from '@/lib/workspaces';
+import {
+   authenticatedFetch,
+   loadCurrentWorkspaceMembership,
+   managesWorkspace,
+} from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
 import { SettingsShell } from '@/components/common/settings/shared';
 
@@ -66,7 +70,7 @@ export default function WorkflowSettings() {
          );
          if (request !== generation.current || currentOrg.current !== orgId) return;
          setWorkspace(membership.workspace.id);
-         setCanEdit(membership.role !== 'MEMBER');
+         setCanEdit(managesWorkspace(membership.role));
          setRows(data);
       } catch (reason) {
          if (request === generation.current && currentOrg.current === orgId)

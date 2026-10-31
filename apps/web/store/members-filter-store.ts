@@ -1,6 +1,7 @@
 'use client';
 
 import { parseAsArrayOf, parseAsString, parseAsStringLiteral, useQueryStates } from 'nuqs';
+import type { User } from '@/types/users';
 
 export type MembersSort =
    | 'name-asc'
@@ -21,13 +22,13 @@ const SORTS: MembersSort[] = [
 
 export interface MembersFilterState {
    filters: {
-      role: ('Guest' | 'Member' | 'Admin' | 'Application')[];
+      role: User['role'][];
    };
    sort: MembersSort;
 
    setSort: (sort: MembersSort) => void;
    setFilter: (type: 'role', ids: string[]) => void;
-   toggleFilter: (type: 'role', id: 'Guest' | 'Member' | 'Admin' | 'Application') => void;
+   toggleFilter: (type: 'role', id: User['role']) => void;
    clearFilters: () => void;
    clearFilterType: (type: 'role') => void;
 
@@ -44,7 +45,7 @@ const parsers = {
 export function useMembersFilterStore(): MembersFilterState {
    const [state, setState] = useQueryStates(parsers, { history: 'replace' });
 
-   const filters = { role: state.role as ('Guest' | 'Member' | 'Admin' | 'Application')[] };
+   const filters = { role: state.role as User['role'][] };
 
    return {
       filters,

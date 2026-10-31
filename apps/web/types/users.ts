@@ -4,12 +4,12 @@ export interface User {
    avatarUrl: string;
    email: string;
    status: 'online' | 'offline' | 'away';
-   role: 'Member' | 'Admin' | 'Guest' | 'Application';
+   role: 'Member' | 'Admin' | 'Admin (read-only)' | 'Guest' | 'Application';
    joinedDate: string;
    teamIds: string[];
    timezone: string;
    lastSeenAt?: string | null;
    workspaceMemberId?: string;
-   workspaceRole?: 'OWNER' | 'ADMIN' | 'MEMBER';
+   workspaceRole?: 'OWNER' | 'ADMIN' | 'MEMBER' | 'ADMIN_VIEWER';
    membershipStatus?: 'ACTIVE' | 'INVITED';
 }

@@ -117,7 +117,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await mcp_stack.aclose()
             await engine.dispose()
 
-    app = FastAPI(title='Flowie Python API', version='0.1.0', lifespan=lifespan)
+    from fastapi import Depends
+    from .modules.access.read_only import enforce_read_only_role
+    # Read-only workspace admins are refused every write in one place (DTD-190).
+    # VI: Quản trị workspace chỉ đọc bị từ chối mọi thao tác ghi tại một chỗ (DTD-190).
+    app = FastAPI(title='Flowie Python API', version='0.1.0', lifespan=lifespan, dependencies=[Depends(enforce_read_only_role)])
     from .modules.operations.diagnostics import install_diagnostics, build_identity
     install_diagnostics(app)
     app.state.settings = runtime

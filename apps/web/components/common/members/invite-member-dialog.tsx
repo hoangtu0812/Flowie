@@ -10,7 +10,7 @@ import {
    DialogTitle,
 } from '@/components/ui/dialog';
 import { InvitationUserPicker, type InvitationUser } from './invitation-user-picker';
-import { useMembersData } from '@/features/members/members-data';
+import { type InvitableRole, useMembersData } from '@/features/members/members-data';
 import { type FormEvent, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -23,7 +23,7 @@ export function InviteMemberDialog({
 }) {
    const { inviteMember, workspaceLoading, workspaceId } = useMembersData();
    const [person, setPerson] = useState<InvitationUser | null>(null);
-   const [role, setRole] = useState<'MEMBER' | 'ADMIN'>('MEMBER');
+   const [role, setRole] = useState<InvitableRole>('MEMBER');
    const [submitting, setSubmitting] = useState(false);
    useEffect(() => {
       setPerson(null);
@@ -66,10 +66,11 @@ export function InviteMemberDialog({
                   <select
                      className="border-input h-9 w-full rounded-md border bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
                      value={role}
-                     onChange={(event) => setRole(event.target.value as 'MEMBER' | 'ADMIN')}
+                     onChange={(event) => setRole(event.target.value as InvitableRole)}
                   >
                      <option value="MEMBER">Member</option>
                      <option value="ADMIN">Admin</option>
+                     <option value="ADMIN_VIEWER">Admin (read-only)</option>
                   </select>
                </label>
                <DialogFooter>

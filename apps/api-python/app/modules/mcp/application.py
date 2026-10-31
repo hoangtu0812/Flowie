@@ -27,6 +27,21 @@ class ToolApplication:
     def __init__(self, factory, settings):
         self.factory, self.settings = factory, settings
 
+    async def read_only(self, principal) -> bool:
+        """Whether the connection's user is a read-only admin (ADMIN_VIEWER) of its workspace;
+        MCP calls carry no session cookie, so the app-wide write guard does not see them.
+        VI: Người dùng của kết nối có phải quản trị chỉ đọc (ADMIN_VIEWER) của workspace hay không;
+        VI: lời gọi MCP không có cookie phiên nên lớp chặn ghi toàn app không thấy chúng.
+        """
+        async with self.factory() as db:
+            role = (
+                await db.execute(
+                    text("SELECT role FROM workspace_members WHERE workspace_id = :workspace AND user_id = :user AND status = 'ACTIVE'"),
+                    {"workspace": principal.workspace_id, "user": principal.user["id"]},
+                )
+            ).scalar_one_or_none()
+        return role == "ADMIN_VIEWER"
+
     async def call(self, principal, name: str, arguments: dict) -> dict:
         correlation, started = _cuid(), monotonic()
         tool = TOOLS.get(name)
@@ -39,6 +54,8 @@ class ToolApplication:
             principal.require(tool.scope, *tool.extra_scopes)
             if tool.write and not self.settings.mcp_writes_enabled:
                 raise ApiError(403, "MCP writes are disabled.", "Forbidden")
+            if tool.write and await self.read_only(principal):
+                raise ApiError(403, "Your role in this workspace is read-only.", "Forbidden")
             payload = tool.model.model_validate(arguments)
             await consume_quota(self.factory, principal.workspace_id, name)
         except ApiError as error:

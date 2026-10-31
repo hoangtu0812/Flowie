@@ -4,7 +4,7 @@ export interface User {
    avatarUrl: string;
    email: string;
    status: 'online' | 'offline' | 'away';
-   role: 'Member' | 'Admin' | 'Guest' | 'Application';
+   role: 'Member' | 'Admin' | 'Admin (read-only)' | 'Guest' | 'Application';
    joinedDate: string;
    teamIds: string[];
    /** IANA timezone, used to display the member's local time. */

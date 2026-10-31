@@ -12,7 +12,7 @@ export type MemberProfileData = {
    avatarUrl: string | null;
    timezone: string;
    joinedAt: string;
-   workspaceRole: 'OWNER' | 'ADMIN' | 'MEMBER';
+   workspaceRole: 'OWNER' | 'ADMIN' | 'MEMBER' | 'ADMIN_VIEWER';
    lastSeenAt: string | null;
    isOnline: boolean;
    teams: Array<{ id: string; name: string; identifier: string; icon: string | null }>;

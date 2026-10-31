@@ -4,6 +4,7 @@ import {
    authenticatedFetch,
    loadCurrentWorkspace,
    loadCurrentWorkspaceMembership,
+   type WorkspaceRole,
 } from '@/lib/workspaces';
 import type { User } from '@/types/users';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react';
@@ -15,7 +16,7 @@ type ApiMember = {
    id: string;
    userId: string;
    status: 'ACTIVE' | 'INVITED';
-   role: 'OWNER' | 'ADMIN' | 'MEMBER';
+   role: WorkspaceRole;
    joinedAt: string | null;
    createdAt: string;
    user: {
@@ -43,21 +44,28 @@ type MemberData = {
    canInvite: boolean;
    canChangeRole: boolean;
    canRemove: boolean;
-   inviteMember: (email: string, role: 'MEMBER' | 'ADMIN') => Promise<void>;
-   changeMemberRole: (member: User, role: 'MEMBER' | 'ADMIN') => Promise<void>;
+   inviteMember: (email: string, role: InvitableRole) => Promise<void>;
+   changeMemberRole: (member: User, role: InvitableRole) => Promise<void>;
    removeMember: (member: User) => Promise<void>;
 };
 
 const MembersDataContext = createContext<MemberData | null>(null);
 
+/** Roles an admin can give. VI: Các role admin có thể gán. */
+export type InvitableRole = Exclude<WorkspaceRole, 'OWNER'>;
+
 const roleLabel = (role: ApiMember['role']): User['role'] =>
-   role === 'ADMIN' || role === 'OWNER' ? 'Admin' : 'Member';
+   role === 'ADMIN' || role === 'OWNER'
+      ? 'Admin'
+      : role === 'ADMIN_VIEWER'
+        ? 'Admin (read-only)'
+        : 'Member';
 
 function useMembersDataSource(): MemberData {
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [workspaceLoading, setWorkspaceLoading] = useState(true);
    const [members, setMembers] = useState<User[]>([]);
-   const [workspaceRole, setWorkspaceRole] = useState<'OWNER' | 'ADMIN' | 'MEMBER'>('MEMBER');
+   const [workspaceRole, setWorkspaceRole] = useState<WorkspaceRole>('MEMBER');
 
    const load = useCallback(async () => {
       const workspaceMembership = await loadCurrentWorkspace();
@@ -134,7 +142,7 @@ function useMembersDataSource(): MemberData {
    }, [load]);
 
    const inviteMember = useCallback(
-      async (email: string, role: 'MEMBER' | 'ADMIN') => {
+      async (email: string, role: InvitableRole) => {
          if (!workspaceId) throw new Error('Workspace is not ready yet.');
          const response = await authenticatedFetch(`${api}/workspaces/${workspaceId}/invitations`, {
             method: 'POST',
@@ -153,7 +161,7 @@ function useMembersDataSource(): MemberData {
    );
 
    const changeMemberRole = useCallback(
-      async (member: User, role: 'MEMBER' | 'ADMIN') => {
+      async (member: User, role: InvitableRole) => {
          if (!workspaceId || !member.workspaceMemberId)
             throw new Error('Workspace member is not ready yet.');
          const response = await authenticatedFetch(

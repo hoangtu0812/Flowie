@@ -45,11 +45,21 @@ export type WorkspaceSummary = {
    organization?: { id: string; name: string; slug: string };
 };
 
+export type WorkspaceRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'ADMIN_VIEWER';
+
 export type WorkspaceMembership = {
    id: string;
-   role: 'OWNER' | 'ADMIN' | 'MEMBER';
+   role: WorkspaceRole;
    workspace: WorkspaceSummary;
 };
+
+/**
+ * Whether the role may change workspace settings. ADMIN_VIEWER reads admin pages (anything other
+ * than MEMBER) but never edits, and the API refuses its writes.
+ * VI: Role có được sửa cài đặt workspace hay không. ADMIN_VIEWER đọc được trang quản trị (mọi role
+ * VI: khác MEMBER) nhưng không bao giờ sửa, và API từ chối thao tác ghi của role này.
+ */
+export const managesWorkspace = (role: WorkspaceRole) => role === 'OWNER' || role === 'ADMIN';
 
 export async function loadWorkspaceMemberships(): Promise<WorkspaceMembership[]> {
    const response = await authenticatedFetch(`${api}/workspaces/me`);

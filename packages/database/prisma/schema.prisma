@@ -92,6 +92,9 @@ enum WorkspaceMemberRole {
   OWNER
   ADMIN
   MEMBER
+  /// Reads everything an admin can read (settings, audit, operations…) but never writes.
+  /// VI: Đọc được mọi thứ admin đọc được (settings, audit, operations…) nhưng không bao giờ ghi.
+  ADMIN_VIEWER
 }
 
 enum TeamMemberRole {
