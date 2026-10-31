@@ -24,6 +24,7 @@ class CommandService:
         self.policy = AccessPolicy(db, principal)
         self.target: dict | None = None
         self.parent_id: str | None = None
+        self.status_id: str | None = None
 
     async def prepare(self, name: str, payload) -> None:
         if name == "create_attachment_upload":
@@ -38,6 +39,8 @@ class CommandService:
             # VI: chạy trong issues.update_issue để MCP và web dùng chung.
             if name == "update_issue" and payload.parentIssueId:
                 self.parent_id = (await self.policy.issue(payload.parentIssueId))["id"]
+            if name == "transition_issue":
+                self.status_id = payload.statusId or await self.status_by_name(payload.status)
         elif name == "update_comment":
             self.target = await self.policy.comment(payload.commentId, lock=True)
             if self.target["author_id"] != self.principal.user["id"]:
@@ -82,6 +85,24 @@ class CommandService:
                 team_id = team_id or project["team_id"]
             await self.policy.destination(project_id, team_id)
             self.target = {"team_id": team_id}
+
+    async def status_by_name(self, name: str) -> str:
+        """Id of the issue team's status called `name`, ignoring case and outer spaces.
+        VI: Id trạng thái tên `name` của team chứa issue, không phân biệt hoa thường và khoảng trắng hai đầu.
+        """
+        rows = (
+            await self.db.execute(
+                text("""SELECT id,name FROM issue_statuses WHERE workspace_id=:workspace
+                AND (team_id IS NULL OR team_id=:team) ORDER BY position,name"""),
+                {"workspace": self.principal.workspace_id, "team": self.target["team_id"]},
+            )
+        ).all()
+        wanted = name.strip().casefold()
+        matches = [row.id for row in rows if row.name.strip().casefold() == wanted]
+        if len(matches) != 1:
+            names = ", ".join(dict.fromkeys(row.name for row in rows))
+            raise ApiError(400, f"Unknown status \"{name}\". Use one of: {names}.", "Bad Request")
+        return matches[0]
 
     async def link_target(self, payload) -> tuple[str | None, str | None]:
         issue_id, project_id = None, payload.projectId
@@ -134,7 +155,7 @@ class CommandService:
             )["data"]
         if name in {"update_issue", "transition_issue"}:
             if name == "transition_issue":
-                values = {"statusId": payload.statusId}
+                values = {"statusId": self.status_id}
             elif not values:
                 raise ApiError(
                     400, "At least one update field is required.", "Bad Request"
@@ -196,6 +217,11 @@ class CommandService:
                 await self.add_link(result["id"], payload)
             return result
         if name in {"update_document", "restore_document"}:
+            if values.get("edits"):
+                from .edits import apply_edits
+
+                values["content"] = apply_edits(self.target["content"], payload.edits)
+            values.pop("edits", None)
             if name == "restore_document":
                 revision = (
                     (

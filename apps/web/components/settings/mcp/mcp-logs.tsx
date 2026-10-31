@@ -134,6 +134,10 @@ export function McpLogs() {
                                     <Text type="supporting" color="secondary">
                                        {counts(row)}
                                        {row.p95Ms != null && ` · p95 ${Math.round(row.p95Ms)} ms`}
+                                       {/* Average result size shows which tools cost agents the most tokens.
+                                           VI: Kích thước kết quả trung bình cho thấy tool nào tốn token của agent nhất. */}
+                                       {row.avgResultBytes != null &&
+                                          ` · avg ${(row.avgResultBytes / 1024).toFixed(1)} KB`}
                                     </Text>
                                  }
                               />

@@ -96,6 +96,10 @@ class IssuePageInput(IssueInput, PageInput):
 
 class IssueContextInput(IssueInput):
     limit: int = Field(default=5, ge=1, le=10)
+    # Off by default: the project's other documents are rarely about this issue and were most of
+    # the response. VI: Mặc định tắt: các tài liệu khác của dự án hiếm khi liên quan tới issue này
+    # VI: và từng chiếm phần lớn phản hồi.
+    includeProjectDocuments: bool = False
 
 
 class ProjectInput(StrictInput):
@@ -188,8 +192,17 @@ class UpdateIssueTool(VersionInput, IssueInput, BugUpdateFields):
 
 
 class TransitionIssueTool(VersionInput, IssueInput):
-    statusId: str = Field(min_length=1)
+    statusId: str | None = Field(default=None, min_length=1)
+    # A status name of the issue's team (case-insensitive), e.g. "In Progress", instead of its id.
+    # VI: Tên trạng thái của team (không phân biệt hoa thường), ví dụ "In Progress", thay cho id.
+    status: str | None = Field(default=None, min_length=1, max_length=100)
     reason: str = Field(min_length=3, max_length=2000)
+
+    @model_validator(mode="after")
+    def one_status(self):
+        if bool(self.statusId) == bool(self.status):
+            raise ValueError("Give exactly one of statusId or status.")
+        return self
 
 
 class AddCommentTool(WriteInput, IssueInput):
@@ -230,13 +243,27 @@ class CreateDocumentTool(WriteInput):
         return self
 
 
+class DocumentEdit(StrictInput):
+    oldText: str = Field(min_length=1, max_length=20000)
+    newText: str = Field(max_length=95000)
+
+
 class UpdateDocumentTool(VersionInput, DocumentInput):
     title: str | None = Field(default=None, min_length=2, max_length=250)
     content: str | None = Field(default=None, max_length=100000)
+    # Exact-text replacements applied to the current content instead of resending it.
+    # VI: Các thay thế đoạn chính xác áp dụng lên nội dung hiện tại thay vì gửi lại cả bài.
+    edits: list[DocumentEdit] | None = Field(default=None, min_length=1, max_length=50)
     docType: Literal["FDS", "TDS", "ADR", "RCA", "GUIDE", "OTHER"] | None = None
     # Agents can draft and submit for review; approving (and so publishing) stays with people.
     # VI: Agent được soạn nháp và gửi duyệt; việc duyệt (và phát hành) do người thực hiện.
     status: Literal["DRAFT", "IN_REVIEW"] | None = None
+
+    @model_validator(mode="after")
+    def content_or_edits(self):
+        if self.content is not None and self.edits:
+            raise ValueError("Give content or edits, not both.")
+        return self
 
 
 class UpsertFeatureDocTool(WriteInput, IssueInput):
@@ -246,8 +273,17 @@ class UpsertFeatureDocTool(WriteInput, IssueInput):
     module: str = Field(min_length=2, max_length=120)
     feature: str = Field(min_length=2, max_length=120)
     docType: Literal["FDS", "TDS"]
-    content: str = Field(min_length=1, max_length=95000)
+    content: str | None = Field(default=None, min_length=1, max_length=95000)
+    # Updates an existing document by exact-text replacements instead of `content`.
+    # VI: Cập nhật tài liệu đã có bằng các thay thế đoạn chính xác thay cho `content`.
+    edits: list[DocumentEdit] | None = Field(default=None, min_length=1, max_length=50)
     changeSummary: str = Field(min_length=3, max_length=500)
+
+    @model_validator(mode="after")
+    def content_or_edits(self):
+        if (self.content is None) == (not self.edits):
+            raise ValueError("Give exactly one of content or edits.")
+        return self
 
     @field_validator("module", "feature", "changeSummary", mode="before")
     @classmethod

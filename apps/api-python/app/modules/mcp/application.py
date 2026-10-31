@@ -15,6 +15,7 @@ from ...core.identifiers import _cuid
 from ...core.clock import _utcnow
 from .commands import CommandService
 from .planning import planning_warnings
+from .compact import compact_comment, compact_issue
 from ...domains.team_insights import hcm_today
 from .connections import validate_current
 from .log_redaction import failure_details, redact_arguments
@@ -67,7 +68,9 @@ class ToolApplication:
             raise
         except ValidationError as error:
             api_error = ApiError(
-                400, "Tool arguments do not match the input schema.", "Bad Request"
+                400,
+                "Tool arguments do not match the input schema: " + schema_errors(error),
+                "Bad Request",
             )
             await self.failed_audit(
                 principal, name, correlation, api_error, started, arguments
@@ -93,6 +96,7 @@ class ToolApplication:
                             correlation,
                             "succeeded",
                             duration_ms=int((monotonic() - started) * 1000),
+                            details={"resultBytes": result_bytes(result)},
                         )
                     result = jsonable_encoder(result)
                     # Image bytes are capped by the image reader itself; the JSON limit applies
@@ -254,7 +258,13 @@ class ToolApplication:
             data.pop("parentIssueId", None)
             data.pop("parent", None)
             data.pop("duplicateOfId", None)
-            data["planningWarnings"] = planning_warnings(data, hcm_today())
+            sent = set(payload.model_fields_set) - {"idempotencyKey", "expectedVersion", "issueId"}
+            data = {
+                **compact_issue(data, sent),
+                "planningWarnings": planning_warnings(data, hcm_today()),
+            }
+        elif tool.name in {"add_comment", "update_comment"}:
+            data = compact_comment(data)
         result = {
             "data": data,
             "correlationId": correlation,
@@ -267,6 +277,7 @@ class ToolApplication:
             "succeeded",
             result["data"].get("id"),
             duration_ms=int((monotonic() - started) * 1000) if started else None,
+            details={"resultBytes": result_bytes(result)},
         )
         await db.execute(
             text("""INSERT INTO mcp_requests (connection_id,tool,key,request_hash,result)
@@ -347,3 +358,21 @@ class ToolApplication:
                 await db.commit()
         except Exception:
             logger.warning("MCP audit is unavailable correlation=%s", correlation)
+
+
+def schema_errors(error: ValidationError, limit: int = 5) -> str:
+    """Which arguments are wrong and why, without echoing the values the client sent.
+    VI: Tham số nào sai và vì sao, không lặp lại giá trị client đã gửi.
+    """
+    parts = [
+        f"{'.'.join(str(part) for part in item['loc']) or 'arguments'}: {item['msg']}"
+        for item in error.errors(include_input=False, include_url=False)[:limit]
+    ]
+    return "; ".join(parts)[:600]
+
+
+def result_bytes(result) -> int:
+    """Serialized size of a tool result, logged so token-heavy tools can be found.
+    VI: Kích thước kết quả tool sau khi tuần tự hoá, ghi log để tìm tool tốn token.
+    """
+    return len(json.dumps(jsonable_encoder(result)).encode())

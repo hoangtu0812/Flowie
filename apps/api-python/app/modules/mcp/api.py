@@ -270,7 +270,8 @@ async def connection_audit_summary(
 
     totals = (await rows(f"SELECT {counts},{p95} {scope}"))[0]
     tools = await rows(
-        f"""SELECT a.metadata->>'tool' AS tool,{counts},{p95} {scope}
+        f"""SELECT a.metadata->>'tool' AS tool,{counts},{p95},
+        round(avg((a.metadata->>'resultBytes')::int))::int AS "avgResultBytes" {scope}
         GROUP BY a.metadata->>'tool' ORDER BY count(*) DESC,1 LIMIT 100"""
     )
     by_connection = await rows(

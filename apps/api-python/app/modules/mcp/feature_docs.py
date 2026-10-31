@@ -192,7 +192,22 @@ async def upsert_feature_doc(db, principal, issue: dict, payload) -> dict[str, A
             {"folder": feature_id, "type": payload.docType},
         )
     ).scalar_one_or_none()
-    content = with_change_entry(payload.content, issue["identifier"], payload.changeSummary, date.today())
+    if payload.edits:
+        if not current:
+            raise ApiError(
+                404,
+                f"No {payload.docType} exists for {payload.module} / {payload.feature} yet; send content to create it.",
+                "Not Found",
+            )
+        from .edits import apply_edits
+
+        existing = (
+            await db.execute(text("SELECT content FROM documents WHERE id=:id"), {"id": current})
+        ).scalar_one()
+        body = apply_edits(existing, payload.edits)
+    else:
+        body = payload.content
+    content = with_change_entry(body, issue["identifier"], payload.changeSummary, date.today())
     if current:
         result = (
             await documents.update_document(
