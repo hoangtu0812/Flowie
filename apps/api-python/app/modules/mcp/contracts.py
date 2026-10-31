@@ -205,6 +205,31 @@ class TransitionIssueTool(VersionInput, IssueInput):
         return self
 
 
+class StartIssueTool(VersionInput, IssueInput):
+    """Plan comment, schedule and the move to work, in one transaction.
+    VI: Comment kế hoạch, lịch và việc chuyển sang làm, trong một transaction."""
+
+    plan: str = Field(min_length=1, max_length=20000)
+    startDate: str | None = None
+    targetDate: str | None = None
+    dueDate: str | None = None
+    estimatedEffort: float | None = Field(default=None, ge=0, le=10000)
+    # Status name of the issue's team; `statusId` wins when given.
+    # VI: Tên trạng thái của team; có `statusId` thì dùng `statusId`.
+    status: str = Field(default="In Progress", min_length=1, max_length=100)
+    statusId: str | None = Field(default=None, min_length=1)
+
+
+class FinishIssueTool(VersionInput, IssueInput):
+    """Result comment, actual effort and the move to review, in one transaction.
+    VI: Comment kết quả, effort thực tế và việc chuyển sang review, trong một transaction."""
+
+    result: str = Field(min_length=1, max_length=20000)
+    actualEffort: float | None = Field(default=None, ge=0, le=10000)
+    status: str = Field(default="Technical Review", min_length=1, max_length=100)
+    statusId: str | None = Field(default=None, min_length=1)
+
+
 class AddCommentTool(WriteInput, IssueInput):
     parentCommentId: str | None = None
     mentionIds: list[str] = Field(default_factory=list, max_length=100)

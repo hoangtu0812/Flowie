@@ -10,7 +10,10 @@ def test_workflow_instructions_name_only_registered_tools():
     named = set(re.findall(r"`([a-z_]+)`", SERVER_INSTRUCTIONS))
     assert named, "the workflow should name the tools agents must call"
     assert named <= set(TOOLS), sorted(named - set(TOOLS))
-    for step in ("add_comment", "transition_issue", "upsert_feature_doc", "get_feature_docs", "update_issue"):
+    for step in (
+        "add_comment", "transition_issue", "upsert_feature_doc", "get_feature_docs", "update_issue",
+        "start_issue", "finish_issue",
+    ):
         assert step in named
 
 

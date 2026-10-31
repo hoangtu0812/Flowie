@@ -254,13 +254,14 @@ class ToolApplication:
             )
         await db.execute(text("SELECT set_config('flowie.mcp_write','true',true)"))
         data = jsonable_encoder(await service.execute(tool.name, payload))
-        if tool.name in {"create_issue", "update_issue", "transition_issue"}:
+        if tool.name in {"create_issue", "update_issue", "transition_issue", "start_issue", "finish_issue"}:
             data.pop("parentIssueId", None)
             data.pop("parent", None)
             data.pop("duplicateOfId", None)
             sent = set(payload.model_fields_set) - {"idempotencyKey", "expectedVersion", "issueId"}
             data = {
                 **compact_issue(data, sent),
+                **({"commentId": data["commentId"]} if "commentId" in data else {}),
                 "planningWarnings": planning_warnings(data, hcm_today()),
             }
         elif tool.name in {"add_comment", "update_comment"}:
