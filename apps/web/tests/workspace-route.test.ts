@@ -1,36 +1,41 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { canonicalWorkspacePath } from '../lib/workspace-route';
+import { canonicalWorkspacePath, withWorkspaceSegment, workspaceKey } from '../lib/workspace-route';
 
-const memberships = [{ workspace: { id: 'ws-fixed-id', slug: 'ph-ng-chuy-n-i-s' } }];
+const memberships = [{ workspace: { id: 'ws-fixed-id', slug: 'bsr-dtd' } }];
 
-test('legacy deep links preserve their complete destination', () => {
+test('id links move to the slug and keep their complete destination', () => {
    assert.equal(
-      canonicalWorkspacePath('/ph-ng-chuy-n-i-s/projects', memberships, '?tab=active#timeline'),
-      '/ws-fixed-id/projects?tab=active#timeline'
+      canonicalWorkspacePath('/ws-fixed-id/projects', memberships, '?tab=active#timeline'),
+      '/bsr-dtd/projects?tab=active#timeline'
    );
    assert.equal(
-      canonicalWorkspacePath('/ph-ng-chuy-n-i-s/settings/workspace', memberships),
-      '/ws-fixed-id/settings/workspace'
+      canonicalWorkspacePath('/ws-fixed-id/settings/workspace', memberships),
+      '/bsr-dtd/settings/workspace'
    );
-   assert.equal(canonicalWorkspacePath('/ph-ng-chuy-n-i-s', memberships), '/ws-fixed-id');
+   assert.equal(canonicalWorkspacePath('/ws-fixed-id', memberships), '/bsr-dtd');
 });
 
-test('canonical, unknown, and malformed workspace routes do not redirect', () => {
-   for (const path of ['/ws-fixed-id/projects', '/unavailable/issue/GEN-1', '/%ZZ/projects', '/'])
+test('slug, unknown, and malformed workspace routes do not redirect', () => {
+   for (const path of ['/bsr-dtd/projects', '/old-slug/issue/GEN-1', '/%ZZ/projects', '/'])
       assert.equal(canonicalWorkspacePath(path, memberships), undefined);
 });
 
-test('IDs take precedence over a legacy slug and encoded slugs resolve', () => {
+test('an id wins over another workspace whose slug matches it', () => {
    assert.equal(
       canonicalWorkspacePath('/ws-fixed-id/projects', [
-         ...memberships,
          { workspace: { id: 'other', slug: 'ws-fixed-id' } },
+         ...memberships,
       ]),
-      undefined
+      '/bsr-dtd/projects'
    );
+});
+
+test('the workspace segment is read decoded and replaced in place', () => {
+   assert.equal(workspaceKey('/ph%2Dng/issues'), 'ph-ng');
+   assert.equal(workspaceKey('/'), undefined);
    assert.equal(
-      canonicalWorkspacePath('/ph%2Dng-chuy-n-i-s/issues', memberships),
-      '/ws-fixed-id/issues'
+      withWorkspaceSegment('/old-slug/project/fl/docs', 'bsr-dtd', '#tree'),
+      '/bsr-dtd/project/fl/docs#tree'
    );
 });

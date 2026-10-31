@@ -184,7 +184,7 @@ export function OrgSwitcher() {
          const workspace = await createWorkspace(workspaceName);
          setCreateOpen(false);
          setWorkspaceName('');
-         router.push(`/${workspace.id}/teams`);
+         router.push(`/${workspace.slug}/teams`);
          router.refresh();
       } catch (error) {
          toast.error(error instanceof Error ? error.message : 'Could not create workspace.');

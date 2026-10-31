@@ -86,14 +86,53 @@ export function workspaceSlugFromLocation(): string | undefined {
    return segment ? decodeURIComponent(segment) : undefined;
 }
 
+// Earlier slugs already resolved in this tab, so every loader on a page asks the API once.
+// VI: Các slug cũ đã phân giải trong tab này, để mọi loader trên trang chỉ hỏi API một lần.
+const resolvedKeys = new Map<string, Promise<{ id: string; slug: string } | undefined>>();
+
+/**
+ * Resolves a workspace key that is not a current slug or id of the caller's memberships (an
+ * earlier slug after a rename) to the workspace id and current slug. Undefined when the API does
+ * not know it or the caller is not a member; other failures are not cached so a retry can work.
+ * VI: Phân giải khoá workspace không phải slug hiện tại hay id của các membership (slug cũ sau khi
+ * VI: đổi) thành id và slug hiện tại. Undefined khi API không biết khoá hoặc người gọi không phải
+ * VI: thành viên; lỗi khác không được cache để thử lại vẫn được.
+ */
+export function resolveWorkspaceKey(key: string) {
+   let pending = resolvedKeys.get(key);
+   if (!pending) {
+      pending = authenticatedFetch(`${api}/workspaces/resolve?${new URLSearchParams({ key })}`)
+         .then((response) =>
+            response.status === 404
+               ? undefined
+               : responseData<{ id: string; slug: string }>(
+                    response,
+                    'Could not open the workspace.'
+                 )
+         )
+         .catch((error: unknown) => {
+            resolvedKeys.delete(key);
+            throw error;
+         });
+      resolvedKeys.set(key, pending);
+   }
+   return pending;
+}
+
 export async function loadCurrentWorkspaceMembership(
    workspaceSlug = workspaceSlugFromLocation()
 ): Promise<WorkspaceMembership> {
    if (!workspaceSlug) throw new Error('The workspace URL is missing.');
    const memberships = await loadWorkspaceMemberships();
-   const membership = memberships.find(
-      ({ workspace }) => workspace.slug === workspaceSlug || workspace.id === workspaceSlug
+   let membership = memberships.find(
+      ({ workspace }) => workspace.id === workspaceSlug || workspace.slug === workspaceSlug
    );
+   if (!membership) {
+      // An earlier slug still opens the workspace while the route moves to the current slug.
+      // VI: Slug cũ vẫn mở được workspace trong lúc route chuyển sang slug hiện tại.
+      const resolved = await resolveWorkspaceKey(workspaceSlug);
+      membership = resolved && memberships.find(({ workspace }) => workspace.id === resolved.id);
+   }
    if (!membership) throw new Error('This workspace is not available to the current user.');
    return membership;
 }

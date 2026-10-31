@@ -41,7 +41,7 @@ export default function InvitationsPage() {
          return;
       }
       if (action === 'accept') {
-         router.replace(`/${invitation.workspace.id}/teams`);
+         router.replace(`/${invitation.workspace.slug}/teams`);
          return;
       }
       await load();

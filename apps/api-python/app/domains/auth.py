@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.config import Settings
 from ..core.errors import ApiError
+from ..core.slugs import GENERATED_ID, RESERVED_WORKSPACE_SLUGS
 from ..db.session import get_session
 from ..services.microsoft_identity import MicrosoftIdentityClient, MicrosoftProfile
 from ..services.auth_policy import require_password_sign_in
@@ -247,8 +248,15 @@ async def _unique_workspace_slug(db: AsyncSession, name: str) -> str:
     slug = base
     suffix = 2
     while True:
-        exists = await db.execute(text('SELECT 1 FROM workspaces WHERE slug = :slug LIMIT 1'), {'slug': slug})
-        if exists.scalar_one_or_none() is None:
+        # An earlier slug of another workspace still opens that workspace, and reserved or
+        # id-shaped slugs would not reach the workspace, so all of them count as taken.
+        # VI: Slug cũ của workspace khác vẫn mở workspace đó, còn slug dành riêng hoặc giống id sẽ
+        # VI: không mở được workspace, nên tất cả đều coi như đã có chủ.
+        exists = await db.execute(
+            text('SELECT 1 FROM workspaces WHERE slug = :slug UNION ALL SELECT 1 FROM workspace_slugs WHERE slug = :slug LIMIT 1'),
+            {'slug': slug},
+        )
+        if exists.scalar_one_or_none() is None and slug not in RESERVED_WORKSPACE_SLUGS and not GENERATED_ID.fullmatch(slug):
             return slug
         slug = f'{base}-{suffix}'
         suffix += 1

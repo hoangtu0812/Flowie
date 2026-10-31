@@ -619,6 +619,7 @@ model Organization {
 model Workspace {
   bulkOperations         BulkOperation[]
   projectSlugs           ProjectSlug[]
+  slugs                  WorkspaceSlug[]
   issueImports           IssueImportBatch[]
   recurringSchedules     RecurringSchedule[]
   issueLifecycleEvents   IssueLifecycleEvent[]
@@ -1292,6 +1293,22 @@ model Project {
 /// VI: Mọi slug một dự án đã dùng trong workspace, cả hiện tại lẫn trước đây. Khoá chính gom slug
 /// VI: hiện tại và alias vào một không gian tên, nên slug không bao giờ được cấp cho dự án khác và
 /// VI: hai lần đổi đồng thời sang cùng một slug không thể cùng thành công.
+/// Every slug a workspace has used, current and earlier, keyed by the slug alone because
+/// workspace URLs are global. Old links resolve through it and a slug is never handed to another
+/// workspace; the primary key also settles two concurrent renames to the same slug.
+/// VI: Mọi slug một workspace đã dùng, cả hiện tại lẫn trước đây, khoá chỉ theo slug vì URL
+/// VI: workspace là toàn cục. Link cũ được phân giải qua bảng này và slug không bao giờ được cấp cho
+/// VI: workspace khác; khoá chính cũng quyết định khi hai lần đổi đồng thời sang cùng một slug.
+model WorkspaceSlug {
+  slug        String    @id
+  workspaceId String    @map("workspace_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("workspace_slugs")
+}
+
 model ProjectSlug {
   workspaceId String    @map("workspace_id")
   slug        String

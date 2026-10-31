@@ -22,7 +22,7 @@ export default function Home() {
             const destination = resolveWorkspaceRoot({
                adminAccessible: Boolean(user.isPlatformAdmin),
                workspacesAccessible: true,
-               workspaceSlug: memberships[0]?.workspace.id,
+               workspaceSlug: memberships[0]?.workspace.slug,
                preferredWorkspaceSlug: preferredWorkspaceSlug(
                   memberships,
                   preferences.defaultWorkspaceId

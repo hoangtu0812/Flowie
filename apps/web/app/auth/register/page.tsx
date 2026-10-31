@@ -102,7 +102,7 @@ function RegisterForm() {
             payload.data.user.isPlatformAdmin
                ? '/admin'
                : payload.data.workspace
-                 ? `/${payload.data.workspace.id}/teams`
+                 ? `/${payload.data.workspace.slug}/teams`
                  : '/'
          );
       } catch (caughtError) {
