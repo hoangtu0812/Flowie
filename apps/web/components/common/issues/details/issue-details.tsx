@@ -13,6 +13,7 @@ import { useIssuesStore } from '@/store/issues-store';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { usePageEntity } from '@/features/shared/document-title';
 
 /**
  * Issue detail page: rich description, sub-issues, activity feed and a
@@ -38,6 +39,7 @@ export default function IssueDetails() {
       () => issues.find((candidate) => candidate.identifier === issueId),
       [issues, issueId]
    );
+   usePageEntity(issue?.title);
 
    const detail = useMemo<IssueDetail | null>(
       () => (issue ? { identifier: issue.identifier, description: [], activity: [] } : null),

@@ -30,6 +30,7 @@ import {
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { usePageEntity } from '@/features/shared/document-title';
 
 type ReviewListTab = 'assigned' | 'created';
 
@@ -292,6 +293,7 @@ export default function Reviews({
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [reviews, setReviews] = useState<CodeReview[]>([]);
    const [selected, setSelected] = useState<CodeReview>();
+   usePageEntity(selectedReviewId ? selected?.title : undefined);
    const [provider, setProvider] = useState<'ALL' | ScmProvider>('ALL');
    const [search, setSearch] = useState('');
    const [loading, setLoading] = useState(true);

@@ -6,9 +6,11 @@ import MemberProfile from '@/components/common/members/member-profile';
 import { LoadingState } from '@/components/common/loading-state';
 import { QueryState } from '@/components/common/query-state';
 import { profileUser, useMemberProfile } from './use-member-profile';
+import { usePageEntity } from '@/features/shared/document-title';
 
 export function MemberProfilePage({ memberId }: { memberId: string }) {
    const state = useMemberProfile(memberId);
+   usePageEntity(state.member?.name);
    if (state.loading) return <LoadingState label="Loading member profile…" />;
    if (!state.member)
       return (

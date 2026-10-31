@@ -12,6 +12,7 @@ import { updateTreeDocument, type ProjectTreeDocument } from './project-docs-api
 import { DocumentPreview } from './doc-preview';
 import { QueryState } from '@/components/common/query-state';
 import { LoadingState } from '@/components/common/loading-state';
+import { usePageEntity } from '@/features/shared/document-title';
 
 /**
  * Full-page view of one document, opened from a task, search or a link. It shows the same
@@ -31,6 +32,7 @@ export function DocumentPage() {
    const [document, setDocument] = useState<ProjectTreeDocument>(),
       [error, setError] = useState<string>(),
       [editing, setEditing] = useState(false);
+   usePageEntity(document?.title);
    const load = useCallback(
       () =>
          getDocument(documentId)

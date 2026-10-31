@@ -6,7 +6,11 @@ import ProjectActivity from '@/components/common/projects/details/project-activi
 import ProjectIssues from '@/components/common/projects/details/project-issues';
 import ProjectOverview from '@/components/common/projects/details/project-overview';
 import ProjectTimeline from '@/components/common/projects/details/project-timeline';
-import { LiveProjectProvider } from '@/components/common/projects/details/use-live-project';
+import {
+   LiveProjectProvider,
+   useLiveProjectData,
+} from '@/components/common/projects/details/use-live-project';
+import { usePageEntity } from '@/features/shared/document-title';
 import Header from '@/components/layout/headers/project/header';
 import MainLayout from '@/components/layout/main-layout';
 import { ProjectDocs } from '@/features/documents/project-docs';
@@ -107,9 +111,16 @@ export function ProjectRoute({
    const View = VIEWS[view];
    return (
       <LiveProjectProvider projectId={projectId}>
+         <ProjectTitle />
          <MainLayout header={<Header projectId={projectId} />}>
             <View projectId={projectId} />
          </MainLayout>
       </LiveProjectProvider>
    );
+}
+
+/** Names the open project in the tab title. VI: Đặt tên dự án đang mở vào title tab. */
+function ProjectTitle() {
+   usePageEntity(useLiveProjectData().project?.name);
+   return null;
 }
