@@ -41,6 +41,18 @@ UPLOAD_AUDIENCE = "flowie-mcp-upload"
 # The upload is recorded under this name in mcp_requests (single use) and in the MCP call log.
 # VI: Lượt upload được ghi với tên này trong mcp_requests (dùng một lần) và trong log lời gọi MCP.
 UPLOAD_TOOL = "upload_attachment"
+# Image types the attachment preview serves inline, fixed here because `mimetypes` reads the OS
+# table and slim container images ship none, which turned .webp screenshots into octet-stream.
+# VI: Kiểu ảnh mà preview đính kèm hiển thị inline, cố định ở đây vì `mimetypes` đọc bảng của hệ
+# VI: điều hành và image container slim không có bảng nào, khiến ảnh chụp .webp thành octet-stream.
+IMAGE_TYPES = {
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "gif": "image/gif",
+    "webp": "image/webp",
+    "avif": "image/avif",
+}
 
 router = APIRouter(prefix="/api/v1/mcp/uploads", tags=["mcp"])
 
@@ -78,6 +90,14 @@ def upload_link(settings, principal, issue: dict, filename: str) -> dict:
         "expiresAt": expires,
         "curl": f'curl -sS -F "file=@<path to {filename}>" "{url}"',
     }
+
+
+def upload_type(filename: str) -> str:
+    """Content type of an MCP upload, from the name fixed at tool time.
+    VI: Kiểu nội dung của file upload qua MCP, theo tên đã chốt lúc gọi tool.
+    """
+    suffix = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    return IMAGE_TYPES.get(suffix) or guess_type(filename)[0] or "application/octet-stream"
 
 
 def _claims(token: str, settings) -> dict:
@@ -147,7 +167,7 @@ async def upload_attachment(token: str, request: Request, file: UploadFile = Fil
         # claim to be an image it is not named as.
         # VI: Kiểu file theo tên đã chốt lúc gọi tool, không theo header của client, nên file không
         # VI: thể tự nhận là ảnh khi tên của nó không phải ảnh.
-        mime = guess_type(claims["name"])[0] or "application/octet-stream"
+        mime = upload_type(claims["name"])
         data = await store_attachment(
             db, settings, principal.workspace_id, principal.user["id"], "issue",
             issue["id"], claims["name"], mime, body,

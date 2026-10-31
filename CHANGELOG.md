@@ -147,6 +147,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
+- Images attached through the MCP upload URL (PNG, JPEG, GIF, WebP, AVIF) keep their image type on servers whose container has no system MIME table, so they preview inline instead of downloading as `application/octet-stream`. Attachments already stored with the wrong type are not changed. API only; no schema change. (DTD-214)
+  VI: Ảnh đính kèm qua URL upload MCP (PNG, JPEG, GIF, WebP, AVIF) giữ đúng kiểu ảnh trên server có container không có bảng MIME của hệ thống, nên xem trước được thay vì chỉ tải về dạng `application/octet-stream`. Đính kèm đã lưu sai kiểu không được sửa. Chỉ đổi API; không đổi schema. (DTD-214)
+
 - MCP connections limited to projects can read, search, update and link documents filed in an allowed project's Docs tree even before they are linked to anything; previously such documents returned "Document not found in the allowed scope", so `link_document` could never create their first link. Documents in other projects' trees or outside any project stay hidden. API only; no schema change. (DTD-216, #99)
   VI: Kết nối MCP giới hạn theo dự án đọc, tìm, sửa và liên kết được tài liệu nằm trong cây Docs của dự án được phép ngay cả khi chưa liên kết với gì; trước đây các tài liệu này trả "Document not found in the allowed scope", nên `link_document` không bao giờ tạo được liên kết đầu tiên. Tài liệu trong cây của dự án khác hoặc ngoài mọi dự án vẫn bị ẩn. Chỉ đổi API; không đổi schema. (DTD-216)
 
