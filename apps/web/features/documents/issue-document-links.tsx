@@ -127,7 +127,7 @@ export function IssueDocumentLinks({
  * VI: thường và dấu tiếng Việt), bỏ các tài liệu đã liên kết với issue này. Cây được tải lại mỗi
  * VI: lần mở hộp thoại để tài liệu mới xuất hiện mà không cần tải lại trang.
  */
-function DocumentSearchDialog({
+export function DocumentSearchDialog({
    open,
    onOpenChange,
    projectId,

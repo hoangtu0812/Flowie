@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- The Related documents section on an issue's Overview has a Link document button for project tasks, opening the same document picker as the Attachments tab, so a task links its FDS/TDS right where the missing-spec warning appears. Unlinking stays in the Attachments tab. Web only; no API or schema change. (DTD-180, #98)
+  VI: Mục Tài liệu liên quan ở tab Overview của issue có nút Liên kết tài liệu cho task thuộc dự án, mở cùng hộp chọn tài liệu như tab Attachments, để task liên kết FDS/TDS ngay tại chỗ hiện cảnh báo thiếu đặc tả. Gỡ liên kết vẫn ở tab Attachments. Chỉ đổi web; không đổi API hay schema. (DTD-180)
+
 - MCP agents can attach a local file to an issue: the `create_attachment_upload` tool returns a one-time upload URL, valid for 10 minutes, that the agent posts the file to (for example with curl). The file becomes an issue attachment uploaded by the connection owner, with the same 10 MB limit as the web; access, scopes, the write switch and read-only roles are checked again at upload time. Deployment: set `API_PUBLIC_URL` to the API address agents reach (Compose uses `NEXT_PUBLIC_API_URL`), and allow 10 MB request bodies on that path in the reverse proxy; no schema change. (DTD-214, #97)
   VI: Agent MCP đính kèm được file trên máy vào issue: tool `create_attachment_upload` trả về URL tải lên dùng một lần, hiệu lực 10 phút, để agent gửi file vào (ví dụ bằng curl). File thành đính kèm của issue với người tải lên là chủ kết nối, cùng giới hạn 10 MB như web; quyền, scope, công tắc ghi và role chỉ đọc được kiểm tra lại lúc tải lên. Triển khai: đặt `API_PUBLIC_URL` là địa chỉ API mà agent truy cập được (Compose lấy theo `NEXT_PUBLIC_API_URL`) và cho phép body 10 MB trên đường dẫn này ở reverse proxy; không đổi schema. (DTD-214)
 
