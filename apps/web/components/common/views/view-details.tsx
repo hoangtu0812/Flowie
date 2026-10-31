@@ -12,6 +12,7 @@ import { useRightPanelStore } from '@/store/right-panel-store';
 import { useMemo } from 'react';
 import { LiveView, useLiveViews } from './use-live-views';
 import { RecoveryScreen } from '@/features/shared/recovery-screen';
+import { usePageEntity } from '@/features/shared/document-title';
 
 const filterValues = (filters: Record<string, unknown>, key: string) =>
    Array.isArray(filters[key]) ? (filters[key] as string[]) : [];
@@ -113,6 +114,7 @@ function ProjectViewBody({ view }: { view: LiveView }) {
 export default function ViewDetails({ viewId }: { viewId: string }) {
    const { views, loading, error, errorStatus, reload } = useLiveViews();
    const view = views.find((candidate) => candidate.id === viewId);
+   usePageEntity(view?.name);
    if (loading)
       return (
          <div className="w-full h-full flex items-center justify-center text-sm text-muted-foreground">

@@ -57,6 +57,7 @@ import {
    useLiveInitiatives,
 } from './use-live-initiatives';
 import { projectPath } from '@/lib/project-route';
+import { usePageEntity } from '@/features/shared/document-title';
 
 const TABS = ['overview', 'activity', 'projects'] as const;
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
@@ -987,6 +988,7 @@ export default function InitiativeDetails({ initiativeId }: { initiativeId: stri
    } = useLiveInitiatives();
    const initiatives = useMemo(() => adaptInitiatives(liveInitiatives), [liveInitiatives]);
    const initiative = initiatives.find((item) => item.id === initiativeId);
+   usePageEntity(initiative?.name);
 
    const timelineGroups = useMemo<ProjectGroup[]>(() => {
       if (!initiative) return [];
