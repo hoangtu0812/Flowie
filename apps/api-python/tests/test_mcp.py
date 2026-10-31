@@ -84,6 +84,20 @@ class McpContractTests(unittest.TestCase):
 @unittest.skipUnless(
     os.getenv("MCP_TEST_DATABASE_URL"), "MCP_TEST_DATABASE_URL is not configured"
 )
+class McpUploadTypeTests(unittest.TestCase):
+    def test_image_uploads_keep_their_type_without_an_os_type_table(self):
+        # Slim container images have no /etc/mime.types; images must still preview inline.
+        # VI: Image container slim không có /etc/mime.types; ảnh vẫn phải xem trước được.
+        from unittest.mock import patch
+        from app.modules.mcp.uploads import upload_type
+
+        with patch("app.modules.mcp.uploads.guess_type", return_value=(None, None)):
+            self.assertEqual(upload_type("shot.WEBP"), "image/webp")
+            self.assertEqual(upload_type("photo.jpg"), "image/jpeg")
+            self.assertEqual(upload_type("notes.log"), "application/octet-stream")
+            self.assertEqual(upload_type("README"), "application/octet-stream")
+
+
 class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_upgrade_backfills_existing_documents(self):
         import asyncpg
