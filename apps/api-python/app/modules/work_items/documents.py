@@ -7,6 +7,7 @@ from ...core.identifiers import _cuid
 from ...core.clock import _utcnow
 from .contracts import CreateDocumentInput, UpdateDocumentInput
 from ..audit.write import record_change
+from .document_review import announce_status_change, check_status_change
 from .document_repository import (
     _team_access,
     _resolve_folder,
@@ -19,6 +20,14 @@ async def create_document(
     payload: CreateDocumentInput, user: Any, db: AsyncSession
 ) -> dict[str, dict[str, Any]]:
     await _team_access(db, payload.workspaceId, payload.teamId, user["id"])
+    # Approval needs a review round, so a document never starts Approved.
+    # VI: Duyệt cần một vòng review, nên tài liệu không bao giờ được tạo ở trạng thái Đã duyệt.
+    if payload.status == "APPROVED":
+        raise ApiError(400, "Create the document as a draft and submit it for review.", "Bad Request")
+    if payload.status == "IN_REVIEW":
+        await check_status_change(
+            db, {"status": "DRAFT", "workspace_id": payload.workspaceId, "team_id": payload.teamId}, "IN_REVIEW", user
+        )
     folder = await _resolve_folder(
         db, payload.workspaceId, payload.teamId, payload.folderId
     )
@@ -57,6 +66,8 @@ async def create_document(
     await record_change(
         db, payload.workspaceId, user["id"], "document.created", "document", document_id
     )
+    if payload.status == "IN_REVIEW":
+        await announce_status_change(db, None, await _row(db, document_id), user)
     document = await _document_by_id(db, document_id, payload.workspaceId)
     if not document:
         raise ApiError(
@@ -97,6 +108,8 @@ async def update_document(
             "Conflict",
         )
     values = payload.model_dump(exclude_unset=True, exclude={"expectedVersion"})
+    if values.get("status"):
+        await check_status_change(db, dict(current), values["status"], user)
     document = await _document_by_id(db, document_id, workspaceId)
     folder = (
         await _resolve_folder(db, workspaceId, current["team_id"], values["folderId"])
@@ -151,6 +164,7 @@ async def update_document(
             document_id,
             fields=values,
         )
+        await announce_status_change(db, dict(current), await _row(db, document_id), user)
     if not document:
         raise ApiError(404, "Document not found.", "Not Found")
     return {"data": document}
@@ -182,3 +196,14 @@ async def archive_document(document_id, workspaceId, user, db):
         db, workspaceId, user["id"], "document.archived", "document", document_id
     )
     return {"data": {"id": document_id, "archived": True}}
+
+
+async def _row(db: AsyncSession, document_id: str) -> dict:
+    """The stored document row, after triggers (an edit can turn Approved back into Draft).
+    VI: Dòng tài liệu đã lưu, sau trigger (sửa có thể đưa Đã duyệt về Nháp).
+    """
+    return dict(
+        (await db.execute(text("SELECT * FROM documents WHERE id = :id"), {"id": document_id}))
+        .mappings()
+        .one()
+    )

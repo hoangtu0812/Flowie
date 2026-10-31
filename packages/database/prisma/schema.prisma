@@ -2066,10 +2066,34 @@ model Document {
   releases    DocumentRelease[]
   links       DocumentLink[]
   publication DocumentPublication?
+  reviewers   DocumentReviewer[]
 
   @@index([workspaceId, teamId])
   @@index([folderId, pinned, position])
   @@map("documents")
+}
+
+/// A team member a lead asked to review a document, with their decision for the current review
+/// round. Decisions are cleared when the document is submitted again or its title or content
+/// changes (trigger `document_review_reset`); the assignment itself stays.
+/// VI: Thành viên team được lead giao duyệt một tài liệu, kèm quyết định của vòng duyệt hiện tại.
+/// VI: Quyết định bị xoá khi tài liệu được gửi duyệt lại hoặc đổi tiêu đề, nội dung (trigger
+/// VI: `document_review_reset`); việc phân công vẫn giữ.
+model DocumentReviewer {
+  documentId String    @map("document_id")
+  reviewerId String    @map("reviewer_id")
+  assignedBy String    @map("assigned_by")
+  assignedAt DateTime  @default(now()) @map("assigned_at")
+  // APPROVED | CHANGES_REQUESTED; NULL while not reviewed in this round.
+  // VI: APPROVED | CHANGES_REQUESTED; NULL khi chưa duyệt trong vòng này.
+  decision   String?
+  note       String?
+  decidedAt  DateTime? @map("decided_at")
+  document   Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@id([documentId, reviewerId])
+  @@index([reviewerId])
+  @@map("document_reviewers")
 }
 
 /// Last SharePoint upload of a document: the version sent, where it landed and the last error.

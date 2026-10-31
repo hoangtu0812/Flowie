@@ -933,6 +933,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             await db.commit()
         read = await self.call("get_document", documentId=documents["allowed"])
         self.assertEqual(read["id"], documents["allowed"])
+        self.assertEqual(read["review"], {"approvers": ["MCP integration test"], "reviewers": []})
         await self.call(
             "link_document",
             documentId=documents["allowed"],

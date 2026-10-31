@@ -415,6 +415,7 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
                         })
                      }
                      onConfigureSharepoint={() => setDialog('sharepoint')}
+                     onReviewChanged={() => void reload()}
                   />
                ) : previewFile ? (
                   <PdfPreview file={previewFile} />

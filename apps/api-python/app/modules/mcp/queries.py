@@ -371,6 +371,26 @@ class QueryService:
             "docType": row["doc_type"],
             "status": row["status"],
             "updatedAt": row["updated_at"],
+            "review": await self._review(row["id"]),
+        }
+
+    async def _review(self, document_id: str) -> dict:
+        """Who approves the document and each reviewer's decision, so an agent can report who
+        the document waits for; agents never assign, decide or approve.
+        VI: Ai duyệt cuối tài liệu và quyết định của từng reviewer, để agent báo được tài liệu đang
+        VI: chờ ai; agent không bao giờ phân công, quyết định hay duyệt.
+        """
+        from ..work_items.document_review import review_state
+
+        state = await review_state(
+            self.db, self.principal.workspace_id, document_id, self.principal.user["id"]
+        )
+        return {
+            "approvers": [person["name"] for person in state["approvers"]],
+            "reviewers": [
+                {"name": row["name"], "decision": row["decision"], "note": row["note"]}
+                for row in state["reviewers"]
+            ],
         }
 
     async def feature_docs(self, payload) -> dict:

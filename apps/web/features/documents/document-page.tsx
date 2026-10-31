@@ -57,6 +57,7 @@ export function DocumentPage() {
             // VI: Chỉ dự án có phát hành SharePoint mới có dòng publication.
             publishing={Boolean(document.publication)}
             onEdit={() => setEditing(true)}
+            onReviewChanged={() => void load()}
             onStatusChange={(status) =>
                // expectedVersion makes Approve fail if the document changed after it was shown;
                // a refused change reloads the document to show the newer text.

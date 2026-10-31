@@ -2,6 +2,7 @@ import asyncio
 import os
 
 import pytest
+from tests.document_review_support import approve
 from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -55,14 +56,14 @@ async def verify_releases():
             with pytest.raises(ApiError) as stale:
                 await update(status="APPROVED", expectedVersion=reviewing["version"] - 1)
             assert stale.value.status_code == 409
-            approved = await update(status="APPROVED", expectedVersion=reviewing["version"])
+            approved = await approve(db, workspace, None, doc["id"], user, expectedVersion=reviewing["version"])
             assert (approved["status"], approved["release"]) == ("APPROVED", 1)
 
             retyped = await update(docType="TDS")
             assert (retyped["status"], retyped["release"]) == ("APPROVED", 1)
             edited = await update(content="two")
             assert (edited["status"], edited["release"]) == ("DRAFT", 1)
-            assert (await update(status="APPROVED"))["release"] == 2
+            assert (await approve(db, workspace, None, doc["id"], user))["release"] == 2
 
             releases = (await list_releases(db, doc["id"]))["items"]
             assert [r["release"] for r in releases] == [2, 1]

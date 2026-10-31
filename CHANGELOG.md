@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- Documents follow a review flow: submitting one notifies the team's leads (or workspace Owners/Admins in the team when it has no lead), a lead can assign team members as reviewers, each reviewer agrees or requests changes with a note (which returns the document to Draft), and only a lead approves once every assigned reviewer agreed; a lead who wrote the document needs another reviewer's agreement. Editing during review clears the agreements. The same rules apply to MCP agents, whose `get_document` now reports approvers and reviewer decisions. Deployment: new migration `document_reviewers`; rebuild `migrate`, `api` and `web`. (DTD-217, #102)
+  VI: Tài liệu có quy trình duyệt: gửi duyệt sẽ thông báo cho lead của team (hoặc Owner/Admin workspace trong team khi team không có lead), lead có thể phân công thành viên team làm reviewer, mỗi reviewer đồng ý hoặc yêu cầu sửa kèm nhận xét (đưa tài liệu về Nháp), và chỉ lead được duyệt khi mọi reviewer được giao đã đồng ý; lead là tác giả cần một reviewer khác đồng ý. Sửa trong lúc duyệt sẽ xoá các lượt đồng ý. Agent MCP theo cùng quy tắc, và `get_document` nay trả người duyệt cuối cùng quyết định của reviewer. Triển khai: migration mới `document_reviewers`; rebuild `migrate`, `api` và `web`. (DTD-217)
+
 - The Related documents section on an issue's Overview has a Link document button for project tasks, opening the same document picker as the Attachments tab, so a task links its FDS/TDS right where the missing-spec warning appears. Unlinking stays in the Attachments tab. Web only; no API or schema change. (DTD-180, #98)
   VI: Mục Tài liệu liên quan ở tab Overview của issue có nút Liên kết tài liệu cho task thuộc dự án, mở cùng hộp chọn tài liệu như tab Attachments, để task liên kết FDS/TDS ngay tại chỗ hiện cảnh báo thiếu đặc tả. Gỡ liên kết vẫn ở tab Attachments. Chỉ đổi web; không đổi API hay schema. (DTD-180)
 
