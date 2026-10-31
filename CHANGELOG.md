@@ -147,7 +147,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
-- MCP connections limited to projects can read, search, update and link documents filed in an allowed project's Docs tree even before they are linked to anything; previously such documents returned "Document not found in the allowed scope", so `link_document` could never create their first link. Documents in other projects' trees or outside any project stay hidden. API only; no schema change. (DTD-216)
+- MCP connections limited to projects can read, search, update and link documents filed in an allowed project's Docs tree even before they are linked to anything; previously such documents returned "Document not found in the allowed scope", so `link_document` could never create their first link. Documents in other projects' trees or outside any project stay hidden. API only; no schema change. (DTD-216, #99)
   VI: Kết nối MCP giới hạn theo dự án đọc, tìm, sửa và liên kết được tài liệu nằm trong cây Docs của dự án được phép ngay cả khi chưa liên kết với gì; trước đây các tài liệu này trả "Document not found in the allowed scope", nên `link_document` không bao giờ tạo được liên kết đầu tiên. Tài liệu trong cây của dự án khác hoặc ngoài mọi dự án vẫn bị ẩn. Chỉ đổi API; không đổi schema. (DTD-216)
 
 - The Assignee and Reporter rows of an issue's Properties panel use the same layout as Schedule and Due date: a small avatar, the field name and the person's name in aligned columns, without the online dot. Clicking either row still opens the person picker; the panel on phones matches. Web only; no API or schema change. (DTD-213, #96)
