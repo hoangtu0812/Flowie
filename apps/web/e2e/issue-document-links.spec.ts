@@ -10,7 +10,7 @@ const fixture = JSON.parse(readFileSync('.e2e-fixture.json', 'utf8')) as {
 };
 const api = 'http://localhost:4000/api/v1';
 
-test('a task links a project document from Attachments and the document lists the task', async ({
+test('a task links a project document from Attachments or Overview and the document lists the task', async ({
    page,
    context,
 }) => {
@@ -46,7 +46,9 @@ test('a task links a project document from Attachments and the document lists th
    try {
       await page.goto(`/${fixture.slug}/issue/${issue.identifier}?tab=attachments`);
       const links = page.getByRole('region', { name: /^(Linked documents|Tài liệu liên kết)$/ });
-      await expect(links.getByText(/^(No linked documents yet\.|Chưa liên kết tài liệu nào\.)$/)).toBeVisible();
+      await expect(
+         links.getByText(/^(No linked documents yet\.|Chưa liên kết tài liệu nào\.)$/)
+      ).toBeVisible();
       await links.getByRole('button', { name: /^(Link document|Liên kết tài liệu)$/ }).click();
       const dialog = page.getByRole('dialog');
       await dialog.getByRole('textbox').fill(title.slice(0, 18));
@@ -77,8 +79,25 @@ test('a task links a project document from Attachments and the document lists th
       );
 
       await page.goto(`/${fixture.slug}/issue/${issue.identifier}?tab=attachments`);
-      await links.getByRole('button', { name: new RegExp(`^(Unlink|Gỡ liên kết) ${title}$`) }).click();
-      await expect(links.getByText(/^(No linked documents yet\.|Chưa liên kết tài liệu nào\.)$/)).toBeVisible();
+      await links
+         .getByRole('button', { name: new RegExp(`^(Unlink|Gỡ liên kết) ${title}$`) })
+         .click();
+      await expect(
+         links.getByText(/^(No linked documents yet\.|Chưa liên kết tài liệu nào\.)$/)
+      ).toBeVisible();
+
+      // Related documents on Overview links with the same picker, next to the FDS/TDS warning.
+      // VI: Tài liệu liên quan ở Overview liên kết bằng cùng hộp chọn, cạnh cảnh báo FDS/TDS.
+      await page.getByRole('tab', { name: /^(Overview|Tổng quan)/ }).click();
+      const related = page.getByRole('region', {
+         name: /^(Related documents|Tài liệu liên quan)$/,
+      });
+      await related.getByRole('button', { name: /^(Link document|Liên kết tài liệu)$/ }).click();
+      await dialog.getByRole('textbox').fill(title.slice(0, 18));
+      await dialog.getByRole('listitem').filter({ hasText: title }).click();
+      await expect(dialog).toBeHidden();
+      await expect(related.getByRole('link', { name: new RegExp(title) })).toBeVisible();
+      await expect(related.getByText(/FDS\/TDS/)).toBeHidden();
    } finally {
       await context.request.delete(`${api}/issues/${issue.id}?workspaceId=${workspaceId}`);
       await context.request.delete(`${api}/documents/${document.id}?workspaceId=${workspaceId}`);
