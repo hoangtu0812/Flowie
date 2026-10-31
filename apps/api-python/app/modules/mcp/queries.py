@@ -508,8 +508,13 @@ class QueryService:
             )
         ).mappings()
         related = [dict(row) for row in relations]
+        from ...domains.team_insights import hcm_today
+        from .planning import planning_summary
+
+        detail = await self.issue(payload)
         return {
-            "issue": await self.issue(payload),
+            "issue": detail,
+            "planning": planning_summary(detail, hcm_today()),
             "projectDocuments": await self.documents(
                 SearchDocumentsInput(projectId=issue["project_id"], limit=25)
             )

@@ -14,6 +14,8 @@ from ...core.errors import ApiError
 from ...core.identifiers import _cuid
 from ...core.clock import _utcnow
 from .commands import CommandService
+from .planning import planning_warnings
+from ...domains.team_insights import hcm_today
 from .connections import validate_current
 from .log_redaction import failure_details, redact_arguments
 from .queries import QueryService
@@ -252,6 +254,7 @@ class ToolApplication:
             data.pop("parentIssueId", None)
             data.pop("parent", None)
             data.pop("duplicateOfId", None)
+            data["planningWarnings"] = planning_warnings(data, hcm_today())
         result = {
             "data": data,
             "correlationId": correlation,

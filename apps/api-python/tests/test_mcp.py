@@ -98,6 +98,34 @@ class McpUploadTypeTests(unittest.TestCase):
             self.assertEqual(upload_type("README"), "application/octet-stream")
 
 
+class McpPlanningTests(unittest.TestCase):
+    def test_planning_warnings_follow_status_dates_and_effort(self):
+        # Plans only warn: what is missing depends on the status category, plus date order and
+        # overdue dates for unfinished work.
+        # VI: Kế hoạch chỉ cảnh báo: phần thiếu tuỳ nhóm trạng thái, cộng thứ tự ngày và quá hạn
+        # VI: với việc chưa xong.
+        from app.modules.mcp.planning import planning_warnings
+
+        today = "2026-10-31"
+        todo = {"status": {"category": "UNSTARTED"}}
+        self.assertEqual(planning_warnings(todo, today), ["No due date: ask the requester for one and set dueDate."])
+        started = {"status": {"category": "STARTED"}, "dueDate": "2026-11-05T00:00:00", "startDate": "2026-10-31"}
+        self.assertEqual(
+            planning_warnings(started, today),
+            ["Work has started without a plan: set targetDate, estimatedEffort (estimatedEffort in man-days)."],
+        )
+        planned = {**started, "targetDate": "2026-11-06", "estimatedEffort": 2}
+        self.assertEqual(planning_warnings(planned, today), ["targetDate 2026-11-06 is after dueDate 2026-11-05."])
+        late = {**planned, "startDate": "2026-10-29", "targetDate": "2026-10-30", "dueDate": "2026-10-30"}
+        self.assertEqual(
+            planning_warnings(late, today),
+            ["Overdue: targetDate 2026-10-30 has passed.", "Overdue: dueDate 2026-10-30 has passed."],
+        )
+        done = {**late, "status": {"category": "COMPLETED"}}
+        self.assertEqual(planning_warnings(done, today), ["Completed without actualEffort: record the man-days spent."])
+        self.assertEqual(planning_warnings({**done, "actualEffort": 0}, today), [])
+
+
 class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_upgrade_backfills_existing_documents(self):
         import asyncpg
@@ -2210,6 +2238,69 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             result = await self.call("read_attachment_image", attachmentId=image)
             self.assertEqual(result["mimeType"], "image/png")
             self.assertEqual(result["imageBase64"], "iVBORw==")
+
+    async def test_issue_writes_accept_plans_and_return_planning_warnings(self):
+        # Agents set the whole plan through MCP; warnings come back on every issue write and in
+        # the issue context, and never block the write.
+        # VI: Agent đặt toàn bộ kế hoạch qua MCP; cảnh báo trả về ở mọi thao tác ghi issue và
+        # VI: trong context của issue, và không bao giờ chặn thao tác ghi.
+        created = (
+            await self.call(
+                "create_issue",
+                teamId=self.team,
+                projectId=self.project,
+                statusId=self.status,
+                title="Planned through MCP",
+                idempotencyKey="planned-create",
+            )
+        )["data"]
+        self.assertEqual(created["planningWarnings"], ["No due date: ask the requester for one and set dueDate."])
+        started_status = await self._status("STARTED")
+        moved = (
+            await self.call(
+                "transition_issue",
+                issueId=created["id"],
+                statusId=started_status,
+                reason="Start without a plan",
+                expectedVersion=created["version"],
+                idempotencyKey="planned-start",
+            )
+        )["data"]
+        self.assertEqual(moved["status"]["category"], "STARTED")
+        self.assertTrue(any(w.startswith("Work has started without a plan") for w in moved["planningWarnings"]))
+        planned = (
+            await self.call(
+                "update_issue",
+                issueId=created["id"],
+                startDate="2099-01-01",
+                targetDate="2099-01-03",
+                dueDate="2099-01-05",
+                estimatedEffort=1.5,
+                expectedVersion=moved["version"],
+                idempotencyKey="planned-update",
+            )
+        )["data"]
+        self.assertEqual((planned["estimatedEffort"], planned["planningWarnings"]), (1.5, []))
+        context = await self.call("get_issue_context", issueId=created["identifier"])
+        self.assertEqual(context["planning"]["estimatedEffort"], 1.5)
+        self.assertEqual((context["planning"]["effortUnit"], context["planning"]["warnings"]), ("man-days", []))
+        with self.assertRaises(ApiError):
+            await self.call(
+                "update_issue",
+                issueId=created["id"],
+                estimatedEffort=-1,
+                expectedVersion=planned["version"],
+                idempotencyKey="planned-negative",
+            )
+
+    async def _status(self, category):
+        async with self.factory() as db:
+            return (
+                await db.execute(
+                    text("SELECT id FROM issue_statuses WHERE workspace_id=:workspace AND category=:category LIMIT 1"),
+                    {"workspace": self.workspace, "category": category},
+                )
+            ).scalar_one()
 
     async def test_attachment_upload_url_is_scoped_single_use_and_rechecked(self):
         # The tool signs a URL for an issue in scope; posting a file there stores it once, as the

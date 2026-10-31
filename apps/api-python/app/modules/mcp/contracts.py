@@ -151,7 +151,12 @@ class CreateIssueTool(WriteInput, BugCreateFields):
     assigneeId: str | None = None
     # Defaults to the caller. VI: Mặc định là người gọi.
     reporterId: str | None = None
+    startDate: str | None = None
+    targetDate: str | None = None
     dueDate: str | None = None
+    # Effort in man-days, like the web's Effort field. VI: Effort theo man-day, như trường Effort trên web.
+    estimatedEffort: float | None = Field(default=None, ge=0, le=10000)
+    actualEffort: float | None = Field(default=None, ge=0, le=10000)
     labelIds: list[str] = Field(default_factory=list, max_length=100)
 
 
@@ -166,8 +171,12 @@ class UpdateIssueTool(VersionInput, IssueInput, BugUpdateFields):
     # Null resets the reporter to the creator. VI: Null đưa reporter về người tạo.
     reporterId: str | None = None
     priority: Literal["NONE", "LOW", "MEDIUM", "HIGH", "URGENT"] | None = None
+    startDate: str | None = None
     targetDate: str | None = None
     dueDate: str | None = None
+    # Man-days; null clears the value. VI: Man-day; null xoá giá trị.
+    estimatedEffort: float | None = Field(default=None, ge=0, le=10000)
+    actualEffort: float | None = Field(default=None, ge=0, le=10000)
     labelIds: list[str] | None = Field(default=None, max_length=100)
 
     @model_validator(mode="after")
