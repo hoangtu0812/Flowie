@@ -9,7 +9,13 @@ import { useLiveProjectData } from './use-live-project';
 /** Project "Timeline" tab: the project's issues laid out over time. */
 export default function ProjectTimeline({ projectId }: { projectId: string }) {
    void projectId;
-   const { project: liveProject, issues: liveIssues, loading, error } = useLiveProjectData();
+   const {
+      project: liveProject,
+      issues: liveIssues,
+      loading,
+      error,
+      reload,
+   } = useLiveProjectData();
 
    const project = useMemo(
       () => (liveProject ? toProjectUi(liveProject, liveIssues) : null),
@@ -28,5 +34,5 @@ export default function ProjectTimeline({ projectId }: { projectId: string }) {
          </div>
       );
 
-   return <ProjectIssuesTimeline issues={issues} />;
+   return <ProjectIssuesTimeline issues={issues} onIssueChanged={reload} />;
 }

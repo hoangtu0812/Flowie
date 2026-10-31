@@ -190,7 +190,7 @@ export function toProjectUi(
    };
 }
 
-const priorityPresentation = (value: string) => {
+export const priorityPresentation = (value: string) => {
    const normalized = value.trim().toLowerCase().replace(/_/g, '-');
    return (
       priorities.find(
