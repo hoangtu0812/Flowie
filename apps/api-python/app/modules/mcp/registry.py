@@ -238,7 +238,7 @@ DEFINITIONS = (
     ),
     ToolDefinition(
         "create_issue",
-        "Create an issue using valid team references; retries require the same idempotency key.",
+        "Create an issue using valid team references; set dueDate (ask the requester when none is given) and, when known, startDate, targetDate and estimatedEffort in man-days. The result lists planningWarnings to fix. Retries require the same idempotency key.",
         c.CreateIssueTool,
         "issues:write",
         "create_issue",
@@ -247,7 +247,7 @@ DEFINITIONS = (
     ),
     ToolDefinition(
         "update_issue",
-        "Update issue fields with expectedVersion; set parentIssueId (id or identifier, null removes it) to move the issue under another issue; use transition_issue for status changes.",
+        "Update issue fields with expectedVersion, including the plan: startDate, targetDate, dueDate, estimatedEffort and actualEffort (man-days). Set parentIssueId (id or identifier, null removes it) to move the issue under another issue; use transition_issue for status changes. The result lists planningWarnings to fix.",
         c.UpdateIssueTool,
         "issues:write",
         "update_issue",
