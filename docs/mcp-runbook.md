@@ -20,6 +20,7 @@ is advertised.
 | `MCP_TOOL_TIMEOUT_SECONDS` | `30` | Maximum execution time per tool transaction |
 | `MCP_MAX_RESULT_BYTES` | `262144` | Maximum serialized structured result size |
 | `MCP_MAX_IDEMPOTENCY_KEYS` | `10000` | Maximum saved mutation keys per connection; identical retries do not consume a new key |
+| `API_PUBLIC_URL` | `http://localhost:4000/api/v1` | Public REST API base (Compose uses `NEXT_PUBLIC_API_URL`); `create_attachment_upload` returns upload URLs under it, so agents must reach it |
 
 Configure the actual API host before enabling remote access, for example:
 

@@ -57,6 +57,7 @@ from .jobs.scm_deliveries import scm_delivery_loop
 from .jobs.scm_sync import scm_sync_loop
 from .domains.reviews import router as reviews_router
 from .modules.mcp.api import router as mcp_management_router
+from .modules.mcp.uploads import router as mcp_upload_router
 from .modules.notifications.outbox import outbox_loop
 from .modules.agent_runs.api import router as agent_runs_router
 from .modules.agent_runs.dispatcher import dispatcher_loop as agent_run_dispatcher_loop
@@ -126,6 +127,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     install_diagnostics(app)
     app.state.settings = runtime
     app.include_router(mcp_management_router)
+    app.include_router(mcp_upload_router)
     app.include_router(agent_runs_router)
     from .modules.agent_runs.evidence import router as operations_router
     app.include_router(operations_router)

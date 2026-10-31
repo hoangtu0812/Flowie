@@ -171,7 +171,7 @@ class ToolApplication:
 
             service = RunService(db, principal, self.settings)
         else:
-            service = CommandService(db, principal)
+            service = CommandService(db, principal, self.settings)
         await service.prepare(tool.name, payload)
         key = f"{principal.connection_id}:{tool.name}:{payload.idempotencyKey}"
         await db.execute(

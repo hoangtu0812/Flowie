@@ -82,6 +82,8 @@ services:
          API_CORS_ORIGIN: http://localhost:3000
          # Absolute base for the links carried by Discord notifications.
          APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+         # Public REST API base that MCP upload URLs start with.
+         API_PUBLIC_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api/v1}
          POSTGRES_HOST: circle-postgres
          POSTGRES_PORT_INTERNAL: 5432
          REDIS_HOST: circle-redis

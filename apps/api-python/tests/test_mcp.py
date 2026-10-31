@@ -2143,6 +2143,80 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result["mimeType"], "image/png")
             self.assertEqual(result["imageBase64"], "iVBORw==")
 
+    async def test_attachment_upload_url_is_scoped_single_use_and_rechecked(self):
+        # The tool signs a URL for an issue in scope; posting a file there stores it once, as the
+        # connection owner, and a revoked connection or forged/expired URL stores nothing.
+        # VI: Tool ký URL cho issue trong phạm vi; gửi file vào đó lưu đúng một lần, người tải lên là
+        # VI: chủ kết nối, còn kết nối bị thu hồi hoặc URL giả/hết hạn không lưu gì.
+        from unittest.mock import AsyncMock, patch
+        from urllib.parse import urlsplit
+        from app.modules.mcp import uploads
+
+        with self.assertRaises(ApiError):
+            await self.call(
+                "create_attachment_upload",
+                issueId=self.other_issue["id"],
+                filename="secret.png",
+                idempotencyKey="upload-out-of-scope",
+            )
+        link = (
+            await self.call(
+                "create_attachment_upload",
+                issueId=self.issue["identifier"],
+                filename="shot.png",
+                idempotencyKey="upload-in-scope",
+            )
+        )["data"]
+        self.assertTrue(link["uploadUrl"].startswith(f"{self.settings.api_public_url}/mcp/uploads/"))
+        self.assertIn(link["uploadUrl"], link["curl"])
+        path = urlsplit(link["uploadUrl"]).path
+        host = create_app(self.settings)
+        host.state.session_factory = self.factory
+        files = {"file": ("ignored.html", b"\x89PNG", "text/html")}
+        with patch("app.storage.minio.MinioStorage.put", AsyncMock()) as storage:
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=host), base_url="http://testserver"
+            ) as client:
+                first = await client.post(path, files=files)
+                self.assertEqual(first.status_code, 200, first.text)
+                attachment = first.json()["data"]
+                self.assertEqual(attachment["entityId"], self.issue["id"])
+                self.assertEqual(attachment["filename"], "shot.png")
+                self.assertEqual(attachment["mimeType"], "image/png")
+                self.assertEqual(attachment["uploadedById"], self.user["id"])
+                again = await client.post(path, files=files)
+                self.assertEqual(again.json()["data"]["id"], attachment["id"])
+                self.assertEqual(storage.await_count, 1)
+
+                forged = await client.post(path[:-2] + "xx", files=files)
+                self.assertEqual(forged.status_code, 401)
+                with patch.object(uploads, "UPLOAD_TTL", timedelta(seconds=-1)):
+                    expired = uploads.upload_link(self.settings, self.principal, self.issue, "late.png")
+                response = await client.post(urlsplit(expired["uploadUrl"]).path, files=files)
+                self.assertEqual(response.status_code, 401)
+
+                fresh = uploads.upload_link(self.settings, self.principal, self.issue, "after.png")
+                async with self.factory() as db:
+                    await revoke(db, self.workspace, self.user, self.connection["id"])
+                response = await client.post(urlsplit(fresh["uploadUrl"]).path, files=files)
+                self.assertEqual(response.status_code, 401)
+                self.assertEqual(storage.await_count, 1)
+        async with self.factory() as db:
+            stored = (
+                await db.execute(
+                    text("SELECT COUNT(*) FROM attachments WHERE entity_id=:id"),
+                    {"id": self.issue["id"]},
+                )
+            ).scalar_one()
+            audited = (
+                await db.execute(
+                    text("""SELECT COUNT(*) FROM audit_logs WHERE workspace_id=:workspace
+                    AND action='mcp.upload_attachment.succeeded'"""),
+                    {"workspace": self.workspace},
+                )
+            ).scalar_one()
+        self.assertEqual((stored, audited), (1, 1))
+
     async def test_mutation_budget_replays_and_inactive_retention(self):
         from app.modules.mcp.maintenance import cleanup
 

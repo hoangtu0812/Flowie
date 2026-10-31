@@ -81,25 +81,40 @@ async def list_attachments(workspaceId: str = Query(min_length=1), entityType: E
 async def create_attachment(request: Request, workspaceId: str = Form(), entityType: EntityType = Form(), entityId: str = Form(), file: UploadFile = File(), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     await _authorize_entity(db, workspaceId, entityType, entityId, user['id'], writing=True)
     body = await file.read(MAX_ATTACHMENT_BYTES + 1)
+    data = await store_attachment(db, request.app.state.settings, workspaceId, user['id'], entityType, entityId, file.filename, file.content_type, body)
+    await db.commit()
+    return {'data': data}
+
+
+async def store_attachment(db: AsyncSession, settings: Any, workspace_id: str, user_id: str, entity_type: EntityType, entity_id: str, filename: str | None, content_type: str | None, body: bytes) -> dict[str, Any]:
+    """Stores an already authorized upload in object storage and records it; the caller commits.
+
+    Shared by the web upload and the MCP upload URL, so both apply the same 10 MB limit, filename
+    cleaning and document type rules. `body` may be one byte over the limit so an oversized file
+    is told apart from one that fits exactly.
+    VI: Lưu file đã được cấp quyền vào object storage và ghi bản ghi; bên gọi tự commit. Dùng chung
+    VI: cho upload trên web và URL upload của MCP, nên cả hai cùng giới hạn 10 MB, cùng cách làm sạch
+    VI: tên file và luật loại file của tài liệu. `body` có thể dư một byte so với giới hạn để phân biệt
+    VI: file quá lớn với file vừa đúng giới hạn.
+    """
     if not body:
         raise ApiError(400, 'A file is required.', 'Bad Request')
     if len(body) > MAX_ATTACHMENT_BYTES:
         raise ApiError(400, 'Files may not exceed 10 MB.', 'Bad Request')
-    filename = sub(r'[^a-zA-Z0-9._-]', '_', file.filename or 'attachment')[:180] or 'attachment'
-    if entityType == 'document' and not filename.lower().endswith(DOCUMENT_FILE_EXTENSIONS):
+    filename = sub(r'[^a-zA-Z0-9._-]', '_', filename or 'attachment')[:180] or 'attachment'
+    if entity_type == 'document' and not filename.lower().endswith(DOCUMENT_FILE_EXTENSIONS):
         raise ApiError(400, 'Documents accept DOCX, PDF, or Markdown files only.', 'Bad Request')
     # The %PDF- signature check stops a renamed file from being served inline as a PDF.
     # VI: Kiểm tra chữ ký %PDF- để file đổi đuôi không được phục vụ inline như PDF.
-    if entityType == 'document-folder' and (not filename.lower().endswith(FOLDER_FILE_EXTENSIONS) or not body.startswith(b'%PDF-')):
+    if entity_type == 'document-folder' and (not filename.lower().endswith(FOLDER_FILE_EXTENSIONS) or not body.startswith(b'%PDF-')):
         raise ApiError(400, 'Document folders accept PDF files only.', 'Bad Request')
-    object_key = f'{workspaceId}/{user["id"]}/{token_urlsafe(18)}-{filename}'
-    storage = MinioStorage(request.app.state.settings)
-    await storage.put(object_key, body, file.content_type or 'application/octet-stream')
+    mime_type = content_type or 'application/octet-stream'
+    object_key = f'{workspace_id}/{user_id}/{token_urlsafe(18)}-{filename}'
+    await MinioStorage(settings).put(object_key, body, mime_type)
     attachment_id = _cuid()
-    await db.execute(text('''INSERT INTO attachments (id, workspace_id, uploaded_by, entity_type, entity_id, object_key, filename, mime_type, size, created_at) VALUES (:id, :workspace_id, :uploaded_by, :entity_type, :entity_id, :object_key, :filename, :mime_type, :size, :now)'''), {'id': attachment_id, 'workspace_id': workspaceId, 'uploaded_by': user['id'], 'entity_type': entityType, 'entity_id': entityId, 'object_key': object_key, 'filename': filename, 'mime_type': file.content_type or 'application/octet-stream', 'size': len(body), 'now': _utcnow()})
-    await db.commit()
+    await db.execute(text('''INSERT INTO attachments (id, workspace_id, uploaded_by, entity_type, entity_id, object_key, filename, mime_type, size, created_at) VALUES (:id, :workspace_id, :uploaded_by, :entity_type, :entity_id, :object_key, :filename, :mime_type, :size, :now)'''), {'id': attachment_id, 'workspace_id': workspace_id, 'uploaded_by': user_id, 'entity_type': entity_type, 'entity_id': entity_id, 'object_key': object_key, 'filename': filename, 'mime_type': mime_type, 'size': len(body), 'now': _utcnow()})
     result = await db.execute(text('SELECT * FROM attachments WHERE id = :id'), {'id': attachment_id})
-    return {'data': _present(result.mappings().one())}
+    return _present(result.mappings().one())
 
 
 @router.get('/{attachment_id}/download')

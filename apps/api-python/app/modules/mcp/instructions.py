@@ -22,7 +22,7 @@ DEFAULT_WORKFLOW = """When asked to handle a task (for example "xử lý DTD-12"
 4. Start: `transition_issue` to the team's In Progress status, with a short reason.
 5. Feature documents: `get_feature_docs`, then `upsert_feature_doc` for the feature's FDS (behaviour, rules, acceptance criteria) and TDS (design, data, API, tests). Send the full updated Markdown, keep existing sections and give a one-sentence `changeSummary`. Skip only when no documented behaviour or design changes, and say so in the plan comment. Agents never approve documents: leave them Draft or In review for a person.
 6. Code, then open a pull request whose title or branch contains the task identifier.
-7. Report: `add_comment` with the result: pull request link, what changed, what was tested and how, and what is not verified yet.
+7. Report: `add_comment` with the result: pull request link, what changed, what was tested and how, and what is not verified yet Attach screenshots or logs that show it with `create_attachment_upload`.
 8. After the pull request is merged: `transition_issue` to the team's Technical Review status. Move to Done only when the change is verified in the deployed app or a person asks.
 When someone adds a new comment to a task you handled, read it (and its screenshots), answer with `add_comment` using `parentCommentId`, move the task back to In Progress if it needs more work, and repeat steps 2-8.
 Write comments in the language the task is written in."""

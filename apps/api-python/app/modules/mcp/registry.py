@@ -255,6 +255,15 @@ DEFINITIONS = (
         extra_scopes=("issues:read",),
     ),
     ToolDefinition(
+        "create_attachment_upload",
+        "Get a one-time URL, valid for 10 minutes, to attach a local file (screenshot, log, document; at most 10 MB) to an issue. Then run the returned curl command with the file path, for example curl -F \"file=@shot.png\" <uploadUrl>; the response is the new attachment. Use a new idempotency key for each file.",
+        c.CreateAttachmentUploadTool,
+        "issues:write",
+        "create_attachment_upload",
+        True,
+        extra_scopes=("issues:read",),
+    ),
+    ToolDefinition(
         "transition_issue",
         "Change a valid team status and record a reason comment atomically.",
         c.TransitionIssueTool,

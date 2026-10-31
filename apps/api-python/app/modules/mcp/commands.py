@@ -15,17 +15,20 @@ from ..work_items.contracts import (
 )
 from .feature_docs import require_feature_project, upsert_feature_doc
 from .policy import AccessPolicy
+from .uploads import upload_link
 
 
 class CommandService:
-    def __init__(self, db, principal):
-        self.db, self.principal = db, principal
+    def __init__(self, db, principal, settings=None):
+        self.db, self.principal, self.settings = db, principal, settings
         self.policy = AccessPolicy(db, principal)
         self.target: dict | None = None
         self.parent_id: str | None = None
 
     async def prepare(self, name: str, payload) -> None:
-        if name in {"update_issue", "transition_issue", "add_comment"}:
+        if name == "create_attachment_upload":
+            self.target = await self.policy.issue(payload.issueId)
+        elif name in {"update_issue", "transition_issue", "add_comment"}:
             self.target = await self.policy.issue(payload.issueId, lock=True)
             if name == "update_issue" and "projectId" in payload.model_fields_set:
                 await self.policy.destination(payload.projectId, self.target["team_id"])
@@ -229,6 +232,8 @@ class CommandService:
             )["data"]
         if name == "upsert_feature_doc":
             return await upsert_feature_doc(self.db, self.principal, self.target, payload)
+        if name == "create_attachment_upload":
+            return upload_link(self.settings, self.principal, self.target, payload.filename)
         if name == "link_document":
             await self.add_link(payload.documentId, payload)
             return {"documentId": payload.documentId, "linked": True}

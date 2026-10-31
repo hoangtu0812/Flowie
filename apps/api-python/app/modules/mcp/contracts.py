@@ -189,6 +189,12 @@ class AddCommentTool(WriteInput, IssueInput):
     content: str = Field(min_length=1, max_length=20000)
 
 
+class CreateAttachmentUploadTool(WriteInput, IssueInput):
+    # The stored name is cleaned like a web upload; the type is derived from it at upload time.
+    # VI: Tên lưu được làm sạch như upload trên web; kiểu file suy ra từ tên lúc upload.
+    filename: str = Field(min_length=1, max_length=180)
+
+
 class UpdateCommentTool(VersionInput):
     commentId: str = Field(min_length=1)
     content: str = Field(min_length=1, max_length=20000)
