@@ -18,12 +18,11 @@ from __future__ import annotations
 import json
 import re
 
-from fastapi import Depends, Request
+from fastapi import Request
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.requests import HTTPConnection
 
 from ...core.errors import ApiError
-from ...db.session import get_session
 
 READ_ONLY_ROLE = "ADMIN_VIEWER"
 # Roles that may read admin-only pages and data. VI: Các role đọc được trang và dữ liệu chỉ dành cho admin.
@@ -59,14 +58,24 @@ async def _target_workspace(request: Request) -> str | None:
     return None
 
 
-async def enforce_read_only_role(request: Request, db: AsyncSession = Depends(get_session)) -> None:
+async def enforce_read_only_role(connection: HTTPConnection) -> None:
     """Refuses writes by ADMIN_VIEWER members (403). A request whose workspace cannot be told is
     refused when the caller is ADMIN_VIEWER anywhere, so an unknown route fails closed. Requests
     without a valid session are left to the route's own authentication.
+
+    It runs for every route, WebSockets included, so it takes the connection rather than a
+    Request and returns at once for anything but an HTTP write. It opens its own short session
+    only when it must look up roles, never holding a database connection for a stream.
     VI: Từ chối thao tác ghi của thành viên ADMIN_VIEWER (403). Request không xác định được
     VI: workspace bị từ chối khi người gọi là ADMIN_VIEWER ở bất kỳ workspace nào, nên route lạ bị
     VI: chặn theo hướng an toàn. Request không có phiên hợp lệ để route tự xác thực.
+    VI: Dependency chạy cho mọi route, kể cả WebSocket, nên nhận connection thay vì Request và trả
+    VI: về ngay với mọi thứ không phải thao tác ghi qua HTTP. Chỉ mở session ngắn của riêng nó khi
+    VI: cần tra role, không bao giờ giữ kết nối database suốt một luồng stream.
     """
+    if not isinstance(connection, Request):
+        return
+    request = connection
     if request.method not in WRITE_METHODS or PERSONAL_PATHS.match(request.url.path):
         return
     token = request.cookies.get("flowie_access")
@@ -78,17 +87,22 @@ async def enforce_read_only_role(request: Request, db: AsyncSession = Depends(ge
         user_id = decode_access(token, request.app.state.settings)["sub"]
     except ApiError:
         return
-    roles = dict(
-        (
-            await db.execute(
-                text("SELECT workspace_id, role FROM workspace_members WHERE user_id = :user AND status = 'ACTIVE'"),
-                {"user": user_id},
-            )
-        ).all()
-    )
-    # The handler shares this session; ending the read leaves it with no open transaction.
-    # VI: Handler dùng chung session này; kết thúc lần đọc để session không còn transaction mở.
-    await db.rollback()
+    factory = getattr(request.app.state, "session_factory", None)
+    # The lifespan always sets the factory in a running server; only test apps built without the
+    # lifespan lack it, and they are not serving real users.
+    # VI: Lifespan luôn tạo factory khi server chạy thật; chỉ app test dựng không qua lifespan mới
+    # VI: thiếu nó, và app đó không phục vụ người dùng thật.
+    if factory is None:
+        return
+    async with factory() as db:
+        roles = dict(
+            (
+                await db.execute(
+                    text("SELECT workspace_id, role FROM workspace_members WHERE user_id = :user AND status = 'ACTIVE'"),
+                    {"user": user_id},
+                )
+            ).all()
+        )
     if READ_ONLY_ROLE not in roles.values():
         return
     workspace = await _target_workspace(request)

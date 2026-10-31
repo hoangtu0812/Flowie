@@ -15,7 +15,9 @@ from app.core.identifiers import _cuid
 from app.db.session import get_session
 from app.domains.auth import create_workspace_bootstrap
 from app.main import create_app
+from app.modules.access.read_only import enforce_read_only_role
 from app.modules.mcp.application import ToolApplication
+from starlette.websockets import WebSocket
 
 
 @pytest.mark.skipif(not os.getenv("MCP_TEST_DATABASE_URL"), reason="Test database not configured")
@@ -58,6 +60,9 @@ async def verify_admin_viewer():
                 yield db
 
         app.dependency_overrides[get_session] = session_dependency
+        # httpx's ASGI transport skips the lifespan that normally sets the factory.
+        # VI: ASGI transport của httpx bỏ qua lifespan vốn tạo factory.
+        app.state.session_factory = factory
 
         async def client_for(user_id):
             client = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver")
@@ -97,6 +102,9 @@ async def verify_admin_viewer():
             await owner_client.aclose()
             await viewer_client.aclose()
 
+        # WebSocket routes pass through the guard untouched (no Request, no database session).
+        # VI: Route WebSocket đi qua lớp chặn mà không bị đụng tới (không Request, không session DB).
+        assert await enforce_read_only_role(WebSocket({"type": "websocket", "path": "/api/v1/notifications/stream", "headers": []}, None, None)) is None
         # MCP tool calls carry no cookie and are checked by role. VI: Lời gọi MCP không có cookie nên kiểm tra theo role.
         tools = ToolApplication(factory, settings)
         assert await tools.read_only(SimpleNamespace(workspace_id=workspace, user={"id": viewer})) is True

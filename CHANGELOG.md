@@ -138,6 +138,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
+- Live notifications work again after the read-only admin role: the role's write guard also ran for WebSocket connections, where it could not get a request and broke the notification stream. The guard now skips anything but HTTP writes and opens its own short database session only when it must check a role, so streams never hold a database connection. API only; no schema change. (DTD-190)
+  VI: Thông báo realtime hoạt động lại sau khi có role quản trị chỉ đọc: lớp chặn ghi của role này chạy cả cho kết nối WebSocket, nơi nó không lấy được request nên làm hỏng luồng thông báo. Giờ lớp chặn bỏ qua mọi thứ không phải thao tác ghi qua HTTP và chỉ mở session database ngắn của riêng nó khi cần kiểm tra role, nên luồng stream không bao giờ giữ kết nối database. Chỉ đổi API; không đổi schema. (DTD-190)
+
 - TeX math in Markdown renders instead of showing its source: `$\rightarrow$` shows an arrow, `$…$` renders inline and `$$…$$` renders as a block, in Docs, task descriptions, comments and Markdown attachments. Code spans and code blocks stay literal, TeX link and image commands are not run, and a literal dollar pair needs `\$`. Web only; no API or schema change. (DTD-179, #88)
   VI: Công thức TeX trong Markdown được hiển thị thay vì hiện mã nguồn: `$\rightarrow$` hiện mũi tên, `$…$` hiển thị trong dòng và `$$…$$` hiển thị thành khối, ở Docs, mô tả task, comment và attachment Markdown. Code span và code block giữ nguyên văn, lệnh link và ảnh của TeX không được thực thi, và muốn giữ cặp ký tự đô la thì viết `\$`. Chỉ đổi web; không đổi API hay schema. (DTD-179)
 
