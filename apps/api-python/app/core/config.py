@@ -70,6 +70,9 @@ class Settings:
     mcp_tool_timeout_seconds: int = 30
     mcp_max_result_bytes: int = 262144
     mcp_max_idempotency_keys: int = 10000
+    # Public base of the REST API (".../api/v1") as agents reach it; MCP upload URLs start here.
+    # VI: Gốc public của REST API (".../api/v1") mà agent truy cập được; URL upload MCP bắt đầu từ đây.
+    api_public_url: str = 'http://localhost:4000/api/v1'
     auth_login_account_limit: int = 20
     auth_login_ip_limit: int = 300
     auth_mfa_encryption_keys: str = ''
@@ -147,6 +150,7 @@ class Settings:
             mcp_tool_timeout_seconds=max(1, min(120, int(getenv('MCP_TOOL_TIMEOUT_SECONDS', '30')))),
             mcp_max_result_bytes=max(1024, min(1048576, int(getenv('MCP_MAX_RESULT_BYTES', '262144')))),
             mcp_max_idempotency_keys=max(100,min(100000,int(getenv('MCP_MAX_IDEMPOTENCY_KEYS','10000')))),
+            api_public_url=getenv('API_PUBLIC_URL', 'http://localhost:4000/api/v1').rstrip('/'),
         )
 
 
