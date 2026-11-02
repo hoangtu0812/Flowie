@@ -16,7 +16,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
-- Browser regression tests follow the current mobile Properties and Bug report flow, restore shared account preferences after failed tests, and wait for the Activity URL before testing reload. Test-only change; no deployment behavior or schema change. (DTD-252)
+- Browser regression tests follow the current mobile Properties and Bug report flow, restore shared account preferences after failed tests, and wait for the Activity URL before testing reload. Test-only change; no deployment behavior or schema change. (DTD-252, #112)
   VI: Kiểm thử trình duyệt dùng luồng Properties và Bug report mobile hiện tại, khôi phục tùy chọn tài khoản dùng chung sau test lỗi, và đợi URL Activity cập nhật trước khi kiểm tra reload. Chỉ thay test; không đổi hành vi triển khai hay schema. (DTD-252)
 
 - Docs supports moving and deleting documents, PDFs and folders through right-click and accessible action menus. Moves stay inside the project and retain document history and links; deletion archives documents, protects project roots and refuses non-empty folders. Deploy `api` and `web` together; no schema migration. (DTD-224, #106)
