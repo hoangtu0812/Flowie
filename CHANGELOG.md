@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- Issue breadcrumbs show the linked project beside the team even when opened from All issues or a direct link; the project opens its issue list. Web only; no schema change. (DTD-249, #110)
+  VI: Breadcrumb task hiển thị dự án cạnh team kể cả mở từ All issues hoặc link trực tiếp; bấm dự án mở danh sách công việc của dự án. Chỉ đổi web; không đổi schema. (DTD-249)
+
 - Long project lead names stay inside the Lead column, with the full name available on the selector, so Target date remains readable. Web only; no schema change. (DTD-227, #109)
   VI: Tên Lead dài được giữ trong cột Lead, có thể xem tên đầy đủ trên nút chọn, giúp Target date luôn dễ đọc. Chỉ đổi web; không đổi schema. (DTD-227)
 

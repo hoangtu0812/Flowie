@@ -34,14 +34,15 @@ import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { projectPath } from '@/lib/project-route';
+import { HStack } from '@astryxdesign/core/Layout';
+import { Text } from '@astryxdesign/core/Text';
+import { DesignSurface } from '@/components/common/design-surface';
 
 /**
- * Issue page header: breadcrumb (team › cycle › parent issues › identifier + title,
- * or project › parent issues › identifier + title when opened from a project page)
- * and previous / next navigation across the issue list.
- * VI: Header trang issue: breadcrumb (team › cycle › các issue cha › mã + tiêu đề,
- * hoặc dự án › các issue cha › mã + tiêu đề khi mở từ trang dự án) và nút issue
- * trước / sau trong danh sách issue.
+ * Issue breadcrumbs show its team and project regardless of the entry route, followed by
+ * parent issues and the issue title. Previous/next links preserve the entry-route marker.
+ * VI: Breadcrumb task hiển thị team và dự án bất kể đường mở, tiếp theo là các task cha
+ * và tiêu đề task. Link trước/sau giữ dấu nhận biết đường mở ban đầu.
  */
 export default function HeaderNav() {
    const tx = useMessages(messages);
@@ -51,13 +52,9 @@ export default function HeaderNav() {
    const openIssueAction = useIssueActionDialogStore((state) => state.openForIssue);
    const index = issues.findIndex((candidate) => candidate.identifier === issueId);
    const issue = index >= 0 ? issues[index] : undefined;
-   // Opened from a project page: the project replaces the team-scoped crumbs,
-   // and previous / next keep the marker so the way back stays the same.
-   // VI: Mở từ trang dự án: dự án thay cho các crumb theo team, và nút trước /
-   // sau giữ dấu này để đường quay lại không đổi.
    const fromProject = isOpenedFromProject(useSearchParams());
-   const project = fromProject ? issue?.project : undefined;
-   const team = project ? undefined : teams.find((candidate) => candidate.id === issue?.teamId);
+   const project = issue?.project;
+   const team = teams.find((candidate) => candidate.id === issue?.teamId);
    const cycle =
       !project && issue?.cycleId
          ? cycles.find((candidate) => candidate.id === issue.cycleId)
@@ -94,13 +91,25 @@ export default function HeaderNav() {
                </Link>
             )}
             {project && (
-               <Link
-                  href={projectPath(orgId, project, 'issues')}
-                  className="flex items-center gap-1.5 shrink-0 hover:opacity-80"
-               >
-                  <project.icon size={16} className="shrink-0" />
-                  <span className="text-sm font-medium hidden md:inline">{project.name}</span>
-               </Link>
+               <>
+                  {team && <ChevronRight className="size-3.5 text-muted-foreground shrink-0" />}
+                  <Link
+                     href={projectPath(orgId, project, 'issues')}
+                     className="min-w-0 max-w-48 hover:opacity-80"
+                     title={project.name}
+                     aria-label={project.name}
+                     data-testid="issue-project-breadcrumb"
+                  >
+                     <DesignSurface>
+                        <HStack gap={1} className="min-w-0">
+                           <project.icon size={16} className="shrink-0" />
+                           <Text type="label" maxLines={1} className="min-w-0 truncate">
+                              {project.name}
+                           </Text>
+                        </HStack>
+                     </DesignSurface>
+                  </Link>
+               </>
             )}
             {issue && !team && !project && (
                <Link
