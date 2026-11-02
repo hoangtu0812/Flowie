@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- Issue Views save reusable filters from workspace and team issue lists, support private/shared views, editing and deletion, and preserve team scope and existing view URLs. Conflicting edits require a reload instead of overwriting another session. Deploy `api` and `web` together; no schema migration. (DTD-250)
+  VI: Issue Views lưu bộ lọc dùng lại từ danh sách công việc của workspace và team, hỗ trợ riêng tư/chia sẻ, sửa và xóa, đồng thời giữ phạm vi team và URL view hiện có. Chỉnh sửa xung đột yêu cầu tải lại thay vì ghi đè phiên khác. Triển khai `api` và `web` cùng bản; không có migration schema. (DTD-250)
+
 - Docs supports moving and deleting documents, PDFs and folders through right-click and accessible action menus. Moves stay inside the project and retain document history and links; deletion archives documents, protects project roots and refuses non-empty folders. Deploy `api` and `web` together; no schema migration. (DTD-224, #106)
   VI: Docs hỗ trợ di chuyển và xóa tài liệu, PDF và thư mục qua menu chuột phải và nút thao tác truy cập được bằng bàn phím. Di chuyển trong cùng dự án và giữ lịch sử/liên kết; xóa tài liệu bằng lưu trữ mềm, bảo vệ gốc dự án và từ chối thư mục không rỗng. Triển khai `api` và `web` cùng bản; không có migration schema. (DTD-224)
 

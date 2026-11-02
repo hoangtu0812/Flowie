@@ -17,6 +17,7 @@ import { useMessages } from '@/features/shared/use-messages';
 import { messages } from './messages.vi';
 import { BugReport } from './bug-report';
 import { BulkIssueActions } from './bulk-issue-actions';
+import { SaveIssueView } from '@/features/views/save-issue-view';
 
 /** Keeps optional list commands in the existing toolbar and resets dialogs with their scope. */
 export function IssueListActions({ hasBugReport = false }: { hasBugReport?: boolean }) {
@@ -59,6 +60,7 @@ function ListActions({
    const { run, busy } = useIssueExport(workspace, query);
    return (
       <>
+         <SaveIssueView />
          <DropdownMenu>
             <DropdownMenuTrigger asChild>
                <Button

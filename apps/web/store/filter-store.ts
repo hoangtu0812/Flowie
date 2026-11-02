@@ -2,7 +2,9 @@
 
 import type { FilterModel, FiltersState } from '@/components/data-table-filter/core/types';
 import { createParser, useQueryState } from 'nuqs';
-import { useCallback } from 'react';
+import { createContext, useCallback, useContext } from 'react';
+
+export const FilterDefaultsContext = createContext<FiltersState>([]);
 
 /**
  * Issue filters, synced to the URL via nuqs under a single `?filters=` param.
@@ -50,20 +52,23 @@ export interface FilterState {
 }
 
 export function useFilterStore(): FilterState {
-   const [filters, setFiltersState] = useQueryState('filters', filtersParser);
+   const defaults = useContext(FilterDefaultsContext);
+   const [filters, setFiltersState] = useQueryState('filters', filtersParser.withDefault(defaults));
 
    const setFilters: React.Dispatch<React.SetStateAction<FiltersState>> = useCallback(
       (action) => {
          void setFiltersState((previous) => {
             const next = typeof action === 'function' ? action(previous) : action;
-            return next.length > 0 ? next : null;
+            return next;
          });
       },
       [setFiltersState]
    );
 
    const clearFilters = useCallback(() => {
-      void setFiltersState(null);
+      // An explicit empty URL array overrides saved defaults; an absent parameter restores them.
+      // VI: Mảng rỗng tường minh trên URL thay bộ lọc đã lưu; bỏ tham số sẽ khôi phục chúng.
+      void setFiltersState([]);
    }, [setFiltersState]);
 
    return {
