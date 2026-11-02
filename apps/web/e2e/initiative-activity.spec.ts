@@ -95,12 +95,16 @@ test('initiative Activity composes updates, keeps failed drafts and refreshes Ov
       ).toBeVisible();
       await expect(input).toHaveValue('Draft kept while browsing history');
       await page.getByRole('button', { name: 'Updates', exact: true }).click();
+      await expect.poll(() => new URL(page.url()).searchParams.get('history')).toBeNull();
       await expect(page.getByRole('article')).toHaveCount(1);
       await input.fill('');
       await page.getByRole('button', { name: 'overview', exact: true }).click();
       await expect(page.getByText(body, { exact: true })).toBeVisible();
       await page.getByRole('button', { name: 'See all', exact: true }).click();
-      await page.waitForLoadState('networkidle');
+      // nuqs renders state before its throttled URL write; reload only after the destination is durable.
+      // VI: nuqs render state trước khi ghi URL có điều tiết; chỉ reload khi đích đã được lưu trên URL.
+      await expect.poll(() => new URL(page.url()).searchParams.get('tab')).toBe('activity');
+      await expect.poll(() => new URL(page.url()).searchParams.get('history')).toBeNull();
       await page.reload();
       await expect(page.getByRole('article')).toHaveCount(1);
       await page.setViewportSize({ width: 390, height: 844 });
