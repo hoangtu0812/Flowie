@@ -69,6 +69,14 @@ import { DocStatusBadge, DocTypeBadge, DOC_TYPES } from './document-badges';
 import { DocumentPreview, EmptyPreview, PdfPreview } from './doc-preview';
 import { ProjectSharepointDialog } from './project-sharepoint';
 import { loadProjectSharepoint } from '@/components/settings/sharepoint-integration';
+import {
+   DocsContextMenu,
+   TreeItemMenu,
+   TreeMutationDialog,
+   mutateTreeItem,
+   type TreeAction,
+   type TreeTarget,
+} from './document-tree-actions';
 
 const FOLDER_KINDS: { value: FolderKind; label: keyof typeof messages }[] = [
    { value: 'module', label: 'Module' },
@@ -104,6 +112,8 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
    const [open, setOpen] = useState<LiveDocument>();
    const [preview, setPreview] = useState<{ kind: 'document' | 'file'; id: string }>();
    const [busy, setBusy] = useState(false);
+   const busyRef = useRef(false);
+   const [mutation, setMutation] = useState<{ action: 'move' | 'delete'; target: TreeTarget }>();
    const upload = useRef<HTMLInputElement>(null);
 
    const reload = useCallback(async () => {
@@ -134,7 +144,9 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
    const visible = useMemo(() => filterTree(roots, query, docType), [roots, query, docType]);
    const filtering = query.trim() !== '' || docType !== 'ALL';
    const root = roots.find((node) => node.folder.kind === 'project') ?? roots[0];
-   const target = selected ?? root?.folder.id;
+   const target = tree?.folders.some((folder) => folder.id === selected)
+      ? selected
+      : root?.folder.id;
    // The project root is named after the project and stays unnumbered, so it is not editable here.
    // VI: Thư mục gốc mang tên dự án và không đánh số, nên không sửa ở đây.
    const editable = tree?.folders.find(
@@ -142,22 +154,42 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
    );
 
    async function act(operation: () => Promise<unknown>, success: string) {
+      if (busyRef.current) return false;
+      busyRef.current = true;
       setBusy(true);
+      let saved = false;
       try {
          await operation();
-         await reload();
+         saved = true;
+         setTree(await loadProjectTree(projectId));
+         setError(undefined);
          toast.success(success);
          return true;
       } catch (reason) {
-         toast.error(reason instanceof Error ? reason.message : tx('Could not save.'));
+         toast.error(
+            saved
+               ? tx('Saved, but the tree could not refresh. Reload before continuing.')
+               : reason instanceof Error
+                 ? reason.message
+                 : tx('Could not save.')
+         );
          return false;
       } finally {
+         busyRef.current = false;
          setBusy(false);
       }
    }
 
    if (error) return <QueryState message={error} onRetry={() => void reload()} />;
    if (!tree) return <LoadingState label={tx('Loading documents…')} />;
+
+   const onTreeAction = (action: TreeAction, item: TreeTarget) => {
+      if (busyRef.current || tree.canManage === false) return;
+      if (action === 'edit' && item.kind === 'folder') {
+         setSelected(item.value.id);
+         setDialog('edit-folder');
+      } else if (action !== 'edit') setMutation({ action, target: item });
+   };
 
    // Preview targets are looked up by id so a reload after editing shows fresh content.
    // VI: Đối tượng xem trước được tra theo id để sau khi sửa và tải lại thì nội dung mới.
@@ -197,6 +229,13 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
          </span>
       ),
       startContent: document.icon,
+      endContent: !document.linked && tree.canManage !== false && (
+         <TreeItemMenu
+            target={{ kind: 'document', value: document }}
+            busy={busy}
+            onAction={onTreeAction}
+         />
+      ),
       isSelected: previewDocument?.id === document.id,
       onClick: () => {
          setPreview({ kind: 'document', id: document.id });
@@ -207,6 +246,9 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
       id: file.id,
       label: file.filename,
       startContent: <FileText className="size-4 text-red-600 dark:text-red-400" />,
+      endContent: tree.canManage !== false && (
+         <TreeItemMenu target={{ kind: 'file', value: file }} busy={busy} onAction={onTreeAction} />
+      ),
       isSelected: previewFile?.id === file.id,
       onClick: () => {
          setPreview({ kind: 'file', id: file.id });
@@ -224,11 +266,22 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
          ),
          startContent: node.folder.icon,
          endContent:
-            node.folder.kind === 'project' ? undefined : kind ? (
-               <Text type="supporting" size="sm">
-                  {tx(kind.label)}
-               </Text>
-            ) : undefined,
+            node.folder.kind === 'project' ? undefined : (
+               <HStack gap={2} vAlign="center">
+                  {kind && (
+                     <Text type="supporting" size="sm">
+                        {tx(kind.label)}
+                     </Text>
+                  )}
+                  {tree.canManage !== false && (
+                     <TreeItemMenu
+                        target={{ kind: 'folder', value: node.folder }}
+                        busy={busy}
+                        onAction={onTreeAction}
+                     />
+                  )}
+               </HStack>
+            ),
          // Folders start collapsed below the project root; while searching or filtering every
          // branch with matches opens. TreeList treats this as the initial state only.
          // VI: Thư mục bắt đầu thu gọn, trừ gốc dự án; khi tìm kiếm hoặc lọc thì mở mọi nhánh có
@@ -367,13 +420,20 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
                      </div>
                   ) : (
                      <>
-                        {/* Remounting on a new filter re-applies the initial expansion. */}
-                        <TreeList
-                           key={`${query}|${docType}`}
-                           aria-label={tx('Project documents')}
-                           density="compact"
-                           items={visible.map(folderItem)}
-                        />
+                        {/* Remounting on a new filter re-applies the initial expansion.
+                            VI: Dựng lại khi đổi bộ lọc để áp dụng trạng thái mở ban đầu. */}
+                        <DocsContextMenu
+                           tree={tree}
+                           busy={busy || tree.canManage === false}
+                           onAction={onTreeAction}
+                        >
+                           <TreeList
+                              key={`${query}|${docType}`}
+                              aria-label={tx('Project documents')}
+                              density="compact"
+                              items={visible.map(folderItem)}
+                           />
+                        </DocsContextMenu>
                         {visible.length === 0 && (
                            <Text type="supporting">{tx('No documents match.')}</Text>
                         )}
@@ -424,6 +484,26 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
                )}
             </ResizablePanel>
          </ResizablePanelGroup>
+         {mutation && (
+            <TreeMutationDialog
+               key={`${mutation.action}-${mutation.target.value.id}`}
+               target={mutation.target}
+               action={mutation.action}
+               tree={tree}
+               busy={busy}
+               onClose={() => setMutation(undefined)}
+               onSubmit={async (destination, number) => {
+                  const ok = await act(
+                     () => mutateTreeItem(mutation.target, destination, number),
+                     tx(destination ? 'Item moved.' : 'Item deleted.')
+                  );
+                  if (ok) {
+                     if (destination) setSelected(destination);
+                     setMutation(undefined);
+                  }
+               }}
+            />
+         )}
          {dialog === 'sharepoint' && (
             <ProjectSharepointDialog
                projectId={projectId}

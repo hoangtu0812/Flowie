@@ -87,6 +87,9 @@ async def verify_admin_viewer():
                 viewer_client.post("/api/v1/issues", json={"workspaceId": workspace, "teamId": team, "title": "Not allowed"}),
                 viewer_client.post(f"/api/v1/labels?workspaceId={workspace}", json={"name": "nope", "color": "#000000"}),
                 viewer_client.post("/api/v1/comments", json={"issueId": "unknown", "content": "no workspace given"}),
+                viewer_client.delete(f"/api/v1/documents/folders/unknown?workspaceId={workspace}"),
+                viewer_client.patch(f"/api/v1/documents/folder-files/unknown?workspaceId={workspace}", json={"folderId": "destination", "expectedFolderId": "source"}),
+                viewer_client.delete(f"/api/v1/documents/folder-files/unknown?workspaceId={workspace}&expectedFolderId=source"),
             ]
             for response in await asyncio.gather(*writes):
                 assert response.status_code == 403, response.text

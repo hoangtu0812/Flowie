@@ -1,4 +1,28 @@
 export const messages = {
+   'Move…': 'Di chuyển…',
+   'Delete…': 'Xóa…',
+   'Move': 'Di chuyển',
+   'Delete': 'Xóa',
+   'Actions for {value0}': 'Thao tác với {value0}',
+   'Document actions': 'Thao tác tài liệu',
+   'Move {value0}': 'Di chuyển {value0}',
+   'Delete {value0}?': 'Xóa {value0}?',
+   'Choose a destination in this project.': 'Chọn thư mục đích trong dự án này.',
+   'The document will be archived. Its history and task links are retained.':
+      'Tài liệu sẽ được lưu trữ. Lịch sử và liên kết task được giữ lại.',
+   'Only an empty folder can be deleted.': 'Chỉ có thể xóa thư mục rỗng.',
+   'The PDF will be removed from Docs. SharePoint copies are kept.':
+      'PDF sẽ được gỡ khỏi Docs. Các bản sao SharePoint được giữ lại.',
+   'Current location: {value0}': 'Vị trí hiện tại: {value0}',
+   'Search folders': 'Tìm thư mục',
+   'Destination folder': 'Thư mục đích',
+   'Choose a folder': 'Chọn thư mục',
+   'This folder is not empty. Move or delete its contents first.':
+      'Thư mục chưa rỗng. Hãy di chuyển hoặc xóa nội dung trước.',
+   'Item moved.': 'Đã di chuyển.',
+   'Item deleted.': 'Đã xóa.',
+   'Saved, but the tree could not refresh. Reload before continuing.':
+      'Đã lưu nhưng chưa tải lại được cây. Hãy tải lại trước khi tiếp tục.',
    'Revision history': 'Lịch sử phiên bản',
    'Up to 100 recent revisions. Restoring creates a new revision.':
       'Tối đa 100 phiên bản gần đây. Khôi phục sẽ tạo một phiên bản mới.',

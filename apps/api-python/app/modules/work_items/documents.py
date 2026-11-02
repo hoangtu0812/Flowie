@@ -20,6 +20,10 @@ async def create_document(
     payload: CreateDocumentInput, user: Any, db: AsyncSession
 ) -> dict[str, dict[str, Any]]:
     await _team_access(db, payload.workspaceId, payload.teamId, user["id"])
+    if payload.teamId:
+        from .document_tree import _lock_team_folders
+
+        await _lock_team_folders(db, payload.teamId)
     # Approval needs a review round, so a document never starts Approved.
     # VI: Duyệt cần một vòng review, nên tài liệu không bao giờ được tạo ở trạng thái Đã duyệt.
     if payload.status == "APPROVED":
@@ -83,6 +87,21 @@ async def update_document(
     user: Any,
     db: AsyncSession,
 ) -> dict[str, dict[str, Any]]:
+    from .document_tree import _folder_row, _lock_team_folders
+
+    if "folderId" in payload.model_fields_set:
+        owner = (await db.execute(text(
+            "SELECT team_id FROM documents WHERE id = :id AND workspace_id = :workspace AND archived_at IS NULL"
+        ), {"id": document_id, "workspace": workspaceId})).mappings().first()
+        if not owner:
+            raise ApiError(404, "Document not found.", "Not Found")
+        await _team_access(db, workspaceId, owner["team_id"], user["id"])
+        # Relocation locks the tree before the document row, matching folder deletion.
+        # Ordinary autosaves need no tree lock because their active document blocks deletion.
+        # VI: Di chuyển khóa cây trước dòng tài liệu, cùng thứ tự với xóa thư mục. Lưu tự động
+        # VI: thông thường không cần khóa cây vì tài liệu đang hoạt động đã chặn xóa thư mục.
+        if owner["team_id"]:
+            await _lock_team_folders(db, owner["team_id"])
     current = (
         (
             await db.execute(
@@ -116,6 +135,10 @@ async def update_document(
         if "folderId" in values and values["folderId"]
         else None
     )
+    if "folderId" in values and values["folderId"] != current["folder_id"]:
+        source = await _folder_row(db, workspaceId, current["folder_id"]) if current["folder_id"] else None
+        if source and source["project_id"] and (not folder or source["project_id"] != folder["project_id"]):
+            raise ApiError(400, "Documents can only move within their project.", "Bad Request")
     columns = {
         "folderId": "folder_id",
         "title": "title",
@@ -154,6 +177,9 @@ async def update_document(
             ),
             params,
         )
+        if "folderId" in values and values["folderId"] != current["folder_id"]:
+            await db.execute(text("UPDATE document_publications SET release = NULL WHERE document_id = :id"),
+                             {"id": document_id})
         document = await _document_by_id(db, document_id, workspaceId)
         await record_change(
             db,
@@ -170,12 +196,12 @@ async def update_document(
     return {"data": document}
 
 
-async def archive_document(document_id, workspaceId, user, db):
+async def archive_document(document_id, workspaceId, user, db, expected_version=None):
     current = (
         (
             await db.execute(
                 text(
-                    "SELECT team_id FROM documents WHERE id=:id AND workspace_id=:workspace AND archived_at IS NULL FOR UPDATE"
+                    "SELECT team_id, version FROM documents WHERE id=:id AND workspace_id=:workspace AND archived_at IS NULL FOR UPDATE"
                 ),
                 {"id": document_id, "workspace": workspaceId},
             )
@@ -186,6 +212,8 @@ async def archive_document(document_id, workspaceId, user, db):
     if not current:
         raise ApiError(404, "Document not found.", "Not Found")
     await _team_access(db, workspaceId, current["team_id"], user["id"])
+    if expected_version is not None and current["version"] != expected_version:
+        raise ApiError(409, "This document changed. Reload it before deleting.", "Conflict")
     await db.execute(
         text(
             "UPDATE documents SET archived_at=:now,updated_at=:now,updated_by=:actor WHERE id=:id"

@@ -4,11 +4,36 @@ import {
    buildTree,
    filterTree,
    folderLabel,
+   folderDestinations,
    type TreeDocument,
    type TreeFolder,
 } from '../lib/document-tree';
 import { documentTemplate, documentTitle } from '../lib/document-templates';
 import { markdownHeadings } from '../lib/markdown-headings';
+
+test('destination paths exclude the moving subtree and tolerate incomplete or cyclic trees', () => {
+   const folders = [
+      folder('root', null, 'Project'),
+      folder('a', 'root', 'Module'),
+      folder('b', 'a', 'Feature'),
+      folder('c', 'root', 'Other'),
+   ];
+   assert.deepEqual(
+      folderDestinations(folders, 'a')
+         .map((item) => item.id)
+         .sort(),
+      ['c', 'root']
+   );
+   assert.equal(
+      folderDestinations(folders).find((item) => item.id === 'b')?.path,
+      'Project / Module / Feature'
+   );
+   assert.equal(folderDestinations([folder('loose', 'missing', 'Loose')])[0].path, 'Loose');
+   assert.equal(
+      folderDestinations([folder('x', 'y', 'First'), folder('y', 'x', 'Second')]).length,
+      2
+   );
+});
 
 const folder = (id: string, parentId: string | null, name: string, position = 0): TreeFolder => ({
    id,

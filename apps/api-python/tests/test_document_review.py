@@ -87,7 +87,9 @@ async def verify_review_flow():
             await status(403, reviewers(spec, author, [first["id"]]))
             await status(400, reviewers(spec, lead, [first["id"], outsider["id"]]))
             state = await reviewers(spec, lead, [first["id"], second["id"]])
-            assert [row["name"] for row in state["reviewers"]] == ["First reviewer", "Second reviewer"]
+            # Batch assignments share a timestamp; ID tie-breaking need not match request order.
+            # VI: Phân công cùng đợt có chung thời điểm; thứ tự theo ID không nhất thiết khớp request.
+            assert {row["name"] for row in state["reviewers"]} == {"First reviewer", "Second reviewer"}
             assert state["canAssign"] and not state["canApprove"]
             assert outsider["id"] not in {person["id"] for person in state["members"]}
             assert (await review_state(db, workspace, spec["id"], first["id"]))["members"] == []
