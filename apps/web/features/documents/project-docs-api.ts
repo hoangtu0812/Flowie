@@ -23,6 +23,7 @@ export type ProjectTreeDocument = LiveDocument & {
 export type ProjectTree = {
    projectId: string;
    teamId: string;
+   canManage?: boolean;
    folders: TreeFolder[];
    documents: ProjectTreeDocument[];
    files: TreeFile[];
@@ -60,15 +61,40 @@ export const createDocumentFolder = async (draft: {
    number?: number;
 }) => send<TreeFolder>('/folders', { method: 'POST', body: await withWorkspace(draft) });
 
-/** Rename or renumber a folder; `number: null` removes the number. VI: Đổi tên hoặc số của thư mục; `number: null` xoá số. */
+/** Update folder metadata or its parent; a supplied expected parent rejects stale moves.
+ * VI: Cập nhật thông tin hoặc cha của thư mục; cha kỳ vọng giúp từ chối di chuyển từ dữ liệu cũ. */
 export const updateDocumentFolder = (
    id: string,
-   draft: { name?: string; number?: number | null }
+   draft: {
+      name?: string;
+      number?: number | null;
+      parentId?: string;
+      expectedParentId?: string | null;
+   }
 ) =>
    send<TreeFolder>(`/folders/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       body: JSON.stringify(draft),
    });
+
+export const deleteDocumentFolder = (id: string, parentId: string | null) =>
+   send(
+      `/folders/${encodeURIComponent(id)}`,
+      { method: 'DELETE' },
+      { expectedParentId: parentId ?? '' }
+   );
+
+export const archiveTreeDocument = (id: string, version: number) =>
+   send(`/${encodeURIComponent(id)}`, { method: 'DELETE' }, { expectedVersion: String(version) });
+
+export const moveFolderFile = (id: string, expectedFolderId: string, folderId: string) =>
+   send(`/folder-files/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ expectedFolderId, folderId }),
+   });
+
+export const deleteFolderFile = (id: string, expectedFolderId: string) =>
+   send(`/folder-files/${encodeURIComponent(id)}`, { method: 'DELETE' }, { expectedFolderId });
 
 export const createTreeDocument = async (draft: {
    teamId: string;

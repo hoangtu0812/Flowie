@@ -109,6 +109,12 @@ async def store_attachment(db: AsyncSession, settings: Any, workspace_id: str, u
     if entity_type == 'document-folder' and (not filename.lower().endswith(FOLDER_FILE_EXTENSIONS) or not body.startswith(b'%PDF-')):
         raise ApiError(400, 'Document folders accept PDF files only.', 'Bad Request')
     mime_type = content_type or 'application/octet-stream'
+    if entity_type == 'document-folder':
+        from ..modules.work_items.document_tree import _lock_team_folders
+
+        team_id = await _entity_team_id(db, workspace_id, entity_type, entity_id)
+        await _lock_team_folders(db, team_id)
+        await _authorize_entity(db, workspace_id, entity_type, entity_id, user_id, writing=True)
     object_key = f'{workspace_id}/{user_id}/{token_urlsafe(18)}-{filename}'
     await MinioStorage(settings).put(object_key, body, mime_type)
     attachment_id = _cuid()

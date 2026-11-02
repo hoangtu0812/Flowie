@@ -24,6 +24,28 @@ export const folderLabel = (folder: { name: string; number?: number | null }) =>
       ? folder.name
       : `${String(folder.number).padStart(2, '0')} · ${folder.name}`;
 
+/** Full folder paths for destination selection; exclude a moved folder and its descendants.
+ * Traversal tolerates missing parents and cycles so malformed/stale trees never hang the UI.
+ * VI: Đường dẫn đầy đủ để chọn đích; loại thư mục đang chuyển và mọi hậu duệ. Duyệt có xét
+ * VI: cha bị thiếu/vòng lặp để cây lỗi hoặc cũ không làm treo giao diện. */
+export function folderDestinations(folders: TreeFolder[], movingFolderId?: string) {
+   const byId = new Map(folders.map((folder) => [folder.id, folder]));
+   return folders
+      .flatMap((folder) => {
+         const path: string[] = [];
+         const seen = new Set<string>();
+         let current: TreeFolder | undefined = folder;
+         while (current && !seen.has(current.id)) {
+            if (current.id === movingFolderId) return [];
+            seen.add(current.id);
+            path.unshift(folderLabel(current));
+            current = current.parentId ? byId.get(current.parentId) : undefined;
+         }
+         return [{ id: folder.id, path: path.join(' / ') }];
+      })
+      .sort((a, b) => a.path.localeCompare(b.path));
+}
+
 export interface TreeDocument {
    id: string;
    folderId: string | null;

@@ -47,8 +47,15 @@ class UpdateFolderInput(BaseModel):
     kind: FolderKind | None = None
     # null removes the number. VI: null xoá số của thư mục.
     number: int | None = Field(default=None, ge=0, le=99)
-    # null moves the folder to its team root. VI: null đưa thư mục về gốc của team.
+    # null is allowed only for team-wide roots; project folders stay in their project.
+    # VI: null chỉ dùng cho gốc của team; thư mục dự án phải ở trong dự án của nó.
     parentId: str | None = None
+    expectedParentId: str | None = None
+
+
+class MoveFolderFileInput(BaseModel):
+    folderId: str = Field(min_length=1)
+    expectedFolderId: str = Field(min_length=1)
 
 
 class ProjectTreeInput(BaseModel):
@@ -110,6 +117,30 @@ async def read_project_tree(workspaceId: str = Query(min_length=1), projectId: s
     from ..modules.work_items.document_tree import project_tree
 
     return {'data': await project_tree(db, workspace_id=workspaceId, user_id=user['id'], project_id=projectId)}
+
+
+@router.delete('/folders/{folder_id}')
+async def delete_folder(folder_id: str, workspaceId: str = Query(min_length=1), expectedParentId: str | None = None, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    from ..modules.work_items.document_tree import delete_folder as operation
+    from ..db.mutations import commit_mutation
+
+    return {'data': await commit_mutation(db, lambda: operation(db, workspace_id=workspaceId, user_id=user['id'], folder_id=folder_id, expected_parent_id=expectedParentId))}
+
+
+@router.patch('/folder-files/{file_id}')
+async def move_folder_file(file_id: str, payload: MoveFolderFileInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    from ..modules.work_items.document_tree import mutate_folder_file
+    from ..db.mutations import commit_mutation
+
+    return {'data': await commit_mutation(db, lambda: mutate_folder_file(db, workspace_id=workspaceId, user_id=user['id'], file_id=file_id, expected_folder_id=payload.expectedFolderId, folder_id=payload.folderId))}
+
+
+@router.delete('/folder-files/{file_id}')
+async def delete_folder_file(file_id: str, workspaceId: str = Query(min_length=1), expectedFolderId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    from ..modules.work_items.document_tree import mutate_folder_file
+    from ..db.mutations import commit_mutation
+
+    return {'data': await commit_mutation(db, lambda: mutate_folder_file(db, workspace_id=workspaceId, user_id=user['id'], file_id=file_id, expected_folder_id=expectedFolderId))}
 
 
 @router.post('/project-tree/scaffold')
@@ -198,11 +229,11 @@ async def update_document(document_id: str, payload: UpdateDocumentInput, worksp
 
 
 @router.delete('/{document_id}')
-async def archive_document(document_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+async def archive_document(document_id: str, workspaceId: str = Query(min_length=1), expectedVersion: int | None = Query(default=None, ge=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     from ..modules.work_items.documents import archive_document as operation
     from ..db.mutations import commit_mutation
 
-    return await commit_mutation(db,lambda:operation(document_id,workspaceId,user,db))
+    return await commit_mutation(db,lambda:operation(document_id,workspaceId,user,db,expected_version=expectedVersion))
 
 
 class RestoreDocumentInput(BaseModel):

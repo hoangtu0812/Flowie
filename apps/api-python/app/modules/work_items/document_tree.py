@@ -62,10 +62,10 @@ def folder_payload(row: Any) -> dict[str, Any]:
 
 
 async def _lock_team_folders(db: AsyncSession, team_id: str) -> None:
-    # Name checks and default-folder creation read then write; one lock per team keeps
-    # two concurrent requests from both passing the check.
-    # VI: Kiểm tra trùng tên và tạo thư mục mặc định đọc rồi ghi; một khoá cho mỗi team
-    # VI: tránh hai request đồng thời cùng vượt qua bước kiểm tra.
+    # Serialize tree changes and content insertion per team so name/depth/emptiness checks
+    # remain valid until commit, including polymorphic PDFs that have no folder foreign key.
+    # VI: Tuần tự hóa thay đổi cây và thêm nội dung theo team để kiểm tra tên/độ sâu/độ rỗng
+    # VI: còn đúng tới lúc commit, kể cả PDF đa hình không có khóa ngoại tới thư mục.
     await db.execute(
         text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
         {"key": f"document-folders:{team_id}"},
@@ -292,6 +292,13 @@ async def create_folder(
         raise ApiError(400, "A team or parent folder is required.", "Bad Request")
     await _team_access(db, workspace_id, team_id, user_id)
     await _lock_team_folders(db, team_id)
+    if parent_id:
+        parent = await _folder_row(db, workspace_id, parent_id)
+        team_id, project_id = parent["team_id"], parent["project_id"]
+        if len(await _ancestors(db, parent_id)) >= MAX_FOLDER_DEPTH:
+            raise ApiError(400, f"Folders nest at most {MAX_FOLDER_DEPTH} levels deep.", "Bad Request")
+    if kind == "project" and (parent_id or not project_id):
+        raise ApiError(400, "Project folders must be project roots.", "Bad Request")
     await _ensure_unique_name(db, team_id, parent_id, name)
     if number is None and parent_id and project_id:
         number = await _next_number(db, parent_id)
@@ -334,13 +341,11 @@ async def update_folder(
 ) -> dict[str, Any]:
     """Rename, re-icon, reorder, re-kind or move a folder within its team.
 
-    Moving refuses a parent in another team, a parent inside the folder's own subtree
-    (a cycle) and a result deeper than MAX_FOLDER_DEPTH; a moved subtree takes the new
-    parent's project. `parentId: null` moves the folder to the team root.
+    Moving refuses another team/project, cycles and excess depth. Team-wide folders may
+    still be imported into a project for compatibility. Project roots stay protected.
     VI: Đổi tên, icon, vị trí, loại hoặc di chuyển thư mục trong team. Di chuyển sẽ từ chối
-    VI: thư mục cha thuộc team khác, thư mục cha nằm trong chính nhánh con của nó (vòng lặp)
-    VI: và kết quả sâu hơn MAX_FOLDER_DEPTH; nhánh được chuyển nhận dự án của cha mới.
-    VI: `parentId: null` đưa thư mục về gốc của team.
+    VI: thư mục cha thuộc team/dự án khác, vòng lặp và độ sâu vượt giới hạn. Vẫn cho nhập
+    VI: thư mục chung của team vào dự án để tương thích. Thư mục gốc dự án được bảo vệ.
     `number` (null clears it) must stay unique among the new siblings. A change of name,
     number or parent re-publishes the documents below to SharePoint at the new path.
     VI: `number` (null để xoá số) không được trùng với các thư mục cùng cha mới. Đổi tên, số
@@ -349,18 +354,29 @@ async def update_folder(
     folder = await _folder_row(db, workspace_id, folder_id)
     await _team_access(db, workspace_id, folder["team_id"], user_id)
     await _lock_team_folders(db, folder["team_id"])
+    folder = await _folder_row(db, workspace_id, folder_id)
+    if "expectedParentId" in values and values["expectedParentId"] != folder["parent_id"]:
+        raise ApiError(409, "This folder moved. Reload the tree and try again.", "Conflict")
+    if folder["kind"] == "project" and any(key in values for key in ("parentId", "kind", "number", "name")):
+        raise ApiError(400, "The project root cannot be changed here.", "Bad Request")
+    if values.get("kind") == "project" and folder["kind"] != "project":
+        raise ApiError(400, "Only project roots can have the project type.", "Bad Request")
     parent_id = values["parentId"] if "parentId" in values else folder["parent_id"]
     project_id = folder["project_id"]
     if "parentId" in values and parent_id:
         parent = await _folder_row(db, workspace_id, parent_id)
         if parent["team_id"] != folder["team_id"]:
             raise ApiError(400, "Folders can only move within their team.", "Bad Request")
+        if folder["project_id"] and parent["project_id"] != folder["project_id"]:
+            raise ApiError(400, "Folders can only move within their project.", "Bad Request")
         chain = await _ancestors(db, parent_id)
         if folder_id in chain:
             raise ApiError(400, "A folder cannot move inside itself.", "Bad Request")
         if len(chain) + await _subtree_height(db, folder_id) > MAX_FOLDER_DEPTH:
             raise ApiError(400, f"Folders nest at most {MAX_FOLDER_DEPTH} levels deep.", "Bad Request")
         project_id = parent["project_id"]
+    elif "parentId" in values and folder["project_id"]:
+        raise ApiError(400, "Choose a destination in this project.", "Bad Request")
     name = values["name"].strip() if values.get("name") else folder["name"]
     if "name" in values or "parentId" in values:
         await _ensure_unique_name(db, folder["team_id"], parent_id, name, exclude_id=folder_id)
@@ -396,6 +412,75 @@ async def update_folder(
             {"id": folder_id, "project": project_id},
         )
     return folder_payload(await _folder_row(db, workspace_id, folder_id))
+
+
+async def delete_folder(
+    db: AsyncSession, *, workspace_id: str, user_id: str, folder_id: str,
+    expected_parent_id: str | None = None,
+) -> dict[str, Any]:
+    """Delete only an empty non-project folder while serializing all folder-content writers.
+
+    Archived documents retain their history and links through the folder FK's SET NULL;
+    checking active documents, children and polymorphic attachments prevents silent loss.
+    An empty expected parent identifies a root; None keeps older callers compatible.
+    VI: Chỉ xóa thư mục rỗng không phải gốc dự án, tuần tự hóa với mọi thao tác ghi nội dung.
+    VI: Tài liệu lưu trữ giữ lịch sử/liên kết qua FK SET NULL; kiểm tra tài liệu hoạt động,
+    VI: thư mục con và attachment đa hình để ngăn mất dữ liệu ngầm.
+    VI: Cha kỳ vọng rỗng biểu thị gốc; None giữ tương thích với bên gọi cũ.
+    """
+    folder = await _folder_row(db, workspace_id, folder_id)
+    await _team_access(db, workspace_id, folder["team_id"], user_id)
+    await _lock_team_folders(db, folder["team_id"])
+    folder = await _folder_row(db, workspace_id, folder_id)
+    if expected_parent_id is not None and (folder["parent_id"] or "") != expected_parent_id:
+        raise ApiError(409, "This folder moved. Reload the tree and try again.", "Conflict")
+    if folder["kind"] == "project":
+        raise ApiError(400, "The project root cannot be deleted.", "Bad Request")
+    occupied = (await db.execute(text(
+        """SELECT EXISTS(SELECT 1 FROM document_folders WHERE parent_id = :id)
+           OR EXISTS(SELECT 1 FROM documents WHERE folder_id = :id AND archived_at IS NULL)
+           OR EXISTS(SELECT 1 FROM attachments WHERE workspace_id = :workspace
+                     AND entity_type = 'document-folder' AND entity_id = :id)"""
+    ), {"id": folder_id, "workspace": workspace_id})).scalar_one()
+    if occupied:
+        raise ApiError(409, "This folder is not empty. Move or delete its contents first.", "Conflict")
+    await db.execute(text("DELETE FROM document_folders WHERE id = :id"), {"id": folder_id})
+    return {"id": folder_id, "deleted": True}
+
+
+async def mutate_folder_file(
+    db: AsyncSession, *, workspace_id: str, user_id: str, file_id: str,
+    expected_folder_id: str, folder_id: str | None = None,
+) -> dict[str, Any]:
+    """Move a PDF's metadata or remove it from Docs; never delete external storage copies.
+
+    Lock the owning team's tree before re-reading the source so deletion, uploads and moves
+    cannot race the empty-folder check. The expected source prevents stale destructive actions.
+    VI: Di chuyển metadata PDF hoặc gỡ khỏi Docs; không xóa bản sao ở kho lưu trữ bên ngoài.
+    VI: Khóa cây của team rồi đọc lại nguồn để xóa/upload/di chuyển không chạy đua với kiểm tra
+    VI: thư mục rỗng. Nguồn kỳ vọng ngăn thao tác phá hủy dựa trên dữ liệu cũ.
+    """
+    source = await _folder_row(db, workspace_id, expected_folder_id)
+    await _team_access(db, workspace_id, source["team_id"], user_id)
+    await _lock_team_folders(db, source["team_id"])
+    source = await _folder_row(db, workspace_id, expected_folder_id)
+    file = (await db.execute(text(
+        """SELECT * FROM attachments WHERE id = :id AND workspace_id = :workspace
+           AND entity_type = 'document-folder' FOR UPDATE"""
+    ), {"id": file_id, "workspace": workspace_id})).mappings().first()
+    if not file:
+        raise ApiError(404, "File not found.", "Not Found")
+    if file["entity_id"] != expected_folder_id:
+        raise ApiError(409, "This file moved. Reload the tree and try again.", "Conflict")
+    if folder_id:
+        destination = await _folder_row(db, workspace_id, folder_id)
+        if (destination["team_id"], destination["project_id"]) != (source["team_id"], source["project_id"]):
+            raise ApiError(400, "Files can only move within their project and team.", "Bad Request")
+        await db.execute(text("UPDATE attachments SET entity_id = :folder WHERE id = :id"),
+                         {"id": file_id, "folder": folder_id})
+        return {"id": file_id, "folderId": folder_id}
+    await db.execute(text("DELETE FROM attachments WHERE id = :id"), {"id": file_id})
+    return {"id": file_id, "deleted": True}
 
 
 async def scaffold_project_tree(
@@ -550,6 +635,9 @@ async def project_tree(
     return {
         "projectId": project_id,
         "teamId": team_id,
+        "canManage": (await db.execute(text(
+            "SELECT role FROM workspace_members WHERE workspace_id = :workspace AND user_id = :user AND status = 'ACTIVE'"
+        ), {"workspace": workspace_id, "user": user_id})).scalar_one() != "ADMIN_VIEWER",
         "folders": [folder_payload(row) for row in folders],
         "documents": documents,
         # PDFs uploaded into the tree's folders, previewed through the attachment routes.
