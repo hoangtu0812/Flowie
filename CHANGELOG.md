@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- Long project lead names stay inside the Lead column, with the full name available on the selector, so Target date remains readable. Web only; no schema change. (DTD-227)
+  VI: Tên Lead dài được giữ trong cột Lead, có thể xem tên đầy đủ trên nút chọn, giúp Target date luôn dễ đọc. Chỉ đổi web; không đổi schema. (DTD-227)
+
 - Docs supports moving and deleting documents, PDFs and folders through right-click and accessible action menus. Moves stay inside the project and retain document history and links; deletion archives documents, protects project roots and refuses non-empty folders. Deploy `api` and `web` together; no schema migration. (DTD-224, #106)
   VI: Docs hỗ trợ di chuyển và xóa tài liệu, PDF và thư mục qua menu chuột phải và nút thao tác truy cập được bằng bàn phím. Di chuyển trong cùng dự án và giữ lịch sử/liên kết; xóa tài liệu bằng lưu trữ mềm, bảo vệ gốc dự án và từ chối thư mục không rỗng. Triển khai `api` và `web` cùng bản; không có migration schema. (DTD-224)
 
