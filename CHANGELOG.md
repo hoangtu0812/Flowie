@@ -16,7 +16,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
-- Projects and issues support a saved Manual order with drag handles and keyboard move controls; sub-issues reorder among siblings without changing their parent. Stale edits and affected pagination cursors require a reload. Includes a Prisma migration adding and backfilling manual positions: let migrate complete before api/worker, and deploy api/web together. (DTD-239)
+- Projects and issues support a saved Manual order with drag handles and keyboard move controls; sub-issues reorder among siblings without changing their parent. Stale edits and affected pagination cursors require a reload. Includes a Prisma migration adding and backfilling manual positions: let migrate complete before api/worker, and deploy api/web together. (DTD-239, #111)
   VI: Dự án và công việc hỗ trợ thứ tự Manual được lưu, có handle kéo-thả và nút di chuyển bằng bàn phím; sub-issue đổi thứ tự cùng cấp mà không đổi parent. Chỉnh sửa và cursor phân trang cũ bị ảnh hưởng yêu cầu tải lại. Có migration Prisma thêm và điền vị trí thủ công: migrate phải hoàn tất trước api/worker, triển khai api/web cùng bản. (DTD-239)
 
 - Docs supports moving and deleting documents, PDFs and folders through right-click and accessible action menus. Moves stay inside the project and retain document history and links; deletion archives documents, protects project roots and refuses non-empty folders. Deploy `api` and `web` together; no schema migration. (DTD-224, #106)
