@@ -19,6 +19,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 - Long project lead names stay inside the Lead column, with the full name available on the selector, so Target date remains readable. Web only; no schema change. (DTD-227, #109)
   VI: Tên Lead dài được giữ trong cột Lead, có thể xem tên đầy đủ trên nút chọn, giúp Target date luôn dễ đọc. Chỉ đổi web; không đổi schema. (DTD-227)
 
+- Browser regression tests follow the current mobile Properties and Bug report flow, restore shared account preferences after failed tests, and wait for the Activity URL before testing reload. Test-only change; no deployment behavior or schema change. (DTD-252, #112)
+  VI: Kiểm thử trình duyệt dùng luồng Properties và Bug report mobile hiện tại, khôi phục tùy chọn tài khoản dùng chung sau test lỗi, và đợi URL Activity cập nhật trước khi kiểm tra reload. Chỉ thay test; không đổi hành vi triển khai hay schema. (DTD-252)
+
 - Docs supports moving and deleting documents, PDFs and folders through right-click and accessible action menus. Moves stay inside the project and retain document history and links; deletion archives documents, protects project roots and refuses non-empty folders. Deploy `api` and `web` together; no schema migration. (DTD-224, #106)
   VI: Docs hỗ trợ di chuyển và xóa tài liệu, PDF và thư mục qua menu chuột phải và nút thao tác truy cập được bằng bàn phím. Di chuyển trong cùng dự án và giữ lịch sử/liên kết; xóa tài liệu bằng lưu trữ mềm, bảo vệ gốc dự án và từ chối thư mục không rỗng. Triển khai `api` và `web` cùng bản; không có migration schema. (DTD-224)
 
