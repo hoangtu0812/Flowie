@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- Issue breadcrumbs show the linked project beside the team even when opened from All issues or a direct link; the project opens its issue list. Web only; no schema change. (DTD-249)
+  VI: Breadcrumb task hiển thị dự án cạnh team kể cả mở từ All issues hoặc link trực tiếp; bấm dự án mở danh sách công việc của dự án. Chỉ đổi web; không đổi schema. (DTD-249)
+
 - Docs supports moving and deleting documents, PDFs and folders through right-click and accessible action menus. Moves stay inside the project and retain document history and links; deletion archives documents, protects project roots and refuses non-empty folders. Deploy `api` and `web` together; no schema migration. (DTD-224, #106)
   VI: Docs hỗ trợ di chuyển và xóa tài liệu, PDF và thư mục qua menu chuột phải và nút thao tác truy cập được bằng bàn phím. Di chuyển trong cùng dự án và giữ lịch sử/liên kết; xóa tài liệu bằng lưu trữ mềm, bảo vệ gốc dự án và từ chối thư mục không rỗng. Triển khai `api` và `web` cùng bản; không có migration schema. (DTD-224)
 
