@@ -162,6 +162,7 @@ async def search_page(
     db: AsyncSession, workspace: str, user: str, secret: str, options: dict
 ) -> dict:
     sql, params = issue_scope(workspace, user, options)
+    manual = options.get("ordering") == "manual"
     total = (await db.execute(text("SELECT COUNT(*) " + sql), params)).scalar_one()
     codec = CursorCodec(
         secret,
@@ -171,18 +172,45 @@ async def search_page(
     )
     cursor_clause = ""
     if options.get("cursor"):
-        timestamp, identifier = codec.decode(options["cursor"])
-        cursor_clause = " AND (i.created_at,i.id)<(:cursor_time,:cursor_id)"
-        params.update(cursor_time=timestamp, cursor_id=identifier)
+        if manual:
+            from .manual_order import decode_rank_cursor
+
+            identifier, rank = decode_rank_cursor(codec, options["cursor"])
+            params.update(cursor_id=identifier, cursor_rank=rank)
+            exists = (
+                await db.execute(
+                    text(
+                        "SELECT COUNT(*) "
+                        + sql
+                        + " AND i.id=:cursor_id AND i.manual_order=:cursor_rank"
+                    ),
+                    params,
+                )
+            ).scalar_one()
+            if not exists:
+                raise ApiError(
+                    409,
+                    "The order changed. Reload the list before loading more.",
+                    "Conflict",
+                )
+            cursor_clause = " AND (i.manual_order,i.id)>(:cursor_rank,:cursor_id)"
+        else:
+            timestamp, identifier = codec.decode(options["cursor"])
+            cursor_clause = " AND (i.created_at,i.id)<(:cursor_time,:cursor_id)"
+            params.update(cursor_time=timestamp, cursor_id=identifier)
     limit = options.get("limit", 100)
     rows = (
         (
             await db.execute(
                 text(
-                    "SELECT i.id,i.created_at "
+                    "SELECT i.id,i.created_at,i.manual_order "
                     + sql
                     + cursor_clause
-                    + " ORDER BY i.created_at DESC,i.id DESC LIMIT :limit"
+                    + (
+                        " ORDER BY i.manual_order,i.id LIMIT :limit"
+                        if manual
+                        else " ORDER BY i.created_at DESC,i.id DESC LIMIT :limit"
+                    )
                 ),
                 {**params, "limit": limit + 1},
             )
@@ -191,8 +219,14 @@ async def search_page(
         .all()
     )
     page = rows[:limit]
+    from .manual_order import encode_rank_cursor
+
     next_cursor = (
-        codec.encode(page[-1]["created_at"], page[-1]["id"])
+        (
+            encode_rank_cursor(codec, page[-1])
+            if manual
+            else codec.encode(page[-1]["created_at"], page[-1]["id"])
+        )
         if len(rows) > limit
         else None
     )

@@ -14,6 +14,7 @@ export interface Health {
 
 /** UI shape mapped from the Projects API. It contains no fixture records. */
 export interface Project {
+   manualOrder?: string;
    id: string;
    /** Readable URL slug; links fall back to the id without it. VI: Slug URL dễ đọc; không có thì link dùng id. */
    slug?: string;

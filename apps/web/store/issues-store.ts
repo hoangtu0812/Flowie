@@ -41,6 +41,7 @@ declare module '@/mock-data/issues' {
 }
 
 type NativeIssue = BugFields & {
+   manualOrder?: string;
    id: string;
    version: number;
    teamId: string | null;
@@ -226,6 +227,7 @@ function asIssue(native: NativeIssue): Issue {
       priority,
       labels: (native.labelLinks ?? []).map(({ label }) => label),
       createdAt: native.createdAt,
+      manualOrder: native.manualOrder,
       cycleId: native.cycleLinks?.[0]?.cycleId ?? '',
       releaseIds: native.releaseLinks?.map((link) => link.releaseId) ?? [],
       project: native.project

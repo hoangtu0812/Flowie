@@ -38,6 +38,7 @@ from .domains.link_metadata import router as link_metadata_router
 from .domains.native_notifications import router as notifications_router
 from .domains.native_integrations import router as integrations_router
 from .domains.native_views import router as views_router
+from .modules.work_items.manual_order import router as manual_order_router
 from .domains.native_projects import public_router as projects_router
 from .domains.native_projects import router as native_projects_router
 from .domains.native_releases import router as releases_router
@@ -202,6 +203,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(channels_router)
     app.include_router(integrations_router)
     app.include_router(views_router)
+    app.include_router(manual_order_router)
     app.include_router(native_projects_router)
     app.include_router(projects_router)
     app.include_router(releases_router)

@@ -6,6 +6,7 @@ import { Status, status, StatusCategory } from './status';
 import { User, users } from './users';
 
 export interface Issue {
+   manualOrder?: string;
    id: string;
    identifier: string;
    title: string;

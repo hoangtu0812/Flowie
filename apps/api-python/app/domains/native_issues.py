@@ -164,6 +164,7 @@ async def list_issues(
     insights: bool = False,
     sliceBy: Literal['status','priority','assignee','project'] = 'status',
     segmentBy: Literal['status','priority','assignee','project'] = 'priority',
+    ordering: Literal['manual'] | None = None,
 ) -> dict:
     from ..modules.work_items.issue_search import search_page
     from ..core.config import Settings
@@ -177,6 +178,8 @@ async def list_issues(
         'query': query, 'filters': filters, 'includeSubIssues': includeSubIssues,
         'noTeam': noTeam, 'noProject': noProject, 'issueType': issueType,
     }
+    if ordering:
+        options['ordering'] = ordering
     if insights:
         from ..modules.work_items.issue_insights import issue_insights
         return {'data':await issue_insights(db,workspaceId,user['id'],options,sliceBy,segmentBy)}
@@ -451,7 +454,7 @@ async def list_sub_issues(
         )).scalars().all())
     result = await db.execute(
         text(
-            '''SELECT child.id, child.identifier, child.title, child.parent_issue_id, child.due_date,
+            '''SELECT child.id, child.identifier, child.title, child.parent_issue_id, child.due_date, child.manual_order,
                       child.priority::text AS priority,
                       status.id AS status_id, status.name AS status_name,
                       status.color AS status_color, status.category AS status_category,
@@ -461,7 +464,7 @@ async def list_sub_issues(
                JOIN issue_statuses status ON status.id = child.status_id
                LEFT JOIN users assignee ON assignee.id = child.assignee_id
                WHERE child.id = ANY(CAST(:ids AS text[]))
-               ORDER BY child.updated_at DESC, child.created_at DESC'''
+               ORDER BY child.manual_order, child.id'''
         ),
         {'ids': ids},
     )
@@ -471,6 +474,7 @@ async def list_sub_issues(
             'identifier': row['identifier'],
             'title': row['title'],
             'parentIssueId': row['parent_issue_id'],
+            'manualOrder': str(row['manual_order']),
             'dueDate': row['due_date'],
             'priority': row['priority'],
             'status': {

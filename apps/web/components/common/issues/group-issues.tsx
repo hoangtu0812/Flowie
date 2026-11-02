@@ -13,6 +13,8 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Button } from '../../ui/button';
 import { IssueDragType, IssueGrid } from './issue-grid';
 import { IssueLine } from './issue-line';
+import { ReorderRow } from '@/features/manual-order/reorder-row';
+import { useDisplaySettingsStore } from '@/store/display-settings-store';
 
 /**
  * Generic descriptor of an issue group. Groups are usually statuses but the
@@ -35,6 +37,8 @@ interface GroupIssuesProps {
 }
 
 export function GroupIssues({ group, issues, count }: GroupIssuesProps) {
+   const manual = useDisplaySettingsStore((state) => state.ordering === 'manual');
+   const { workspaceId, retryIssues } = useIssuesStore();
    const { viewType } = useViewStore();
    const isViewTypeGrid = viewType === 'grid';
    const { openModal } = useCreateIssueStore();
@@ -119,7 +123,19 @@ export function GroupIssues({ group, issues, count }: GroupIssuesProps) {
             !collapsed && (
                <div className="space-y-0">
                   {issues.map((issue) => (
-                     <IssueLine key={issue.id} issue={issue} layoutId={true} />
+                     <ReorderRow
+                        key={issue.id}
+                        item={issue}
+                        items={issues}
+                        name={issue.identifier}
+                        entityType="issue"
+                        scope={`issue:${workspaceId}:${group.id}`}
+                        workspaceId={workspaceId}
+                        enabled={manual}
+                        refresh={retryIssues}
+                     >
+                        <IssueLine issue={issue} layoutId={true} />
+                     </ReorderRow>
                   ))}
                </div>
             )

@@ -1236,6 +1236,9 @@ model Project {
   agentAutomations    AgentAutomation[]
   documentFolders     DocumentFolder[]
   documentLinks       DocumentLink[]
+  /// Shared logical position; new rows start at zero until manually reordered.
+  /// VI: Vị trí logic dùng chung; dòng mới bắt đầu tại không đến khi sắp xếp thủ công.
+  manualOrder BigInt @default(0) @map("manual_order")
   id                  String              @id @default(cuid())
   workspaceId         String              @map("workspace_id")
   teamId              String?             @map("team_id")
@@ -1288,6 +1291,7 @@ model Project {
   @@unique([workspaceId, slug])
   @@index([workspaceId, teamId])
   @@map("projects")
+  @@index([workspaceId, manualOrder, id])
 }
 
 /// Every slug a project has used in its workspace, current and earlier. The primary key makes
@@ -1793,6 +1797,9 @@ model Issue {
   agentRuns         AgentRun[]
   agentEvents       AgentIssueEvent[]
   documentLinks     DocumentLink[]
+  /// Shared logical position; new rows start at zero until manually reordered.
+  /// VI: Vị trí logic dùng chung; dòng mới bắt đầu tại không đến khi sắp xếp thủ công.
+  manualOrder BigInt @default(0) @map("manual_order")
   id                String            @id @default(cuid())
   workspaceId       String            @map("workspace_id")
   teamId            String?           @map("team_id")
@@ -1871,6 +1878,7 @@ model Issue {
   @@index([assigneeId])
   @@index([reporterId])
   @@map("issues")
+  @@index([workspaceId, manualOrder, id])
 }
 
 model IssueRelation {
