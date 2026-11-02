@@ -83,6 +83,7 @@ async def verify_admin_viewer():
             # Every write aimed at the workspace is refused, whatever the route.
             # VI: Mọi thao tác ghi nhắm vào workspace đều bị từ chối, bất kể route nào.
             writes = [
+                viewer_client.post('/api/v1/manual-order', json={'workspaceId': workspace, 'entityType': 'issue', 'sourceId': 'source', 'targetId': 'target', 'placement': 'before', 'expectedOrder': '0', 'expectedTargetOrder': '0'}),
                 viewer_client.patch(f"/api/v1/workspaces/{workspace}", json={"icon": "🚫"}),
                 viewer_client.post("/api/v1/issues", json={"workspaceId": workspace, "teamId": team, "title": "Not allowed"}),
                 viewer_client.post(f"/api/v1/labels?workspaceId={workspace}", json={"name": "nope", "color": "#000000"}),

@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- Projects and issues support a saved Manual order with drag handles and keyboard move controls; sub-issues reorder among siblings without changing their parent. Stale edits and affected pagination cursors require a reload. Includes a Prisma migration adding and backfilling manual positions: let migrate complete before api/worker, and deploy api/web together. (DTD-239, #111)
+  VI: Dự án và công việc hỗ trợ thứ tự Manual được lưu, có handle kéo-thả và nút di chuyển bằng bàn phím; sub-issue đổi thứ tự cùng cấp mà không đổi parent. Chỉnh sửa và cursor phân trang cũ bị ảnh hưởng yêu cầu tải lại. Có migration Prisma thêm và điền vị trí thủ công: migrate phải hoàn tất trước api/worker, triển khai api/web cùng bản. (DTD-239)
+
 - Issue breadcrumbs show the linked project beside the team even when opened from All issues or a direct link; the project opens its issue list. Web only; no schema change. (DTD-249, #110)
   VI: Breadcrumb task hiển thị dự án cạnh team kể cả mở từ All issues hoặc link trực tiếp; bấm dự án mở danh sách công việc của dự án. Chỉ đổi web; không đổi schema. (DTD-249)
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { ManualLabel } from '@/features/manual-order/reorder-row';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
@@ -40,6 +41,7 @@ const ORDERINGS: { value: OrderingKey; label: string }[] = [
    { value: 'priority', label: 'Priority' },
    { value: 'created', label: 'Created' },
    { value: 'title', label: 'Title' },
+   { value: 'manual', label: 'Manual' },
 ];
 
 /**
@@ -157,7 +159,7 @@ export function DisplayOptions() {
                      <SelectContent>
                         {ORDERINGS.map((option) => (
                            <SelectItem key={option.value} value={option.value} className="text-xs">
-                              {option.label}
+                              {option.value === 'manual' ? <ManualLabel /> : option.label}
                            </SelectItem>
                         ))}
                      </SelectContent>
