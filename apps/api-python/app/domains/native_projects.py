@@ -657,7 +657,7 @@ async def _project(db: AsyncSession, project_id: str, workspace_id: str, user_id
     issues = await db.execute(text('''SELECT i.id, i.identifier, i.title, i.priority, i.updated_at, s.id AS status_id_value, s.name AS status_name, s.category AS status_category, s.color AS status_color, a.id AS assignee_id_value, a.name AS assignee_name, a.avatar_url AS assignee_avatar_url FROM issues i JOIN issue_statuses s ON s.id = i.status_id LEFT JOIN users a ON a.id = i.assignee_id WHERE i.project_id = :project_id AND i.archived_at IS NULL AND (i.team_id IS NULL OR EXISTS(SELECT 1 FROM team_members tm JOIN teams scoped_team ON scoped_team.id=tm.team_id WHERE tm.team_id=i.team_id AND tm.user_id=:user_id AND scoped_team.archived_at IS NULL)) ORDER BY i.updated_at DESC'''), {'project_id': project_id,'user_id':user_id})
     issue_records=issues.mappings().all()
     return {
-        'id': row['id'], 'workspaceId': row['workspace_id'], 'teamId': row['team_id'], 'name': row['name'], 'icon': row['icon'], 'identifier': row['identifier'], 'slug': row['slug'], 'description': row['description'], 'type': row['type'], 'status': row['status'], 'priority': row['priority'], 'health': row['health'], 'leadId': row['lead_id'], 'startDate': row['start_date'], 'targetDate': row['target_date'], 'archivedAt': row['archived_at'], 'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
+        'id': row['id'], 'manualOrder': str(row['manual_order']), 'workspaceId': row['workspace_id'], 'teamId': row['team_id'], 'name': row['name'], 'icon': row['icon'], 'identifier': row['identifier'], 'slug': row['slug'], 'description': row['description'], 'type': row['type'], 'status': row['status'], 'priority': row['priority'], 'health': row['health'], 'leadId': row['lead_id'], 'startDate': row['start_date'], 'targetDate': row['target_date'], 'archivedAt': row['archived_at'], 'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
         'team': team,
         'lead': {'id': row['lead_id_value'], 'name': row['lead_name'], 'avatarUrl': row['lead_avatar_url']} if row['lead_id_value'] else None,
         '_count': {'issues': len(issue_records)}, 'labelLinks': [{'label': {'id': label['id'], 'workspaceId': label['workspace_id'], 'name': label['name'], 'color': label['color'], 'description': label['description'], 'createdAt': label['created_at'], 'updatedAt': label['updated_at']}} for label in labels.mappings().all()],
@@ -670,14 +670,16 @@ async def _project(db: AsyncSession, project_id: str, workspace_id: str, user_id
 
 @router.get('')
 async def list_projects(workspaceId: str = Query(min_length=1), teamId: str | None = None, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session), *,
-    request: Request = None, limit: Annotated[int, Query(ge=1,le=100)] = 100, cursor: Annotated[str | None, Query(max_length=2000)] = None) -> dict:
+    request: Request = None, limit: Annotated[int, Query(ge=1,le=100)] = 100, cursor: Annotated[str | None, Query(max_length=2000)] = None, ordering: str | None = None) -> dict:
     from ..modules.portfolio.projects import project_page
     from ..core.config import Settings
     await _workspace_access(db, workspaceId, user['id'])
     if teamId:
         await _team_access(db, workspaceId, teamId, user['id'])
     settings = request.app.state.settings if request else Settings.from_environment()
-    return await project_page(db,workspaceId,user['id'],settings.auth_jwt_secret,team=teamId,limit=limit,cursor=cursor)
+    if ordering not in {None, 'manual'}:
+        raise ApiError(400, 'Unsupported project ordering.', 'Bad Request')
+    return await project_page(db,workspaceId,user['id'],settings.auth_jwt_secret,team=teamId,limit=limit,cursor=cursor,ordering=ordering)
 
 
 @router.post('')

@@ -1,4 +1,5 @@
 export type IssueQuery = {
+   ordering?: 'manual';
    noTeam?: boolean;
    noProject?: boolean;
    issueType?: 'TASK' | 'BUG';

@@ -6,7 +6,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 export type ProjectsViewType = 'timeline' | 'board' | 'list';
 export type ProjectsTab = 'all' | 'active';
 export type ProjectsGrouping = 'team' | 'none';
-export type ProjectsOrdering = 'start-date' | 'target-date' | 'title';
+export type ProjectsOrdering = 'start-date' | 'target-date' | 'title' | 'manual';
 export type ClosedProjectsFilter = 'all' | 'hide';
 
 export type ProjectDisplayPropertyKey =

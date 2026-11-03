@@ -10,6 +10,36 @@ const fixture = JSON.parse(readFileSync('.e2e-fixture.json', 'utf8')) as {
    issues: { identifier: string; title: string }[];
 };
 const api = 'http://localhost:4000/api/v1';
+let restoreValues: Record<string, unknown> | undefined;
+let restoreIssue: { id: string; issueType: string } | undefined;
+
+// Teardown has its own timeout budget, so a failed locator cannot leave the shared account in Vietnamese.
+// VI: Teardown có ngân sách thời gian riêng, nên locator lỗi không để tài khoản dùng chung ở tiếng Việt.
+test.afterEach(async ({ context }) => {
+   test.setTimeout(30000);
+   const values = restoreValues;
+   const issue = restoreIssue;
+   restoreValues = undefined;
+   restoreIssue = undefined;
+   if (!values) return;
+   try {
+      if (issue) {
+         const response = await context.request.patch(
+            `${api}/issues/${issue.id}?workspaceId=${fixture.workspace_id}`,
+            { data: { issueType: issue.issueType } }
+         );
+         expect(response.ok()).toBeTruthy();
+      }
+   } finally {
+      const endpoint = `${api}/users/me/ui-preferences`;
+      const current = (await (await context.request.get(endpoint)).json()).data;
+      const restored = await context.request.put(endpoint, {
+         data: { accountId: fixture.userId, expectedVersion: current.version, values },
+      });
+      expect(restored.ok()).toBeTruthy();
+   }
+});
+
 test('Vietnamese core routes retain user content and controls remain usable on mobile', async ({
    page,
    context,
@@ -25,7 +55,8 @@ test('Vietnamese core routes retain user content and controls remain usable on m
    await expect(page).toHaveURL(new RegExp(`/${fixture.slug}/`));
    const endpoint = `${api}/users/me/ui-preferences`,
       original = (await (await context.request.get(endpoint)).json()).data;
-   try {
+   restoreValues = original.values;
+   {
       await page.waitForLoadState('networkidle');
       await page.goto(`/${fixture.slug}/settings/preferences`);
       await page.getByRole('combobox', { name: 'Language', exact: true }).click();
@@ -54,10 +85,16 @@ test('Vietnamese core routes retain user content and controls remain usable on m
       await expect(
          page.getByRole('heading', { name: fixture.issues[0].title, exact: true })
       ).toBeVisible();
-      await page
-         .getByRole('button', { name: 'Sửa loại công việc và thông tin bug', exact: true })
-         .click();
+      restoreIssue = (
+         await (
+            await context.request.get(
+               `${api}/issues/${fixture.issues[0].identifier}?workspaceId=${fixture.workspace_id}`
+            )
+         ).json()
+      ).data;
+      await page.getByRole('button', { name: 'Thuộc tính', exact: true }).click();
       await page.getByRole('button', { name: 'Bug', exact: true }).click();
+      await page.getByRole('button', { name: 'Sửa thông tin bug', exact: true }).click();
       await expect(page.getByRole('textbox', { name: 'Môi trường', exact: true })).toBeVisible();
       await page.getByRole('button', { name: 'Hủy sửa bug', exact: true }).click();
       const document = (
@@ -89,15 +126,5 @@ test('Vietnamese core routes retain user content and controls remain usable on m
       }
       await dialog.getByRole('button', { name: 'Đóng', exact: true }).last().click();
       expect(errors).toEqual([]);
-   } finally {
-      const current = (await (await context.request.get(endpoint)).json()).data;
-      const restored = await context.request.put(endpoint, {
-         data: {
-            accountId: fixture.userId,
-            expectedVersion: current.version,
-            values: original.values,
-         },
-      });
-      expect(restored.ok()).toBeTruthy();
    }
 });

@@ -3,10 +3,13 @@
 import { useProjectsDisplayStore } from '@/store/projects-display-store';
 import ProjectLine from './project-line';
 import { ProjectGroup } from './projects';
+import { useProjectsData } from '@/features/projects/projects-data';
+import { ReorderRow } from '@/features/manual-order/reorder-row';
 
 /** Projects "List" view: grouped table (team sections by default). */
 export default function ProjectsList({ groups }: { groups: ProjectGroup[] }) {
-   const { grouping, displayProperties } = useProjectsDisplayStore();
+   const { grouping, displayProperties, ordering } = useProjectsDisplayStore();
+   const { workspaceId, refreshProjects } = useProjectsData();
 
    return (
       <div className="w-full h-full overflow-y-auto">
@@ -40,7 +43,19 @@ export default function ProjectsList({ groups }: { groups: ProjectGroup[] }) {
                   </div>
                )}
                {group.projects.map((project) => (
-                  <ProjectLine key={project.id} project={project} />
+                  <ReorderRow
+                     key={project.id}
+                     item={project}
+                     items={group.projects}
+                     name={project.name}
+                     entityType="project"
+                     scope={`project:${workspaceId}:${group.id}`}
+                     workspaceId={workspaceId}
+                     enabled={ordering === 'manual'}
+                     refresh={refreshProjects}
+                  >
+                     <ProjectLine project={project} />
+                  </ReorderRow>
                ))}
                {group.projects.length === 0 && (
                   <div className="px-6 py-3 text-xs text-muted-foreground border-b border-border/40">

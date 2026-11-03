@@ -16,6 +16,7 @@ import ProjectsBoard from './projects-board';
 import { ProjectsDisplayOptions } from './projects-display-options';
 import ProjectsInsightsPanel from './projects-insights-panel';
 import ProjectsList from './projects-list';
+import { compareManual } from '@/features/manual-order/order';
 import ProjectsTimeline from './projects-timeline';
 
 export interface ProjectGroup {
@@ -74,6 +75,8 @@ export default function Projects({ teamId }: { teamId?: string }) {
 
       const compare = (a: Project, b: Project) => {
          switch (ordering) {
+            case 'manual':
+               return compareManual(a, b);
             case 'title':
                return a.name.localeCompare(b.name);
             case 'target-date':
