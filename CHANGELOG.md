@@ -19,6 +19,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 - Issue Views save reusable filters from workspace and team issue lists, support private/shared views, editing and deletion, and preserve team scope and existing view URLs. Conflicting edits require a reload instead of overwriting another session. Deploy `api` and `web` together; no schema migration. (DTD-250, #108)
   VI: Issue Views lưu bộ lọc dùng lại từ danh sách công việc của workspace và team, hỗ trợ riêng tư/chia sẻ, sửa và xóa, đồng thời giữ phạm vi team và URL view hiện có. Chỉnh sửa xung đột yêu cầu tải lại thay vì ghi đè phiên khác. Triển khai `api` và `web` cùng bản; không có migration schema. (DTD-250)
 
+- CI allows 35 minutes for the complete three-browser regression suite, which outgrew the previous 20-minute step budget; all tests and per-test timeouts remain enabled. No runtime or schema change. (#107)
+  VI: CI dành 35 phút cho toàn bộ bộ kiểm thử ba trình duyệt đã vượt ngân sách bước 20 phút trước đây; giữ đầy đủ test và thời gian tối đa của từng test. Không đổi hành vi ứng dụng hoặc schema.
+
 - Browser regression checks activate native row dragging with intermediate pointer moves, clean up temporary sub-issues even after timeouts, and locate the current workspace search title. Test-only change; no schema or runtime change. (#107)
   VI: Kiểm thử trình duyệt kích hoạt kéo hàng native bằng các bước di chuyển con trỏ trung gian, dọn sub-issue tạm kể cả khi hết giờ và tìm đúng tiêu đề tìm kiếm workspace hiện tại. Chỉ đổi test; không đổi schema hoặc hành vi ứng dụng.
 
