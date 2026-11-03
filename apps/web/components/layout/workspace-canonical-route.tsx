@@ -33,10 +33,18 @@ export function WorkspaceCanonicalRoute() {
             )
                return;
             return resolveWorkspaceKey(key).then((resolved) => {
-               if (active && resolved)
-                  router.replace(withWorkspaceSegment(pathname, resolved.slug, search + hash), {
-                     scroll: false,
-                  });
+               // Alias resolution may finish after navigation; retain the live destination only within the same workspace key.
+               // VI: Phân giải alias có thể xong sau điều hướng; giữ đích hiện tại chỉ khi khoá workspace vẫn không đổi.
+               const currentPath = appPathname();
+               if (active && resolved && workspaceKey(currentPath) === key)
+                  router.replace(
+                     withWorkspaceSegment(
+                        currentPath,
+                        resolved.slug,
+                        window.location.search + window.location.hash
+                     ),
+                     { scroll: false }
+                  );
             });
          })
          .catch(() => {

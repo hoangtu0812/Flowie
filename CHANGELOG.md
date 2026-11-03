@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- Old workspace slugs resolve to their own workspace before fallback selection, preserving the full destination, query and hash even when another membership is first. Web only; no migration. (DTD-260)
+  VI: Slug workspace cũ được phân giải về đúng workspace trước khi chọn workspace thay thế, giữ đầy đủ đích, query và hash kể cả khi membership khác đứng đầu. Chỉ đổi web; không có migration.
+
 - Issue Views save reusable filters from workspace and team issue lists, support private/shared views, editing and deletion, and preserve team scope and existing view URLs. Conflicting edits require a reload instead of overwriting another session. Deploy `api` and `web` together; no schema migration. (DTD-250, #108)
   VI: Issue Views lưu bộ lọc dùng lại từ danh sách công việc của workspace và team, hỗ trợ riêng tư/chia sẻ, sửa và xóa, đồng thời giữ phạm vi team và URL view hiện có. Chỉnh sửa xung đột yêu cầu tải lại thay vì ghi đè phiên khác. Triển khai `api` và `web` cùng bản; không có migration schema. (DTD-250)
 
