@@ -340,7 +340,10 @@ export function ScheduleEditor({
                label={tx('Recurring issue type')}
                value={template.issueType}
                onChange={(issueType) => changeTemplate({ issueType })}
-               options={['TASK', 'BUG'].map((value) => ({ value, label: enumLabel(value) }))}
+               options={['TASK', 'BUG', 'EPIC'].map((value) => ({
+                  value,
+                  label: enumLabel(value),
+               }))}
                isDisabled={busy}
             />
             {refs(

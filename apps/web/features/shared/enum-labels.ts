@@ -3,6 +3,7 @@ import { useLocale } from './use-locale';
 const values: Record<string, readonly [string, string]> = {
    TASK: ['Task', 'Task'],
    BUG: ['Bug', 'Bug'],
+   EPIC: ['Epic', 'Epic'],
    NONE: ['None', 'Không'],
    LOW: ['LOW', 'THẤP'],
    MEDIUM: ['MEDIUM', 'TRUNG BÌNH'],

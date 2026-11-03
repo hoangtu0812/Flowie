@@ -152,9 +152,9 @@ export function IssuePropertiesPanel({ issue, detail, reviews }: IssueProperties
       );
    };
 
-   // Only the type is sent, so bug fields typed earlier survive a switch to Task and back.
-   // VI: Chỉ gửi loại, nên các trường bug đã nhập vẫn còn khi chuyển sang Task rồi quay lại.
-   const setIssueType = async (issueType: 'TASK' | 'BUG' | undefined) => {
+   // Only the type is sent, so bug fields survive a switch to Task/Epic and back.
+   // VI: Chỉ gửi loại, nên các trường bug vẫn còn khi chuyển sang Task/Epic rồi quay lại.
+   const setIssueType = async (issueType: 'TASK' | 'BUG' | 'EPIC' | undefined) => {
       if (!issueType || issueType === (issue.issueType ?? 'TASK')) return;
       try {
          await updateIssueBug(issue.id, { issueType });

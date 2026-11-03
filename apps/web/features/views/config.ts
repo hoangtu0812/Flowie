@@ -22,7 +22,8 @@ export function captureIssueView(rawQuery: string): IssueViewConfig {
       if (params.get(key) === 'true') query[key] = true;
    }
    const issueType = params.get('issueType');
-   if (issueType === 'BUG' || issueType === 'TASK') query.issueType = issueType;
+   if (issueType === 'BUG' || issueType === 'TASK' || issueType === 'EPIC')
+      query.issueType = issueType;
    const categories = params.get('categories');
    if (categories) query.categories = categories.split(',');
    return { version: 1, ...(params.get('teamId') ? { teamId: params.get('teamId')! } : {}), query };

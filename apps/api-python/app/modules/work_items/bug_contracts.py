@@ -1,7 +1,7 @@
 from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
-IssueType = Literal["TASK", "BUG"]
+IssueType = Literal["TASK", "BUG", "EPIC"]
 BugSeverity = Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"]
 
 

@@ -9,7 +9,7 @@ class IssueSelectionQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
     noTeam: bool = False
     noProject: bool = False
-    issueType: Literal["TASK", "BUG"] | None = None
+    issueType: Literal["TASK", "BUG", "EPIC"] | None = None
     teamId: str | None = Field(default=None, max_length=100)
     projectId: str | None = Field(default=None, max_length=100)
     assigneeId: str | None = Field(default=None, max_length=100)

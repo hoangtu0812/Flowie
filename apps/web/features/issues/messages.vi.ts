@@ -1,4 +1,5 @@
 export const messages = {
+   'Epic': 'Epic',
    'Click to sort; Shift+click for multiple columns.': 'Bấm để sắp xếp; Shift+bấm để sắp xếp nhiều cột.',
    'ascending': 'tăng dần',
    'descending': 'giảm dần',

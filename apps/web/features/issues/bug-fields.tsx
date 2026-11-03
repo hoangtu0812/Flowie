@@ -18,7 +18,7 @@ import {
 import { Minus, SignalLow, SignalMedium, SignalHigh, OctagonAlert } from 'lucide-react';
 import { DesignSurface } from '@/components/common/design-surface';
 export type BugFields = {
-   issueType?: 'TASK' | 'BUG';
+   issueType?: 'TASK' | 'BUG' | 'EPIC';
    severity?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | null;
    environment?: string | null;
    reproductionSteps?: string | null;
@@ -53,10 +53,10 @@ export function IssueTypeSelector({
             role="group"
             aria-label={tx('Issue type')}
          >
-            {(['TASK', 'BUG'] as const).map((type) => (
+            {(['TASK', 'BUG', 'EPIC'] as const).map((type) => (
                <Button
                   key={type}
-                  label={type === 'BUG' ? tx('Bug') : tx('Task')}
+                  label={type === 'EPIC' ? tx('Epic') : type === 'BUG' ? tx('Bug') : tx('Task')}
                   size="sm"
                   aria-pressed={(value.issueType ?? 'TASK') === type}
                   variant={(value.issueType ?? 'TASK') === type ? 'secondary' : 'ghost'}

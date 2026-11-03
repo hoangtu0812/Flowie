@@ -24,8 +24,8 @@ export const messages = {
    'Report duplicate errors': 'Báo lỗi dòng trùng',
    'CSV content': 'Nội dung CSV',
    'Inspect CSV columns': 'Kiểm tra cột CSV',
-   'Map required externalId and title, then optional fields. Reference columns use Flowie IDs. Dates use ISO 8601; enum values use TASK/BUG, NONE/LOW/MEDIUM/HIGH/URGENT and LOW/MEDIUM/HIGH/CRITICAL severity.':
-      'Ánh xạ externalId và title bắt buộc, rồi các trường tùy chọn. Cột tham chiếu dùng ID Flowie. Ngày dùng ISO 8601; giá trị enum dùng TASK/BUG, NONE/LOW/MEDIUM/HIGH/URGENT và mức nghiêm trọng LOW/MEDIUM/HIGH/CRITICAL.',
+   'Map required externalId and title, then optional fields. Reference columns use Flowie IDs. Dates use ISO 8601; enum values use TASK/BUG/EPIC, NONE/LOW/MEDIUM/HIGH/URGENT and LOW/MEDIUM/HIGH/CRITICAL severity.':
+      'Ánh xạ externalId và title bắt buộc, rồi các trường tùy chọn. Cột tham chiếu dùng ID Flowie. Ngày dùng ISO 8601; giá trị enum dùng TASK/BUG/EPIC, NONE/LOW/MEDIUM/HIGH/URGENT và mức nghiêm trọng LOW/MEDIUM/HIGH/CRITICAL.',
    'Do not import': 'Không nhập',
    'Preview CSV import': 'Xem trước nhập CSV',
    'Import preview and results': 'Xem trước và kết quả nhập',
