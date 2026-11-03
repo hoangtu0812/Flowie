@@ -333,7 +333,7 @@ function MarkdownAttachmentDialog({
                ) : content === undefined ? (
                   <div className="h-40 animate-pulse rounded-md bg-accent/50" />
                ) : (
-                  <MarkdownPreview content={content} />
+                  <MarkdownPreview content={content} documentMedia />
                )}
             </div>
             <DialogFooter>

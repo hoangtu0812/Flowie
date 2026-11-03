@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- Document readers apply safe Mermaid YAML front matter and expand diagrams, SVGs and raster images inline across the reading area with zoom, pan and collapse controls. Metadata stays out of prose; no migration or API change. (DTD-263)
+  VI: Trình đọc tài liệu áp dụng YAML front matter Mermaid an toàn và mở rộng sơ đồ, SVG, ảnh raster inline toàn vùng đọc với phóng/thu, kéo và thu gọn. Metadata không hiện trong nội dung; không migration hoặc đổi API.
+
 - New issue descriptions support Rich Text with natural paragraphs and formatting tools, Markdown with Preview, remembered editor mode and source-preserving conversion. Clipboard images and resumable creation remain available. Web only; no migration. (DTD-262, #123)
   VI: Mô tả task mới hỗ trợ soạn trực quan với đoạn văn tự nhiên và công cụ định dạng, Markdown có Xem trước, nhớ chế độ và chuyển đổi giữ nguyên nguồn. Vẫn dán ảnh và tiếp tục lưu sau lỗi. Chỉ đổi web; không migration.
 

@@ -6,6 +6,7 @@ import { authenticatedFetch } from '@/lib/workspaces';
 import { cn } from '@/lib/utils';
 import { ImageViewer, type ViewerImage } from '@/components/common/image-viewer';
 import { useEffect, useRef, useState } from 'react';
+import { InlineDocumentImage } from './markdown/inline-media';
 
 /**
  * Attachments are private, and the session cookie is SameSite=Lax — a bare
@@ -24,10 +25,12 @@ export function AttachmentImage({
    src,
    alt,
    className,
+   inlineExpansion = false,
 }: {
    src: string;
    alt: string;
    className?: string;
+   inlineExpansion?: boolean;
 }) {
    const attachmentId = attachmentIdFromUrl(src);
    const authenticated = attachmentId !== undefined;
@@ -44,8 +47,26 @@ export function AttachmentImage({
       setFailed(false);
       void (async () => {
          try {
-            const response = await authenticatedFetch(target);
-            if (!response.ok) throw new Error('Could not load the image.');
+            let response = await authenticatedFetch(target);
+            if (!response.ok && !(inlineExpansion && response.status === 415))
+               throw new Error('Could not load the image.');
+            if (
+               inlineExpansion &&
+               attachmentId &&
+               !response.headers.get('content-type')?.startsWith('image/')
+            ) {
+               // SVG remains download-only on the API; use authenticated bytes solely as an inert image.
+               // VI: SVG vẫn chỉ tải xuống ở API; chỉ dùng byte đã xác thực trong ngữ cảnh ảnh bất hoạt.
+               response = await authenticatedFetch(target.replace(/\/preview$/, '/download'));
+            }
+            if (
+               inlineExpansion &&
+               (!response.ok ||
+                  !/^image\/(png|jpeg|gif|webp|avif|svg\+xml)(?:;|$)/i.test(
+                     response.headers.get('content-type') ?? ''
+                  ))
+            )
+               throw new Error('Unsupported image.');
             url = URL.createObjectURL(await response.blob());
             if (revoked) {
                URL.revokeObjectURL(url);
@@ -61,7 +82,7 @@ export function AttachmentImage({
          if (url) URL.revokeObjectURL(url);
          setObjectUrl(undefined);
       };
-   }, [authenticated, target]);
+   }, [authenticated, target, attachmentId, inlineExpansion]);
 
    if (failed) {
       return <span className="text-xs text-muted-foreground">{alt} — image unavailable</span>;
@@ -73,6 +94,8 @@ export function AttachmentImage({
          <span className="my-2 block h-32 w-full max-w-md animate-pulse rounded-md bg-accent/50" />
       );
    }
+
+   if (inlineExpansion) return <InlineDocumentImage src={resolved} alt={alt} />;
 
    // The gallery is every loaded image inside the nearest `[data-image-gallery]` (a task's
    // description and comments), in page order; outside one, the image is viewed alone.
