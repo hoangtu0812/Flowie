@@ -1,5 +1,5 @@
 export type ClientName = 'Claude Code' | 'Codex' | 'Cursor' | 'VS Code' | 'Antigravity';
-export type ClientOs = 'macOS' | 'Windows';
+export type ClientOs = 'macOS' | 'Windows' | 'Linux';
 export const CLIENTS: ClientName[] = ['Claude Code', 'Codex', 'Cursor', 'VS Code', 'Antigravity'];
 export const TOKEN_PLACEHOLDER = '<FLOWIE_MCP_TOKEN>';
 export const READ_PRESET = [
@@ -34,9 +34,12 @@ export const CLIENT_FILES: Record<ClientName, string> = {
 };
 
 export function defaultOs(): ClientOs {
-   return typeof navigator !== 'undefined' && /Windows/i.test(navigator.userAgent)
+   if (typeof navigator === 'undefined') return 'macOS';
+   return /Windows/i.test(navigator.userAgent)
       ? 'Windows'
-      : 'macOS';
+      : /Linux/i.test(navigator.userAgent)
+        ? 'Linux'
+        : 'macOS';
 }
 
 const bearer = (token?: string) => `Bearer ${token ?? TOKEN_PLACEHOLDER}`;
@@ -68,13 +71,13 @@ export function clientConfig(client: ClientName, endpoint: string, token?: strin
    return JSON.stringify(server, null, 2);
 }
 
-// One command that the user pastes into Terminal (macOS) or PowerShell (Windows). It first
+// One command that the user pastes into Terminal (macOS/Linux) or PowerShell (Windows). It first
 // removes an existing `flowie` server, so running it again with a new token does not fail.
 // For Codex it never appends a second `[mcp_servers.flowie]` table, because Codex refuses to
 // start with a duplicate TOML table. PowerShell writes ASCII so Windows PowerShell 5.1 adds
 // no BOM; the URL and the `flowie_mcp_` + urlsafe token are ASCII and safe inside quotes.
 // Returns undefined for clients without a command-line install.
-// VI: Một lệnh để người dùng dán vào Terminal (macOS) hoặc PowerShell (Windows). Lệnh xoá
+// VI: Một lệnh để người dùng dán vào Terminal (macOS/Linux) hoặc PowerShell (Windows). Lệnh xoá
 // server `flowie` cũ trước, nên chạy lại với token mới không bị lỗi. Với Codex, lệnh không
 // bao giờ thêm bảng `[mcp_servers.flowie]` thứ hai, vì Codex không khởi động khi TOML có bảng
 // trùng. PowerShell ghi ASCII để Windows PowerShell 5.1 không thêm BOM; URL và token

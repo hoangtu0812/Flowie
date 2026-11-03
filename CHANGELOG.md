@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- MCP setup explains approved .crt/CA trust on macOS, Windows and Linux, Node.js PEM settings, restarts, token-free TLS checks and permission troubleshooting before installation. Existing tokens/configurations are unchanged; no migration. (DTD-225)
+  VI: Cài MCP hướng dẫn tin cậy .crt/CA đã phê duyệt trên macOS, Windows, Linux, cấu hình PEM Node.js, khởi động lại, kiểm TLS không gửi token và xử lý lỗi quyền trước khi cài. Token/cấu hình hiện có giữ nguyên; không migration.
+
 - Epic is an issue type for larger goals, independent of workflow status, with the existing subtask tree, filters, saved views, MCP, imports and recurring templates. Apply the Prisma enum migration before API/worker and deploy API/web together; existing Task/Bug records are unchanged. (DTD-253, #120)
   VI: Epic là loại task cho mục tiêu lớn, độc lập trạng thái workflow, dùng cây task con, bộ lọc, saved view, MCP, import và mẫu lặp lại hiện có. Chạy migration enum Prisma trước API/worker và triển khai API/web cùng bản; Task/Bug cũ giữ nguyên.
 
