@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- Issue rows show a branch icon after the identifier for subtasks, with a full parent-name tooltip on hover or keyboard focus and aligned columns. Web only; no migration. (DTD-259)
+  VI: Dòng task con hiển thị icon nhánh sau mã, tooltip tên cha đầy đủ khi rê chuột hoặc focus bàn phím và giữ các cột thẳng hàng. Chỉ đổi web; không có migration.
+
 - New issue dialogs accept pasted images and a parent issue; uploads attach only after creation, and retries finish the existing issue without creating another one. Web only; no migration. (DTD-254, #115)
   VI: Popup tạo task nhận ảnh dán và task cha; chỉ tải ảnh sau khi task được tạo, retry hoàn tất trên task đó mà không tạo thêm task. Chỉ đổi web; không có migration.
 

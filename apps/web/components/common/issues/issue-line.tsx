@@ -17,6 +17,7 @@ import { ProjectBadge } from './project-badge';
 import { StatusSelector } from './status-selector';
 import { motion } from 'motion/react';
 import { ListTree } from 'lucide-react';
+import { IssueParentIndicator } from './issue-parent-indicator';
 
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { IssueContextMenu } from './issue-context-menu';
@@ -48,6 +49,7 @@ export function IssueLine({ issue, layoutId = false }: { issue: Issue; layoutId?
                         {issue.identifier}
                      </span>
                   )}
+                  <IssueParentIndicator parent={issue.parent} />
                   {displayProperties.status && (
                      <StatusSelector status={issue.status} issueId={issue.id} />
                   )}
