@@ -45,7 +45,25 @@ async function dragRow(page: Page, handle: Locator, target: Locator, after = tru
    await page.mouse.down();
    await page.mouse.move(from.x + from.width / 2 + 12, from.y + from.height / 2, { steps: 4 });
    await expect(page.locator('[data-dnd-placeholder]')).toBeVisible();
-   await page.mouse.move(to.x + 80, to.y + (after ? to.height - 2 : 2), { steps: 12 });
+   await page.mouse.move(to.x + 80, to.y + to.height / 2, { steps: 12 });
+   const targetId = await target.getAttribute('data-order-id');
+   await expect
+      .poll(() =>
+         handle.evaluate(
+            (el, args) => {
+               const source = el.closest('[data-order-id]')!;
+               const target = document.querySelector(
+                  `[data-order-id="${args.id}"]:not([data-dnd-placeholder])`
+               )!;
+               return Boolean(
+                  source.compareDocumentPosition(target) &
+                  (args.after ? Node.DOCUMENT_POSITION_PRECEDING : Node.DOCUMENT_POSITION_FOLLOWING)
+               );
+            },
+            { id: targetId, after }
+         )
+      )
+      .toBe(true);
    await page.mouse.up();
 }
 
@@ -270,6 +288,7 @@ test('sub-issues reorder among siblings and retain nested children', async ({ pa
       await sorter.click();
       await page.getByRole('option', { name: 'Sort: Manual', exact: true }).click();
       const handles = page.getByRole('button', { name: /^Reorder / });
+
       await expect(handles).toHaveCount(4);
       let writes = 0;
       page.on('request', (r) => {

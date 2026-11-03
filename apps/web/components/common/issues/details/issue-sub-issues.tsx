@@ -41,6 +41,7 @@ import type { User } from '@/mock-data/users';
 import { IssueSearchDialog } from './issue-search-dialog';
 import { Selector } from '@astryxdesign/core/Selector';
 import { DesignSurface } from '@/components/common/design-surface';
+import { moveInList } from '@/features/manual-order/order';
 import { sortSubIssues, type SubIssueSort } from '@/features/manual-order/sub-issue-sort';
 import { ReorderRow, ReorderProvider } from '@/features/manual-order/reorder-row';
 
@@ -233,6 +234,9 @@ export function IssueSubIssues({
                scope={`sub:${workspaceId}:${subIssue.parentIssueId}`}
                workspaceId={workspaceId}
                enabled={state === 'ready' && sort === 'manual'}
+               optimistic={(source, target, placement) =>
+                  setSubIssues((current) => moveInList(current, source, target, placement))
+               }
                refresh={load}
             >
                <div

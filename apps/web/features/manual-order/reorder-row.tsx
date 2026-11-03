@@ -70,6 +70,7 @@ export function ReorderRow({
    scope,
    enabled,
    refresh,
+   optimistic,
    children,
 }: {
    item: OrderedItem;
@@ -80,6 +81,7 @@ export function ReorderRow({
    scope: string;
    enabled: boolean;
    refresh: () => void | Promise<void>;
+   optimistic: (sourceId: string, targetId: string, placement: 'before' | 'after') => void;
    children: ReactNode;
 }) {
    const tx = useMessages(messages);
@@ -92,6 +94,8 @@ export function ReorderRow({
    const commit = async (nextIndex: number) => {
       const target = siblings[nextIndex];
       if (!workspaceId || !target || target.id === item.id) return;
+      const placement = nextIndex < index ? 'before' : 'after';
+      optimistic(item.id, target.id, placement);
       try {
          await responseData(
             await authenticatedFetch(
@@ -104,7 +108,7 @@ export function ReorderRow({
                      entityType,
                      sourceId: item.id,
                      targetId: target.id,
-                     placement: nextIndex < index ? 'before' : 'after',
+                     placement,
                      expectedOrder: item.manualOrder ?? '0',
                      expectedTargetOrder: target.manualOrder ?? '0',
                   }),
@@ -134,6 +138,10 @@ export function ReorderRow({
       disabled: !enabled || !workspaceId || busy,
       data: { commit },
    });
+   // Keep the handle mounted when hidden: removing its ref makes accessibility fall back to the
+   // entire row, which contains other buttons and links and must never become a nested button.
+   // VI: Giữ handle trong DOM khi ẩn: gỡ ref làm trợ năng chuyển sang cả hàng, vốn chứa nút và link
+   // VI: khác nên không được biến thành nút lồng nhau.
    return (
       <HStack
          ref={ref}
@@ -143,20 +151,19 @@ export function ReorderRow({
          data-order-id={enabled && workspaceId ? item.id : undefined}
          data-dragging={isDragging || undefined}
       >
-         {enabled && workspaceId && (
-            <DesignSurface>
-               <button
-                  ref={handleRef}
-                  type="button"
-                  disabled={busy}
-                  aria-label={tx('Reorder {name}', { name })}
-                  title={tx('Reorder {name}', { name })}
-                  className="cursor-grab touch-none text-secondary self-start"
-               >
-                  <Icon icon={GripVertical} size="sm" />
-               </button>
-            </DesignSurface>
-         )}
+         <DesignSurface>
+            <button
+               ref={handleRef}
+               type="button"
+               hidden={!enabled || !workspaceId}
+               disabled={busy || !enabled || !workspaceId}
+               aria-label={tx('Reorder {name}', { name })}
+               title={tx('Reorder {name}', { name })}
+               className="cursor-grab touch-none text-secondary self-start"
+            >
+               <Icon icon={GripVertical} size="sm" />
+            </button>
+         </DesignSurface>
          <VStack gap={0} className="flex-1 min-w-0" align="stretch">
             {children}
          </VStack>

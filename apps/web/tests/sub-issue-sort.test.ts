@@ -22,3 +22,16 @@ test('sub-issue sorting uses numeric IDs and workflow position without mutating 
       ['b', 'a']
    );
 });
+
+test('optimistic ordering moves a sibling without discarding intervening descendants', async () => {
+   const { moveInList } = await import('../features/manual-order/order');
+   const items = [{ id: 'a' }, { id: 'child-a', parentIssueId: 'a' }, { id: 'b' }];
+   assert.deepEqual(
+      moveInList(items, 'b', 'a', 'before').map((i) => i.id),
+      ['b', 'a', 'child-a']
+   );
+   assert.deepEqual(
+      items.map((i) => i.id),
+      ['a', 'child-a', 'b']
+   );
+});
