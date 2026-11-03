@@ -16,7 +16,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
-- Issue column headers cycle ascending, descending and default order; Shift-click combines up to five criteria across server-paginated results. Long project names use ellipsis and full-name tooltips. API and web must deploy together; no migration. (DTD-256)
+- Issue column headers cycle ascending, descending and default order; Shift-click combines up to five criteria across server-paginated results. Long project names use ellipsis and full-name tooltips. API and web must deploy together; no migration. (DTD-256, #119)
   VI: Header cột task chuyển tăng, giảm và mặc định; Shift+bấm kết hợp tối đa năm tiêu chí trên kết quả phân trang server. Tên dự án dài có dấu ba chấm và tooltip tên đầy đủ. API và web cần triển khai cùng bản; không có migration.
 
 - Manual ordering uses dnd-kit sortable handles with keyboard controls, drag placeholders and motion; sub-issue trees can sort siblings by issue ID or workflow status in either direction. Removes per-row up/down buttons. React order stays synchronized with drag feedback to prevent duplicate rows. Switching sort modes keeps one accessible drag handle per row. No new migration. (DTD-239, #118)
