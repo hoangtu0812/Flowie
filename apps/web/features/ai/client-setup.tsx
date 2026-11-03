@@ -16,6 +16,7 @@ import {
    type ClientName,
    type ClientOs,
 } from './client-config';
+import { McpTlsGuide } from './mcp-tls-guide';
 import { probeConnection } from './connection-probe';
 
 async function copy(value: string, success: string) {
@@ -35,10 +36,10 @@ export function ClientSetup({ endpoint, token }: { endpoint: string; token?: str
    const link = installLink(client, endpoint, token);
    const config = clientConfig(client, endpoint, token);
    return (
-      <VStack gap={3}>
+      <VStack gap={3} className="min-w-0 w-full">
          <Heading level={3}>Install in your AI client</Heading>
-         <HStack gap={2} vAlign="center" hAlign="between">
-            <HStack gap={1}>
+         <HStack gap={2} vAlign="center" hAlign="between" wrap="wrap">
+            <HStack gap={1} wrap="wrap">
                {CLIENTS.map((name) => (
                   <Button
                      key={name}
@@ -50,18 +51,17 @@ export function ClientSetup({ endpoint, token }: { endpoint: string; token?: str
                   />
                ))}
             </HStack>
-            <HStack gap={1}>
-               {command &&
-                  (['macOS', 'Windows'] as const).map((name) => (
-                     <Button
-                        key={name}
-                        label={name}
-                        size="sm"
-                        variant={os === name ? 'secondary' : 'ghost'}
-                        aria-pressed={os === name}
-                        onClick={() => setOs(name)}
-                     />
-                  ))}
+            <HStack gap={1} wrap="wrap">
+               {(['macOS', 'Windows', 'Linux'] as const).map((name) => (
+                  <Button
+                     key={name}
+                     label={name}
+                     size="sm"
+                     variant={os === name ? 'secondary' : 'ghost'}
+                     aria-pressed={os === name}
+                     onClick={() => setOs(name)}
+                  />
+               ))}
                <Button
                   label="Check new connection endpoint and grant"
                   tooltip={
@@ -94,9 +94,10 @@ export function ClientSetup({ endpoint, token }: { endpoint: string; token?: str
                ? 'The new token is already filled in. Install now: Flowie cannot show this token again.'
                : 'Create a connection to fill in its token. Flowie does not keep tokens, so <FLOWIE_MCP_TOKEN> stays a placeholder here.'}
          </Text>
+         <McpTlsGuide endpoint={endpoint} client={client} os={os} />
          {command && (
             <>
-               <HStack gap={2} vAlign="center" hAlign="between">
+               <HStack gap={2} vAlign="center" hAlign="between" wrap="wrap">
                   <Text>
                      Run this once in {os === 'Windows' ? 'PowerShell' : 'Terminal'}, then restart{' '}
                      {client}.
@@ -138,7 +139,7 @@ export function ClientSetup({ endpoint, token }: { endpoint: string; token?: str
          )}
          {client !== 'Claude Code' && (
             <>
-               <HStack gap={2} vAlign="center" hAlign="between">
+               <HStack gap={2} vAlign="center" hAlign="between" wrap="wrap">
                   <Text type="supporting" color="secondary">
                      {command ? 'Manual alternative: merge' : 'Merge'} this into{' '}
                      {CLIENT_FILES[client]}, then restart {client}.

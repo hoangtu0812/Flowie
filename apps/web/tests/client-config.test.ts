@@ -34,7 +34,7 @@ test('client configurations embed the token or a placeholder', () => {
 });
 
 test('install commands are re-runnable and never duplicate the Codex table', () => {
-   for (const os of ['macOS', 'Windows'] as const) {
+   for (const os of ['macOS', 'Windows', 'Linux'] as const) {
       const claude = installCommand('Claude Code', os, endpoint, token)!;
       assert.ok(claude.indexOf('claude mcp remove') < claude.indexOf('claude mcp add'));
       assert.ok(claude.includes(`--header "Authorization: Bearer ${token}"`));
