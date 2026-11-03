@@ -12,12 +12,10 @@ import { useIssuesStore } from '@/store/issues-store';
 import { applyIssueFilters } from './issue-filter-columns';
 import { IssueFilterBar } from './issue-filter-bar';
 import { useRightPanelStore } from '@/store/right-panel-store';
-import { useSearchStore } from '@/store/search-store';
 import { useViewStore } from '@/store/view-store';
 import { useMemo } from 'react';
 import { GroupedIssuesView } from './grouped-issues-view';
 import { InsightsPanel } from './insights-panel';
-import { SearchIssues } from './search-issues';
 
 export type CycleView = 'active' | 'upcoming';
 
@@ -31,7 +29,6 @@ interface CycleIssuesProps {
  * filters, list/board) plus the cycle details / insights side panels.
  */
 export default function CycleIssues({ cycleView }: CycleIssuesProps) {
-   const { isSearchOpen, searchQuery } = useSearchStore();
    const { viewType } = useViewStore();
    const { filters } = useFilterStore();
    const { issues, statuses, error } = useIssuesStore();
@@ -39,7 +36,6 @@ export default function CycleIssues({ cycleView }: CycleIssuesProps) {
    const { cycle, loading, error: cycleError, retry: retryCycle } = useLiveCycle(cycleView);
    const queryState = useIssueQuery(undefined, { cycleId: cycle?.id }, Boolean(cycle));
 
-   const isSearching = isSearchOpen && searchQuery.trim() !== '';
    const isViewTypeGrid = viewType === 'grid';
 
    const cycleIssues = useMemo(
@@ -63,16 +59,6 @@ export default function CycleIssues({ cycleView }: CycleIssuesProps) {
             />
          </DesignSurface>
       );
-
-   if (isSearching) {
-      return (
-         <div className="w-full h-full">
-            <div className="px-6 mb-6">
-               <SearchIssues issues={displayedIssues} />
-            </div>
-         </div>
-      );
-   }
 
    return (
       <div className="w-full h-full flex flex-col overflow-hidden">

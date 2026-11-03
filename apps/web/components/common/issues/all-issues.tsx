@@ -11,13 +11,11 @@ import { useIssuesStore } from '@/store/issues-store';
 import { applyIssueFilters } from './issue-filter-columns';
 import { IssueFilterBar } from './issue-filter-bar';
 import { useRightPanelStore } from '@/store/right-panel-store';
-import { useSearchStore } from '@/store/search-store';
 import { useViewStore } from '@/store/view-store';
 import { useParams } from 'next/navigation';
 import { useMemo } from 'react';
 import { GroupedIssuesView } from './grouped-issues-view';
 import { InsightsPanel } from './insights-panel';
-import { SearchIssues } from './search-issues';
 
 interface AllIssuesProps {
    /**
@@ -29,7 +27,6 @@ interface AllIssuesProps {
 }
 
 export default function AllIssues({ categories, query }: AllIssuesProps) {
-   const { isSearchOpen, searchQuery } = useSearchStore();
    const { viewType } = useViewStore();
    const { filters } = useFilterStore();
    const showSubIssues = useDisplaySettingsStore((state) => state.showSubIssues);
@@ -39,7 +36,6 @@ export default function AllIssues({ categories, query }: AllIssuesProps) {
    const teamIdentifier = Array.isArray(params.teamId) ? params.teamId[0] : params.teamId;
    const queryState = useIssueQuery(teamIdentifier, { ...query, categories });
 
-   const isSearching = isSearchOpen && searchQuery.trim() !== '';
    const isViewTypeGrid = viewType === 'grid';
 
    const statuses = useMemo<Status[]>(() => {
@@ -64,16 +60,6 @@ export default function AllIssues({ categories, query }: AllIssuesProps) {
       () => applyIssueFilters(scopedIssues, filters),
       [scopedIssues, filters]
    );
-
-   if (isSearching) {
-      return (
-         <HStack width="100%" height="100%">
-            <VStack padding={6}>
-               <SearchIssues issues={displayedIssues} />
-            </VStack>
-         </HStack>
-      );
-   }
 
    return (
       <VStack width="100%" height="100%" className="overflow-hidden">

@@ -9,3 +9,10 @@ test('search honors the supplied view scope and supports Vietnamese queries', ()
    assert.equal(searchIssueCollection(assigned, 'GEN-1').length, 1);
    assert.deepEqual(searchIssueCollection(assigned, ' '), []);
 });
+
+test('search ignores description-only matches', () => {
+   const issues = [{ identifier: 'DTD-255', title: 'Đăng nhập', description: 'secret-log-only' }];
+   assert.equal(searchIssueCollection(issues, 'dang nhap').length, 1);
+   assert.equal(searchIssueCollection(issues, 'DTD-255').length, 1);
+   assert.deepEqual(searchIssueCollection(issues, 'secret-log-only'), []);
+});

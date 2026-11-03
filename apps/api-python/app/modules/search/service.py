@@ -8,7 +8,7 @@ from ..access.project_scope import project_read_scope
 from ..work_items.issue_search import VIETNAMESE, NORMALIZED
 
 SOURCES = f"""
-SELECT 'issue' AS kind,i.id,i.title,i.identifier AS subtitle,'/issue/'||i.identifier AS path,i.created_at,i.title||' '||COALESCE(i.description,'') AS search_text
+SELECT 'issue' AS kind,i.id,i.title,i.identifier AS subtitle,'/issue/'||i.identifier AS path,i.created_at,i.identifier||' '||i.title AS search_text
 FROM issues i LEFT JOIN teams t ON t.id=i.team_id WHERE i.workspace_id=:workspace AND i.archived_at IS NULL AND t.archived_at IS NULL
 AND (i.team_id IS NULL OR EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=i.team_id AND tm.user_id=:user))
 UNION ALL

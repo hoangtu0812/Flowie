@@ -46,11 +46,50 @@ async def verify_search():
                         workspaceId=seed["workspace_id"],
                         teamId=seed["team_id"],
                         title="Đăng nhập task",
+                        description="Description-only-hidden-query",
                     ),
                     user,
                     db,
                 )
             )["data"]
+            from app.modules.work_items.issue_search import search_page
+
+            for query in ("dang nhap", issue["identifier"].lower()):
+                result = await search_page(
+                    db,
+                    seed["workspace_id"],
+                    user["id"],
+                    "secret",
+                    {"query": query, "limit": 1},
+                )
+                assert result["meta"]["total"] == 1
+                assert result["data"][0]["id"] == issue["id"]
+            assert (
+                await search(
+                    db,
+                    seed["workspace_id"],
+                    user["id"],
+                    "secret",
+                    issue["identifier"].lower(),
+                    kind="issue",
+                )
+            )["data"][0]["id"] == issue["id"]
+            for query in ("Description-only-hidden-query", "%", "_"):
+                assert (
+                    await search_page(
+                        db, seed["workspace_id"], user["id"], "secret", {"query": query}
+                    )
+                )["data"] == []
+            assert (
+                await search(
+                    db,
+                    seed["workspace_id"],
+                    user["id"],
+                    "secret",
+                    "Description-only-hidden-query",
+                    kind="issue",
+                )
+            )["data"] == []
             document = (
                 await create_document(
                     CreateDocumentInput(
@@ -132,7 +171,7 @@ async def verify_search():
                     "id": _cuid(),
                     "workspace": seed["workspace_id"],
                     "team": hidden,
-                    "user":user["id"],
+                    "user": user["id"],
                     "now": now,
                 },
             )
