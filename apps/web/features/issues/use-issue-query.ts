@@ -21,7 +21,7 @@ export function useIssueQuery(teamReference?: string, input: IssueQuery = {}, en
       ...(ordering === 'manual' ? { ordering: 'manual' as const } : {}),
       ...input,
       filters: [...(input.filters ?? []), ...filters],
-      query: isSearchOpen ? searchQuery.trim() : undefined,
+      query: isSearchOpen ? searchQuery.trim() : input.query,
    };
    const signature = JSON.stringify(options);
    const key = `${orgId}/${teamReference ?? '*'}/${signature}`;

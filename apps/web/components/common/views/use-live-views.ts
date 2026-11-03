@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import { responseData, ApiRequestError } from '@/lib/http';
 import { useParams } from 'next/navigation';
+import { loadJoinedWorkspaceTeams } from '@/components/common/teams/team-types';
 
 export type LiveView = {
    id: string;
@@ -14,6 +15,7 @@ export type LiveView = {
    isShared: boolean;
    createdAt: string;
    updatedAt: string;
+   configurationError?: string | null;
    createdBy: { id: string; name: string; avatarUrl: string | null };
 };
 
@@ -23,10 +25,12 @@ async function workspaceIdForCurrentUser() {
    return (await loadCurrentWorkspace()).id;
 }
 
-export function useLiveViews() {
+export function useLiveViews(teamReference?: string) {
    const { orgId } = useParams<{ orgId: string }>();
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [currentUserId, setCurrentUserId] = useState<string>();
+   const [teamId, setTeamId] = useState<string>();
+   const [teamNames, setTeamNames] = useState<Record<string, string>>({});
    const [views, setViews] = useState<LiveView[]>([]);
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState<string>();
@@ -38,14 +42,27 @@ export function useLiveViews() {
       setViews([]);
       setWorkspaceId(undefined);
       setCurrentUserId(undefined);
+      setTeamId(undefined);
+      setTeamNames({});
       void (async () => {
          setLoading(true);
          setError(undefined);
          setErrorStatus(undefined);
          try {
             const currentWorkspaceId = await workspaceIdForCurrentUser();
+            let resolvedTeam: string | undefined;
+            const joined = await loadJoinedWorkspaceTeams();
+            if (teamReference) {
+               resolvedTeam = joined.teams.find(
+                  (team) => team.id === teamReference || team.identifier === teamReference
+               )?.id;
+               if (!resolvedTeam)
+                  throw new Error('This team is not available to the current account.');
+            }
             const [response, userResponse] = await Promise.all([
-               authenticatedFetch(`${api}/views?workspaceId=${currentWorkspaceId}`),
+               authenticatedFetch(
+                  `${api}/views?${new URLSearchParams({ workspaceId: currentWorkspaceId, ...(resolvedTeam ? { teamId: resolvedTeam } : {}) })}`
+               ),
                authenticatedFetch(`${api}/users/me`),
             ]);
             const data = await responseData<LiveView[]>(response, 'Could not load views.');
@@ -54,6 +71,8 @@ export function useLiveViews() {
                setWorkspaceId(currentWorkspaceId);
                setViews(data);
                setCurrentUserId(account.id);
+               setTeamId(resolvedTeam);
+               setTeamNames(Object.fromEntries(joined.teams.map((team) => [team.id, team.name])));
             }
          } catch (caught) {
             if (current) {
@@ -67,7 +86,7 @@ export function useLiveViews() {
       return () => {
          current = false;
       };
-   }, [orgId, refreshKey]);
+   }, [orgId, refreshKey, teamReference]);
 
    useEffect(() => {
       const refresh = () => setRefreshKey((value) => value + 1);
@@ -75,5 +94,15 @@ export function useLiveViews() {
       return () => window.removeEventListener('flowie:views-changed', refresh);
    }, []);
    const reload = useCallback(() => window.dispatchEvent(new Event('flowie:views-changed')), []);
-   return { workspaceId, currentUserId, views, loading, error, errorStatus, reload };
+   return {
+      workspaceId,
+      currentUserId,
+      teamId,
+      teamNames,
+      views,
+      loading,
+      error,
+      errorStatus,
+      reload,
+   };
 }

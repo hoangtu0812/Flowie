@@ -1,92 +1,128 @@
 'use client';
-import { ProjectPagination } from '@/features/projects/project-pagination';
 
+import { useMemo } from 'react';
+import { Button } from '@astryxdesign/core/Button';
+import { HStack, VStack } from '@astryxdesign/core/Layout';
+import { Text } from '@astryxdesign/core/Text';
+import { DesignSurface } from '@/components/common/design-surface';
+import { ProjectPagination } from '@/features/projects/project-pagination';
 import { useIssueQuery } from '@/features/issues/use-issue-query';
 import { GroupedIssuesView } from '@/components/common/issues/grouped-issues-view';
+import { IssueFilterTrigger } from '@/components/common/issues/issue-filter-trigger';
+import { IssueFilterBar } from '@/components/common/issues/issue-filter-bar';
 import { InsightsPanel } from '@/components/common/issues/insights-panel';
 import ProjectsList from '@/components/common/projects/projects-list';
 import { ProjectGroup } from '@/components/common/projects/projects';
 import { useProjectsData } from '@/features/projects/projects-data';
 import { useIssuesStore } from '@/store/issues-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
-import { useMemo } from 'react';
+import { FilterDefaultsContext, useFilterStore } from '@/store/filter-store';
 import { LiveView, useLiveViews } from './use-live-views';
 import { RecoveryScreen } from '@/features/shared/recovery-screen';
 import { usePageEntity } from '@/features/shared/document-title';
+import { useMessages } from '@/features/shared/use-messages';
+import { captureIssueView, isIssueViewConfig, type IssueViewConfig } from '@/features/views/config';
+import { ViewActions } from '@/features/views/view-actions';
+import { ScopeSummary } from '@/features/views/view-editor';
+import { messages } from '@/features/views/messages.vi';
 
-const filterValues = (filters: Record<string, unknown>, key: string) =>
-   Array.isArray(filters[key]) ? (filters[key] as string[]) : [];
-
-function IssueViewBody({ view }: { view: LiveView }) {
+function IssueViewBody({
+   view,
+   config,
+   workspaceId,
+   currentUserId,
+}: {
+   view: LiveView;
+   config: IssueViewConfig;
+   workspaceId: string;
+   currentUserId?: string;
+}) {
+   const tx = useMessages(messages);
    const { openPanel } = useRightPanelStore();
-   const { issues, statuses, error } = useIssuesStore();
-   const queryFilters = [];
-   for (const [key, columnId, type, operator] of [
-      ['statusIds', 'status', 'option', 'is any of'],
-      ['priorityIds', 'priority', 'option', 'is any of'],
-      ['labelIds', 'labels', 'multiOption', 'include any of'],
-   ]) {
-      const values = filterValues(view.filters, key);
-      if (values.length) queryFilters.push({ columnId, type, operator, values });
-   }
-   if (view.filters.unassigned === true)
-      queryFilters.push({
-         columnId: 'assignee',
-         type: 'option',
-         operator: 'is',
-         values: ['unassigned'],
-      });
-   if (view.filters.hasProject === true)
-      queryFilters.push({ columnId: 'project', type: 'option', operator: 'is not', values: [''] });
-   const queryState = useIssueQuery(
-      typeof view.filters.teamId === 'string' ? view.filters.teamId : undefined,
-      { categories: filterValues(view.filters, 'statusCategories'), filters: queryFilters }
-   );
-   const filtered = useMemo(() => {
-      const categories = filterValues(view.filters, 'statusCategories');
-      const statusIds = filterValues(view.filters, 'statusIds');
-      const labelIds = filterValues(view.filters, 'labelIds');
-      const priorityIds = filterValues(view.filters, 'priorityIds');
-      const teamId = typeof view.filters.teamId === 'string' ? view.filters.teamId : undefined;
-      return issues.filter((issue) => {
-         if (categories.length && !categories.includes(issue.status.category)) return false;
-         if (statusIds.length && !statusIds.includes(issue.status.id)) return false;
-         if (labelIds.length && !issue.labels.some((label) => labelIds.includes(label.id)))
-            return false;
-         if (priorityIds.length && !priorityIds.includes(issue.priority.id)) return false;
-         if (view.filters.hasProject === true && !issue.project) return false;
-         if (view.filters.unassigned === true && issue.assignee) return false;
-         return !teamId || issue.teamId === teamId;
-      });
-   }, [issues, view]);
+   const { issues, statuses, error, pageQuery } = useIssuesStore();
+   const { filters } = useFilterStore();
+   const { filters: savedFilters, ...query } = config.query;
+   const queryState = useIssueQuery(config.teamId, query);
+   const currentConfig =
+      !queryState.loading && pageQuery
+         ? captureIssueView(pageQuery)
+         : { ...config, query: { ...query, filters } };
+   const changed = JSON.stringify(filters) !== JSON.stringify(savedFilters);
    return (
-      <div className="w-full h-full flex flex-col overflow-hidden">
-         <div className="flex-1 min-h-0 w-full flex overflow-hidden">
-            <div className="flex-1 min-w-0 h-full overflow-hidden">
+      <VStack height="100%" minHeight={0} gap={0}>
+         <DesignSurface>
+            <HStack
+               paddingInline={6}
+               paddingBlock={2}
+               gap={3}
+               justify="between"
+               wrap="wrap"
+               className="border-b"
+            >
+               <VStack gap={1}>
+                  <ScopeSummary config={config} />
+                  {changed && <Text type="supporting">{tx('Temporary changes')}</Text>}
+               </VStack>
+               <HStack gap={2} wrap="wrap">
+                  <IssueFilterTrigger />
+                  <ViewActions
+                     view={view}
+                     config={currentConfig}
+                     workspaceId={workspaceId}
+                     currentUserId={currentUserId}
+                     disabled={queryState.loading || !!error}
+                     dirty={changed}
+                  />
+                  {changed && (
+                     <Button
+                        label={tx('Reload view')}
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => window.location.assign(window.location.pathname)}
+                     />
+                  )}
+               </HStack>
+            </HStack>
+         </DesignSurface>
+         <IssueFilterBar />
+         <HStack
+            height="100%"
+            minHeight={0}
+            gap={0}
+            align="stretch"
+            className="flex-1 overflow-hidden"
+         >
+            <VStack minHeight={0} className="flex-1 min-w-0 overflow-hidden">
                <GroupedIssuesView
-                  issues={filtered}
-                  totalIssues={filtered}
+                  issues={issues}
+                  totalIssues={issues}
                   statuses={statuses}
                   isViewTypeGrid={false}
                   loading={queryState.loading}
                   error={error}
                   onRetry={queryState.retry}
                />
-            </div>
+            </VStack>
             {openPanel === 'insights' && (
-               <aside className="hidden lg:flex w-[420px] shrink-0 border-l h-full overflow-hidden bg-container">
+               <VStack
+                  width={420}
+                  minHeight={0}
+                  className="hidden lg:flex shrink-0 border-l overflow-hidden"
+               >
                   <InsightsPanel />
-               </aside>
+               </VStack>
             )}
-         </div>
-      </div>
+         </HStack>
+      </VStack>
    );
 }
 
 function ProjectViewBody({ view }: { view: LiveView }) {
    const { allProjects } = useProjectsData();
    const groups = useMemo<ProjectGroup[]>(() => {
-      const priorities = filterValues(view.filters, 'priorityIds');
+      const priorities = Array.isArray(view.filters.priorityIds)
+         ? (view.filters.priorityIds as string[])
+         : [];
       const teamId = typeof view.filters.teamId === 'string' ? view.filters.teamId : undefined;
       const projects = allProjects.filter(
          (project) =>
@@ -110,35 +146,65 @@ function ProjectViewBody({ view }: { view: LiveView }) {
    );
 }
 
-/** Saved view detail backed by persisted view filters and live issue/project data. */
 export default function ViewDetails({ viewId }: { viewId: string }) {
-   const { views, loading, error, errorStatus, reload } = useLiveViews();
+   const tx = useMessages(messages);
+   const { views, workspaceId, currentUserId, loading, error, reload } = useLiveViews();
    const view = views.find((candidate) => candidate.id === viewId);
    usePageEntity(view?.name);
-   if (loading)
-      return (
-         <div className="w-full h-full flex items-center justify-center text-sm text-muted-foreground">
-            Loading view…
-         </div>
-      );
+   if (loading) return <Text>{tx('Loading view…')}</Text>;
    if (error)
       return (
-         <RecoveryScreen
-            title={errorStatus === 403 ? 'Access unavailable' : 'Could not load this view'}
-            message={errorStatus === 0 ? 'Check your connection and try again.' : error}
-            retry={reload}
-         />
+         <RecoveryScreen title={tx('Could not load this view')} message={error} retry={reload} />
       );
-   if (!view)
+   if (!view || !workspaceId)
       return (
          <RecoveryScreen
-            title="View not found"
-            message="This view was removed or is outside your access."
+            title={tx('View not found')}
+            message={tx('This view was removed or is outside your access.')}
          />
       );
-   return view.entityType === 'issue' ? (
-      <IssueViewBody view={view} />
-   ) : (
-      <ProjectViewBody view={view} />
+   if (view.configurationError || (view.entityType === 'issue' && !isIssueViewConfig(view.filters)))
+      return (
+         <DesignSurface>
+            <VStack gap={3} padding={6}>
+               <Text>{tx('Invalid view configuration')}</Text>
+               <Text type="supporting">{view.configurationError}</Text>
+               <ViewActions
+                  view={view}
+                  config={view.filters}
+                  workspaceId={workspaceId}
+                  currentUserId={currentUserId}
+                  disabled
+               />
+            </VStack>
+         </DesignSurface>
+      );
+   if (view.entityType === 'project')
+      return (
+         <>
+            <DesignSurface>
+               <HStack padding={3}>
+                  <ViewActions
+                     view={view}
+                     config={view.filters}
+                     workspaceId={workspaceId}
+                     currentUserId={currentUserId}
+                  />
+               </HStack>
+            </DesignSurface>
+            <ProjectViewBody view={view} />
+         </>
+      );
+   const config = view.filters as IssueViewConfig;
+   return (
+      <FilterDefaultsContext.Provider value={config.query.filters}>
+         <IssueViewBody
+            key={`${view.id}:${view.updatedAt}`}
+            view={view}
+            config={config}
+            workspaceId={workspaceId}
+            currentUserId={currentUserId}
+         />
+      </FilterDefaultsContext.Provider>
    );
 }

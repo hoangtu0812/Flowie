@@ -16,6 +16,18 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- Issue Views save reusable filters from workspace and team issue lists, support private/shared views, editing and deletion, and preserve team scope and existing view URLs. Conflicting edits require a reload instead of overwriting another session. Deploy `api` and `web` together; no schema migration. (DTD-250, #108)
+  VI: Issue Views lưu bộ lọc dùng lại từ danh sách công việc của workspace và team, hỗ trợ riêng tư/chia sẻ, sửa và xóa, đồng thời giữ phạm vi team và URL view hiện có. Chỉnh sửa xung đột yêu cầu tải lại thay vì ghi đè phiên khác. Triển khai `api` và `web` cùng bản; không có migration schema. (DTD-250)
+
+- CI allows 35 minutes for the complete three-browser regression suite, which outgrew the previous 20-minute step budget; all tests and per-test timeouts remain enabled. No runtime or schema change. (#107)
+  VI: CI dành 35 phút cho toàn bộ bộ kiểm thử ba trình duyệt đã vượt ngân sách bước 20 phút trước đây; giữ đầy đủ test và thời gian tối đa của từng test. Không đổi hành vi ứng dụng hoặc schema.
+
+- Browser regression checks activate native row dragging with intermediate pointer moves, clean up temporary sub-issues even after timeouts, and locate the current workspace search title. Test-only change; no schema or runtime change. (#107)
+  VI: Kiểm thử trình duyệt kích hoạt kéo hàng native bằng các bước di chuyển con trỏ trung gian, dọn sub-issue tạm kể cả khi hết giờ và tìm đúng tiêu đề tìm kiếm workspace hiện tại. Chỉ đổi test; không đổi schema hoặc hành vi ứng dụng.
+
+- Docs supports dragging a document, PDF or folder onto another folder in the same project, with hover expansion, edge scrolling, protected drop targets and a move dialog for conflicts or failed writes. Existing menu and keyboard actions remain available. Web only; no API or schema change. (DTD-226, #107)
+  VI: Docs hỗ trợ kéo tài liệu, PDF hoặc thư mục vào thư mục khác trong cùng dự án, tự mở nhánh khi rê giữ, cuộn gần mép, bảo vệ đích thả và dùng hộp di chuyển khi xung đột hoặc lỗi ghi. Giữ các thao tác menu và bàn phím hiện có. Chỉ đổi web; không đổi API hoặc schema. (DTD-226)
+
 - Projects and issues support a saved Manual order with drag handles and keyboard move controls; sub-issues reorder among siblings without changing their parent. Stale edits and affected pagination cursors require a reload. Includes a Prisma migration adding and backfilling manual positions: let migrate complete before api/worker, and deploy api/web together. (DTD-239, #111)
   VI: Dự án và công việc hỗ trợ thứ tự Manual được lưu, có handle kéo-thả và nút di chuyển bằng bàn phím; sub-issue đổi thứ tự cùng cấp mà không đổi parent. Chỉnh sửa và cursor phân trang cũ bị ảnh hưởng yêu cầu tải lại. Có migration Prisma thêm và điền vị trí thủ công: migrate phải hoàn tất trước api/worker, triển khai api/web cùng bản. (DTD-239)
 

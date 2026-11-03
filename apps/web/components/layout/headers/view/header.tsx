@@ -1,21 +1,22 @@
 'use client';
 
-import { HStack } from '@astryxdesign/core/Layout';
+import { useMemo } from 'react';
+import { useParams } from 'next/navigation';
+import { Button } from '@astryxdesign/core/Button';
+import { HStack, VStack } from '@astryxdesign/core/Layout';
+import { Text } from '@astryxdesign/core/Text';
+import { DesignSurface } from '@/components/common/design-surface';
 import { IssueListActions } from '@/features/issues/issue-list-actions';
-import { Button } from '@/components/ui/button';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useProjectsData } from '@/features/projects/projects-data';
 import { useIssuesStore } from '@/store/issues-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
-import { BarChart3, Box, Layers, MoreHorizontal, Star } from 'lucide-react';
-import { useParams } from 'next/navigation';
-import { useMemo } from 'react';
 import { useLiveViews } from '@/components/common/views/use-live-views';
-
-const values = (filters: Record<string, unknown>, key: string) =>
-   Array.isArray(filters[key]) ? (filters[key] as string[]) : [];
+import { useMessages } from '@/features/shared/use-messages';
+import { messages } from '@/features/views/messages.vi';
 
 export default function Header() {
+   const tx = useMessages(messages);
    const { viewId } = useParams<{ viewId: string }>();
    const { views, loading } = useLiveViews();
    const { page, loading: issuesLoading } = useIssuesStore();
@@ -24,48 +25,56 @@ export default function Header() {
    const view = views.find((candidate) => candidate.id === viewId);
    const count = useMemo(() => {
       if (!view) return 0;
-      const priorities = values(view.filters, 'priorityIds');
+      if (view.entityType === 'issue') return issuesLoading ? '…' : (page?.total ?? '…');
+      const priorities = Array.isArray(view.filters.priorityIds)
+         ? (view.filters.priorityIds as string[])
+         : [];
       const teamId = typeof view.filters.teamId === 'string' ? view.filters.teamId : undefined;
-      if (view.entityType === 'project')
-         return allProjects.filter(
-            (project) =>
-               (!priorities.length || priorities.includes(project.priority.id)) &&
-               (!teamId || project.teamId === teamId)
-         ).length;
-      return issuesLoading ? '…' : (page?.total ?? '…');
+      return allProjects.filter(
+         (project) =>
+            (!priorities.length || priorities.includes(project.priority.id)) &&
+            (!teamId || project.teamId === teamId)
+      ).length;
    }, [allProjects, page, issuesLoading, view]);
    if (loading || !view) return null;
-   const Icon = view.entityType === 'issue' ? Layers : Box;
    return (
-      <div className="w-full flex flex-col">
-         <div className="w-full flex justify-between items-center border-b py-1.5 px-6 h-10">
-            <div className="flex items-center gap-2 min-w-0">
-               <SidebarTrigger />
-               <span className="inline-flex size-5 items-center justify-center rounded bg-muted/50 text-xs shrink-0">
-                  <Icon className="size-3.5" />
-               </span>
-               <span className="text-sm font-medium truncate">{view.name}</span>
-               <Star className="size-3.5 text-muted-foreground shrink-0 ml-1" />
-               <MoreHorizontal className="size-3.5 text-muted-foreground shrink-0" />
-            </div>
-         </div>
-         <div className="w-full flex justify-between items-center border-b py-1.5 px-6 h-10">
-            <span className="text-xs text-muted-foreground">
-               {count} {view.entityType === 'issue' ? 'issues' : 'projects'}
-            </span>
-            {view.entityType === 'issue' && (
-               <HStack gap={1}>
-                  <IssueListActions />
-                  <Button
-                     size="xs"
-                     variant={openPanel === 'insights' ? 'secondary' : 'ghost'}
-                     onClick={() => togglePanel('insights')}
-                  >
-                     <BarChart3 className="size-4" />
-                  </Button>
+      <VStack width="100%">
+         <DesignSurface>
+            <VStack gap={0}>
+               <HStack paddingInline={6} paddingBlock={2} gap={2} className="border-b">
+                  <SidebarTrigger />
+                  <Text weight="medium" maxLines={1}>
+                     {view.name}
+                  </Text>
+                  <Text type="supporting">{tx(view.isShared ? 'Shared' : 'Private')}</Text>
                </HStack>
-            )}
-         </div>
-      </div>
+               <HStack
+                  paddingInline={6}
+                  paddingBlock={2}
+                  gap={2}
+                  justify="between"
+                  wrap="wrap"
+                  className="border-b"
+               >
+                  <Text type="supporting">
+                     {tx(view.entityType === 'issue' ? '{count} issues' : '{count} projects', {
+                        count,
+                     })}
+                  </Text>
+                  {view.entityType === 'issue' && !view.configurationError && (
+                     <HStack gap={2}>
+                        <IssueListActions />
+                        <Button
+                           label={tx('Show insights')}
+                           size="sm"
+                           variant={openPanel === 'insights' ? 'secondary' : 'ghost'}
+                           onClick={() => togglePanel('insights')}
+                        />
+                     </HStack>
+                  )}
+               </HStack>
+            </VStack>
+         </DesignSurface>
+      </VStack>
    );
 }

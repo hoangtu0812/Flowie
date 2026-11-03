@@ -1,7 +1,12 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { ContextMenu } from '@astryxdesign/core/ContextMenu';
+import {
+   ContextMenu,
+   ContextMenuTrigger,
+   ContextMenuContent,
+   ContextMenuItem,
+} from '@/components/ui/context-menu';
 import {
    DropdownMenu,
    DropdownMenuTrigger,
@@ -52,7 +57,7 @@ export const targetName = (target: TreeTarget) =>
       : target.kind === 'file'
         ? target.value.filename
         : target.value.title;
-const sourceFolder = (target: TreeTarget) =>
+export const sourceFolder = (target: TreeTarget) =>
    target.kind === 'folder' ? target.value.parentId : target.value.folderId;
 
 export async function mutateTreeItem(
@@ -177,43 +182,64 @@ export function DocsContextMenu({
       if (file) return { kind: 'file', value: file };
    };
    return (
-      <ContextMenu label={tx('Document actions')} items={items} isDisabled={busy}>
-         <section
-            onTouchStartCapture={(event) => {
-               const next = resolve(event.target);
-               if (!next || busy) {
+      <ContextMenu modal={false}>
+         <ContextMenuTrigger asChild disabled={busy}>
+            <section
+               onTouchStartCapture={(event) => {
+                  const next = resolve(event.target);
+                  if (!next || busy) {
+                     event.stopPropagation();
+                     return;
+                  }
+                  setTarget(next);
+               }}
+               onContextMenuCapture={(event) => {
+                  const next = resolve(event.target);
+                  if (!next || busy) {
+                     event.stopPropagation();
+                     return;
+                  }
+                  setTarget(next);
+               }}
+               onKeyDownCapture={(event) => {
+                  if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10'))
+                     return;
+                  if (!resolve(event.target) || busy) return;
+                  event.preventDefault();
                   event.stopPropagation();
-                  return;
-               }
-               setTarget(next);
-            }}
-            onContextMenuCapture={(event) => {
-               const next = resolve(event.target);
-               if (!next || busy) {
-                  event.stopPropagation();
-                  return;
-               }
-               setTarget(next);
-            }}
-            onKeyDownCapture={(event) => {
-               if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return;
-               if (!resolve(event.target) || busy) return;
-               event.preventDefault();
-               event.stopPropagation();
-               const row = (event.target as HTMLElement).closest('[data-tree-id]') as HTMLElement;
-               const rect = row.getBoundingClientRect();
-               row.dispatchEvent(
-                  new MouseEvent('contextmenu', {
-                     bubbles: true,
-                     cancelable: true,
-                     clientX: rect.left,
-                     clientY: rect.top,
-                  })
-               );
-            }}
+                  const row = (event.target as HTMLElement).closest(
+                     '[data-tree-id]'
+                  ) as HTMLElement;
+                  const rect = row.getBoundingClientRect();
+                  row.dispatchEvent(
+                     new MouseEvent('contextmenu', {
+                        bubbles: true,
+                        cancelable: true,
+                        clientX: rect.left,
+                        clientY: rect.top,
+                     })
+                  );
+               }}
+            >
+               {children}
+            </section>
+         </ContextMenuTrigger>
+         <ContextMenuContent
+            aria-label={tx('Document actions')}
+            onClick={(event) => event.stopPropagation()}
          >
-            {children}
-         </section>
+            {items.map((item) => (
+               <ContextMenuItem
+                  key={item.label}
+                  disabled={item.isDisabled}
+                  variant={'variant' in item ? item.variant : 'default'}
+                  onSelect={() => item.onClick()}
+               >
+                  {item.icon}
+                  {item.label}
+               </ContextMenuItem>
+            ))}
+         </ContextMenuContent>
       </ContextMenu>
    );
 }
@@ -225,6 +251,8 @@ export function TreeMutationDialog({
    busy,
    onClose,
    onSubmit,
+   initialDestination,
+   notice,
 }: {
    target: TreeTarget;
    action: 'move' | 'delete';
@@ -232,9 +260,11 @@ export function TreeMutationDialog({
    busy: boolean;
    onClose: () => void;
    onSubmit: (destination?: string, number?: number | null) => Promise<void>;
+   initialDestination?: string;
+   notice?: string;
 }) {
    const tx = useMessages(messages);
-   const [destination, setDestination] = useState('');
+   const [destination, setDestination] = useState(initialDestination ?? '');
    const [search, setSearch] = useState('');
    const [number, setNumber] = useState(
       target.kind === 'folder' && target.value.number != null
@@ -290,6 +320,7 @@ export function TreeMutationDialog({
                </DialogDescription>
             </DialogHeader>
             <VStack gap={3}>
+               {notice && <Text role="alert">{notice}</Text>}
                {current && (
                   <Text type="supporting">
                      {tx('Current location: {value0}', { value0: current })}
