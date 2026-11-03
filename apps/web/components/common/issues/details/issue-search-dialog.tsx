@@ -91,6 +91,8 @@ export function IssueSearchDialog({
    excludeIds,
    moveTarget,
    onPick,
+   workspaceId: requestedWorkspaceId,
+   inline = false,
 }: {
    open: boolean;
    onOpenChange: (open: boolean) => void;
@@ -100,8 +102,11 @@ export function IssueSearchDialog({
    excludeIds: string[];
    moveTarget?: { id: string; identifier: string };
    onPick: (issue: IssueCandidate) => Promise<void>;
+   workspaceId?: string;
+   inline?: boolean;
 }) {
-   const workspaceId = useIssuesStore((state) => state.workspaceId);
+   const storedWorkspaceId = useIssuesStore((state) => state.workspaceId);
+   const workspaceId = requestedWorkspaceId ?? storedWorkspaceId;
    const tx = useMessages(messages);
    const [query, setQuery] = useState('');
    const [results, setResults] = useState<IssueCandidate[]>([]);
@@ -179,106 +184,113 @@ export function IssueSearchDialog({
       'Add existing sub-issue': tx('Add existing sub-issue'),
    };
    if (!open) return null;
-   return (
-      <DesignSurface>
-         <Dialog isOpen onOpenChange={close} width={520} purpose="form">
-            <Layout
-               height="auto"
-               padding={4}
-               className="min-w-0"
-               header={
-                  <DialogHeader
-                     title={pending ? tx('Move sub-issue?') : (titles[title] ?? title)}
-                     subtitle={
-                        pending && moveTarget
-                           ? `${pending.identifier} is a sub-issue of ${pending.parent?.identifier}. Move it under ${moveTarget.identifier}?`
-                           : description
-                     }
-                     onOpenChange={close}
-                  />
+   const content = (
+      <Layout
+         height="auto"
+         padding={4}
+         className="min-w-0"
+         header={
+            <DialogHeader
+               title={pending ? tx('Move sub-issue?') : (titles[title] ?? title)}
+               subtitle={
+                  pending && moveTarget
+                     ? `${pending.identifier} is a sub-issue of ${pending.parent?.identifier}. Move it under ${moveTarget.identifier}?`
+                     : description
                }
-               footer={
-                  pending ? (
-                     <LayoutFooter>
-                        <HStack gap={2} justify="end">
-                           <Button
-                              label={tx('Back')}
-                              onClick={() => setPending(undefined)}
-                              isDisabled={saving}
-                           />
-                           <Button
-                              label={tx(saving ? 'Moving…' : 'Move')}
-                              onClick={() => void save(pending)}
-                              isDisabled={saving}
-                           />
-                        </HStack>
-                     </LayoutFooter>
-                  ) : undefined
-               }
-            >
-               <LayoutContent padding={0}>
-                  <VStack gap={2} width="100%" className="min-w-0">
+               onOpenChange={close}
+            />
+         }
+         footer={
+            pending ? (
+               <LayoutFooter>
+                  <HStack gap={2} justify="end">
+                     <Button
+                        label={tx('Back')}
+                        onClick={() => setPending(undefined)}
+                        isDisabled={saving}
+                     />
+                     <Button
+                        label={tx(saving ? 'Moving…' : 'Move')}
+                        onClick={() => void save(pending)}
+                        isDisabled={saving}
+                     />
+                  </HStack>
+               </LayoutFooter>
+            ) : undefined
+         }
+      >
+         <LayoutContent padding={0}>
+            <VStack gap={2} width="100%" className="min-w-0">
+               {!pending && (
+                  <>
+                     <TextInput
+                        label={tx('Search issues')}
+                        isLabelHidden
+                        value={query}
+                        onChange={setQuery}
+                        placeholder={tx('Search by ID or title')}
+                        hasAutoFocus
+                        hasClear
+                        isDisabled={saving}
+                        width="100%"
+                     />
+                     <VStack isScrollable className="max-h-72 min-w-0" aria-busy={loading}>
+                        {loading ? (
+                           <Text role="status">{tx('Searching…')}</Text>
+                        ) : (
+                           <List density="compact">
+                              {visible.map((issue) => (
+                                 <CandidateRow
+                                    key={issue.id}
+                                    issue={issue}
+                                    description={
+                                       issue.parent
+                                          ? tx('in {parent}', {
+                                               parent: issue.parent.identifier,
+                                            })
+                                          : undefined
+                                    }
+                                    saving={saving}
+                                    onPick={() => pick(issue)}
+                                 />
+                              ))}
+                           </List>
+                        )}
+                        {!loading && !error && visible.length === 0 && (
+                           <Text type="supporting">{tx('No issues found.')}</Text>
+                        )}
+                     </VStack>
+                  </>
+               )}
+               {error && (
+                  <VStack gap={2}>
+                     <Text role="alert">
+                        {error === 'Could not search issues.'
+                           ? tx('Could not search issues.')
+                           : error}
+                     </Text>
                      {!pending && (
-                        <>
-                           <TextInput
-                              label={tx('Search issues')}
-                              isLabelHidden
-                              value={query}
-                              onChange={setQuery}
-                              placeholder={tx('Search by ID or title')}
-                              hasAutoFocus
-                              hasClear
-                              isDisabled={saving}
-                              width="100%"
-                           />
-                           <VStack isScrollable className="max-h-72 min-w-0" aria-busy={loading}>
-                              {loading ? (
-                                 <Text role="status">{tx('Searching…')}</Text>
-                              ) : (
-                                 <List density="compact">
-                                    {visible.map((issue) => (
-                                       <CandidateRow
-                                          key={issue.id}
-                                          issue={issue}
-                                          description={
-                                             issue.parent
-                                                ? tx('in {parent}', {
-                                                     parent: issue.parent.identifier,
-                                                  })
-                                                : undefined
-                                          }
-                                          saving={saving}
-                                          onPick={() => pick(issue)}
-                                       />
-                                    ))}
-                                 </List>
-                              )}
-                              {!loading && !error && visible.length === 0 && (
-                                 <Text type="supporting">{tx('No issues found.')}</Text>
-                              )}
-                           </VStack>
-                        </>
-                     )}
-                     {error && (
-                        <VStack gap={2}>
-                           <Text role="alert">
-                              {error === 'Could not search issues.'
-                                 ? tx('Could not search issues.')
-                                 : error}
-                           </Text>
-                           {!pending && (
-                              <Button
-                                 label={tx('Retry')}
-                                 onClick={() => setRetry((value) => value + 1)}
-                                 isDisabled={saving}
-                              />
-                           )}
-                        </VStack>
+                        <Button
+                           label={tx('Retry')}
+                           onClick={() => setRetry((value) => value + 1)}
+                           isDisabled={saving}
+                        />
                      )}
                   </VStack>
-               </LayoutContent>
-            </Layout>
-         </Dialog>
+               )}
+            </VStack>
+         </LayoutContent>
+      </Layout>
+   );
+   return (
+      <DesignSurface>
+         {inline ? (
+            content
+         ) : (
+            <Dialog isOpen onOpenChange={close} width={520} purpose="form">
+               {content}
+            </Dialog>
+         )}
       </DesignSurface>
    );
 }

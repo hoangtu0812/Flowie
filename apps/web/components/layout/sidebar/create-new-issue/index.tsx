@@ -9,6 +9,17 @@ import {
    type BugFields,
 } from '@/features/issues/bug-fields';
 import { Button } from '@/components/ui/button';
+import { Button as ActionButton } from '@astryxdesign/core/Button';
+import { DraftImages } from '@/components/common/markdown/draft-images';
+import {
+   IssueSearchDialog,
+   type IssueCandidate,
+} from '@/components/common/issues/details/issue-search-dialog';
+import { imagesFromClipboard, insertAtCursor, uploadAttachment } from '@/lib/attachments';
+import {
+   draftDescriptionForServer,
+   type DraftIssueImage,
+} from '@/features/issues/draft-issue-images';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
@@ -36,7 +47,8 @@ import { ProjectOption, ProjectSelector } from './project-selector';
 import { LabelSelector } from './label-selector';
 import { DialogTitle } from '@radix-ui/react-dialog';
 import { useParams } from 'next/navigation';
-import { Box, ChevronDown, Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import { Box, ChevronDown, CornerLeftUp, Loader2, X } from 'lucide-react';
 import { LabelInterface } from '@/mock-data/labels';
 import { Priority } from '@/mock-data/priorities';
 import { User } from '@/mock-data/users';
@@ -98,7 +110,26 @@ export function CreateNewIssue() {
    const [context, setContext] = useState<IssueContext>();
    const [switchingTeam, setSwitchingTeam] = useState(false);
    const [creating, setCreating] = useState(false);
+   const submitting = useRef(false);
+   const createdIssueRef = useRef<
+      { id: string; identifier: string; workspaceId: string } | undefined
+   >(undefined);
+   const [createdIssue, setCreatedIssue] = useState<{ id: string; identifier: string }>();
+   const [submitError, setSubmitError] = useState<string>();
+   const [draftImages, setDraftImages] = useState<DraftIssueImage[]>([]);
+   const imagesRef = useRef(draftImages);
+   imagesRef.current = draftImages;
+   const [parent, setParent] = useState<IssueCandidate>();
+   const [pickingParent, setPickingParent] = useState(false);
+   const locked = creating || !!createdIssue;
    const [bug, setBug] = useState<BugFields>(emptyBug);
+
+   useEffect(
+      () => () => {
+         for (const image of imagesRef.current) URL.revokeObjectURL(image.url);
+      },
+      []
+   );
 
    const createDefaultData = useCallback(() => {
       return {
@@ -115,7 +146,8 @@ export function CreateNewIssue() {
    const [addIssueForm, setAddIssueForm] = useState<CreateIssueForm>(createDefaultData());
 
    useEffect(() => {
-      setAddIssueForm(createDefaultData());
+      if (!createdIssueRef.current)
+         setAddIssueForm((form) => (form.title || form.description ? form : createDefaultData()));
    }, [createDefaultData]);
    useEffect(() => {
       if (!isOpen) initializedAssignee.current = false;
@@ -135,7 +167,7 @@ export function CreateNewIssue() {
    );
 
    const loadContext = useCallback(async () => {
-      if (!isOpen) return;
+      if (!isOpen || submitting.current || createdIssueRef.current) return;
       try {
          const [workspace, joinedTeams, actor] = await Promise.all([
             loadCurrentWorkspace(),
@@ -185,14 +217,16 @@ export function CreateNewIssue() {
       }
    }, [isOpen, loadOptions, teamIdentifier, projectIdFromRoute, autoAssignSelf, tx]);
 
-   /** Members, projects and labels are team-scoped, so a switch reloads them. */
+   /** Members, projects, labels and parent selection are team-scoped; a successful switch resets them.
+    * VI: Thành viên, dự án, nhãn và lựa chọn cha theo team; đổi team thành công đặt lại các trường này. */
    const selectTeam = useCallback(
       async (team: WorkspaceTeam | undefined) => {
-         if (!context || switchingTeam || team?.id === context.team?.id) return;
+         if (!context || switchingTeam || locked || team?.id === context.team?.id) return;
          setSwitchingTeam(true);
          try {
             const options = await loadOptions(context.workspaceId, team?.id);
             setContext({ ...context, team, options });
+            setParent(undefined);
             setAddIssueForm((form) => ({
                ...form,
                assignee: initialAssignee(
@@ -210,7 +244,7 @@ export function CreateNewIssue() {
             setSwitchingTeam(false);
          }
       },
-      [context, switchingTeam, loadOptions, autoAssignSelf, tx]
+      [context, switchingTeam, loadOptions, autoAssignSelf, tx, locked]
    );
 
    useEffect(() => {
@@ -229,10 +263,10 @@ export function CreateNewIssue() {
       [context]
    );
 
-   // Opened from a project screen, the dialog starts on that project; the
-   // picker stays available for anything else.
+   // Project routes supply defaults only before an issue has been created for this draft.
+   // VI: Route dự án chỉ cấp giá trị mặc định trước khi bản nháp này đã tạo issue.
    useEffect(() => {
-      if (!isOpen || !projectIdFromRoute) return;
+      if (!isOpen || !projectIdFromRoute || createdIssueRef.current) return;
       const routeProject = liveProjects.find((project) => project.id === projectIdFromRoute);
       if (!routeProject) return;
       setAddIssueForm((form) => (form.project ? form : { ...form, project: routeProject }));
@@ -282,7 +316,7 @@ export function CreateNewIssue() {
          toast.error(tx('Workspace is not ready yet.'));
          return;
       }
-      if (creating || switchingTeam) return;
+      if (submitting.current || switchingTeam || pickingParent) return;
       const statusId = context.options.statuses.find(
          (candidate) => candidate.id === addIssueForm.status.id
       )?.id;
@@ -290,32 +324,83 @@ export function CreateNewIssue() {
          toast.error(tx('A valid status is required.'));
          return;
       }
+      submitting.current = true;
       setCreating(true);
+      setSubmitError(undefined);
       try {
-         const response = await authenticatedFetch(`${api}/issues`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-               ...bug,
-               workspaceId: context.workspaceId,
-               teamId: context.team?.id ?? null,
-               title: addIssueForm.title.trim(),
-               description: addIssueForm.description.trim() || undefined,
-               statusId,
-               priority: priorityForApi[addIssueForm.priority.id],
-               assigneeId: addIssueForm.assignee?.id,
-               projectId: addIssueForm.project?.id,
-               labelIds: addIssueForm.labels.map((label) => label.id),
-            }),
-         });
-         if (!response.ok) {
-            const payload = (await response.json().catch(() => null)) as {
-               message?: string;
-            } | null;
-            throw new Error(payload?.message ?? tx('Could not create issue.'));
+         if (!createdIssueRef.current) {
+            const response = await authenticatedFetch(`${api}/issues`, {
+               method: 'POST',
+               headers: { 'content-type': 'application/json' },
+               body: JSON.stringify({
+                  ...bug,
+                  workspaceId: context.workspaceId,
+                  teamId: context.team?.id ?? null,
+                  title: addIssueForm.title.trim(),
+                  description:
+                     draftDescriptionForServer(addIssueForm.description, imagesRef.current) ||
+                     undefined,
+                  parentIssueId: parent?.id,
+                  statusId,
+                  priority: priorityForApi[addIssueForm.priority.id],
+                  assigneeId: addIssueForm.assignee?.id,
+                  projectId: addIssueForm.project?.id,
+                  labelIds: addIssueForm.labels.map((label) => label.id),
+               }),
+            });
+            if (!response.ok) {
+               const payload = (await response.json().catch(() => null)) as {
+                  message?: string;
+               } | null;
+               throw new Error(payload?.message ?? tx('Could not create issue.'));
+            }
+            const saved = ((await response.json()) as { data: { id: string; identifier: string } })
+               .data;
+            createdIssueRef.current = { ...saved, workspaceId: context.workspaceId };
+            setCreatedIssue(saved);
+         }
+         const saved = createdIssueRef.current;
+         // Cache each successful upload before the next one, so retry resumes on the existing issue.
+         // VI: Lưu từng upload thành công trước upload tiếp theo để retry tiếp tục trên issue đã tạo.
+         for (const image of imagesRef.current) {
+            if (addIssueForm.description.includes(image.url) && !image.uploaded)
+               image.uploaded = await uploadAttachment(
+                  saved.workspaceId,
+                  'issue',
+                  saved.id,
+                  image.file
+               );
+         }
+         if (imagesRef.current.length) {
+            const response = await authenticatedFetch(
+               `${api}/issues/${saved.id}?${new URLSearchParams({ workspaceId: saved.workspaceId })}`,
+               {
+                  method: 'PATCH',
+                  headers: { 'content-type': 'application/json' },
+                  body: JSON.stringify({
+                     description: draftDescriptionForServer(
+                        addIssueForm.description,
+                        imagesRef.current
+                     ),
+                  }),
+               }
+            );
+            if (!response.ok) {
+               const payload = (await response.json().catch(() => null)) as {
+                  message?: string;
+               } | null;
+               throw new Error(payload?.message ?? tx('Could not save images.'));
+            }
          }
          await retryIssues();
+         window.dispatchEvent(new Event('flowie:sub-issues-changed'));
          toast.success(tx('Issue created'));
+         for (const image of imagesRef.current) URL.revokeObjectURL(image.url);
+         imagesRef.current = [];
+         setDraftImages([]);
+         createdIssueRef.current = undefined;
+         setCreatedIssue(undefined);
+         if (!createMore) setParent(undefined);
          if (!createMore) closeModal();
          setAddIssueForm({
             ...createDefaultData(),
@@ -331,16 +416,48 @@ export function CreateNewIssue() {
          });
          setBug(emptyBug);
       } catch (error) {
-         toast.error(error instanceof Error ? error.message : tx('Could not create issue.'));
+         const message = error instanceof Error ? error.message : tx('Could not create issue.');
+         setSubmitError(message);
+         toast.error(message);
       } finally {
+         submitting.current = false;
          setCreating(false);
       }
+   };
+
+   const pasteImages = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      const files = imagesFromClipboard(event.clipboardData);
+      if (!files.length) return;
+      event.preventDefault();
+      if (creating || createdIssueRef.current) return;
+      if (files.some((file) => file.size > 10 * 1024 * 1024)) {
+         toast.error(tx('Each image must be at most 10 MB.'));
+         return;
+      }
+      let value = addIssueForm.description;
+      let start = event.currentTarget.selectionStart ?? value.length;
+      let end = event.currentTarget.selectionEnd ?? start;
+      const added = files.map((file) => ({ file, url: URL.createObjectURL(file) }));
+      for (const image of added) {
+         const name = image.file.name.replace(/[\[\]\\]/g, '');
+         const next = insertAtCursor(value, start, end, `![${name}](${image.url})`);
+         value = next.value;
+         start = next.caret;
+         end = next.caret;
+      }
+      imagesRef.current = [...imagesRef.current, ...added];
+      setDraftImages(imagesRef.current);
+      setAddIssueForm((form) => ({ ...form, description: value }));
    };
 
    return (
       <Dialog
          open={isOpen}
          onOpenChange={(value) => {
+            if (!value && pickingParent) {
+               setPickingParent(false);
+               return;
+            }
             if (value) openModal();
             else if (!creating) closeModal();
          }}
@@ -355,7 +472,10 @@ export function CreateNewIssue() {
             >
                <DialogTitle className="text-sm font-medium">{tx('Create issue')}</DialogTitle>
                <DropdownMenu>
-                  <DropdownMenuTrigger asChild disabled={!context || creating || switchingTeam}>
+                  <DropdownMenuTrigger
+                     asChild
+                     disabled={!context || locked || switchingTeam || pickingParent}
+                  >
                      <Button
                         size="sm"
                         variant="outline"
@@ -386,84 +506,174 @@ export function CreateNewIssue() {
             </HStack>
 
             <VStack gap={5} padding={5} className="min-h-0 overflow-y-auto overscroll-contain">
-               <DesignSurface>
-                  <IssueTypeSelector value={bug} onChange={setBug} disabled={creating} />
-               </DesignSurface>
-               <VStack gap={2}>
-                  <Input
-                     className="border-none w-full rounded-none shadow-none outline-none text-xl md:text-xl font-semibold px-0 h-auto py-1 focus-visible:ring-0 placeholder:text-muted-foreground/70"
-                     aria-label={tx('Issue title')}
-                     placeholder={tx('Issue title')}
-                     value={addIssueForm.title}
-                     disabled={creating}
-                     onChange={(e) => setAddIssueForm({ ...addIssueForm, title: e.target.value })}
-                  />
-
-                  <Textarea
-                     className="border-none w-full rounded-none shadow-none outline-none resize-none px-0 min-h-28 focus-visible:ring-0 break-words whitespace-pre-wrap leading-relaxed placeholder:text-muted-foreground/70"
-                     aria-label={tx('Issue description')}
-                     placeholder={tx('Add description...')}
-                     value={addIssueForm.description}
-                     disabled={creating}
-                     onChange={(e) =>
-                        setAddIssueForm({ ...addIssueForm, description: e.target.value })
-                     }
-                  />
-               </VStack>
-               {bug.issueType === 'BUG' && (
-                  <VStack padding={4} className="rounded-lg border border-border/60 bg-muted/10">
-                     <BugFieldsForm
-                        value={bug}
-                        onChange={setBug}
-                        disabled={creating}
-                        showTypeSelector={false}
-                     />
-                  </VStack>
+               {createdIssue && submitError && (
+                  <DesignSurface>
+                     <VStack gap={2}>
+                        <Text role="status">
+                           {tx('Issue {identifier} was created. Retry to finish saving images.', {
+                              identifier: createdIssue.identifier,
+                           })}
+                        </Text>
+                        <Link
+                           href={`/${createdIssueRef.current?.workspaceId}/issue/${createdIssue.identifier}`}
+                           target="_blank"
+                           rel="noreferrer"
+                        >
+                           {tx('Open created issue')}
+                        </Link>
+                     </VStack>
+                  </DesignSurface>
                )}
+               {pickingParent && context ? (
+                  <IssueSearchDialog
+                     inline
+                     open
+                     onOpenChange={setPickingParent}
+                     title="Set parent"
+                     description={tx('Choose a parent in the same team.')}
+                     workspaceId={context.workspaceId}
+                     teamId={context.team?.id}
+                     excludeIds={[]}
+                     onPick={async (issue) => {
+                        setParent(issue);
+                     }}
+                  />
+               ) : (
+                  <>
+                     <DesignSurface>
+                        <IssueTypeSelector value={bug} onChange={setBug} disabled={locked} />
+                     </DesignSurface>
+                     <VStack gap={2}>
+                        <Input
+                           className="border-none w-full rounded-none shadow-none outline-none text-xl md:text-xl font-semibold px-0 h-auto py-1 focus-visible:ring-0 placeholder:text-muted-foreground/70"
+                           aria-label={tx('Issue title')}
+                           placeholder={tx('Issue title')}
+                           value={addIssueForm.title}
+                           disabled={locked}
+                           onChange={(e) =>
+                              setAddIssueForm({ ...addIssueForm, title: e.target.value })
+                           }
+                        />
 
-               <VStack gap={2} className="border-t border-border/50 pt-4">
-                  <Text type="supporting" weight="medium">
-                     {tx('Properties')}
-                  </Text>
-                  <HStack gap={2} wrap="wrap" className="min-w-0">
-                     <StatusSelector
-                        status={addIssueForm.status}
-                        options={liveStatuses}
-                        counts={statusCounts}
-                        onChange={(newStatus) =>
-                           setAddIssueForm({ ...addIssueForm, status: newStatus })
-                        }
-                     />
-                     <PrioritySelector
-                        priority={addIssueForm.priority}
-                        onChange={(newPriority) =>
-                           setAddIssueForm({ ...addIssueForm, priority: newPriority })
-                        }
-                     />
-                     <AssigneeSelector
-                        assignee={addIssueForm.assignee}
-                        users={liveUsers}
-                        teamIdentifier={context?.team?.identifier}
-                        onChange={(newAssignee) =>
-                           setAddIssueForm({ ...addIssueForm, assignee: newAssignee })
-                        }
-                     />
-                     <ProjectSelector
-                        project={addIssueForm.project}
-                        projects={liveProjects}
-                        onChange={(newProject) =>
-                           setAddIssueForm({ ...addIssueForm, project: newProject })
-                        }
-                     />
-                     <LabelSelector
-                        selectedLabels={addIssueForm.labels}
-                        labels={context?.options.labels ?? []}
-                        onChange={(newLabels) =>
-                           setAddIssueForm({ ...addIssueForm, labels: newLabels })
-                        }
-                     />
-                  </HStack>
-               </VStack>
+                        <Textarea
+                           className="border-none w-full rounded-none shadow-none outline-none resize-none px-0 min-h-28 focus-visible:ring-0 break-words whitespace-pre-wrap leading-relaxed placeholder:text-muted-foreground/70"
+                           aria-label={tx('Issue description')}
+                           placeholder={tx('Add description...')}
+                           value={addIssueForm.description}
+                           disabled={creating}
+                           onPaste={pasteImages}
+                           onChange={(e) =>
+                              setAddIssueForm({ ...addIssueForm, description: e.target.value })
+                           }
+                        />
+                        <DesignSurface>
+                           <DraftImages
+                              value={addIssueForm.description}
+                              onChange={(description) =>
+                                 setAddIssueForm((form) => ({ ...form, description }))
+                              }
+                              label={tx('Pasted images')}
+                              removeLabel={tx('Remove image')}
+                              isDisabled={creating}
+                           />
+                        </DesignSurface>
+                        <DesignSurface>
+                           <HStack gap={2} wrap="wrap">
+                              <ActionButton
+                                 label={
+                                    parent
+                                       ? `${tx('Parent')}: ${parent.identifier}`
+                                       : tx('Set parent')
+                                 }
+                                 tooltip={parent?.title}
+                                 icon={<CornerLeftUp />}
+                                 size="sm"
+                                 variant="ghost"
+                                 isDisabled={!context || locked || switchingTeam}
+                                 onClick={() => setPickingParent(true)}
+                              />
+                              {parent && (
+                                 <ActionButton
+                                    label={tx('Remove parent')}
+                                    icon={<X />}
+                                    isIconOnly
+                                    size="sm"
+                                    variant="ghost"
+                                    isDisabled={locked}
+                                    onClick={() => setParent(undefined)}
+                                 />
+                              )}
+                           </HStack>
+                        </DesignSurface>
+                     </VStack>
+                     {bug.issueType === 'BUG' && (
+                        <VStack
+                           padding={4}
+                           className="rounded-lg border border-border/60 bg-muted/10"
+                        >
+                           <BugFieldsForm
+                              value={bug}
+                              onChange={setBug}
+                              disabled={locked}
+                              showTypeSelector={false}
+                           />
+                        </VStack>
+                     )}
+
+                     <VStack
+                        gap={2}
+                        className="border-t border-border/50 pt-4"
+                        inert={locked || undefined}
+                     >
+                        <Text type="supporting" weight="medium">
+                           {tx('Properties')}
+                        </Text>
+                        <HStack gap={2} wrap="wrap" className="min-w-0">
+                           <StatusSelector
+                              status={addIssueForm.status}
+                              options={liveStatuses}
+                              counts={statusCounts}
+                              onChange={(newStatus) =>
+                                 setAddIssueForm({ ...addIssueForm, status: newStatus })
+                              }
+                           />
+                           <PrioritySelector
+                              priority={addIssueForm.priority}
+                              onChange={(newPriority) =>
+                                 setAddIssueForm({ ...addIssueForm, priority: newPriority })
+                              }
+                           />
+                           <AssigneeSelector
+                              assignee={addIssueForm.assignee}
+                              users={liveUsers}
+                              teamIdentifier={context?.team?.identifier}
+                              onChange={(newAssignee) =>
+                                 setAddIssueForm({ ...addIssueForm, assignee: newAssignee })
+                              }
+                           />
+                           <ProjectSelector
+                              project={addIssueForm.project}
+                              projects={liveProjects}
+                              onChange={(newProject) =>
+                                 setAddIssueForm({ ...addIssueForm, project: newProject })
+                              }
+                           />
+                           <LabelSelector
+                              selectedLabels={addIssueForm.labels}
+                              labels={context?.options.labels ?? []}
+                              onChange={(newLabels) =>
+                                 setAddIssueForm({ ...addIssueForm, labels: newLabels })
+                              }
+                           />
+                        </HStack>
+                     </VStack>
+                  </>
+               )}
+               {submitError && (
+                  <DesignSurface>
+                     <Text role="alert">{submitError}</Text>
+                  </DesignSurface>
+               )}
             </VStack>
             <HStack
                justify="between"
@@ -477,7 +687,7 @@ export function CreateNewIssue() {
                   <Switch
                      id="create-more"
                      checked={createMore}
-                     disabled={creating}
+                     disabled={creating || !!createdIssue || pickingParent}
                      onCheckedChange={setCreateMore}
                   />
                   <Label
@@ -490,7 +700,7 @@ export function CreateNewIssue() {
                <Button
                   size="sm"
                   className="rounded-md px-4 shadow-sm"
-                  disabled={creating || switchingTeam || !context}
+                  disabled={creating || switchingTeam || !context || pickingParent}
                   aria-busy={creating}
                   onClick={() => {
                      void createIssue();
@@ -502,7 +712,7 @@ export function CreateNewIssue() {
                         {tx('Creating issue…')}
                      </>
                   ) : (
-                     tx('Create issue')
+                     tx(createdIssue ? 'Retry saving images' : 'Create issue')
                   )}
                </Button>
             </HStack>
