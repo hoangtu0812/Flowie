@@ -1,4 +1,15 @@
 export const messages = {
+   'Drag to move documents': 'Kéo để di chuyển tài liệu',
+   'Moving…': 'Đang di chuyển…',
+   'Drag items onto folders to move them.': 'Kéo mục vào thư mục để di chuyển.',
+   'Move to {value0}': 'Di chuyển vào {value0}',
+   'Cannot move here.': 'Không thể di chuyển vào đây.',
+   'Drop to resolve the folder conflict.': 'Thả để xử lý trùng tên hoặc số thư mục.',
+   'Drag {value0} onto a folder. Esc cancels.': 'Kéo {value0} vào thư mục. Esc để hủy.',
+   'The destination has a folder with the same name or number. Choose another folder or change the number.':
+      'Đích đã có thư mục trùng tên hoặc số. Hãy chọn thư mục khác hoặc sửa số.',
+   'The move could not be completed. Review the current location and choose a destination again.':
+      'Chưa thể hoàn tất di chuyển. Hãy kiểm tra vị trí hiện tại và chọn lại thư mục đích.',
    'Move…': 'Di chuyển…',
    'Delete…': 'Xóa…',
    'Move': 'Di chuyển',

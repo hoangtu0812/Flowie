@@ -81,6 +81,7 @@ async def project_summaries(db, workspace, user, identifiers):
         summary = {"total": sum(counts[row["id"]].values()), **counts[row["id"]]}
         result[row["id"]] = {
             **{key: row[column] for key, column in fields.items()},
+            "manualOrder": str(row["manual_order"]),
             "team": {
                 "id": row["team_id"],
                 "name": row["team_name"],
@@ -105,28 +106,59 @@ async def project_summaries(db, workspace, user, identifiers):
 
 
 async def project_page(
-    db, workspace, user, secret, *, team=None, limit=100, cursor=None
+    db, workspace, user, secret, *, team=None, limit=100, cursor=None, ordering=None
 ):
     predicate = project_read_scope() + (" AND p.team_id=:team" if team else "")
     params = {"workspace": workspace, "user": user, "team": team, "limit": limit + 1}
-    codec = CursorCodec(
-        secret, user, "portfolio.projects", {"workspace": workspace, "team": team}
-    )
+    manual = ordering == "manual"
+    binding = {
+        "workspace": workspace,
+        "team": team,
+        **({"ordering": "manual"} if manual else {}),
+    }
+    codec = CursorCodec(secret, user, "portfolio.projects", binding)
     total = (
         await db.execute(
             text("SELECT COUNT(*) FROM projects p WHERE " + predicate), params
         )
     ).scalar_one()
     if cursor:
-        params["time"], params["after"] = codec.decode(cursor)
-        predicate += " AND (p.created_at,p.id)<(:time,:after)"
+        if manual:
+            from ..work_items.manual_order import decode_rank_cursor
+            from ...core.errors import ApiError
+
+            params["after"], params["rank"] = decode_rank_cursor(codec, cursor)
+            exists = (
+                await db.execute(
+                    text(
+                        "SELECT COUNT(*) FROM projects p WHERE "
+                        + predicate
+                        + " AND p.id=:after AND p.manual_order=:rank"
+                    ),
+                    params,
+                )
+            ).scalar_one()
+            if not exists:
+                raise ApiError(
+                    409,
+                    "The order changed. Reload the list before loading more.",
+                    "Conflict",
+                )
+            predicate += " AND (p.manual_order,p.id)>(:rank,:after)"
+        else:
+            params["time"], params["after"] = codec.decode(cursor)
+            predicate += " AND (p.created_at,p.id)<(:time,:after)"
     rows = (
         (
             await db.execute(
                 text(
-                    "SELECT p.id,p.created_at FROM projects p WHERE "
+                    "SELECT p.id,p.created_at,p.manual_order FROM projects p WHERE "
                     + predicate
-                    + " ORDER BY p.created_at DESC,p.id DESC LIMIT :limit"
+                    + (
+                        " ORDER BY p.manual_order,p.id LIMIT :limit"
+                        if manual
+                        else " ORDER BY p.created_at DESC,p.id DESC LIMIT :limit"
+                    )
                 ),
                 params,
             )
@@ -138,12 +170,18 @@ async def project_page(
     summaries = await project_summaries(
         db, workspace, user, [row["id"] for row in page]
     )
+    from ..work_items.manual_order import encode_rank_cursor
+
     return {
         "data": [summaries[row["id"]] for row in page if row["id"] in summaries],
         "meta": {
             "total": total,
             "limit": limit,
-            "nextCursor": codec.encode(page[-1]["created_at"], page[-1]["id"])
+            "nextCursor": (
+                encode_rank_cursor(codec, page[-1])
+                if manual
+                else codec.encode(page[-1]["created_at"], page[-1]["id"])
+            )
             if len(rows) > limit
             else None,
         },

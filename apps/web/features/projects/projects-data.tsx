@@ -20,8 +20,10 @@ import { responseEnvelope } from '@/lib/http';
 import type { PageMetadata } from '@/features/issues/issue-query';
 import { useParams } from 'next/navigation';
 import { RecoveryScreen } from '@/features/shared/recovery-screen';
+import { useProjectsDisplayStore } from '@/store/projects-display-store';
 
 type ApiProject = {
+   manualOrder?: string;
    id: string;
    slug?: string;
    name: string;
@@ -150,6 +152,7 @@ const mapProject = (project: ApiProject): Project & { issueCount: number } => {
 
    return {
       id: project.id,
+      manualOrder: project.manualOrder,
       slug: project.slug,
       name: project.name,
       status: mapStatus(project.status),
@@ -193,6 +196,7 @@ const mapProject = (project: ApiProject): Project & { issueCount: number } => {
 };
 
 function useProjectsDataSource(teamIdentifier?: string): ProjectData {
+   const ordering = useProjectsDisplayStore((state) => state.ordering);
    const { orgId } = useParams<{ orgId: string }>();
    const [error, setError] = useState<string>();
    const [pageError, setPageError] = useState<string>();
@@ -245,6 +249,7 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
             : undefined;
          if (teamIdentifier && !team) throw new Error('This team is unavailable.');
          const query = new URLSearchParams({ workspaceId: workspace.id, limit: '100' });
+         if (ordering === 'manual') query.set('ordering', 'manual');
          if (team) query.set('teamId', team);
          const page = await responseEnvelope<ApiProject[], PageMetadata>(
             await authenticatedFetch(`${api}/projects?${query}`)
@@ -269,7 +274,7 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
          .finally(() => {
             if (current()) setWorkspaceLoading(false);
          });
-   }, [teamIdentifier, orgId, refreshKey]);
+   }, [teamIdentifier, orgId, refreshKey, ordering]);
    const loadMoreProjects = useCallback(async () => {
       if (!workspaceId || !projectPage?.nextCursor || loadingMore) return;
       const request = generation.current;
@@ -282,6 +287,7 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
             cursor: projectPage.nextCursor,
          });
          if (resolvedTeamId) query.set('teamId', resolvedTeamId);
+         if (ordering === 'manual') query.set('ordering', 'manual');
          const page = await responseEnvelope<ApiProject[], PageMetadata>(
             await authenticatedFetch(`${api}/projects?${query}`)
          );
@@ -300,7 +306,7 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
       } finally {
          if (alive.current && generation.current === request) setLoadingMore(false);
       }
-   }, [workspaceId, projectPage, resolvedTeamId, loadingMore]);
+   }, [workspaceId, projectPage, resolvedTeamId, loadingMore, ordering]);
 
    const updateProject = useCallback(
       async (projectId: string, update: ProjectListUpdate) => {

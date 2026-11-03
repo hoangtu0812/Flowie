@@ -74,9 +74,12 @@ import {
    TreeItemMenu,
    TreeMutationDialog,
    mutateTreeItem,
+   sourceFolder,
    type TreeAction,
    type TreeTarget,
 } from './document-tree-actions';
+import { DocsDragTree, moveSource, treeTarget } from './document-tree-drag';
+import { documentMoveConflict } from '@/lib/document-tree-move';
 
 const FOLDER_KINDS: { value: FolderKind; label: keyof typeof messages }[] = [
    { value: 'module', label: 'Module' },
@@ -113,7 +116,12 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
    const [preview, setPreview] = useState<{ kind: 'document' | 'file'; id: string }>();
    const [busy, setBusy] = useState(false);
    const busyRef = useRef(false);
-   const [mutation, setMutation] = useState<{ action: 'move' | 'delete'; target: TreeTarget }>();
+   const [mutation, setMutation] = useState<{
+      action: 'move' | 'delete';
+      target: TreeTarget;
+      initialDestination?: string;
+      notice?: string;
+   }>();
    const upload = useRef<HTMLInputElement>(null);
 
    const reload = useCallback(async () => {
@@ -189,6 +197,53 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
          setSelected(item.value.id);
          setDialog('edit-folder');
       } else if (action !== 'edit') setMutation({ action, target: item });
+   };
+
+   const onTreeDrop = async (item: TreeTarget, destination: string) => {
+      if (busyRef.current || tree.canManage === false) return;
+      if (documentMoveConflict(tree.folders, moveSource(item), destination)) {
+         setMutation({
+            action: 'move',
+            target: item,
+            initialDestination: destination,
+            notice: tx(
+               'The destination has a folder with the same name or number. Choose another folder or change the number.'
+            ),
+         });
+         return;
+      }
+      if (await act(() => mutateTreeItem(item, destination), tx('Item moved.'))) {
+         setSelected(destination);
+         return;
+      }
+      // Refresh before offering a retry so a stale drop never reuses an earlier version or
+      // silently undoes another person's move. No optimistic relocation needs rolling back.
+      // VI: Tải lại trước khi cho thử lại để lần thả cũ không dùng phiên bản trước hoặc âm thầm
+      // VI: đảo di chuyển của người khác. Không đổi vị trí lạc quan nên không cần hoàn tác.
+      let latest = tree;
+      try {
+         latest = await loadProjectTree(projectId);
+         setTree(latest);
+      } catch {
+         /* The retained source still carries its stale-write precondition.
+         VI: Nguồn được giữ vẫn mang điều kiện chặn ghi từ dữ liệu cũ. */
+      }
+      const source = treeTarget(latest, item.value.id);
+      if (!source || latest.canManage === false) return;
+      if (sourceFolder(source) === destination) {
+         setSelected(destination);
+         return;
+      }
+      setMutation({
+         action: 'move',
+         target: source,
+         initialDestination: latest.folders.some((folder) => folder.id === destination)
+            ? destination
+            : undefined,
+         notice: tx(
+            'The move could not be completed. Review the current location and choose a destination again.'
+         ),
+      });
    };
 
    // Preview targets are looked up by id so a reload after editing shows fresh content.
@@ -400,7 +455,7 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
                maxSize={isMobile ? 80 : 60}
                className="min-h-0"
             >
-               <div className="h-full overflow-auto px-3 py-3">
+               <div className="h-full overflow-auto px-3 py-3" data-docs-scroll>
                   {roots.length === 0 ? (
                      <div className="flex flex-col items-center gap-3 py-24 text-center text-sm text-muted-foreground">
                         <p>{tx('This project has no document tree yet.')}</p>
@@ -422,18 +477,24 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
                      <>
                         {/* Remounting on a new filter re-applies the initial expansion.
                             VI: Dựng lại khi đổi bộ lọc để áp dụng trạng thái mở ban đầu. */}
-                        <DocsContextMenu
+                        <DocsDragTree
                            tree={tree}
-                           busy={busy || tree.canManage === false}
-                           onAction={onTreeAction}
+                           disabled={busy || !!mutation || !!dialog || !!open}
+                           onMove={onTreeDrop}
                         >
-                           <TreeList
-                              key={`${query}|${docType}`}
-                              aria-label={tx('Project documents')}
-                              density="compact"
-                              items={visible.map(folderItem)}
-                           />
-                        </DocsContextMenu>
+                           <DocsContextMenu
+                              tree={tree}
+                              busy={busy || tree.canManage === false}
+                              onAction={onTreeAction}
+                           >
+                              <TreeList
+                                 key={`${query}|${docType}`}
+                                 aria-label={tx('Project documents')}
+                                 density="compact"
+                                 items={visible.map(folderItem)}
+                              />
+                           </DocsContextMenu>
+                        </DocsDragTree>
                         {visible.length === 0 && (
                            <Text type="supporting">{tx('No documents match.')}</Text>
                         )}
@@ -491,6 +552,8 @@ export function ProjectDocs({ projectId }: { projectId: string }) {
                action={mutation.action}
                tree={tree}
                busy={busy}
+               initialDestination={mutation.initialDestination}
+               notice={mutation.notice}
                onClose={() => setMutation(undefined)}
                onSubmit={async (destination, number) => {
                   const ok = await act(

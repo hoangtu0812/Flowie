@@ -3,6 +3,7 @@
 import { IssuePagination } from '@/features/issues/issue-pagination';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { compareManual } from '@/features/manual-order/order';
 import { Issue, sortIssuesByPriority } from '@/mock-data/issues';
 import { priorities } from '@/mock-data/priorities';
 import { Status } from '@/mock-data/status';
@@ -42,6 +43,8 @@ interface GroupEntry {
 
 const sortIssues = (issues: Issue[], ordering: string): Issue[] => {
    switch (ordering) {
+      case 'manual':
+         return [...issues].sort(compareManual);
       case 'created':
          return [...issues].sort(
             (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()

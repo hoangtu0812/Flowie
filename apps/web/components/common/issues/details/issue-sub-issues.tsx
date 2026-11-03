@@ -39,12 +39,14 @@ import { AssigneeUser } from '../assignee-user';
 import { IssueDateCell } from '../issue-inline-cells';
 import type { User } from '@/mock-data/users';
 import { IssueSearchDialog } from './issue-search-dialog';
+import { ReorderRow } from '@/features/manual-order/reorder-row';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 type SubIssueStatus = { id: string; name: string; color: string; category: string };
 
 type SubIssue = {
+   manualOrder?: string;
    id: string;
    identifier: string;
    title: string;
@@ -219,88 +221,99 @@ export function IssueSubIssues({
          const open = !collapsed.has(subIssue.id);
          return (
             <div key={subIssue.id}>
-               <div
-                  className="flex items-center gap-2 h-10 pr-1 border-b border-border/50 hover:bg-sidebar/50 text-sm min-w-0"
-                  style={{ paddingLeft: depth * 20 + 4 }}
-                  data-testid="sub-issue-row"
+               <ReorderRow
+                  item={subIssue}
+                  items={items}
+                  name={subIssue.identifier}
+                  entityType="issue"
+                  scope={`sub:${workspaceId}:${subIssue.parentIssueId}`}
+                  workspaceId={workspaceId}
+                  enabled={state === 'ready'}
+                  refresh={load}
                >
-                  {nested ? (
-                     <button
-                        type="button"
-                        onClick={() => toggle(subIssue.id)}
-                        aria-expanded={open}
-                        aria-label={`${open ? 'Collapse' : 'Expand'} ${subIssue.identifier}`}
-                        className="flex size-4 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
-                     >
-                        <ChevronRight
-                           className={`size-3.5 transition-transform ${open ? 'rotate-90' : ''}`}
-                        />
-                     </button>
-                  ) : (
-                     <span className="size-4 shrink-0" />
-                  )}
-                  <DropdownMenu>
-                     <DropdownMenuTrigger
-                        aria-label={`Change status of ${subIssue.identifier}`}
-                        title={subIssue.status.name}
-                        className="flex size-5 shrink-0 items-center justify-center rounded hover:bg-accent"
-                     >
-                        <StatusIcon status={subIssue.status} />
-                     </DropdownMenuTrigger>
-                     <DropdownMenuContent align="start" className="min-w-44">
-                        {statuses.map((status) => (
-                           <DropdownMenuItem
-                              key={status.id}
-                              onSelect={() => {
-                                 if (status.id !== subIssue.status.id)
-                                    void patchSubIssue(subIssue.id, { statusId: status.id });
-                              }}
-                           >
-                              <StatusIcon status={status} />
-                              {status.name}
-                              {status.id === subIssue.status.id && (
-                                 <Check className="ml-auto size-4" />
-                              )}
-                           </DropdownMenuItem>
-                        ))}
-                        {statuses.length === 0 && (
-                           <p className="px-2 py-1.5 text-sm text-muted-foreground">
-                              No statuses available.
-                           </p>
-                        )}
-                     </DropdownMenuContent>
-                  </DropdownMenu>
-                  <Link
-                     href={`/${orgId}/issue/${subIssue.identifier}`}
-                     className="flex min-w-0 flex-1 items-center gap-2"
+                  <div
+                     className="w-full flex items-center gap-2 h-10 pr-1 border-b border-border/50 hover:bg-sidebar/50 text-sm min-w-0"
+                     style={{ paddingLeft: depth * 20 + 4 }}
+                     data-testid="sub-issue-row"
                   >
-                     <span className="text-muted-foreground shrink-0 text-xs font-medium">
-                        {subIssue.identifier}
+                     {nested ? (
+                        <button
+                           type="button"
+                           onClick={() => toggle(subIssue.id)}
+                           aria-expanded={open}
+                           aria-label={`${open ? 'Collapse' : 'Expand'} ${subIssue.identifier}`}
+                           className="flex size-4 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
+                        >
+                           <ChevronRight
+                              className={`size-3.5 transition-transform ${open ? 'rotate-90' : ''}`}
+                           />
+                        </button>
+                     ) : (
+                        <span className="size-4 shrink-0" />
+                     )}
+                     <DropdownMenu>
+                        <DropdownMenuTrigger
+                           aria-label={`Change status of ${subIssue.identifier}`}
+                           title={subIssue.status.name}
+                           className="flex size-5 shrink-0 items-center justify-center rounded hover:bg-accent"
+                        >
+                           <StatusIcon status={subIssue.status} />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="min-w-44">
+                           {statuses.map((status) => (
+                              <DropdownMenuItem
+                                 key={status.id}
+                                 onSelect={() => {
+                                    if (status.id !== subIssue.status.id)
+                                       void patchSubIssue(subIssue.id, { statusId: status.id });
+                                 }}
+                              >
+                                 <StatusIcon status={status} />
+                                 {status.name}
+                                 {status.id === subIssue.status.id && (
+                                    <Check className="ml-auto size-4" />
+                                 )}
+                              </DropdownMenuItem>
+                           ))}
+                           {statuses.length === 0 && (
+                              <p className="px-2 py-1.5 text-sm text-muted-foreground">
+                                 No statuses available.
+                              </p>
+                           )}
+                        </DropdownMenuContent>
+                     </DropdownMenu>
+                     <Link
+                        href={`/${orgId}/issue/${subIssue.identifier}`}
+                        className="flex min-w-0 flex-1 items-center gap-2"
+                     >
+                        <span className="text-muted-foreground shrink-0 text-xs font-medium">
+                           {subIssue.identifier}
+                        </span>
+                        <span className="truncate font-medium">{subIssue.title}</span>
+                     </Link>
+                     <ProgressBadge items={nested} />
+                     <span className="w-20 shrink-0">
+                        <IssueDateCell
+                           issueId={subIssue.id}
+                           value={subIssue.dueDate ?? undefined}
+                           kind="due"
+                           accent={isOverdue(subIssue)}
+                           onSave={(dueDate) =>
+                              patchSubIssue(subIssue.id, { dueDate: dueDate ?? null })
+                           }
+                        />
                      </span>
-                     <span className="truncate font-medium">{subIssue.title}</span>
-                  </Link>
-                  <ProgressBadge items={nested} />
-                  <span className="w-20 shrink-0">
-                     <IssueDateCell
-                        issueId={subIssue.id}
-                        value={subIssue.dueDate ?? undefined}
-                        kind="due"
-                        accent={isOverdue(subIssue)}
-                        onSave={(dueDate) =>
-                           patchSubIssue(subIssue.id, { dueDate: dueDate ?? null })
-                        }
-                     />
-                  </span>
-                  <span className="shrink-0">
-                     <AssigneeUser
-                        user={asUser(subIssue.assignee)}
-                        issueId={subIssue.id}
-                        onAssign={(assignee) =>
-                           patchSubIssue(subIssue.id, { assigneeId: assignee?.id ?? null })
-                        }
-                     />
-                  </span>
-               </div>
+                     <span className="shrink-0">
+                        <AssigneeUser
+                           user={asUser(subIssue.assignee)}
+                           issueId={subIssue.id}
+                           onAssign={(assignee) =>
+                              patchSubIssue(subIssue.id, { assigneeId: assignee?.id ?? null })
+                           }
+                        />
+                     </span>
+                  </div>
+               </ReorderRow>
                {nested && open && renderRows(nested, depth + 1)}
             </div>
          );

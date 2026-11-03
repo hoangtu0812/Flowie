@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { ManualLabel } from '@/features/manual-order/reorder-row';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
    Select,
@@ -43,6 +44,7 @@ const ORDERINGS: { value: ProjectsOrdering; label: string }[] = [
    { value: 'start-date', label: 'Start date' },
    { value: 'target-date', label: 'Target date' },
    { value: 'title', label: 'Title' },
+   { value: 'manual', label: 'Manual' },
 ];
 
 function OptionRow({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
@@ -154,7 +156,7 @@ export function ProjectsDisplayOptions() {
                         <SelectContent>
                            {ORDERINGS.map((option) => (
                               <SelectItem key={option.value} value={option.value}>
-                                 {option.label}
+                                 {option.value === 'manual' ? <ManualLabel /> : option.label}
                               </SelectItem>
                            ))}
                         </SelectContent>
@@ -193,16 +195,10 @@ export function ProjectsDisplayOptions() {
                   {viewType === 'timeline' && (
                      <>
                         <OptionRow label="Show project list">
-                           <Switch
-                              checked={showProjectList}
-                              onCheckedChange={setShowProjectList}
-                           />
+                           <Switch checked={showProjectList} onCheckedChange={setShowProjectList} />
                         </OptionRow>
                         <OptionRow label="Show week numbers">
-                           <Switch
-                              checked={showWeekNumbers}
-                              onCheckedChange={setShowWeekNumbers}
-                           />
+                           <Switch checked={showWeekNumbers} onCheckedChange={setShowWeekNumbers} />
                         </OptionRow>
                      </>
                   )}

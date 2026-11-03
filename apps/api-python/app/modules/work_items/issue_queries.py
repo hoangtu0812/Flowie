@@ -156,6 +156,7 @@ def _present_issue(row, labels, cycles, releases, user_id):
         "canceledAt": row["canceled_at"],
         "archivedAt": row["archived_at"],
         "createdAt": row["created_at"],
+        "manualOrder": str(row['manual_order']),
         "updatedAt": row["updated_at"],
         "version": row.get("version", 1),
         "team": {

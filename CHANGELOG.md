@@ -19,6 +19,24 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 - Issue Views save reusable filters from workspace and team issue lists, support private/shared views, editing and deletion, and preserve team scope and existing view URLs. Conflicting edits require a reload instead of overwriting another session. Deploy `api` and `web` together; no schema migration. (DTD-250, #108)
   VI: Issue Views lưu bộ lọc dùng lại từ danh sách công việc của workspace và team, hỗ trợ riêng tư/chia sẻ, sửa và xóa, đồng thời giữ phạm vi team và URL view hiện có. Chỉnh sửa xung đột yêu cầu tải lại thay vì ghi đè phiên khác. Triển khai `api` và `web` cùng bản; không có migration schema. (DTD-250)
 
+- Browser regression checks activate native row dragging with intermediate pointer moves, clean up temporary sub-issues even after timeouts, and locate the current workspace search title. Test-only change; no schema or runtime change. (#107)
+  VI: Kiểm thử trình duyệt kích hoạt kéo hàng native bằng các bước di chuyển con trỏ trung gian, dọn sub-issue tạm kể cả khi hết giờ và tìm đúng tiêu đề tìm kiếm workspace hiện tại. Chỉ đổi test; không đổi schema hoặc hành vi ứng dụng.
+
+- Docs supports dragging a document, PDF or folder onto another folder in the same project, with hover expansion, edge scrolling, protected drop targets and a move dialog for conflicts or failed writes. Existing menu and keyboard actions remain available. Web only; no API or schema change. (DTD-226, #107)
+  VI: Docs hỗ trợ kéo tài liệu, PDF hoặc thư mục vào thư mục khác trong cùng dự án, tự mở nhánh khi rê giữ, cuộn gần mép, bảo vệ đích thả và dùng hộp di chuyển khi xung đột hoặc lỗi ghi. Giữ các thao tác menu và bàn phím hiện có. Chỉ đổi web; không đổi API hoặc schema. (DTD-226)
+
+- Projects and issues support a saved Manual order with drag handles and keyboard move controls; sub-issues reorder among siblings without changing their parent. Stale edits and affected pagination cursors require a reload. Includes a Prisma migration adding and backfilling manual positions: let migrate complete before api/worker, and deploy api/web together. (DTD-239, #111)
+  VI: Dự án và công việc hỗ trợ thứ tự Manual được lưu, có handle kéo-thả và nút di chuyển bằng bàn phím; sub-issue đổi thứ tự cùng cấp mà không đổi parent. Chỉnh sửa và cursor phân trang cũ bị ảnh hưởng yêu cầu tải lại. Có migration Prisma thêm và điền vị trí thủ công: migrate phải hoàn tất trước api/worker, triển khai api/web cùng bản. (DTD-239)
+
+- Issue breadcrumbs show the linked project beside the team even when opened from All issues or a direct link; the project opens its issue list. Web only; no schema change. (DTD-249, #110)
+  VI: Breadcrumb task hiển thị dự án cạnh team kể cả mở từ All issues hoặc link trực tiếp; bấm dự án mở danh sách công việc của dự án. Chỉ đổi web; không đổi schema. (DTD-249)
+
+- Long project lead names stay inside the Lead column, with the full name available on the selector, so Target date remains readable. Web only; no schema change. (DTD-227, #109)
+  VI: Tên Lead dài được giữ trong cột Lead, có thể xem tên đầy đủ trên nút chọn, giúp Target date luôn dễ đọc. Chỉ đổi web; không đổi schema. (DTD-227)
+
+- Browser regression tests follow the current mobile Properties and Bug report flow, restore shared account preferences after failed tests, and wait for the Activity URL before testing reload. Test-only change; no deployment behavior or schema change. (DTD-252, #112)
+  VI: Kiểm thử trình duyệt dùng luồng Properties và Bug report mobile hiện tại, khôi phục tùy chọn tài khoản dùng chung sau test lỗi, và đợi URL Activity cập nhật trước khi kiểm tra reload. Chỉ thay test; không đổi hành vi triển khai hay schema. (DTD-252)
+
 - Docs supports moving and deleting documents, PDFs and folders through right-click and accessible action menus. Moves stay inside the project and retain document history and links; deletion archives documents, protects project roots and refuses non-empty folders. Deploy `api` and `web` together; no schema migration. (DTD-224, #106)
   VI: Docs hỗ trợ di chuyển và xóa tài liệu, PDF và thư mục qua menu chuột phải và nút thao tác truy cập được bằng bàn phím. Di chuyển trong cùng dự án và giữ lịch sử/liên kết; xóa tài liệu bằng lưu trữ mềm, bảo vệ gốc dự án và từ chối thư mục không rỗng. Triển khai `api` và `web` cùng bản; không có migration schema. (DTD-224)
 
