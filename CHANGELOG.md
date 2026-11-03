@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- New issue descriptions support Rich Text with natural paragraphs and formatting tools, Markdown with Preview, remembered editor mode and source-preserving conversion. Clipboard images and resumable creation remain available. Web only; no migration. (DTD-262)
+  VI: Mô tả task mới hỗ trợ soạn trực quan với đoạn văn tự nhiên và công cụ định dạng, Markdown có Xem trước, nhớ chế độ và chuyển đổi giữ nguyên nguồn. Vẫn dán ảnh và tiếp tục lưu sau lỗi. Chỉ đổi web; không migration.
+
 - Hovering or focusing a subtask progress badge opens a scrollable list of direct children with status and links, including loading/error recovery. No migration. (DTD-261, #122)
   VI: Rê chuột hoặc focus badge tiến độ task con mở danh sách con trực tiếp có cuộn, trạng thái và link, kèm tải/lỗi và thử lại. Không migration.
 
