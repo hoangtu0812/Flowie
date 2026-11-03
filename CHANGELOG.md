@@ -16,7 +16,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
-- Workspace owners and admins can save a display name in General settings; sidebar, switcher and tab titles refresh while URLs and aliases stay unchanged. Failed saves retain the draft. Deploy API and web together; no migration. (DTD-264)
+- Workspace owners and admins can save a display name in General settings; sidebar, switcher and tab titles refresh while URLs and aliases stay unchanged. Failed saves retain the draft. Deploy API and web together; no migration. (DTD-264, #125)
   VI: Owner và admin lưu được tên hiển thị trong General; sidebar, bộ chọn và title tab cập nhật trong khi URL và alias giữ nguyên. Lỗi lưu giữ bản nháp. Triển khai API/web cùng bản; không migration.
 
 - Document readers apply safe Mermaid YAML front matter and expand diagrams, SVGs and raster images inline across the reading area with zoom, pan and collapse controls. Metadata stays out of prose; no migration or API change. (DTD-263, #124)
