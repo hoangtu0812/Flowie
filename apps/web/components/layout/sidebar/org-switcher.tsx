@@ -29,9 +29,12 @@ import {
    authenticatedFetch,
    createWorkspace,
    loadWorkspaceMemberships,
+   resolveWorkspaceKey,
    type WorkspaceMembership,
    type WorkspaceSummary,
 } from '@/lib/workspaces';
+import { appPathname } from '@/lib/base-path';
+import { withWorkspaceSegment, workspaceKey } from '@/lib/workspace-route';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -140,8 +143,23 @@ export function OrgSwitcher() {
                ({ workspace }) => workspace.slug === orgId || workspace.id === orgId
             );
             if (!matched && nextMemberships[0]) {
-               const rest = pathname.split('/').slice(2).join('/');
-               router.replace(`/${nextMemberships[0].workspace.id}${rest ? `/${rest}` : ''}`);
+               // A historical slug can belong to any membership; resolve it before choosing a fallback.
+               // Read the live suffix after resolution so a competing canonical redirect cannot drop filters or hashes.
+               // VI: Slug cũ có thể thuộc bất kỳ membership nào; phân giải trước khi chọn workspace thay thế.
+               // VI: Đọc suffix hiện tại sau phân giải để điều hướng canonical cạnh tranh không làm mất bộ lọc hoặc hash.
+               const resolved = await resolveWorkspaceKey(orgId);
+               if (!current || workspaceKey(appPathname()) !== orgId) return;
+               const target =
+                  nextMemberships.find(({ workspace }) => workspace.id === resolved?.id) ??
+                  nextMemberships[0];
+               router.replace(
+                  withWorkspaceSegment(
+                     appPathname(),
+                     target.workspace.slug,
+                     window.location.search + window.location.hash
+                  ),
+                  { scroll: false }
+               );
             }
          })
          .catch(() => {

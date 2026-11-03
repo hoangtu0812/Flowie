@@ -3,6 +3,33 @@ import { readFileSync } from 'node:fs';
 
 const fixture = JSON.parse(readFileSync('.e2e-fixture.json', 'utf8'));
 const api = 'http://localhost:4000/api/v1';
+let restoreSlug = false;
+let temporaryWorkspaces: Array<{ id: string; name: string }> = [];
+
+// Restore the shared URL even when an assertion fails before the test reaches its normal reset.
+// VI: Khôi phục URL dùng chung kể cả khi assertion lỗi trước bước trả slug bình thường.
+test.afterEach(async ({ context }) => {
+   test.setTimeout(30000);
+   const reset = restoreSlug;
+   restoreSlug = false;
+   const workspaces = temporaryWorkspaces;
+   temporaryWorkspaces = [];
+   try {
+      if (reset) {
+         const response = await context.request.patch(`${api}/workspaces/${fixture.workspace_id}`, {
+            data: { slug: fixture.slug },
+         });
+         expect(response.ok()).toBeTruthy();
+      }
+   } finally {
+      for (const workspace of workspaces) {
+         const response = await context.request.delete(`${api}/workspaces/${workspace.id}`, {
+            data: { confirmationName: workspace.name },
+         });
+         expect(response.ok() || response.status() === 404).toBeTruthy();
+      }
+   }
+});
 
 test('stable workspace links and owner deletion preserve other workspaces', async ({
    page,
@@ -42,10 +69,11 @@ test('stable workspace links and owner deletion preserve other workspaces', asyn
       await page.getByRole('button', { name: 'Save URL' }).click();
       expect((await saved).ok()).toBeTruthy();
    };
+   restoreSlug = true;
    await saveSlug(renamed);
    await expect(page).toHaveURL(new RegExp(`/${renamed}/settings/workspace$`));
-   await page.goto(`/${fixture.slug}/projects?tab=active`);
-   await expect(page).toHaveURL(new RegExp(`/${renamed}/projects\\?tab=active$`));
+   await page.goto(`/${fixture.slug}/projects?tab=active#timeline`);
+   await expect(page).toHaveURL(new RegExp(`/${renamed}/projects\\?tab=active#timeline$`));
    await page.goto(`/${renamed}/settings/workspace`);
    await saveSlug(fixture.slug);
    await expect(page).toHaveURL(new RegExp(`/${fixture.slug}/settings/workspace$`));
@@ -54,6 +82,7 @@ test('stable workspace links and owner deletion preserve other workspaces', asyn
    const created = await context.request.post(`${api}/workspaces`, { data: { name } });
    expect(created.ok(), await created.text()).toBeTruthy();
    const workspace = (await created.json()).data.workspaces[0];
+   temporaryWorkspaces.push({ id: workspace.id, name });
    let deleted = false;
    try {
       await page.goto(`/${workspace.id}/settings/workspace`);
@@ -126,4 +155,43 @@ test('stable workspace links and owner deletion preserve other workspaces', asyn
    await expect(page.getByRole('button', { name: 'Delete workspace', exact: true })).toHaveCount(0);
    await page.waitForLoadState('networkidle');
    await page.unrouteAll({ behavior: 'wait' });
+});
+
+test('an old workspace slug keeps its destination when another membership is first', async ({
+   page,
+   context,
+}) => {
+   const login = await context.request.post(`${api}/auth/login`, {
+      data: { email: fixture.email, password: fixture.password },
+   });
+   expect(login.ok()).toBeTruthy();
+   const name = `Alias sibling ${Date.now()}`;
+   const created = await context.request.post(`${api}/workspaces`, { data: { name } });
+   expect(created.ok()).toBeTruthy();
+   const sibling = (await created.json()).data.workspaces[0];
+   temporaryWorkspaces.push({ id: sibling.id, name });
+   const renamed = `alias-${Date.now()}`;
+   restoreSlug = true;
+   const changed = await context.request.patch(`${api}/workspaces/${fixture.workspace_id}`, {
+      data: { slug: renamed },
+   });
+   expect(changed.ok()).toBeTruthy();
+   await page.route(`${api}/workspaces/me`, async (route) => {
+      const response = await route.fetch();
+      const body = await response.json();
+      body.data.sort(
+         (a: { workspace: { id: string } }, b: { workspace: { id: string } }) =>
+            Number(b.workspace.id === sibling.id) - Number(a.workspace.id === sibling.id)
+      );
+      await route.fulfill({ response, json: body });
+   });
+   await page.route('**/workspaces/resolve?*', async (route) => {
+      // Network latency exposes the competing fallback without changing the API's access checks.
+      // VI: Độ trễ mạng làm lộ điều hướng fallback cạnh tranh mà không đổi kiểm tra quyền của API.
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      await route.continue();
+   });
+   await page.goto(`/${fixture.slug}/projects?tab=active#timeline`);
+   await expect(page).toHaveURL(new RegExp(`/${renamed}/projects\\?tab=active#timeline$`));
+   await expect(page.getByText('Regression project', { exact: true }).first()).toBeVisible();
 });
