@@ -1,20 +1,37 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
-import {
-   Dialog,
-   DialogContent,
-   DialogDescription,
-   DialogFooter,
-   DialogHeader,
-   DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
+import { Button } from '@astryxdesign/core/Button';
+import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
+import { HStack, VStack, Layout, LayoutContent, LayoutFooter } from '@astryxdesign/core/Layout';
+import { List, ListItem } from '@astryxdesign/core/List';
+import { StatusDot } from '@astryxdesign/core/StatusDot';
+import { Text } from '@astryxdesign/core/Text';
+import { TextInput } from '@astryxdesign/core/TextInput';
+import { Tooltip } from '@astryxdesign/core/Tooltip';
+import { DesignSurface } from '@/components/common/design-surface';
+import { useMessages } from '@/features/shared/use-messages';
 import { authenticatedFetch } from '@/lib/workspaces';
 import { useIssuesStore } from '@/store/issues-store';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+const messages = {
+   'Search issues': 'Tìm công việc',
+   'Search by ID or title': 'Tìm theo mã hoặc tiêu đề',
+   'Searching…': 'Đang tìm…',
+   'No issues found.': 'Không tìm thấy công việc.',
+   'Could not search issues.': 'Không tìm được công việc.',
+   'Could not change the parent issue.': 'Không thay đổi được task cha.',
+   'Retry': 'Thử lại',
+   'Back': 'Quay lại',
+   'Move': 'Di chuyển',
+   'Moving…': 'Đang di chuyển…',
+   'Move sub-issue?': 'Di chuyển task con?',
+   'in {parent}': 'thuộc {parent}',
+   'Set parent': 'Đặt task cha',
+   'Change parent': 'Đổi task cha',
+   'Add existing sub-issue': 'Thêm task con có sẵn',
+} as const;
 
 export type IssueCandidate = {
    id: string;
@@ -24,15 +41,46 @@ export type IssueCandidate = {
    parent: { id: string; identifier: string; title: string } | null;
 };
 
+function CandidateRow({
+   issue,
+   description,
+   saving,
+   onPick,
+}: {
+   issue: IssueCandidate;
+   description?: string;
+   saving: boolean;
+   onPick: () => void;
+}) {
+   const anchor = useRef<HTMLLIElement>(null);
+   return (
+      <>
+         <ListItem
+            ref={anchor}
+            label={
+               <Text maxLines={1}>
+                  {issue.identifier} · {issue.title}
+               </Text>
+            }
+            startContent={
+               <StatusDot variant="neutral" label={issue.status.name} tooltip={issue.status.name} />
+            }
+            description={description}
+            isDisabled={saving}
+            onClick={onPick}
+         />
+         <Tooltip anchorRef={anchor} content={`${issue.identifier} · ${issue.title}`} />
+      </>
+   );
+}
+
 /**
- * Finds an issue of the same team by identifier or title for a parent–child change. Each result
- * shows its status and current parent so the right issue is picked. With `moveTarget`, picking an
- * issue that already has another parent asks to confirm the move instead of saving at once. Server
- * errors (cycle, other team, archived parent) are shown in the dialog.
- * VI: Tìm issue cùng team theo mã hoặc tiêu đề để đổi quan hệ cha–con. Mỗi kết quả hiện trạng thái
- * VI: và cha hiện tại để chọn đúng issue. Có `moveTarget` thì chọn issue đang thuộc cha khác sẽ hỏi
- * VI: xác nhận chuyển thay vì lưu ngay. Lỗi từ server (chu trình, khác team, cha đã archive) hiển
- * VI: thị trong hộp thoại.
+ * Shares the same-team picker between parent changes and attaching existing children. Search
+ * requests are canceled on scope/query changes, and long names stay inside the scrollable list.
+ * Existing-parent moves require confirmation; server errors keep the selection dialog open.
+ * VI: Dùng chung bộ chọn cùng team cho đổi cha và gắn task con có sẵn. Hủy request khi đổi phạm vi
+ * VI: hoặc truy vấn, tên dài nằm gọn trong danh sách cuộn. Chuyển task đã có cha cần xác nhận;
+ * VI: lỗi server giữ hộp chọn mở để người dùng xử lý.
  */
 export function IssueSearchDialog({
    open,
@@ -54,123 +102,183 @@ export function IssueSearchDialog({
    onPick: (issue: IssueCandidate) => Promise<void>;
 }) {
    const workspaceId = useIssuesStore((state) => state.workspaceId);
+   const tx = useMessages(messages);
    const [query, setQuery] = useState('');
    const [results, setResults] = useState<IssueCandidate[]>([]);
    const [pending, setPending] = useState<IssueCandidate>();
+   const [loading, setLoading] = useState(false);
    const [saving, setSaving] = useState(false);
    const [error, setError] = useState<string>();
+   const [retry, setRetry] = useState(0);
 
    useEffect(() => {
       if (!open || !workspaceId) return;
+      const controller = new AbortController();
+      setLoading(true);
+      setError(undefined);
+      setResults([]);
       const timer = window.setTimeout(() => {
          const params = new URLSearchParams({ workspaceId, query: query.trim(), limit: '20' });
          if (teamId) params.set('teamId', teamId);
          else params.set('noTeam', 'true');
-         void authenticatedFetch(`${api}/issues?${params}`)
+         void authenticatedFetch(`${api}/issues?${params}`, { signal: controller.signal })
             .then(async (response) => {
                if (!response.ok) throw new Error('Could not search issues.');
-               setResults(((await response.json()) as { data: IssueCandidate[] }).data);
+               const data = ((await response.json()) as { data: IssueCandidate[] }).data;
+               if (!controller.signal.aborted) setResults(data);
             })
-            .catch((caught: Error) => setError(caught.message));
+            .catch((caught: unknown) => {
+               if (!controller.signal.aborted)
+                  setError(caught instanceof Error ? caught.message : 'Could not search issues.');
+            })
+            .finally(() => {
+               if (!controller.signal.aborted) setLoading(false);
+            });
       }, 250);
-      return () => window.clearTimeout(timer);
-   }, [open, query, teamId, workspaceId]);
+      return () => {
+         window.clearTimeout(timer);
+         controller.abort();
+      };
+   }, [open, query, teamId, workspaceId, retry]);
 
-   const close = (next: boolean) => {
-      onOpenChange(next);
-      if (!next) {
-         setQuery('');
-         setPending(undefined);
-         setError(undefined);
-      }
+   const reset = () => {
+      setQuery('');
+      setPending(undefined);
+      setError(undefined);
+      setResults([]);
    };
-
+   const close = (next: boolean) => {
+      if (saving) return;
+      onOpenChange(next);
+      if (!next) reset();
+   };
    const save = async (issue: IssueCandidate) => {
+      if (saving) return;
       setSaving(true);
       setError(undefined);
       try {
          await onPick(issue);
-         close(false);
+         onOpenChange(false);
+         reset();
       } catch (caught) {
-         setError(caught instanceof Error ? caught.message : 'Could not change the parent issue.');
+         setError(
+            caught instanceof Error ? caught.message : tx('Could not change the parent issue.')
+         );
       } finally {
          setSaving(false);
       }
    };
-
    const pick = (issue: IssueCandidate) => {
       if (moveTarget && issue.parent && issue.parent.id !== moveTarget.id) setPending(issue);
       else void save(issue);
    };
-
    const visible = results.filter((issue) => !excludeIds.includes(issue.id));
-
+   const titles: Record<string, string> = {
+      'Set parent': tx('Set parent'),
+      'Change parent': tx('Change parent'),
+      'Add existing sub-issue': tx('Add existing sub-issue'),
+   };
+   if (!open) return null;
    return (
-      <Dialog open={open} onOpenChange={close}>
-         <DialogContent className="sm:max-w-[520px]">
-            <DialogHeader>
-               <DialogTitle>{pending ? 'Move sub-issue?' : title}</DialogTitle>
-               <DialogDescription>
-                  {pending && moveTarget
-                     ? `${pending.identifier} is a sub-issue of ${pending.parent?.identifier}. Move it under ${moveTarget.identifier}?`
-                     : description}
-               </DialogDescription>
-            </DialogHeader>
-            {!pending && (
-               <div className="space-y-2">
-                  <Input
-                     value={query}
-                     onChange={(event) => setQuery(event.target.value)}
-                     placeholder="Search by ID or title"
-                     aria-label="Search issues"
-                     autoFocus
+      <DesignSurface>
+         <Dialog isOpen onOpenChange={close} width={520} purpose="form">
+            <Layout
+               height="auto"
+               padding={4}
+               className="min-w-0"
+               header={
+                  <DialogHeader
+                     title={pending ? tx('Move sub-issue?') : (titles[title] ?? title)}
+                     subtitle={
+                        pending && moveTarget
+                           ? `${pending.identifier} is a sub-issue of ${pending.parent?.identifier}. Move it under ${moveTarget.identifier}?`
+                           : description
+                     }
+                     onOpenChange={close}
                   />
-                  <div className="max-h-72 overflow-y-auto flex flex-col" role="list">
-                     {visible.length === 0 && (
-                        <p className="px-1 py-3 text-sm text-muted-foreground">No issues found.</p>
-                     )}
-                     {/* Rows keep their height (shrink-0); in this capped flex column they would otherwise be squeezed to text height once the results overflow.
-                         VI: Dòng giữ nguyên chiều cao (shrink-0); trong cột flex có chiều cao tối đa này, khi kết quả tràn chúng sẽ bị ép xuống bằng chiều cao chữ. */}
-                     {visible.map((issue) => (
-                        <button
-                           key={issue.id}
-                           type="button"
-                           role="listitem"
-                           disabled={saving}
-                           onClick={() => pick(issue)}
-                           className="flex shrink-0 items-center gap-2 h-9 px-1 rounded-md text-left text-sm hover:bg-sidebar/60 min-w-0"
-                        >
-                           <span
-                              className="size-2 rounded-full shrink-0"
-                              style={{ backgroundColor: issue.status.color }}
-                              aria-label={issue.status.name}
+               }
+               footer={
+                  pending ? (
+                     <LayoutFooter>
+                        <HStack gap={2} justify="end">
+                           <Button
+                              label={tx('Back')}
+                              onClick={() => setPending(undefined)}
+                              isDisabled={saving}
                            />
-                           <span className="text-xs font-medium text-muted-foreground shrink-0">
-                              {issue.identifier}
-                           </span>
-                           <span className="truncate">{issue.title}</span>
-                           {issue.parent && (
-                              <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                                 in {issue.parent.identifier}
-                              </span>
+                           <Button
+                              label={tx(saving ? 'Moving…' : 'Move')}
+                              onClick={() => void save(pending)}
+                              isDisabled={saving}
+                           />
+                        </HStack>
+                     </LayoutFooter>
+                  ) : undefined
+               }
+            >
+               <LayoutContent padding={0}>
+                  <VStack gap={2} width="100%" className="min-w-0">
+                     {!pending && (
+                        <>
+                           <TextInput
+                              label={tx('Search issues')}
+                              isLabelHidden
+                              value={query}
+                              onChange={setQuery}
+                              placeholder={tx('Search by ID or title')}
+                              hasAutoFocus
+                              hasClear
+                              isDisabled={saving}
+                              width="100%"
+                           />
+                           <VStack isScrollable className="max-h-72 min-w-0" aria-busy={loading}>
+                              {loading ? (
+                                 <Text role="status">{tx('Searching…')}</Text>
+                              ) : (
+                                 <List density="compact">
+                                    {visible.map((issue) => (
+                                       <CandidateRow
+                                          key={issue.id}
+                                          issue={issue}
+                                          description={
+                                             issue.parent
+                                                ? tx('in {parent}', {
+                                                     parent: issue.parent.identifier,
+                                                  })
+                                                : undefined
+                                          }
+                                          saving={saving}
+                                          onPick={() => pick(issue)}
+                                       />
+                                    ))}
+                                 </List>
+                              )}
+                              {!loading && !error && visible.length === 0 && (
+                                 <Text type="supporting">{tx('No issues found.')}</Text>
+                              )}
+                           </VStack>
+                        </>
+                     )}
+                     {error && (
+                        <VStack gap={2}>
+                           <Text role="alert">
+                              {error === 'Could not search issues.'
+                                 ? tx('Could not search issues.')
+                                 : error}
+                           </Text>
+                           {!pending && (
+                              <Button
+                                 label={tx('Retry')}
+                                 onClick={() => setRetry((value) => value + 1)}
+                                 isDisabled={saving}
+                              />
                            )}
-                        </button>
-                     ))}
-                  </div>
-               </div>
-            )}
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            {pending && (
-               <DialogFooter>
-                  <Button variant="outline" onClick={() => setPending(undefined)} disabled={saving}>
-                     Back
-                  </Button>
-                  <Button onClick={() => void save(pending)} disabled={saving}>
-                     {saving ? 'Moving…' : 'Move'}
-                  </Button>
-               </DialogFooter>
-            )}
-         </DialogContent>
-      </Dialog>
+                        </VStack>
+                     )}
+                  </VStack>
+               </LayoutContent>
+            </Layout>
+         </Dialog>
+      </DesignSurface>
    );
 }

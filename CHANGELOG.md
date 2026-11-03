@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- Parent issue pickers keep long names and search fields within the dialog on mobile and desktop, distinguish loading/errors from empty results, and cancel stale searches. Web only; no migration. (DTD-257)
+  VI: Hộp chọn task cha giữ tên dài và ô tìm kiếm gọn trong dialog trên mobile và desktop, phân biệt đang tải/lỗi với kết quả rỗng và hủy tìm kiếm cũ. Chỉ đổi web; không có migration.
+
 - Old workspace slugs resolve to their own workspace before fallback selection, preserving the full destination, query and hash even when another membership is first. Web only; no migration. (DTD-260, #113)
   VI: Slug workspace cũ được phân giải về đúng workspace trước khi chọn workspace thay thế, giữ đầy đủ đích, query và hash kể cả khi membership khác đứng đầu. Chỉ đổi web; không có migration.
 
