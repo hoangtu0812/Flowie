@@ -742,9 +742,7 @@ test('Vietnamese account locale applies to Inbox search and issue activity', asy
       });
       expect(response.ok()).toBeTruthy();
       await page.goto(`/${fixture.slug}/search`);
-      await expect(
-         page.getByRole('heading', { name: 'Tìm trong workspace', exact: true })
-      ).toBeVisible();
+      await expect(page.getByText('Tìm trong workspace', { exact: true })).toBeVisible();
       await page
          .getByLabel('Tìm công việc, tài liệu, dự án và thành viên')
          .fill('Regression Markdown');

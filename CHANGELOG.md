@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- Browser regression checks activate native row dragging with intermediate pointer moves, clean up temporary sub-issues even after timeouts, and locate the current workspace search title. Test-only change; no schema or runtime change. (#107)
+  VI: Kiểm thử trình duyệt kích hoạt kéo hàng native bằng các bước di chuyển con trỏ trung gian, dọn sub-issue tạm kể cả khi hết giờ và tìm đúng tiêu đề tìm kiếm workspace hiện tại. Chỉ đổi test; không đổi schema hoặc hành vi ứng dụng.
+
 - Docs supports dragging a document, PDF or folder onto another folder in the same project, with hover expansion, edge scrolling, protected drop targets and a move dialog for conflicts or failed writes. Existing menu and keyboard actions remain available. Web only; no API or schema change. (DTD-226, #107)
   VI: Docs hỗ trợ kéo tài liệu, PDF hoặc thư mục vào thư mục khác trong cùng dự án, tự mở nhánh khi rê giữ, cuộn gần mép, bảo vệ đích thả và dùng hộp di chuyển khi xung đột hoặc lỗi ghi. Giữ các thao tác menu và bàn phím hiện có. Chỉ đổi web; không đổi API hoặc schema. (DTD-226)
 
