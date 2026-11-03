@@ -60,6 +60,8 @@ test('parent picker bounds long names, retries failed search and supports keyboa
    await expect(row).toBeVisible();
    await row.hover();
    await expect(page.getByRole('tooltip')).toHaveText(`${parent.identifier} · ${parent.title}`);
+   await search.hover();
+   await expect(page.getByRole('tooltip')).toHaveCount(0);
    for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: 844 });
       expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBeTruthy();
