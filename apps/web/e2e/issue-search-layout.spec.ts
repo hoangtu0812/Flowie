@@ -61,8 +61,12 @@ test('issue search matches only identifier or title and preserves list geometry'
          await expect(row).toBeVisible();
          expect(await geometry()).toEqual(initial);
          await expect(page.getByText('Unrelated issue', { exact: true })).toHaveCount(0);
-         await expect(page.locator('.sticky.top-0').getByText('Project', { exact: true })).toBeVisible();
-         await expect(row.getByText('Regression project', { exact: true })).toBeVisible();
+         await expect(
+            page.locator('.sticky.top-0').getByText('Project', { exact: true })
+         ).toBeVisible();
+         await expect(
+            row.getByRole('link', { name: 'Regression project', exact: true })
+         ).toBeVisible();
       }
       await page.screenshot({ path: testInfo.outputPath('search-list.png'), fullPage: true });
       expect((await search('description-only-unique')).meta.total).toBe(0);

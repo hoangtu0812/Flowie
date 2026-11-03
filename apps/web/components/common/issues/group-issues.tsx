@@ -38,7 +38,9 @@ interface GroupIssuesProps {
 }
 
 export function GroupIssues({ group, issues, count }: GroupIssuesProps) {
-   const manual = useDisplaySettingsStore((state) => state.ordering === 'manual');
+   const manual = useDisplaySettingsStore(
+      (state) => state.ordering === 'manual' && !state.columnSorts?.length
+   );
    const [orderedIssues, setOrderedIssues] = useState(issues);
    useEffect(() => setOrderedIssues(issues), [issues]);
    const { workspaceId, retryIssues } = useIssuesStore();

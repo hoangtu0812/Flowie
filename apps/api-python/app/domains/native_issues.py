@@ -165,6 +165,7 @@ async def list_issues(
     sliceBy: Literal['status','priority','assignee','project'] = 'status',
     segmentBy: Literal['status','priority','assignee','project'] = 'priority',
     ordering: Literal['manual'] | None = None,
+    sort: Annotated[str | None, Query(max_length=2000)] = None,
 ) -> dict:
     from ..modules.work_items.issue_search import search_page
     from ..core.config import Settings
@@ -178,6 +179,8 @@ async def list_issues(
         'query': query, 'filters': filters, 'includeSubIssues': includeSubIssues,
         'noTeam': noTeam, 'noProject': noProject, 'issueType': issueType,
     }
+    if sort:
+        options['sort'] = sort
     if ordering:
         options['ordering'] = ordering
     if insights:
