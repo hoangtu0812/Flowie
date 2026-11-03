@@ -1,25 +1,60 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
-import { Button } from '@astryxdesign/core/Button';
-import { HStack } from '@astryxdesign/core/Layout';
-import { GripVertical, ArrowUp, ArrowDown } from 'lucide-react';
+import { createContext, useContext, useRef, useState, type ReactNode } from 'react';
+import { Feedback } from '@dnd-kit/dom';
+import { DragDropProvider } from '@dnd-kit/react';
+import { isSortable, useSortable } from '@dnd-kit/react/sortable';
+import { HStack, VStack } from '@astryxdesign/core/Layout';
+import { Icon } from '@astryxdesign/core/Icon';
+import { GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import { DesignSurface } from '@/components/common/design-surface';
 import { authenticatedFetch } from '@/lib/workspaces';
 import { responseData, ApiRequestError } from '@/lib/http';
 import { useMessages } from '@/features/shared/use-messages';
-
 import type { OrderedItem } from './order';
+
 const messages = {
    'Reorder {name}': 'Đổi thứ tự {name}',
-   'Move up {name}': 'Đưa {name} lên',
-   'Move down {name}': 'Đưa {name} xuống',
    'Manual': 'Thủ công',
    'The order changed. Reload the list.': 'Thứ tự đã thay đổi. Hãy tải lại danh sách.',
    'Could not reorder.': 'Không đổi được thứ tự.',
 } as const;
-let dragged: { item: OrderedItem; scope: string } | undefined;
+const BusyContext = createContext(false);
+
+type ReorderData = { commit: (index: number) => Promise<void> };
+
+export function ReorderProvider({ children }: { children: ReactNode }) {
+   const [busy, setBusy] = useState(false);
+   const saving = useRef(false);
+   return (
+      <BusyContext.Provider value={busy}>
+         <DragDropProvider<ReorderData>
+            plugins={(defaults) => [...defaults, Feedback.configure({ feedback: 'clone' })]}
+            onDragEnd={async (event) => {
+               if (event.canceled || saving.current) return;
+               const source = event.operation.source;
+               if (
+                  !isSortable(source) ||
+                  source.initialGroup !== source.group ||
+                  source.initialIndex === source.index
+               )
+                  return;
+               saving.current = true;
+               setBusy(true);
+               try {
+                  await source.data.commit(source.index);
+               } finally {
+                  saving.current = false;
+                  setBusy(false);
+               }
+            }}
+         >
+            {children}
+         </DragDropProvider>
+      </BusyContext.Provider>
+   );
+}
 
 export function ManualLabel() {
    const tx = useMessages(messages);
@@ -35,6 +70,7 @@ export function ReorderRow({
    scope,
    enabled,
    refresh,
+   optimistic,
    children,
 }: {
    item: OrderedItem;
@@ -45,18 +81,21 @@ export function ReorderRow({
    scope: string;
    enabled: boolean;
    refresh: () => void | Promise<void>;
+   optimistic: (sourceId: string, targetId: string, placement: 'before' | 'after') => void;
    children: ReactNode;
 }) {
    const tx = useMessages(messages);
-   const [busy, setBusy] = useState(false);
-   const [edge, setEdge] = useState<'before' | 'after'>();
+   const busy = useContext(BusyContext);
    const siblings = items.filter(
       (candidate) => (candidate.parentIssueId ?? null) === (item.parentIssueId ?? null)
    );
    const index = siblings.findIndex((candidate) => candidate.id === item.id);
-   const move = async (source: OrderedItem, target: OrderedItem, placement: 'before' | 'after') => {
-      if (!workspaceId || busy || source.id === target.id) return;
-      setBusy(true);
+   const group = `${scope}:${item.parentIssueId ?? 'root'}`;
+   const commit = async (nextIndex: number) => {
+      const target = siblings[nextIndex];
+      if (!workspaceId || !target || target.id === item.id) return;
+      const placement = nextIndex < index ? 'before' : 'after';
+      optimistic(item.id, target.id, placement);
       try {
          await responseData(
             await authenticatedFetch(
@@ -67,16 +106,15 @@ export function ReorderRow({
                   body: JSON.stringify({
                      workspaceId,
                      entityType,
-                     sourceId: source.id,
+                     sourceId: item.id,
                      targetId: target.id,
                      placement,
-                     expectedOrder: source.manualOrder ?? '0',
+                     expectedOrder: item.manualOrder ?? '0',
                      expectedTargetOrder: target.manualOrder ?? '0',
                   }),
                }
             )
          );
-         await refresh();
       } catch (error) {
          toast.error(
             error instanceof ApiRequestError && error.status === 409
@@ -85,106 +123,50 @@ export function ReorderRow({
                  ? error.message
                  : tx('Could not reorder.')
          );
-         await refresh();
       } finally {
-         setBusy(false);
+         await refresh();
       }
    };
-   if (!enabled || !workspaceId) return <>{children}</>;
-   const accepts = () =>
-      dragged &&
-      dragged.scope === scope &&
-      dragged.item.id !== item.id &&
-      (dragged.item.parentIssueId ?? null) === (item.parentIssueId ?? null);
+   // Scope and parent form the sortable type, so pointer and keyboard moves cannot reparent items.
+   // VI: Scope và cha tạo kiểu sortable nên di chuyển bằng chuột/bàn phím không thể đổi cha của item.
+   const { ref, handleRef, isDragging } = useSortable<ReorderData>({
+      id: item.id,
+      index,
+      group,
+      type: group,
+      accept: group,
+      disabled: !enabled || !workspaceId || busy,
+      data: { commit },
+   });
+   // Keep the handle mounted when hidden: removing its ref makes accessibility fall back to the
+   // entire row, which contains other buttons and links and must never become a nested button.
+   // VI: Giữ handle trong DOM khi ẩn: gỡ ref làm trợ năng chuyển sang cả hàng, vốn chứa nút và link
+   // VI: khác nên không được biến thành nút lồng nhau.
    return (
       <HStack
+         ref={ref}
          gap={0}
          align="stretch"
          width="100%"
-         className={
-            edge === 'before'
-               ? 'border-t-2 border-accent'
-               : edge === 'after'
-                 ? 'border-b-2 border-accent'
-                 : ''
-         }
-         data-order-id={item.id}
-         onDragOver={(event) => {
-            if (accepts() && !busy) {
-               event.preventDefault();
-               setEdge(
-                  event.clientY <
-                     event.currentTarget.getBoundingClientRect().top +
-                        event.currentTarget.getBoundingClientRect().height / 2
-                     ? 'before'
-                     : 'after'
-               );
-            }
-         }}
-         onDragLeave={(event) => {
-            if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget))
-               setEdge(undefined);
-         }}
-         onDrop={(event) => {
-            if (!accepts() || busy) return;
-            event.preventDefault();
-            event.stopPropagation();
-            const source = dragged!.item;
-            dragged = undefined;
-            const placement =
-               event.clientY <
-               event.currentTarget.getBoundingClientRect().top +
-                  event.currentTarget.getBoundingClientRect().height / 2
-                  ? 'before'
-                  : 'after';
-            setEdge(undefined);
-            void move(source, item, placement);
-         }}
+         data-order-id={enabled && workspaceId ? item.id : undefined}
+         data-dragging={isDragging || undefined}
       >
          <DesignSurface>
-            <HStack gap={0} height="100%">
-               <button
-                  type="button"
-                  draggable={!busy}
-                  disabled={busy}
-                  aria-label={tx('Reorder {name}', { name })}
-                  title={tx('Reorder {name}', { name })}
-                  className="cursor-grab text-secondary"
-                  onDragStart={(event) => {
-                     dragged = { item, scope };
-                     event.dataTransfer.effectAllowed = 'move';
-                     event.dataTransfer.setData('application/x-flowie-order', item.id);
-                  }}
-                  onDragEnd={() => {
-                     dragged = undefined;
-                     setEdge(undefined);
-                  }}
-               >
-                  <GripVertical className="size-4" />
-               </button>
-               <Button
-                  label={tx('Move up {name}', { name })}
-                  isIconOnly
-                  icon={<ArrowUp />}
-                  variant="ghost"
-                  size="sm"
-                  isDisabled={busy || index <= 0}
-                  onClick={() => void move(item, siblings[index - 1], 'before')}
-               />
-               <Button
-                  label={tx('Move down {name}', { name })}
-                  isIconOnly
-                  icon={<ArrowDown />}
-                  variant="ghost"
-                  size="sm"
-                  isDisabled={busy || index < 0 || index >= siblings.length - 1}
-                  onClick={() => void move(item, siblings[index + 1], 'after')}
-               />
-            </HStack>
+            <button
+               ref={handleRef}
+               type="button"
+               hidden={!enabled || !workspaceId}
+               disabled={busy || !enabled || !workspaceId}
+               aria-label={tx('Reorder {name}', { name })}
+               title={tx('Reorder {name}', { name })}
+               className="cursor-grab touch-none text-secondary self-start"
+            >
+               <Icon icon={GripVertical} size="sm" />
+            </button>
          </DesignSurface>
-         <HStack className="flex-1 min-w-0" align="stretch">
+         <VStack gap={0} className="flex-1 min-w-0" align="stretch">
             {children}
-         </HStack>
+         </VStack>
       </HStack>
    );
 }

@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- Manual ordering uses dnd-kit sortable handles with keyboard controls, drag placeholders and motion; sub-issue trees can sort siblings by issue ID or workflow status in either direction. Removes per-row up/down buttons. React order stays synchronized with drag feedback to prevent duplicate rows. Switching sort modes keeps one accessible drag handle per row. No new migration. (DTD-239, #118)
+  VI: Thứ tự thủ công dùng handle dnd-kit sortable hỗ trợ bàn phím, placeholder và chuyển động; cây task con sắp xếp anh em theo mã hoặc trạng thái workflow tăng/giảm. Bỏ nút lên/xuống từng hàng. Thứ tự React đồng bộ với phản hồi kéo để tránh trùng hàng; đổi chế độ sort giữ đúng một handle trợ năng mỗi hàng. Không thêm migration.
+
 - Issue search matches identifiers and titles only and retains the main list columns, row sizes, filters and scrolling across All issues, Cycle, My issues and member profiles; quick search also limits issue matches to identifiers/titles. No migration. (DTD-255, #117)
   VI: Tìm task chỉ khớp mã và tiêu đề, giữ cột, kích thước hàng, bộ lọc và cuộn của danh sách chính ở All issues, Cycle, My issues và hồ sơ thành viên; tìm nhanh cũng giới hạn task theo mã/tiêu đề. Không có migration.
 

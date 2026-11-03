@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Locator } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 const fixture = JSON.parse(readFileSync('.e2e-fixture.json', 'utf8'));
 const api = 'http://localhost:4000/api/v1';
@@ -36,6 +36,37 @@ async function manual(page: Page) {
    await page.keyboard.press('Escape');
 }
 
+async function dragRow(page: Page, handle: Locator, target: Locator, after = true) {
+   await expect(page.locator('[data-dnd-dropping]')).toHaveCount(0);
+   await expect(handle).toHaveAttribute('aria-roledescription', /.+/);
+   const from = (await handle.boundingBox())!,
+      to = (await target.boundingBox())!;
+   const targetId = await target.getAttribute('data-order-id');
+   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+   await page.mouse.down();
+   await page.mouse.move(from.x + from.width / 2 + 12, from.y + from.height / 2, { steps: 4 });
+   await expect(page.locator('[data-dnd-placeholder]')).toBeVisible();
+   await page.mouse.move(to.x + 80, to.y + (after ? to.height - 2 : 2), { steps: 12 });
+   await expect
+      .poll(() =>
+         handle.evaluate(
+            (el, args) => {
+               const source = el.closest('[data-order-id]')!;
+               const target = document.querySelector(
+                  `[data-order-id="${args.id}"]:not([data-dnd-placeholder])`
+               )!;
+               return Boolean(
+                  source.compareDocumentPosition(target) &
+                  (args.after ? Node.DOCUMENT_POSITION_PRECEDING : Node.DOCUMENT_POSITION_FOLLOWING)
+               );
+            },
+            { id: targetId, after }
+         )
+      )
+      .toBe(true);
+   await page.mouse.up();
+}
+
 test('manual issue order supports drag, keyboard and reload', async ({ page }, testInfo) => {
    await page.goto(`/${fixture.slug}/issues`);
    await expect(
@@ -54,14 +85,32 @@ test('manual issue order supports drag, keyboard and reload', async ({ page }, t
       (response) =>
          response.url().endsWith('/manual-order') && response.request().method() === 'POST'
    );
-   await page
-      .getByRole('button', { name: `Reorder ${source.identifier}`, exact: true })
-      .dragTo(target, { steps: 12, targetPosition: { x: 80, y: 2 } });
+   const dragHandle = page.getByRole('button', {
+      name: `Reorder ${source.identifier}`,
+      exact: true,
+   });
+   const from = (await dragHandle.boundingBox())!,
+      to = (await target.boundingBox())!;
+   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+   await page.mouse.down();
+   await page.mouse.move(from.x + from.width / 2 + 12, from.y + from.height / 2, { steps: 4 });
+   await expect(page.locator('[data-dnd-placeholder]')).toBeVisible();
+   const placeholder = await page.locator('[data-dnd-placeholder]').boundingBox();
+   expect(placeholder!.height).toBeGreaterThanOrEqual(44);
+   await page.screenshot({ path: testInfo.outputPath('manual-placeholder.png'), fullPage: true });
+   await page.mouse.move(to.x + 80, to.y + 2, { steps: 12 });
+   await page.mouse.up();
    expect((await saved).ok()).toBeTruthy();
    await expect(rows.first()).toHaveAttribute('data-order-id', source.id);
    await page.reload();
    await expect(rows.first()).toHaveAttribute('data-order-id', source.id);
-   await page.getByRole('button', { name: `Move down ${source.identifier}`, exact: true }).click();
+   await expect(page.getByRole('button', { name: /^Move (up|down) / })).toHaveCount(0);
+   const handle = page.getByRole('button', { name: `Reorder ${source.identifier}`, exact: true });
+   await expect(page.locator('[data-dnd-dropping]')).toHaveCount(0);
+   await handle.focus();
+   await handle.press('Space');
+   await handle.press('ArrowDown');
+   await handle.press('Space');
    await expect(rows.first()).toHaveAttribute('data-order-id', ids[0]!);
    await page.screenshot({ path: testInfo.outputPath('manual-issues.png'), fullPage: true });
 });
@@ -85,25 +134,29 @@ test('manual project order persists after keyboard moves', async ({ page, contex
       const id = await rows.last().getAttribute('data-order-id');
       await page
          .getByRole('button', {
-            name: `Move up ${id === project.id ? project.name : 'Regression project'}`,
+            name: `Reorder ${id === project.id ? project.name : 'Regression project'}`,
             exact: true,
          })
-         .click();
+         .focus();
+      await page.keyboard.press('Space');
+      await page.keyboard.press('ArrowUp');
+      await page.keyboard.press('Space');
       await expect(rows.first()).toHaveAttribute('data-order-id', id!);
       await page.reload();
       await expect(rows.first()).toHaveAttribute('data-order-id', id!);
       const target = rows.last();
-      const box = await target.boundingBox();
       const saved = page.waitForResponse(
          (response) =>
             response.url().endsWith('/manual-order') && response.request().method() === 'POST'
       );
-      await page
-         .getByRole('button', {
+      await dragRow(
+         page,
+         page.getByRole('button', {
             name: `Reorder ${id === project.id ? project.name : 'Regression project'}`,
             exact: true,
-         })
-         .dragTo(target, { steps: 12, targetPosition: { x: 80, y: box!.height - 2 } });
+         }),
+         target
+      );
       expect((await saved).ok()).toBeTruthy();
       await expect(rows.last()).toHaveAttribute('data-order-id', id!);
    } finally {
@@ -135,30 +188,53 @@ test('sub-issues reorder among siblings and retain nested children', async ({ pa
       const a = await create('Manual child A', parent.id),
          b = await create('Manual child B', parent.id);
       const nested = await create('Manual grandchild', a.id);
+      const nested2 = await create('Manual grandchild two', a.id);
+      const options = (
+         await (
+            await context.request.get(
+               `${api}/issues/options?workspaceId=${fixture.workspace_id}&teamId=${fixture.team_id}`
+            )
+         ).json()
+      ).data;
+      const done = options.statuses.find(
+         (status: { category: string }) => status.category === 'COMPLETED'
+      );
+      expect(done).toBeTruthy();
+      expect(
+         (
+            await context.request.patch(
+               `${api}/issues/${b.id}?workspaceId=${fixture.workspace_id}`,
+               { data: { statusId: done.id } }
+            )
+         ).ok()
+      ).toBeTruthy();
       await page.goto(`/${fixture.slug}/issue/${parent.identifier}`);
       const rows = page.getByTestId('sub-issue-row');
-      await expect(rows).toHaveCount(3);
+      await expect(rows).toHaveCount(4);
       const order = await rows.allTextContents();
       const rootOrder = order.filter(
          (text) => text.includes(a.identifier) || text.includes(b.identifier)
       );
       const moved = rootOrder[1].includes(b.identifier) ? b : a;
-      await page.getByRole('button', { name: `Move up ${moved.identifier}`, exact: true }).click();
+      await expect(page.locator('[data-dnd-dropping]')).toHaveCount(0);
+      await page.getByRole('button', { name: `Reorder ${moved.identifier}`, exact: true }).focus();
+      await page.keyboard.press('Space');
+      await page.keyboard.press('ArrowUp');
+      await page.keyboard.press('Space');
       await expect(rows.first()).toContainText(moved.identifier);
       await page.reload();
       await expect(rows.first()).toContainText(moved.identifier);
       const other = moved.id === a.id ? b : a;
       const target = page.locator(`[data-order-id="${other.id}"]`);
-      const box = await target.boundingBox();
       const saved = page.waitForResponse(
          (response) =>
             response.url().endsWith('/manual-order') && response.request().method() === 'POST'
       );
-      // Intermediate pointer moves activate native dragging before entering the adjacent row.
-      // VI: Các bước di chuyển con trỏ trung gian kích hoạt kéo native trước khi vào hàng liền kề.
-      await page
-         .getByRole('button', { name: `Reorder ${moved.identifier}`, exact: true })
-         .dragTo(target, { steps: 12, targetPosition: { x: 80, y: box!.height - 2 } });
+      await dragRow(
+         page,
+         page.getByRole('button', { name: `Reorder ${moved.identifier}`, exact: true }),
+         target
+      );
       expect((await saved).ok()).toBeTruthy();
       await expect(rows.first()).toContainText(other.identifier);
       const detail = (
@@ -169,5 +245,59 @@ test('sub-issues reorder among siblings and retain nested children', async ({ pa
          ).json()
       ).data;
       expect(detail.parentIssueId).toBe(a.id);
+      const grandchildren = rows.filter({ hasText: /Manual grandchild/ });
+      const grandchildOrder = await grandchildren.allTextContents();
+      const lastGrandchild = grandchildOrder[1].includes(nested2.identifier) ? nested2 : nested;
+      const nestedSaved = page.waitForResponse(
+         (r) => r.url().endsWith('/manual-order') && r.request().method() === 'POST'
+      );
+      await expect(page.locator('[data-dnd-dropping]')).toHaveCount(0);
+      await page
+         .getByRole('button', { name: `Reorder ${lastGrandchild.identifier}`, exact: true })
+         .focus();
+      await page.keyboard.press('Space');
+      await page.keyboard.press('ArrowUp');
+      await page.keyboard.press('Space');
+      expect((await nestedSaved).ok()).toBeTruthy();
+      await expect(grandchildren.first()).toContainText(lastGrandchild.identifier);
+      await page.reload();
+      await expect(grandchildren.first()).toContainText(lastGrandchild.identifier);
+      expect(
+         (
+            await context.request
+               .get(`${api}/issues/${nested2.id}?workspaceId=${fixture.workspace_id}`)
+               .then((r) => r.json())
+         ).data.parentIssueId
+      ).toBe(a.id);
+      await expect(page.locator('[data-dnd-dropping]')).toHaveCount(0);
+      const sorter = page.getByRole('combobox', { name: 'Sort sub-issues', exact: true });
+      const aFirst =
+         options.statuses.findIndex((status: { id: string }) => status.id === a.status.id) <
+         options.statuses.findIndex((status: { id: string }) => status.id === done.id);
+      for (const [option, first] of [
+         ['Issue ID ascending', a.identifier],
+         ['Issue ID descending', b.identifier],
+         ['Status ascending', aFirst ? a.identifier : b.identifier],
+         ['Status descending', aFirst ? b.identifier : a.identifier],
+      ]) {
+         await sorter.click();
+         await page.getByRole('option', { name: option, exact: true }).click();
+         await expect(rows.first()).toContainText(first);
+         await expect(page.getByRole('button', { name: /^Reorder / })).toHaveCount(0);
+      }
+      await sorter.click();
+      await page.getByRole('option', { name: 'Sort: Manual', exact: true }).click();
+      const handles = page.getByRole('button', { name: /^Reorder / });
+
+      await expect(handles).toHaveCount(4);
+      let writes = 0;
+      page.on('request', (r) => {
+         if (r.url().endsWith('/manual-order') && r.method() === 'POST') writes++;
+      });
+      await handles.first().focus();
+      await page.keyboard.press('Space');
+      await page.keyboard.press('ArrowDown');
+      await page.keyboard.press('Escape');
+      expect(writes).toBe(0);
    }
 });

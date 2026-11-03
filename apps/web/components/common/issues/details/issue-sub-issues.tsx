@@ -39,7 +39,11 @@ import { AssigneeUser } from '../assignee-user';
 import { IssueDateCell } from '../issue-inline-cells';
 import type { User } from '@/mock-data/users';
 import { IssueSearchDialog } from './issue-search-dialog';
-import { ReorderRow } from '@/features/manual-order/reorder-row';
+import { Selector } from '@astryxdesign/core/Selector';
+import { DesignSurface } from '@/components/common/design-surface';
+import { moveInList } from '@/features/manual-order/order';
+import { sortSubIssues, type SubIssueSort } from '@/features/manual-order/sub-issue-sort';
+import { ReorderRow, ReorderProvider } from '@/features/manual-order/reorder-row';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -146,6 +150,7 @@ export function IssueSubIssues({
    const [saving, setSaving] = useState(false);
    const [error, setError] = useState<string>();
    const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+   const [sort, setSort] = useState<SubIssueSort>('manual');
    const [statuses, setStatuses] = useState<SubIssueStatus[]>([]);
    const { roots, children } = useMemo(() => issueTree(subIssues), [subIssues]);
 
@@ -216,106 +221,108 @@ export function IssueSubIssues({
       });
 
    const renderRows = (items: SubIssue[], depth: number): ReactNode =>
-      items.map((subIssue) => {
+      sortSubIssues(items, sort, statuses).map((subIssue) => {
          const nested = children.get(subIssue.id);
          const open = !collapsed.has(subIssue.id);
          return (
-            <div key={subIssue.id}>
-               <ReorderRow
-                  item={subIssue}
-                  items={items}
-                  name={subIssue.identifier}
-                  entityType="issue"
-                  scope={`sub:${workspaceId}:${subIssue.parentIssueId}`}
-                  workspaceId={workspaceId}
-                  enabled={state === 'ready'}
-                  refresh={load}
+            <ReorderRow
+               key={subIssue.id}
+               item={subIssue}
+               items={items}
+               name={subIssue.identifier}
+               entityType="issue"
+               scope={`sub:${workspaceId}:${subIssue.parentIssueId}`}
+               workspaceId={workspaceId}
+               enabled={state === 'ready' && sort === 'manual'}
+               optimistic={(source, target, placement) =>
+                  setSubIssues((current) => moveInList(current, source, target, placement))
+               }
+               refresh={load}
+            >
+               <div
+                  className="w-full flex items-center gap-2 h-10 pr-1 border-b border-border/50 hover:bg-sidebar/50 text-sm min-w-0"
+                  style={{ paddingLeft: depth * 20 + 4 }}
+                  data-testid="sub-issue-row"
                >
-                  <div
-                     className="w-full flex items-center gap-2 h-10 pr-1 border-b border-border/50 hover:bg-sidebar/50 text-sm min-w-0"
-                     style={{ paddingLeft: depth * 20 + 4 }}
-                     data-testid="sub-issue-row"
-                  >
-                     {nested ? (
-                        <button
-                           type="button"
-                           onClick={() => toggle(subIssue.id)}
-                           aria-expanded={open}
-                           aria-label={`${open ? 'Collapse' : 'Expand'} ${subIssue.identifier}`}
-                           className="flex size-4 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
-                        >
-                           <ChevronRight
-                              className={`size-3.5 transition-transform ${open ? 'rotate-90' : ''}`}
-                           />
-                        </button>
-                     ) : (
-                        <span className="size-4 shrink-0" />
-                     )}
-                     <DropdownMenu>
-                        <DropdownMenuTrigger
-                           aria-label={`Change status of ${subIssue.identifier}`}
-                           title={subIssue.status.name}
-                           className="flex size-5 shrink-0 items-center justify-center rounded hover:bg-accent"
-                        >
-                           <StatusIcon status={subIssue.status} />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="min-w-44">
-                           {statuses.map((status) => (
-                              <DropdownMenuItem
-                                 key={status.id}
-                                 onSelect={() => {
-                                    if (status.id !== subIssue.status.id)
-                                       void patchSubIssue(subIssue.id, { statusId: status.id });
-                                 }}
-                              >
-                                 <StatusIcon status={status} />
-                                 {status.name}
-                                 {status.id === subIssue.status.id && (
-                                    <Check className="ml-auto size-4" />
-                                 )}
-                              </DropdownMenuItem>
-                           ))}
-                           {statuses.length === 0 && (
-                              <p className="px-2 py-1.5 text-sm text-muted-foreground">
-                                 No statuses available.
-                              </p>
-                           )}
-                        </DropdownMenuContent>
-                     </DropdownMenu>
-                     <Link
-                        href={`/${orgId}/issue/${subIssue.identifier}`}
-                        className="flex min-w-0 flex-1 items-center gap-2"
+                  {nested ? (
+                     <button
+                        type="button"
+                        onClick={() => toggle(subIssue.id)}
+                        aria-expanded={open}
+                        aria-label={`${open ? 'Collapse' : 'Expand'} ${subIssue.identifier}`}
+                        className="flex size-4 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
                      >
-                        <span className="text-muted-foreground shrink-0 text-xs font-medium">
-                           {subIssue.identifier}
-                        </span>
-                        <span className="truncate font-medium">{subIssue.title}</span>
-                     </Link>
-                     <ProgressBadge items={nested} />
-                     <span className="w-20 shrink-0">
-                        <IssueDateCell
-                           issueId={subIssue.id}
-                           value={subIssue.dueDate ?? undefined}
-                           kind="due"
-                           accent={isOverdue(subIssue)}
-                           onSave={(dueDate) =>
-                              patchSubIssue(subIssue.id, { dueDate: dueDate ?? null })
-                           }
+                        <ChevronRight
+                           className={`size-3.5 transition-transform ${open ? 'rotate-90' : ''}`}
                         />
+                     </button>
+                  ) : (
+                     <span className="size-4 shrink-0" />
+                  )}
+                  <DropdownMenu>
+                     <DropdownMenuTrigger
+                        aria-label={`Change status of ${subIssue.identifier}`}
+                        title={subIssue.status.name}
+                        className="flex size-5 shrink-0 items-center justify-center rounded hover:bg-accent"
+                     >
+                        <StatusIcon status={subIssue.status} />
+                     </DropdownMenuTrigger>
+                     <DropdownMenuContent align="start" className="min-w-44">
+                        {statuses.map((status) => (
+                           <DropdownMenuItem
+                              key={status.id}
+                              onSelect={() => {
+                                 if (status.id !== subIssue.status.id)
+                                    void patchSubIssue(subIssue.id, { statusId: status.id });
+                              }}
+                           >
+                              <StatusIcon status={status} />
+                              {status.name}
+                              {status.id === subIssue.status.id && (
+                                 <Check className="ml-auto size-4" />
+                              )}
+                           </DropdownMenuItem>
+                        ))}
+                        {statuses.length === 0 && (
+                           <p className="px-2 py-1.5 text-sm text-muted-foreground">
+                              No statuses available.
+                           </p>
+                        )}
+                     </DropdownMenuContent>
+                  </DropdownMenu>
+                  <Link
+                     href={`/${orgId}/issue/${subIssue.identifier}`}
+                     className="flex min-w-0 flex-1 items-center gap-2"
+                  >
+                     <span className="text-muted-foreground shrink-0 text-xs font-medium">
+                        {subIssue.identifier}
                      </span>
-                     <span className="shrink-0">
-                        <AssigneeUser
-                           user={asUser(subIssue.assignee)}
-                           issueId={subIssue.id}
-                           onAssign={(assignee) =>
-                              patchSubIssue(subIssue.id, { assigneeId: assignee?.id ?? null })
-                           }
-                        />
-                     </span>
-                  </div>
-               </ReorderRow>
+                     <span className="truncate font-medium">{subIssue.title}</span>
+                  </Link>
+                  <ProgressBadge items={nested} />
+                  <span className="w-20 shrink-0">
+                     <IssueDateCell
+                        issueId={subIssue.id}
+                        value={subIssue.dueDate ?? undefined}
+                        kind="due"
+                        accent={isOverdue(subIssue)}
+                        onSave={(dueDate) =>
+                           patchSubIssue(subIssue.id, { dueDate: dueDate ?? null })
+                        }
+                     />
+                  </span>
+                  <span className="shrink-0">
+                     <AssigneeUser
+                        user={asUser(subIssue.assignee)}
+                        issueId={subIssue.id}
+                        onAssign={(assignee) =>
+                           patchSubIssue(subIssue.id, { assigneeId: assignee?.id ?? null })
+                        }
+                     />
+                  </span>
+               </div>
                {nested && open && renderRows(nested, depth + 1)}
-            </div>
+            </ReorderRow>
          );
       });
 
@@ -388,6 +395,23 @@ export function IssueSubIssues({
                      Sub-issues <ProgressBadge items={roots} />
                   </h2>
                   <div className="flex items-center gap-1">
+                     <DesignSurface>
+                        <Selector
+                           label="Sort sub-issues"
+                           isLabelHidden
+                           size="sm"
+                           variant="ghost"
+                           value={sort}
+                           onChange={(value) => setSort(value as SubIssueSort)}
+                           options={[
+                              { value: 'manual', label: 'Sort: Manual' },
+                              { value: 'identifier-asc', label: 'Issue ID ascending' },
+                              { value: 'identifier-desc', label: 'Issue ID descending' },
+                              { value: 'status-asc', label: 'Status ascending' },
+                              { value: 'status-desc', label: 'Status descending' },
+                           ]}
+                        />
+                     </DesignSurface>
                      {children.size > 0 && (
                         <Button
                            size="xs"
@@ -415,7 +439,11 @@ export function IssueSubIssues({
                      </Button>
                   </div>
                </div>
-               <div className="flex flex-col border-t border-border/50">{renderRows(roots, 0)}</div>
+               <ReorderProvider>
+                  <div className="flex flex-col border-t border-border/50">
+                     {renderRows(roots, 0)}
+                  </div>
+               </ReorderProvider>
             </>
          )}
 
