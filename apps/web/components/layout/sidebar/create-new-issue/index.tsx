@@ -15,7 +15,8 @@ import {
    IssueSearchDialog,
    type IssueCandidate,
 } from '@/components/common/issues/details/issue-search-dialog';
-import { imagesFromClipboard, insertAtCursor, uploadAttachment } from '@/lib/attachments';
+import { uploadAttachment } from '@/lib/attachments';
+import dynamic from 'next/dynamic';
 import {
    draftDescriptionForServer,
    type DraftIssueImage,
@@ -31,7 +32,6 @@ import {
    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -59,6 +59,13 @@ import { loadCurrentUser } from '@/features/identity/current-user';
 import { initialAssignee, issueMember } from '@/features/issues/create-defaults';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+
+// Load the editor engine when the dialog content mounts, keeping it out of the initial sidebar bundle.
+// VI: Chỉ tải engine editor khi nội dung dialog mount để không tăng bundle sidebar ban đầu.
+const DescriptionEditor = dynamic(
+   () => import('@/features/issues/description-editor').then((module) => module.DescriptionEditor),
+   { ssr: false }
+);
 
 type NativeIssueOptions = {
    statuses: Array<{ id: string; name: string; category: string; color: string }>;
@@ -425,29 +432,19 @@ export function CreateNewIssue() {
       }
    };
 
-   const pasteImages = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
-      const files = imagesFromClipboard(event.clipboardData);
-      if (!files.length) return;
-      event.preventDefault();
-      if (creating || createdIssueRef.current) return;
+   const stageImages = (files: File[]) => {
+      if (creating || createdIssueRef.current) return [];
       if (files.some((file) => file.size > 10 * 1024 * 1024)) {
          toast.error(tx('Each image must be at most 10 MB.'));
-         return;
+         return [];
       }
-      let value = addIssueForm.description;
-      let start = event.currentTarget.selectionStart ?? value.length;
-      let end = event.currentTarget.selectionEnd ?? start;
       const added = files.map((file) => ({ file, url: URL.createObjectURL(file) }));
-      for (const image of added) {
-         const name = image.file.name.replace(/[\[\]\\]/g, '');
-         const next = insertAtCursor(value, start, end, `![${name}](${image.url})`);
-         value = next.value;
-         start = next.caret;
-         end = next.caret;
-      }
       imagesRef.current = [...imagesRef.current, ...added];
       setDraftImages(imagesRef.current);
-      setAddIssueForm((form) => ({ ...form, description: value }));
+      return added.map((image) => ({
+         url: image.url,
+         name: image.file.name.replace(/[\[\]\\]/g, ''),
+      }));
    };
 
    return (
@@ -555,17 +552,16 @@ export function CreateNewIssue() {
                            }
                         />
 
-                        <Textarea
-                           className="border-none w-full rounded-none shadow-none outline-none resize-none px-0 min-h-28 focus-visible:ring-0 break-words whitespace-pre-wrap leading-relaxed placeholder:text-muted-foreground/70"
-                           aria-label={tx('Issue description')}
-                           placeholder={tx('Add description...')}
-                           value={addIssueForm.description}
-                           disabled={creating}
-                           onPaste={pasteImages}
-                           onChange={(e) =>
-                              setAddIssueForm({ ...addIssueForm, description: e.target.value })
-                           }
-                        />
+                        <DesignSurface>
+                           <DescriptionEditor
+                              value={addIssueForm.description}
+                              isDisabled={creating}
+                              onImages={stageImages}
+                              onChange={(description) =>
+                                 setAddIssueForm((form) => ({ ...form, description }))
+                              }
+                           />
+                        </DesignSurface>
                         <DesignSurface>
                            <DraftImages
                               value={addIssueForm.description}

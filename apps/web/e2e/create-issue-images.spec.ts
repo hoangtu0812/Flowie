@@ -40,6 +40,7 @@ test('clipboard images and parent resume upload and description failures without
 }, testInfo) => {
    const dialog = page.getByRole('dialog', { name: 'Create issue', exact: true });
    await dialog.getByLabel('Issue title', { exact: true }).fill(`Clipboard child ${Date.now()}`);
+   await dialog.getByRole('button', { name: 'Markdown', exact: true }).click();
    const description = dialog.getByLabel('Issue description', { exact: true });
    await description.fill('Before After');
    await description.evaluate((el) => (el as HTMLTextAreaElement).setSelectionRange(7, 7));
@@ -150,6 +151,7 @@ test('team changes clear parent and Create more keeps it while resetting image d
    await dialog.getByRole('button').filter({ hasText: 'No team' }).first().click();
    await page.getByRole('menuitem', { name: /General/ }).click();
    await chooseParent();
+   await dialog.getByRole('button', { name: 'Markdown', exact: true }).click();
    const description = dialog.getByLabel('Issue description', { exact: true });
    const uploads: string[] = [];
    await page.route('**/api/v1/attachments', async (route) => {
