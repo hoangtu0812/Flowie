@@ -13,7 +13,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Button } from '../../ui/button';
 import { IssueDragType, IssueGrid } from './issue-grid';
 import { IssueLine } from './issue-line';
-import { ReorderRow } from '@/features/manual-order/reorder-row';
+import { ReorderRow, ReorderProvider } from '@/features/manual-order/reorder-row';
 import { useDisplaySettingsStore } from '@/store/display-settings-store';
 
 /**
@@ -121,23 +121,25 @@ export function GroupIssues({ group, issues, count }: GroupIssuesProps) {
 
          {viewType === 'list' ? (
             !collapsed && (
-               <div className="space-y-0">
-                  {issues.map((issue) => (
-                     <ReorderRow
-                        key={issue.id}
-                        item={issue}
-                        items={issues}
-                        name={issue.identifier}
-                        entityType="issue"
-                        scope={`issue:${workspaceId}:${group.id}`}
-                        workspaceId={workspaceId}
-                        enabled={manual}
-                        refresh={retryIssues}
-                     >
-                        <IssueLine issue={issue} layoutId={true} />
-                     </ReorderRow>
-                  ))}
-               </div>
+               <ReorderProvider>
+                  <div className="space-y-0">
+                     {issues.map((issue) => (
+                        <ReorderRow
+                           key={issue.id}
+                           item={issue}
+                           items={issues}
+                           name={issue.identifier}
+                           entityType="issue"
+                           scope={`issue:${workspaceId}:${group.id}`}
+                           workspaceId={workspaceId}
+                           enabled={manual}
+                           refresh={retryIssues}
+                        >
+                           <IssueLine issue={issue} layoutId={true} />
+                        </ReorderRow>
+                     ))}
+                  </div>
+               </ReorderProvider>
             )
          ) : (
             <IssueGridList issues={issues} status={group.status} />

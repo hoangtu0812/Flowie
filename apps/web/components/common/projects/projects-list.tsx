@@ -4,7 +4,7 @@ import { useProjectsDisplayStore } from '@/store/projects-display-store';
 import ProjectLine from './project-line';
 import { ProjectGroup } from './projects';
 import { useProjectsData } from '@/features/projects/projects-data';
-import { ReorderRow } from '@/features/manual-order/reorder-row';
+import { ReorderRow, ReorderProvider } from '@/features/manual-order/reorder-row';
 
 /** Projects "List" view: grouped table (team sections by default). */
 export default function ProjectsList({ groups }: { groups: ProjectGroup[] }) {
@@ -42,21 +42,23 @@ export default function ProjectsList({ groups }: { groups: ProjectGroup[] }) {
                      <span className="text-xs text-muted-foreground">{group.projects.length}</span>
                   </div>
                )}
-               {group.projects.map((project) => (
-                  <ReorderRow
-                     key={project.id}
-                     item={project}
-                     items={group.projects}
-                     name={project.name}
-                     entityType="project"
-                     scope={`project:${workspaceId}:${group.id}`}
-                     workspaceId={workspaceId}
-                     enabled={ordering === 'manual'}
-                     refresh={refreshProjects}
-                  >
-                     <ProjectLine project={project} />
-                  </ReorderRow>
-               ))}
+               <ReorderProvider>
+                  {group.projects.map((project) => (
+                     <ReorderRow
+                        key={project.id}
+                        item={project}
+                        items={group.projects}
+                        name={project.name}
+                        entityType="project"
+                        scope={`project:${workspaceId}:${group.id}`}
+                        workspaceId={workspaceId}
+                        enabled={ordering === 'manual'}
+                        refresh={refreshProjects}
+                     >
+                        <ProjectLine project={project} />
+                     </ReorderRow>
+                  ))}
+               </ReorderProvider>
                {group.projects.length === 0 && (
                   <div className="px-6 py-3 text-xs text-muted-foreground border-b border-border/40">
                      No projects
