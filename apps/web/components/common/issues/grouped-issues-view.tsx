@@ -144,7 +144,7 @@ export const GroupedIssuesView: FC<GroupedIssuesViewProps> = ({
    error,
    onRetry,
 }) => {
-   const { grouping, ordering, completedIssues, showEmptyGroups, displayProperties } =
+   const { grouping, ordering, columnSorts, completedIssues, showEmptyGroups, displayProperties } =
       useDisplaySettingsStore();
    const { filters } = useFilterStore();
    const hasActiveFilters = filters.length > 0;
@@ -256,9 +256,9 @@ export const GroupedIssuesView: FC<GroupedIssuesViewProps> = ({
 
       return buildGroups().map((entry) => ({
          ...entry,
-         issues: sortIssues(entry.issues, ordering),
+         issues: columnSorts?.length ? entry.issues : sortIssues(entry.issues, ordering),
       }));
-   }, [issues, totalIssues, statuses, grouping, ordering, completedIssues]);
+   }, [issues, totalIssues, statuses, grouping, ordering, columnSorts, completedIssues]);
 
    const hiddenCount = Math.max(0, totalIssues.length - issues.length);
    const showFooter = hasActiveFilters && hiddenCount > 0;

@@ -1,3 +1,8 @@
+import {
+   toggleColumnSort,
+   type ColumnSort,
+   type ColumnSortKey,
+} from '@/features/issues/column-sorting';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
@@ -53,6 +58,8 @@ const DEFAULT_DISPLAY_PROPERTIES: Record<DisplayPropertyKey, boolean> = {
 };
 
 interface DisplaySettingsState {
+   columnSorts: ColumnSort[];
+   toggleColumnSort: (key: ColumnSortKey, additive: boolean) => void;
    grouping: GroupingKey;
    ordering: OrderingKey;
    orderCompletedByRecency: boolean;
@@ -72,6 +79,7 @@ interface DisplaySettingsState {
 }
 
 const DEFAULTS = {
+   columnSorts: [] as ColumnSort[],
    grouping: 'status' as GroupingKey,
    ordering: 'priority' as OrderingKey,
    orderCompletedByRecency: false,
@@ -90,6 +98,10 @@ export const useDisplaySettingsStore = create<DisplaySettingsState>()(
    persist(
       (set) => ({
          ...DEFAULTS,
+         toggleColumnSort: (key, additive) =>
+            set((state) => ({
+               columnSorts: toggleColumnSort(state.columnSorts ?? [], key, additive),
+            })),
 
          setGrouping: (grouping) => set({ grouping }),
          setOrdering: (ordering) => set({ ordering }),

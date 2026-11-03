@@ -11,6 +11,7 @@ export function useIssueQuery(teamReference?: string, input: IssueQuery = {}, en
    const { orgId } = useParams<{ orgId: string }>();
    const { filters } = useFilterStore();
    const { isSearchOpen, searchQuery } = useSearchStore();
+   const columnSorts = useDisplaySettingsStore((state) => state.columnSorts);
    const ordering = useDisplaySettingsStore((state) => state.ordering);
    const includeSubIssues = useDisplaySettingsStore((state) => state.showSubIssues);
    const loadIssues = useIssuesStore((state) => state.loadIssues);
@@ -18,7 +19,11 @@ export function useIssueQuery(teamReference?: string, input: IssueQuery = {}, en
    const [completed, setCompleted] = useState('');
    const options = {
       includeSubIssues,
-      ...(ordering === 'manual' ? { ordering: 'manual' as const } : {}),
+      ...(columnSorts?.length
+         ? { sort: columnSorts }
+         : ordering === 'manual'
+           ? { ordering: 'manual' as const }
+           : {}),
       ...input,
       filters: [...(input.filters ?? []), ...filters],
       query: isSearchOpen ? searchQuery.trim() : input.query,

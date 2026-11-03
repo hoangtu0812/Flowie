@@ -1,4 +1,6 @@
+import type { ColumnSort } from './column-sorting';
 export type IssueQuery = {
+   sort?: ColumnSort[];
    ordering?: 'manual';
    noTeam?: boolean;
    noProject?: boolean;
@@ -21,7 +23,7 @@ export function issueQueryParams(input: IssueQuery): URLSearchParams {
          continue;
       params.set(
          key,
-         key === 'filters'
+         key === 'filters' || key === 'sort'
             ? JSON.stringify(value)
             : Array.isArray(value)
               ? value.join(',')

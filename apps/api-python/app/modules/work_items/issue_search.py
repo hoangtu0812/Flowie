@@ -162,7 +162,14 @@ async def search_page(
     db: AsyncSession, workspace: str, user: str, secret: str, options: dict
 ) -> dict:
     sql, params = issue_scope(workspace, user, options)
+    from .issue_sort import parse_sort, sorted_page
+
+    sorts = parse_sort(options.get("sort"))
     manual = options.get("ordering") == "manual"
+    if sorts and manual:
+        raise ApiError(
+            400, "Column sort cannot be combined with manual ordering.", "Bad Request"
+        )
     total = (await db.execute(text("SELECT COUNT(*) " + sql), params)).scalar_one()
     codec = CursorCodec(
         secret,
@@ -170,6 +177,10 @@ async def search_page(
         "web_issues",
         {key: value for key, value in options.items() if key != "cursor"},
     )
+    if sorts:
+        return await sorted_page(
+            db, workspace, user, sql, params, sorts, codec, options, total
+        )
     cursor_clause = ""
     if options.get("cursor"):
         if manual:
