@@ -6,19 +6,22 @@ import { Input } from '@/components/ui/input';
 import {
    authenticatedFetch,
    loadCurrentWorkspaceMembership,
+   managesWorkspace,
    type WorkspaceSummary,
+   type WorkspaceRole,
 } from '@/lib/workspaces';
-import { Building2, Check, Link2 } from 'lucide-react';
+import { Check, Link2 } from 'lucide-react';
 import { HStack } from '@astryxdesign/core/HStack';
 import { VStack } from '@astryxdesign/core/VStack';
 import { DeleteWorkspace } from './delete-workspace';
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { appPathname, withBasePath } from '@/lib/base-path';
 import { withWorkspaceSegment } from '@/lib/workspace-route';
 import { projectSlugError } from '@/components/common/projects/details/project-settings-dialog';
-import { SettingsCard, SettingsRow, SettingsSection, SettingsShell } from './shared';
+import { SettingsCard, SettingsSection, SettingsShell } from './shared';
+import { WorkspaceNameSetting } from './workspace-name-setting';
 
 // First path segments the app owns, the same list as the API. VI: Đoạn path đầu do app dùng, cùng danh sách với API.
 const RESERVED_SLUGS = new Set([
@@ -45,34 +48,44 @@ function fallbackIcon(workspace?: WorkspaceSummary) {
 }
 
 /**
- * Workspace identity: the URL slug (editable by OWNER and ADMIN, read-only for members) and the
- * icon. A new slug moves the current tab to the new address; earlier slugs keep opening the
- * workspace, so shared links do not break.
- * VI: Định danh workspace: slug URL (OWNER và ADMIN sửa được, thành viên chỉ xem) và icon. Slug
- * VI: mới chuyển tab hiện tại sang địa chỉ mới; slug cũ vẫn mở được workspace nên link đã chia sẻ
- * VI: không bị hỏng.
+ * Workspace identity: display name, URL slug and icon. OWNER/ADMIN can edit names and slugs;
+ * other members see the name. A name edit preserves URLs; a slug edit moves the current tab,
+ * while earlier slugs still open the workspace so shared links keep working.
+ * VI: Định danh workspace gồm tên hiển thị, slug URL và icon. OWNER/ADMIN sửa được tên và slug;
+ * VI: thành viên khác chỉ xem tên. Sửa tên giữ nguyên URL; sửa slug chuyển địa chỉ tab hiện tại,
+ * VI: còn slug cũ vẫn mở workspace để link đã chia sẻ tiếp tục hoạt động.
  */
 export default function WorkspaceSettings() {
+   const { orgId } = useParams<{ orgId: string }>();
    const router = useRouter();
    const [workspace, setWorkspace] = useState<WorkspaceSummary>();
    const [icon, setIcon] = useState('');
    const [slug, setSlug] = useState('');
    const [saving, setSaving] = useState(false);
    const [savingSlug, setSavingSlug] = useState(false);
-   const [role, setRole] = useState('');
+   const [role, setRole] = useState<WorkspaceRole>();
    const canEditSlug = role === 'OWNER' || role === 'ADMIN';
    const slugError = workspaceSlugError(slug);
 
    useEffect(() => {
+      let active = true;
+      setWorkspace(undefined);
+      setRole(undefined);
       void loadCurrentWorkspaceMembership()
          .then(({ workspace: current, role: currentRole }) => {
+            if (!active) return;
             setWorkspace(current);
             setRole(currentRole);
             setIcon(current.icon ?? '');
             setSlug(current.slug);
          })
-         .catch(() => toast.error('Could not load workspace settings.'));
-   }, []);
+         .catch(() => {
+            if (active) toast.error('Could not load workspace settings.');
+         });
+      return () => {
+         active = false;
+      };
+   }, [orgId]);
 
    const save = async () => {
       if (!workspace) return;
@@ -135,14 +148,16 @@ export default function WorkspaceSettings() {
       <SettingsShell title="Workspace settings" description="Manage this workspace's identity.">
          <SettingsSection title="General">
             <SettingsCard>
-               <SettingsRow
-                  icon={<Building2 className="size-4" />}
-                  title="Workspace name"
-                  description="The name is chosen when the workspace is created."
-                  trailing={
-                     <span className="max-w-44 truncate">{workspace?.name ?? 'Loading…'}</span>
-                  }
-               />
+               {workspace && (
+                  <WorkspaceNameSetting
+                     key={workspace.id}
+                     workspace={workspace}
+                     canEdit={!!role && managesWorkspace(role)}
+                     onSaved={(updated) =>
+                        setWorkspace((current) => (current?.id === updated.id ? updated : current))
+                     }
+                  />
+               )}
                <VStack gap={2} paddingInline={4} paddingBlock={3}>
                   <HStack gap={2} vAlign="center">
                      <Link2 className="size-4 text-muted-foreground" />

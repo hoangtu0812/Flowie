@@ -35,6 +35,7 @@ class CreateWorkspaceInput(BaseModel):
 
 
 class UpdateWorkspaceInput(BaseModel):
+    name: str | None = Field(default=None, max_length=120)
     icon: str | None = Field(default=None, max_length=16)
     # Only the fields sent are changed. VI: Chỉ đổi các trường được gửi lên.
     slug: str | None = Field(default=None, max_length=63)
@@ -560,23 +561,31 @@ async def update_workspace(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    """Changes the workspace icon and/or URL slug; OWNER or ADMIN only. Only the fields sent are
-    written, so saving the icon never clears the slug and the reverse. A slug follows the shared
-    rules (`app.core.slugs`) plus the reserved first path segments; one already owned by another
+    """Changes the display name, icon and/or URL slug; OWNER or ADMIN only. Only supplied fields
+    are written, so renaming never regenerates the slug or modifies the organization. Blank/null
+    names are rejected after trimming. Lock the row so concurrent writes audit the actual previous
+    value. A slug follows the shared rules (`app.core.slugs`) plus reserved first path segments;
+    one already owned by another
     workspace, now or earlier, is refused with 409 by the slug trigger, also under concurrency.
     Each change is written to the audit log with the old and new value.
-    VI: Đổi icon và/hoặc slug URL của workspace; chỉ OWNER hoặc ADMIN. Chỉ ghi các trường được gửi
-    VI: lên, nên lưu icon không bao giờ xoá slug và ngược lại. Slug theo quy tắc dùng chung
+    VI: Đổi tên hiển thị, icon và/hoặc slug URL workspace; chỉ OWNER hoặc ADMIN. Chỉ ghi trường gửi
+    VI: lên nên đổi tên không tạo lại slug hoặc sửa organization. Từ chối tên rỗng/null sau trim.
+    VI: Khóa dòng để thao tác ghi đồng thời ghi audit đúng giá trị trước. Slug theo quy tắc dùng chung
     VI: (`app.core.slugs`) cộng các đoạn path đầu đã dành riêng; slug đã thuộc workspace khác, hiện
     VI: tại hoặc trước đây, bị trigger slug từ chối với 409, kể cả khi ghi đồng thời. Mỗi thay đổi
     VI: được ghi vào audit log kèm giá trị cũ và mới.
     """
     await _authorize_manager(db, workspace_id, user['id'])
     values = payload.model_dump(exclude_unset=True)
-    current = (await db.execute(text('SELECT icon, slug FROM workspaces WHERE id = :id'), {'id': workspace_id})).mappings().first()
+    current = (await db.execute(text('SELECT name, icon, slug FROM workspaces WHERE id = :id FOR UPDATE'), {'id': workspace_id})).mappings().first()
     if not current:
         raise ApiError(404, 'Workspace not found.', 'Not Found')
     changes: dict[str, Any] = {}
+    if 'name' in values:
+        name = (values['name'] or '').strip()
+        if not name:
+            raise ApiError(400, 'Workspace name must not be empty.', 'Bad Request')
+        changes['name'] = name
     if 'icon' in values:
         changes['icon'] = (values['icon'] or '').strip() or None
     if 'slug' in values:
