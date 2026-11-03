@@ -16,7 +16,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
-- New issue dialogs accept pasted images and a parent issue; uploads attach only after creation, and retries finish the existing issue without creating another one. Web only; no migration. (DTD-254)
+- New issue dialogs accept pasted images and a parent issue; uploads attach only after creation, and retries finish the existing issue without creating another one. Web only; no migration. (DTD-254, #115)
   VI: Popup tạo task nhận ảnh dán và task cha; chỉ tải ảnh sau khi task được tạo, retry hoàn tất trên task đó mà không tạo thêm task. Chỉ đổi web; không có migration.
 
 - Parent issue pickers keep long names and search fields within the dialog on mobile and desktop, distinguish loading/errors from empty results, cancel stale searches, and retain keyboard selection and full-name tooltips. Web only; no migration. (DTD-257, #114)
