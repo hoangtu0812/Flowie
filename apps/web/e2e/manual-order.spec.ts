@@ -41,12 +41,12 @@ async function dragRow(page: Page, handle: Locator, target: Locator, after = tru
    await expect(handle).toHaveAttribute('aria-roledescription', /.+/);
    const from = (await handle.boundingBox())!,
       to = (await target.boundingBox())!;
+   const targetId = await target.getAttribute('data-order-id');
    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
    await page.mouse.down();
    await page.mouse.move(from.x + from.width / 2 + 12, from.y + from.height / 2, { steps: 4 });
    await expect(page.locator('[data-dnd-placeholder]')).toBeVisible();
-   await page.mouse.move(to.x + 80, to.y + to.height / 2, { steps: 12 });
-   const targetId = await target.getAttribute('data-order-id');
+   await page.mouse.move(to.x + 80, to.y + (after ? to.height - 2 : 2), { steps: 12 });
    await expect
       .poll(() =>
          handle.evaluate(
