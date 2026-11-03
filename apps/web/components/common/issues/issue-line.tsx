@@ -16,7 +16,8 @@ import { PrioritySelector } from './priority-selector';
 import { ProjectBadge } from './project-badge';
 import { StatusSelector } from './status-selector';
 import { motion } from 'motion/react';
-import { ListTree } from 'lucide-react';
+import { HStack } from '@astryxdesign/core/Layout';
+import { IssueSubtaskPopover } from './issue-subtask-popover';
 import { IssueParentIndicator } from './issue-parent-indicator';
 
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
@@ -54,24 +55,25 @@ export function IssueLine({ issue, layoutId = false }: { issue: Issue; layoutId?
                      <StatusSelector status={issue.status} issueId={issue.id} />
                   )}
                </div>
-               <Link
-                  href={issueHref(orgId ?? 'lndev-ui', issue.identifier, isProjectPath(pathname))}
-                  className="flex-1 min-w-0 flex items-center justify-start mr-1 ml-0.5"
-               >
-                  <span className="text-xs sm:text-sm font-medium sm:font-semibold truncate">
-                     {issue.title}
-                  </span>
-                  {Boolean(issue.subIssueCount) && (
-                     <span
-                        className="ml-2 inline-flex shrink-0 items-center gap-1 rounded border border-border px-1.5 text-[11px] text-muted-foreground"
-                        title="Completed / total direct sub-issues"
-                        data-testid="sub-issue-progress"
-                     >
-                        <ListTree className="size-3" />
-                        {issue.completedSubIssueCount ?? 0}/{issue.subIssueCount}
+               <HStack gap={2} className="flex-1 min-w-0 mr-1 ml-0.5">
+                  <Link
+                     href={issueHref(
+                        orgId ?? 'lndev-ui',
+                        issue.identifier,
+                        isProjectPath(pathname)
+                     )}
+                     className="min-w-0 flex items-center justify-start"
+                  >
+                     <span className="text-xs sm:text-sm font-medium sm:font-semibold truncate">
+                        {issue.title}
                      </span>
-                  )}
-               </Link>
+                  </Link>
+                  <IssueSubtaskPopover
+                     issue={issue}
+                     orgId={orgId ?? 'lndev-ui'}
+                     projectPath={isProjectPath(pathname)}
+                  />
+               </HStack>
                {/* Fixed columns from here on: they carry the labels printed by
                    IssuesListHeader, so every cell renders even when empty. */}
                {displayProperties.labels && (

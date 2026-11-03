@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- Hovering or focusing a subtask progress badge opens a scrollable list of direct children with status and links, including loading/error recovery. No migration. (DTD-261, #122)
+  VI: Rê chuột hoặc focus badge tiến độ task con mở danh sách con trực tiếp có cuộn, trạng thái và link, kèm tải/lỗi và thử lại. Không migration.
+
 - MCP setup explains approved .crt/CA trust on macOS, Windows and Linux, Node.js PEM settings, restarts, token-free TLS checks and permission troubleshooting before installation. Existing tokens/configurations are unchanged; no migration. (DTD-225, #121)
   VI: Cài MCP hướng dẫn tin cậy .crt/CA đã phê duyệt trên macOS, Windows, Linux, cấu hình PEM Node.js, khởi động lại, kiểm TLS không gửi token và xử lý lỗi quyền trước khi cài. Token/cấu hình hiện có giữ nguyên; không migration.
 
