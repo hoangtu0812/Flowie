@@ -48,11 +48,12 @@ const workspaceNames = new Map<string, Promise<string | undefined>>();
 
 /**
  * Keeps the browser tab title in step with the page (`lib/page-title`). The workspace name is
- * loaded once per workspace key and team names come from the loaded teams, so only pages that
- * show one object need `usePageEntity`. The title is plain text set through document.title.
- * VI: Giữ title tab trình duyệt khớp với trang (`lib/page-title`). Tên workspace được tải một lần
- * VI: cho mỗi khoá workspace và tên team lấy từ danh sách team đã tải, nên chỉ trang hiển thị một
- * VI: đối tượng mới cần `usePageEntity`. Title là văn bản thuần, đặt qua document.title.
+ * cached per workspace key and refreshed after workspace edits. Team names come from loaded
+ * teams, so only pages showing one object need `usePageEntity`. The title is plain text set
+ * through document.title.
+ * VI: Giữ title tab trình duyệt khớp với trang (`lib/page-title`). Tên workspace được cache theo
+ * VI: khoá và cập nhật lại sau khi sửa. Tên team lấy từ danh sách đã tải, nên chỉ trang hiển thị
+ * VI: một đối tượng mới cần `usePageEntity`. Title là văn bản thuần đặt qua document.title.
  */
 export function DocumentTitle() {
    const pathname = usePathname() ?? '/';
@@ -63,8 +64,20 @@ export function DocumentTitle() {
    );
    const teams = useIssuesStore((state) => state.teams);
    const [workspace, setWorkspace] = useState<{ key: string; name?: string }>();
+   const [workspaceVersion, setWorkspaceVersion] = useState(0);
    const key = workspaceKey(pathname);
    const inWorkspace = Boolean(key && !PUBLIC_SEGMENTS.has(key));
+
+   useEffect(() => {
+      const updated = () => {
+         // Workspace names are cached by every visited id/alias; invalidate them together after edits.
+         // VI: Tên workspace được cache theo từng id/alias đã mở; xóa cùng lúc sau chỉnh sửa.
+         workspaceNames.clear();
+         setWorkspaceVersion((version) => version + 1);
+      };
+      window.addEventListener('flowie:workspace-updated', updated);
+      return () => window.removeEventListener('flowie:workspace-updated', updated);
+   }, []);
 
    useEffect(() => {
       if (!key || !inWorkspace) return;
@@ -83,7 +96,7 @@ export function DocumentTitle() {
       return () => {
          active = false;
       };
-   }, [key, inWorkspace]);
+   }, [key, inWorkspace, workspaceVersion]);
 
    const segments = pathname.split('/').filter(Boolean);
    const teamKey =
