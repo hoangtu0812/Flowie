@@ -1,4 +1,15 @@
 export const messages = {
+   'Could not save images.': 'Không lưu được ảnh.',
+   'Each image must be at most 10 MB.': 'Mỗi ảnh tối đa 10 MB.',
+   'Issue {identifier} was created. Retry to finish saving images.':
+      'Task {identifier} đã được tạo. Thử lại để hoàn tất lưu ảnh.',
+   'Open created issue': 'Mở task đã tạo',
+   'Choose a parent in the same team.': 'Chọn task cha trong cùng team.',
+   'Pasted images': 'Ảnh đã dán',
+   'Parent': 'Task cha',
+   'Set parent': 'Đặt task cha',
+   'Remove parent': 'Gỡ task cha',
+   'Retry saving images': 'Thử lưu ảnh lại',
    'No team': 'Chưa có nhóm',
    'Bugs': 'Lỗi',
 
