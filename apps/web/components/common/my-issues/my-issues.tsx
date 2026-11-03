@@ -5,12 +5,10 @@ import { applyIssueFilters } from '@/components/common/issues/issue-filter-colum
 import { IssueFilterBar } from '@/components/common/issues/issue-filter-bar';
 import { GroupedIssuesView } from '@/components/common/issues/grouped-issues-view';
 import { InsightsPanel } from '@/components/common/issues/insights-panel';
-import { SearchIssues } from '@/components/common/issues/search-issues';
 import { BreakdownPanel } from './breakdown-panel';
 import { useFilterStore } from '@/store/filter-store';
 import { useIssuesStore } from '@/store/issues-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
-import { useSearchStore } from '@/store/search-store';
 import { useViewStore } from '@/store/view-store';
 import { useMemo } from 'react';
 import { scopeMyIssues, useCurrentUserId, useMyIssuesTab } from './use-my-issues';
@@ -22,14 +20,12 @@ import { scopeMyIssues, useCurrentUserId, useMyIssuesTab } from './use-my-issues
  */
 export default function MyIssues() {
    const [tab] = useMyIssuesTab();
-   const { isSearchOpen, searchQuery } = useSearchStore();
    const { viewType } = useViewStore();
    const { filters } = useFilterStore();
    const { issues, statuses, error } = useIssuesStore();
    const { openPanel } = useRightPanelStore();
    const queryState = useIssueQuery(undefined, { scope: tab });
 
-   const isSearching = isSearchOpen && searchQuery.trim() !== '';
    const isViewTypeGrid = viewType === 'grid';
 
    const currentUserId = useCurrentUserId();
@@ -43,16 +39,6 @@ export default function MyIssues() {
       () => applyIssueFilters(scopedIssues, filters),
       [scopedIssues, filters]
    );
-
-   if (isSearching) {
-      return (
-         <div className="w-full h-full">
-            <div className="px-6 mb-6">
-               <SearchIssues issues={displayedIssues} />
-            </div>
-         </div>
-      );
-   }
 
    return (
       <div className="w-full h-full flex flex-col overflow-hidden">

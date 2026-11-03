@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- Issue search matches identifiers and titles only and retains the main list columns, row sizes, filters and scrolling across All issues, Cycle, My issues and member profiles; quick search also limits issue matches to identifiers/titles. No migration. (DTD-255)
+  VI: Tìm task chỉ khớp mã và tiêu đề, giữ cột, kích thước hàng, bộ lọc và cuộn của danh sách chính ở All issues, Cycle, My issues và hồ sơ thành viên; tìm nhanh cũng giới hạn task theo mã/tiêu đề. Không có migration.
+
 - Issue rows show a branch icon after the identifier for subtasks, with a full parent-name tooltip on hover or keyboard focus and aligned columns. Web only; no migration. (DTD-259, #116)
   VI: Dòng task con hiển thị icon nhánh sau mã, tooltip tên cha đầy đủ khi rê chuột hoặc focus bàn phím và giữ các cột thẳng hàng. Chỉ đổi web; không có migration.
 

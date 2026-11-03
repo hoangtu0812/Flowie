@@ -150,7 +150,7 @@ def issue_scope(workspace: str, user: str, options: dict) -> tuple[str, dict]:
             if not unicodedata.combining(char)
         )
         clauses.append(
-            f"translate(lower(i.identifier || ' ' || i.title || ' ' || COALESCE(i.description,'')), '{VIETNAMESE}', '{NORMALIZED}') LIKE :query ESCAPE '\\'"
+            f"translate(lower(i.identifier || ' ' || i.title), '{VIETNAMESE}', '{NORMALIZED}') LIKE :query ESCAPE '\\'"
         )
         params["query"] = literal_search(query)
     clauses.extend(filters)

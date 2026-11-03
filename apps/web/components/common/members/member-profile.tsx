@@ -14,10 +14,8 @@ import { DesignSurface } from '@/components/common/design-surface';
 import { IssueFilterBar } from '@/components/common/issues/issue-filter-bar';
 import { applyIssueFilters } from '@/components/common/issues/issue-filter-columns';
 import { GroupedIssuesView } from '@/components/common/issues/grouped-issues-view';
-import { SearchIssues } from '@/components/common/issues/search-issues';
 import { useIssuesStore } from '@/store/issues-store';
 import { useFilterStore } from '@/store/filter-store';
-import { useSearchStore } from '@/store/search-store';
 import { useViewStore } from '@/store/view-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { InsightsPanel } from '@/components/common/issues/insights-panel';
@@ -34,7 +32,6 @@ export default function MemberProfile({
    const { issues, statuses, error } = useIssuesStore();
    const { filters } = useFilterStore();
    const [tab] = useQueryState('tab', parseAsString.withDefault('assigned'));
-   const { isSearchOpen, searchQuery } = useSearchStore();
    const { viewType } = useViewStore();
    const { openPanel } = useRightPanelStore();
    const queryState = useIssueQuery(
@@ -51,19 +48,15 @@ export default function MemberProfile({
          <IssueFilterBar />
          <HStack height="100%" gap={0} align="stretch">
             <VStack width="100%" isScrollable>
-               {isSearchOpen && searchQuery.trim() ? (
-                  <SearchIssues issues={displayed} />
-               ) : (
-                  <GroupedIssuesView
-                     issues={displayed}
-                     totalIssues={scoped}
-                     statuses={statuses}
-                     isViewTypeGrid={viewType === 'grid'}
-                     loading={queryState.loading}
-                     error={error}
-                     onRetry={queryState.retry}
-                  />
-               )}
+               <GroupedIssuesView
+                  issues={displayed}
+                  totalIssues={scoped}
+                  statuses={statuses}
+                  isViewTypeGrid={viewType === 'grid'}
+                  loading={queryState.loading}
+                  error={error}
+                  onRetry={queryState.retry}
+               />
             </VStack>
             {openPanel === 'insights' && (
                <VStack as="aside" width={380} isScrollable>
