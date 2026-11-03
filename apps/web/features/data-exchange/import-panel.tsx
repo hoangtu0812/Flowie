@@ -211,7 +211,7 @@ export function ImportPanel({
             <>
                <Text>
                   {tx(
-                     'Map required externalId and title, then optional fields. Reference columns use Flowie IDs. Dates use ISO 8601; enum values use TASK/BUG, NONE/LOW/MEDIUM/HIGH/URGENT and LOW/MEDIUM/HIGH/CRITICAL severity.'
+                     'Map required externalId and title, then optional fields. Reference columns use Flowie IDs. Dates use ISO 8601; enum values use TASK/BUG/EPIC, NONE/LOW/MEDIUM/HIGH/URGENT and LOW/MEDIUM/HIGH/CRITICAL severity.'
                   )}
                </Text>
                <HStack gap={3} wrap="wrap">

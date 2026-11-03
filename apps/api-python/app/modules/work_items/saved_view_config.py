@@ -17,7 +17,7 @@ class ViewQuery(BaseModel):
     ] = Field(default_factory=list, max_length=6)
     noTeam: bool = False
     noProject: bool = False
-    issueType: Literal["TASK", "BUG"] | None = None
+    issueType: Literal["TASK", "BUG", "EPIC"] | None = None
     projectId: str | None = Field(default=None, min_length=1, max_length=100)
     assigneeId: str | None = Field(default=None, min_length=1, max_length=100)
     creatorId: str | None = Field(default=None, min_length=1, max_length=100)

@@ -119,6 +119,7 @@ enum IssueStatusCategory {
 enum IssueType {
   TASK
   BUG
+  EPIC
 }
 
 enum BugSeverity {

@@ -160,7 +160,7 @@ async def list_issues(
     cycleId: str | None = None, query: Annotated[str | None, Query(max_length=200)] = None,
     filters: Annotated[str | None, Query(max_length=12000)] = None, includeSubIssues: bool = True,
     noTeam: bool = False, noProject: bool = False,
-    issueType: Literal["TASK", "BUG"] | None = None,
+    issueType: Literal["TASK", "BUG", "EPIC"] | None = None,
     insights: bool = False,
     sliceBy: Literal['status','priority','assignee','project'] = 'status',
     segmentBy: Literal['status','priority','assignee','project'] = 'priority',

@@ -207,6 +207,7 @@ export const createIssueFilterColumns = ({
          .options([
             { value: 'TASK', label: 'Task' },
             { value: 'BUG', label: 'Bug' },
+            { value: 'EPIC', label: 'Epic' },
          ])
          .build(),
       dtf
