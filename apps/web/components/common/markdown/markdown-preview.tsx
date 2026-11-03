@@ -1,3 +1,6 @@
+'use client';
+
+import { useContext, useMemo } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { VStack } from '@astryxdesign/core/Layout';
@@ -8,6 +11,9 @@ import { createSlugger } from '@/lib/markdown-headings';
 import { rehypeMathPlugin, remarkMathPlugin } from '@/lib/markdown-math';
 import { MermaidDiagram } from './mermaid-diagram';
 import { cn } from '@/lib/utils';
+import { documentFrontMatter } from '@/lib/document-front-matter';
+import { MarkdownContext } from './markdown-context';
+import { useMessages } from '@/features/shared/use-messages';
 
 type MarkdownNode = { type: string; value?: string; children?: MarkdownNode[]; data?: object };
 
@@ -78,6 +84,47 @@ function rehypeHeadingIds() {
 const isMermaid = (className: unknown) =>
    (Array.isArray(className) ? className : [className]).includes('language-mermaid');
 
+const hasImage = (node?: HtmlNode): boolean =>
+   node?.tagName === 'img' || (node?.children ?? []).some(hasImage);
+
+function MarkdownImage({ src, alt }: { src: string; alt: string }) {
+   const { documentMedia } = useContext(MarkdownContext);
+   return (
+      <AttachmentImage
+         src={src}
+         alt={alt}
+         inlineExpansion={documentMedia}
+         className="max-h-112 w-auto object-contain"
+      />
+   );
+}
+
+function MarkdownLink({
+   children,
+   href,
+   node,
+}: {
+   children?: React.ReactNode;
+   href?: string;
+   node?: HtmlNode;
+}) {
+   const { documentMedia } = useContext(MarkdownContext);
+   const tx = useMessages({ 'Open linked page': 'Mở trang liên kết' });
+   const link = (
+      <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline">
+         {documentMedia && hasImage(node) ? tx('Open linked page') : children}
+      </a>
+   );
+   return documentMedia && hasImage(node) ? (
+      <VStack gap={1}>
+         {children}
+         {link}
+      </VStack>
+   ) : (
+      link
+   );
+}
+
 /**
  * Element renderers for both appearances, built once at module load. react-markdown compares
  * component identity on every render, so an inline object would remount each element on any
@@ -120,21 +167,15 @@ function markdownComponents(readable: boolean): Components {
             {children}
          </Heading>
       ),
-      p: ({ children }) => (
-         <Text as="p" type={readable ? 'inherit' : 'body'}>
-            {children}
-         </Text>
-      ),
-      a: ({ children, href }) => (
-         <a
-            href={href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary underline"
-         >
-            {children}
-         </a>
-      ),
+      p: ({ children, node }) =>
+         hasImage(node as HtmlNode) ? (
+            <VStack gap={2}>{children}</VStack>
+         ) : (
+            <Text as="p" type={readable ? 'inherit' : 'body'}>
+               {children}
+            </Text>
+         ),
+      a: MarkdownLink,
       // A mermaid block renders as a diagram, so it must not sit inside <pre>.
       // VI: Khối mermaid được vẽ thành sơ đồ nên không được nằm trong <pre>.
       pre: ({ children, node }) =>
@@ -194,13 +235,9 @@ function markdownComponents(readable: boolean): Components {
       ),
       img: ({ src, alt }) =>
          typeof src === 'string' ? (
-            // Attachment URLs are private and need the session on the
-            // request, which a bare `<img src>` cannot carry.
-            <AttachmentImage
-               src={src}
-               alt={alt ?? ''}
-               className={cn('max-h-[28rem] w-auto object-contain', readable && 'border-border/50')}
-            />
+            // Resolve private attachments before either the gallery or inline viewport uses them.
+            // VI: Tải attachment riêng tư trước khi gallery hoặc viewport inline sử dụng.
+            <MarkdownImage src={src} alt={alt ?? ''} />
          ) : null,
    };
 }
@@ -217,27 +254,61 @@ export function MarkdownPreview({
    content,
    appearance = 'default',
    mentions = [],
+   documentMedia = false,
 }: {
    content: string;
    appearance?: 'default' | 'issue';
    mentions?: string[];
+   documentMedia?: boolean;
 }) {
    const readable = appearance === 'issue';
+   const parsed = useMemo(
+      () =>
+         documentMedia
+            ? documentFrontMatter(content)
+            : { body: content, config: undefined, error: false },
+      [content, documentMedia]
+   );
+   const configKey = JSON.stringify(parsed.config ?? {});
+   const context = useMemo(
+      () => ({ documentMedia, config: documentMedia ? JSON.parse(configKey) : undefined }),
+      [documentMedia, configKey]
+   );
+   const tx = useMessages({
+      'Invalid document front matter. Default diagram settings are used.':
+         'Front matter tài liệu không hợp lệ. Dùng cấu hình sơ đồ mặc định.',
+   });
    if (!content.trim()) return <Text type="supporting">This content is empty.</Text>;
    return (
-      <VStack gap={4} className={cn('min-w-0', readable && 'text-sm leading-7 break-words')}>
-         <Markdown
-            skipHtml
-            remarkPlugins={
-               mentions.length
-                  ? [remarkGfm, remarkMathPlugin, remarkMentions(mentions)]
-                  : [remarkGfm, remarkMathPlugin]
-            }
-            rehypePlugins={[rehypeMathPlugin, rehypeHeadingIds]}
-            components={COMPONENTS[appearance]}
+      <MarkdownContext.Provider value={context}>
+         <VStack
+            gap={4}
+            data-document-reading={documentMedia ? '' : undefined}
+            className={cn(
+               'min-w-0',
+               readable && 'text-sm leading-7 break-words',
+               documentMedia &&
+                  '[&>*]:mx-auto [&>*]:w-full [&>*]:max-w-3xl [&>*:has([data-media-expanded=true])]:max-w-none [&>[data-media-expanded=true]]:max-w-none'
+            )}
          >
-            {content}
-         </Markdown>
-      </VStack>
+            {parsed.error && (
+               <Text role="alert">
+                  {tx('Invalid document front matter. Default diagram settings are used.')}
+               </Text>
+            )}
+            <Markdown
+               skipHtml
+               remarkPlugins={
+                  mentions.length
+                     ? [remarkGfm, remarkMathPlugin, remarkMentions(mentions)]
+                     : [remarkGfm, remarkMathPlugin]
+               }
+               rehypePlugins={[rehypeMathPlugin, rehypeHeadingIds]}
+               components={COMPONENTS[appearance]}
+            >
+               {parsed.body}
+            </Markdown>
+         </VStack>
+      </MarkdownContext.Provider>
    );
 }

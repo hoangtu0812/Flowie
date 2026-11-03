@@ -1,3 +1,5 @@
+import { documentFrontMatter } from './document-front-matter';
+
 /**
  * Anchor id for a heading: lowercase, accents removed, words joined by "-". Repeated
  * headings get "-2", "-3"… in order, matching the ids the preview assigns while rendering.
@@ -31,7 +33,7 @@ export function markdownHeadings(source: string) {
    const slug = createSlugger();
    const headings: { level: number; text: string; id: string }[] = [];
    let fence: string | null = null;
-   for (const line of source.split('\n')) {
+   for (const line of documentFrontMatter(source).body.split('\n')) {
       const marker = /^\s*(```|~~~)/.exec(line)?.[1];
       if (marker) {
          fence = fence === marker ? null : (fence ?? marker);

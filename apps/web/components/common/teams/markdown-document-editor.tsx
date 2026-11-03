@@ -269,9 +269,9 @@ export function MarkdownDocumentEditor({
                            </HStack>
                         )}
                         {mode === 'view' ? (
-                           <VStack as="article" maxWidth="80ch" gap={4}>
+                           <VStack as="article" className="w-full min-w-0" gap={4}>
                               <TableOfContents content={content} label={tx('Contents')} />
-                              <MarkdownPreview content={content} />
+                              <MarkdownPreview content={content} documentMedia />
                            </VStack>
                         ) : (
                            <VStack gap={3}>

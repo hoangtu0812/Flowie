@@ -214,7 +214,7 @@ export function MarkdownEditor({
             )}
             {mode !== 'edit' && (
                <article aria-label={tx('Preview')} className={cn(pane, 'p-4')}>
-                  <MarkdownPreview content={value} />
+                  <MarkdownPreview content={value} documentMedia />
                </article>
             )}
          </div>

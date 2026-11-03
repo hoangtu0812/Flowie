@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { VStack } from '@astryxdesign/core/Layout';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
@@ -171,7 +172,11 @@ export function DocumentPreview({
             />
          </PreviewHeader>
          <div className="min-h-0 flex-1 overflow-auto">
-            <div className="mx-auto max-w-3xl space-y-4 px-6 py-5">
+            <VStack
+               gap={4}
+               className="w-full min-w-0 px-6 py-5"
+               data-testid="document-reading-area"
+            >
                {releases.length > 0 && (
                   <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                      <Select value={selected} onValueChange={setSelected}>
@@ -208,8 +213,8 @@ export function DocumentPreview({
                <LinkedIssues documentId={document.id} />
                <DocumentReviewPanel documentId={document.id} review={review} run={run} />
                <TableOfContents content={content} label={tx('Contents')} />
-               <MarkdownPreview content={content} />
-            </div>
+               <MarkdownPreview content={content} documentMedia />
+            </VStack>
          </div>
       </div>
    );
