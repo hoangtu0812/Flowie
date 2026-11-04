@@ -3,7 +3,7 @@ import { useMessages } from '@/features/shared/use-messages';
 import { messages } from '@/features/issues/messages.vi';
 
 import { Button } from '@astryxdesign/core/Button';
-import { TextArea } from '@astryxdesign/core/TextArea';
+import { Textarea } from '@/components/ui/textarea';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
 import { MarkdownPreview } from '@/components/common/markdown/markdown-preview';
@@ -93,14 +93,21 @@ export function IssueDescription({ issue }: { issue: Issue }) {
          }}
       >
          {editing ? (
-            <>
-               <TextArea
-                  label={tx('Issue description')}
+            <VStack
+               gap={3}
+               padding={3}
+               role="group"
+               aria-label={tx('Issue description')}
+               className="min-w-0 rounded-lg border border-border bg-background focus-within:ring-2 focus-within:ring-ring"
+            >
+               <Textarea
+                  aria-label={tx('Issue description')}
                   value={draft}
-                  onChange={setDraft}
+                  onChange={(event) => setDraft(event.target.value)}
                   onPaste={onPaste}
                   rows={10}
-                  isDisabled={saving}
+                  disabled={saving}
+                  className="min-h-48 resize-y border-0 p-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
                />
                <DraftImages
                   value={draft}
@@ -116,7 +123,7 @@ export function IssueDescription({ issue }: { issue: Issue }) {
                         ? tx('Uploading image…')
                         : `${modifier}+Enter to save · paste to add an image`}
                   </Text>
-                  <HStack gap={2}>
+                  <HStack gap={2} className="ml-auto">
                      <Button
                         label={tx('Cancel')}
                         variant="ghost"
@@ -137,7 +144,7 @@ export function IssueDescription({ issue }: { issue: Issue }) {
                      />
                   </HStack>
                </HStack>
-            </>
+            </VStack>
          ) : (
             <HStack gap={2} vAlign="start" className="min-w-0">
                <VStack className="min-w-0 flex-1">
