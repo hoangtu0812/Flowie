@@ -6,11 +6,12 @@ import { Text } from '@astryxdesign/core/Text';
 import { MarkdownContext } from './markdown-context';
 import { InlineMedia } from './inline-media';
 import type { MediaBounds } from '@/lib/inline-media';
+import { MermaidSettings, useMermaidPreferences } from './mermaid-settings';
 import { useMessages } from '@/features/shared/use-messages';
 
 let sequence = 0;
 let rendering: Promise<unknown> = Promise.resolve();
-type Diagram = { id: string; inner: string; bounds: MediaBounds };
+type Diagram = { url: string; bounds: MediaBounds };
 
 /**
  * Mermaid owns global configuration, so initialize and render share one serialized queue.
@@ -22,6 +23,7 @@ type Diagram = { id: string; inner: string; bounds: MediaBounds };
  */
 export function MermaidDiagram({ code }: { code: string }) {
    const { documentMedia, config } = useContext(MarkdownContext);
+   const preferences = useMermaidPreferences();
    const tx = useMessages({
       'Mermaid diagram': 'Sơ đồ Mermaid',
       'Diagram could not be rendered.': 'Không thể vẽ sơ đồ.',
@@ -31,6 +33,7 @@ export function MermaidDiagram({ code }: { code: string }) {
    const [failed, setFailed] = useState(false);
    useEffect(() => {
       let active = true;
+      let url: string | undefined;
       setDiagram(undefined);
       setFailed(false);
       const task = rendering
@@ -38,11 +41,15 @@ export function MermaidDiagram({ code }: { code: string }) {
          .then(async () => {
             if (!active) return;
             const mermaid = (await import('mermaid')).default;
-            mermaid.initialize({
+            const baseConfig = {
                ...config,
                theme:
                   config?.theme ??
                   (document.documentElement.classList.contains('dark') ? 'dark' : 'default'),
+               // Match HTML label measurement and standalone image layout without host resets.
+               // VI: Giữ cách đo nhãn HTML và layout ảnh độc lập nhất quán, không phụ thuộc reset của app.
+               themeCSS:
+                  'foreignObject p { margin: 0; font: inherit; color: inherit; } foreignObject * { box-sizing: border-box; }',
                startOnLoad: false,
                securityLevel: 'strict',
                suppressErrorRendering: true,
@@ -56,11 +63,34 @@ export function MermaidDiagram({ code }: { code: string }) {
                   'dompurifyConfig',
                   'themeCSS',
                ],
-            });
+            } as const;
             // Preserve the existing semicolon retry for sequence labels without changing valid diagrams.
             // VI: Giữ lần thử lại dấu chấm phẩy trong nhãn sequence mà không đổi sơ đồ hợp lệ.
-            const render = (source: string) =>
-               mermaid.render(`flowie-mermaid-${++sequence}`, source);
+            const render = async (source: string) => {
+               mermaid.initialize({ ...baseConfig, secure: [...baseConfig.secure] });
+               if (preferences.theme !== 'document' || preferences.curve !== 'document') {
+                  await mermaid.parse(source);
+                  const effective = mermaid.mermaidAPI.getConfig();
+                  // Capture source directives first, then lock only explicitly overridden fields.
+                  // VI: Nhận directive nguồn trước, sau đó khóa các trường được ghi đè rõ ràng.
+                  mermaid.initialize({
+                     ...effective,
+                     ...(preferences.theme === 'document'
+                        ? {}
+                        : { theme: preferences.theme, themeVariables: undefined }),
+                     flowchart: {
+                        ...effective.flowchart,
+                        ...(preferences.curve === 'document' ? {} : { curve: preferences.curve }),
+                     },
+                     secure: [
+                        ...baseConfig.secure,
+                        ...(preferences.theme === 'document' ? [] : ['theme', 'themeVariables']),
+                        ...(preferences.curve === 'document' ? [] : ['flowchart']),
+                     ],
+                  });
+               }
+               return mermaid.render(`flowie-mermaid-${++sequence}`, source);
+            };
             const result = await render(code).catch((error: unknown) => {
                if (!code.includes(';')) throw error;
                return render(code.replaceAll(';', '#59;'));
@@ -76,7 +106,36 @@ export function MermaidDiagram({ code }: { code: string }) {
                .map(Number);
             if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0)
                throw new Error('viewBox');
-            setDiagram({ id: root.id, inner: root.innerHTML, bounds: { x, y, width, height } });
+            const palette = mermaid.mermaidAPI.getConfig().themeVariables;
+            const background = preferences.customBackground
+               ? preferences.background
+               : palette?.background;
+            root.setAttribute('width', String(width));
+            root.setAttribute('height', String(height));
+            root.removeAttribute('style');
+            root.setAttribute('color', palette?.textColor ?? (palette?.darkMode ? '#ddd' : '#333'));
+            if (background && background !== 'transparent') {
+               const rect = root.ownerDocument.createElementNS(
+                  'http://www.w3.org/2000/svg',
+                  'rect'
+               );
+               for (const [name, value] of Object.entries({
+                  x,
+                  y,
+                  width,
+                  height,
+                  fill: background,
+               }))
+                  rect.setAttribute(name, String(value));
+               rect.setAttribute('data-preview-background', 'true');
+               root.insertBefore(rect, root.firstChild);
+            }
+            // An inert SVG image retains Mermaid's own styles without inheriting app/prose CSS.
+            // VI: Ảnh SVG bất hoạt giữ CSS riêng của Mermaid, không kế thừa CSS app/prose.
+            url = URL.createObjectURL(
+               new Blob([new XMLSerializer().serializeToString(root)], { type: 'image/svg+xml' })
+            );
+            setDiagram({ url, bounds: { x, y, width, height } });
          });
       rendering = task;
       void task.catch(() => {
@@ -84,39 +143,48 @@ export function MermaidDiagram({ code }: { code: string }) {
       });
       return () => {
          active = false;
+         if (url) URL.revokeObjectURL(url);
       };
-   }, [code, config]);
-   if (failed)
-      return (
-         <VStack gap={1} className="my-2">
-            <Text role="alert">{tx('Diagram could not be rendered.')}</Text>
-            <pre className="overflow-auto rounded bg-muted p-3 text-xs">{code}</pre>
-         </VStack>
-      );
-   if (!diagram) return <Text role="status">{tx('Loading diagram…')}</Text>;
-   const { bounds } = diagram;
-   const svg = (
-      <svg
-         id={diagram.id}
-         xmlns="http://www.w3.org/2000/svg"
-         x={bounds.x}
-         y={bounds.y}
-         width={bounds.width}
-         height={bounds.height}
-         viewBox={`${bounds.x} ${bounds.y} ${bounds.width} ${bounds.height}`}
-         role={documentMedia ? undefined : 'img'}
-         aria-label={documentMedia ? undefined : tx('Mermaid diagram')}
-         className={documentMedia ? undefined : 'my-2 h-auto max-w-full'}
-         // Only Mermaid's strict, DOMPurify-sanitized SVG is mounted; external SVG files use <image>.
-         // VI: Chỉ mount SVG Mermaid strict đã qua DOMPurify; file SVG ngoài được nhúng bằng <image>.
-         dangerouslySetInnerHTML={{ __html: diagram.inner }}
-      />
-   );
-   return documentMedia ? (
-      <InlineMedia key={diagram.id} label={tx('Mermaid diagram')} bounds={bounds}>
-         {svg}
+   }, [code, config, preferences]);
+   const content = failed ? (
+      <VStack gap={1} className="my-2">
+         <Text role="alert">{tx('Diagram could not be rendered.')}</Text>
+         <pre className="overflow-auto rounded bg-muted p-3 text-xs">{code}</pre>
+      </VStack>
+   ) : !diagram ? (
+      <Text role="status">{tx('Loading diagram…')}</Text>
+   ) : documentMedia ? (
+      <InlineMedia key={diagram.url} label={tx('Mermaid diagram')} bounds={diagram.bounds}>
+         <image
+            data-mermaid-image="true"
+            href={diagram.url}
+            x={diagram.bounds.x}
+            y={diagram.bounds.y}
+            width={diagram.bounds.width}
+            height={diagram.bounds.height}
+         />
       </InlineMedia>
    ) : (
-      svg
+      <svg
+         role="img"
+         aria-label={tx('Mermaid diagram')}
+         viewBox={`0 0 ${diagram.bounds.width} ${diagram.bounds.height}`}
+         width={diagram.bounds.width}
+         height={diagram.bounds.height}
+         className="my-2 h-auto max-w-full"
+      >
+         <image
+            data-mermaid-image="true"
+            href={diagram.url}
+            width={diagram.bounds.width}
+            height={diagram.bounds.height}
+         />
+      </svg>
+   );
+   return (
+      <VStack gap={1} className="min-w-0 w-full">
+         <MermaidSettings busy={!diagram && !failed} />
+         {content}
+      </VStack>
    );
 }
