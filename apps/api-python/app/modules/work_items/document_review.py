@@ -1,19 +1,9 @@
-"""Document review: the team lead receives submitted documents, may assign team members as
-reviewers, and alone approves the document once every assigned reviewer agreed.
-
-Approvers are the LEAD members of the document's team; a team without an active lead falls back
-to workspace Owners/Admins who are members of that team (team documents are readable by team
-members only). A document without a team is approved by workspace Owners/Admins. A lead who
-wrote the document needs at least one other reviewer's approval. Decisions belong to one review
-round: the `document_review_reset` trigger clears them when the document enters In review again
-or its title or content changes.
-VI: Duyệt tài liệu: lead của team nhận tài liệu được gửi duyệt, có thể giao thành viên team làm
-VI: reviewer, và chỉ lead được duyệt cuối khi mọi reviewer được giao đã đồng ý. Người duyệt cuối
-VI: là thành viên LEAD của team sở hữu tài liệu; team không có lead đang hoạt động thì dùng
-VI: Owner/Admin workspace là thành viên team đó (tài liệu team chỉ thành viên team đọc được). Tài
-VI: liệu không thuộc team do Owner/Admin workspace duyệt. Lead là tác giả cần ít nhất một reviewer
-VI: khác đồng ý. Quyết định thuộc về một vòng duyệt: trigger `document_review_reset` xoá chúng khi
-VI: tài liệu vào lại Đang duyệt hoặc đổi tiêu đề, nội dung.
+"""Team leads and accessible workspace Owners/Admins approve reviewed documents.
+All assigned reviewers must agree. Ordinary leads who authored a document need another reviewer;
+Owners/Admins may approve their own documents. Team visibility and active membership still apply.
+VI: Lead và Owner/Admin workspace có quyền truy cập được duyệt tài liệu đang review. Mọi reviewer
+VI: được giao phải đồng ý. Lead thường là tác giả cần reviewer khác; Owner/Admin được tự duyệt.
+VI: Phạm vi truy cập team và điều kiện thành viên đang hoạt động vẫn áp dụng.
 """
 
 from __future__ import annotations
@@ -30,6 +20,7 @@ from ...modules.notifications.outbox import stage_notifications
 from ...services.notification_events import create_notification_batch
 from ..audit.write import record_change
 from .document_repository import _team_access
+from ..access.membership import _workspace_role
 
 Decision = Literal["APPROVED", "CHANGES_REQUESTED"]
 
@@ -58,22 +49,19 @@ ACTIVE_MEMBER = """EXISTS(SELECT 1 FROM workspace_members wm JOIN users u ON u.i
 
 
 async def approver_ids(db: AsyncSession, workspace_id: str, team_id: str | None) -> list[str]:
-    """Users who assign reviewers and approve documents of `team_id`, oldest membership first.
-    VI: Người giao reviewer và duyệt tài liệu của `team_id`, thành viên lâu nhất trước.
+    """Active leads and workspace Owners/Admins who can access this team's documents.
+    ADMIN_VIEWER is excluded even when marked LEAD; team visibility is never widened by role.
+    VI: Lead và Owner/Admin workspace đang hoạt động có quyền truy cập tài liệu team này.
+    VI: Loại ADMIN_VIEWER kể cả mang LEAD; role không mở rộng phạm vi truy cập team.
     """
-    params = {"workspace": workspace_id, "team": team_id}
-    if team_id:
-        leads = (
-            await db.execute(
-                text(f"""SELECT tm.user_id FROM team_members tm WHERE tm.team_id=:team AND tm.role='LEAD'
-                AND {ACTIVE_MEMBER.format(user='tm.user_id')} ORDER BY tm.created_at, tm.user_id"""),
-                params,
-            )
-        ).scalars().all()
-        if leads:
-            return list(leads)
     team_filter = (
         "AND EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=:team AND tm.user_id=wm.user_id)"
+        if team_id
+        else ""
+    )
+    lead_filter = (
+        "OR (wm.role <> 'ADMIN_VIEWER' AND EXISTS(SELECT 1 FROM team_members tm "
+        "WHERE tm.team_id=:team AND tm.user_id=wm.user_id AND tm.role='LEAD'))"
         if team_id
         else ""
     )
@@ -82,8 +70,9 @@ async def approver_ids(db: AsyncSession, workspace_id: str, team_id: str | None)
             await db.execute(
                 text(f"""SELECT wm.user_id FROM workspace_members wm JOIN users u ON u.id=wm.user_id
                 WHERE wm.workspace_id=:workspace AND wm.status='ACTIVE' AND u.status='ACTIVE'
-                AND wm.role IN ('OWNER','ADMIN') {team_filter} ORDER BY wm.user_id"""),
-                params,
+                AND (wm.role IN ('OWNER','ADMIN') {lead_filter}) {team_filter}
+                ORDER BY wm.created_at,wm.user_id"""),
+                {"workspace": workspace_id, "team": team_id},
             )
         ).scalars().all()
     )
@@ -113,19 +102,26 @@ async def _reviewers(db: AsyncSession, document_id: str) -> list[dict[str, Any]]
 
 
 def approval_block(
-    document: dict, approvers: list[str], reviewers: list[dict], user_id: str
+    document: dict,
+    approvers: list[str],
+    reviewers: list[dict],
+    user_id: str,
+    *,
+    allow_own_approval: bool = False,
 ) -> tuple[int, str] | None:
-    """Why `user_id` cannot approve `document` now, as (HTTP status, message); None when allowed.
-    VI: Lý do `user_id` chưa duyệt được `document`, dạng (mã HTTP, thông báo); None khi được duyệt.
+    """Returns a blocker or None; only a current DB Owner/Admin may bypass the author restriction.
+    The exemption never skips In review status, assigned decisions, or membership checks.
+    VI: Trả lý do chặn hoặc None; chỉ Owner/Admin hiện hành từ DB được miễn ràng buộc tác giả.
+    VI: Ngoại lệ không bỏ qua trạng thái Đang duyệt, quyết định reviewer hoặc kiểm tra thành viên.
     """
     if user_id not in approvers:
-        return 403, "Only a team lead can approve this document."
+        return 403, "Only a team lead or workspace Owner/Admin with document access can approve this document."
     if document["status"] != "IN_REVIEW":
         return 409, "Submit the document for review before approving it."
     pending = [row for row in reviewers if row["decision"] != "APPROVED"]
     if pending:
         return 409, f"{len(pending)} reviewer(s) have not approved this version yet."
-    if document["created_by"] == user_id and not any(
+    if not allow_own_approval and document["created_by"] == user_id and not any(
         row["id"] != user_id for row in reviewers
     ):
         return 409, "You wrote this document: another reviewer must approve it first."
@@ -170,11 +166,14 @@ async def review_state(
         )
     ).mappings().all()
     names = {person["id"]: person for person in people}
-    block = approval_block(dict(row), approvers, reviewers, user_id)
+    block = approval_block(
+        dict(row), approvers, reviewers, user_id,
+        allow_own_approval=await _workspace_role(db, workspace_id, user_id) in ("OWNER", "ADMIN"),
+    )
     in_review = row["status"] == "IN_REVIEW"
     can_assign = in_review and user_id in approvers
-    # Only a lead picks reviewers, so only a lead receives the team's member list.
-    # VI: Chỉ lead chọn reviewer, nên chỉ lead nhận danh sách thành viên team.
+    # Only eligible approvers receive the member list used to assign reviewers.
+    # VI: Chỉ người duyệt hợp lệ nhận danh sách thành viên dùng để phân công reviewer.
     members = (
         (
             await db.execute(
@@ -242,9 +241,12 @@ async def check_status_change(db: AsyncSession, before: dict, status: str, user:
         return
     approvers = await approver_ids(db, before["workspace_id"], before["team_id"])
     if status == "IN_REVIEW" and not approvers:
-        raise ApiError(409, "This team needs a lead to review documents.", "Conflict")
+        raise ApiError(409, "This team needs a lead or an active workspace Owner/Admin with document access.", "Conflict")
     if status == "APPROVED":
-        block = approval_block(before, approvers, await _reviewers(db, before["id"]), user["id"])
+        block = approval_block(
+            before, approvers, await _reviewers(db, before["id"]), user["id"],
+            allow_own_approval=await _workspace_role(db, before["workspace_id"], user["id"]) in ("OWNER", "ADMIN"),
+        )
         if block:
             raise ApiError(block[0], block[1], "Forbidden" if block[0] == 403 else "Conflict")
 
@@ -268,7 +270,7 @@ async def set_reviewers(
 ) -> dict[str, Any]:
     document = await _locked(db, payload.workspaceId, document_id, user["id"])
     if user["id"] not in await approver_ids(db, payload.workspaceId, document["team_id"]):
-        raise ApiError(403, "Only a team lead can assign reviewers.", "Forbidden")
+        raise ApiError(403, "Only a team lead or workspace Owner/Admin with document access can assign reviewers.", "Forbidden")
     if document["status"] != "IN_REVIEW":
         raise ApiError(409, "Reviewers are assigned while the document is in review.", "Conflict")
     wanted = list(dict.fromkeys(payload.reviewerIds))
