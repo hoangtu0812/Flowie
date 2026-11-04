@@ -225,7 +225,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
-- Issue description editing keeps Save, Cancel, draft images, errors and keyboard hints inside the same bordered composer as its text field, including narrow screens. Explicit save and draft recovery remain available. Web only; no migration. (DTD-268)
+- Issue description editing keeps Save, Cancel, draft images, errors and keyboard hints inside the same bordered composer as its text field, including narrow screens. Explicit save and draft recovery remain available. Web only; no migration. (DTD-268, #129)
   VI: Khi sửa mô tả task, Save, Cancel, ảnh nháp, lỗi và gợi ý phím tắt nằm chung khung viền với ô soạn, kể cả màn hình hẹp. Vẫn lưu tường minh và phục hồi nháp. Chỉ web; không migration.
 
 - Subtask popover links keep the configured deployment base path (such as /flowie), so clicking a child opens the correct issue page. Root deployments remain supported; web only, no migration. (DTD-265, #126)
