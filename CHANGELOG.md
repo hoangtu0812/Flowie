@@ -316,7 +316,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Changed
 
-- Workspace Owners/Admins with document access can approve alongside team leads, including their own documents. Assigned reviewers must still agree; read-only, inactive and out-of-scope accounts remain excluded. Deploy API and web together; no migration. (DTD-270)
+- Workspace Owners/Admins with document access can approve alongside team leads, including their own documents. Assigned reviewers must still agree; read-only, inactive and out-of-scope accounts remain excluded. Deploy API and web together; no migration. (DTD-270, #132)
   VI: Owner/Admin workspace có quyền truy cập được duyệt cùng lead, kể cả tài liệu tự tạo. Reviewer đã giao vẫn phải đồng ý; tài khoản chỉ đọc, ngừng hoạt động hoặc ngoài phạm vi không được duyệt. Triển khai API/web cùng bản; không migration.
 
 - Flowie branding blends into light/dark surfaces with transparent artwork and an adaptive wordmark. Loading uses a compact symbol with a continuous gentle loop; full logos keep stable dimensions during sign-in and respect reduced motion. Web only; no migration. (DTD-267, #131)
