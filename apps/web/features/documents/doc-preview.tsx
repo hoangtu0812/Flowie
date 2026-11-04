@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { VStack } from '@astryxdesign/core/Layout';
+import { HStack, VStack } from '@astryxdesign/core/Layout';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
@@ -54,10 +54,14 @@ function PreviewHeader({
    actions: React.ReactNode;
 }) {
    return (
-      <div className="flex min-h-11 items-center gap-2 border-b px-4 py-1.5">
-         <div className="flex min-w-0 flex-1 items-center gap-2">{children}</div>
-         <div className="flex shrink-0 items-center gap-1">{actions}</div>
-      </div>
+      <HStack gap={2} wrap="wrap" className="min-h-11 border-b px-4 py-2">
+         <HStack gap={2} className="min-w-0 flex-1">
+            {children}
+         </HStack>
+         <HStack gap={1} wrap="wrap" className="min-w-0">
+            {actions}
+         </HStack>
+      </HStack>
    );
 }
 
@@ -98,7 +102,7 @@ export function DocumentPreview({
 }) {
    const tx = useMessages(messages);
    const locale = useUiPreferencesStore((state) => state.locale);
-   const { review, run } = useDocumentReview(document, onReviewChanged);
+   const { review, run, loading, failed, retry } = useDocumentReview(document, onReviewChanged);
    const [releases, setReleases] = useState<DocumentRelease[]>([]);
    const [selected, setSelected] = useState('current');
    const [shown, setShown] = useState<DocumentRelease>();
@@ -211,7 +215,14 @@ export function DocumentPreview({
                   </div>
                )}
                <LinkedIssues documentId={document.id} />
-               <DocumentReviewPanel documentId={document.id} review={review} run={run} />
+               <DocumentReviewPanel
+                  documentId={document.id}
+                  review={review}
+                  run={run}
+                  loading={loading}
+                  failed={failed}
+                  onRetry={retry}
+               />
                <TableOfContents content={content} label={tx('Contents')} />
                <MarkdownPreview content={content} documentMedia />
             </VStack>
@@ -302,9 +313,9 @@ function ReviewActions({
 }) {
    const tx = useMessages(messages);
    const [confirming, setConfirming] = useState(false);
-   useEffect(() => setConfirming(false), [document.id, document.version]);
+   useEffect(() => setConfirming(false), [document.id, document.version, review?.canApprove]);
    if (document.status === 'APPROVED') return null;
-   if (confirming)
+   if (confirming && review?.canApprove && document.status === 'IN_REVIEW')
       return (
          <>
             <Button
@@ -340,7 +351,7 @@ function ReviewActions({
             (review.canApprove || review.approveBlockedReason) && (
                <Button
                   size="xs"
-                  variant="ghost"
+                  variant="default"
                   disabled={!review.canApprove}
                   title={review.approveBlockedReason ?? undefined}
                   onClick={() => setConfirming(true)}

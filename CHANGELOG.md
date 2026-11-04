@@ -225,6 +225,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
+- Document approvers see why approval is blocked and how to proceed without relying on hover; review permission failures offer retry, stale permissions are discarded, and header actions wrap on narrow screens. Existing approval rules remain enforced. Web only; no migration. (DTD-270)
+  VI: Người duyệt thấy lý do chưa duyệt được và bước tiếp theo mà không cần hover; lỗi tải quyền có thử lại, quyền cũ bị loại bỏ và thanh thao tác xuống dòng trên màn hình hẹp. Giữ các quy tắc duyệt hiện hành. Chỉ web; không migration.
+
 - Issue description editing keeps Save, Cancel, draft images, errors and keyboard hints inside the same bordered composer as its text field, including narrow screens. Explicit save and draft recovery remain available. Web only; no migration. (DTD-268, #129)
   VI: Khi sửa mô tả task, Save, Cancel, ảnh nháp, lỗi và gợi ý phím tắt nằm chung khung viền với ô soạn, kể cả màn hình hẹp. Vẫn lưu tường minh và phục hồi nháp. Chỉ web; không migration.
 
