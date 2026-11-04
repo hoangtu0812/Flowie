@@ -26,10 +26,9 @@ test('supplied branding loads locally and motion respects reduced-motion prefere
    expect(markup).toContain('animation-duration:5s');
    expect(markup).not.toMatch(/<script|foreignObject|https?:\/\/(?!www\.w3\.org)/);
    await page.screenshot({ path: testInfo.outputPath('brand-auth-light.png') });
-   await page.evaluate(() => {
-      document.documentElement.classList.add('dark');
-      document.documentElement.style.colorScheme = 'dark';
-   });
+   await page.emulateMedia({colorScheme: 'dark'});
+   await page.reload();
+   await expect(page.locator('html')).toHaveClass(/dark/);
    await page.screenshot({ path: testInfo.outputPath('brand-auth-dark.png') });
    await page.setViewportSize({ width: 390, height: 844 });
    let release!: () => void;

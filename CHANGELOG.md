@@ -310,7 +310,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Changed
 
-- Flowie uses the supplied blue/teal/green brand logo and five-second loading motion across authentication, admin branding, shared loading states and favicon/PWA icons. Reduced-motion browsers receive static artwork. Web only; no migration. (DTD-267)
+- Flowie uses the supplied blue/teal/green brand logo and five-second loading motion across authentication, admin branding, shared loading states and favicon/PWA icons. Reduced-motion browsers receive static artwork. Web only; no migration. (DTD-267, #128)
   VI: Flowie dùng logo xanh dương/xanh ngọc/xanh lá và loading motion 5 giây được cung cấp tại auth, admin, loader dùng chung và icon favicon/PWA. Trình duyệt giảm chuyển động nhận ảnh tĩnh. Chỉ web; không migration.
 
 - MCP tools cost agents fewer tokens and calls: `get_issue_context` no longer includes the project's other documents unless `includeProjectDocuments` is set (then titles only); `create_issue`, `update_issue` and `transition_issue` return the identifier, version, status, plan fields and the fields just sent instead of the whole issue, and comment writes return only ids and version; `transition_issue` accepts a status name; `update_document` and `upsert_feature_doc` accept exact-text `edits` instead of the full content; schema errors name the wrong arguments; and MCP logs show the average result size per tool. Clients that read other fields from write results must call `get_issue`. API and one MCP logs line; no schema change; reconnect MCP clients. (DTD-220, #104)
