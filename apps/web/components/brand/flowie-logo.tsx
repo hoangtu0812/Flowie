@@ -1,4 +1,6 @@
+import { HStack } from '@astryxdesign/core/Layout';
 import { cn } from '@/lib/utils';
+import { withBasePath } from '@/lib/base-path';
 
 export function FlowieLogo({
    className,
@@ -9,44 +11,41 @@ export function FlowieLogo({
    loading?: boolean;
    label?: boolean;
 }) {
+   const source = withBasePath(label ? '/brand/flowie-logo.svg' : '/flowie-icon.svg');
    return (
-      <span className={cn('inline-flex items-center gap-2.5', className)}>
-         <svg
-            aria-label={loading ? 'Flowie đang tải' : 'Flowie'}
-            className={cn('flowie-logo size-8 shrink-0', loading && 'flowie-logo-loading')}
-            fill="none"
-            role="img"
-            viewBox="0 0 72 72"
-         >
-            <rect height="72" rx="16" width="72" fill="#09090b" />
-            <path d="M15 15h26L32 28H23L15 15Z" fill="#ff761a" />
-            <path d="M41 15h24L46 43 33 28 41 15Z" fill="#ff963f" />
-            <path d="m23 28 10 15-10 16H15l8-31Z" fill="#f75b0b" />
-            <path d="m33 43h13l13 16H23l10-16Z" fill="#ffd49f" />
-            <path d="M46 43 65 15v31L59 59 46 43Z" fill="#c94206" />
-            {loading && (
-               <circle
-                  cx="36"
-                  cy="36"
-                  fill="none"
-                  r="31"
-                  stroke="#ffffff"
-                  strokeDasharray="28 168"
-                  strokeLinecap="round"
-                  strokeWidth="2"
-               >
-                  <animateTransform
-                     attributeName="transform"
-                     dur="900ms"
-                     from="0 36 36"
-                     repeatCount="indefinite"
-                     to="360 36 36"
-                     type="rotate"
-                  />
-               </circle>
-            )}
-         </svg>
-         {label && <span className="text-lg font-semibold tracking-[-0.04em]">Flowie</span>}
-      </span>
+      <HStack gap={0} className={cn('inline-flex shrink-0', className)}>
+         {loading ? (
+            <picture className={label ? 'block w-40 shrink-0' : 'block w-36 shrink-0'}>
+               <source
+                  media="(prefers-reduced-motion: reduce)"
+                  srcSet={withBasePath('/brand/flowie-logo.svg')}
+               />
+               {/* Local brand artwork renders as an inert image; reduced motion always gets the static logo.
+             VI: Asset thương hiệu local hiển thị dưới dạng ảnh bất hoạt; giảm chuyển động luôn dùng logo tĩnh. */}
+               <img
+                  src={withBasePath('/brand/flowie-motion.svg')}
+                  width={1170}
+                  height={450}
+                  alt="Flowie"
+                  className="block h-auto w-full rounded"
+               />
+            </picture>
+         ) : (
+            <svg
+               role="img"
+               aria-label="Flowie"
+               viewBox={label ? '0 0 1170 450' : '35 50 375 350'}
+               className={label ? 'block h-auto w-32 shrink-0 rounded' : 'block size-8 shrink-0'}
+            >
+               <image
+                  href={source}
+                  x={label ? 0 : 35}
+                  y={label ? 0 : 50}
+                  width={label ? 1170 : 375}
+                  height={label ? 450 : 350}
+               />
+            </svg>
+         )}
+      </HStack>
    );
 }
