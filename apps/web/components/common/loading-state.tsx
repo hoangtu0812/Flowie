@@ -24,8 +24,8 @@ export function LoadingState({
          className={cn('h-full min-h-32', className)}
          role="status"
       >
-         <VStack gap={0} aria-hidden="true">
-            <FlowieLogo loading label />
+         <VStack gap={0} padding={3} className="rounded-2xl bg-muted/50" aria-hidden="true">
+            <FlowieLogo loading />
          </VStack>
          <Text type="supporting">{label}</Text>
       </VStack>

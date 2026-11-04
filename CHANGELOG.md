@@ -316,6 +316,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Changed
 
+- Flowie branding blends into light/dark surfaces with transparent artwork and an adaptive wordmark. Loading uses a compact symbol with a continuous gentle loop; full logos keep stable dimensions during sign-in and respect reduced motion. Web only; no migration. (DTD-267, #131)
+  VI: Logo Flowie hòa vào nền sáng/tối bằng ảnh trong suốt và wordmark theo theme. Loading dùng biểu tượng gọn với vòng lặp nhẹ liên tục; logo đầy đủ giữ kích thước ổn định khi đăng nhập và tôn trọng giảm chuyển động. Chỉ web; không migration.
+
 - Flowie uses the supplied blue/teal/green brand logo and five-second loading motion across authentication, admin branding, shared loading states and favicon/PWA icons. Reduced-motion browsers receive static artwork. Web only; no migration. (DTD-267, #128)
   VI: Flowie dùng logo xanh dương/xanh ngọc/xanh lá và loading motion 5 giây được cung cấp tại auth, admin, loader dùng chung và icon favicon/PWA. Trình duyệt giảm chuyển động nhận ảnh tĩnh. Chỉ web; không migration.
 

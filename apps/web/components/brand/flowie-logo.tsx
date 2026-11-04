@@ -1,3 +1,7 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useTheme } from 'next-themes';
 import { HStack } from '@astryxdesign/core/Layout';
 import { cn } from '@/lib/utils';
 import { withBasePath } from '@/lib/base-path';
@@ -11,39 +15,41 @@ export function FlowieLogo({
    loading?: boolean;
    label?: boolean;
 }) {
-   const source = withBasePath(label ? '/brand/flowie-logo.svg' : '/flowie-icon.svg');
+   const { resolvedTheme } = useTheme();
+   const [mounted, setMounted] = useState(false);
+   useEffect(() => setMounted(true), []);
+   // The server cannot read saved themes; defer variant choice while keeping identical media dimensions.
+   // VI: Server không đọc được theme đã lưu; hoãn chọn biến thể nhưng giữ cùng kích thước media.
+   const suffix = mounted && resolvedTheme === 'dark' ? '-dark' : '';
+   const source = withBasePath(label ? `/brand/flowie-logo${suffix}.svg` : '/flowie-icon.svg');
+   const motion = withBasePath(
+      label ? `/brand/flowie-motion${suffix}.svg` : '/brand/flowie-symbol-motion.svg'
+   );
+   const width = label ? 1110 : 400;
+   const height = label ? 350 : 400;
    return (
       <HStack gap={0} className={cn('inline-flex shrink-0', className)}>
          {loading ? (
-            <picture className={label ? 'block w-40 shrink-0' : 'block w-36 shrink-0'}>
-               <source
-                  media="(prefers-reduced-motion: reduce)"
-                  srcSet={withBasePath('/brand/flowie-logo.svg')}
-               />
-               {/* Local brand artwork renders as an inert image; reduced motion always gets the static logo.
-             VI: Asset thương hiệu local hiển thị dưới dạng ảnh bất hoạt; giảm chuyển động luôn dùng logo tĩnh. */}
+            <picture className={label ? 'block w-32 shrink-0' : 'block size-14 shrink-0'}>
+               <source media="(prefers-reduced-motion: reduce)" srcSet={source} />
+               {/* The app theme chooses contrast; reduced motion retains the same dimensions and logo kind.
+                   VI: Theme app chọn độ tương phản; giảm chuyển động giữ cùng kích thước và dạng logo. */}
                <img
-                  src={withBasePath('/brand/flowie-motion.svg')}
-                  width={1170}
-                  height={450}
+                  src={motion}
+                  width={width}
+                  height={height}
                   alt="Flowie"
-                  className="block h-auto w-full rounded"
+                  className="block h-auto w-full"
                />
             </picture>
          ) : (
             <svg
                role="img"
                aria-label="Flowie"
-               viewBox={label ? '0 0 1170 450' : '35 50 375 350'}
-               className={label ? 'block h-auto w-32 shrink-0 rounded' : 'block size-8 shrink-0'}
+               viewBox={`0 0 ${width} ${height}`}
+               className={label ? 'block h-auto w-32 shrink-0' : 'block size-8 shrink-0'}
             >
-               <image
-                  href={source}
-                  x={label ? 0 : 35}
-                  y={label ? 0 : 50}
-                  width={label ? 1170 : 375}
-                  height={label ? 450 : 350}
-               />
+               <image href={source} x={0} y={0} width={width} height={height} />
             </svg>
          )}
       </HStack>
