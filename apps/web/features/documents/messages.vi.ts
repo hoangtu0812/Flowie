@@ -1,4 +1,17 @@
 export const messages = {
+   'Could not load approval permissions.': 'Không tải được quyền duyệt tài liệu.',
+   'Loading approval permissions…': 'Đang tải quyền duyệt tài liệu…',
+   'Retry': 'Thử lại',
+   'Approval is not ready': 'Chưa đủ điều kiện duyệt',
+   'You wrote this document: another reviewer must approve it first.':
+      'Bạn là tác giả tài liệu: cần reviewer khác đồng ý trước khi duyệt.',
+   '{count} reviewer(s) have not approved this version yet.':
+      'Còn {count} reviewer chưa đồng ý phiên bản này.',
+   'Assign another team member as a reviewer and wait for their agreement. Documents created through MCP use the connection owner as their author.':
+      'Phân công thành viên khác làm reviewer và chờ họ đồng ý. Tài liệu tạo qua MCP có tác giả là chủ kết nối.',
+   'Check the reviewers above and wait for every assigned reviewer to agree.':
+      'Kiểm tra danh sách reviewer phía trên và chờ tất cả reviewer được giao đồng ý.',
+
    'Drag to move documents': 'Kéo để di chuyển tài liệu',
    'Moving…': 'Đang di chuyển…',
    'Drag items onto folders to move them.': 'Kéo mục vào thư mục để di chuyển.',

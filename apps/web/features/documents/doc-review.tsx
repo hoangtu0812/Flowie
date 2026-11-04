@@ -1,7 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, CircleDashed, MessageSquareWarning, UserPlus, X } from 'lucide-react';
+import { VStack } from '@astryxdesign/core/Layout';
+import { Text } from '@astryxdesign/core/Text';
+import { Button as ActionButton } from '@astryxdesign/core/Button';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -30,30 +33,57 @@ const failure = (caught: unknown, fallback: string) =>
  */
 export function useDocumentReview(document: ProjectTreeDocument, onChanged?: () => void) {
    const tx = useMessages(messages);
-   const [review, setReview] = useState<DocumentReview>();
+   const key = `${document.id}:${document.version}:${document.status}`;
+   const activeKey = useRef(key);
+   activeKey.current = key;
+   const request = useRef(0);
+   const [attempt, setAttempt] = useState(0);
+   const [snapshot, setSnapshot] = useState<{
+      key: string;
+      review?: DocumentReview;
+      failed?: boolean;
+   }>();
    useEffect(() => {
+      const generation = ++request.current;
       let active = true;
+      setSnapshot(undefined);
       void loadDocumentReview(document.id)
-         .then((state) => active && setReview(state))
-         .catch(() => active && setReview(undefined));
+         .then((review) => {
+            if (active && generation === request.current) setSnapshot({ key, review });
+         })
+         .catch(() => {
+            if (active && generation === request.current) setSnapshot({ key, failed: true });
+         });
       return () => {
          active = false;
       };
-   }, [document.id, document.version, document.status]);
+   }, [document.id, key, attempt]);
    const run = useCallback(
       async (action: () => Promise<DocumentReview>) => {
+         // New actions invalidate older reads; only the newest response may replace permissions.
+         // VI: Thao tác mới vô hiệu lượt đọc cũ; chỉ phản hồi mới nhất được thay quyền hiện tại.
+         const generation = ++request.current;
          try {
-            setReview(await action());
+            const review = await action();
+            if (activeKey.current !== key) return false;
+            if (generation === request.current) setSnapshot({ key, review });
             onChanged?.();
             return true;
          } catch (caught) {
-            toast.error(failure(caught, tx('Could not save.')));
+            if (activeKey.current === key) toast.error(failure(caught, tx('Could not save.')));
             return false;
          }
       },
-      [onChanged, tx]
+      [key, onChanged, tx]
    );
-   return { review, run };
+   const current = snapshot?.key === key ? snapshot : undefined;
+   return {
+      review: current?.review,
+      failed: !!current?.failed,
+      loading: !current,
+      retry: () => setAttempt((n) => n + 1),
+      run,
+   };
 }
 
 /**
@@ -69,13 +99,44 @@ export function DocumentReviewPanel({
    documentId,
    review,
    run,
+   loading = false,
+   failed = false,
+   onRetry,
 }: {
+   loading?: boolean;
+   failed?: boolean;
+   onRetry?: () => void;
    documentId: string;
    review: DocumentReview | undefined;
    run: (action: () => Promise<DocumentReview>) => Promise<boolean>;
 }) {
    const tx = useMessages(messages);
+   if (loading || failed)
+      return (
+         <VStack
+            as="section"
+            gap={2}
+            aria-label={tx('Review')}
+            className="rounded border border-border p-3"
+         >
+            <Text role={failed ? 'alert' : 'status'}>
+               {tx(
+                  failed ? 'Could not load approval permissions.' : 'Loading approval permissions…'
+               )}
+            </Text>
+            {failed && <ActionButton size="sm" label={tx('Retry')} onClick={onRetry} />}
+         </VStack>
+      );
    if (!review || (review.status !== 'IN_REVIEW' && review.reviewers.length === 0)) return null;
+   const reason = review.approveBlockedReason;
+   const pending = /^(\d+) reviewer\(s\) have not approved this version yet\.$/.exec(reason ?? '');
+   const ownDocument =
+      reason === 'You wrote this document: another reviewer must approve it first.';
+   const explanation = ownDocument
+      ? tx('You wrote this document: another reviewer must approve it first.')
+      : pending
+        ? tx('{count} reviewer(s) have not approved this version yet.', { count: pending[1] })
+        : reason;
    return (
       <section
          aria-label={tx('Review')}
@@ -129,6 +190,19 @@ export function DocumentReviewPanel({
                   </span>
                </p>
             ))}
+         {review.status === 'IN_REVIEW' && explanation && (
+            <VStack gap={1} className="rounded bg-muted p-3 text-foreground" role="status">
+               <Text type="label">{tx('Approval is not ready')}</Text>
+               <Text>{explanation}</Text>
+               <Text type="supporting">
+                  {tx(
+                     ownDocument
+                        ? 'Assign another team member as a reviewer and wait for their agreement. Documents created through MCP use the connection owner as their author.'
+                        : 'Check the reviewers above and wait for every assigned reviewer to agree.'
+                  )}
+               </Text>
+            </VStack>
+         )}
          {review.canDecide && (
             <DecisionButtons
                onDecide={(decision, note) =>
