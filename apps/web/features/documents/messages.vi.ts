@@ -178,6 +178,7 @@ export const messages = {
    'Approver': 'Người duyệt cuối',
    'Reviewers': 'Reviewer',
    'The lead reviews it.': 'Lead tự review.',
+   'No reviewers assigned.': 'Chưa phân công reviewer.',
    'Agreed': 'Đã đồng ý',
    'Changes requested': 'Yêu cầu sửa',
    'Waiting': 'Chưa review',

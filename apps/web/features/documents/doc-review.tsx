@@ -88,11 +88,11 @@ export function useDocumentReview(document: ProjectTreeDocument, onChanged?: () 
 
 /**
  * Review block under the linked tasks: who approves, each reviewer's decision with its note,
- * the lead's reviewer picker and the assigned reviewer's Approve / Request changes. Hidden for a
+ * the eligible approver's reviewer picker and the assigned reviewer's Approve / Request changes. Hidden for a
  * document that is neither in review nor has reviewers. Permissions come from the server, which
  * enforces the same rules.
  * VI: Khối duyệt dưới task liên kết: ai duyệt cuối, quyết định của từng reviewer kèm nhận xét,
- * VI: hộp chọn reviewer của lead và nút Đồng ý / Yêu cầu sửa của reviewer được giao. Ẩn với tài
+ * VI: hộp chọn reviewer của người duyệt hợp lệ và nút Đồng ý / Yêu cầu sửa của reviewer được giao. Ẩn với tài
  * VI: liệu không Đang duyệt và chưa có reviewer. Quyền lấy từ server, nơi áp dụng cùng quy tắc.
  */
 export function DocumentReviewPanel({
@@ -156,7 +156,7 @@ export function DocumentReviewPanel({
          </div>
          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span>{tx('Reviewers')}:</span>
-            {review.reviewers.length === 0 && <span>{tx('The lead reviews it.')}</span>}
+            {review.reviewers.length === 0 && <span>{tx('No reviewers assigned.')}</span>}
             {review.reviewers.map((reviewer) => (
                <span
                   key={reviewer.id}

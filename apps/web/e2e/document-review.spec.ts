@@ -10,11 +10,9 @@ const fixture = JSON.parse(readFileSync('.e2e-fixture.json', 'utf8')) as {
 };
 const api = 'http://localhost:4000/api/v1';
 
-// The fixture user leads the team and writes the document: they can assign reviewers and review,
-// but Approve stays disabled with the reason until another reviewer agrees.
-// VI: User fixture là lead của team và là tác giả: phân công và review được, nhưng nút Duyệt bị
-// VI: khoá kèm lý do cho tới khi có reviewer khác đồng ý.
-test('a lead assigns reviewers, reviews, and cannot approve their own document alone', async ({
+// Workspace owners can approve their own documents, but assigned reviewers must still agree.
+// VI: Owner workspace được duyệt tài liệu tự tạo, nhưng reviewer đã giao vẫn phải đồng ý.
+test('a workspace owner approves their own document after assigned reviewers agree', async ({
    page,
    context,
 }, testInfo) => {
@@ -51,23 +49,12 @@ test('a lead assigns reviewers, reviews, and cannot approve their own document a
       const review = page.getByRole('region', { name: /^(Review|Duyệt tài liệu)$/ });
       await expect(review).toBeVisible();
       const approve = page.getByRole('button', { name: /^(Approve|Duyệt)$/ });
-      await expect(approve).toBeDisabled();
-      await expect(
-         review.getByText('You wrote this document: another reviewer must approve it first.', {
-            exact: true,
-         })
-      ).toBeVisible();
-      await expect(review.getByText(/Documents created through MCP/)).toBeVisible();
+      await expect(approve).toBeEnabled();
       for (const width of [1024, 390]) {
          await page.setViewportSize({ width, height: 900 });
          await expect(approve).toBeInViewport();
-         await expect(review.getByText('Approval is not ready', { exact: true })).toBeVisible();
-         expect(
-            await page.locator('body').evaluate((el) => el.scrollWidth <= window.innerWidth + 1)
-         ).toBeTruthy();
       }
       await page.setViewportSize({ width: 1024, height: 900 });
-      await page.screenshot({ path: testInfo.outputPath('approval-guidance-ipad.png') });
       await review.getByRole('button', { name: /^(Assign reviewers|Phân công reviewer)$/ }).click();
       await page
          .getByRole('group', { name: /^(Reviewers|Reviewer)$/ })
@@ -75,10 +62,25 @@ test('a lead assigns reviewers, reviews, and cannot approve their own document a
          .first()
          .check();
       await page.getByRole('button', { name: /^(Save|Lưu)$/ }).click();
+      await expect(approve).toBeDisabled();
+      await expect(
+         review.getByText('1 reviewer(s) have not approved this version yet.', { exact: true })
+      ).toBeVisible();
       await review.getByRole('button', { name: /^(Looks good|Đồng ý)$/ }).click();
       await expect(review.getByLabel(/^(Agreed|Đã đồng ý)$/)).toBeVisible();
-      await expect(approve).toBeDisabled();
-      await expect(approve).toHaveAttribute('title', /another reviewer/);
+      await expect(approve).toBeEnabled();
+      await page.screenshot({ path: testInfo.outputPath('owner-approval-ready.png') });
+      await approve.click();
+      await page.getByRole('button', { name: 'Confirm approval v1', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'Return to draft', exact: true })).toHaveCount(
+         0
+      );
+      const saved = await context.request.get(
+         `${api}/documents/${document.id}?workspaceId=${workspaceId}`
+      );
+      const result = (await saved.json()).data;
+      expect(result.status).toBe('APPROVED');
+      expect(result.release).toBe(1);
    } finally {
       await context.request.delete(`${api}/documents/${document.id}?workspaceId=${workspaceId}`);
    }
