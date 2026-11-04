@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Button } from '@astryxdesign/core/Button';
 import { Text } from '@astryxdesign/core/Text';
 import { ZoomIn, ZoomOut, RotateCcw, Minimize2 } from 'lucide-react';
 import { useMessages } from '@/features/shared/use-messages';
-import { clampMediaView, zoomMediaView, type MediaBounds } from '@/lib/inline-media';
+import type { MediaBounds } from '@/lib/inline-media';
 
 const messages = {
    'Expand {name}': 'Mở rộng {name}',
@@ -22,12 +22,12 @@ const messages = {
 } as const;
 
 /**
- * Changes the SVG viewport rather than transforming a floating overlay: the expanded frame
- * remains in document flow. Pointer coordinates use the initial inverse CTM, so panning
- * stays stable as viewBox changes; clamping keeps every zoomed edge reachable without gaps.
- * VI: Đổi viewport SVG thay vì biến đổi lớp nổi: khung mở rộng vẫn nằm trong luồng tài liệu.
- * Tọa độ con trỏ dùng CTM nghịch đảo ban đầu nên pan ổn định khi viewBox đổi; clamp cho xem
- * được mọi mép ảnh đã phóng mà không kéo lộ khoảng trống ngoài ảnh.
+ * Horizontal overflow belongs to the media; vertical movement belongs to the document.
+ * The SVG always retains its complete viewBox, so zoom increases layout height instead of
+ * clipping a taller drawing. Numeric SVG dimensions come from measured width/source ratio.
+ * VI: Tràn ngang thuộc vùng ảnh; di chuyển dọc thuộc tài liệu. SVG luôn giữ viewBox đầy đủ,
+ * nên zoom tăng chiều cao layout thay vì cắt hình dài. Kích thước SVG lấy từ chiều rộng đo
+ * được và tỷ lệ nguồn.
  */
 export function InlineMedia({
    label,
@@ -40,95 +40,57 @@ export function InlineMedia({
 }) {
    const tx = useMessages(messages);
    const [expanded, setExpanded] = useState(false);
-   const [view, setView] = useState(bounds);
-   const frame = useRef<SVGSVGElement>(null);
+   const [zoom, setZoom] = useState(1);
+   const [width, setWidth] = useState(bounds.width);
+   const frame = useRef<HTMLDivElement>(null);
    const expandButton = useRef<HTMLButtonElement>(null);
    const drag = useRef<
-      { pointer: number; point: DOMPoint; inverse: DOMMatrix; view: MediaBounds } | undefined
+      | {
+           pointer: number;
+           x: number;
+           y: number;
+           left: number;
+           top: number;
+           scroll: HTMLElement | null;
+        }
+      | undefined
    >(undefined);
-   const zoom = bounds.width / view.width;
-   const changeZoom = (factor: number) =>
-      setView((current) => zoomMediaView(bounds, current, factor));
-   const collapse = () => {
-      setExpanded(false);
-      setView(bounds);
-      drag.current = undefined;
-      requestAnimationFrame(() => expandButton.current?.focus());
+   useLayoutEffect(() => {
+      const element = frame.current;
+      if (!element) return;
+      setWidth(element.clientWidth || bounds.width);
+      const observer = new ResizeObserver(() => setWidth(element.clientWidth || bounds.width));
+      observer.observe(element);
+      return () => observer.disconnect();
+   }, [bounds.width, expanded]);
+   const verticalScroller = () => {
+      let element = frame.current?.parentElement ?? null;
+      while (element) {
+         if (
+            /(auto|scroll)/.test(getComputedStyle(element).overflowY) &&
+            element.scrollHeight > element.clientHeight
+         )
+            return element;
+         element = element.parentElement;
+      }
+      return null;
+   };
+   const moveVertical = (scroll: HTMLElement | null, top: number) => {
+      if (scroll) scroll.scrollTop = top;
+      else window.scrollTo({ top, behavior: 'instant' });
+   };
+   const reset = () => {
+      setZoom(1);
+      if (frame.current) frame.current.scrollLeft = 0;
    };
    const svg = (
       <svg
-         ref={frame}
          role="img"
          aria-label={label}
-         tabIndex={expanded ? 0 : undefined}
-         viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`}
-         width={bounds.width}
-         height={bounds.height}
-         className={
-            expanded
-               ? 'block h-96 w-full touch-none cursor-grab active:cursor-grabbing rounded border border-border'
-               : 'block h-auto w-full max-h-80'
-         }
-         onKeyDown={(event) => {
-            if (!expanded) return;
-            if (
-               ['+', '=', '-', '0', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(
-                  event.key
-               )
-            )
-               event.preventDefault();
-            if (event.key === '+' || event.key === '=') changeZoom(1.25);
-            if (event.key === '-') changeZoom(0.8);
-            if (event.key === '0') setView(bounds);
-            const dx = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0;
-            const dy = event.key === 'ArrowUp' ? -1 : event.key === 'ArrowDown' ? 1 : 0;
-            if (dx || dy)
-               setView((current) =>
-                  clampMediaView(bounds, {
-                     ...current,
-                     x: current.x + (dx * current.width) / 5,
-                     y: current.y + (dy * current.height) / 5,
-                  })
-               );
-         }}
-         onPointerDown={(event) => {
-            if (!expanded || event.button !== 0) return;
-            const matrix = event.currentTarget.getScreenCTM();
-            if (!matrix) return;
-            const inverse = matrix.inverse();
-            drag.current = {
-               pointer: event.pointerId,
-               point: new DOMPoint(event.clientX, event.clientY).matrixTransform(inverse),
-               inverse,
-               view,
-            };
-            event.currentTarget.setPointerCapture(event.pointerId);
-            event.currentTarget.focus();
-            event.preventDefault();
-         }}
-         onPointerMove={(event) => {
-            const initial = drag.current;
-            if (!initial || initial.pointer !== event.pointerId) return;
-            const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(
-               initial.inverse
-            );
-            setView(
-               clampMediaView(bounds, {
-                  ...initial.view,
-                  x: initial.view.x - (point.x - initial.point.x),
-                  y: initial.view.y - (point.y - initial.point.y),
-               })
-            );
-         }}
-         onPointerUp={() => {
-            drag.current = undefined;
-         }}
-         onPointerCancel={() => {
-            drag.current = undefined;
-         }}
-         onLostPointerCapture={() => {
-            drag.current = undefined;
-         }}
+         viewBox={`${bounds.x} ${bounds.y} ${bounds.width} ${bounds.height}`}
+         width={expanded ? width * zoom : bounds.width}
+         height={expanded ? (width * zoom * bounds.height) / bounds.width : bounds.height}
+         className={expanded ? 'block max-w-none shrink-0' : 'block h-auto w-full'}
       >
          {children}
       </svg>
@@ -137,38 +99,110 @@ export function InlineMedia({
       <VStack gap={2} data-media-expanded={String(expanded)} className="my-2 min-w-0 w-full">
          {expanded ? (
             <>
-               <HStack gap={1} wrap="wrap">
+               <HStack gap={1} wrap="wrap" className="sticky top-0 z-10 bg-background">
                   <Button
                      size="sm"
                      label={tx('Zoom in')}
                      icon={<ZoomIn />}
                      isDisabled={zoom >= 8}
-                     onClick={() => changeZoom(1.25)}
+                     onClick={() => setZoom((z) => Math.min(8, z * 1.25))}
                   />
                   <Button
                      size="sm"
                      label={tx('Zoom out')}
                      icon={<ZoomOut />}
                      isDisabled={zoom <= 1}
-                     onClick={() => changeZoom(0.8)}
+                     onClick={() => setZoom((z) => Math.max(1, z * 0.8))}
                   />
                   <Text type="supporting" aria-live="polite">
                      {Math.round(zoom * 100)}%
                   </Text>
-                  <Button
-                     size="sm"
-                     label={tx('Reset view')}
-                     icon={<RotateCcw />}
-                     onClick={() => setView(bounds)}
-                  />
+                  <Button size="sm" label={tx('Reset view')} icon={<RotateCcw />} onClick={reset} />
                   <Button
                      size="sm"
                      label={tx('Collapse')}
                      icon={<Minimize2 />}
-                     onClick={collapse}
+                     onClick={() => {
+                        reset();
+                        setExpanded(false);
+                        drag.current = undefined;
+                        requestAnimationFrame(() =>
+                           expandButton.current?.focus({ preventScroll: true })
+                        );
+                     }}
                   />
                </HStack>
-               {svg}
+               <VStack
+                  ref={frame}
+                  gap={0}
+                  role="region"
+                  aria-label={label}
+                  tabIndex={0}
+                  data-media-scroll="true"
+                  className="block w-full min-w-0 overflow-x-auto touch-none cursor-grab active:cursor-grabbing rounded border border-border"
+                  onKeyDown={(event) => {
+                     if (
+                        ![
+                           '+',
+                           '=',
+                           '-',
+                           '0',
+                           'ArrowLeft',
+                           'ArrowRight',
+                           'ArrowUp',
+                           'ArrowDown',
+                        ].includes(event.key)
+                     )
+                        return;
+                     event.preventDefault();
+                     if (event.key === '+' || event.key === '=')
+                        setZoom((z) => Math.min(8, z * 1.25));
+                     if (event.key === '-') setZoom((z) => Math.max(1, z * 0.8));
+                     if (event.key === '0') reset();
+                     if (event.key === 'ArrowLeft') event.currentTarget.scrollLeft -= width / 5;
+                     if (event.key === 'ArrowRight') event.currentTarget.scrollLeft += width / 5;
+                     if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                        const scroll = verticalScroller();
+                        moveVertical(
+                           scroll,
+                           (scroll?.scrollTop ?? window.scrollY) +
+                              ((event.key === 'ArrowUp' ? -1 : 1) * window.innerHeight) / 5
+                        );
+                     }
+                  }}
+                  onPointerDown={(event) => {
+                     if (event.button !== 0) return;
+                     const scroll = verticalScroller();
+                     drag.current = {
+                        pointer: event.pointerId,
+                        x: event.clientX,
+                        y: event.clientY,
+                        left: event.currentTarget.scrollLeft,
+                        top: scroll?.scrollTop ?? window.scrollY,
+                        scroll,
+                     };
+                     event.currentTarget.setPointerCapture(event.pointerId);
+                     event.currentTarget.focus({ preventScroll: true });
+                     event.preventDefault();
+                  }}
+                  onPointerMove={(event) => {
+                     const start = drag.current;
+                     if (!start || start.pointer !== event.pointerId) return;
+                     event.currentTarget.scrollLeft = start.left - (event.clientX - start.x);
+                     moveVertical(start.scroll, start.top - (event.clientY - start.y));
+                  }}
+                  onPointerUp={() => {
+                     drag.current = undefined;
+                  }}
+                  onPointerCancel={() => {
+                     drag.current = undefined;
+                  }}
+                  onLostPointerCapture={() => {
+                     drag.current = undefined;
+                  }}
+               >
+                  {svg}
+               </VStack>
                <Text type="supporting">
                   {tx('Drag to pan. Arrow keys move; + / − zoom; 0 resets.')}
                </Text>
@@ -180,7 +214,7 @@ export function InlineMedia({
                aria-label={tx('Expand {name}', { name: label })}
                className="block w-full max-w-full cursor-zoom-in rounded text-left focus-visible:ring-2 focus-visible:ring-primary"
                onClick={() => {
-                  setView(bounds);
+                  reset();
                   setExpanded(true);
                }}
             >

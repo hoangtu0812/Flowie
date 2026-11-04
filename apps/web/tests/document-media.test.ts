@@ -2,7 +2,6 @@ import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 import { documentFrontMatter } from '../lib/document-front-matter';
 import { markdownHeadings } from '../lib/markdown-headings';
-import { clampMediaView, zoomMediaView } from '../lib/inline-media';
 
 test('document front matter strips metadata and accepts bounded Mermaid display options', () => {
    const source =
@@ -46,15 +45,30 @@ test('invalid, duplicate, aliased and oversized YAML fail safely without hiding 
    assert.equal(documentFrontMatter(unfinished).body, unfinished);
 });
 
-test('zoom preserves center, clamps to 1–8 and pan remains within nonzero image bounds', () => {
-   const bounds = { x: -8, y: -8, width: 1000, height: 500 };
-   const zoomed = zoomMediaView(bounds, bounds, 2);
-   assert.deepEqual(zoomed, { x: 242, y: 117, width: 500, height: 250 });
-   assert.deepEqual(clampMediaView(bounds, { ...zoomed, x: -999, y: 999 }), {
-      ...zoomed,
-      x: -8,
-      y: 242,
-   });
-   assert.equal(zoomMediaView(bounds, zoomed, 999).width, 125);
-   assert.deepEqual(zoomMediaView(bounds, zoomed, 0.0001), bounds);
+import { readMermaidPreferences, defaultMermaidPreferences } from '../lib/mermaid-preferences';
+test('Mermaid preferences accept display allowlists only and recover invalid stored data', () => {
+   assert.deepEqual(readMermaidPreferences('{'), defaultMermaidPreferences);
+   assert.deepEqual(
+      readMermaidPreferences(
+         JSON.stringify({
+            theme: 'dark',
+            curve: 'linear',
+            customBackground: true,
+            background: 'transparent',
+            securityLevel: 'loose',
+         })
+      ),
+      { theme: 'dark', curve: 'linear', customBackground: true, background: 'transparent' }
+   );
+   assert.deepEqual(
+      readMermaidPreferences(
+         JSON.stringify({
+            theme: '__proto__',
+            curve: 'unsafe',
+            customBackground: 'true',
+            background: 'url(unsafe)',
+         })
+      ),
+      defaultMermaidPreferences
+   );
 });

@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- Document media keeps its natural height as inline zoom grows the page, with local horizontal scrolling and document panning. Mermaid palettes stay readable in dark mode and browser-wide display settings persist without editing source. Web only; no migration. (DTD-266)
+  VI: Media tài liệu giữ chiều cao tự nhiên, zoom inline tăng chiều dài trang, cuộn ngang cục bộ và kéo cuộn tài liệu. Palette Mermaid đọc rõ trong dark mode, tùy chọn hiển thị toàn trình duyệt được nhớ mà không sửa nguồn. Chỉ web; không migration.
+
 - Workspace owners and admins can save a display name in General settings; sidebar, switcher and tab titles refresh while URLs and aliases stay unchanged. Failed saves retain the draft. Deploy API and web together; no migration. (DTD-264, #125)
   VI: Owner và admin lưu được tên hiển thị trong General; sidebar, bộ chọn và title tab cập nhật trong khi URL và alias giữ nguyên. Lỗi lưu giữ bản nháp. Triển khai API/web cùng bản; không migration.
 
