@@ -13,6 +13,7 @@ import { authenticatedFetch } from '@/lib/workspaces';
 import { useIssuesStore } from '@/store/issues-store';
 import { useMessages } from '@/features/shared/use-messages';
 import { issueHref } from '@/lib/issue-route';
+import { withBasePath } from '@/lib/base-path';
 import type { Issue } from '@/mock-data/issues';
 
 const messages = {
@@ -118,7 +119,9 @@ export function IssueSubtaskPopover({
                            <ListItem
                               key={child.id}
                               label={`${child.identifier} · ${child.title}`}
-                              href={issueHref(orgId, child.identifier, projectPath)}
+                              // ListItem renders a native anchor; unlike Next Link, it needs the browser base path.
+                              // VI: ListItem tạo anchor thuần; khác Next Link, nó cần thêm base path của trình duyệt.
+                              href={withBasePath(issueHref(orgId, child.identifier, projectPath))}
                               startContent={
                                  <Icon
                                     icon={statusIcon(child.status.category)}

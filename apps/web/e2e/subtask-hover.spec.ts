@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 const fixture = JSON.parse(readFileSync('.e2e-fixture.json', 'utf8'));
 const api = 'http://localhost:4000/api/v1';
+const basePath = process.env.FLOWIE_E2E_BASE_PATH ?? '';
+const appPath = (path: string) => `${basePath}${path}`;
 let created: string[] = [];
 test.afterEach(async ({ context }) => {
    test.setTimeout(30000);
@@ -14,7 +16,7 @@ test('subtask badge loads direct children, retries, scrolls and supports hover a
    page,
    context,
 }, testInfo) => {
-   await page.goto('/auth/login');
+   await page.goto(appPath('/auth/login'));
    await page.getByLabel('Email', { exact: true }).fill(fixture.email);
    await page.getByLabel('Password', { exact: true }).fill(fixture.password);
    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
@@ -38,7 +40,7 @@ test('subtask badge loads direct children, retries, scrolls and supports hover a
       if (fail) return route.fulfill({ status: 503, json: { message: 'Synthetic failure' } });
       await route.continue();
    });
-   await page.goto(`/${fixture.slug}/issues`);
+   await page.goto(appPath(`/${fixture.slug}/issues`));
    const badge = page.getByRole('button', {
       name: `Sub-issues of ${parent.identifier}`,
       exact: true,
@@ -68,7 +70,27 @@ test('subtask badge loads direct children, retries, scrolls and supports hover a
    await page.mouse.move(0, 0);
    await badge.hover();
    const destination = popup.locator(`a[href$="/issue/${children[17].identifier}"]`);
+   const detailPath = appPath(`/${fixture.slug}/issue/${children[17].identifier}`);
+   await expect(destination).toHaveAttribute('href', detailPath);
    await destination.scrollIntoViewIfNeeded();
    await destination.click();
-   await expect(page).toHaveURL(new RegExp(`/issue/${children[17].identifier}$`));
+   await expect(page).toHaveURL(detailPath);
+   await expect(page.getByText(children[17].title, { exact: true }).first()).toBeVisible();
+   await page.reload();
+   await expect(page).toHaveURL(detailPath);
+   await expect(page.getByText(children[17].title, { exact: true }).first()).toBeVisible();
+   writeFileSync(
+      testInfo.outputPath('subtask-navigation.json'),
+      JSON.stringify(
+         {
+            browser: testInfo.project.name,
+            basePath,
+            expectedPath: detailPath,
+            actualUrlAfterReload: page.url(),
+            identifier: children[17].identifier,
+         },
+         null,
+         2
+      )
+   );
 });
