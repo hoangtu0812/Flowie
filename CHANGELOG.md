@@ -222,6 +222,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
+- Subtask popover links keep the configured deployment base path (such as /flowie), so clicking a child opens the correct issue page. Root deployments remain supported; web only, no migration. (DTD-265, #126)
+  VI: Link task con trong popover giữ đường dẫn triển khai đã cấu hình (như /flowie), nên bấm task con mở đúng trang chi tiết. Vẫn hỗ trợ chạy ở gốc domain; chỉ đổi web, không migration.
+
 - Images attached through the MCP upload URL (PNG, JPEG, GIF, WebP, AVIF) keep their image type on servers whose container has no system MIME table, so they preview inline instead of downloading as `application/octet-stream`. Attachments already stored with the wrong type are not changed. API only; no schema change. (DTD-214, #101)
   VI: Ảnh đính kèm qua URL upload MCP (PNG, JPEG, GIF, WebP, AVIF) giữ đúng kiểu ảnh trên server có container không có bảng MIME của hệ thống, nên xem trước được thay vì chỉ tải về dạng `application/octet-stream`. Đính kèm đã lưu sai kiểu không được sửa. Chỉ đổi API; không đổi schema. (DTD-214)
 

@@ -5,6 +5,7 @@ if (!Number.isInteger(webPort) || webPort < 1 || webPort > 65535) {
    throw new Error('FLOWIE_E2E_WEB_PORT must be a valid TCP port.');
 }
 const webUrl = `http://localhost:${webPort}`;
+const webBasePath = process.env.FLOWIE_E2E_BASE_PATH ?? '';
 export default defineConfig({
    testDir: './e2e',
    fullyParallel: false,
@@ -48,7 +49,7 @@ export default defineConfig({
       },
       {
          command: `pnpm exec next start --hostname 127.0.0.1 --port ${webPort}`,
-         url: `${webUrl}/auth/login`,
+         url: `${webUrl}${webBasePath}/auth/login`,
          reuseExistingServer: !process.env.CI,
          timeout: 60000,
       },
