@@ -31,6 +31,7 @@ import { TicketDetail } from './ticket-detail';
 import { TicketDialog } from './ticket-dialog';
 import { TicketEmailSwitch } from './ticket-email-switch';
 import { useSelectedTicket } from './use-selected-ticket';
+import { useTicketUpdates } from './use-ticket-updates';
 import { inState, TicketList, TicketStateSelect, type TicketState } from './ticket-list';
 
 type Desk = { tickets: Ticket[]; projects: TicketProject[] };
@@ -39,13 +40,11 @@ type Desk = { tickets: Ticket[]; projects: TicketProject[] };
  * Service Desk for people who only raise tickets, outside the workspace shell, so there is no
  * sidebar and no workspace in the URL: every call passes the workspace id. The workspace comes
  * from `?workspace=`, then the saved default, then the only membership; otherwise the person
- * picks one. Without an Inbox here, unread ticket notifications mark tickets with news, and data
- * reloads when the tab regains focus.
+ * picks one. Without an Inbox here, unread ticket notifications mark tickets with news.
  * VI: Service Desk cho người chỉ tạo ticket, nằm ngoài khung workspace, nên không có sidebar và
  * VI: không có workspace trên URL: mọi lời gọi đều truyền id workspace. Workspace lấy từ
  * VI: `?workspace=`, rồi workspace mặc định, rồi workspace duy nhất; còn lại thì người dùng tự
- * VI: chọn. Trang không có Inbox nên thông báo ticket chưa đọc đánh dấu ticket có tin mới, và dữ
- * VI: liệu tải lại khi tab được mở lại.
+ * VI: chọn. Trang không có Inbox nên thông báo ticket chưa đọc đánh dấu ticket có tin mới.
  */
 export function ServiceDeskPortal() {
    const tx = useMessages(messages);
@@ -105,12 +104,8 @@ export function ServiceDeskPortal() {
          setError(caught instanceof Error ? caught.message : 'Could not load tickets.');
       }
    }, [workspaceId]);
-   useEffect(() => {
-      void load();
-      const refresh = () => void load();
-      window.addEventListener('focus', refresh);
-      return () => window.removeEventListener('focus', refresh);
-   }, [load]);
+   useEffect(() => void load(), [load]);
+   useTicketUpdates(workspaceId, load);
 
    // Opening a ticket is reading it, so its dot clears here as it does in the Inbox.
    // VI: Mở ticket nghĩa là đã đọc, nên chấm tin mới được xoá giống như trong Inbox.

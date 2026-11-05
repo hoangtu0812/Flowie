@@ -14,6 +14,11 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ## Unreleased
 
+### Changed
+
+- Service Desk now updates by itself: when a ticket notification arrives, the list and the open ticket refresh without a reload and a draft reply stays in place. A dropped connection recovers on its own and data is read again when the tab regains focus, on the team page too. Team members who were not notified, such as when a ticket is assigned to a colleague, see changes when they return to the tab. Opening a ticket from the Inbox or a link now selects the Queue or My tickets tab that holds it. No migration; rebuild `web`. (DTD-297)
+  VI: Service Desk nay tự cập nhật: khi có thông báo ticket, danh sách và ticket đang mở làm mới mà không cần tải lại trang, và bản nháp phản hồi vẫn còn. Mất kết nối thì tự phục hồi, và dữ liệu được đọc lại khi quay lại tab, kể cả ở trang team. Thành viên team không nhận thông báo, ví dụ khi ticket đã giao cho đồng nghiệp, thấy thay đổi khi quay lại tab. Mở ticket từ Inbox hoặc link nay tự chọn tab Hàng đợi hoặc Ticket của tôi chứa ticket đó. Không có migration; build lại `web`. (DTD-297)
+
 ### Added
 
 - People who raise a Service Desk ticket now get email about it by default, with the ticket code, its title and a link that opens the ticket, in Vietnamese and English. Messages, decline reasons and file names stay in Flowie. They can turn these emails off on `/servicedesk` or in Settings → Notifications, and team members keep following their existing email setting, whose emails about tickets now use the same wording. Email about a ticket is dropped once the ticket is archived or the notification is over a day old, so turning SMTP on later does not send a backlog. Needs SMTP configured on the server. Includes a migration: rebuild `migrate`, `api` and `web`, and run `migrate` before `api`. (DTD-295, #146)
