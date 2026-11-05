@@ -16,7 +16,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
-- Platform access can be managed from the Users page of the /admin console: super admins grant or revoke the Super admin and Admin view only roles, and view-only admins can read the console but change nothing. Every role change is audited. `ADMIN_EMAIL` stays the permanent super admin, and these roles do not open workspace data. Includes a migration: rebuild `migrate`, `api` and `web`. (DTD-283)
+- Platform access can be managed from the Users page of the /admin console: super admins grant or revoke the Super admin and Admin view only roles, and view-only admins can read the console but change nothing. Every role change is audited. `ADMIN_EMAIL` stays the permanent super admin, and these roles do not open workspace data. Includes a migration: rebuild `migrate`, `api` and `web`. (DTD-283, #137)
   VI: Quyền hệ thống được quản lý ngay tại trang Users của console /admin: super admin cấp hoặc thu hồi vai trò Super admin và Admin view only, còn admin chỉ xem đọc được console nhưng không sửa được gì. Mọi thay đổi vai trò đều ghi audit log. `ADMIN_EMAIL` vẫn là super admin cố định, và các vai trò này không mở dữ liệu workspace. Có migration: build lại `migrate`, `api` và `web`. (DTD-283)
 
 - The Approvals page in the sidebar gathers documents in one place: what waits for your decision, what you submitted and what you already handled, with the document and its review panel beside the list and a sidebar count of what waits for you. Rules and document access are unchanged. Deploy API and web together; no migration. (DTD-278, #136)
