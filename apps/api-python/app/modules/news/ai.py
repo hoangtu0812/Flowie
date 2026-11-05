@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 RISK_LEVELS = ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW')
 BATCH_ITEMS = 30
+MAX_BATCHES = 4
 SUMMARY_CHARS = 400
 DIGEST_CHARS = 1500
 
@@ -54,7 +55,11 @@ def analysis_messages(category: str, items: list[dict[str, Any]]) -> tuple[str, 
         }
         for index, item in enumerate(items, start=1)
     ]
-    payload = json.dumps({'group': category, 'items': data}, ensure_ascii=False)
+    # plain_text decodes entities after stripping tags, so an encoded closing tag survives into the
+    # text; \u003c keeps the JSON equal for the model while nothing can end the data block.
+    # VI: plain_text giải mã entity sau khi bỏ thẻ nên thẻ đóng đã mã hoá vẫn còn trong văn bản;
+    # VI: \u003c giữ nguyên nghĩa JSON với model mà không gì kết thúc được khối dữ liệu.
+    payload = json.dumps({'group': category, 'items': data}, ensure_ascii=False).replace('<', '\\u003c')
     return SYSTEM_PROMPT, [{'role': 'user', 'content': f'<untrusted-news>\n{payload}\n</untrusted-news>'}]
 
 
@@ -105,13 +110,15 @@ async def _complete(provider: dict[str, str], system: str, history: list[dict[st
 
 async def analyze_workspace(db: AsyncSession, workspace_id: str, settings: Any) -> int:
     """Label, score and summarise unanalysed items with the workspace's AI provider, one call per
-    category, and refresh the category digest. Returns the number of items labelled.
+    category with up to ``MAX_BATCHES`` batches per run, and refresh the category digest from the
+    first batch, which holds the newest items. Returns the number of items labelled.
 
     No provider, an undecryptable key, a provider error or a malformed reply never raises: the
     items keep ``analyzed_at`` NULL and are retried on the next fetch, and the fetch/Teams flow
     continues unchanged. The transaction is closed before each call so a slow provider holds no lock.
     VI: Gán nhãn, điểm và tóm tắt cho tin chưa phân tích bằng provider AI của workspace, mỗi nhóm
-    VI: một lần gọi, và cập nhật bản tin của nhóm. Trả số tin đã gán nhãn. Không có provider, key
+    VI: tối đa ``MAX_BATCHES`` lô mỗi lần chạy, và cập nhật bản tin của nhóm từ lô đầu, là lô chứa
+    VI: tin mới nhất. Trả số tin đã gán nhãn. Không có provider, key
     VI: không giải mã được, provider lỗi hay trả sai định dạng đều không báo lỗi: tin giữ
     VI: ``analyzed_at`` NULL để thử lại lần lấy sau, luồng lấy tin/Teams chạy như cũ. Transaction
     VI: được đóng trước mỗi lần gọi để provider chậm không giữ khoá.
@@ -135,40 +142,47 @@ async def analyze_workspace(db: AsyncSession, workspace_id: str, settings: Any) 
     ).mappings().all()
     labelled = 0
     for category in categories:
-        items = (
-            await db.execute(
-                text(
-                    '''SELECT i.id, i.title, i.summary, i.published_at, i.analyzed_at, s.name AS source_name
-                       FROM news_items i JOIN news_sources s ON s.id = i.source_id
-                       WHERE s.category_id = :category_id
-                         AND (i.analyzed_at IS NULL OR i.published_at >= :since)
-                       ORDER BY (i.analyzed_at IS NULL) DESC, i.published_at DESC LIMIT :limit'''
-                ),
-                {'category_id': category['id'], 'since': _utcnow() - timedelta(hours=24), 'limit': BATCH_ITEMS},
-            )
-        ).mappings().all()
-        await db.commit()
-        try:
-            system, history = analysis_messages(category['name'], list(items))
-            results, digest = parse_analysis(await _complete(provider, system, history), len(items))
-        except Exception as failure:  # Any AI failure leaves the items for the next fetch.
-            logger.warning('News AI failed for category %s: %s', category['id'], getattr(failure, 'message', failure))
-            continue
-        now = _utcnow()
-        for index, result in results.items():
-            if items[index]['analyzed_at'] is None:
+        for batch in range(MAX_BATCHES):
+            items = (
                 await db.execute(
                     text(
-                        '''UPDATE news_items SET risk_level = :risk, risk_score = :score, ai_summary = :summary,
-                                  analyzed_at = :now WHERE id = :id'''
+                        '''SELECT i.id, i.title, i.summary, i.published_at, i.analyzed_at, s.name AS source_name
+                           FROM news_items i JOIN news_sources s ON s.id = i.source_id
+                           WHERE s.category_id = :category_id
+                             AND (i.analyzed_at IS NULL OR i.published_at >= :since)
+                           ORDER BY (i.analyzed_at IS NULL) DESC, i.published_at DESC LIMIT :limit'''
                     ),
-                    {**result, 'now': now, 'id': items[index]['id']},
+                    {'category_id': category['id'], 'since': _utcnow() - timedelta(hours=24), 'limit': BATCH_ITEMS},
                 )
-                labelled += 1
-        if digest:
-            await db.execute(
-                text('UPDATE news_categories SET digest = :digest, digest_at = :now WHERE id = :id'),
-                {'digest': digest, 'now': now, 'id': category['id']},
-            )
-        await db.commit()
+            ).mappings().all()
+            await db.commit()
+            try:
+                system, history = analysis_messages(category['name'], list(items))
+                results, digest = parse_analysis(await _complete(provider, system, history), len(items))
+            except Exception as failure:  # Any AI failure leaves the items for the next fetch.
+                logger.warning('News AI failed for category %s: %s', category['id'], getattr(failure, 'message', failure))
+                break
+            now = _utcnow()
+            batch_labelled = 0
+            for index, result in results.items():
+                if items[index]['analyzed_at'] is None:
+                    await db.execute(
+                        text(
+                            '''UPDATE news_items SET risk_level = :risk, risk_score = :score, ai_summary = :summary,
+                                      analyzed_at = :now WHERE id = :id'''
+                        ),
+                        {**result, 'now': now, 'id': items[index]['id']},
+                    )
+                    batch_labelled += 1
+            if digest and batch == 0:
+                await db.execute(
+                    text('UPDATE news_categories SET digest = :digest, digest_at = :now WHERE id = :id'),
+                    {'digest': digest, 'now': now, 'id': category['id']},
+                )
+            await db.commit()
+            labelled += batch_labelled
+            # A short batch was the last one; no progress means the model keeps skipping these items.
+            # VI: Lô thiếu là lô cuối; không có tiến triển nghĩa là model cứ bỏ qua các tin này.
+            if not batch_labelled or sum(item['analyzed_at'] is None for item in items) < BATCH_ITEMS:
+                break
     return labelled

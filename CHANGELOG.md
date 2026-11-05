@@ -258,6 +258,15 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
+- Agent keeps attached files across planning turns, so answering its clarifying question no longer loses the document; files stop being used once the plan is applied. Includes a migration: rebuild `migrate` and `api`, and run `migrate` before `api`. (DTD-299)
+  VI: Agent giữ file đính kèm qua các lượt lập kế hoạch, nên trả lời câu hỏi làm rõ không còn mất tài liệu; file ngừng được dùng khi kế hoạch đã áp dụng. Có migration: build lại `migrate` và `api`, chạy `migrate` trước `api`. (DTD-299)
+- Agent answers questions such as "Ai đang xử lý FL-12?" or "What's the plan for project TAM?" as questions instead of drafting a plan, while requests to create work still go to planning. (DTD-299)
+  VI: Agent trả lời các câu như "Ai đang xử lý FL-12?" hay "What's the plan for project TAM?" như câu hỏi thay vì soạn kế hoạch; yêu cầu tạo việc vẫn vào luồng lập kế hoạch. (DTD-299)
+- News labels every new item of a group in one run, up to 120 items, instead of stopping at 30. When a workspace has an AI provider, a group's Teams card now waits up to 2 hours for labels and retries every 10 minutes, then goes out unlabelled if the AI is still failing, so a card can arrive later than 06:30. (DTD-299)
+  VI: News gán nhãn mọi tin mới của nhóm trong một lần chạy, tối đa 120 tin, thay vì dừng ở 30. Khi workspace có provider AI, thẻ Teams của nhóm chờ nhãn tối đa 2 giờ và thử lại mỗi 10 phút, rồi vẫn gửi không nhãn nếu AI còn lỗi, nên thẻ có thể đến muộn hơn 06:30. (DTD-299)
+- AI scheduling counts today in Vietnam time, so it no longer allows a start date one day in the past when the server runs on UTC. (DTD-299)
+  VI: Xếp lịch bằng AI tính ngày hôm nay theo giờ Việt Nam, nên không còn cho phép ngày bắt đầu lùi một ngày khi server chạy UTC. (DTD-299)
+
 - People who left a workspace can no longer read or change Asks they created there. (DTD-287, #139)
   VI: Người đã rời workspace không còn đọc hay sửa được Ask do họ tạo trong workspace đó. (DTD-287)
 - Document media groups the zoom percentage between its controls, gives sticky tools breathing room, and matches Mermaid Settings to the app’s compact popovers. Web only; no migration. (DTD-266, #134)
@@ -428,6 +437,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
   VI: Pull request được đồng bộ tự liên kết với task có mã (ví dụ `DTD-6`, viết hoa hay thường đều được) xuất hiện trong tên branch, tiêu đề hoặc mô tả, giới hạn trong team được gán cho repository; review đã có sẽ được liên kết ở lần đồng bộ hoặc webhook kế tiếp. Phần Pull requests của task luôn hiển thị và hướng dẫn cách liên kết khi còn trống. Tool MCP mới `read_attachment_image` trả về ảnh đính kèm PNG, JPEG, GIF hoặc WebP tối đa 5 MiB mà connection có quyền đọc, dưới dạng nội dung ảnh, để agent đọc được ảnh chụp trong mô tả và comment. Không thay đổi schema.
 
 ### Security
+
+- Project updates, AI scheduling and assignment notes tell the model that workspace records are data, not instructions, and text in attached files or news items can no longer close the block that marks it as untrusted. (DTD-299)
+  VI: Project update, xếp lịch AI và ghi chú phân công nói rõ với model rằng dữ liệu workspace không phải chỉ dẫn, và nội dung trong file đính kèm hay tin tức không còn đóng được khối đánh dấu dữ liệu không tin cậy. (DTD-299)
 
 - Updating a project that belongs to no team now requires active membership of its workspace, like every other project read and write. (DTD-33, #65)
   VI: Cập nhật dự án không thuộc team nào giờ yêu cầu là thành viên đang hoạt động của workspace, giống mọi thao tác đọc và ghi dự án khác. (DTD-33)

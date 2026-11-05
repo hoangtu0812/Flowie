@@ -6,7 +6,7 @@ import logging
 from ...core.clock import _utcnow
 from ..operations.heartbeats import progress
 from .feeds import news_cutoff_utc
-from .service import due_workspaces, refresh_workspace
+from .service import due_workspaces, held_workspaces, refresh_workspace, retry_held_workspace
 
 logger = logging.getLogger(__name__)
 
@@ -16,16 +16,28 @@ async def fetch_due_news(factory, settings=None) -> int:
     Because "due" is read from ``last_fetched_at``, a restart neither skips nor repeats a day.
     VI: Lấy tin cho mọi workspace có nguồn chưa lấy kể từ mốc 06:30 giờ Việt Nam gần nhất. Vì
     VI: "đến hạn" đọc từ ``last_fetched_at`` nên khởi động lại không bỏ sót hay lặp lại một ngày.
+
+    Workspaces with cards waiting for AI labels are retried on every tick. They are read first so
+    a workspace refreshed in this tick is not analysed twice.
+    VI: Workspace có card chờ nhãn AI được thử lại mỗi lượt. Danh sách được đọc trước để workspace
+    VI: vừa làm mới trong lượt này không bị phân tích hai lần.
     """
     cutoff = news_cutoff_utc(_utcnow())
     async with factory() as db:
         workspaces = await due_workspaces(db, cutoff)
+        held = await held_workspaces(db) if settings is not None else []
     for workspace_id in workspaces:
         async with factory() as db:
             try:
                 await refresh_workspace(db, workspace_id, due_before=cutoff, settings=settings)
             except Exception:
                 logger.exception('News refresh failed for workspace %s.', workspace_id)
+    for workspace_id in set(held) - set(workspaces):
+        async with factory() as db:
+            try:
+                await retry_held_workspace(db, workspace_id, settings)
+            except Exception:
+                logger.exception('News retry failed for workspace %s.', workspace_id)
     return len(workspaces)
 
 
