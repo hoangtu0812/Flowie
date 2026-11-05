@@ -9,7 +9,10 @@ import { Tab, TabList } from '@astryxdesign/core/TabList';
 import { Text } from '@astryxdesign/core/Text';
 import { LoadingState } from '@/components/common/loading-state';
 import { QueryState } from '@/components/common/query-state';
-import { loadCurrentWorkspaceTeams } from '@/components/common/teams/team-types';
+import {
+   loadCurrentWorkspaceTeams,
+   type WorkspaceTeam,
+} from '@/components/common/teams/team-types';
 import { Button } from '@/components/ui/button';
 import {
    Select,
@@ -35,12 +38,16 @@ import { TicketDialog } from './ticket-dialog';
 
 type DeskData = {
    workspaceId: string;
+   teams: WorkspaceTeam[];
    inTeam: boolean;
    mine: Ticket[];
    queue: Ticket[];
    projects: TicketProject[];
 };
 const ALL_PROJECTS = 'all';
+const STATE_LABELS = { open: 'Open', closed: 'Closed', all: 'All' } as const;
+type QueueState = keyof typeof STATE_LABELS;
+const isOpen = (ticket: Ticket) => !['done', 'canceled', 'declined'].includes(ticket.ticketStatus);
 
 /**
  * Tickets beside the one being read, as in Approvals. Everyone has "my tickets"; only people in a
@@ -61,6 +68,7 @@ export function ServiceDeskPage() {
    const [tab, setTab] = useState<'mine' | 'queue'>('mine');
    const [selected, setSelected] = useState(ticketId?.[0]);
    const [projectFilter, setProjectFilter] = useState(ALL_PROJECTS);
+   const [queueState, setQueueState] = useState<QueueState>('open');
    const [dialog, setDialog] = useState<'new' | 'edit'>();
 
    const load = useCallback(async () => {
@@ -72,7 +80,7 @@ export function ServiceDeskPage() {
             inTeam ? listTickets(workspaceId, 'team') : [],
             listTicketProjects(workspaceId),
          ]);
-         setData({ workspaceId, inTeam, mine, queue, projects });
+         setData({ workspaceId, teams, inTeam, mine, queue, projects });
          setLoadError(undefined);
       } catch (caught) {
          setLoadError(caught instanceof Error ? caught.message : 'Could not load tickets.');
@@ -90,7 +98,9 @@ export function ServiceDeskPage() {
       tab === 'mine'
          ? (data?.mine ?? [])
          : (data?.queue ?? []).filter(
-              (ticket) => projectFilter === ALL_PROJECTS || ticket.projectId === projectFilter
+              (ticket) =>
+                 (projectFilter === ALL_PROJECTS || ticket.projectId === projectFilter) &&
+                 (queueState === 'all' || isOpen(ticket) === (queueState === 'open'))
            );
    const queued = data?.queue.find((ticket) => ticket.id === selected);
    const ticket = queued ?? data?.mine.find((item) => item.id === selected);
@@ -123,12 +133,27 @@ export function ServiceDeskPage() {
                <Tab
                   value="queue"
                   panelId="service-desk-list"
-                  label={tx('Queue ({count})', { count: data.queue.length })}
+                  label={tx('Queue ({count})', { count: data.queue.filter(isOpen).length })}
                />
             </TabList>
          )}
          {tab === 'queue' && (
-            <div className="shrink-0 p-2">
+            <div className="grid shrink-0 grid-cols-2 gap-2 p-2">
+               <Select
+                  value={queueState}
+                  onValueChange={(value) => setQueueState(value as QueueState)}
+               >
+                  <SelectTrigger aria-label={tx('Status')} className="w-full">
+                     <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                     {(Object.keys(STATE_LABELS) as QueueState[]).map((value) => (
+                        <SelectItem key={value} value={value}>
+                           {tx(STATE_LABELS[value])}
+                        </SelectItem>
+                     ))}
+                  </SelectContent>
+               </Select>
                <Select value={projectFilter} onValueChange={setProjectFilter}>
                   <SelectTrigger aria-label={tx('Project')} className="w-full">
                      <SelectValue />
@@ -178,8 +203,12 @@ export function ServiceDeskPage() {
                               {[
                                  row.project?.name ?? row.team.name,
                                  row.createdBy.name,
+                                 row.assignee &&
+                                    tx('Assigned to {name}', { name: row.assignee.name }),
                                  parseInstant(row.updatedAt).toLocaleString(locale),
-                              ].join(' · ')}
+                              ]
+                                 .filter(Boolean)
+                                 .join(' · ')}
                            </Text>
                         }
                         endContent={
@@ -202,6 +231,7 @@ export function ServiceDeskPage() {
             workspaceId={data.workspaceId}
             ticket={ticket}
             canHandle={Boolean(queued)}
+            members={data.teams.find((team) => team.id === ticket.teamId)?.members ?? []}
             onChanged={load}
             onClose={() => setSelected(undefined)}
             onEdit={() => setDialog('edit')}

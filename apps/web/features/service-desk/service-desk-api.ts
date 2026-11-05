@@ -21,6 +21,7 @@ export type Ticket = {
    team: { id: string; name: string };
    project: { id: string; name: string } | null;
    createdBy: { id: string; name: string };
+   assignee: { id: string; name: string } | null;
    /**
     * Present only in the team queue; "my tickets" never carries issue data.
     * VI: Chỉ có trong hàng đợi của team; "ticket của tôi" không bao giờ kèm dữ liệu Issue.
@@ -76,7 +77,7 @@ export const createTicket = async (
 export const updateTicket = async (
    workspaceId: string,
    ticketId: string,
-   changes: Partial<TicketDraft> & { status?: 'open' | 'declined' }
+   changes: Partial<TicketDraft> & { status?: 'open' | 'declined'; assigneeId?: string | null }
 ) =>
    responseData<Ticket>(
       await authenticatedFetch(
@@ -122,4 +123,10 @@ export const listTicketFiles = async (workspaceId: string, ticketId: string) =>
          `${api}/attachments?${scoped(workspaceId, { entityType: 'ticket', entityId: ticketId })}`
       ),
       'Could not load attachments.'
+   );
+
+export const ticketForIssue = async (workspaceId: string, issueId: string) =>
+   responseData<{ id: string; title: string } | null>(
+      await authenticatedFetch(`${api}/asks/by-issue/${issueId}?${scoped(workspaceId)}`),
+      'Could not load the ticket.'
    );

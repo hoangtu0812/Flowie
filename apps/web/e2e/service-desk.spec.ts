@@ -76,10 +76,19 @@ test('a requester outside the team follows a ticket the team answers and convert
       await team.page.getByRole('textbox', { name: 'Write a reply' }).fill('Which browser?');
       await team.page.getByRole('button', { name: 'Send', exact: true }).click();
       await expect(team.page.getByText('Which browser?')).toBeVisible();
+      await team.page.getByRole('combobox', { name: 'Assignee' }).click();
+      await team.page.getByRole('option', { name: 'Regression Owner' }).click();
+      await expect(team.page.getByText('Assigned to Regression Owner').first()).toBeVisible();
       await team.page.getByRole('button', { name: 'Convert to issue', exact: true }).click();
       const issueLink = team.page.getByRole('link', { name: /^[A-Z0-9]+-\d+$/ });
       await expect(issueLink).toBeVisible();
       const identifier = (await issueLink.textContent()) ?? '';
+
+      // The ticket stays reachable from the issue, and a closed ticket leaves the default queue.
+      // VI: Ticket vẫn mở được từ Issue, và ticket đã đóng rời khỏi hàng đợi mặc định.
+      await issueLink.click();
+      await team.page.getByRole('link', { name: /Service Desk ticket/ }).click();
+      await expect(team.page.getByRole('link', { name: 'steps.txt' })).toBeVisible();
 
       await requester.page.reload();
       await requester.page.getByText(title, { exact: true }).first().click();
@@ -95,6 +104,32 @@ test('a requester outside the team follows a ticket the team answers and convert
       await requester.page.getByRole('button', { name: 'Send', exact: true }).click();
       await expect(requester.page.getByText('Safari')).toBeVisible();
       await expect(requester.page.getByText('Received').first()).toBeVisible();
+      await expect(requester.page.getByText('Assigned to Regression Owner').first()).toBeVisible();
+
+      const declined = await team.context.request.post(`${api}/asks?${query}`, {
+         data: {
+            workspaceId: fixture.workspace_id,
+            teamId: (
+               await (
+                  await team.context.request.get(`${api}/asks/service-desk-projects?${query}`)
+               ).json()
+            ).data[0].teamId,
+            projectId: fixture.projectId,
+            title: `${title} closed`,
+         },
+      });
+      const closed = (await declined.json()).data;
+      await team.context.request.patch(`${api}/asks/${closed.id}?${query}`, {
+         data: { status: 'declined' },
+      });
+      await openDesk(team.page);
+      await team.page.getByRole('tab', { name: /Queue/ }).click();
+      await expect(team.page.getByText(title, { exact: true }).first()).toBeVisible();
+      await expect(team.page.getByText(`${title} closed`, { exact: true })).toHaveCount(0);
+      await team.page.getByRole('combobox', { name: 'Status' }).click();
+      await team.page.getByRole('option', { name: 'Closed', exact: true }).click();
+      await expect(team.page.getByText(`${title} closed`, { exact: true })).toBeVisible();
+      await expect(team.page.getByText(title, { exact: true })).toHaveCount(0);
    } finally {
       await setServiceDesk(team.context, false);
       await team.context.close();
