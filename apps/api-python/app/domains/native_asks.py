@@ -169,6 +169,13 @@ async def create_ask(payload: CreateAskInput, user: Any = Depends(current_user),
     await db.execute(text('''INSERT INTO asks (id, workspace_id, team_id, project_id, title, description, priority, status, notified_ticket_status, created_by, created_at, updated_at)
                              VALUES (:id, :workspace_id, :team_id, :project_id, :title, :description, :priority, 'open', 'received', :created_by, :now, :now)'''), {'id': ask_id, 'workspace_id': payload.workspaceId, 'team_id': payload.teamId, 'project_id': payload.projectId, 'title': payload.title.strip(), 'description': payload.description.strip() if payload.description else None, 'priority': payload.priority, 'created_by': user['id'], 'now': now})
     await _audit(db, payload.workspaceId, user['id'], 'ask.created', ask_id, {'title': payload.title.strip(), 'teamId': payload.teamId})
+    # Only Service Desk intake reaches the team's Inbox; Asks a team files for itself stay quiet.
+    # VI: Chỉ ticket từ Service Desk mới báo vào Inbox của team; Ask do team tự tạo thì không báo.
+    if await _accepts_tickets(db, payload.workspaceId, payload.teamId, payload.projectId):
+        batch = await create_notification_batch(db, workspace_id=payload.workspaceId, recipient_ids=await team_recipient_ids(db, payload.teamId), actor=user,
+                                                event_type='ticket.created', entity_type='ticket', entity_id=ask_id, title=payload.title.strip(), message='raised a ticket',
+                                                entity_path=f'/service-desk/{ask_id}', body=payload.description, discord=False)
+        await stage_notifications(db, batch, workspace_id=payload.workspaceId)
     await db.commit()
     return {'data': await _ask(db, ask_id, payload.workspaceId)}
 
