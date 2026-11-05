@@ -1,11 +1,8 @@
-import AsksSettings from '@/components/common/settings/asks-settings';
-import MainLayout from '@/components/layout/main-layout';
-import Header from '@/components/layout/headers/settings/header';
+import { redirect } from 'next/navigation';
 
-export default function AsksSettingsPage() {
-   return (
-      <MainLayout header={<Header />} headersNumber={1}>
-         <AsksSettings />
-      </MainLayout>
-   );
+// Asks moved to Service Desk; old bookmarks keep working.
+// VI: Asks đã chuyển sang Service Desk; bookmark cũ vẫn dùng được.
+export default async function AsksSettingsPage({ params }: { params: Promise<{ orgId: string }> }) {
+   const { orgId } = await params;
+   redirect(`/${orgId}/service-desk`);
 }

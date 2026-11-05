@@ -31,6 +31,7 @@ const WORKSPACE_PAGES: Record<string, string> = {
    'reviews': 'Assigned reviews',
    'reviews/created': 'Created reviews',
    'approvals': 'Approvals',
+   'service-desk': 'Service Desk',
 };
 
 const ACCOUNT_SETTINGS: Record<string, string> = {

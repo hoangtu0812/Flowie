@@ -52,6 +52,14 @@ async def main():
                 platform_users[key] = f'{_cuid()}@example.test'
                 await db.execute(text("""INSERT INTO users(id,name,email,password_hash,status,email_verified_at,is_platform_admin,platform_role,created_at,updated_at)
                     VALUES (:id,:name,:email,:password,'ACTIVE',:now,:admin,CAST(:role AS "PlatformRole"),:now,:now)"""), {'id': _cuid(), 'name': name, 'email': platform_users[key], 'password': password_hasher.hash(password), 'admin': role is not None, 'role': role, 'now': now})
+            # A workspace member in no team: the Service Desk requester, who must not see team work.
+            # VI: Thành viên workspace không thuộc team nào: người yêu cầu Service Desk, không được thấy việc của team.
+            requester = {'id': _cuid(), 'email': f'{_cuid()}@example.test'}
+            await db.execute(text("""INSERT INTO users(id,name,email,password_hash,status,email_verified_at,created_at,updated_at)
+                VALUES (:id,'Regression Requester',:email,:password,'ACTIVE',:now,:now,:now)"""), {**requester, 'password': password_hasher.hash(password), 'now': now})
+            await db.execute(text("""INSERT INTO workspace_members(id,workspace_id,user_id,status,role,created_at,updated_at)
+                VALUES (:id,:workspace,:user,'ACTIVE','MEMBER',:now,:now)"""), {'id': _cuid(), 'workspace': seed['workspace_id'], 'user': requester['id'], 'now': now})
+            platform_users['deskRequesterEmail'] = requester['email']
             await db.commit()
             output = {**seed, **platform_users, 'legacy_slug': seed['slug'], 'slug': seed['slug'], 'userId': user['id'], 'email': user['email'], 'password': password,
                 'projectId': project, 'documentId': document['id'], 'documentTitle': document['title'],

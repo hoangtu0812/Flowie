@@ -34,6 +34,7 @@ import {
    Layers,
    LucideIcon,
    UserRound,
+   LifeBuoy,
 } from 'lucide-react';
 import { useRef, useState } from 'react';
 
@@ -49,6 +50,7 @@ export const PERSONAL_ITEMS: ItemConfig[] = [
    { key: 'inbox', label: 'Inbox', icon: Inbox, badged: true },
    { key: 'reviews', label: 'Reviews', icon: GitPullRequestArrow, badged: true },
    { key: 'approvals', label: 'Approvals', icon: ClipboardCheck, badged: true },
+   { key: 'service-desk', label: 'Service Desk', icon: LifeBuoy },
    { key: 'my-issues', label: 'My issues', icon: FolderKanban },
    { key: 'agent', label: 'Agent', icon: Bot },
 ];

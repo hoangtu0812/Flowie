@@ -21,6 +21,7 @@ from app.domains.native_asks import (
     ticket_status,
     update_ask,
 )
+from app.domains.native_attachments import _authorize_entity
 from app.domains.native_notifications import list_notifications
 from app.jobs.ticket_status import notify_ticket_status_changes
 from app.modules.work_items.comments import create_comment
@@ -191,6 +192,13 @@ async def verify_conversation():
                 {"workspace": workspace, "user": requester["id"]},
             )
             await db.commit()
+
+            # Ticket files follow ticket access, not team membership.
+            # VI: Tệp của ticket đi theo quyền trên ticket, không theo thành viên team.
+            await _authorize_entity(db, workspace, "ticket", ask_id, requester["id"], writing=True)
+            await _authorize_entity(db, workspace, "ticket", ask_id, handler["id"], writing=True)
+            await forbidden(_authorize_entity(db, workspace, "ticket", ask_id, other["id"]))
+            await forbidden(_authorize_entity(db, workspace, "ticket", ask_id, stranger["id"]))
 
             # Archiving a ticket removes its notifications from every Inbox.
             # VI: Lưu trữ ticket sẽ gỡ thông báo của ticket khỏi mọi Inbox.

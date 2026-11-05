@@ -8,6 +8,7 @@ export type SidebarItemKey =
    | 'inbox'
    | 'reviews'
    | 'approvals'
+   | 'service-desk'
    | 'my-issues'
    | 'agent'
    | 'dashboard'
@@ -36,6 +37,7 @@ const DEFAULT_VISIBILITY: Record<SidebarItemKey, SidebarVisibility> = {
    'inbox': 'always',
    'reviews': 'always',
    'approvals': 'always',
+   'service-desk': 'always',
    'my-issues': 'always',
    'agent': 'always',
    'dashboard': 'always',
@@ -55,7 +57,7 @@ const DEFAULT_VISIBILITY: Record<SidebarItemKey, SidebarVisibility> = {
  * sidebar keeps its shape across sessions.
  */
 const DEFAULT_ORDER: Record<SidebarSection, SidebarItemKey[]> = {
-   personal: ['inbox', 'reviews', 'approvals', 'my-issues', 'agent'],
+   personal: ['inbox', 'reviews', 'approvals', 'service-desk', 'my-issues', 'agent'],
    workspace: [
       'dashboard',
       'issues',

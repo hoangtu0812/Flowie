@@ -174,7 +174,7 @@ test('settings routes expose persisted actions and recovery availability', async
    await expect(page.getByRole('dialog')).toHaveCount(0);
    await page.reload();
    await expect(page.getByText(name, { exact: true })).toBeVisible();
-   for (const path of ['slas', 'customer-requests', 'asks', 'emojis']) {
+   for (const path of ['slas', 'customer-requests', 'emojis']) {
       await page.goto(`/${fixture.slug}/settings/${path}`);
       await expect(page.getByRole('heading', { level: 1 }).last()).toBeVisible();
       await expect(page.getByText('Something went wrong', { exact: true })).toHaveCount(0);
@@ -429,13 +429,6 @@ test('SLA request Ask and emoji settings create persisted records', async ({ pag
    await expect(page.getByRole('dialog')).toHaveCount(0);
    await page.reload();
    await expect(page.getByText('Regression request ' + suffix, { exact: true })).toBeVisible();
-   await page.goto(`/${fixture.slug}/settings/asks`);
-   await page.getByRole('button', { name: 'New Ask', exact: true }).click();
-   await page.getByPlaceholder('What is being requested?').fill('Regression Ask ' + suffix);
-   await page.getByRole('button', { name: 'Create Ask', exact: true }).click();
-   await expect(page.getByRole('dialog')).toHaveCount(0);
-   await page.reload();
-   await expect(page.getByText('Regression Ask ' + suffix, { exact: true })).toBeVisible();
    let finishEmojiLoad!: () => void;
    const emojiLoad = new Promise<void>((resolve) => {
       finishEmojiLoad = resolve;
