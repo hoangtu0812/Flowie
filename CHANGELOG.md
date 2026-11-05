@@ -16,7 +16,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
-- AI operations shows AI provider usage for the last 7 days by feature (calls, failed calls, input and output tokens, p95 time) and the 10 latest provider errors. Only usage and outcome are stored, never prompts or replies, and rows are kept for 90 days. Includes a migration: rebuild `migrate`, `api` and `web`, and run `migrate` before `api`. (DTD-322)
+- AI operations shows AI provider usage for the last 7 days by feature (calls, failed calls, input and output tokens, p95 time) and the 10 latest provider errors. Only usage and outcome are stored, never prompts or replies, and rows are kept for 90 days. Includes a migration: rebuild `migrate`, `api` and `web`, and run `migrate` before `api`. (DTD-322, #151)
   VI: AI operations hiển thị usage provider AI trong 7 ngày theo tính năng (số lần gọi, số lần lỗi, token vào và ra, thời gian p95) và 10 lỗi provider gần nhất. Chỉ lưu usage và kết quả, không lưu prompt hay câu trả lời, dữ liệu giữ 90 ngày. Có migration: build lại `migrate`, `api` và `web`, chạy `migrate` trước `api`. (DTD-322)
 
 - Owners and admins can let company accounts join a workspace by themselves: with the new setting on, staff in the company's Microsoft tenant join as members of no team when they sign in, and new accounts go straight to `/servicedesk` without a personal workspace. It is off for every workspace, and turning it on first shows how many projects, issues and documents with no team everyone would read. People removed from the workspace or who left stay out until invited again, and each change and each join is audited. People removed before this release left no record, so review them before turning it on. Includes a migration: rebuild `migrate`, `api` and `web`, and run `migrate` before `api`. (DTD-298, #149)
@@ -261,7 +261,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
-- Agent and News retry temporary AI provider failures, wait longer for large work such as scheduling and news analysis (up to 180 seconds), and report a reply that was cut off instead of "invalid format". Provider errors now name the HTTP status. A reverse proxy in front of the API must allow requests of up to 180 seconds, or scheduling can still be cut off. (DTD-322)
+- Agent and News retry temporary AI provider failures, wait longer for large work such as scheduling and news analysis (up to 180 seconds), and report a reply that was cut off instead of "invalid format". Provider errors now name the HTTP status. A reverse proxy in front of the API must allow requests of up to 180 seconds, or scheduling can still be cut off. (DTD-322, #151)
   VI: Agent và News thử lại khi provider AI lỗi tạm thời, chờ lâu hơn với việc lớn như xếp lịch và phân tích tin (tối đa 180 giây), và báo câu trả lời bị cắt thay vì "sai định dạng". Lỗi provider nay nêu mã HTTP. Reverse proxy trước API phải cho phép request tới 180 giây, nếu không xếp lịch vẫn có thể bị cắt. (DTD-322)
 
 - Agent keeps attached files across planning turns, so answering its clarifying question no longer loses the document; files stop being used once the plan is applied. Includes a migration: rebuild `migrate` and `api`, and run `migrate` before `api`. (DTD-299, #150)
