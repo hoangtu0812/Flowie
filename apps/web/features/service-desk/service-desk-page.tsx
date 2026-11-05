@@ -2,7 +2,7 @@
 
 import { Plus } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Tab, TabList } from '@astryxdesign/core/TabList';
 import { Text } from '@astryxdesign/core/Text';
@@ -34,6 +34,7 @@ import {
 import { TicketDetail } from './ticket-detail';
 import { TicketDialog } from './ticket-dialog';
 import { useSelectedTicket } from './use-selected-ticket';
+import { useTicketUpdates } from './use-ticket-updates';
 import { inState, isOpen, TicketList, TicketStateSelect, type TicketState } from './ticket-list';
 import { isRequester } from './requester';
 
@@ -91,6 +92,20 @@ export function ServiceDeskPage() {
       }
    }, [router, ticketId]);
    useEffect(() => void load(), [load]);
+   useTicketUpdates(data?.workspaceId, load);
+
+   // Follows a ticket opened from the Inbox or a link into its tab. It runs once per ticket, so
+   // later reloads cannot pull someone back from the tab they moved to.
+   // VI: Chuyển sang tab chứa ticket được mở từ Inbox hoặc link. Chỉ chạy một lần cho mỗi ticket,
+   // VI: để các lần tải lại sau không kéo người dùng về lại tab khác.
+   const followedTicket = useRef<string | undefined>(undefined);
+   useEffect(() => {
+      if (!data || !selected || followedTicket.current === selected) return;
+      followedTicket.current = selected;
+      const mine = data.mine.some((item) => item.id === selected);
+      const queued = data.queue.some((item) => item.id === selected);
+      if (mine !== queued) setTab(mine ? 'mine' : 'queue');
+   }, [data, selected]);
 
    const queueProjects = useMemo(() => {
       const named = (data?.queue ?? []).flatMap((ticket) =>

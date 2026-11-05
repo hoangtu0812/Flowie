@@ -284,6 +284,66 @@ test('a ticket keeps its own address and code', async ({ browser }) => {
    }
 });
 
+// Both sides see each other's messages without reloading, and a draft survives the update.
+// VI: Hai bên thấy tin nhắn của nhau mà không cần tải lại trang, và bản nháp vẫn còn sau khi cập nhật.
+test('a conversation updates live and keeps the draft', async ({ browser }) => {
+   const team = await signIn(browser, fixture.email);
+   const requester = await signIn(browser, fixture.deskRequesterEmail);
+   await setServiceDesk(team.context, true);
+   try {
+      const projects = await requester.context.request.get(
+         `${api}/asks/service-desk-projects?${query}`
+      );
+      const project = (await projects.json()).data[0];
+      const created = await requester.context.request.post(`${api}/asks`, {
+         data: {
+            workspaceId: fixture.workspace_id,
+            teamId: project.teamId,
+            projectId: project.id,
+            title: `Service Desk live ${Date.now()}`,
+         },
+      });
+      expect(created.ok(), await created.text()).toBeTruthy();
+      const ticket = (await created.json()).data as { id: string };
+
+      // Opening the link lands on the tab holding the ticket.
+      // VI: Mở link sẽ tới đúng tab chứa ticket.
+      await team.page.goto(`/${fixture.slug}/service-desk/${ticket.id}`);
+      await expect(team.page.getByRole('tab', { name: /Queue/ })).toHaveAttribute(
+         'aria-selected',
+         'true'
+      );
+      await expect(team.page.getByRole('button', { name: 'Mark as resolved' })).toBeVisible();
+
+      await requester.page.goto(`/servicedesk/${ticket.id}`);
+      const draft = requester.page.getByRole('textbox', { name: 'Write a reply' });
+      await draft.fill('Half typed');
+      // Lets the page finish opening its socket before the message goes out.
+      // VI: Chờ trang mở xong socket trước khi tin nhắn được gửi.
+      await expect
+         .poll(
+            async () => {
+               await team.context.request.post(`${api}/asks/${ticket.id}/messages?${query}`, {
+                  data: { content: 'Live reply' },
+               });
+               return requester.page.getByText('Live reply').count();
+            },
+            { timeout: 15000, intervals: [2000] }
+         )
+         .toBeGreaterThan(0);
+      await expect(draft).toHaveValue('Half typed');
+
+      await requester.context.request.post(`${api}/asks/${ticket.id}/messages?${query}`, {
+         data: { content: 'Answer from the requester' },
+      });
+      await expect(team.page.getByText('Answer from the requester')).toBeVisible();
+   } finally {
+      await setServiceDesk(team.context, false);
+      await team.context.close();
+      await requester.context.close();
+   }
+});
+
 // The server here has no SMTP, so the channel settings are stubbed to show the requester's switch.
 // VI: Server ở đây không có SMTP, nên cài đặt kênh được giả lập để hiện công tắc của người yêu cầu.
 test('a requester turns ticket emails off from their page', async ({ browser }) => {

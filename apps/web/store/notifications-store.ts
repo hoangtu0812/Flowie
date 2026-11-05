@@ -4,6 +4,7 @@ import { useIssuesStore } from '@/store/issues-store';
 import { toast } from 'sonner';
 import { ApiRequestError, responseData } from '@/lib/http';
 import { showDesktopNotification } from '@/features/notifications/desktop';
+import { openNotificationStream } from '@/lib/notification-stream';
 import { loadCurrentUser } from '@/features/identity/current-user';
 import {
    notificationType,
@@ -172,57 +173,13 @@ export const useNotificationsStore = create<NotificationsState>((set, get) => {
       },
       connectRealtime: (workspaceId) => {
          if (typeof window === 'undefined') return () => undefined;
-         let closed = false;
-         let socket: WebSocket | undefined;
-         let reconnectTimer: number | undefined;
-         let heartbeatTimer: number | undefined;
-         let attempt = 0;
-         let connected = false;
-
-         const connect = () => {
-            const stream = new URL(`${api}/notifications/stream`);
-            stream.protocol = stream.protocol === 'https:' ? 'wss:' : 'ws:';
-            stream.searchParams.set('workspaceId', workspaceId);
-            socket = new WebSocket(stream);
-            socket.onopen = () => {
-               attempt = 0;
-               if (connected) void get().loadNotifications();
-               connected = true;
-               heartbeatTimer = window.setInterval(() => {
-                  if (socket?.readyState === WebSocket.OPEN) socket.send('ping');
-               }, 25_000);
-            };
-            socket.onmessage = (event) => {
-               if (event.data === 'pong') return;
-               try {
-                  const payload = JSON.parse(event.data) as {
-                     type?: string;
-                     notification?: { id: string; userId: string; readAt?: string | null };
-                  };
-                  if (payload.type === 'notification.created') {
-                     void get().loadNotifications();
-                     if (payload.notification)
-                        void showDesktopNotification(workspaceId, payload.notification);
-                  }
-               } catch {
-                  // Ignore malformed data; the durable REST list remains the source of truth.
-               }
-            };
-            socket.onclose = () => {
-               if (heartbeatTimer) window.clearInterval(heartbeatTimer);
-               if (!closed) {
-                  const delay = Math.min(30_000, 1_000 * 2 ** attempt++);
-                  reconnectTimer = window.setTimeout(connect, delay);
-               }
-            };
-         };
-         connect();
-         return () => {
-            closed = true;
-            if (reconnectTimer) window.clearTimeout(reconnectTimer);
-            if (heartbeatTimer) window.clearInterval(heartbeatTimer);
-            socket?.close();
-         };
+         return openNotificationStream(workspaceId, {
+            onReconnect: () => void get().loadNotifications(),
+            onNotification: (notification) => {
+               void get().loadNotifications();
+               if (notification) void showDesktopNotification(workspaceId, notification);
+            },
+         });
       },
       setSelectedNotification: (notification) => set({ selectedNotification: notification }),
       markAsRead: async (id) => {

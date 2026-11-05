@@ -101,11 +101,13 @@ export function TicketDetail({
       setFiles(nextFiles);
    }, [ticket.id, workspaceId]);
 
+   // Messages, files and decisions all move `updatedAt`, so a reloaded list is the only signal needed.
+   // VI: Tin nhắn, tệp và các quyết định đều đổi `updatedAt`, nên chỉ cần tín hiệu từ danh sách.
    useEffect(() => {
       loadConversation().catch((caught: unknown) =>
          setError(caught instanceof Error ? caught.message : 'Could not load the ticket.')
       );
-   }, [loadConversation]);
+   }, [loadConversation, ticket.updatedAt]);
 
    const act = async (action: () => Promise<unknown>) => {
       setBusy(true);
