@@ -16,7 +16,7 @@ from .auth import _cuid, _utcnow, current_user
 from .native_issues import CreateIssueInput, create_issue
 from .native_projects import _team_access, _workspace_access
 from ..modules.notifications.outbox import stage_notifications
-from ..services.notification_events import create_notification_batch, team_recipient_ids
+from ..services.notification_events import create_notification_batch, project_teams_batch, team_recipient_ids
 
 
 router = APIRouter(prefix='/api/v1/asks', tags=['asks'])
@@ -251,7 +251,9 @@ async def create_ask(payload: CreateAskInput, user: Any = Depends(current_user),
         batch = await create_notification_batch(db, workspace_id=payload.workspaceId, recipient_ids=await team_recipient_ids(db, payload.teamId), actor=user,
                                                 event_type='ticket.created', entity_type='ticket', entity_id=ask_id, title=payload.title.strip(), message='raised a ticket',
                                                 entity_path=f'/service-desk/{ask_id}', entity_label=_identifier(number), body=payload.description, discord=False)
-        await stage_notifications(db, batch, workspace_id=payload.workspaceId)
+        channel = await project_teams_batch(db, payload.workspaceId, payload.projectId, actor=user, event_type='ticket.created', entity_type='ticket', title=payload.title.strip(), message='raised a ticket',
+                                            entity_path=f'/service-desk/{ask_id}', entity_label=_identifier(number))
+        await stage_notifications(db, batch, channel, workspace_id=payload.workspaceId)
     await db.commit()
     return {'data': await _ask(db, ask_id, payload.workspaceId)}
 
