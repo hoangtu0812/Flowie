@@ -2434,6 +2434,9 @@ model NotificationPreference {
   /// Teams @mention for assignments and comment mentions; on unless the person turns it off.
   /// VI: @mention trên Teams khi được giao việc hoặc được mention; bật trừ khi người dùng tắt.
   teamsEnabled       Boolean  @default(true) @map("teams_enabled")
+  /// Email about tickets this person raised; on unless they turn it off, whatever emailEnabled says.
+  /// VI: Email về ticket do người này tạo; bật trừ khi họ tắt, không phụ thuộc emailEnabled.
+  ticketEmailEnabled Boolean  @default(true) @map("ticket_email_enabled")
   workspaceId        String   @map("workspace_id")
   userId             String   @map("user_id")
   teamIssueAdded     Boolean  @default(false) @map("team_issue_added")

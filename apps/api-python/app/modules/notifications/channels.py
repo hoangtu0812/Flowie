@@ -22,6 +22,9 @@ class ChannelInput(BaseModel):
     # Omitted by older clients, which must not switch Teams back on or off.
     # VI: Client cũ không gửi trường này và không được làm bật/tắt lại Teams.
     teamsEnabled: bool | None = None
+    # Omitted means unchanged, so the Settings page and the Service Desk page cannot undo each other.
+    # VI: Không gửi nghĩa là giữ nguyên, để trang Settings và trang Service Desk không ghi đè nhau.
+    ticketEmailEnabled: bool | None = None
 
 
 class SnoozeInput(BaseModel):
@@ -41,7 +44,7 @@ async def channels(
         (
             await db.execute(
                 text(
-                    "SELECT email_enabled,desktop_enabled,teams_enabled FROM notification_preferences WHERE workspace_id=:workspace AND user_id=:user"
+                    "SELECT email_enabled,desktop_enabled,teams_enabled,ticket_email_enabled FROM notification_preferences WHERE workspace_id=:workspace AND user_id=:user"
                 ),
                 {"workspace": workspaceId, "user": user["id"]},
             )
@@ -58,6 +61,7 @@ async def channels(
             # Teams mentions are on until the person turns them off.
             # VI: @mention Teams bật cho tới khi người dùng tự tắt.
             "teamsEnabled": not row or row["teams_enabled"],
+            "ticketEmailEnabled": not row or row["ticket_email_enabled"],
         }
     }
 
@@ -78,15 +82,17 @@ async def update_channels(
             409, "Verify your email address before enabling notifications.", "Conflict"
         )
     await db.execute(
-        text("""INSERT INTO notification_preferences(workspace_id,user_id,email_enabled,desktop_enabled,teams_enabled,created_at,updated_at)
-        VALUES (:workspace,:user,:email,:desktop,COALESCE(CAST(:teams AS boolean),true),:now,:now) ON CONFLICT(workspace_id,user_id) DO UPDATE SET email_enabled=EXCLUDED.email_enabled,
-        desktop_enabled=EXCLUDED.desktop_enabled,teams_enabled=COALESCE(CAST(:teams AS boolean),notification_preferences.teams_enabled),updated_at=:now"""),
+        text("""INSERT INTO notification_preferences(workspace_id,user_id,email_enabled,desktop_enabled,teams_enabled,ticket_email_enabled,created_at,updated_at)
+        VALUES (:workspace,:user,:email,:desktop,COALESCE(CAST(:teams AS boolean),true),COALESCE(CAST(:tickets AS boolean),true),:now,:now) ON CONFLICT(workspace_id,user_id) DO UPDATE SET email_enabled=EXCLUDED.email_enabled,
+        desktop_enabled=EXCLUDED.desktop_enabled,teams_enabled=COALESCE(CAST(:teams AS boolean),notification_preferences.teams_enabled),
+        ticket_email_enabled=COALESCE(CAST(:tickets AS boolean),notification_preferences.ticket_email_enabled),updated_at=:now"""),
         {
             "workspace": workspaceId,
             "user": user["id"],
             "email": payload.emailEnabled,
             "desktop": payload.desktopEnabled,
             "teams": payload.teamsEnabled,
+            "tickets": payload.ticketEmailEnabled,
             "now": _utcnow(),
         },
     )

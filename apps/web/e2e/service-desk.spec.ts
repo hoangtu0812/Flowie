@@ -284,6 +284,42 @@ test('a ticket keeps its own address and code', async ({ browser }) => {
    }
 });
 
+// The server here has no SMTP, so the channel settings are stubbed to show the requester's switch.
+// VI: Server ở đây không có SMTP, nên cài đặt kênh được giả lập để hiện công tắc của người yêu cầu.
+test('a requester turns ticket emails off from their page', async ({ browser }) => {
+   const requester = await signIn(browser, fixture.deskRequesterEmail);
+   let saved: unknown;
+   await requester.page.route('**/notifications/channels?*', async (route) => {
+      if (route.request().method() === 'PUT') {
+         saved = route.request().postDataJSON();
+         await route.fulfill({ json: { data: saved } });
+         return;
+      }
+      await route.fulfill({
+         json: {
+            data: {
+               emailAvailable: true,
+               emailEnabled: false,
+               desktopEnabled: false,
+               ticketEmailEnabled: true,
+            },
+         },
+      });
+   });
+   try {
+      await requester.page.goto('/servicedesk');
+      const toggle = requester.page.getByRole('switch', { name: 'Email me about my tickets' });
+      await expect(toggle).toBeChecked();
+      await toggle.click();
+      await expect(toggle).not.toBeChecked();
+      await expect
+         .poll(() => saved)
+         .toEqual({ emailEnabled: false, desktopEnabled: false, ticketEmailEnabled: false });
+   } finally {
+      await requester.context.close();
+   }
+});
+
 // The switch in Project settings decides whether the project appears in the ticket form.
 // VI: Công tắc trong Project settings quyết định dự án có xuất hiện trong form ticket hay không.
 test('the project settings switch opens the project to tickets', async ({ browser }) => {

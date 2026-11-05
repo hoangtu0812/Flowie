@@ -58,6 +58,7 @@ export const messages = {
    'Edit': 'Sửa',
    'Archive': 'Lưu trữ',
    'Created by {name}': 'Tạo bởi {name}',
+   'Email me about my tickets': 'Gửi email về ticket của tôi',
    'Mark as resolved': 'Đã giải quyết',
    'This closes the ticket. The requester can reopen it if the problem remains.':
       'Ticket sẽ được đóng. Người yêu cầu có thể mở lại nếu vẫn còn lỗi.',
