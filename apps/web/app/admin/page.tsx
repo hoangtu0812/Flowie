@@ -16,6 +16,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import {
+   Select,
+   SelectContent,
+   SelectItem,
+   SelectTrigger,
+   SelectValue,
+} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import {
@@ -40,12 +47,17 @@ type Overview = {
    issues: number;
 };
 
+type PlatformRole = 'SUPER_ADMIN' | 'VIEWER';
+
 type User = {
    id: string;
    name: string;
    email: string;
    status: 'ACTIVE' | 'INVITED' | 'SUSPENDED' | 'DISABLED';
-   isPlatformAdmin: boolean;
+   isEnvironmentAdmin: boolean;
+   platformRole: PlatformRole | null;
+   /** The API accepts changes to this account from the signed-in administrator. */
+   manageable: boolean;
    createdAt: string;
    lastLoginAt: string | null;
    _count: { memberships: number; organizations: number };
@@ -67,13 +79,30 @@ const sectionCopy: Record<AdminSection, { title: string; description: string }> 
    },
    users: {
       title: 'Users',
-      description: 'Review platform access and suspend or reactivate user accounts.',
+      description: 'Grant platform roles and suspend or reactivate user accounts.',
    },
    workspaces: {
       title: 'Workspaces',
       description: 'Inspect every organization workspace and its current usage.',
    },
 };
+
+// Radix Select cannot hold an empty value, so "no role" needs its own item value.
+// VI: Radix Select không nhận giá trị rỗng nên "không có vai trò" cần giá trị riêng.
+const NO_PLATFORM_ROLE = 'NONE';
+
+const platformRoleOptions = [
+   { value: NO_PLATFORM_ROLE, label: 'No admin role' },
+   { value: 'VIEWER', label: 'Admin view only' },
+   { value: 'SUPER_ADMIN', label: 'Super admin' },
+];
+
+function lockedReason(user: User): string | undefined {
+   if (user.manageable) return undefined;
+   return user.isEnvironmentAdmin
+      ? 'Change ADMIN_EMAIL in the deployment environment to transfer this access.'
+      : 'Your role cannot change this account.';
+}
 
 function formatDate(value: string | null): string {
    return value
@@ -212,7 +241,7 @@ export default function AdminPage() {
          : users;
    }, [query, users]);
 
-   async function updateUser(user: User, data: Pick<User, 'status'>) {
+   async function updateUser(user: User, data: Partial<Pick<User, 'status' | 'platformRole'>>) {
       setSavingUserId(user.id);
       setError(null);
       try {
@@ -380,11 +409,12 @@ export default function AdminPage() {
                               />
                            </CardHeader>
                            <CardContent className="overflow-x-auto p-0">
-                              <Table className="min-w-[850px]">
+                              <Table className="min-w-[900px]">
                                  <TableHeader>
                                     <TableRow>
                                        <TableHead className="pl-5">User</TableHead>
                                        <TableHead>Status</TableHead>
+                                       <TableHead>Role</TableHead>
                                        <TableHead>Scope</TableHead>
                                        <TableHead>Last login</TableHead>
                                        <TableHead className="pr-5 text-right">Action</TableHead>
@@ -398,8 +428,8 @@ export default function AdminPage() {
                                              <TableCell className="pl-5">
                                                 <div className="flex items-center gap-2 font-medium">
                                                    {user.name}
-                                                   {user.isPlatformAdmin && (
-                                                      <Badge variant="outline">Admin</Badge>
+                                                   {user.isEnvironmentAdmin && (
+                                                      <Badge variant="outline">ADMIN_EMAIL</Badge>
                                                    )}
                                                 </div>
                                                 <div className="text-xs text-muted-foreground">
@@ -411,12 +441,51 @@ export default function AdminPage() {
                                                    {user.status}
                                                 </Badge>
                                              </TableCell>
-                                             <TableCell className="text-muted-foreground">
-                                                {countLabel(user._count.memberships, 'workspace')} ·{' '}
-                                                {countLabel(
-                                                   user._count.organizations,
-                                                   'organization'
-                                                )}
+                                             <TableCell>
+                                                <Select
+                                                   value={user.platformRole ?? NO_PLATFORM_ROLE}
+                                                   disabled={saving || !user.manageable}
+                                                   onValueChange={(value) =>
+                                                      void updateUser(user, {
+                                                         platformRole:
+                                                            value === NO_PLATFORM_ROLE
+                                                               ? null
+                                                               : (value as PlatformRole),
+                                                      })
+                                                   }
+                                                >
+                                                   <SelectTrigger
+                                                      className="h-8 w-36"
+                                                      aria-label={`Platform role of ${user.name}`}
+                                                      title={lockedReason(user)}
+                                                   >
+                                                      <SelectValue />
+                                                   </SelectTrigger>
+                                                   <SelectContent>
+                                                      {platformRoleOptions.map((option) => (
+                                                         <SelectItem
+                                                            key={option.value}
+                                                            value={option.value}
+                                                         >
+                                                            {option.label}
+                                                         </SelectItem>
+                                                      ))}
+                                                   </SelectContent>
+                                                </Select>
+                                             </TableCell>
+                                             <TableCell className="text-xs text-muted-foreground">
+                                                <div>
+                                                   {countLabel(
+                                                      user._count.memberships,
+                                                      'workspace'
+                                                   )}
+                                                </div>
+                                                <div>
+                                                   {countLabel(
+                                                      user._count.organizations,
+                                                      'organization'
+                                                   )}
+                                                </div>
                                              </TableCell>
                                              <TableCell className="text-muted-foreground">
                                                 {formatDate(user.lastLoginAt)}
@@ -430,12 +499,8 @@ export default function AdminPage() {
                                                             ? 'destructive'
                                                             : 'outline'
                                                       }
-                                                      disabled={saving || user.isPlatformAdmin}
-                                                      title={
-                                                         user.isPlatformAdmin
-                                                            ? 'Change ADMIN_EMAIL in the deployment environment to transfer administrator access.'
-                                                            : undefined
-                                                      }
+                                                      disabled={saving || !user.manageable}
+                                                      title={lockedReason(user)}
                                                       onClick={() =>
                                                          void updateUser(user, {
                                                             status:
@@ -459,7 +524,7 @@ export default function AdminPage() {
                                     {!loading && filteredUsers.length === 0 && (
                                        <TableRow>
                                           <TableCell
-                                             colSpan={5}
+                                             colSpan={6}
                                              className="py-10 text-center text-muted-foreground"
                                           >
                                              No users match this search.
