@@ -225,7 +225,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
-- Document media groups the zoom percentage between its controls, gives sticky tools breathing room, and matches Mermaid Settings to the app’s compact popovers. Web only; no migration. (DTD-266)
+- Document media groups the zoom percentage between its controls, gives sticky tools breathing room, and matches Mermaid Settings to the app’s compact popovers. Web only; no migration. (DTD-266, #134)
   VI: Media tài liệu gom phần trăm zoom giữa hai nút điều khiển, tạo khoảng đệm cho toolbar ghim và đồng bộ Mermaid Settings với popover gọn của ứng dụng. Chỉ web; không migration.
 
 - Loading screens restore the supplied five-second ribbon entrance, word reveal and dot bounce with a full-size Flowie logo. Dark themes and reduced motion remain supported, and versioned assets preserve compatibility for open tabs; web only, no migration. (DTD-267, #133)
