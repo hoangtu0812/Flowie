@@ -8,7 +8,7 @@ from collections.abc import Awaitable, Callable
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from ..domains.native_asks import reopen_pending, ticket_status
+from ..domains.native_asks import _identifier, reopen_pending, ticket_status
 from ..modules.notifications.outbox import stage_notifications
 from ..services.notification_events import create_notification_batch
 
@@ -33,7 +33,7 @@ async def notify_ticket_status_changes(factory: async_sessionmaker[AsyncSession]
     async with factory() as db:
         result = await db.execute(
             text(
-                '''SELECT ask.id, ask.workspace_id, ask.title, ask.status, ask.created_by, ask.notified_ticket_status, ask.reopened_at,
+                '''SELECT ask.id, ask.number, ask.workspace_id, ask.title, ask.status, ask.created_by, ask.notified_ticket_status, ask.reopened_at,
                           COALESCE(issue.completed_at, issue.canceled_at) AS closed_at, issue_status.category
                    FROM asks ask
                    LEFT JOIN issues issue ON issue.id = ask.converted_issue_id
@@ -66,6 +66,7 @@ async def notify_ticket_status_changes(factory: async_sessionmaker[AsyncSession]
                 title=row['title'],
                 message='Your ticket status changed',
                 entity_path=f"/service-desk/{row['id']}",
+                entity_label=_identifier(row['number']),
                 details=[('Status', f"{STATUS_LABELS[seen]} → {STATUS_LABELS[current]}")],
                 discord=False,
             )

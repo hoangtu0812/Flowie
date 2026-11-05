@@ -14,6 +14,7 @@ export type Ticket = {
    title: string;
    description: string | null;
    priority: TicketPriority;
+   identifier: string;
    status: 'open' | 'accepted' | 'declined' | 'resolved' | 'canceled';
    ticketStatus: TicketStatus;
    reopenPending?: boolean;

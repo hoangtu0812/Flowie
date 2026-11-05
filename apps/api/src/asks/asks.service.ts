@@ -41,8 +41,14 @@ export class AsksService {
    async create(dto: CreateAskDto, userId: string) {
       await this.authorize(dto.workspaceId, userId);
       await this.assertReferences(dto.workspaceId, dto.teamId, dto.projectId, userId);
+      const { ticketSequence } = await this.prisma.workspace.update({
+         where: { id: dto.workspaceId },
+         data: { ticketSequence: { increment: 1 } },
+         select: { ticketSequence: true },
+      });
       const ask = await this.prisma.ask.create({
          data: {
+            number: ticketSequence,
             workspaceId: dto.workspaceId,
             teamId: dto.teamId,
             projectId: dto.projectId || null,

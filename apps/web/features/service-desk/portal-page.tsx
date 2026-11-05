@@ -2,7 +2,7 @@
 
 import { Plus } from 'lucide-react';
 import Link from 'next/link';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
@@ -29,6 +29,7 @@ import {
 } from './service-desk-api';
 import { TicketDetail } from './ticket-detail';
 import { TicketDialog } from './ticket-dialog';
+import { useSelectedTicket } from './use-selected-ticket';
 import { inState, TicketList, TicketStateSelect, type TicketState } from './ticket-list';
 
 type Desk = { tickets: Ticket[]; projects: TicketProject[] };
@@ -49,7 +50,6 @@ export function ServiceDeskPortal() {
    const tx = useMessages(messages);
    const isMobile = useIsMobile();
    const router = useRouter();
-   const { ticketId } = useParams<{ ticketId?: string[] }>();
    const wanted = useSearchParams().get('workspace');
    const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>();
    const [workspace, setWorkspace] = useState<WorkspaceSummary>();
@@ -58,7 +58,7 @@ export function ServiceDeskPortal() {
    const [unread, setUnread] = useState<TicketNotification[]>([]);
    const [error, setError] = useState<string>();
    const [notice, setNotice] = useState<string>();
-   const [selected, setSelected] = useState(ticketId?.[0]);
+   const [selected, setSelected] = useSelectedTicket('/servicedesk');
    const [ticketState, setTicketState] = useState<TicketState>('open');
    const [dialog, setDialog] = useState<'new' | 'edit'>();
 

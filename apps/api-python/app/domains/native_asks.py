@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 from typing import Any, Literal
 
 from fastapi import Depends, Query
@@ -19,6 +20,7 @@ from ..services.notification_events import create_notification_batch, team_recip
 
 
 router = APIRouter(prefix='/api/v1/asks', tags=['asks'])
+TICKET_FILE_NOTICE_GAP = timedelta(seconds=60)
 AskPriority = Literal['NONE', 'LOW', 'MEDIUM', 'HIGH', 'URGENT']
 AskScope = Literal['team', 'mine']
 TicketAction = Literal['resolve', 'decline', 'reopen', 'cancel']
@@ -95,6 +97,10 @@ async def _audit(db: AsyncSession, workspace_id: str, actor_id: str, action: str
                              VALUES (:id, :workspace_id, :actor_id, :action, 'ask', :entity_id, CAST(:metadata AS jsonb), :now)'''), {'id': _cuid(), 'workspace_id': workspace_id, 'actor_id': actor_id, 'action': action, 'entity_id': ask_id, 'metadata': json.dumps(metadata), 'now': _utcnow()})
 
 
+def _identifier(number: int) -> str:
+    return f'SD-{number}'
+
+
 def reopen_pending(ask_status: str, issue_category: str | None, reopened_at: Any, issue_closed_at: Any) -> bool:
     """True while a reopened ticket's issue is still closed and no team member has decided yet.
     Nothing has to clear this: returning the issue to work changes the category, and closing it
@@ -137,7 +143,7 @@ async def _ask(db: AsyncSession, ask_id: str, workspace_id: str) -> dict[str, An
     row = result.mappings().first()
     if not row: raise ApiError(404, 'Ask not found.', 'Not Found')
     pending = reopen_pending(row['status'], row['issue_category'], row['reopened_at'], row['issue_closed_at'])
-    return {'id': row['id'], 'workspaceId': row['workspace_id'], 'teamId': row['team_id'], 'projectId': row['project_id'], 'title': row['title'], 'description': row['description'], 'priority': row['priority'], 'status': row['status'], 'ticketStatus': ticket_status(row['status'], row['issue_category'], row['last_message_author'] not in {None, row['created_by']}, pending), 'reopenPending': pending, 'createdById': row['created_by'], 'assigneeId': row['assignee_id'], 'assignee': {'id': row['assignee_id'], 'name': row['assignee_name'], 'avatarUrl': row['assignee_avatar_url']} if row['assignee_id'] else None, 'convertedIssueId': row['converted_issue_id'], 'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
+    return {'id': row['id'], 'number': row['number'], 'identifier': _identifier(row['number']), 'workspaceId': row['workspace_id'], 'teamId': row['team_id'], 'projectId': row['project_id'], 'title': row['title'], 'description': row['description'], 'priority': row['priority'], 'status': row['status'], 'ticketStatus': ticket_status(row['status'], row['issue_category'], row['last_message_author'] not in {None, row['created_by']}, pending), 'reopenPending': pending, 'createdById': row['created_by'], 'assigneeId': row['assignee_id'], 'assignee': {'id': row['assignee_id'], 'name': row['assignee_name'], 'avatarUrl': row['assignee_avatar_url']} if row['assignee_id'] else None, 'convertedIssueId': row['converted_issue_id'], 'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
             'team': {'id': row['team_id_value'], 'name': row['team_name'], 'identifier': row['team_identifier'], 'icon': row['team_icon']},
             'project': {'id': row['project_id_value'], 'name': row['project_name'], 'identifier': row['project_identifier'], 'team': {'id': row['team_id']} if row['team_id'] else None} if row['project_id_value'] else None,
             'createdBy': {'id': row['creator_id'], 'name': row['creator_name'], 'avatarUrl': row['creator_avatar_url']},
@@ -233,15 +239,18 @@ async def create_ask(payload: CreateAskInput, user: Any = Depends(current_user),
     await _workspace_access(db, payload.workspaceId, user['id'])
     await _references(db, payload.workspaceId, payload.teamId, payload.projectId, user['id'])
     ask_id, now = _cuid(), _utcnow()
-    await db.execute(text('''INSERT INTO asks (id, workspace_id, team_id, project_id, title, description, priority, status, notified_ticket_status, created_by, created_at, updated_at)
-                             VALUES (:id, :workspace_id, :team_id, :project_id, :title, :description, :priority, 'open', 'received', :created_by, :now, :now)'''), {'id': ask_id, 'workspace_id': payload.workspaceId, 'team_id': payload.teamId, 'project_id': payload.projectId, 'title': payload.title.strip(), 'description': payload.description.strip() if payload.description else None, 'priority': payload.priority, 'created_by': user['id'], 'now': now})
+    # The row lock lasts until commit, so concurrent tickets in a workspace take numbers in turn.
+    # VI: Khoá dòng giữ đến khi commit, nên các ticket tạo đồng thời trong workspace lấy số lần lượt.
+    number = (await db.execute(text('UPDATE workspaces SET ticket_sequence = ticket_sequence + 1 WHERE id = :id RETURNING ticket_sequence'), {'id': payload.workspaceId})).scalar_one()
+    await db.execute(text('''INSERT INTO asks (id, number, workspace_id, team_id, project_id, title, description, priority, status, notified_ticket_status, created_by, created_at, updated_at)
+                             VALUES (:id, :number, :workspace_id, :team_id, :project_id, :title, :description, :priority, 'open', 'received', :created_by, :now, :now)'''), {'id': ask_id, 'number': number, 'workspace_id': payload.workspaceId, 'team_id': payload.teamId, 'project_id': payload.projectId, 'title': payload.title.strip(), 'description': payload.description.strip() if payload.description else None, 'priority': payload.priority, 'created_by': user['id'], 'now': now})
     await _audit(db, payload.workspaceId, user['id'], 'ask.created', ask_id, {'title': payload.title.strip(), 'teamId': payload.teamId})
     # Only Service Desk intake reaches the team's Inbox; Asks a team files for itself stay quiet.
     # VI: Chỉ ticket từ Service Desk mới báo vào Inbox của team; Ask do team tự tạo thì không báo.
     if await _accepts_tickets(db, payload.workspaceId, payload.teamId, payload.projectId):
         batch = await create_notification_batch(db, workspace_id=payload.workspaceId, recipient_ids=await team_recipient_ids(db, payload.teamId), actor=user,
                                                 event_type='ticket.created', entity_type='ticket', entity_id=ask_id, title=payload.title.strip(), message='raised a ticket',
-                                                entity_path=f'/service-desk/{ask_id}', body=payload.description, discord=False)
+                                                entity_path=f'/service-desk/{ask_id}', entity_label=_identifier(number), body=payload.description, discord=False)
         await stage_notifications(db, batch, workspace_id=payload.workspaceId)
     await db.commit()
     return {'data': await _ask(db, ask_id, payload.workspaceId)}
@@ -273,7 +282,7 @@ async def update_ask(ask_id: str, payload: UpdateAskInput, workspaceId: str = Qu
         await _audit(db, workspaceId, user['id'], 'ask.updated', ask_id, values)
         if values.get('assigneeId') and values['assigneeId'] != ask['assigneeId']:
             batch = await create_notification_batch(db, workspace_id=workspaceId, recipient_ids={values['assigneeId']}, actor=user, event_type='ticket.assigned', entity_type='ticket', entity_id=ask_id,
-                                                    title=values.get('title', ask['title']), message='assigned you a ticket', entity_path=f'/service-desk/{ask_id}', discord=False)
+                                                    title=values.get('title', ask['title']), message='assigned you a ticket', entity_path=f'/service-desk/{ask_id}', entity_label=ask['identifier'], discord=False)
             await stage_notifications(db, batch, workspace_id=workspaceId)
         await db.commit()
     return {'data': await _ask(db, ask_id, workspaceId)}
@@ -305,7 +314,7 @@ async def transition_ask(ask_id: str, payload: AskTransitionInput, workspaceId: 
     if content: await _add_message(db, ask_id, user['id'], content, now)
     await _audit(db, workspaceId, user['id'], audit_action, ask_id, {'from': ask['status']})
     batch = await create_notification_batch(db, workspace_id=workspaceId, recipient_ids=await _parties(db, ask), actor=user, event_type='ticket.status_changed', entity_type='ticket', entity_id=ask_id,
-                                            title=ask['title'], message=notice, entity_path=f'/service-desk/{ask_id}', body=content or None, discord=False)
+                                            title=ask['title'], message=notice, entity_path=f'/service-desk/{ask_id}', entity_label=ask['identifier'], body=content or None, discord=False)
     await stage_notifications(db, batch, workspace_id=workspaceId)
     await db.commit()
     updated = await _ask(db, ask_id, workspaceId)
@@ -363,11 +372,31 @@ async def create_ask_message(ask_id: str, payload: AskMessageInput, workspaceId:
     # VI: discord=False giữ trao đổi của người yêu cầu ngoài các kênh chung của team.
     batch = await create_notification_batch(db, workspace_id=workspaceId, recipient_ids=await _parties(db, ask), actor=user,
                                             event_type='ticket.message', entity_type='ticket', entity_id=ask_id, title=ask['title'], message='sent a message',
-                                            entity_path=f'/service-desk/{ask_id}', body=content, discord=False)
+                                            entity_path=f'/service-desk/{ask_id}', entity_label=ask['identifier'], body=content, discord=False)
     await stage_notifications(db, batch, workspace_id=workspaceId)
     await db.commit()
     result = await db.execute(text(f'SELECT {MESSAGE_COLUMNS} FROM ask_messages message JOIN users author ON author.id = message.author_id WHERE message.id = :id'), {'id': message_id})
     return {'data': _message(result.mappings().one())}
+
+
+async def record_ticket_file(db: AsyncSession, ask_id: str, workspace_id: str, user: Any, filename: str) -> None:
+    """Brings a ticket forward and tells the other side about a new file, in the upload's transaction.
+    Files arrive one request at a time, so one person's burst, or the files sent with a new ticket,
+    would otherwise become a row per file. The caller has authorized the upload.
+    VI: Đưa ticket lên trước và báo bên còn lại có file mới, trong transaction của lần tải lên.
+    VI: File tới theo từng request, nên một đợt tải của một người, hoặc file gửi kèm ticket mới, sẽ
+    VI: thành một dòng cho mỗi file nếu không gom lại. Caller đã kiểm tra quyền tải lên.
+    """
+    ask = await _ask(db, ask_id, workspace_id)
+    now = _utcnow()
+    recent = await db.execute(text('''SELECT 1 FROM audit_logs WHERE entity_type = 'ask' AND entity_id = :ask_id AND actor_id = :user_id
+                                      AND action IN ('ask.created', 'ask.file_added') AND created_at > :since LIMIT 1'''), {'ask_id': ask_id, 'user_id': user['id'], 'since': now - TICKET_FILE_NOTICE_GAP})
+    await db.execute(text('UPDATE asks SET updated_at = :now WHERE id = :ask_id'), {'now': now, 'ask_id': ask_id})
+    await _audit(db, workspace_id, user['id'], 'ask.file_added', ask_id, {'filename': filename})
+    if recent.scalar_one_or_none() is None:
+        batch = await create_notification_batch(db, workspace_id=workspace_id, recipient_ids=await _parties(db, ask), actor=user, event_type='ticket.attachment', entity_type='ticket', entity_id=ask_id,
+                                                title=ask['title'], message='added a file', entity_path=f'/service-desk/{ask_id}', entity_label=ask['identifier'], body=filename, discord=False)
+        await stage_notifications(db, batch, workspace_id=workspace_id)
 
 
 @router.delete('/{ask_id}')

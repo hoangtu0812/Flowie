@@ -653,6 +653,9 @@ model Workspace {
   timezone               String                @default("UTC")
   projectDisplayDefaults Json?                 @map("project_display_defaults")
   issueSequence          Int                   @default(0) @map("issue_sequence")
+  /// Last ticket number handed out; numbers run per workspace and are never reused.
+  /// VI: Số ticket đã cấp gần nhất; số chạy theo từng workspace và không dùng lại.
+  ticketSequence         Int                   @default(0) @map("ticket_sequence")
   issueDisplayDefaults   Json?                 @map("issue_display_defaults")
   issueInsightDefaults   Json?                 @map("issue_insight_defaults")
   mcpInstructions        String?               @map("mcp_instructions")
@@ -1720,6 +1723,9 @@ model SlaPolicy {
 model Ask {
   id               String        @id @default(cuid())
   workspaceId      String        @map("workspace_id")
+  /// Shown as SD-{number}; unique within the workspace.
+  /// VI: Hiển thị dạng SD-{number}; không trùng trong workspace.
+  number           Int
   teamId           String        @map("team_id")
   projectId        String?       @map("project_id")
   title            String
@@ -1749,6 +1755,7 @@ model Ask {
   messages       AskMessage[]
   assignee       User?     @relation("AskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
 
+  @@unique([workspaceId, number])
   @@index([workspaceId, archivedAt, status])
   @@index([teamId])
   @@index([projectId])
