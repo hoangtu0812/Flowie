@@ -258,13 +258,13 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
-- Agent keeps attached files across planning turns, so answering its clarifying question no longer loses the document; files stop being used once the plan is applied. Includes a migration: rebuild `migrate` and `api`, and run `migrate` before `api`. (DTD-299)
+- Agent keeps attached files across planning turns, so answering its clarifying question no longer loses the document; files stop being used once the plan is applied. Includes a migration: rebuild `migrate` and `api`, and run `migrate` before `api`. (DTD-299, #150)
   VI: Agent giữ file đính kèm qua các lượt lập kế hoạch, nên trả lời câu hỏi làm rõ không còn mất tài liệu; file ngừng được dùng khi kế hoạch đã áp dụng. Có migration: build lại `migrate` và `api`, chạy `migrate` trước `api`. (DTD-299)
-- Agent answers questions such as "Ai đang xử lý FL-12?" or "What's the plan for project TAM?" as questions instead of drafting a plan, while requests to create work still go to planning. (DTD-299)
+- Agent answers questions such as "Ai đang xử lý FL-12?" or "What's the plan for project TAM?" as questions instead of drafting a plan, while requests to create work still go to planning. (DTD-299, #150)
   VI: Agent trả lời các câu như "Ai đang xử lý FL-12?" hay "What's the plan for project TAM?" như câu hỏi thay vì soạn kế hoạch; yêu cầu tạo việc vẫn vào luồng lập kế hoạch. (DTD-299)
-- News labels every new item of a group in one run, up to 120 items, instead of stopping at 30. When a workspace has an AI provider, a group's Teams card now waits up to 2 hours for labels and retries every 10 minutes, then goes out unlabelled if the AI is still failing, so a card can arrive later than 06:30. (DTD-299)
+- News labels every new item of a group in one run, up to 120 items, instead of stopping at 30. When a workspace has an AI provider, a group's Teams card now waits up to 2 hours for labels and retries every 10 minutes, then goes out unlabelled if the AI is still failing, so a card can arrive later than 06:30. (DTD-299, #150)
   VI: News gán nhãn mọi tin mới của nhóm trong một lần chạy, tối đa 120 tin, thay vì dừng ở 30. Khi workspace có provider AI, thẻ Teams của nhóm chờ nhãn tối đa 2 giờ và thử lại mỗi 10 phút, rồi vẫn gửi không nhãn nếu AI còn lỗi, nên thẻ có thể đến muộn hơn 06:30. (DTD-299)
-- AI scheduling counts today in Vietnam time, so it no longer allows a start date one day in the past when the server runs on UTC. (DTD-299)
+- AI scheduling counts today in Vietnam time, so it no longer allows a start date one day in the past when the server runs on UTC. (DTD-299, #150)
   VI: Xếp lịch bằng AI tính ngày hôm nay theo giờ Việt Nam, nên không còn cho phép ngày bắt đầu lùi một ngày khi server chạy UTC. (DTD-299)
 
 - People who left a workspace can no longer read or change Asks they created there. (DTD-287, #139)
@@ -438,7 +438,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Security
 
-- Project updates, AI scheduling and assignment notes tell the model that workspace records are data, not instructions, and text in attached files or news items can no longer close the block that marks it as untrusted. (DTD-299)
+- Project updates, AI scheduling and assignment notes tell the model that workspace records are data, not instructions, and text in attached files or news items can no longer close the block that marks it as untrusted. (DTD-299, #150)
   VI: Project update, xếp lịch AI và ghi chú phân công nói rõ với model rằng dữ liệu workspace không phải chỉ dẫn, và nội dung trong file đính kèm hay tin tức không còn đóng được khối đánh dấu dữ liệu không tin cậy. (DTD-299)
 
 - Updating a project that belongs to no team now requires active membership of its workspace, like every other project read and write. (DTD-33, #65)
