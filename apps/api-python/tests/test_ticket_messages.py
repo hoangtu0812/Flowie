@@ -91,6 +91,20 @@ async def verify_conversation():
             ticket = CreateAskInput(workspaceId=workspace, teamId=team, projectId=project, title="Cannot sign in")
             ask_id = (await create_ask(ticket, requester, db))["data"]["id"]
 
+            # A new ticket reaches the team, not the requester or anyone else.
+            # VI: Ticket mới báo cho team, không báo cho người yêu cầu hay người khác.
+            assert [row["type"] for row in await inbox(db, workspace, handler)] == ["ticket.created"]
+            assert [row["type"] for row in await inbox(db, workspace, colleague)] == ["ticket.created"]
+            assert await inbox(db, workspace, requester) == []
+            assert await inbox(db, workspace, other) == []
+
+            # An Ask the team files outside Service Desk stays quiet.
+            # VI: Ask do team tạo ngoài Service Desk không tạo thông báo.
+            closed = await add_project(db, workspace, team, enabled=False)
+            await create_ask(ticket.model_copy(update={"projectId": closed}), handler, db)
+            await create_ask(ticket.model_copy(update={"projectId": None}), handler, db)
+            assert len(await inbox(db, workspace, colleague)) == 1
+
             # Only the requester and the people handling the ticket join the conversation.
             # VI: Chỉ người yêu cầu và người xử lý ticket tham gia trao đổi.
             sent = await create_ask_message(ask_id, AskMessageInput(content="  It fails on mobile  "), workspace, requester, db)
@@ -104,8 +118,8 @@ async def verify_conversation():
             assert error.value.status_code == 400
 
             assert await inbox(db, workspace, requester) == []
-            assert [row["type"] for row in await inbox(db, workspace, handler)] == ["ticket.message"]
-            assert [row["type"] for row in await inbox(db, workspace, colleague)] == ["ticket.message"]
+            assert (await inbox(db, workspace, handler))[0]["type"] == "ticket.message"
+            assert (await inbox(db, workspace, colleague))[0]["type"] == "ticket.message"
             assert await inbox(db, workspace, other) == []
             mine = (await list_asks(workspace, "mine", requester, db))["data"][0]
             assert mine["ticketStatus"] == "received"
