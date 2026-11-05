@@ -10,10 +10,12 @@ export function FlowieLogo({
    className,
    loading = false,
    label = false,
+   size = 'default',
 }: {
    className?: string;
    loading?: boolean;
    label?: boolean;
+   size?: 'default' | 'large';
 }) {
    const { resolvedTheme } = useTheme();
    const [mounted, setMounted] = useState(false);
@@ -23,14 +25,15 @@ export function FlowieLogo({
    const suffix = mounted && resolvedTheme === 'dark' ? '-dark' : '';
    const source = withBasePath(label ? `/brand/flowie-logo${suffix}.svg` : '/flowie-icon.svg');
    const motion = withBasePath(
-      label ? `/brand/flowie-motion${suffix}.svg` : '/brand/flowie-symbol-motion.svg'
+      label ? `/brand/flowie-motion${suffix}-v2.svg` : '/brand/flowie-symbol-motion-v2.svg'
    );
    const width = label ? 1110 : 400;
    const height = label ? 350 : 400;
+   const fullWidth = size === 'large' ? 'w-64' : 'w-32';
    return (
-      <HStack gap={0} className={cn('inline-flex shrink-0', className)}>
+      <HStack gap={0} className={cn('inline-flex max-w-full shrink-0', className)}>
          {loading ? (
-            <picture className={label ? 'block w-32 shrink-0' : 'block size-14 shrink-0'}>
+            <picture className={cn('block max-w-full shrink-0', label ? fullWidth : 'size-14')}>
                <source media="(prefers-reduced-motion: reduce)" srcSet={source} />
                {/* The app theme chooses contrast; reduced motion retains the same dimensions and logo kind.
                    VI: Theme app chọn độ tương phản; giảm chuyển động giữ cùng kích thước và dạng logo. */}
@@ -47,7 +50,7 @@ export function FlowieLogo({
                role="img"
                aria-label="Flowie"
                viewBox={`0 0 ${width} ${height}`}
-               className={label ? 'block h-auto w-32 shrink-0' : 'block size-8 shrink-0'}
+               className={cn('block max-w-full shrink-0', label ? `h-auto ${fullWidth}` : 'size-8')}
             >
                <image href={source} x={0} y={0} width={width} height={height} />
             </svg>

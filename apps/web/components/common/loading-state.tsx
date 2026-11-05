@@ -4,9 +4,9 @@ import { FlowieLogo } from '@/components/brand/flowie-logo';
 import { cn } from '@/lib/utils';
 
 /**
- * Shared indeterminate loader keeps its label available while brand motion loops.
+ * Shared indeterminate loader shows the full supplied logo sequence while the label stays visible.
  * Reduced-motion browsers receive static artwork through FlowieLogo's picture source.
- * VI: Loader không xác định tiến độ dùng chung giữ nhãn truy cập khi motion thương hiệu lặp.
+ * VI: Loader không xác định tiến độ dùng chung hiện đầy đủ trình tự logo gốc, nhãn luôn hiển thị.
  * Trình duyệt giảm chuyển động nhận ảnh tĩnh qua source của picture trong FlowieLogo.
  */
 export function LoadingState({
@@ -24,8 +24,8 @@ export function LoadingState({
          className={cn('h-full min-h-32', className)}
          role="status"
       >
-         <VStack gap={0} padding={3} className="rounded-2xl bg-muted/50" aria-hidden="true">
-            <FlowieLogo loading />
+         <VStack gap={0} className="max-w-full" aria-hidden="true">
+            <FlowieLogo loading label size="large" />
          </VStack>
          <Text type="supporting">{label}</Text>
       </VStack>
