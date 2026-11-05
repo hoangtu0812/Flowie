@@ -1734,6 +1734,9 @@ model Ask {
   /// Last ticket status the requester was told about; null until the first comparison sets a baseline.
   /// VI: Trạng thái ticket gần nhất đã báo cho người yêu cầu; null đến khi lần so sánh đầu đặt mốc.
   notifiedTicketStatus String? @map("notified_ticket_status")
+  /// Last reopening; while later than the linked issue's closing, the ticket waits for the team, not the issue.
+  /// VI: Lần mở lại gần nhất; khi còn sau thời điểm đóng Issue liên kết, ticket chờ team thay vì theo Issue.
+  reopenedAt       DateTime?     @map("reopened_at")
   archivedAt       DateTime?     @map("archived_at")
   createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime      @default(now()) @updatedAt @map("updated_at")

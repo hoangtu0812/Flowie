@@ -23,6 +23,7 @@ import { uploadAttachment, type Attachment } from '@/lib/attachments';
 import { parseInstant } from '@/lib/time';
 import { useUiPreferencesStore } from '@/store/ui-preferences-store';
 import { messages } from './messages.vi';
+import { TicketActionDialog, type TicketDialogAction } from './ticket-action-dialog';
 import {
    api,
    archiveTicket,
@@ -30,6 +31,7 @@ import {
    listTicketFiles,
    listTicketMessages,
    sendTicketMessage,
+   transitionTicket,
    updateTicket,
    type Ticket,
    type TicketMessage,
@@ -87,6 +89,7 @@ export function TicketDetail({
    const [reply, setReply] = useState('');
    const [busy, setBusy] = useState(false);
    const [error, setError] = useState<string>();
+   const [pending, setPending] = useState<TicketDialogAction>();
    const fileInput = useRef<HTMLInputElement>(null);
 
    const loadConversation = useCallback(async () => {
@@ -135,9 +138,26 @@ export function TicketDetail({
          await loadConversation();
       });
 
+   const confirm = async (message: string) => {
+      if (pending === 'archive') {
+         await archiveTicket(workspaceId, ticket.id);
+         onArchived();
+         return;
+      }
+      if (pending) await transitionTicket(workspaceId, ticket.id, pending, message);
+      await loadConversation();
+      await onChanged();
+      setPending(undefined);
+   };
+
    const when = (value: string) => parseInstant(value).toLocaleString(locale);
    const converted = canHandle && ticket.convertedIssue;
-   const editable = ticket.status !== 'accepted';
+   const editable = ticket.status === 'open';
+   const closed = ['done', 'canceled', 'declined'].includes(ticket.ticketStatus);
+   // A decline or an issue the team canceled stays open to replies, since it cannot be reopened.
+   // VI: Ticket bị từ chối hoặc Issue bị team huỷ vẫn nhận phản hồi, vì không tự mở lại được.
+   const requesterReopens =
+      !canHandle && (ticket.ticketStatus === 'done' || ticket.status === 'canceled');
 
    return (
       <VStack className="h-full min-h-0 w-full">
@@ -170,6 +190,14 @@ export function TicketDetail({
             </Text>
             {ticket.description && (
                <p className="text-sm whitespace-pre-wrap">{ticket.description}</p>
+            )}
+            {canHandle && ticket.reopenPending && converted && (
+               <Text type="supporting">
+                  {tx(
+                     'The requester reopened this ticket. Move {issue} back to work, or mark the ticket as resolved.',
+                     { issue: converted.identifier }
+                  )}
+               </Text>
             )}
             {canHandle && editable && (
                <div className="grid max-w-xs gap-1.5">
@@ -207,7 +235,7 @@ export function TicketDetail({
                      </Link>
                   </Button>
                )}
-               {canHandle && !ticket.convertedIssue && ticket.status !== 'declined' && (
+               {canHandle && editable && (
                   <Button
                      type="button"
                      size="sm"
@@ -217,21 +245,37 @@ export function TicketDetail({
                      {tx('Convert to issue')}
                   </Button>
                )}
+               {canHandle && (editable || ticket.reopenPending) && (
+                  <Button
+                     type="button"
+                     variant="outline"
+                     size="sm"
+                     disabled={busy}
+                     onClick={() => setPending('resolve')}
+                  >
+                     {tx('Mark as resolved')}
+                  </Button>
+               )}
                {canHandle && editable && (
                   <Button
                      type="button"
                      variant="outline"
                      size="sm"
                      disabled={busy}
-                     onClick={() =>
-                        void change(() =>
-                           updateTicket(workspaceId, ticket.id, {
-                              status: ticket.status === 'declined' ? 'open' : 'declined',
-                           })
-                        )
-                     }
+                     onClick={() => setPending('decline')}
                   >
-                     {tx(ticket.status === 'declined' ? 'Reopen' : 'Decline')}
+                     {tx('Decline')}
+                  </Button>
+               )}
+               {canHandle && closed && (
+                  <Button
+                     type="button"
+                     variant="outline"
+                     size="sm"
+                     disabled={busy}
+                     onClick={() => setPending('reopen')}
+                  >
+                     {tx('Reopen')}
                   </Button>
                )}
                {editable && (
@@ -245,19 +289,28 @@ export function TicketDetail({
                      {tx('Edit')}
                   </Button>
                )}
-               <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() =>
-                     void act(() => archiveTicket(workspaceId, ticket.id)).then(
-                        (archived) => archived && onArchived()
-                     )
-                  }
-               >
-                  {tx('Archive')}
-               </Button>
+               {!canHandle && editable && (
+                  <Button
+                     type="button"
+                     variant="outline"
+                     size="sm"
+                     disabled={busy}
+                     onClick={() => setPending('cancel')}
+                  >
+                     {tx('Cancel request')}
+                  </Button>
+               )}
+               {canHandle && (
+                  <Button
+                     type="button"
+                     variant="outline"
+                     size="sm"
+                     disabled={busy}
+                     onClick={() => setPending('archive')}
+                  >
+                     {tx('Archive')}
+                  </Button>
+               )}
             </div>
             <VStack gap={2}>
                <HStack gap={2} className="items-center justify-between">
@@ -315,24 +368,42 @@ export function TicketDetail({
                   {error}
                </p>
             )}
-            <Textarea
-               value={reply}
-               rows={2}
-               maxLength={10000}
-               aria-label={tx('Write a reply')}
-               placeholder={tx('Write a reply')}
-               onChange={(event) => setReply(event.target.value)}
-            />
-            <Button
-               type="button"
-               size="sm"
-               className="self-end"
-               disabled={busy || !reply.trim()}
-               onClick={() => void send()}
-            >
-               {tx('Send')}
-            </Button>
+            {requesterReopens ? (
+               <HStack gap={2} className="items-center justify-between">
+                  <Text type="supporting">{tx('This ticket is closed.')}</Text>
+                  <Button type="button" size="sm" onClick={() => setPending('reopen')}>
+                     {tx('Still not fixed')}
+                  </Button>
+               </HStack>
+            ) : (
+               <>
+                  <Textarea
+                     value={reply}
+                     rows={2}
+                     maxLength={10000}
+                     aria-label={tx('Write a reply')}
+                     placeholder={tx('Write a reply')}
+                     onChange={(event) => setReply(event.target.value)}
+                  />
+                  <Button
+                     type="button"
+                     size="sm"
+                     className="self-end"
+                     disabled={busy || !reply.trim()}
+                     onClick={() => void send()}
+                  >
+                     {tx('Send')}
+                  </Button>
+               </>
+            )}
          </VStack>
+         {pending && (
+            <TicketActionDialog
+               action={pending}
+               onClose={() => setPending(undefined)}
+               onConfirm={confirm}
+            />
+         )}
       </VStack>
    );
 }

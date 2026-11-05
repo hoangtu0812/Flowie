@@ -33,7 +33,7 @@ import {
 } from './service-desk-api';
 import { TicketDetail } from './ticket-detail';
 import { TicketDialog } from './ticket-dialog';
-import { TicketList } from './ticket-list';
+import { inState, isOpen, TicketList, TicketStateSelect, type TicketState } from './ticket-list';
 import { isRequester } from './requester';
 
 type DeskData = {
@@ -45,9 +45,6 @@ type DeskData = {
    projects: TicketProject[];
 };
 const ALL_PROJECTS = 'all';
-const STATE_LABELS = { open: 'Open', closed: 'Closed', all: 'All' } as const;
-type QueueState = keyof typeof STATE_LABELS;
-const isOpen = (ticket: Ticket) => !['done', 'canceled', 'declined'].includes(ticket.ticketStatus);
 
 /**
  * Tickets beside the one being read, as in Approvals. Everyone has "my tickets"; only people in a
@@ -68,7 +65,7 @@ export function ServiceDeskPage() {
    const [tab, setTab] = useState<'mine' | 'queue'>('mine');
    const [selected, setSelected] = useState(ticketId?.[0]);
    const [projectFilter, setProjectFilter] = useState(ALL_PROJECTS);
-   const [queueState, setQueueState] = useState<QueueState>('open');
+   const [ticketState, setTicketState] = useState<TicketState>('open');
    const [dialog, setDialog] = useState<'new' | 'edit'>();
 
    const load = useCallback(async () => {
@@ -100,14 +97,11 @@ export function ServiceDeskPage() {
       );
       return [...new Map(named.map((project) => [project.id, project])).values()];
    }, [data]);
-   const rows =
-      tab === 'mine'
-         ? (data?.mine ?? [])
-         : (data?.queue ?? []).filter(
-              (ticket) =>
-                 (projectFilter === ALL_PROJECTS || ticket.projectId === projectFilter) &&
-                 (queueState === 'all' || isOpen(ticket) === (queueState === 'open'))
-           );
+   const rows = (tab === 'mine' ? (data?.mine ?? []) : (data?.queue ?? [])).filter(
+      (ticket) =>
+         inState(ticket, ticketState) &&
+         (tab === 'mine' || projectFilter === ALL_PROJECTS || ticket.projectId === projectFilter)
+   );
    const queued = data?.queue.find((ticket) => ticket.id === selected);
    const ticket = queued ?? data?.mine.find((item) => item.id === selected);
 
@@ -143,23 +137,9 @@ export function ServiceDeskPage() {
                />
             </TabList>
          )}
-         {tab === 'queue' && (
-            <div className="grid shrink-0 grid-cols-2 gap-2 p-2">
-               <Select
-                  value={queueState}
-                  onValueChange={(value) => setQueueState(value as QueueState)}
-               >
-                  <SelectTrigger aria-label={tx('Status')} className="w-full">
-                     <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                     {(Object.keys(STATE_LABELS) as QueueState[]).map((value) => (
-                        <SelectItem key={value} value={value}>
-                           {tx(STATE_LABELS[value])}
-                        </SelectItem>
-                     ))}
-                  </SelectContent>
-               </Select>
+         <div className="grid shrink-0 grid-cols-2 gap-2 p-2">
+            <TicketStateSelect value={ticketState} onChange={setTicketState} />
+            {tab === 'queue' && (
                <Select value={projectFilter} onValueChange={setProjectFilter}>
                   <SelectTrigger aria-label={tx('Project')} className="w-full">
                      <SelectValue />
@@ -173,8 +153,8 @@ export function ServiceDeskPage() {
                      ))}
                   </SelectContent>
                </Select>
-            </div>
-         )}
+            )}
+         </div>
          {notice && (
             <p role="alert" className="shrink-0 p-4 text-sm text-destructive">
                {notice}
@@ -190,9 +170,11 @@ export function ServiceDeskPage() {
             {data && rows.length === 0 && (
                <Text type="supporting" className="p-4 text-center">
                   {tx(
-                     tab === 'mine'
-                        ? 'You have no tickets yet.'
-                        : 'No tickets are waiting for your team.'
+                     tab === 'queue'
+                        ? 'No tickets are waiting for your team.'
+                        : data.mine.length === 0
+                          ? 'You have no tickets yet.'
+                          : 'No tickets in this view.'
                   )}
                </Text>
             )}

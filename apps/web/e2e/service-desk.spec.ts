@@ -129,8 +129,8 @@ test('a requester outside the team follows a ticket the team answers and convert
          },
       });
       const closed = (await declined.json()).data;
-      await team.context.request.patch(`${api}/asks/${closed.id}?${query}`, {
-         data: { status: 'declined' },
+      await team.context.request.post(`${api}/asks/${closed.id}/transition?${query}`, {
+         data: { action: 'decline', message: 'Out of scope' },
       });
       await openDesk(team.page);
       await team.page.getByRole('tab', { name: /Queue/ }).click();
@@ -140,6 +140,76 @@ test('a requester outside the team follows a ticket the team answers and convert
       await team.page.getByRole('option', { name: 'Closed', exact: true }).click();
       await expect(team.page.getByText(`${title} closed`, { exact: true })).toBeVisible();
       await expect(team.page.getByText(title, { exact: true })).toHaveCount(0);
+   } finally {
+      await setServiceDesk(team.context, false);
+      await team.context.close();
+      await requester.context.close();
+   }
+});
+
+// A question answered in the conversation closes without an issue, and the requester can object.
+// VI: Câu hỏi đã trả lời trong trao đổi được đóng mà không cần Issue, và người yêu cầu có thể phản hồi lại.
+test('the team resolves a ticket and the requester reopens it', async ({ browser }) => {
+   const team = await signIn(browser, fixture.email, { width: 1280, height: 800 });
+   const requester = await signIn(browser, fixture.deskRequesterEmail, {
+      width: 1280,
+      height: 800,
+   });
+   const title = `Service Desk lifecycle ${Date.now()}`;
+   await setServiceDesk(team.context, true);
+   try {
+      const projects = await requester.context.request.get(
+         `${api}/asks/service-desk-projects?${query}`
+      );
+      const project = (await projects.json()).data[0];
+      const created = await requester.context.request.post(`${api}/asks`, {
+         data: {
+            workspaceId: fixture.workspace_id,
+            teamId: project.teamId,
+            projectId: project.id,
+            title,
+         },
+      });
+      expect(created.ok(), await created.text()).toBeTruthy();
+
+      await openDesk(team.page);
+      await team.page.getByRole('tab', { name: /Queue/ }).click();
+      await team.page.getByText(title, { exact: true }).first().click();
+
+      // A decline cannot leave without its reason.
+      // VI: Không thể từ chối khi chưa có lý do.
+      await team.page.getByRole('button', { name: 'Decline', exact: true }).click();
+      const decline = team.page.getByRole('dialog');
+      await expect(decline.getByRole('button', { name: 'Decline', exact: true })).toBeDisabled();
+      await decline.getByRole('button', { name: 'Close', exact: true }).first().click();
+
+      await team.page.getByRole('button', { name: 'Mark as resolved', exact: true }).click();
+      await team.page.getByRole('dialog').getByRole('textbox').fill('Restart the app');
+      await team.page
+         .getByRole('dialog')
+         .getByRole('button', { name: 'Mark as resolved', exact: true })
+         .click();
+      await expect(team.page.getByRole('dialog')).toHaveCount(0);
+      await expect(team.page.getByText('Restart the app')).toBeVisible();
+
+      await requester.page.goto('/servicedesk');
+      await expect(requester.page.getByRole('button', { name: 'New ticket' })).toBeVisible();
+      await expect(requester.page.getByText(title, { exact: true })).toHaveCount(0);
+      await requester.page.getByRole('combobox', { name: 'Status' }).click();
+      await requester.page.getByRole('option', { name: 'Closed', exact: true }).click();
+      await requester.page.getByText(title, { exact: true }).first().click();
+      await expect(requester.page.getByText('Restart the app')).toBeVisible();
+      await expect(requester.page.getByRole('textbox', { name: 'Write a reply' })).toHaveCount(0);
+
+      await requester.page.getByRole('button', { name: 'Still not fixed' }).click();
+      await requester.page.getByRole('dialog').getByRole('textbox').fill('It crashes again');
+      await requester.page
+         .getByRole('dialog')
+         .getByRole('button', { name: 'Reopen', exact: true })
+         .click();
+      await expect(requester.page.getByRole('dialog')).toHaveCount(0);
+      await expect(requester.page.getByText('It crashes again')).toBeVisible();
+      await expect(requester.page.getByRole('textbox', { name: 'Write a reply' })).toBeVisible();
    } finally {
       await setServiceDesk(team.context, false);
       await team.context.close();
@@ -215,8 +285,14 @@ test('the desk works at phone width and the old Asks page redirects', async ({ b
       await requester.page.goto(`/${fixture.slug}/service-desk/${ticket.id}`);
       await expect(requester.page).toHaveURL(new RegExp(`/servicedesk/${ticket.id}`));
       await expect(requester.page.getByRole('textbox', { name: 'Write a reply' })).toBeVisible();
-      await requester.page.getByRole('button', { name: 'Archive', exact: true }).click();
-      await expect(requester.page.getByRole('button', { name: 'New ticket' })).toBeVisible();
+      await expect(requester.page.getByRole('button', { name: 'Archive' })).toHaveCount(0);
+      await requester.page.getByRole('button', { name: 'Cancel request', exact: true }).click();
+      await requester.page
+         .getByRole('dialog')
+         .getByRole('button', { name: 'Cancel request', exact: true })
+         .click();
+      await expect(requester.page.getByRole('button', { name: 'Still not fixed' })).toBeVisible();
+      await requester.page.getByRole('button', { name: 'Close', exact: true }).click();
       await expect(requester.page.getByText(title, { exact: true })).toHaveCount(0);
    } finally {
       await setServiceDesk(team.context, false);

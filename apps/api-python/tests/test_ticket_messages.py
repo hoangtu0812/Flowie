@@ -12,6 +12,7 @@ from app.domains.native_asks import (
     AskMessageInput,
     CreateAskInput,
     UpdateAskInput,
+    AskTransitionInput,
     archive_ask,
     convert_ask,
     create_ask,
@@ -19,6 +20,7 @@ from app.domains.native_asks import (
     list_ask_messages,
     list_asks,
     ticket_status,
+    transition_ask,
     update_ask,
 )
 from app.domains.native_attachments import _authorize_entity
@@ -177,11 +179,11 @@ async def verify_conversation():
             assert note["data"]["details"][0]["value"] == "In progress → Done"
             assert await inbox(db, workspace, other) == []
 
-            # Declining goes through the same comparison as issue changes.
-            # VI: Từ chối đi qua cùng phép so sánh với thay đổi của Issue.
+            # A decision on the ticket notifies at once, so the job must not repeat it.
+            # VI: Quyết định trên ticket báo ngay, nên job không được báo lại.
             second = (await create_ask(ticket, requester, db))["data"]["id"]
-            await update_ask(second, UpdateAskInput(status="declined"), workspace, handler, db)
-            assert await notify_ticket_status_changes(factory) == 1
+            await transition_ask(second, AskTransitionInput(action="decline", message="Out of scope"), workspace, handler, db)
+            assert await notify_ticket_status_changes(factory) == 0
 
             # An Ask from before this job gets a baseline, not a notification.
             # VI: Ask có trước job này được đặt mốc, không tạo thông báo.
@@ -216,7 +218,7 @@ async def verify_conversation():
 
             # Archiving a ticket removes its notifications from every Inbox.
             # VI: Lưu trữ ticket sẽ gỡ thông báo của ticket khỏi mọi Inbox.
-            await archive_ask(ask_id, workspace, requester, db)
+            await archive_ask(ask_id, workspace, handler, db)
             assert all(row["entityId"] != ask_id for row in await inbox(db, workspace, requester))
             assert all(row["entityId"] != ask_id for row in await inbox(db, workspace, handler))
     finally:

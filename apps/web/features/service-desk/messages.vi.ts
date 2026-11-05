@@ -58,4 +58,29 @@ export const messages = {
    'Edit': 'Sửa',
    'Archive': 'Lưu trữ',
    'Created by {name}': 'Tạo bởi {name}',
+   'Mark as resolved': 'Đã giải quyết',
+   'This closes the ticket. The requester can reopen it if the problem remains.':
+      'Ticket sẽ được đóng. Người yêu cầu có thể mở lại nếu vẫn còn lỗi.',
+   'Note for the requester (optional)': 'Ghi chú cho người yêu cầu (không bắt buộc)',
+   'Decline this ticket': 'Từ chối ticket',
+   'The requester reads your reason in the ticket.':
+      'Người yêu cầu sẽ đọc lý do của bạn trong ticket.',
+   'Reason': 'Lý do',
+   'Cancel this request': 'Huỷ yêu cầu này',
+   'The team stops working on it. You can reopen it later.':
+      'Team sẽ dừng xử lý. Bạn có thể mở lại sau.',
+   'Reason (optional)': 'Lý do (không bắt buộc)',
+   'Cancel request': 'Huỷ yêu cầu',
+   'Reopen this ticket': 'Mở lại ticket',
+   'The ticket returns to the queue and the team is told.':
+      'Ticket trở lại hàng đợi và team sẽ được báo.',
+   'What still needs attention?': 'Còn vấn đề gì cần xử lý?',
+   'Archive this ticket': 'Lưu trữ ticket',
+   'It leaves every list and its notifications leave the Inbox.':
+      'Ticket sẽ biến mất khỏi mọi danh sách và thông báo của nó biến mất khỏi Inbox.',
+   'This ticket is closed.': 'Ticket này đã đóng.',
+   'Still not fixed': 'Vẫn còn lỗi',
+   'No tickets in this view.': 'Không có ticket nào ở mục này.',
+   'The requester reopened this ticket. Move {issue} back to work, or mark the ticket as resolved.':
+      'Người yêu cầu đã mở lại ticket này. Hãy chuyển {issue} về đang làm, hoặc đánh dấu ticket đã giải quyết.',
 } as const;
