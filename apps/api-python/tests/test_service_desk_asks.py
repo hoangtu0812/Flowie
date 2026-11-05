@@ -11,12 +11,14 @@ from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
 from app.domains.native_asks import (
     CreateAskInput,
     UpdateAskInput,
+    AskTransitionInput,
     archive_ask,
     convert_ask,
     create_ask,
     list_asks,
     list_service_desk_projects,
     ticket_status,
+    transition_ask,
     update_ask,
 )
 from app.domains.native_projects import UpdateProjectInput, update_project
@@ -36,6 +38,9 @@ from tests.document_review_support import add_member
         ("accepted", "CANCELED", "canceled"),
         ("declined", None, "declined"),
         ("declined", "STARTED", "declined"),
+        ("resolved", None, "done"),
+        ("resolved", "STARTED", "done"),
+        ("canceled", None, "canceled"),
     ],
 )
 def test_ticket_status_labels(ask_status, category, expected):
@@ -127,13 +132,13 @@ async def verify_intake():
             # VI: Người yêu cầu sửa được nội dung ticket nhưng mọi quyết định thuộc về team.
             updated = await update_ask(ask_id, UpdateAskInput(title="Cannot sign in on mobile"), workspace, requester, db)
             assert updated["data"]["title"] == "Cannot sign in on mobile"
-            await forbidden(update_ask(ask_id, UpdateAskInput(status="declined"), workspace, requester, db))
+            await forbidden(transition_ask(ask_id, AskTransitionInput(action="decline", message="No"), workspace, requester, db))
             await forbidden(update_ask(ask_id, UpdateAskInput(title="Taken over"), workspace, other, db))
             await forbidden(convert_ask(ask_id, workspace, requester, db))
             await forbidden(convert_ask(ask_id, workspace, other, db))
             await forbidden(archive_ask(ask_id, workspace, other, db))
 
-            declined = await update_ask(handled["id"], UpdateAskInput(status="declined"), workspace, owner, db)
+            declined = await transition_ask(handled["id"], AskTransitionInput(action="decline", message="Out of scope"), workspace, owner, db)
             assert declined["data"]["ticketStatus"] == "declined"
 
             converted = (await convert_ask(ask_id, workspace, handler, db))["data"]
@@ -169,7 +174,8 @@ async def verify_intake():
                 await update_project(teamless, enable, workspace, owner, db)
             assert error.value.status_code == 400
 
-            await archive_ask(ask_id, workspace, requester, db)
+            await forbidden(archive_ask(ask_id, workspace, requester, db))
+            await archive_ask(ask_id, workspace, handler, db)
             assert (await list_asks(workspace, "mine", requester, db))["data"] == []
     finally:
         await engine.dispose()

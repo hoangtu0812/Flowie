@@ -14,8 +14,9 @@ export type Ticket = {
    title: string;
    description: string | null;
    priority: TicketPriority;
-   status: 'open' | 'accepted' | 'declined';
+   status: 'open' | 'accepted' | 'declined' | 'resolved' | 'canceled';
    ticketStatus: TicketStatus;
+   reopenPending?: boolean;
    createdAt: string;
    updatedAt: string;
    team: { id: string; name: string };
@@ -77,12 +78,28 @@ export const createTicket = async (
 export const updateTicket = async (
    workspaceId: string,
    ticketId: string,
-   changes: Partial<TicketDraft> & { status?: 'open' | 'declined'; assigneeId?: string | null }
+   changes: Partial<TicketDraft> & { assigneeId?: string | null }
 ) =>
    responseData<Ticket>(
       await authenticatedFetch(
          `${api}/asks/${ticketId}?${scoped(workspaceId)}`,
          json('PATCH', changes)
+      ),
+      'Could not update the ticket.'
+   );
+
+export type TicketAction = 'resolve' | 'decline' | 'reopen' | 'cancel';
+
+export const transitionTicket = async (
+   workspaceId: string,
+   ticketId: string,
+   action: TicketAction,
+   message: string
+) =>
+   responseData<Ticket>(
+      await authenticatedFetch(
+         `${api}/asks/${ticketId}/transition?${scoped(workspaceId)}`,
+         json('POST', { action, message })
       ),
       'Could not update the ticket.'
    );

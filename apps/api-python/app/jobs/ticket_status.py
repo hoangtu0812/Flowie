@@ -8,7 +8,7 @@ from collections.abc import Awaitable, Callable
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from ..domains.native_asks import ticket_status
+from ..domains.native_asks import reopen_pending, ticket_status
 from ..modules.notifications.outbox import stage_notifications
 from ..services.notification_events import create_notification_batch
 
@@ -33,7 +33,8 @@ async def notify_ticket_status_changes(factory: async_sessionmaker[AsyncSession]
     async with factory() as db:
         result = await db.execute(
             text(
-                '''SELECT ask.id, ask.workspace_id, ask.title, ask.status, ask.created_by, ask.notified_ticket_status, issue_status.category
+                '''SELECT ask.id, ask.workspace_id, ask.title, ask.status, ask.created_by, ask.notified_ticket_status, ask.reopened_at,
+                          COALESCE(issue.completed_at, issue.canceled_at) AS closed_at, issue_status.category
                    FROM asks ask
                    LEFT JOIN issues issue ON issue.id = ask.converted_issue_id
                    LEFT JOIN issue_statuses issue_status ON issue_status.id = issue.status_id
@@ -42,7 +43,8 @@ async def notify_ticket_status_changes(factory: async_sessionmaker[AsyncSession]
         )
         notified = 0
         for row in result.mappings().all():
-            current, seen = ticket_status(row['status'], row['category']), row['notified_ticket_status']
+            reopened = reopen_pending(row['status'], row['category'], row['reopened_at'], row['closed_at'])
+            current, seen = ticket_status(row['status'], row['category'], reopened=reopened), row['notified_ticket_status']
             if current == seen:
                 continue
             # The conditional update is the claim: a second API process blocks here, then matches no row.

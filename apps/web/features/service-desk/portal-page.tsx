@@ -29,7 +29,7 @@ import {
 } from './service-desk-api';
 import { TicketDetail } from './ticket-detail';
 import { TicketDialog } from './ticket-dialog';
-import { TicketList } from './ticket-list';
+import { inState, TicketList, TicketStateSelect, type TicketState } from './ticket-list';
 
 type Desk = { tickets: Ticket[]; projects: TicketProject[] };
 
@@ -59,6 +59,7 @@ export function ServiceDeskPortal() {
    const [error, setError] = useState<string>();
    const [notice, setNotice] = useState<string>();
    const [selected, setSelected] = useState(ticketId?.[0]);
+   const [ticketState, setTicketState] = useState<TicketState>('open');
    const [dialog, setDialog] = useState<'new' | 'edit'>();
 
    const open = useCallback(async () => {
@@ -121,6 +122,7 @@ export function ServiceDeskPortal() {
 
    const unreadTickets = useMemo(() => new Set(unread.map((item) => item.entityId)), [unread]);
    const ticket = desk?.tickets.find((item) => item.id === selected);
+   const rows = desk?.tickets.filter((item) => inState(item, ticketState)) ?? [];
 
    const signOut = async () => {
       await fetch(`${api}/auth/logout`, { method: 'POST', credentials: 'include' });
@@ -139,6 +141,9 @@ export function ServiceDeskPortal() {
                {tx('New ticket')}
             </Button>
          </HStack>
+         <div className="shrink-0 p-2">
+            <TicketStateSelect value={ticketState} onChange={setTicketState} />
+         </div>
          {notice && (
             <p role="alert" className="shrink-0 p-4 text-sm text-destructive">
                {notice}
@@ -146,13 +151,17 @@ export function ServiceDeskPortal() {
          )}
          <VStack className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
             {!desk && !error && <LoadingState />}
-            {desk?.tickets.length === 0 && (
+            {desk && rows.length === 0 && (
                <Text type="supporting" className="p-4 text-center">
-                  {tx('You have no tickets yet.')}
+                  {tx(
+                     desk.tickets.length === 0
+                        ? 'You have no tickets yet.'
+                        : 'No tickets in this view.'
+                  )}
                </Text>
             )}
             <TicketList
-               rows={desk?.tickets ?? []}
+               rows={rows}
                selected={selected}
                inQueue={false}
                unread={unreadTickets}

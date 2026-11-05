@@ -195,8 +195,8 @@ export const helpTopics: HelpTopic[] = [
          'Service Desk cho mọi người trong workspace tạo ticket cho một dự án và theo dõi mà không cần vào team. Team trả lời từ hàng đợi và chuyển ticket thành Issue.',
       ],
       steps: [
-         'Turn on Service Desk in Project settings, then open Service Desk and create a ticket. People outside a team use their own page at /servicedesk. Replies and status changes reach your Inbox and show as a dot on that page. Team members use the Queue tab to answer, decline or convert a ticket.',
-         'Bật Service Desk trong Project settings, rồi mở Service Desk và tạo ticket. Người ngoài team dùng trang riêng tại /servicedesk. Phản hồi và thay đổi trạng thái được báo vào Inbox và hiện thành chấm trên trang đó. Thành viên team dùng tab Hàng đợi để trả lời, từ chối hoặc chuyển ticket.',
+         'Turn on Service Desk in Project settings, then open Service Desk and create a ticket. People outside a team use their own page at /servicedesk. Replies and status changes reach your Inbox and show as a dot on that page. Team members use the Queue tab to answer, resolve, decline or convert a ticket, and requesters can reopen a closed ticket or cancel an open one.',
+         'Bật Service Desk trong Project settings, rồi mở Service Desk và tạo ticket. Người ngoài team dùng trang riêng tại /servicedesk. Phản hồi và thay đổi trạng thái được báo vào Inbox và hiện thành chấm trên trang đó. Thành viên team dùng tab Hàng đợi để trả lời, giải quyết, từ chối hoặc chuyển ticket, còn người yêu cầu mở lại được ticket đã đóng hoặc huỷ ticket đang mở.',
       ],
       path: '/service-desk',
    },
