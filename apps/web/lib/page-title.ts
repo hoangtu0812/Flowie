@@ -114,6 +114,7 @@ const PUBLIC_PAGES: Record<string, string> = {
    'auth/reset-password': 'Reset password',
    'auth/mfa': 'Multi-factor authentication',
    'invitations': 'Workspace invitations',
+   'servicedesk': 'Service Desk',
    'admin': 'Admin',
 };
 
@@ -136,6 +137,7 @@ export function pageTitle(pathname: string, context: PageTitleContext = {}): str
    const segments = pathname.split('/').filter(Boolean).map(decodeSegment);
    const route = segments.join('/');
    if (route in PUBLIC_PAGES) return PUBLIC_PAGES[route];
+   if (segments[0] === 'servicedesk') return PUBLIC_PAGES.servicedesk;
    const [, section, key, ...rest] = segments;
    const tail = [key, ...rest].filter(Boolean).join('/');
    const { workspace, entity } = context;

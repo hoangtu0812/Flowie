@@ -6,6 +6,7 @@ import { ApiRequestError } from '@/lib/http';
 import { loadCurrentUser } from '@/features/identity/current-user';
 import { preferredWorkspaceSlug, resolveWorkspaceRoot } from '@/lib/workspace-root';
 import { accountPreferences } from '@/features/identity/account-preferences';
+import { isRequester } from '@/features/service-desk/requester';
 import { LoadingState } from '@/components/common/loading-state';
 import { QueryState } from '@/components/common/query-state';
 export default function Home() {
@@ -18,7 +19,16 @@ export default function Home() {
       void Promise.all([loadCurrentUser(), loadWorkspaceMemberships()])
          .then(async ([user, memberships]) => {
             const preferences = await accountPreferences(user.id);
+            const slug =
+               preferredWorkspaceSlug(memberships, preferences.defaultWorkspaceId) ??
+               memberships[0]?.workspace.slug;
+            const home = memberships.find(({ workspace }) => workspace.slug === slug);
+            const requester = !user.isPlatformAdmin && home && (await isRequester(home));
             if (!active) return;
+            if (requester) {
+               router.replace('/servicedesk');
+               return;
+            }
             const destination = resolveWorkspaceRoot({
                adminAccessible: Boolean(user.isPlatformAdmin),
                workspacesAccessible: true,

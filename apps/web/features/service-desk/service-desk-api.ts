@@ -130,3 +130,22 @@ export const ticketForIssue = async (workspaceId: string, issueId: string) =>
       await authenticatedFetch(`${api}/asks/by-issue/${issueId}?${scoped(workspaceId)}`),
       'Could not load the ticket.'
    );
+
+export type TicketNotification = { id: string; entityId: string };
+
+/**
+ * Unread ticket notifications, which mark tickets with news on the page without an Inbox.
+ * VI: Thông báo ticket chưa đọc, dùng để đánh dấu ticket có tin mới trên trang không có Inbox.
+ */
+export const listUnreadTicketNotifications = async (workspaceId: string) => {
+   const items = await responseData<
+      (TicketNotification & { entityType: string; readAt: string | null })[]
+   >(
+      await authenticatedFetch(`${api}/notifications?${scoped(workspaceId)}`),
+      'Could not load notifications.'
+   );
+   return items.filter((item) => item.entityType === 'ticket' && !item.readAt);
+};
+
+export const markNotificationRead = (id: string) =>
+   authenticatedFetch(`${api}/notifications/${id}/read`, json('POST'));

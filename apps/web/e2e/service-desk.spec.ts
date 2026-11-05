@@ -23,7 +23,9 @@ async function signIn(
    await page.getByLabel('Email', { exact: true }).fill(email);
    await page.getByLabel('Password', { exact: true }).fill(fixture.password);
    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-   await expect(page).toHaveURL(new RegExp(`/${fixture.slug}/`));
+   await expect(page).toHaveURL(
+      new RegExp(email === fixture.deskRequesterEmail ? '/servicedesk' : `/${fixture.slug}/`)
+   );
    return { context, page };
 }
 
@@ -49,7 +51,9 @@ test('a requester outside the team follows a ticket the team answers and convert
    const title = `Service Desk spec ${Date.now()}`;
    await setServiceDesk(team.context, true);
    try {
-      await openDesk(requester.page);
+      await expect(requester.page.getByRole('button', { name: 'New ticket' })).toBeEnabled();
+      await expect(requester.page.getByRole('link', { name: 'Dashboard' })).toHaveCount(0);
+      await expect(requester.page).toHaveTitle(/Service Desk/);
       await expect(requester.page.getByRole('tab', { name: /Queue/ })).toHaveCount(0);
       await requester.page.getByRole('button', { name: 'New ticket', exact: true }).click();
       await requester.page.getByLabel('Title', { exact: true }).fill(title);
@@ -91,8 +95,14 @@ test('a requester outside the team follows a ticket the team answers and convert
       await expect(team.page.getByRole('link', { name: 'steps.txt' })).toBeVisible();
 
       await requester.page.reload();
+      const news = requester.page
+         .getByRole('listitem')
+         .filter({ hasText: title })
+         .getByRole('img', { name: 'New activity' });
+      await expect(news).toBeVisible();
       await requester.page.getByText(title, { exact: true }).first().click();
       await expect(requester.page.getByText('Which browser?')).toBeVisible();
+      await expect(news).toHaveCount(0);
       await expect(requester.page.getByText('Waiting for you').first()).toBeVisible();
       await expect(requester.page.getByText(identifier, { exact: true })).toHaveCount(0);
       const tickets = await requester.context.request.get(`${api}/asks?${query}&scope=mine`);
@@ -154,6 +164,7 @@ test('the project settings switch opens the project to tickets', async ({ browse
       await page.goto(`/${fixture.slug}/project/${fixture.projectId}/overview`);
       let dialog = await openSettings();
       await dialog.getByRole('switch', { name: 'Service Desk' }).click();
+      await expect(dialog.getByRole('switch', { name: 'Service Desk' })).toBeChecked();
       await dialog.getByRole('button', { name: 'Save' }).click();
       await expect(dialog).toHaveCount(0);
       expect(await accepting()).toContain(fixture.projectId);
@@ -191,7 +202,7 @@ test('the desk works at phone width and the old Asks page redirects', async ({ b
       const ticket = (await created.json()).data;
 
       await requester.page.goto(`/${fixture.slug}/settings/asks`);
-      await expect(requester.page).toHaveURL(new RegExp(`/${fixture.slug}/service-desk`));
+      await expect(requester.page).toHaveURL(/\/servicedesk/);
       await requester.page.getByText(title, { exact: true }).first().click();
       await expect(requester.page.getByRole('textbox', { name: 'Write a reply' })).toBeVisible();
       const width = await requester.page.evaluate(() => document.documentElement.scrollWidth);
@@ -199,7 +210,10 @@ test('the desk works at phone width and the old Asks page redirects', async ({ b
       await requester.page.getByRole('button', { name: 'Close', exact: true }).click();
       await expect(requester.page.getByRole('button', { name: 'New ticket' })).toBeVisible();
 
+      // An Inbox or email link opens the ticket on the requester's own page.
+      // VI: Liên kết từ Inbox hoặc email mở ticket trên trang riêng của người yêu cầu.
       await requester.page.goto(`/${fixture.slug}/service-desk/${ticket.id}`);
+      await expect(requester.page).toHaveURL(new RegExp(`/servicedesk/${ticket.id}`));
       await expect(requester.page.getByRole('textbox', { name: 'Write a reply' })).toBeVisible();
       await requester.page.getByRole('button', { name: 'Archive', exact: true }).click();
       await expect(requester.page.getByRole('button', { name: 'New ticket' })).toBeVisible();
