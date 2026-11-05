@@ -145,6 +145,29 @@ export const saveTicketEmail = async (
       'Could not save email settings.'
    );
 
+export type AutoJoin = {
+   available: boolean;
+   enabled: boolean;
+   teamlessProjects: number;
+   teamlessIssues: number;
+   teamlessDocuments: number;
+};
+
+export const loadAutoJoin = async (workspaceId: string) =>
+   responseData<AutoJoin>(
+      await authenticatedFetch(`${api}/workspaces/${workspaceId}/auto-join`),
+      'Could not load this setting.'
+   );
+
+export const saveAutoJoin = async (workspaceId: string, enabled: boolean) =>
+   responseData<unknown>(
+      await authenticatedFetch(
+         `${api}/workspaces/${workspaceId}/auto-join`,
+         json('PUT', { enabled })
+      ),
+      'Could not save this setting.'
+   );
+
 export const listTicketMessages = async (workspaceId: string, ticketId: string) =>
    responseData<TicketMessage[]>(
       await authenticatedFetch(`${api}/asks/${ticketId}/messages?${scoped(workspaceId)}`),

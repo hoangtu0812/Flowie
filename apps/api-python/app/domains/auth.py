@@ -585,6 +585,49 @@ async def verify_registration(
     return response
 
 
+async def _join_tenant_workspaces(db: AsyncSession, user_id: str, tenant_id: str, now: Any) -> int:
+    """Adds a Microsoft account to the workspaces open to its tenant and returns how many it joined.
+    `tenant_id` is the `tid` claim of a token already checked against the configured tenant, never
+    the email domain. Any existing row wins, so an invitation or a suspension is left alone, and
+    the blocks keep out people who were removed or left. They join as members of no team.
+    VI: Thêm tài khoản Microsoft vào các workspace mở cho tenant của họ, trả về số workspace đã vào.
+    VI: `tenant_id` là claim `tid` của token đã được đối chiếu với tenant cấu hình, không phải đuôi
+    VI: email. Dòng đã có luôn được giữ, nên lời mời hoặc trạng thái tạm khoá không đổi, và bảng chặn
+    VI: giữ người bị xoá hoặc đã tự rời ở ngoài. Họ vào với vai trò member, không thuộc team nào.
+    """
+    open_workspaces = await db.execute(
+        text(
+            '''SELECT w.id FROM workspaces w
+               WHERE lower(w.auto_join_tenant_id) = :tenant_id
+                 AND NOT EXISTS (SELECT 1 FROM workspace_members m WHERE m.workspace_id = w.id AND m.user_id = :user_id)
+                 AND NOT EXISTS (SELECT 1 FROM workspace_auto_join_blocks b WHERE b.workspace_id = w.id AND b.user_id = :user_id)'''
+        ),
+        {'tenant_id': tenant_id.lower(), 'user_id': user_id},
+    )
+    joined = 0
+    for workspace_id in open_workspaces.scalars().all():
+        member_id = _cuid()
+        inserted = await db.execute(
+            text(
+                '''INSERT INTO workspace_members (id, workspace_id, user_id, status, role, joined_at, created_at, updated_at)
+                   VALUES (:id, :workspace_id, :user_id, 'ACTIVE', 'MEMBER', :now, :now, :now)
+                   ON CONFLICT (workspace_id, user_id) DO NOTHING RETURNING id'''
+            ),
+            {'id': member_id, 'workspace_id': workspace_id, 'user_id': user_id, 'now': now},
+        )
+        if inserted.first() is None:
+            continue
+        await db.execute(
+            text(
+                '''INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
+                   VALUES (:id, :workspace_id, :actor_id, 'workspace.member.auto_joined', 'workspace-member', :entity_id, CAST('{}' AS jsonb), :now)'''
+            ),
+            {'id': _cuid(), 'workspace_id': workspace_id, 'actor_id': user_id, 'entity_id': member_id, 'now': now},
+        )
+        joined += 1
+    return joined
+
+
 async def _upsert_microsoft_user(
     db: AsyncSession,
     profile: MicrosoftProfile,
@@ -686,13 +729,16 @@ async def _upsert_microsoft_user(
                         'now': now,
                     },
                 )
-                await create_workspace_bootstrap(
-                    db,
-                    user_id=user_id,
-                    organization_name=f"{profile.name}'s organization",
-                    workspace_name=f"{profile.name}'s workspace",
-                    now=now,
-                )
+                # A personal workspace would make this person an owner and hide Service Desk from them.
+                # VI: Workspace cá nhân sẽ biến người này thành owner và che mất Service Desk.
+                if not await _join_tenant_workspaces(db, user_id, profile.tenant_id, now):
+                    await create_workspace_bootstrap(
+                        db,
+                        user_id=user_id,
+                        organization_name=f"{profile.name}'s organization",
+                        workspace_name=f"{profile.name}'s workspace",
+                        now=now,
+                    )
                 return user_id
 
         if user['status'] != 'ACTIVE':
@@ -744,6 +790,7 @@ async def _upsert_microsoft_user(
                 'now': now,
             },
         )
+        await _join_tenant_workspaces(db, user['id'], profile.tenant_id, now)
         return str(user['id'])
 
 

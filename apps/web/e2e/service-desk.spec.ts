@@ -380,6 +380,48 @@ test('a requester turns ticket emails off from their page', async ({ browser }) 
    }
 });
 
+// The server here has no Microsoft sign-in, so the status is stubbed to show the workspace setting.
+// VI: Server ở đây không có đăng nhập Microsoft, nên trạng thái được giả lập để hiện cài đặt workspace.
+test('turning on automatic joining shows what it exposes first', async ({ browser }) => {
+   const { context, page } = await signIn(browser, fixture.email);
+   const saved: unknown[] = [];
+   await page.route('**/workspaces/*/auto-join', async (route) => {
+      if (route.request().method() === 'PUT') {
+         saved.push(route.request().postDataJSON());
+         await route.fulfill({ json: { data: { enabled: true } } });
+         return;
+      }
+      await route.fulfill({
+         json: {
+            data: {
+               available: true,
+               enabled: false,
+               teamlessProjects: 2,
+               teamlessIssues: 7,
+               teamlessDocuments: 3,
+            },
+         },
+      });
+   });
+   try {
+      await page.goto(`/${fixture.slug}/settings/workspace`);
+      const toggle = page.getByRole('switch', { name: 'Let company accounts join automatically' });
+      await toggle.click();
+      const dialog = page.getByRole('alertdialog');
+      await expect(dialog.getByText('7 issues with no team')).toBeVisible();
+      await dialog.getByRole('button', { name: 'Cancel' }).click();
+      await expect(toggle).not.toBeChecked();
+      expect(saved).toEqual([]);
+
+      await toggle.click();
+      await dialog.getByRole('button', { name: 'Turn on' }).click();
+      await expect(toggle).toBeChecked();
+      expect(saved).toEqual([{ enabled: true }]);
+   } finally {
+      await context.close();
+   }
+});
+
 // The switch in Project settings decides whether the project appears in the ticket form.
 // VI: Công tắc trong Project settings quyết định dự án có xuất hiện trong form ticket hay không.
 test('the project settings switch opens the project to tickets', async ({ browser }) => {
