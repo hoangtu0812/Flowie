@@ -528,6 +528,7 @@ export function useLiveProject(projectId: string) {
          setProject((current) =>
             current ? { ...current, favorites: favorite ? [{ userId: 'current' }] : [] } : current
          );
+         window.dispatchEvent(new Event('flowie-project-favorites-changed'));
       },
       [projectId, workspaceId]
    );
