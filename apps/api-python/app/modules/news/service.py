@@ -19,6 +19,12 @@ from .feeds import fetch_feed, news_card, parse_feed
 
 logger = logging.getLogger(__name__)
 
+# How long a card may wait for AI labels: long enough to ride out a provider outage, short enough
+# that the morning security news still arrives the same morning.
+# VI: Thời gian card được chờ nhãn AI: đủ lâu để qua một sự cố provider, đủ ngắn để tin bảo mật buổi
+# VI: sáng vẫn đến trong buổi sáng đó.
+NEWS_AI_GRACE = timedelta(hours=2)
+
 
 async def member_role(db: AsyncSession, workspace_id: str, user_id: str) -> str:
     role = (
@@ -146,12 +152,13 @@ async def refresh_workspace(
     is given), store new items once per link, then post them to Teams. Each source is committed on
     its own and the transaction is closed before every download, so a slow feed holds no lock and
     one broken feed only records ``last_error`` on its source. With ``settings`` the new items are
-    labelled by the workspace's AI provider before the Teams post; AI failures never stop the post.
+    labelled by the workspace's AI provider before the Teams post; a card waiting for labels is held
+    for at most ``NEWS_AI_GRACE``, so AI failures only delay it.
     VI: Lấy các nguồn đang bật của workspace (chỉ nguồn chưa lấy từ ``due_before`` nếu có), lưu
     VI: tin mới một lần theo link, rồi gửi Teams. Mỗi nguồn được commit riêng và transaction được
     VI: đóng trước mỗi lần tải, nên feed chậm không giữ khoá và feed lỗi chỉ ghi ``last_error``.
-    VI: Có ``settings`` thì tin mới được provider AI của workspace gán nhãn trước khi gửi Teams; lỗi
-    VI: AI không bao giờ chặn việc gửi.
+    VI: Có ``settings`` thì tin mới được provider AI của workspace gán nhãn trước khi gửi Teams; thẻ
+    VI: chờ nhãn được giữ tối đa ``NEWS_AI_GRACE``, nên lỗi AI chỉ làm thẻ đến muộn.
     """
     query = 'SELECT id, feed_url FROM news_sources WHERE workspace_id = :workspace_id AND enabled'
     params: dict[str, Any] = {'workspace_id': workspace_id}
@@ -190,23 +197,62 @@ async def refresh_workspace(
             )
             await db.commit()
         analyzed = await analyze_workspace(db, workspace_id, settings) if settings is not None else 0
-        notified = await notify_workspace(db, workspace_id, client)
+        notified = await notify_workspace(db, workspace_id, client, hold=settings is not None)
     return {'fetched': len(sources), 'inserted': inserted, 'analyzed': analyzed, 'notified': notified}
 
 
-async def notify_workspace(db: AsyncSession, workspace_id: str, client: httpx.AsyncClient) -> int:
+async def held_workspaces(db: AsyncSession) -> list[str]:
+    """Workspaces with an active provider and unsent items still waiting for AI labels.
+    VI: Các workspace có provider đang bật và tin chưa gửi còn chờ nhãn AI.
+    """
+    rows = await db.execute(
+        text(
+            '''SELECT DISTINCT i.workspace_id FROM news_items i
+               JOIN workspace_agent_providers p ON p.workspace_id = i.workspace_id AND p.enabled
+               WHERE i.notified_at IS NULL AND i.analyzed_at IS NULL'''
+        )
+    )
+    return [row[0] for row in rows.all()]
+
+
+async def retry_held_workspace(db: AsyncSession, workspace_id: str, settings: Any) -> None:
+    """Label held items and post what is ready, without downloading the feeds again.
+    VI: Gán nhãn tin đang giữ và gửi phần đã sẵn sàng, không tải lại feed.
+    """
+    await analyze_workspace(db, workspace_id, settings)
+    async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
+        await notify_workspace(db, workspace_id, client, hold=True)
+
+
+async def notify_workspace(
+    db: AsyncSession, workspace_id: str, client: httpx.AsyncClient, hold: bool = False
+) -> int:
     """Post one card per category with unsent items. Items of a category without a webhook are
     marked as handled so a webhook added later does not replay the backlog; a failed post keeps
     them pending for the next fetch. Returns the number of cards delivered.
+
+    With ``hold`` and an active provider, a category with items unlabelled for less than
+    ``NEWS_AI_GRACE`` is skipped so its card can carry the labels. After that the card goes out as
+    it is, because a security item must not be lost to an AI outage.
     VI: Gửi một card cho mỗi nhóm có tin chưa gửi. Tin của nhóm không có webhook được đánh dấu đã
     VI: xử lý để webhook thêm sau không gửi lại tồn đọng; gửi lỗi thì giữ lại cho lần lấy sau.
-    VI: Trả về số card đã gửi thành công.
+    VI: Trả về số card đã gửi thành công. Với ``hold`` và provider đang bật, nhóm có tin chưa nhãn
+    VI: dưới ``NEWS_AI_GRACE`` bị bỏ qua để card có nhãn. Sau đó card vẫn được gửi, vì sự cố AI không
+    VI: được làm mất tin bảo mật.
     """
+    await_labels = hold and bool(
+        (
+            await db.execute(
+                text('SELECT 1 FROM workspace_agent_providers WHERE workspace_id = :workspace_id AND enabled LIMIT 1'),
+                {'workspace_id': workspace_id},
+            )
+        ).first()
+    )
     rows = (
         await db.execute(
             text(
                 '''SELECT c.id AS category_id, c.name, c.webhook_url, c.digest, c.digest_at,
-                          i.id, i.title, i.url, i.risk_level, i.ai_summary
+                          i.id, i.title, i.url, i.risk_level, i.ai_summary, i.analyzed_at, i.created_at
                    FROM news_items i JOIN news_sources s ON s.id = i.source_id
                    JOIN news_categories c ON c.id = s.category_id
                    WHERE i.workspace_id = :workspace_id AND i.notified_at IS NULL
@@ -222,7 +268,10 @@ async def notify_workspace(db: AsyncSession, workspace_id: str, client: httpx.As
     base = (getenv('APP_URL') or getenv('NEXT_PUBLIC_APP_URL') or '').rstrip('/')
     recent = _utcnow() - timedelta(hours=24)
     delivered = 0
+    hold_after = _utcnow() - NEWS_AI_GRACE
     for items in groups.values():
+        if await_labels and any(i['analyzed_at'] is None and i['created_at'] >= hold_after for i in items):
+            continue
         handled = True
         if items[0]['webhook_url']:
             try:

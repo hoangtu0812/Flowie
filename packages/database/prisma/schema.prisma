@@ -825,6 +825,9 @@ model AgentMessage {
   acceptedAt     DateTime?        @map("accepted_at")
   appliedAt      DateTime?        @map("applied_at")
   appliedResult  Json?            @map("applied_result")
+  /// Text extracted from files attached to this USER turn, read back for later planning turns.
+  /// VI: Văn bản trích từ file đính kèm của lượt USER này, được đọc lại cho các lượt lập kế hoạch sau.
+  sourceText     String?          @map("source_text")
   createdAt      DateTime         @default(now()) @map("created_at")
 
   conversation AgentConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
