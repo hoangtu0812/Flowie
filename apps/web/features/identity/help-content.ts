@@ -188,6 +188,19 @@ export const helpTopics: HelpTopic[] = [
       path: '/reviews',
    },
    {
+      id: 'approvals',
+      title: ['Approvals', 'Phê duyệt'],
+      meaning: [
+         'Approvals gathers the documents waiting for your decision, the documents you submitted and what you already handled.',
+         'Phê duyệt gom các tài liệu đang chờ bạn quyết định, tài liệu bạn đã gửi và những gì bạn đã xử lý.',
+      ],
+      steps: [
+         'Open Approvals and select a document to read it beside the list. Agree, request changes or approve in the document, as in Docs. The number in the sidebar counts what waits for you.',
+         'Mở Phê duyệt và chọn tài liệu để đọc ngay cạnh danh sách. Đồng ý, yêu cầu sửa hoặc duyệt trong tài liệu, giống như ở Docs. Số trên sidebar là số việc đang chờ bạn.',
+      ],
+      path: '/approvals',
+   },
+   {
       id: 'search',
       title: ['Search & command palette', 'Tìm kiếm & bảng lệnh'],
       meaning: [

@@ -1,5 +1,6 @@
 import {
    Bot,
+   ClipboardCheck,
    GitPullRequestArrow,
    Inbox,
    FolderKanban,
@@ -28,6 +29,11 @@ export const inboxItems = [
       name: 'Reviews',
       url: '/lndev-ui/reviews',
       icon: GitPullRequestArrow,
+   },
+   {
+      name: 'Approvals',
+      url: '/lndev-ui/approvals',
+      icon: ClipboardCheck,
    },
    {
       name: 'My issues',

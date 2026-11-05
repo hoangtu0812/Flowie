@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- The Approvals page in the sidebar gathers documents in one place: what waits for your decision, what you submitted and what you already handled, with the document and its review panel beside the list and a sidebar count of what waits for you. Rules and document access are unchanged. Deploy API and web together; no migration. (DTD-278, #136)
+  VI: Trang Phê duyệt ở sidebar gom tài liệu vào một chỗ: việc đang chờ bạn quyết định, tài liệu bạn đã gửi và những gì bạn đã xử lý, kèm tài liệu và panel duyệt ngay cạnh danh sách, cùng số việc đang chờ trên sidebar. Quy tắc duyệt và quyền truy cập tài liệu không đổi. Deploy API và web cùng bản; không có migration. (DTD-278)
+
 - Starred projects appear under Projects in the sidebar for one-click access and update as soon as a project is starred or unstarred. `GET /projects` accepts `favorite=true`. Deploy API and web together; no migration. (DTD-279, #135)
   VI: Dự án đã gắn sao hiển thị ngay dưới mục Projects ở sidebar để mở nhanh và cập nhật ngay khi gắn hoặc bỏ sao. `GET /projects` nhận `favorite=true`. Triển khai API/web cùng bản; không migration.
 

@@ -30,6 +30,7 @@ const WORKSPACE_PAGES: Record<string, string> = {
    'news': 'News',
    'reviews': 'Assigned reviews',
    'reviews/created': 'Created reviews',
+   'approvals': 'Approvals',
 };
 
 const ACCOUNT_SETTINGS: Record<string, string> = {
