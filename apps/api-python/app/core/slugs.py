@@ -20,7 +20,7 @@ GENERATED_ID = re.compile(r"c[a-z0-9]{24}")
 # First path segments the web app owns; a workspace slug equal to one would never be reachable.
 # VI: Đoạn path đầu tiên do web app sử dụng; slug workspace trùng với chúng sẽ không bao giờ mở được.
 RESERVED_WORKSPACE_SLUGS = frozenset(
-    {"admin", "api", "auth", "invitations", "_next", "static", "public", "health", "favicon-ico"}
+    {"admin", "api", "auth", "invitations", "servicedesk", "_next", "static", "public", "health", "favicon-ico"}
 )
 
 

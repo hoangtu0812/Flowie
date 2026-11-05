@@ -1,10 +1,9 @@
 'use client';
 
 import { Plus } from 'lucide-react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
-import { List, ListItem } from '@astryxdesign/core/List';
 import { Tab, TabList } from '@astryxdesign/core/TabList';
 import { Text } from '@astryxdesign/core/Text';
 import { LoadingState } from '@/components/common/loading-state';
@@ -24,8 +23,7 @@ import {
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useMessages } from '@/features/shared/use-messages';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { parseInstant } from '@/lib/time';
-import { useUiPreferencesStore } from '@/store/ui-preferences-store';
+import { loadCurrentWorkspaceMembership } from '@/lib/workspaces';
 import { messages } from './messages.vi';
 import {
    listTicketProjects,
@@ -33,8 +31,10 @@ import {
    type Ticket,
    type TicketProject,
 } from './service-desk-api';
-import { TicketDetail, statusLabel } from './ticket-detail';
+import { TicketDetail } from './ticket-detail';
 import { TicketDialog } from './ticket-dialog';
+import { TicketList } from './ticket-list';
+import { isRequester } from './requester';
 
 type DeskData = {
    workspaceId: string;
@@ -59,7 +59,7 @@ const isOpen = (ticket: Ticket) => !['done', 'canceled', 'declined'].includes(ti
  */
 export function ServiceDeskPage() {
    const tx = useMessages(messages);
-   const locale = useUiPreferencesStore((state) => state.locale);
+   const router = useRouter();
    const isMobile = useIsMobile();
    const { ticketId } = useParams<{ ticketId?: string[] }>();
    const [data, setData] = useState<DeskData>();
@@ -73,6 +73,12 @@ export function ServiceDeskPage() {
 
    const load = useCallback(async () => {
       try {
+         const membership = await loadCurrentWorkspaceMembership();
+         if (await isRequester(membership)) {
+            const ticket = ticketId?.[0] ? `/${ticketId[0]}` : '';
+            router.replace(`/servicedesk${ticket}?workspace=${membership.workspace.slug}`);
+            return;
+         }
          const { workspaceId, teams } = await loadCurrentWorkspaceTeams();
          const inTeam = teams.some((team) => team.joined);
          const [mine, queue, projects] = await Promise.all([
@@ -85,7 +91,7 @@ export function ServiceDeskPage() {
       } catch (caught) {
          setLoadError(caught instanceof Error ? caught.message : 'Could not load tickets.');
       }
-   }, []);
+   }, [router, ticketId]);
    useEffect(() => void load(), [load]);
 
    const queueProjects = useMemo(() => {
@@ -190,36 +196,12 @@ export function ServiceDeskPage() {
                   )}
                </Text>
             )}
-            {rows.length > 0 && (
-               <List hasDividers>
-                  {rows.map((row) => (
-                     <ListItem
-                        key={row.id}
-                        label={row.title}
-                        isSelected={row.id === selected}
-                        onClick={() => setSelected(row.id)}
-                        description={
-                           <Text type="supporting">
-                              {[
-                                 row.project?.name ?? row.team.name,
-                                 row.createdBy.name,
-                                 row.assignee &&
-                                    tx('Assigned to {name}', { name: row.assignee.name }),
-                                 parseInstant(row.updatedAt).toLocaleString(locale),
-                              ]
-                                 .filter(Boolean)
-                                 .join(' · ')}
-                           </Text>
-                        }
-                        endContent={
-                           <Text type="label" className="whitespace-nowrap">
-                              {tx(statusLabel(row.ticketStatus, tab === 'queue'))}
-                           </Text>
-                        }
-                     />
-                  ))}
-               </List>
-            )}
+            <TicketList
+               rows={rows}
+               selected={selected}
+               inQueue={tab === 'queue'}
+               onSelect={setSelected}
+            />
          </VStack>
       </VStack>
    );

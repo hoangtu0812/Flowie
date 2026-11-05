@@ -29,6 +29,7 @@ const RESERVED_SLUGS = new Set([
    'api',
    'auth',
    'invitations',
+   'servicedesk',
    '_next',
    'static',
    'public',

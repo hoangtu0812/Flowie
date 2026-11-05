@@ -43,7 +43,7 @@ export function usePageEntity(name: string | undefined) {
    }, [pathname, name]);
 }
 
-const PUBLIC_SEGMENTS = new Set(['auth', 'admin', 'invitations']);
+const PUBLIC_SEGMENTS = new Set(['auth', 'admin', 'invitations', 'servicedesk']);
 const workspaceNames = new Map<string, Promise<string | undefined>>();
 
 /**
