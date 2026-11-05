@@ -89,6 +89,10 @@ async def create_attachment(request: Request, workspaceId: str = Form(), entityT
     await _authorize_entity(db, workspaceId, entityType, entityId, user['id'], writing=True)
     body = await file.read(MAX_ATTACHMENT_BYTES + 1)
     data = await store_attachment(db, request.app.state.settings, workspaceId, user['id'], entityType, entityId, file.filename, file.content_type, body)
+    if entityType == 'ticket':
+        from .native_asks import record_ticket_file
+
+        await record_ticket_file(db, entityId, workspaceId, user, data['filename'])
     await db.commit()
     return {'data': data}
 

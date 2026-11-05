@@ -180,6 +180,7 @@ export function TicketDetail({
          <VStack gap={4} className="min-h-0 flex-1 overflow-y-auto p-4">
             <Text type="supporting">
                {[
+                  ticket.identifier,
                   ticket.project?.name ?? ticket.team.name,
                   tx('Created by {name}', { name: ticket.createdBy.name }),
                   ticket.assignee && tx('Assigned to {name}', { name: ticket.assignee.name }),

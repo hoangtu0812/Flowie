@@ -51,6 +51,9 @@ test('a requester outside the team follows a ticket the team answers and convert
    const title = `Service Desk spec ${Date.now()}`;
    await setServiceDesk(team.context, true);
    try {
+      // The page may have listed projects before the switch was turned on.
+      // VI: Trang có thể đã tải danh sách dự án trước khi bật công tắc.
+      await requester.page.reload();
       await expect(requester.page.getByRole('button', { name: 'New ticket' })).toBeEnabled();
       await expect(requester.page.getByRole('link', { name: 'Dashboard' })).toHaveCount(0);
       await expect(requester.page).toHaveTitle(/Service Desk/);
@@ -94,7 +97,9 @@ test('a requester outside the team follows a ticket the team answers and convert
       await team.page.getByRole('link', { name: /Service Desk ticket/ }).click();
       await expect(team.page.getByRole('link', { name: 'steps.txt' })).toBeVisible();
 
-      await requester.page.reload();
+      // Staying on the ticket would mark it read, so the dot is checked from the list.
+      // VI: Ở lại ticket sẽ đánh dấu đã đọc, nên chấm tin mới được kiểm tra từ danh sách.
+      await requester.page.goto('/servicedesk');
       const news = requester.page
          .getByRole('listitem')
          .filter({ hasText: title })
@@ -210,6 +215,68 @@ test('the team resolves a ticket and the requester reopens it', async ({ browser
       await expect(requester.page.getByRole('dialog')).toHaveCount(0);
       await expect(requester.page.getByText('It crashes again')).toBeVisible();
       await expect(requester.page.getByRole('textbox', { name: 'Write a reply' })).toBeVisible();
+   } finally {
+      await setServiceDesk(team.context, false);
+      await team.context.close();
+      await requester.context.close();
+   }
+});
+
+// A ticket has its own address: it survives a reload, Back leaves it, and it stays private.
+// VI: Ticket có địa chỉ riêng: giữ nguyên khi tải lại, Back rời khỏi ticket, và vẫn giữ riêng tư.
+test('a ticket keeps its own address and code', async ({ browser }) => {
+   const team = await signIn(browser, fixture.email);
+   const requester = await signIn(browser, fixture.deskRequesterEmail, { width: 390, height: 780 });
+   const stamp = Date.now();
+   await setServiceDesk(team.context, true);
+   try {
+      const projects = await requester.context.request.get(
+         `${api}/asks/service-desk-projects?${query}`
+      );
+      const project = (await projects.json()).data[0];
+      const raise = async (context: BrowserContext, title: string) => {
+         const response = await context.request.post(`${api}/asks`, {
+            data: {
+               workspaceId: fixture.workspace_id,
+               teamId: project.teamId,
+               projectId: project.id,
+               title,
+            },
+         });
+         expect(response.ok(), await response.text()).toBeTruthy();
+         return (await response.json()).data as { id: string; identifier: string };
+      };
+      const title = `Service Desk address ${stamp}`;
+      const mine = await raise(requester.context, title);
+      const hiddenTitle = `Service Desk private ${stamp}`;
+      const hidden = await raise(team.context, hiddenTitle);
+      expect(mine.identifier).toMatch(/^SD-\d+$/);
+
+      await requester.page.goto('/servicedesk');
+      await requester.page.getByText(title, { exact: true }).first().click();
+      await expect(requester.page).toHaveURL(new RegExp(`/servicedesk/${mine.id}$`));
+      await expect(requester.page.getByText(mine.identifier, { exact: false })).toBeVisible();
+      await requester.page.reload();
+      await expect(requester.page.getByRole('textbox', { name: 'Write a reply' })).toBeVisible();
+      await requester.page.getByRole('button', { name: 'Close', exact: true }).click();
+      await expect(requester.page).toHaveURL(/\/servicedesk$/);
+      await requester.page.goBack();
+      await expect(requester.page.getByRole('textbox', { name: 'Write a reply' })).toBeVisible();
+      await requester.page.goBack();
+      await expect(requester.page.getByRole('button', { name: 'New ticket' })).toBeVisible();
+      await expect(requester.page.getByRole('textbox', { name: 'Write a reply' })).toHaveCount(0);
+
+      await requester.page.goto(`/servicedesk/${hidden.id}`);
+      await expect(requester.page.getByRole('button', { name: 'New ticket' })).toBeVisible();
+      await expect(requester.page.getByText(hiddenTitle)).toHaveCount(0);
+
+      await openDesk(team.page);
+      await team.page.getByRole('tab', { name: /Queue/ }).click();
+      await team.page.getByText(title, { exact: true }).first().click();
+      await expect(team.page).toHaveURL(new RegExp(`/service-desk/${mine.id}$`));
+      await team.page.reload();
+      await team.page.getByRole('tab', { name: /Queue/ }).click();
+      await expect(team.page.getByRole('button', { name: 'Mark as resolved' })).toBeVisible();
    } finally {
       await setServiceDesk(team.context, false);
       await team.context.close();

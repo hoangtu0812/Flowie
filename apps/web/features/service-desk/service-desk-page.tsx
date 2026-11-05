@@ -33,6 +33,7 @@ import {
 } from './service-desk-api';
 import { TicketDetail } from './ticket-detail';
 import { TicketDialog } from './ticket-dialog';
+import { useSelectedTicket } from './use-selected-ticket';
 import { inState, isOpen, TicketList, TicketStateSelect, type TicketState } from './ticket-list';
 import { isRequester } from './requester';
 
@@ -58,12 +59,12 @@ export function ServiceDeskPage() {
    const tx = useMessages(messages);
    const router = useRouter();
    const isMobile = useIsMobile();
-   const { ticketId } = useParams<{ ticketId?: string[] }>();
+   const { orgId, ticketId } = useParams<{ orgId: string; ticketId?: string[] }>();
    const [data, setData] = useState<DeskData>();
    const [loadError, setLoadError] = useState<string>();
    const [notice, setNotice] = useState<string>();
    const [tab, setTab] = useState<'mine' | 'queue'>('mine');
-   const [selected, setSelected] = useState(ticketId?.[0]);
+   const [selected, setSelected] = useSelectedTicket(`/${orgId}/service-desk`);
    const [projectFilter, setProjectFilter] = useState(ALL_PROJECTS);
    const [ticketState, setTicketState] = useState<TicketState>('open');
    const [dialog, setDialog] = useState<'new' | 'edit'>();
