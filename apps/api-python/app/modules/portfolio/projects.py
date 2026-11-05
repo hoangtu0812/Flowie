@@ -106,15 +106,27 @@ async def project_summaries(db, workspace, user, identifiers):
 
 
 async def project_page(
-    db, workspace, user, secret, *, team=None, limit=100, cursor=None, ordering=None
+    db,
+    workspace,
+    user,
+    secret,
+    *,
+    team=None,
+    limit=100,
+    cursor=None,
+    ordering=None,
+    favorite=False,
 ):
     predicate = project_read_scope() + (" AND p.team_id=:team" if team else "")
+    if favorite:
+        predicate += " AND EXISTS(SELECT 1 FROM project_favorites f WHERE f.project_id=p.id AND f.user_id=:user)"
     params = {"workspace": workspace, "user": user, "team": team, "limit": limit + 1}
     manual = ordering == "manual"
     binding = {
         "workspace": workspace,
         "team": team,
         **({"ordering": "manual"} if manual else {}),
+        **({"favorite": True} if favorite else {}),
     }
     codec = CursorCodec(secret, user, "portfolio.projects", binding)
     total = (

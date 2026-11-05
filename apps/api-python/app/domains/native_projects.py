@@ -670,7 +670,7 @@ async def _project(db: AsyncSession, project_id: str, workspace_id: str, user_id
 
 @router.get('')
 async def list_projects(workspaceId: str = Query(min_length=1), teamId: str | None = None, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session), *,
-    request: Request = None, limit: Annotated[int, Query(ge=1,le=100)] = 100, cursor: Annotated[str | None, Query(max_length=2000)] = None, ordering: str | None = None) -> dict:
+    request: Request = None, limit: Annotated[int, Query(ge=1,le=100)] = 100, cursor: Annotated[str | None, Query(max_length=2000)] = None, ordering: str | None = None, favorite: bool = False) -> dict:
     from ..modules.portfolio.projects import project_page
     from ..core.config import Settings
     await _workspace_access(db, workspaceId, user['id'])
@@ -679,7 +679,7 @@ async def list_projects(workspaceId: str = Query(min_length=1), teamId: str | No
     settings = request.app.state.settings if request else Settings.from_environment()
     if ordering not in {None, 'manual'}:
         raise ApiError(400, 'Unsupported project ordering.', 'Bad Request')
-    return await project_page(db,workspaceId,user['id'],settings.auth_jwt_secret,team=teamId,limit=limit,cursor=cursor,ordering=ordering)
+    return await project_page(db,workspaceId,user['id'],settings.auth_jwt_secret,team=teamId,limit=limit,cursor=cursor,ordering=ordering,favorite=favorite)
 
 
 @router.post('')
@@ -1154,8 +1154,8 @@ def _public_project_id(project_suffix: str) -> str:
 
 @public_router.get('')
 async def public_list_projects(workspaceId: str = Query(min_length=1), teamId: str | None = None, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session), *,
-    request: Request = None, limit: Annotated[int, Query(ge=1,le=100)] = 100, cursor: Annotated[str | None, Query(max_length=2000)] = None) -> dict:
-    return await list_projects(workspaceId,teamId,user,db,request=request,limit=limit,cursor=cursor)
+    request: Request = None, limit: Annotated[int, Query(ge=1,le=100)] = 100, cursor: Annotated[str | None, Query(max_length=2000)] = None, favorite: bool = False) -> dict:
+    return await list_projects(workspaceId,teamId,user,db,request=request,limit=limit,cursor=cursor,favorite=favorite)
 
 
 @public_router.post('')

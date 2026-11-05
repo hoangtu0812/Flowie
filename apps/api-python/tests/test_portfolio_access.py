@@ -69,6 +69,16 @@ async def verify_scope(role):
                 await public_get_project(hidden[1:],workspace,member,db)
             assert denied.value.status_code == 403
             await assert_visible({visible})
+            # Favorites are per user and never widen access: the owner's star and a star on a
+            # project outside the member's teams must both stay out of the member's list.
+            # VI: Yêu thích theo từng người và không nới quyền: sao của owner và sao trên dự án
+            # ngoài team của member đều không được xuất hiện trong danh sách của member.
+            assert (await public_list_projects(workspace,None,member,db,favorite=True))['data'] == []
+            for project, user in [(visible,owner),(hidden,member)]:
+                await db.execute(text('INSERT INTO project_favorites(project_id,user_id,created_at) VALUES (:project,:user,:now)'), {'project':project,'user':user['id'],'now':now})
+            assert (await public_list_projects(workspace,None,member,db,favorite=True))['data'] == []
+            await db.execute(text('INSERT INTO project_favorites(project_id,user_id,created_at) VALUES (:project,:user,:now)'), {'project':visible,'user':member['id'],'now':now})
+            assert [p['id'] for p in (await public_list_projects(workspace,None,member,db,favorite=True))['data']] == [visible]
             await db.execute(text("INSERT INTO team_members(team_id,user_id,created_at) VALUES (:team,:user,:now)"), {'team':team,'user':member['id'],'now':now})
             await assert_visible({hidden, visible})
             with patch.object(db, 'commit', db.flush):

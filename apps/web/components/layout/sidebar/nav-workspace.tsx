@@ -40,6 +40,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { CustomizeSidebarDialog } from './customize-sidebar-dialog';
+import { NavFavoriteProjects } from './nav-favorite-projects';
 
 interface WorkspaceNavItem {
    key: SidebarItemKey;
@@ -97,6 +98,7 @@ export function NavWorkspace() {
                         <span>{tx(item.name)}</span>
                      </Link>
                   </SidebarMenuButton>
+                  {item.key === 'projects' && <NavFavoriteProjects />}
                </SidebarMenuItem>
             ))}
             <SidebarMenuItem>

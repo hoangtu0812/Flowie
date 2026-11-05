@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- Starred projects appear under Projects in the sidebar for one-click access and update as soon as a project is starred or unstarred. `GET /projects` accepts `favorite=true`. Deploy API and web together; no migration. (DTD-279)
+  VI: Dự án đã gắn sao hiển thị ngay dưới mục Projects ở sidebar để mở nhanh và cập nhật ngay khi gắn hoặc bỏ sao. `GET /projects` nhận `favorite=true`. Triển khai API/web cùng bản; không migration.
+
 - Document media keeps its natural height as inline zoom grows the page, with local horizontal scrolling and document panning. Mermaid palettes stay readable in dark mode and browser-wide display settings persist without editing source. Web only; no migration. (DTD-266, #127)
   VI: Media tài liệu giữ chiều cao tự nhiên, zoom inline tăng chiều dài trang, cuộn ngang cục bộ và kéo cuộn tài liệu. Palette Mermaid đọc rõ trong dark mode, tùy chọn hiển thị toàn trình duyệt được nhớ mà không sửa nguồn. Chỉ web; không migration.
 
