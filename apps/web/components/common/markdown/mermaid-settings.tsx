@@ -1,13 +1,21 @@
 'use client';
 
-import { useState, useSyncExternalStore } from 'react';
-import { Popover } from '@astryxdesign/core/Popover';
-import { Selector } from '@astryxdesign/core/Selector';
-import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
+import { useId, useState, useSyncExternalStore } from 'react';
 import { Button } from '@astryxdesign/core/Button';
+import { IconButton } from '@astryxdesign/core/IconButton';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
-import { Settings2 } from 'lucide-react';
+import { Settings2, X } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+   Select,
+   SelectContent,
+   SelectItem,
+   SelectTrigger,
+   SelectValue,
+} from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { useMessages } from '@/features/shared/use-messages';
 import {
    defaultMermaidPreferences,
@@ -57,10 +65,46 @@ function save(value: MermaidPreferences, reset = false) {
 export function useMermaidPreferences() {
    return useSyncExternalStore(subscribe, getSnapshot, () => defaultMermaidPreferences);
 }
+
+function PreferenceSelect({
+   label,
+   value,
+   options,
+   disabled,
+   onChange,
+}: {
+   label: string;
+   value: string;
+   options: readonly { value: string; label: string }[];
+   disabled?: boolean;
+   onChange: (value: string) => void;
+}) {
+   const id = useId();
+   return (
+      <VStack gap={2}>
+         <Label htmlFor={id}>{label}</Label>
+         <Select value={value} onValueChange={onChange} disabled={disabled}>
+            <SelectTrigger id={id} aria-label={label} className="h-8 text-xs">
+               <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+               {options.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                     {option.label}
+                  </SelectItem>
+               ))}
+            </SelectContent>
+         </Select>
+      </VStack>
+   );
+}
+
 export function MermaidSettings({ busy }: { busy: boolean }) {
    const applied = useMermaidPreferences();
    const [draft, setDraft] = useState(applied);
    const [open, setOpen] = useState(false);
+   const backgroundId = useId();
+   const titleId = useId();
    const tx = useMessages({
       'Mermaid Settings': 'Tùy chọn Mermaid',
       'Theme': 'Chủ đề',
@@ -73,46 +117,73 @@ export function MermaidSettings({ busy }: { busy: boolean }) {
       'Black': 'Đen',
       'Apply': 'Áp dụng',
       'Reset': 'Đặt lại',
+      'Close settings': 'Đóng tùy chọn',
       'Applies across the web app in this browser. Does not change Markdown.':
          'Áp dụng toàn web app trong trình duyệt này. Không đổi Markdown.',
    });
    const documentOption = { value: 'document', label: tx('Use document') };
    return (
       <Popover
-         isOpen={open}
+         open={open}
          onOpenChange={(value) => {
             if (value) setDraft(applied);
             setOpen(value);
          }}
-         label={tx('Mermaid Settings')}
-         content={
-            <VStack gap={3} className="p-4 w-72 max-w-full">
-               <Text type="label">{tx('Mermaid Settings')}</Text>
-               <Selector
+      >
+         <PopoverTrigger asChild>
+            <Button size="sm" icon={<Settings2 />} label={tx('Mermaid Settings')} />
+         </PopoverTrigger>
+         <PopoverContent align="start" aria-labelledby={titleId} className="w-72 max-w-full">
+            <VStack gap={4}>
+               <HStack gap={2} align="center" justify="between">
+                  <Text id={titleId} type="label">
+                     {tx('Mermaid Settings')}
+                  </Text>
+                  <IconButton
+                     size="sm"
+                     variant="ghost"
+                     label={tx('Close settings')}
+                     tooltip={tx('Close settings')}
+                     icon={<X />}
+                     onClick={() => setOpen(false)}
+                  />
+               </HStack>
+               <PreferenceSelect
                   label={tx('Theme')}
                   value={draft.theme}
-                  options={[documentOption, ...mermaidThemes]}
+                  options={[
+                     documentOption,
+                     ...mermaidThemes.map((value) => ({ value, label: value })),
+                  ]}
                   onChange={(value) =>
                      setDraft({ ...draft, theme: value as MermaidPreferences['theme'] })
                   }
                />
-               <Selector
+               <PreferenceSelect
                   label={tx('Curve')}
                   value={draft.curve}
-                  options={[documentOption, ...mermaidCurves]}
+                  options={[
+                     documentOption,
+                     ...mermaidCurves.map((value) => ({ value, label: value })),
+                  ]}
                   onChange={(value) =>
                      setDraft({ ...draft, curve: value as MermaidPreferences['curve'] })
                   }
                />
-               <CheckboxInput
-                  label={tx('Custom background')}
-                  value={draft.customBackground}
-                  onChange={(value) => setDraft({ ...draft, customBackground: value })}
-               />
-               <Selector
+               <HStack gap={2} align="center">
+                  <Checkbox
+                     id={backgroundId}
+                     checked={draft.customBackground}
+                     onCheckedChange={(value) =>
+                        setDraft({ ...draft, customBackground: value === true })
+                     }
+                  />
+                  <Label htmlFor={backgroundId}>{tx('Custom background')}</Label>
+               </HStack>
+               <PreferenceSelect
                   label={tx('Background color')}
                   value={draft.background}
-                  isDisabled={!draft.customBackground}
+                  disabled={!draft.customBackground}
                   options={[
                      { value: 'white', label: tx('White') },
                      { value: 'transparent', label: tx('Transparent') },
@@ -125,9 +196,11 @@ export function MermaidSettings({ busy }: { busy: boolean }) {
                <Text type="supporting">
                   {tx('Applies across the web app in this browser. Does not change Markdown.')}
                </Text>
-               <HStack gap={2}>
+               <HStack gap={2} justify="end" className="border-t border-border pt-3">
                   <Button
                      label={tx('Apply')}
+                     size="sm"
+                     variant="primary"
                      isDisabled={busy || JSON.stringify(draft) === JSON.stringify(applied)}
                      onClick={() => {
                         save(draft);
@@ -136,6 +209,7 @@ export function MermaidSettings({ busy }: { busy: boolean }) {
                   />
                   <Button
                      label={tx('Reset')}
+                     size="sm"
                      isDisabled={busy}
                      onClick={() => {
                         save(defaultMermaidPreferences, true);
@@ -145,9 +219,7 @@ export function MermaidSettings({ busy }: { busy: boolean }) {
                   />
                </HStack>
             </VStack>
-         }
-      >
-         <Button size="sm" icon={<Settings2 />} label={tx('Mermaid Settings')} />
+         </PopoverContent>
       </Popover>
    );
 }
