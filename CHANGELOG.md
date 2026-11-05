@@ -225,7 +225,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
-- Loading screens restore the supplied five-second ribbon entrance, word reveal and dot bounce with a full-size Flowie logo. Dark themes and reduced motion remain supported, and versioned assets preserve compatibility for open tabs; web only, no migration. (DTD-267)
+- Loading screens restore the supplied five-second ribbon entrance, word reveal and dot bounce with a full-size Flowie logo. Dark themes and reduced motion remain supported, and versioned assets preserve compatibility for open tabs; web only, no migration. (DTD-267, #133)
   VI: Màn hình tải khôi phục hiệu ứng dải màu vào lần lượt, hiện chữ và chấm bật lên trong chu kỳ năm giây theo mẫu, với logo Flowie đầy đủ. Giữ hỗ trợ theme tối, giảm chuyển động và asset có phiên bản tương thích với tab đang mở; chỉ web, không migration.
 
 - Document approvers see why approval is blocked and how to proceed without relying on hover; review permission failures offer retry, stale permissions are discarded, and header actions wrap on narrow screens. Existing approval rules remain enforced. Web only; no migration. (DTD-270, #130)
