@@ -57,6 +57,7 @@ from .domains.scm.router import webhook_router as scm_webhook_router
 from .jobs.scm_deliveries import scm_delivery_loop
 from .jobs.scm_sync import scm_sync_loop
 from .domains.reviews import router as reviews_router
+from .domains.approvals import router as approvals_router
 from .modules.mcp.api import router as mcp_management_router
 from .modules.mcp.uploads import router as mcp_upload_router
 from .modules.notifications.outbox import outbox_loop
@@ -217,6 +218,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(scm_router)
     app.include_router(scm_webhook_router)
     app.include_router(reviews_router)
+    app.include_router(approvals_router)
 
     @app.get('/readyz')
     async def readyz(request: Request) -> JSONResponse:

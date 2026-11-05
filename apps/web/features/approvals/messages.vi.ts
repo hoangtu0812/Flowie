@@ -1,0 +1,17 @@
+export const messages = {
+   'Approvals': 'Phê duyệt',
+   'Waiting for me ({count})': 'Chờ tôi xử lý ({count})',
+   'Submitted ({count})': 'Tôi đã gửi ({count})',
+   'Handled': 'Đã xử lý',
+   'Nothing is waiting for you.': 'Không có gì đang chờ bạn.',
+   'You have no documents in review.': 'Bạn không có tài liệu nào đang duyệt.',
+   'You have not handled any documents yet.': 'Bạn chưa xử lý tài liệu nào.',
+   'Reviewer': 'Reviewer',
+   'Approver': 'Người duyệt',
+   '{agreed}/{total} agreed': '{agreed}/{total} đồng ý',
+   'In review': 'Đang duyệt',
+   'Changes requested': 'Yêu cầu sửa',
+   'Agreed': 'Đã đồng ý',
+   'Reviewed': 'Đã review',
+   'Approved v{release}': 'Đã duyệt v{release}',
+} as const;
