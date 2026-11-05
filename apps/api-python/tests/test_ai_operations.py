@@ -1,5 +1,6 @@
 import asyncio
 import os
+from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 from types import SimpleNamespace
 
@@ -205,6 +206,61 @@ def test_workspace_quota_is_atomic_and_management_is_restricted():
                     {"ids": [user, member]},
                 )
                 await db.commit()
+            await engine.dispose()
+
+    asyncio.run(run())
+
+
+def test_overview_sums_provider_calls_by_feature_and_lists_failures():
+    async def run():
+        engine = create_async_engine(
+            _async_database_url(os.environ["MCP_TEST_DATABASE_URL"])
+        )
+        try:
+            async with async_sessionmaker(engine)() as db:
+                now = _utcnow()
+                user = _cuid()
+                await db.execute(
+                    text(
+                        "INSERT INTO users(id,name,email,status,created_at,updated_at) VALUES (:id,'Usage fixture',:email,'ACTIVE',:now,:now)"
+                    ),
+                    {"id": user, "email": user + "@example.test", "now": now},
+                )
+                workspace = (
+                    await create_workspace_bootstrap(
+                        db,
+                        user_id=user,
+                        organization_name="Usage",
+                        workspace_name=_cuid(),
+                        now=now,
+                    )
+                )["workspace_id"]
+                rows = [
+                    ("agent.plan", "ok", 200, 100, 20, 0),
+                    ("agent.plan", "truncated", 200, 300, 50, 0),
+                    ("news.analysis", "error", 429, None, None, 0),
+                    ("agent.report", "ok", 200, 999, 999, 8),
+                ]
+                for feature, outcome, status, tokens_in, tokens_out, days in rows:
+                    await db.execute(
+                        text(
+                            """INSERT INTO ai_provider_calls(id,workspace_id,feature,provider,model,outcome,status_code,
+                               input_tokens,output_tokens,attempts,duration_ms,created_at)
+                               VALUES (:id,:w,:f,'OPENAI','m',:o,:s,:i,:t,1,100,:at)"""
+                        ),
+                        {
+                            "id": _cuid(), "w": workspace, "f": feature, "o": outcome, "s": status,
+                            "i": tokens_in, "t": tokens_out, "at": now - timedelta(days=days),
+                        },
+                    )
+                await db.commit()
+                data = (await overview(workspaceId=workspace, user={"id": user}, db=db))["data"]
+                assert [
+                    (row["feature"], row["calls"], row["failed"], row["inputTokens"], row["outputTokens"])
+                    for row in data["providerCalls"]
+                ] == [("agent.plan", 2, 1, 400, 70), ("news.analysis", 1, 1, 0, 0)]
+                assert {row["outcome"] for row in data["recentProviderErrors"]} == {"truncated", "error"}
+        finally:
             await engine.dispose()
 
     asyncio.run(run())

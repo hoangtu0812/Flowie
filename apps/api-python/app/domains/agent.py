@@ -13,7 +13,6 @@ from zipfile import BadZipFile, ZipFile
 from xml.etree import ElementTree
 from zoneinfo import ZoneInfo
 
-import httpx
 import mammoth
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import Depends, File, Form, Query, Request, UploadFile
@@ -26,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
 from ..db.session import get_session
+from .ai_calls import PROVIDER_LABELS, call_provider
 from .auth import _cuid, _utcnow, current_user
 from .native_issues import CreateIssueInput, create_issue
 from .native_projects import (
@@ -56,7 +56,6 @@ PROVIDER_ENDPOINTS = {
     'OPENAI': 'https://api.openai.com/v1',
     'GOOGLE': 'https://generativelanguage.googleapis.com/v1beta',
 }
-PROVIDER_LABELS = {'OPENAI': 'OpenAI', 'GOOGLE': 'Google'}
 # Sent with every prompt built from workspace records, because a title or description can be
 # written by a requester who has no say over what the model does.
 # VI: Gửi kèm mọi prompt dựng từ dữ liệu workspace, vì tiêu đề hoặc mô tả có thể do người yêu cầu
@@ -109,7 +108,7 @@ class AgentProposal(BaseModel):
 
 
 class PlannerState(TypedDict):
-    provider: dict[str, str]
+    provider: dict[str, Any]
     system_prompt: str
     history: list[dict[str, str]]
     proposal: dict[str, Any]
@@ -218,18 +217,20 @@ def _validated_endpoint(provider: ProviderName, endpoint: str, allowed_hosts: tu
     return normalized
 
 
-async def _configured_provider(request: Request, db: AsyncSession, workspace_id: str) -> dict[str, str]:
+async def _configured_provider(request: Request, db: AsyncSession, workspace_id: str) -> dict[str, Any]:
     return await configured_provider(request.app.state.settings, db, workspace_id)
 
 
-async def configured_provider(settings: Any, db: AsyncSession, workspace_id: str) -> dict[str, str]:
+async def configured_provider(settings: Any, db: AsyncSession, workspace_id: str) -> dict[str, Any]:
     """Return the workspace's active provider with its decrypted key, or raise 409/503.
 
     Takes ``Settings`` instead of a request so background jobs (the News analysis) share the same
-    endpoint re-check and key decryption as Agent requests. The key lives only in the returned dict.
+    endpoint re-check and key decryption as Agent requests. The key lives only in the returned dict,
+    which also carries what ``call_provider`` needs to record usage in its own session.
     VI: Trả provider đang bật của workspace kèm key đã giải mã, hoặc báo 409/503. Nhận ``Settings``
     thay vì request để job nền (phân tích News) dùng chung bước kiểm tra lại endpoint và giải mã
-    key với Agent. Key chỉ nằm trong dict trả về.
+    key với Agent. Key chỉ nằm trong dict trả về, dict này cũng mang thông tin để ``call_provider``
+    ghi usage bằng session riêng.
     """
     result = await db.execute(
         text('''SELECT provider, endpoint, model, api_key_encrypted
@@ -248,7 +249,10 @@ async def configured_provider(settings: Any, db: AsyncSession, workspace_id: str
         api_key = _settings_cipher(settings).decrypt(row['api_key_encrypted'].encode('ascii')).decode('utf-8')
     except InvalidToken as error:
         raise ApiError(503, 'The saved provider key cannot be decrypted with this server key.', 'Service Unavailable') from error
-    return {'provider': row['provider'], 'endpoint': row['endpoint'], 'model': row['model'], 'apiKey': api_key}
+    return {
+        'provider': row['provider'], 'endpoint': row['endpoint'], 'model': row['model'], 'apiKey': api_key,
+        'workspaceId': workspace_id, 'engine': db.bind,
+    }
 
 
 async def _workspace_catalog(db: AsyncSession, workspace_id: str) -> dict[str, Any]:
@@ -648,17 +652,14 @@ def _parse_assignment_notes(raw: Any, valid_ids: set[str]) -> dict[str, str]:
 
 
 async def _explain_assignment(
-    provider: dict[str, str] | None, plan: dict[str, Any], valid_ids: set[str]
+    provider: dict[str, Any] | None, plan: dict[str, Any], valid_ids: set[str]
 ) -> dict[str, str]:
     """LLM-written rationales for a deterministic plan; never decides the plan."""
     if provider is None:
         return {}
     history = [{'role': 'user', 'content': _assignment_explainer_prompt(plan)}]
     try:
-        if provider['provider'] == 'OPENAI':
-            raw = await _call_openai(provider, 'You explain assignment plans as JSON.', history)
-        else:
-            raw = await _call_google(provider, 'You explain assignment plans as JSON.', history)
+        raw = await call_provider(provider, 'agent.assignment', 'You explain assignment plans as JSON.', history)
         return _parse_assignment_notes(json.loads(raw), valid_ids)
     except Exception as error:
         logger.warning('Assignment explanation fell back to deterministic reasons: %s', error)
@@ -1025,54 +1026,6 @@ def _apply_personal_skill_defaults(proposal: AgentProposal, skills: dict[str, An
             issue.dueDate = due_date
 
 
-async def _call_openai(provider: dict[str, str], system_prompt: str, history: list[dict[str, str]]) -> str:
-    url = f"{provider['endpoint'].rstrip('/')}/chat/completions"
-    body = {
-        'model': provider['model'],
-        'messages': [{'role': 'system', 'content': system_prompt}, *history],
-        'response_format': {'type': 'json_object'},
-        'temperature': 0.2,
-    }
-    async with httpx.AsyncClient(timeout=60) as client:
-        try:
-            response = await client.post(url, headers={'Authorization': f"Bearer {provider['apiKey']}"}, json=body)
-        except httpx.HTTPError as error:
-            raise ApiError(502, 'The OpenAI provider could not be reached.', 'Bad Gateway') from error
-    if response.is_error:
-        raise ApiError(502, 'The OpenAI provider rejected the planning request.', 'Bad Gateway')
-    payload = response.json()
-    try:
-        content = payload['choices'][0]['message']['content']
-    except (KeyError, IndexError, TypeError) as error:
-        raise ApiError(502, 'The OpenAI provider returned no plan content.', 'Bad Gateway') from error
-    return content if isinstance(content, str) else json.dumps(content)
-
-
-async def _call_google(provider: dict[str, str], system_prompt: str, history: list[dict[str, str]]) -> str:
-    url = f"{provider['endpoint'].rstrip('/')}/models/{provider['model']}:generateContent"
-    contents = [
-        {'role': 'model' if item['role'] == 'assistant' else 'user', 'parts': [{'text': item['content']}]}
-        for item in history
-    ]
-    body = {
-        'systemInstruction': {'parts': [{'text': system_prompt}]},
-        'contents': contents,
-        'generationConfig': {'temperature': 0.2, 'responseMimeType': 'application/json'},
-    }
-    async with httpx.AsyncClient(timeout=60) as client:
-        try:
-            response = await client.post(url, headers={'x-goog-api-key': provider['apiKey']}, json=body)
-        except httpx.HTTPError as error:
-            raise ApiError(502, 'The Google provider could not be reached.', 'Bad Gateway') from error
-    if response.is_error:
-        raise ApiError(502, 'The Google provider rejected the planning request.', 'Bad Gateway')
-    payload = response.json()
-    try:
-        return payload['candidates'][0]['content']['parts'][0]['text']
-    except (KeyError, IndexError, TypeError) as error:
-        raise ApiError(502, 'The Google provider returned no plan content.', 'Bad Gateway') from error
-
-
 def _clarification_proposal(message: str) -> AgentProposal:
     normalized = message.casefold()
     is_vietnamese = any(term in normalized for term in ('tạo', 'dự án', 'du an', 'vấn đề', 'van de', 'công việc', 'cong viec'))
@@ -1150,11 +1103,7 @@ def _parse_agent_proposal(raw: str) -> AgentProposal:
 
 
 async def _draft_proposal(state: PlannerState) -> dict[str, Any]:
-    raw = await (
-        _call_openai(state['provider'], state['system_prompt'], state['history'])
-        if state['provider']['provider'] == 'OPENAI'
-        else _call_google(state['provider'], state['system_prompt'], state['history'])
-    )
+    raw = await call_provider(state['provider'], 'agent.plan', state['system_prompt'], state['history'])
     try:
         proposal = _parse_agent_proposal(raw)
     except ValidationError:
@@ -1740,11 +1689,7 @@ async def compose_project_update(
     provider = await _configured_provider(request, db, payload.workspaceId)
     system_prompt = COMPOSE_UPDATE_PROMPT if payload.kind == 'update' else COMPOSE_COMMENT_PROMPT
     history = [{'role': 'user', 'content': json.dumps(facts, ensure_ascii=False)}]
-    raw = await (
-        _call_openai(provider, system_prompt, history)
-        if provider['provider'] == 'OPENAI'
-        else _call_google(provider, system_prompt, history)
-    )
+    raw = await call_provider(provider, 'agent.compose', system_prompt, history)
     try:
         composed = ComposedText.model_validate_json(raw)
     except ValidationError as error:
@@ -1893,11 +1838,7 @@ async def draft_project_schedule(
     facts = await _project_schedule_facts(db, payload.workspaceId, project_id, user['id'])
     provider = await _configured_provider(request, db, payload.workspaceId)
     history = [{'role': 'user', 'content': json.dumps(facts, ensure_ascii=False)}]
-    raw = await (
-        _call_openai(provider, PROJECT_SCHEDULE_PROMPT, history)
-        if provider['provider'] == 'OPENAI'
-        else _call_google(provider, PROJECT_SCHEDULE_PROMPT, history)
-    )
+    raw = await call_provider(provider, 'agent.schedule', PROJECT_SCHEDULE_PROMPT, history)
     try:
         proposal = _parse_schedule_proposal(raw)
     except ValidationError as error:
@@ -2095,7 +2036,7 @@ async def _assignment_turn(
         )
     await progress({'id': 'assignment.explain', 'label': 'Explaining the draft', 'state': 'running', 'orb': 'composing'})
     try:
-        provider: dict[str, str] | None = await _configured_provider(request, db, workspace_id)
+        provider: dict[str, Any] | None = await _configured_provider(request, db, workspace_id)
     except ApiError:
         provider = None
     valid_ids = {item['issueId'] for item in plan['suggestions']}
@@ -2264,11 +2205,7 @@ async def _analyst_turn(
     await progress({'id': 'provider.chat', 'label': f"Calling {provider['provider'].title()} to write the {label}", 'state': 'running', 'orb': 'composing'})
     base_prompt = LEADERSHIP_REPORT_PROMPT if kind == 'report' else ANALYST_ANSWER_PROMPT
     system_prompt = f'{base_prompt}\nWorkspace facts:\n{json.dumps(facts, ensure_ascii=False, default=str)}'
-    raw = await (
-        _call_openai(provider, system_prompt, history)
-        if provider['provider'] == 'OPENAI'
-        else _call_google(provider, system_prompt, history)
-    )
+    raw = await call_provider(provider, f'agent.{kind}', system_prompt, history)
     try:
         body = AnalystText.model_validate_json(raw).body.strip()
     except ValidationError as error:
