@@ -26,7 +26,7 @@ async def stage_notifications(
 ) -> None:
     """Persist delivery intent in the same transaction as the domain mutation."""
     for batch in batches:
-        if batch is not None and (batch.records or batch.discord_embed):
+        if batch is not None and (batch.records or batch.discord_embed or batch.teams_cards):
             await db.execute(
                 text(
                     "INSERT INTO notification_outbox (id,workspace_id,payload) VALUES (:id,:workspace,CAST(:payload AS jsonb))"

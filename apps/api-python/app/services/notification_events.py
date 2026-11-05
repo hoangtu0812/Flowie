@@ -39,8 +39,8 @@ class NotificationBatch:
     discord_embed: dict[str, Any] | None = None
     # Teams cards are rendered from ``discord_embed`` at delivery time.
     teams_urls: list[str] = field(default_factory=list)
-    # Ready-made Teams messages ``{'url', 'message'}`` that @mention their recipients.
-    # VI: Message Teams dựng sẵn ``{'url', 'message'}`` có @mention người nhận.
+    # Ready-made Teams messages ``{'url', 'message'}``: @mentions, and new-ticket cards.
+    # VI: Message Teams dựng sẵn ``{'url', 'message'}``: @mention và card ticket mới.
     teams_cards: list[dict[str, Any]] = field(default_factory=list)
 
 
@@ -173,6 +173,60 @@ async def _teams_webhooks(
         {'workspace_id': workspace_id, 'entity_type': entity_type, 'entity_id': entity_id},
     )
     return list(result.scalars().all())
+
+
+async def project_teams_batch(
+    db: AsyncSession,
+    workspace_id: str,
+    project_id: str,
+    *,
+    actor: Any,
+    event_type: str,
+    entity_type: str,
+    title: str,
+    message: str,
+    entity_path: str,
+    entity_label: str,
+) -> NotificationBatch | None:
+    """A card for the project's own Teams channel, or None when there is none to post to.
+
+    The workspace channel is left out on purpose: it reaches people outside the project, and
+    what a requester raised should stay with the project's team. The body is not sent for the
+    same reason. Staging this as its own batch keeps a Teams failure from delaying Inbox delivery.
+    VI: Card cho kênh Teams riêng của dự án, hoặc None khi không có kênh để gửi.
+
+    VI: Cố ý bỏ kênh chung của workspace: kênh đó tới cả người ngoài dự án, còn điều người yêu cầu
+    VI: gửi nên ở trong team của dự án. Nội dung không được gửi cũng vì lý do này. Tách thành batch
+    VI: riêng để lỗi Teams không làm trễ việc gửi vào Inbox.
+    """
+
+    if not teams_available():
+        return None
+    result = await db.execute(
+        text(
+            '''SELECT c.webhook_url, p.name FROM project_teams_channels c JOIN projects p ON p.id = c.project_id
+               WHERE c.project_id = :project_id AND p.workspace_id = :workspace_id AND c.enabled = TRUE'''
+        ),
+        {'project_id': project_id, 'workspace_id': workspace_id},
+    )
+    channel = result.mappings().first()
+    if channel is None:
+        return None
+    slug = await _workspace_route_id(db, workspace_id)
+    app_url = _app_url()
+    embed = _embed(
+        event_type=event_type,
+        entity_type=entity_type,
+        entity_label=entity_label,
+        title=title,
+        message=message,
+        url=f'{app_url}/{slug}{entity_path}' if app_url and slug else None,
+        actor_data=actor_payload(actor),
+        details=[('Project', channel['name'])],
+        body=None,
+        now=_utcnow(),
+    )
+    return NotificationBatch(teams_cards=[{'url': channel['webhook_url'], 'message': teams_message(embed)}])
 
 
 async def _teams_mention_card(
