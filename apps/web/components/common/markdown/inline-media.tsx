@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Button } from '@astryxdesign/core/Button';
+import { IconButton } from '@astryxdesign/core/IconButton';
 import { Text } from '@astryxdesign/core/Text';
 import { ZoomIn, ZoomOut, RotateCcw, Minimize2 } from 'lucide-react';
 import { useMessages } from '@/features/shared/use-messages';
@@ -12,6 +13,8 @@ const messages = {
    'Expand {name}': 'Mở rộng {name}',
    'Zoom in': 'Phóng to',
    'Zoom out': 'Thu nhỏ',
+   'Zoom controls': 'Điều khiển thu phóng',
+   'Image controls': 'Điều khiển ảnh',
    'Reset view': 'Đặt lại',
    'Collapse': 'Thu gọn',
    'Drag to pan. Arrow keys move; + / − zoom; 0 resets.':
@@ -99,27 +102,62 @@ export function InlineMedia({
       <VStack gap={2} data-media-expanded={String(expanded)} className="my-2 min-w-0 w-full">
          {expanded ? (
             <>
-               <HStack gap={1} wrap="wrap" className="sticky top-0 z-10 bg-background">
+               <HStack
+                  gap={2}
+                  padding={2}
+                  align="center"
+                  wrap="wrap"
+                  role="group"
+                  aria-label={tx('Image controls')}
+                  data-media-toolbar="true"
+                  className="sticky top-3 z-10 self-start max-w-full rounded-lg border border-border bg-background shadow-sm"
+               >
+                  <HStack
+                     gap={0}
+                     align="center"
+                     role="group"
+                     aria-label={tx('Zoom controls')}
+                     className="shrink-0 rounded-md border border-border bg-muted/50"
+                  >
+                     <IconButton
+                        size="sm"
+                        variant="ghost"
+                        label={tx('Zoom out')}
+                        tooltip={tx('Zoom out')}
+                        icon={<ZoomOut />}
+                        isDisabled={zoom <= 1}
+                        onClick={() => setZoom((z) => Math.max(1, z * 0.8))}
+                     />
+                     <Text
+                        as="span"
+                        type="label"
+                        justify="center"
+                        hasTabularNumbers
+                        aria-live="polite"
+                        className="min-w-14"
+                     >
+                        {Math.round(zoom * 100)}%
+                     </Text>
+                     <IconButton
+                        size="sm"
+                        variant="ghost"
+                        label={tx('Zoom in')}
+                        tooltip={tx('Zoom in')}
+                        icon={<ZoomIn />}
+                        isDisabled={zoom >= 8}
+                        onClick={() => setZoom((z) => Math.min(8, z * 1.25))}
+                     />
+                  </HStack>
                   <Button
                      size="sm"
-                     label={tx('Zoom in')}
-                     icon={<ZoomIn />}
-                     isDisabled={zoom >= 8}
-                     onClick={() => setZoom((z) => Math.min(8, z * 1.25))}
+                     variant="ghost"
+                     label={tx('Reset view')}
+                     icon={<RotateCcw />}
+                     onClick={reset}
                   />
                   <Button
                      size="sm"
-                     label={tx('Zoom out')}
-                     icon={<ZoomOut />}
-                     isDisabled={zoom <= 1}
-                     onClick={() => setZoom((z) => Math.max(1, z * 0.8))}
-                  />
-                  <Text type="supporting" aria-live="polite">
-                     {Math.round(zoom * 100)}%
-                  </Text>
-                  <Button size="sm" label={tx('Reset view')} icon={<RotateCcw />} onClick={reset} />
-                  <Button
-                     size="sm"
+                     variant="ghost"
                      label={tx('Collapse')}
                      icon={<Minimize2 />}
                      onClick={() => {

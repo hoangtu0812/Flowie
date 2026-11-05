@@ -285,3 +285,141 @@ test('Docs front matter configures Mermaid and all image kinds expand in flow wi
    await expect(reading.getByRole('alert')).toContainText('Invalid document front matter');
    await expect(reading.getByRole('heading', { name: 'Retained body', exact: true })).toBeVisible();
 });
+
+test('media toolbar keeps zoom together, leaves a sticky inset and uses compact app popovers', async ({
+   page,
+   context,
+}, testInfo) => {
+   test.setTimeout(60000);
+   await page.goto('/auth/login');
+   await page.getByLabel('Email', { exact: true }).fill(fixture.email);
+   await page.getByLabel('Password', { exact: true }).fill(fixture.password);
+   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+   await expect(page).toHaveURL(new RegExp(`/${fixture.slug}/`));
+   const scaffold = await context.request.post(`${api}/documents/project-tree/scaffold`, {
+      data: { workspaceId: fixture.workspace_id, projectId: fixture.projectId },
+   });
+   expect(scaffold.ok()).toBeTruthy();
+   const tree = (await scaffold.json()).data;
+   const rootFolder = tree.folders.find((folder: { kind: string }) => folder.kind === 'project');
+   const response = await context.request.post(`${api}/documents`, {
+      data: {
+         workspaceId: fixture.workspace_id,
+         teamId: tree.teamId,
+         folderId: rootFolder.id,
+         title: `Synthetic toolbar ${Date.now()}`,
+         content:
+            '# Synthetic controls\n\n```mermaid\nsequenceDiagram\n  participant A as Start\n  participant B as Finish\n' +
+            Array.from({ length: 30 }, (_, i) => `  A->>B: Step ${i + 1}`).join('\n') +
+            '\n```\n\nAfter diagram',
+         docType: 'GUIDE',
+      },
+   });
+   expect(response.ok()).toBeTruthy();
+   const document = (await response.json()).data;
+   created.push(document.id);
+   const reading = page.getByTestId('document-reading-area');
+   const controls = reading.locator('[data-media-toolbar]');
+   const zoom = controls.getByRole('group', { name: 'Zoom controls', exact: true });
+   const settings = reading.getByRole('button', { name: 'Mermaid Settings', exact: true });
+   const panel = page.getByRole('dialog', { name: 'Mermaid Settings', exact: true });
+   const assertContrast = async () => {
+      const contrast = await panel
+         .getByRole('combobox', { name: 'Theme', exact: true })
+         .evaluate((el) => {
+            const surface = el.closest('[role="dialog"]')!;
+            const canvas = document.createElement('canvas');
+            canvas.width = canvas.height = 1;
+            const ctx = canvas.getContext('2d')!;
+            const luminance = (color: string) => {
+               ctx.fillStyle = color;
+               ctx.fillRect(0, 0, 1, 1);
+               const channels = [...ctx.getImageData(0, 0, 1, 1).data].slice(0, 3).map((value) => {
+                  const c = value / 255;
+                  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+               });
+               return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+            };
+            const text = luminance(getComputedStyle(el).color);
+            const background = luminance(getComputedStyle(surface).backgroundColor);
+            return (Math.max(text, background) + 0.05) / (Math.min(text, background) + 0.05);
+         });
+      expect(contrast).toBeGreaterThanOrEqual(4.5);
+   };
+   const assertZoom = async (percent: string) => {
+      const minus = (await zoom
+         .getByRole('button', { name: 'Zoom out', exact: true })
+         .boundingBox())!;
+      const plus = (await zoom
+         .getByRole('button', { name: 'Zoom in', exact: true })
+         .boundingBox())!;
+      const value = (await zoom.getByText(percent, { exact: true }).boundingBox())!;
+      expect(value.x).toBeGreaterThanOrEqual(minus.x + minus.width);
+      expect(value.x + value.width).toBeLessThanOrEqual(plus.x);
+      expect(Math.abs(value.y + value.height / 2 - (plus.y + plus.height / 2))).toBeLessThan(2);
+      expect(Math.abs(minus.y - plus.y)).toBeLessThan(1);
+   };
+   for (const entry of ['standalone', 'docs']) {
+      await page.emulateMedia({ colorScheme: 'light' });
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await page.goto(
+         entry === 'standalone'
+            ? `/${fixture.slug}/documents/${document.id}`
+            : `/${fixture.slug}/docs?project=${fixture.projectId}`
+      );
+      if (entry === 'docs') await page.locator(`[data-tree-id="${document.id}"]`).click();
+      await settings.click();
+      await expect(panel).toBeVisible();
+      await expect(panel).toHaveAttribute('data-slot', 'popover-content');
+      expect((await panel.boundingBox())!.width).toBeLessThanOrEqual(300);
+      await assertContrast();
+      await panel.screenshot({ path: testInfo.outputPath(`settings-light-${entry}.png`) });
+      await panel.getByRole('combobox', { name: 'Theme', exact: true }).click();
+      await page.getByRole('option', { name: 'forest', exact: true }).click();
+      await expect(panel).toBeVisible();
+      await expect(panel.getByRole('button', { name: 'Apply', exact: true })).toBeEnabled();
+      await page.keyboard.press('Escape');
+      await expect(panel).toHaveCount(0);
+      await expect(settings).toBeFocused();
+      await settings.click();
+      await expect(panel.getByRole('combobox', { name: 'Theme', exact: true })).toContainText(
+         'Use document'
+      );
+      await panel.getByRole('button', { name: 'Close settings', exact: true }).click();
+      await reading.getByRole('button', { name: 'Expand Mermaid diagram', exact: true }).click();
+      await assertZoom('100%');
+      await zoom.getByRole('button', { name: 'Zoom in', exact: true }).click();
+      await assertZoom('125%');
+      const scroller = reading.locator('..');
+      await scroller.evaluate((el) => {
+         const bar = el.querySelector('[data-media-toolbar]')!;
+         el.scrollTop += bar.getBoundingClientRect().top - el.getBoundingClientRect().top + 120;
+      });
+      await expect
+         .poll(async () => (await controls.boundingBox())!.y - (await scroller.boundingBox())!.y)
+         .toBeGreaterThanOrEqual(11);
+      expect(
+         (await controls.boundingBox())!.y - (await scroller.boundingBox())!.y
+      ).toBeLessThanOrEqual(13);
+      await page.screenshot({ path: testInfo.outputPath(`toolbar-sticky-${entry}.png`) });
+      await controls.screenshot({ path: testInfo.outputPath(`toolbar-only-${entry}.png`) });
+      await controls.getByRole('button', { name: 'Collapse', exact: true }).click();
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.emulateMedia({ colorScheme: 'dark' });
+      await expect(page.locator('html')).toHaveClass(/dark/);
+      await settings.click();
+      await assertContrast();
+      const box = (await panel.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(390);
+      expect(box.y).toBeGreaterThanOrEqual(0);
+      expect(box.y + box.height).toBeLessThanOrEqual(844);
+      await panel.screenshot({ path: testInfo.outputPath(`settings-only-${entry}.png`) });
+      await page.screenshot({ path: testInfo.outputPath(`settings-mobile-${entry}.png`) });
+      await panel.getByRole('button', { name: 'Close settings', exact: true }).click();
+      await reading.getByRole('button', { name: 'Expand Mermaid diagram', exact: true }).click();
+      await assertZoom('100%');
+      expect(await reading.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBeTruthy();
+      await controls.getByRole('button', { name: 'Collapse', exact: true }).click();
+   }
+});
