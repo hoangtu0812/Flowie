@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { usePathname, useRouter } from 'next/navigation';
 import { type FormEvent, useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -60,6 +61,7 @@ export function ProjectSettingsDialog({
    const [name, setName] = useState('');
    const [icon, setIcon] = useState('');
    const [slug, setSlug] = useState('');
+   const [serviceDesk, setServiceDesk] = useState(false);
    const [saving, setSaving] = useState(false);
 
    useEffect(() => {
@@ -67,6 +69,7 @@ export function ProjectSettingsDialog({
       setName(project.name);
       setIcon(project.icon ?? '');
       setSlug(project.slug ?? '');
+      setServiceDesk(project.serviceDeskEnabled ?? false);
    }, [open, project]);
 
    const error = projectNameError(name);
@@ -88,6 +91,9 @@ export function ProjectSettingsDialog({
             name: name.trim(),
             icon: icon.trim() || null,
             ...(changedSlug ? { slug } : {}),
+            ...(serviceDesk !== project.serviceDeskEnabled
+               ? { serviceDeskEnabled: serviceDesk }
+               : {}),
          });
          toast.success('Project updated.');
          onOpenChange(false);
@@ -114,7 +120,8 @@ export function ProjectSettingsDialog({
                <DialogHeader>
                   <DialogTitle>Project settings</DialogTitle>
                   <DialogDescription>
-                     Rename the project, change its icon or the slug used in its links.
+                     Rename the project, change its icon or the slug used in its links, or open it
+                     to Service Desk tickets.
                   </DialogDescription>
                </DialogHeader>
                <div className="grid gap-2">
@@ -172,6 +179,22 @@ export function ProjectSettingsDialog({
                      Old links keep working after a change; renaming the project does not change its
                      slug.
                   </p>
+               </div>
+               <div className="flex items-center justify-between gap-4">
+                  <div className="grid gap-1">
+                     <Label htmlFor="project-settings-service-desk">Service Desk</Label>
+                     <p className="text-xs text-muted-foreground">
+                        {project?.teamId
+                           ? 'Anyone in the workspace can raise tickets for this project.'
+                           : 'Needs a project with a team.'}
+                     </p>
+                  </div>
+                  <Switch
+                     id="project-settings-service-desk"
+                     checked={serviceDesk}
+                     disabled={!project?.teamId}
+                     onCheckedChange={setServiceDesk}
+                  />
                </div>
                <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

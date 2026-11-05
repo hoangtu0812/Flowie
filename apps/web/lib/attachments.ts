@@ -3,7 +3,7 @@ import { authenticatedFetch } from '@/lib/workspaces';
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 export type AttachmentEntityType =
-   'issue' | 'comment' | 'project' | 'project-update' | 'document' | 'document-folder';
+   'issue' | 'comment' | 'project' | 'project-update' | 'document' | 'document-folder' | 'ticket';
 
 export type Attachment = {
    id: string;

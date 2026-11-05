@@ -23,7 +23,7 @@ router = APIRouter(prefix='/api/v1/_native/attachments', tags=['native-attachmen
 # Storage authorization is entity-aware and already native. Expose this
 # contract ahead of the attachment panel adapter without changing its UI.
 public_router = APIRouter(prefix='/api/v1/attachments', tags=['attachments'])
-EntityType = Literal['issue', 'comment', 'project', 'project-update', 'document', 'document-folder']
+EntityType = Literal['issue', 'comment', 'project', 'project-update', 'document', 'document-folder', 'ticket']
 MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
 INLINE_IMAGE_MIME_TYPES = frozenset({'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif'})
 DOCUMENT_FILE_EXTENSIONS = ('.docx', '.pdf', '.md')
@@ -50,6 +50,13 @@ async def _entity_team_id(db: AsyncSession, workspace_id: str, entity_type: Enti
 
 async def _authorize_entity(db: AsyncSession, workspace_id: str, entity_type: EntityType, entity_id: str, user_id: str, *, writing: bool = False) -> None:
     await _workspace_access(db, workspace_id, user_id)
+    # Requesters sit outside the ticket's team, so the team rule below would lock them out of their own files.
+    # VI: Người yêu cầu ở ngoài team của ticket, nên quy tắc team bên dưới sẽ chặn họ khỏi tệp của chính mình.
+    if entity_type == 'ticket':
+        from .native_asks import _ask, _manage
+
+        await _manage(db, await _ask(db, entity_id, workspace_id), workspace_id, user_id)
+        return
     team_id = await _entity_team_id(db, workspace_id, entity_type, entity_id)
     if team_id:
         await _team_access(db, workspace_id, team_id, user_id)

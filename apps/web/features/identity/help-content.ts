@@ -188,6 +188,19 @@ export const helpTopics: HelpTopic[] = [
       path: '/reviews',
    },
    {
+      id: 'service-desk',
+      title: ['Service Desk', 'Service Desk'],
+      meaning: [
+         'Service Desk lets anyone in the workspace raise a ticket for a project and follow it without joining the team. The team answers from its queue and turns tickets into issues.',
+         'Service Desk cho mọi người trong workspace tạo ticket cho một dự án và theo dõi mà không cần vào team. Team trả lời từ hàng đợi và chuyển ticket thành Issue.',
+      ],
+      steps: [
+         'Turn on Service Desk in Project settings, then open Service Desk and create a ticket. Replies and status changes reach your Inbox. Team members use the Queue tab to answer, decline or convert a ticket.',
+         'Bật Service Desk trong Project settings, rồi mở Service Desk và tạo ticket. Phản hồi và thay đổi trạng thái được báo vào Inbox. Thành viên team dùng tab Hàng đợi để trả lời, từ chối hoặc chuyển ticket.',
+      ],
+      path: '/service-desk',
+   },
+   {
       id: 'approvals',
       title: ['Approvals', 'Phê duyệt'],
       meaning: [

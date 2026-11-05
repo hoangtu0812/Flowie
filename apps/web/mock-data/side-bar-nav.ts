@@ -3,6 +3,7 @@ import {
    ClipboardCheck,
    GitPullRequestArrow,
    Inbox,
+   LifeBuoy,
    FolderKanban,
    ContactRound,
    Box,
@@ -34,6 +35,11 @@ export const inboxItems = [
       name: 'Approvals',
       url: '/lndev-ui/approvals',
       icon: ClipboardCheck,
+   },
+   {
+      name: 'Service Desk',
+      url: '/lndev-ui/service-desk',
+      icon: LifeBuoy,
    },
    {
       name: 'My issues',
