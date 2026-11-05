@@ -45,7 +45,7 @@ class Argon2CompatibilityTests(unittest.TestCase):
         self.assertIsNone(_safe_app_path('//attacker.example/path'))
         self.assertIsNone(_safe_app_path('https://attacker.example/path'))
 
-    def test_admin_api_cannot_promote_users(self) -> None:
+    def test_admin_api_rejects_the_derived_admin_flag(self) -> None:
         with self.assertRaises(ValidationError):
             UpdateAdminUserInput.model_validate({'isPlatformAdmin': True})
 

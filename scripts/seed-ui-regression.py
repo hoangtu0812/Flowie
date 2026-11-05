@@ -45,8 +45,15 @@ async def main():
                 'id': _cuid(), 'workspace': seed['workspace_id'], 'user': user['id'], 'issue': issues[0]['id'], 'now': now,
                 'data': json.dumps({'title': issues[0]['title'], 'entityPath': '/issue/' + issues[0]['identifier'], 'actor': {'id': user['id'], 'name': user['name']}}),
             })
+            # Separate accounts: a platform role changes where sign-in lands, which the workspace specs must not see.
+            # VI: Tài khoản riêng: vai trò hệ thống đổi trang sau đăng nhập, các spec workspace không được bị ảnh hưởng.
+            platform_users = {}
+            for key, name, role in [('superAdminEmail', 'Regression Super Admin', 'SUPER_ADMIN'), ('adminViewerEmail', 'Regression Admin Viewer', 'VIEWER'), ('plainUserEmail', 'Regression Plain User', None)]:
+                platform_users[key] = f'{_cuid()}@example.test'
+                await db.execute(text("""INSERT INTO users(id,name,email,password_hash,status,email_verified_at,is_platform_admin,platform_role,created_at,updated_at)
+                    VALUES (:id,:name,:email,:password,'ACTIVE',:now,:admin,CAST(:role AS "PlatformRole"),:now,:now)"""), {'id': _cuid(), 'name': name, 'email': platform_users[key], 'password': password_hasher.hash(password), 'admin': role is not None, 'role': role, 'now': now})
             await db.commit()
-            output = {**seed, 'legacy_slug': seed['slug'], 'slug': seed['slug'], 'userId': user['id'], 'email': user['email'], 'password': password,
+            output = {**seed, **platform_users, 'legacy_slug': seed['slug'], 'slug': seed['slug'], 'userId': user['id'], 'email': user['email'], 'password': password,
                 'projectId': project, 'documentId': document['id'], 'documentTitle': document['title'],
                 'issues': [{'id': item['id'], 'identifier': item['identifier'], 'title': item['title']} for item in issues]}
             target = ROOT / 'apps/web/.e2e-fixture.json'

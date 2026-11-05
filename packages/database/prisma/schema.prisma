@@ -97,6 +97,15 @@ enum WorkspaceMemberRole {
   ADMIN_VIEWER
 }
 
+/// Access to the platform /admin console. The ADMIN_EMAIL account is a super admin without a stored
+/// role. Neither role grants access to workspace data.
+/// VI: Quyền vào console /admin của hệ thống. Tài khoản ADMIN_EMAIL là super admin dù không lưu vai
+/// VI: trò. Cả hai vai trò đều không mở dữ liệu workspace.
+enum PlatformRole {
+  SUPER_ADMIN
+  VIEWER
+}
+
 enum TeamMemberRole {
   LEAD
   MEMBER
@@ -194,6 +203,7 @@ model User {
   authVersion          Int                   @default(0) @map("auth_version")
   passwordHash         String?               @map("password_hash")
   isPlatformAdmin      Boolean               @default(false) @map("is_platform_admin")
+  platformRole         PlatformRole?         @map("platform_role")
   emailVerifiedAt      DateTime?             @map("email_verified_at")
   status               UserStatus            @default(ACTIVE)
   createdAt            DateTime              @default(now()) @map("created_at")

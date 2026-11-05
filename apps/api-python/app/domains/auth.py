@@ -43,7 +43,7 @@ MICROSOFT_FLOW_TTL_SECONDS = 10 * 60
 
 USER_COLUMNS = '''
     id, email, name, username, title, timezone, avatar_url, password_hash,
-    is_platform_admin, email_verified_at, status, auth_version, created_at
+    is_platform_admin, platform_role, email_verified_at, status, auth_version, created_at
 '''
 
 # Chromium on Windows can report the historical IANA alias `Asia/Saigon`.
@@ -145,9 +145,23 @@ def _is_environment_admin(email: str, settings: Settings) -> bool:
     return bool(settings.admin_email and email.strip().lower() == settings.admin_email)
 
 
+def _platform_role(email: str, stored_role: str | None, settings: Settings) -> str | None:
+    """Return the effective /admin role: ADMIN_EMAIL is always a super admin, whatever is stored.
+
+    The environment wins so the account stays recoverable from the server if roles are misconfigured.
+    VI: Trả về vai trò /admin hiệu lực: ADMIN_EMAIL luôn là super admin, bất kể giá trị đã lưu.
+    VI: Biến môi trường được ưu tiên để vẫn khôi phục được từ server nếu cấu hình vai trò bị sai.
+    """
+
+    return 'SUPER_ADMIN' if _is_environment_admin(email, settings) else stored_role
+
+
 def _runtime_user(row: Any, settings: Settings) -> dict[str, Any]:
     user = dict(row)
-    user['is_platform_admin'] = _is_environment_admin(str(user['email']), settings)
+    user['platform_role'] = _platform_role(
+        str(user['email']), user.get('platform_role'), settings
+    )
+    user['is_platform_admin'] = user['platform_role'] is not None
     return user
 
 
@@ -700,7 +714,8 @@ async def _upsert_microsoft_user(
                        auth_version = auth_version + CASE WHEN password_hash IS NOT NULL THEN 1 ELSE 0 END,
                        password_hash = NULL,
                        timezone = COALESCE((SELECT preferences->>'timezone' FROM user_ui_preferences WHERE user_id=users.id), :timezone, timezone),
-                       is_platform_admin = :is_platform_admin, email_verified_at = COALESCE(email_verified_at, :now),
+                       is_platform_admin = (CAST(:is_environment_admin AS boolean) OR platform_role IS NOT NULL),
+                       email_verified_at = COALESCE(email_verified_at, :now),
                        last_login_at = :now, last_seen_at = :now, updated_at = :now
                    WHERE id = :id'''
             ),
@@ -709,7 +724,7 @@ async def _upsert_microsoft_user(
                 'name': profile.name,
                 'email': profile.email.lower(),
                 'timezone': timezone_name,
-                'is_platform_admin': _is_environment_admin(profile.email, settings),
+                'is_environment_admin': _is_environment_admin(profile.email, settings),
                 'now': now,
             },
         )

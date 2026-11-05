@@ -11,33 +11,59 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
 from ..db.session import get_session
-from .auth import _cuid, _utcnow, current_user
+from .auth import _cuid, _is_environment_admin, _platform_role, _utcnow, current_user
 
 router = APIRouter(prefix='/api/v1/admin', tags=['admin'])
 
 UserStatus = Literal['ACTIVE', 'INVITED', 'SUSPENDED', 'DISABLED']
+PlatformRole = Literal['SUPER_ADMIN', 'VIEWER']
 
 
 class UpdateAdminUserInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
     status: UserStatus | None = None
+    # An explicit null revokes the role; leaving the field out keeps it.
+    # VI: Gửi null tường minh để thu hồi vai trò; bỏ trống trường này thì giữ nguyên.
+    platformRole: PlatformRole | None = None
 
 
 async def _platform_admin(user: Any) -> None:
     """The console is platform-wide, so workspace roles grant nothing here."""
 
-    if not user['is_platform_admin']:
+    if not user['platform_role']:
         raise ApiError(403, 'Platform administrator access is required.', 'Forbidden')
 
 
-def _admin_user(row: Any, admin_email: str) -> dict[str, Any]:
+async def _super_admin(user: Any) -> None:
+    """Guard every console write and the audit log; view-only administrators stop here.
+
+    VI: Chặn mọi thao tác ghi của console và audit log; admin chỉ xem dừng ở đây.
+    """
+
+    if user['platform_role'] != 'SUPER_ADMIN':
+        raise ApiError(403, 'Super administrator access is required.', 'Forbidden')
+
+
+def _admin_user(row: Any, actor: Any, settings: Any) -> dict[str, Any]:
+    email = row['email']
+    role = _platform_role(email, row['platform_role'], settings)
+    environment_admin = _is_environment_admin(email, settings)
     return {
         'id': row['id'],
         'name': row['name'],
         'email': row['email'],
         'status': row['status'],
-        'isPlatformAdmin': bool(admin_email and row['email'].strip().lower() == admin_email),
+        'isPlatformAdmin': role is not None,
+        'isEnvironmentAdmin': environment_admin,
+        'platformRole': role,
+        # Mirrors the checks in update_user so the console only offers what the API accepts.
+        # VI: Khớp các kiểm tra trong update_user để console chỉ cho thao tác mà API chấp nhận.
+        'manageable': (
+            actor['platform_role'] == 'SUPER_ADMIN'
+            and row['id'] != actor['id']
+            and not environment_admin
+        ),
         'createdAt': row['created_at'],
         'lastLoginAt': row['last_login_at'],
         '_count': {'memberships': row['memberships'], 'organizations': row['organizations']},
@@ -45,7 +71,7 @@ def _admin_user(row: Any, admin_email: str) -> dict[str, Any]:
 
 
 ADMIN_USER_QUERY = '''
-    SELECT u.id, u.name, u.email, u.status, u.is_platform_admin, u.created_at, u.last_login_at,
+    SELECT u.id, u.name, u.email, u.status, u.platform_role, u.created_at, u.last_login_at,
            (SELECT COUNT(*)::int FROM workspace_members m WHERE m.user_id = u.id) AS memberships,
            (SELECT COUNT(*)::int FROM organizations o WHERE o.owner_id = u.id) AS organizations
     FROM users u
@@ -90,7 +116,7 @@ async def users(
     result = await db.execute(text(f'{ADMIN_USER_QUERY} ORDER BY u.created_at DESC'))
     return {
         'data': [
-            _admin_user(row, request.app.state.settings.admin_email)
+            _admin_user(row, user, request.app.state.settings)
             for row in result.mappings().all()
         ]
     }
@@ -144,7 +170,7 @@ async def workspaces(
 async def audit_logs(
     user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)
 ) -> dict[str, list[dict[str, Any]]]:
-    await _platform_admin(user)
+    await _super_admin(user)
     result = await db.execute(
         text(
             '''SELECT id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at
@@ -176,7 +202,7 @@ async def update_user(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _platform_admin(user)
+    await _super_admin(user)
     if user_id == user['id']:
         raise ApiError(
             400,
@@ -184,16 +210,21 @@ async def update_user(
             'Bad Request',
         )
     target = await db.execute(
-        text('SELECT id, email, status, is_platform_admin FROM users WHERE id = :id'), {'id': user_id}
+        text('SELECT id, email, status, platform_role FROM users WHERE id = :id'), {'id': user_id}
     )
     row = target.mappings().first()
     if not row:
         raise ApiError(404, 'User not found.', 'Not Found')
 
-    is_environment_admin = bool(
-        request.app.state.settings.admin_email
-        and row['email'].strip().lower() == request.app.state.settings.admin_email
-    )
+    settings = request.app.state.settings
+    is_environment_admin = _is_environment_admin(row['email'], settings)
+    role_changes = 'platformRole' in payload.model_fields_set
+    if role_changes and is_environment_admin:
+        raise ApiError(
+            400,
+            'The ADMIN_EMAIL account always keeps super administrator access.',
+            'Bad Request',
+        )
     if payload.status and payload.status != 'ACTIVE' and is_environment_admin:
         raise ApiError(
             400,
@@ -206,6 +237,13 @@ async def update_user(
     if payload.status:
         sets.append('status = :status')
         params['status'] = payload.status
+    if role_changes:
+        # is_platform_admin is kept in step because /users/me and member payloads read the column.
+        # VI: Giữ is_platform_admin đồng bộ vì /users/me và dữ liệu thành viên đọc cột này.
+        sets.append('platform_role = CAST(:platform_role AS "PlatformRole")')
+        sets.append('is_platform_admin = :is_platform_admin')
+        params['platform_role'] = payload.platformRole
+        params['is_platform_admin'] = payload.platformRole is not None
     if sets:
         await db.execute(text(f"UPDATE users SET {', '.join(sets)} WHERE id = :id"), params)
     if payload.status and payload.status != 'ACTIVE':
@@ -225,15 +263,23 @@ async def update_user(
             'actor_id': user['id'],
             'entity_id': user_id,
             'metadata': json.dumps(
-                {'status': payload.status}
+                {
+                    'status': payload.status,
+                    **(
+                        {
+                            'platformRole': {
+                                'from': row['platform_role'],
+                                'to': payload.platformRole,
+                            }
+                        }
+                        if role_changes
+                        else {}
+                    ),
+                }
             ),
             'now': now,
         },
     )
     await db.commit()
     updated = await db.execute(text(f'{ADMIN_USER_QUERY} WHERE u.id = :id'), {'id': user_id})
-    return {
-        'data': _admin_user(
-            updated.mappings().one(), request.app.state.settings.admin_email
-        )
-    }
+    return {'data': _admin_user(updated.mappings().one(), user, settings)}
