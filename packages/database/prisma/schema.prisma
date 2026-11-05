@@ -185,6 +185,7 @@ enum CycleStatus {
 }
 
 model User {
+  autoJoinBlocks WorkspaceAutoJoinBlock[]
   bulkOperations       BulkOperation[]
   issueImports         IssueImportBatch[]
   recurringSchedules   RecurringSchedule[]
@@ -656,6 +657,10 @@ model Workspace {
   /// Last ticket number handed out; numbers run per workspace and are never reused.
   /// VI: Số ticket đã cấp gần nhất; số chạy theo từng workspace và không dùng lại.
   ticketSequence         Int                   @default(0) @map("ticket_sequence")
+  /// Microsoft tenant whose accounts join on sign-in; null keeps automatic joining off.
+  /// VI: Tenant Microsoft có tài khoản tự vào khi đăng nhập; null là tắt tự vào.
+  autoJoinTenantId       String?               @map("auto_join_tenant_id")
+  autoJoinBlocks         WorkspaceAutoJoinBlock[]
   issueDisplayDefaults   Json?                 @map("issue_display_defaults")
   issueInsightDefaults   Json?                 @map("issue_insight_defaults")
   mcpInstructions        String?               @map("mcp_instructions")
@@ -2492,6 +2497,21 @@ model WorkspaceEmoji {
   @@unique([workspaceId, name])
   @@index([workspaceId, archivedAt])
   @@map("workspace_emojis")
+}
+
+/// People removed from a workspace or who left it, who may only return by invitation.
+/// VI: Người bị xoá khỏi workspace hoặc đã tự rời, chỉ được quay lại bằng lời mời.
+model WorkspaceAutoJoinBlock {
+  workspaceId String   @map("workspace_id")
+  userId      String   @map("user_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, userId])
+  @@index([userId])
+  @@map("workspace_auto_join_blocks")
 }
 
 model WorkspaceMember {

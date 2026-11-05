@@ -59,6 +59,18 @@ export const messages = {
    'Archive': 'Lưu trữ',
    'Created by {name}': 'Tạo bởi {name}',
    'Email me about my tickets': 'Gửi email về ticket của tôi',
+   'Company access': 'Truy cập cho công ty',
+   'Let company accounts join automatically': 'Cho tài khoản công ty tự vào',
+   'Staff who sign in with Microsoft join as members of no team. They can raise tickets and read anything in this workspace that has no team.':
+      'Nhân viên đăng nhập Microsoft sẽ vào với vai trò member, không thuộc team nào. Họ tạo được ticket và đọc được mọi dữ liệu không gắn team trong workspace này.',
+   'Everyone in the company will be able to read:': 'Mọi người trong công ty sẽ đọc được:',
+   '{count} projects with no team': '{count} dự án không gắn team',
+   '{count} issues with no team': '{count} Issue không gắn team',
+   '{count} documents with no team': '{count} tài liệu không gắn team',
+   'Move sensitive work into a team before you continue. People who were removed or left stay out unless you invite them again. Turning this off later does not remove anyone.':
+      'Hãy chuyển dữ liệu nhạy cảm vào một team trước khi tiếp tục. Người đã bị xoá hoặc đã tự rời sẽ không vào lại trừ khi bạn mời. Tắt sau này không xoá ai khỏi workspace.',
+   'Turn on automatic joining?': 'Bật tự vào workspace?',
+   'Turn on': 'Bật',
    'Mark as resolved': 'Đã giải quyết',
    'This closes the ticket. The requester can reopen it if the problem remains.':
       'Ticket sẽ được đóng. Người yêu cầu có thể mở lại nếu vẫn còn lỗi.',

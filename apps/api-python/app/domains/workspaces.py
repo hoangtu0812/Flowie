@@ -5,7 +5,7 @@ import unicodedata
 from datetime import timedelta
 from typing import Any, Literal
 
-from fastapi import Depends, Query, Response
+from fastapi import Depends, Query, Request, Response
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
+from ..services.auth_policy import microsoft_sign_in_enabled
 from ..core.slugs import RESERVED_WORKSPACE_SLUGS, url_slug
 from ..modules.access.read_only import ADMIN_READ_ROLES
 from ..db.session import get_session
@@ -853,6 +854,78 @@ async def decline_invitation(
     return {'data': {'id': member_id, 'declined': True}}
 
 
+async def _block_auto_join(db: AsyncSession, workspace_id: str, user_id: str) -> None:
+    # The member row is about to go, so this is what keeps the next sign-in from bringing them back.
+    # VI: Dòng thành viên sắp bị xoá, nên đây là thứ giữ lần đăng nhập sau không đưa họ quay lại.
+    await db.execute(
+        text('INSERT INTO workspace_auto_join_blocks (workspace_id, user_id) VALUES (:workspace_id, :user_id) ON CONFLICT DO NOTHING'),
+        {'workspace_id': workspace_id, 'user_id': user_id},
+    )
+
+
+class AutoJoinInput(BaseModel):
+    enabled: bool
+
+
+@router.get('/{workspace_id}/auto-join')
+async def auto_join_status(
+    workspace_id: str,
+    request: Request,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, Any]]:
+    """What turning automatic joining on would expose: everyone can read data with no team.
+    VI: Những gì sẽ mở ra khi bật tự vào: mọi người đọc được dữ liệu không gắn team.
+    """
+    await _authorize_manager(db, workspace_id, user['id'])
+    result = await db.execute(
+        text(
+            '''SELECT w.auto_join_tenant_id,
+                      (SELECT COUNT(*) FROM projects p WHERE p.workspace_id = w.id AND p.team_id IS NULL AND p.archived_at IS NULL) AS projects,
+                      (SELECT COUNT(*) FROM issues i WHERE i.workspace_id = w.id AND i.team_id IS NULL AND i.archived_at IS NULL) AS issues,
+                      (SELECT COUNT(*) FROM documents d WHERE d.workspace_id = w.id AND d.team_id IS NULL AND d.archived_at IS NULL) AS documents
+               FROM workspaces w WHERE w.id = :workspace_id'''
+        ),
+        {'workspace_id': workspace_id},
+    )
+    row = result.mappings().one()
+    return {'data': {
+        'available': microsoft_sign_in_enabled(request.app.state.settings),
+        'enabled': row['auto_join_tenant_id'] is not None,
+        'teamlessProjects': row['projects'],
+        'teamlessIssues': row['issues'],
+        'teamlessDocuments': row['documents'],
+    }}
+
+
+@router.put('/{workspace_id}/auto-join')
+async def update_auto_join(
+    workspace_id: str,
+    payload: AutoJoinInput,
+    request: Request,
+    user: Any = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, dict[str, bool]]:
+    await _authorize_manager(db, workspace_id, user['id'])
+    settings = request.app.state.settings
+    if payload.enabled and not microsoft_sign_in_enabled(settings):
+        raise ApiError(409, 'Microsoft sign-in is not configured.', 'Conflict')
+    now = _utcnow()
+    await db.execute(
+        text('UPDATE workspaces SET auto_join_tenant_id = :tenant_id, updated_at = :now WHERE id = :workspace_id'),
+        {'tenant_id': settings.azure_ad_tenant_id if payload.enabled else None, 'now': now, 'workspace_id': workspace_id},
+    )
+    await db.execute(
+        text(
+            '''INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
+               VALUES (:id, :workspace_id, :actor_id, 'workspace.auto_join.changed', 'workspace', :workspace_id, CAST(:metadata AS jsonb), :now)'''
+        ),
+        {'id': _cuid(), 'workspace_id': workspace_id, 'actor_id': user['id'], 'metadata': json.dumps({'enabled': payload.enabled}), 'now': now},
+    )
+    await db.commit()
+    return {'data': {'enabled': payload.enabled}}
+
+
 @router.delete('/{workspace_id}/leave')
 async def leave(
     workspace_id: str,
@@ -865,6 +938,7 @@ async def leave(
     now = _utcnow()
     await db.execute(text("INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at) VALUES (:id, :workspace_id, :actor_id, 'workspace.member.left', 'workspace-member', :entity_id, CAST('{}' AS jsonb), :now)"), {'id': _cuid(), 'workspace_id': workspace_id, 'actor_id': user['id'], 'entity_id': membership['member_id'], 'now': now})
     await db.execute(text('DELETE FROM team_members WHERE user_id = :user_id AND team_id IN (SELECT id FROM teams WHERE workspace_id = :workspace_id)'), {'user_id': user['id'], 'workspace_id': workspace_id})
+    await _block_auto_join(db, workspace_id, user['id'])
     await db.execute(text('DELETE FROM workspace_members WHERE id = :id'), {'id': membership['member_id']})
     await db.commit()
     return {'data': {'id': membership['member_id'], 'left': True}}
@@ -907,6 +981,7 @@ async def remove_member(
     if member['user_id'] == user['id'] or member['role'] == 'OWNER':
         raise ApiError(403, 'The workspace owner cannot be removed.', 'Forbidden')
     await db.execute(text('DELETE FROM team_members WHERE user_id = :user_id AND team_id IN (SELECT id FROM teams WHERE workspace_id = :workspace_id)'), {'user_id': member['user_id'], 'workspace_id': workspace_id})
+    await _block_auto_join(db, workspace_id, member['user_id'])
     await db.execute(text('DELETE FROM workspace_members WHERE id = :id'), {'id': member_id})
     await db.commit()
     return {'data': {'id': member_id, 'removed': True}}
