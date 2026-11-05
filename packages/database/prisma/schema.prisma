@@ -255,6 +255,7 @@ model User {
   createdCustomerRequests  CustomerRequest[]        @relation("CustomerRequestCreator")
   createdSlaPolicies       SlaPolicy[]              @relation("SlaPolicyCreator")
   createdAsks              Ask[]                    @relation("AskCreator")
+  askMessages              AskMessage[]             @relation("AskMessageAuthor")
   createdWorkspaceEmojis   WorkspaceEmoji[]         @relation("WorkspaceEmojiCreator")
   agentConversations       AgentConversation[]
   agentSkills              UserAgentSkill[]
@@ -1726,6 +1727,9 @@ model Ask {
   status           String        @default("open")
   createdById      String        @map("created_by")
   convertedIssueId String?       @map("converted_issue_id")
+  /// Last ticket status the requester was told about; null until the first comparison sets a baseline.
+  /// VI: Trạng thái ticket gần nhất đã báo cho người yêu cầu; null đến khi lần so sánh đầu đặt mốc.
+  notifiedTicketStatus String? @map("notified_ticket_status")
   archivedAt       DateTime?     @map("archived_at")
   createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime      @default(now()) @updatedAt @map("updated_at")
@@ -1735,12 +1739,29 @@ model Ask {
   project        Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
   createdBy      User      @relation("AskCreator", fields: [createdById], references: [id], onDelete: Restrict)
   convertedIssue Issue?    @relation("AskConvertedIssue", fields: [convertedIssueId], references: [id], onDelete: SetNull)
+  messages       AskMessage[]
 
   @@index([workspaceId, archivedAt, status])
   @@index([teamId])
   @@index([projectId])
   @@index([convertedIssueId])
   @@map("asks")
+}
+
+/// Conversation between a requester and the team. Kept apart from issue comments, which stay internal.
+/// VI: Trao đổi giữa người yêu cầu và team. Tách khỏi comment của Issue, vốn chỉ dành cho nội bộ.
+model AskMessage {
+  id        String   @id @default(cuid())
+  askId     String   @map("ask_id")
+  authorId  String   @map("author_id")
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  ask    Ask  @relation(fields: [askId], references: [id], onDelete: Cascade)
+  author User @relation("AskMessageAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([askId, createdAt])
+  @@map("ask_messages")
 }
 
 model TeamMember {

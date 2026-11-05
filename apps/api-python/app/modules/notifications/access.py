@@ -32,6 +32,10 @@ def notification_scope(alias="n", *, actor=None):
                 WHERE review.id={alias}.entity_id AND review.workspace_id={alias}.workspace_id AND repository.enabled=true AND repository.archived_at IS NULL
                 AND (EXISTS(SELECT 1 FROM workspace_members wm WHERE wm.workspace_id={alias}.workspace_id AND wm.user_id={actor} AND wm.status='ACTIVE' AND wm.role IN ('OWNER','ADMIN'))
                     OR EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=repository.team_id AND tm.user_id={actor}))))
+            OR ({alias}.entity_type='ticket' AND EXISTS(SELECT 1 FROM asks ticket WHERE ticket.id={alias}.entity_id AND ticket.workspace_id={alias}.workspace_id AND ticket.archived_at IS NULL
+                AND (ticket.created_by={actor}
+                    OR EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=ticket.team_id AND tm.user_id={actor})
+                    OR EXISTS(SELECT 1 FROM workspace_members wm WHERE wm.workspace_id={alias}.workspace_id AND wm.user_id={actor} AND wm.status='ACTIVE' AND wm.role IN ('OWNER','ADMIN')))))
             OR ({alias}.entity_type='workspace' AND {alias}.entity_id={alias}.workspace_id)
         )"""
 
