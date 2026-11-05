@@ -256,6 +256,7 @@ model User {
   createdSlaPolicies       SlaPolicy[]              @relation("SlaPolicyCreator")
   createdAsks              Ask[]                    @relation("AskCreator")
   askMessages              AskMessage[]             @relation("AskMessageAuthor")
+  assignedAsks             Ask[]                    @relation("AskAssignee")
   createdWorkspaceEmojis   WorkspaceEmoji[]         @relation("WorkspaceEmojiCreator")
   agentConversations       AgentConversation[]
   agentSkills              UserAgentSkill[]
@@ -1727,6 +1728,9 @@ model Ask {
   status           String        @default("open")
   createdById      String        @map("created_by")
   convertedIssueId String?       @map("converted_issue_id")
+  /// Team member handling the ticket; null leaves it to the whole team.
+  /// VI: Thành viên team xử lý ticket; null nghĩa là cả team cùng theo dõi.
+  assigneeId       String?       @map("assignee_id")
   /// Last ticket status the requester was told about; null until the first comparison sets a baseline.
   /// VI: Trạng thái ticket gần nhất đã báo cho người yêu cầu; null đến khi lần so sánh đầu đặt mốc.
   notifiedTicketStatus String? @map("notified_ticket_status")
@@ -1740,11 +1744,13 @@ model Ask {
   createdBy      User      @relation("AskCreator", fields: [createdById], references: [id], onDelete: Restrict)
   convertedIssue Issue?    @relation("AskConvertedIssue", fields: [convertedIssueId], references: [id], onDelete: SetNull)
   messages       AskMessage[]
+  assignee       User?     @relation("AskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, archivedAt, status])
   @@index([teamId])
   @@index([projectId])
   @@index([convertedIssueId])
+  @@index([assigneeId])
   @@map("asks")
 }
 

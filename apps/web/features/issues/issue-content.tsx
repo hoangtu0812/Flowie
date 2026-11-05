@@ -15,6 +15,7 @@ import { useLocale } from '@/features/shared/use-locale';
 import { useIssuesStore } from '@/store/issues-store';
 import { useIssueActivity } from './use-issue-activity';
 import { useIssueAttachments } from './use-issue-attachments';
+import { IssueTicketLink } from '@/features/service-desk/issue-ticket-link';
 import { IssueDescription } from '@/components/common/issues/details/issue-description';
 import { IssueAttachments } from '@/components/common/issues/details/issue-attachments';
 import { IssueReactions } from '@/components/common/issues/details/issue-reactions';
@@ -113,6 +114,7 @@ export function IssueContent({
                      <IssueDescription issue={issue} />
                      <BugDetails key={issue.id} issue={issue} />
                      <IssueAgentRun key={issue.id} issueId={issue.id} />
+                     <IssueTicketLink workspaceId={workspaceId} issueId={issue.id} orgId={orgId} />
                      <IssuePullRequests reviews={reviews} orgId={orgId} />
                      <IssueDocuments state={documents} projectId={issue.project?.id} />
                      <IssueSlaPanel issue={issue} />

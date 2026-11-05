@@ -40,6 +40,7 @@ class UpdateAskInput(BaseModel):
     description: str | None = Field(default=None, max_length=10_000)
     priority: AskPriority | None = None
     status: AskStatus | None = None
+    assigneeId: str | None = None
 
 
 class AskMessageInput(BaseModel):
@@ -99,14 +100,14 @@ async def _ask(db: AsyncSession, ask_id: str, workspace_id: str) -> dict[str, An
     result = await db.execute(text('''SELECT ask.*, team.id AS team_id_value, team.name AS team_name, team.identifier AS team_identifier, team.icon AS team_icon,
                                       project.id AS project_id_value, project.name AS project_name, project.identifier AS project_identifier,
                                       creator.id AS creator_id, creator.name AS creator_name, creator.avatar_url AS creator_avatar_url,
-                                      issue.id AS issue_id_value, issue.identifier AS issue_identifier, issue.title AS issue_title, issue_status.category AS issue_category,
+                                      issue.id AS issue_id_value, issue.identifier AS issue_identifier, issue.title AS issue_title, issue_status.category AS issue_category, assignee.name AS assignee_name, assignee.avatar_url AS assignee_avatar_url,
                                       (SELECT message.author_id FROM ask_messages message WHERE message.ask_id = ask.id ORDER BY message.created_at DESC, message.id DESC LIMIT 1) AS last_message_author
                                FROM asks ask JOIN teams team ON team.id = ask.team_id JOIN users creator ON creator.id = ask.created_by
-                               LEFT JOIN projects project ON project.id = ask.project_id LEFT JOIN issues issue ON issue.id = ask.converted_issue_id LEFT JOIN issue_statuses issue_status ON issue_status.id = issue.status_id
+                               LEFT JOIN projects project ON project.id = ask.project_id LEFT JOIN issues issue ON issue.id = ask.converted_issue_id LEFT JOIN issue_statuses issue_status ON issue_status.id = issue.status_id LEFT JOIN users assignee ON assignee.id = ask.assignee_id
                                WHERE ask.id = :ask_id AND ask.workspace_id = :workspace_id AND ask.archived_at IS NULL'''), {'ask_id': ask_id, 'workspace_id': workspace_id})
     row = result.mappings().first()
     if not row: raise ApiError(404, 'Ask not found.', 'Not Found')
-    return {'id': row['id'], 'workspaceId': row['workspace_id'], 'teamId': row['team_id'], 'projectId': row['project_id'], 'title': row['title'], 'description': row['description'], 'priority': row['priority'], 'status': row['status'], 'ticketStatus': ticket_status(row['status'], row['issue_category'], row['last_message_author'] not in {None, row['created_by']}), 'createdById': row['created_by'], 'convertedIssueId': row['converted_issue_id'], 'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
+    return {'id': row['id'], 'workspaceId': row['workspace_id'], 'teamId': row['team_id'], 'projectId': row['project_id'], 'title': row['title'], 'description': row['description'], 'priority': row['priority'], 'status': row['status'], 'ticketStatus': ticket_status(row['status'], row['issue_category'], row['last_message_author'] not in {None, row['created_by']}), 'createdById': row['created_by'], 'assigneeId': row['assignee_id'], 'assignee': {'id': row['assignee_id'], 'name': row['assignee_name'], 'avatarUrl': row['assignee_avatar_url']} if row['assignee_id'] else None, 'convertedIssueId': row['converted_issue_id'], 'createdAt': row['created_at'], 'updatedAt': row['updated_at'],
             'team': {'id': row['team_id_value'], 'name': row['team_name'], 'identifier': row['team_identifier'], 'icon': row['team_icon']},
             'project': {'id': row['project_id_value'], 'name': row['project_name'], 'identifier': row['project_identifier'], 'team': {'id': row['team_id']} if row['team_id'] else None} if row['project_id_value'] else None,
             'createdBy': {'id': row['creator_id'], 'name': row['creator_name'], 'avatarUrl': row['creator_avatar_url']},
@@ -186,10 +187,15 @@ async def update_ask(ask_id: str, payload: UpdateAskInput, workspaceId: str = Qu
     if ask['convertedIssueId']: raise ApiError(400, 'Converted asks cannot be edited.', 'Bad Request')
     values = payload.model_dump(exclude_unset=True)
     if values.get('status') == 'accepted': raise ApiError(400, 'Use the convert action to accept an Ask.', 'Bad Request')
-    if 'status' in values: await _triage(db, ask, workspaceId, user['id'])
+    if 'status' in values or 'assigneeId' in values: await _triage(db, ask, workspaceId, user['id'])
     team_id, project_id = values.get('teamId', ask['teamId']), values.get('projectId', ask['projectId'])
     await _references(db, workspaceId, team_id, project_id, user['id'])
-    columns = {'teamId': 'team_id', 'projectId': 'project_id', 'title': 'title', 'description': 'description', 'priority': 'priority', 'status': 'status'}
+    # An assignee belongs to the ticket's team, so moving the ticket clears the old one.
+    # VI: Người được giao thuộc team của ticket, nên chuyển ticket sang team khác sẽ bỏ giao.
+    if team_id != ask['teamId'] and 'assigneeId' not in values: values['assigneeId'] = None
+    if values.get('assigneeId') and values['assigneeId'] not in await team_recipient_ids(db, team_id):
+        raise ApiError(400, 'A ticket can only be assigned to a member of its team.', 'Bad Request')
+    columns = {'teamId': 'team_id', 'projectId': 'project_id', 'title': 'title', 'description': 'description', 'priority': 'priority', 'status': 'status', 'assigneeId': 'assignee_id'}
     sets, params = [], {'ask_id': ask_id, 'now': _utcnow()}
     for field, column in columns.items():
         if field in values:
@@ -199,7 +205,12 @@ async def update_ask(ask_id: str, payload: UpdateAskInput, workspaceId: str = Qu
             params[field] = value; sets.append(f'{column} = :{field}')
     if sets:
         await db.execute(text(f"UPDATE asks SET {', '.join(sets)}, updated_at = :now WHERE id = :ask_id"), params)
-        await _audit(db, workspaceId, user['id'], 'ask.updated', ask_id, values); await db.commit()
+        await _audit(db, workspaceId, user['id'], 'ask.updated', ask_id, values)
+        if values.get('assigneeId') and values['assigneeId'] != ask['assigneeId']:
+            batch = await create_notification_batch(db, workspace_id=workspaceId, recipient_ids={values['assigneeId']}, actor=user, event_type='ticket.assigned', entity_type='ticket', entity_id=ask_id,
+                                                    title=values.get('title', ask['title']), message='assigned you a ticket', entity_path=f'/service-desk/{ask_id}', discord=False)
+            await stage_notifications(db, batch, workspace_id=workspaceId)
+        await db.commit()
     return {'data': await _ask(db, ask_id, workspaceId)}
 
 
@@ -208,7 +219,7 @@ async def convert_ask(ask_id: str, workspaceId: str = Query(min_length=1), user:
     ask = await _ask(db, ask_id, workspaceId); await _triage(db, ask, workspaceId, user['id'])
     if ask['convertedIssueId']: return {'data': ask}
     if ask['status'] == 'declined': raise ApiError(400, 'Declined asks cannot be converted.', 'Bad Request')
-    issue = await create_issue(CreateIssueInput(workspaceId=workspaceId, teamId=ask['teamId'], projectId=ask['projectId'], title=ask['title'], description=ask['description'], priority=ask['priority']), user, db)
+    issue = await create_issue(CreateIssueInput(workspaceId=workspaceId, teamId=ask['teamId'], projectId=ask['projectId'], title=ask['title'], description=ask['description'], priority=ask['priority'], assigneeId=ask['assigneeId']), user, db)
     issue_data = issue['data']
     await db.execute(text("UPDATE asks SET status = 'accepted', converted_issue_id = :issue_id, updated_at = :now WHERE id = :ask_id"), {'issue_id': issue_data['id'], 'ask_id': ask_id, 'now': _utcnow()})
     await _audit(db, workspaceId, user['id'], 'ask.converted', ask_id, {'issueId': issue_data['id'], 'identifier': issue_data['identifier']}); await db.commit()
@@ -220,6 +231,17 @@ def _message(row: Any) -> dict[str, Any]:
 
 
 MESSAGE_COLUMNS = 'message.id, message.ask_id, message.content, message.created_at, message.author_id, author.name AS author_name, author.avatar_url AS author_avatar_url'
+
+
+@router.get('/by-issue/{issue_id}')
+async def ticket_for_issue(issue_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, str] | None]:
+    await _workspace_access(db, workspaceId, user['id'])
+    result = await db.execute(text('SELECT id FROM asks WHERE converted_issue_id = :issue_id AND workspace_id = :workspace_id AND archived_at IS NULL'), {'issue_id': issue_id, 'workspace_id': workspaceId})
+    ask_id = result.scalar_one_or_none()
+    if ask_id is None:
+        return {'data': None}
+    ask = await _ask(db, ask_id, workspaceId); await _manage(db, ask, workspaceId, user['id'])
+    return {'data': {'id': ask['id'], 'title': ask['title']}}
 
 
 @router.get('/{ask_id}/messages')
@@ -239,9 +261,13 @@ async def create_ask_message(ask_id: str, payload: AskMessageInput, workspaceId:
     await db.execute(text('INSERT INTO ask_messages (id, ask_id, author_id, content, created_at) VALUES (:id, :ask_id, :author_id, :content, :now)'), {'id': message_id, 'ask_id': ask_id, 'author_id': user['id'], 'content': content, 'now': now})
     await db.execute(text('UPDATE asks SET updated_at = :now WHERE id = :ask_id'), {'now': now, 'ask_id': ask_id})
     await _audit(db, workspaceId, user['id'], 'ask.message_created', ask_id, {'messageId': message_id})
+    # An assignee takes over from the team, unless they have left it and nobody would hear the message.
     # discord=False keeps a requester's conversation out of the shared team channels.
+    # VI: Người được giao thay cả team nhận tin, trừ khi họ đã rời team và tin nhắn sẽ không tới ai.
     # VI: discord=False giữ trao đổi của người yêu cầu ngoài các kênh chung của team.
-    batch = await create_notification_batch(db, workspace_id=workspaceId, recipient_ids=await team_recipient_ids(db, ask['teamId']) | {ask['createdById']}, actor=user,
+    team = await team_recipient_ids(db, ask['teamId'])
+    handlers = {ask['assigneeId']} if ask['assigneeId'] in team else team
+    batch = await create_notification_batch(db, workspace_id=workspaceId, recipient_ids=handlers | {ask['createdById']}, actor=user,
                                             event_type='ticket.message', entity_type='ticket', entity_id=ask_id, title=ask['title'], message='sent a message',
                                             entity_path=f'/service-desk/{ask_id}', body=content, discord=False)
     await stage_notifications(db, batch, workspace_id=workspaceId)

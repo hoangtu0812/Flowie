@@ -6,8 +6,17 @@ import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
+import type { TeamMember } from '@/components/common/teams/team-types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import {
+   Select,
+   SelectContent,
+   SelectItem,
+   SelectTrigger,
+   SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useMessages } from '@/features/shared/use-messages';
 import { uploadAttachment, type Attachment } from '@/lib/attachments';
@@ -36,6 +45,8 @@ export const STATUS_LABELS = {
    declined: 'Declined',
 } as const;
 
+const UNASSIGNED = 'unassigned';
+
 /** One status label; in the queue, "waiting" means waiting on the requester, not the reader. */
 /** VI: Nhãn trạng thái; ở hàng đợi, "đang chờ" nghĩa là chờ người yêu cầu, không phải người đọc. */
 export const statusLabel = (status: TicketStatus, inQueue: boolean) =>
@@ -53,6 +64,7 @@ export function TicketDetail({
    workspaceId,
    ticket,
    canHandle,
+   members,
    onChanged,
    onClose,
    onEdit,
@@ -61,6 +73,7 @@ export function TicketDetail({
    workspaceId: string;
    ticket: Ticket;
    canHandle: boolean;
+   members: TeamMember[];
    onChanged: () => Promise<void>;
    onClose: () => void;
    onEdit: () => void;
@@ -149,11 +162,42 @@ export function TicketDetail({
                {[
                   ticket.project?.name ?? ticket.team.name,
                   tx('Created by {name}', { name: ticket.createdBy.name }),
+                  ticket.assignee && tx('Assigned to {name}', { name: ticket.assignee.name }),
                   when(ticket.createdAt),
-               ].join(' · ')}
+               ]
+                  .filter(Boolean)
+                  .join(' · ')}
             </Text>
             {ticket.description && (
                <p className="text-sm whitespace-pre-wrap">{ticket.description}</p>
+            )}
+            {canHandle && editable && (
+               <div className="grid max-w-xs gap-1.5">
+                  <Label htmlFor="ticket-assignee">{tx('Assignee')}</Label>
+                  <Select
+                     value={ticket.assignee?.id ?? UNASSIGNED}
+                     disabled={busy}
+                     onValueChange={(value) =>
+                        void change(() =>
+                           updateTicket(workspaceId, ticket.id, {
+                              assigneeId: value === UNASSIGNED ? null : value,
+                           })
+                        )
+                     }
+                  >
+                     <SelectTrigger id="ticket-assignee" className="w-full">
+                        <SelectValue />
+                     </SelectTrigger>
+                     <SelectContent>
+                        <SelectItem value={UNASSIGNED}>{tx('Unassigned')}</SelectItem>
+                        {members.map((member) => (
+                           <SelectItem key={member.id} value={member.id}>
+                              {member.name}
+                           </SelectItem>
+                        ))}
+                     </SelectContent>
+                  </Select>
+               </div>
             )}
             <div className="flex flex-wrap gap-2">
                {converted && (
