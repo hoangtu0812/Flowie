@@ -120,6 +120,31 @@ export const archiveTicket = async (workspaceId: string, ticketId: string) =>
       'Could not archive the ticket.'
    );
 
+export type TicketEmailChannels = {
+   emailAvailable: boolean;
+   emailEnabled: boolean;
+   desktopEnabled: boolean;
+   ticketEmailEnabled: boolean;
+};
+
+export const loadTicketEmail = async (workspaceId: string) =>
+   responseData<TicketEmailChannels>(
+      await authenticatedFetch(`${api}/notifications/channels?${scoped(workspaceId)}`),
+      'Could not load email settings.'
+   );
+
+export const saveTicketEmail = async (
+   workspaceId: string,
+   { emailEnabled, desktopEnabled, ticketEmailEnabled }: TicketEmailChannels
+) =>
+   responseData<unknown>(
+      await authenticatedFetch(
+         `${api}/notifications/channels?${scoped(workspaceId)}`,
+         json('PUT', { emailEnabled, desktopEnabled, ticketEmailEnabled })
+      ),
+      'Could not save email settings.'
+   );
+
 export const listTicketMessages = async (workspaceId: string, ticketId: string) =>
    responseData<TicketMessage[]>(
       await authenticatedFetch(`${api}/asks/${ticketId}/messages?${scoped(workspaceId)}`),

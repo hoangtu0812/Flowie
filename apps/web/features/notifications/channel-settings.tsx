@@ -16,8 +16,12 @@ type ChannelState = {
    desktopEnabled: boolean;
    teamsAvailable: boolean;
    teamsEnabled: boolean;
+   ticketEmailEnabled: boolean;
 };
-type Channels = Pick<ChannelState, 'emailEnabled' | 'desktopEnabled' | 'teamsEnabled'>;
+type Channels = Pick<
+   ChannelState,
+   'emailEnabled' | 'desktopEnabled' | 'teamsEnabled' | 'ticketEmailEnabled'
+>;
 type Delivery = {
    notificationId: string;
    attempts: number;
@@ -78,6 +82,7 @@ export function ChannelSettings() {
             emailEnabled: next.emailEnabled,
             desktopEnabled: next.desktopEnabled,
             teamsEnabled: next.teamsEnabled,
+            ticketEmailEnabled: next.ticketEmailEnabled,
          };
          setSaving(true);
          setError(undefined);
@@ -139,6 +144,18 @@ export function ChannelSettings() {
                         {state.emailAvailable
                            ? 'Email is delivered privately with retries.'
                            : 'Private SMTP delivery is not configured.'}
+                     </Text>
+                     <CheckboxInput
+                        label="Email about my tickets"
+                        value={state.ticketEmailEnabled}
+                        isDisabled={!state.emailAvailable || saving}
+                        onChange={(checked) => {
+                           void save({ ticketEmailEnabled: checked });
+                        }}
+                     />
+                     <Text>
+                        Replies and status changes on Service Desk tickets you raised, even when
+                        email notifications are off.
                      </Text>
                      <CheckboxInput
                         label="Desktop notifications"

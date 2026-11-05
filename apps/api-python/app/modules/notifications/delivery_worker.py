@@ -8,6 +8,7 @@ from ...core.identifiers import _cuid
 from ...services.notification_events import notification_hub
 from ...services.private_email import send_private_email
 from ..identity.reset_delivery import delivery_enabled
+from .ticket_email import ticket_email, ticket_email_allowed
 
 
 async def wake_snoozed(factory):
@@ -70,10 +71,13 @@ async def deliver_one(factory, settings, send=send_private_email, notification_i
         target = (
             (
                 await db.execute(
-                    text("""SELECT u.email,u.status,u.email_verified_at,w.id AS workspace_id,p.email_enabled,wm.status AS membership_status
+                    text("""SELECT u.email,u.status,u.email_verified_at,w.id AS workspace_id,w.slug AS workspace_slug,p.email_enabled,
+            p.ticket_email_enabled,wm.status AS membership_status,n.user_id,n.entity_type,n.entity_id,n.data,n.created_at,
+            a.created_by AS ticket_owner,a.archived_at AS ticket_archived_at
             FROM notifications n JOIN users u ON u.id=n.user_id JOIN workspaces w ON w.id=n.workspace_id
             LEFT JOIN workspace_members wm ON wm.user_id=n.user_id AND wm.workspace_id=n.workspace_id
-            LEFT JOIN notification_preferences p ON p.user_id=n.user_id AND p.workspace_id=n.workspace_id WHERE n.id=:id"""),
+            LEFT JOIN notification_preferences p ON p.user_id=n.user_id AND p.workspace_id=n.workspace_id
+            LEFT JOIN asks a ON n.entity_type='ticket' AND a.id=n.entity_id WHERE n.id=:id"""),
                     {"id": row["notification_id"]},
                 )
             )
@@ -81,25 +85,32 @@ async def deliver_one(factory, settings, send=send_private_email, notification_i
             .first()
         )
         await db.commit()
+    ticket = bool(target and target["entity_type"] == "ticket")
     allowed = bool(
         target
         and target["status"] == "ACTIVE"
         and target["membership_status"] == "ACTIVE"
         and target["email_verified_at"]
-        and target["email_enabled"]
+        and (ticket_email_allowed(target, now) if ticket else target["email_enabled"])
     )
     error = None
     if not allowed:
         error = "RECIPIENT_DISABLED"
     else:
         message = EmailMessage()
-        message["Subject"] = "New Flowie notification"
+        subject, content = (
+            ticket_email(target, settings.app_url)
+            if ticket
+            else (
+                "New Flowie notification",
+                f"You have a new Flowie notification.\n\n{settings.app_url}/{target['workspace_id']}/inbox\n\nManage email notifications in workspace Settings > Notifications.",
+            )
+        )
+        message["Subject"] = subject
         message["From"] = settings.smtp_from
         message["To"] = target["email"]
         message["Message-ID"] = f"<{row['notification_id']}@flowie>"
-        message.set_content(
-            f"You have a new Flowie notification.\n\n{settings.app_url}/{target['workspace_id']}/inbox\n\nManage email notifications in workspace Settings > Notifications."
-        )
+        message.set_content(content)
         try:
             await send(settings, message)
         except Exception:

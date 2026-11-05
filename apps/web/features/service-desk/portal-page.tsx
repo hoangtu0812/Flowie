@@ -29,6 +29,7 @@ import {
 } from './service-desk-api';
 import { TicketDetail } from './ticket-detail';
 import { TicketDialog } from './ticket-dialog';
+import { TicketEmailSwitch } from './ticket-email-switch';
 import { useSelectedTicket } from './use-selected-ticket';
 import { inState, TicketList, TicketStateSelect, type TicketState } from './ticket-list';
 
@@ -168,6 +169,7 @@ export function ServiceDeskPortal() {
                onSelect={setSelected}
             />
          </VStack>
+         {workspaceId && <TicketEmailSwitch workspaceId={workspaceId} />}
       </VStack>
    );
 
