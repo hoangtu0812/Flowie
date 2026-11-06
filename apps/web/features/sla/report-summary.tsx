@@ -3,13 +3,15 @@ import { useMessages } from '@/features/shared/use-messages';
 import { messages } from '@/features/sla/messages.vi';
 
 import { useEffect, useState } from 'react';
-import { Button } from '@astryxdesign/core/Button';
+import { Card } from '@astryxdesign/core/Card';
+import { Grid } from '@astryxdesign/core/Grid';
 import { VStack } from '@astryxdesign/core/Layout';
-import { Heading, Text } from '@astryxdesign/core/Text';
-import { List, ListItem } from '@astryxdesign/core/List';
+import { Text } from '@astryxdesign/core/Text';
 import { Selector } from '@astryxdesign/core/Selector';
 import { authenticatedFetch } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
+import { SettingsSection } from '@/components/common/settings/shared';
+import { RefreshIconButton } from '@/features/shared/refresh-icon-button';
 import { slaApi } from './types';
 
 export function SlaReportSummary({
@@ -61,41 +63,58 @@ export function SlaReportSummary({
       pending_events: tx('Lifecycle events awaiting processing'),
    };
    return (
-      <VStack gap={3} width="100%">
-         <Heading level={2}>{tx('SLA compliance')}</Heading>
-         <Selector
-            label={tx('SLA report team')}
-            value={team}
-            options={[
-               { value: '', label: tx('All accessible teams') },
-               ...teams.map((row) => ({ value: row.id, label: row.name })),
-            ]}
-            onChange={setTeam}
-            width="100%"
-         />
-         <Text>
-            {tx(
-               'All currently accessible, non-archived tasks; the latest cycle of each task. Compliance includes only completed tracked cycles. Manual deadlines do not create clocks; an earlier completed cycle keeps its result.'
-            )}
-         </Text>
+      <SettingsSection
+         title={tx('SLA compliance')}
+         description={tx(
+            'All currently accessible, non-archived tasks; the latest cycle of each task. Compliance includes only completed tracked cycles. Manual deadlines do not create clocks; an earlier completed cycle keeps its result.'
+         )}
+      >
+         <div className="flex flex-wrap items-center gap-2">
+            <Selector
+               label={tx('SLA report team')}
+               isLabelHidden
+               size="sm"
+               width={220}
+               value={team}
+               options={[
+                  { value: '', label: tx('All accessible teams') },
+                  ...teams.map((row) => ({ value: row.id, label: row.name })),
+               ]}
+               onChange={setTeam}
+            />
+            <RefreshIconButton
+               label={tx('Refresh SLA report')}
+               onClick={() => setRetry((value) => value + 1)}
+            />
+         </div>
          {data ? (
             <>
-               <Text>
+               <Text weight="semibold">
                   {data.compliancePercent === null
                      ? tx('No completed tracked cycles yet.')
                      : tx('Compliance: {percent}%', { percent: data.compliancePercent })}
                </Text>
-               <List density="compact" hasDividers>
+               {/* Stat cards in the same style as MCP logs; a narrow screen shows two per row.
+                   VI: Thẻ số liệu cùng kiểu trang MCP logs; màn hình hẹp hiện hai thẻ mỗi hàng. */}
+               <Grid columns={{ minWidth: 150, max: 5 }} gap={3} width="100%">
                   {Object.entries(labels).map(([key, label]) => (
-                     <ListItem key={key} label={label} description={String(data[key] ?? 0)} />
+                     <Card key={key} padding={3}>
+                        <VStack gap={1} role="group" aria-label={label}>
+                           <Text type="supporting" color="secondary">
+                              {label}
+                           </Text>
+                           <Text size="xl" weight="semibold" hasTabularNumbers>
+                              {String(data[key] ?? 0)}
+                           </Text>
+                        </VStack>
+                     </Card>
                   ))}
-               </List>
+               </Grid>
             </>
          ) : (
             <Text>{error ? tx('Report unavailable.') : tx('Loading report…')}</Text>
          )}
          {error && <Text role="alert">{error}</Text>}
-         <Button label={tx('Refresh SLA report')} onClick={() => setRetry((value) => value + 1)} />
-      </VStack>
+      </SettingsSection>
    );
 }

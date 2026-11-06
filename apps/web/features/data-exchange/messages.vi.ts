@@ -37,6 +37,8 @@ export const messages = {
    'Refresh import results': 'Tải lại kết quả nhập',
    'Load more import rows': 'Tải thêm dòng nhập',
    'Your latest 20 imports': '20 lần nhập gần nhất của bạn',
+   'No imports yet.': 'Chưa có lần nhập nào.',
+   'Open': 'Mở',
    'Preview and result details are retained for 30 days. External IDs remain registered while their tasks exist.':
       'Chi tiết xem trước và kết quả được giữ 30 ngày. ID ngoài vẫn được đăng ký khi công việc còn tồn tại.',
    'Export matching issues CSV': 'Xuất CSV công việc khớp bộ lọc',

@@ -8,7 +8,6 @@ import { useParams } from 'next/navigation';
 import { Button } from '@astryxdesign/core/Button';
 import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
-import { List, ListItem } from '@astryxdesign/core/List';
 import { Selector } from '@astryxdesign/core/Selector';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { DesignSurface } from '@/components/common/design-surface';
@@ -17,7 +16,7 @@ import { responseData } from '@/lib/http';
 import { RecoveryScreen } from '@/features/shared/recovery-screen';
 import { ResourcePagination } from '@/features/shared/resource-pagination';
 import { usePagedResource } from '@/features/shared/use-paged-resource';
-import { SettingsShell } from '@/components/common/settings/shared';
+import { SettingsRow, SettingsShell } from '@/components/common/settings/shared';
 
 type Archived = { id: string; title: string; kind: string; archivedAt: string; updatedAt: string };
 type Preview = Archived & {
@@ -181,50 +180,62 @@ function ArchiveCenter({
             )}
          >
             <VStack gap={4} width="100%">
-               <Selector
-                  label={tx('Record type')}
-                  value={kind}
-                  onChange={setKind}
-                  isDisabled={busy}
-                  options={[
-                     { value: 'issue', label: tx('Tasks and bugs') },
-                     { value: 'project', label: tx('Projects') },
-                     { value: 'document', label: tx('Documents') },
-                     ...(manager ? [{ value: 'initiative', label: tx('Initiatives') }] : []),
-                  ]}
-               />
+               <div className="flex">
+                  <Selector
+                     label={tx('Record type')}
+                     isLabelHidden
+                     size="sm"
+                     width={200}
+                     value={kind}
+                     onChange={setKind}
+                     isDisabled={busy}
+                     options={[
+                        { value: 'issue', label: tx('Tasks and bugs') },
+                        { value: 'project', label: tx('Projects') },
+                        { value: 'document', label: tx('Documents') },
+                        ...(manager ? [{ value: 'initiative', label: tx('Initiatives') }] : []),
+                     ]}
+                  />
+               </div>
                {error && !preview && <Text role="alert">{error}</Text>}
                {restored && (
                   <HStack gap={3} wrap="wrap">
                      <Text role="status">
                         {tx('Restored')} {restored.title}
                      </Text>
-                     <Button label={tx('Open restored record')} href={restored.href} />
+                     <Button
+                        label={tx('Open restored record')}
+                        size="sm"
+                        variant="secondary"
+                        href={restored.href}
+                     />
                   </HStack>
                )}
-               <List hasDividers>
-                  {records.items.map((row) => (
-                     <ListItem
-                        key={row.id}
-                        label={row.title}
-                        description={
-                           <VStack gap={2}>
-                              <Text>
-                                 {tx('Archived {date}', { date: dateLabel(row.archivedAt) })}
-                              </Text>
-                              <HStack wrap="wrap">
+               {records.items.length > 0 && (
+                  <ul className="rounded-lg border bg-container divide-y divide-border/60">
+                     {records.items.map((row) => (
+                        <li key={row.id}>
+                           <SettingsRow
+                              wrap
+                              title={row.title}
+                              description={tx('Archived {date}', {
+                                 date: dateLabel(row.archivedAt),
+                              })}
+                              trailing={
                                  <Button
                                     label={tx('Preview restore')}
                                     aria-label={tx('Preview restore {title}', { title: row.title })}
+                                    size="sm"
+                                    variant="secondary"
                                     onClick={() => void select(row)}
                                     isDisabled={busy}
                                  />
-                              </HStack>
-                           </VStack>
-                        }
-                     />
-                  ))}
-               </List>
+                              }
+                           />
+                        </li>
+                     ))}
+                  </ul>
+               )}
                {!records.loading && !records.error && !records.items.length && (
                   <Text>{tx('No accessible archived records of this type.')}</Text>
                )}

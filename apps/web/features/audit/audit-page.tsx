@@ -4,7 +4,6 @@ import { useParams } from 'next/navigation';
 import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Text } from '@astryxdesign/core/Text';
-import { List, ListItem } from '@astryxdesign/core/List';
 import { Selector } from '@astryxdesign/core/Selector';
 import { TextInput } from '@astryxdesign/core/TextInput';
 import { DesignSurface } from '@/components/common/design-surface';
@@ -161,6 +160,15 @@ function AuditCenter({ workspace }: { workspace: string }) {
          <SettingsShell
             title="Workspace audit log"
             description="Events follow your current access. Historical events with an unproven entity scope are excluded; UNKNOWN means the original event did not record its transport source."
+            action={
+               <Button
+                  label="Export filtered audit CSV"
+                  size="sm"
+                  variant="secondary"
+                  isLoading={exporting}
+                  onClick={() => void exportCsv()}
+               />
+            }
          >
             <VStack gap={4} width="100%">
                <VStack
@@ -177,9 +185,14 @@ function AuditCenter({ workspace }: { workspace: string }) {
                      }
                   }}
                >
-                  <HStack gap={3} wrap="wrap">
+                  {/* One wrapping row; controls align on their bottom edge so labelled fields
+                      and buttons sit on the same line.
+                      VI: Một hàng tự xuống dòng; các control canh theo cạnh dưới để ô có nhãn
+                      và nút nằm cùng một đường. */}
+                  <HStack gap={3} wrap="wrap" vAlign="end">
                      <Selector
                         label="Audit actor"
+                        size="sm"
                         value={draft.actor}
                         onChange={(actor) => setDraft({ ...draft, actor })}
                         options={[
@@ -189,6 +202,7 @@ function AuditCenter({ workspace }: { workspace: string }) {
                      />
                      <Selector
                         label="Audit entity"
+                        size="sm"
                         value={draft.entity}
                         onChange={(entity) => setDraft({ ...draft, entity })}
                         options={[
@@ -209,6 +223,7 @@ function AuditCenter({ workspace }: { workspace: string }) {
                      />
                      <Selector
                         label="Audit source"
+                        size="sm"
                         value={draft.source}
                         onChange={(source) => setDraft({ ...draft, source })}
                         options={['all', 'WEB', 'AI', 'SYSTEM', 'UNKNOWN'].map((value) => ({
@@ -216,26 +231,23 @@ function AuditCenter({ workspace }: { workspace: string }) {
                            label: value === 'all' ? 'All sources' : value,
                         }))}
                      />
-                  </HStack>
-                  <HStack gap={3} wrap="wrap">
                      <TextInput
                         label="From date (UTC)"
-                        description="YYYY-MM-DD"
+                        placeholder="YYYY-MM-DD"
+                        size="sm"
+                        width={140}
                         value={draft.from}
                         onChange={(from) => setDraft({ ...draft, from })}
                      />
                      <TextInput
                         label="Through date (UTC)"
-                        description="YYYY-MM-DD"
+                        placeholder="YYYY-MM-DD"
+                        size="sm"
+                        width={140}
                         value={draft.through}
                         onChange={(through) => setDraft({ ...draft, through })}
                      />
-                     <Button label="Apply audit filters" type="submit" />
-                     <Button
-                        label="Export filtered audit CSV"
-                        isLoading={exporting}
-                        onClick={() => void exportCsv()}
-                     />
+                     <Button label="Apply audit filters" type="submit" size="sm" />
                   </HStack>
                </VStack>
                <Text type="supporting">
@@ -243,15 +255,19 @@ function AuditCenter({ workspace }: { workspace: string }) {
                   cells have a leading tab for spreadsheet viewing.
                </Text>
                {error && <Text role="alert">{error}</Text>}
-               <List hasDividers>
-                  {history.items.map((row) => (
-                     <ListItem
-                        key={row.id}
-                        label={row.action}
-                        description={`${new Date(row.createdAt).toLocaleString()} · ${row.source} · ${row.actor?.name ?? 'System'} · ${row.entityType} ${row.entityId ?? ''}${row.metadata.fields?.length ? ' · ' + row.metadata.fields.join(', ') : ''}`}
-                     />
-                  ))}
-               </List>
+               {history.items.length > 0 && (
+                  <ul className="rounded-lg border bg-container divide-y divide-border/60">
+                     {history.items.map((row) => (
+                        <li
+                           key={row.id}
+                           className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 px-4 py-2"
+                        >
+                           <span className="text-sm font-medium">{row.action}</span>
+                           <span className="text-xs text-muted-foreground">{`${new Date(row.createdAt).toLocaleString()} · ${row.source} · ${row.actor?.name ?? 'System'} · ${row.entityType} ${row.entityId ?? ''}${row.metadata.fields?.length ? ' · ' + row.metadata.fields.join(', ') : ''}`}</span>
+                        </li>
+                     ))}
+                  </ul>
+               )}
                {!history.loading && !history.error && !history.items.length && (
                   <Text>No accessible events match the applied filters.</Text>
                )}
