@@ -2,6 +2,7 @@ import asyncio
 import os
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -162,6 +163,31 @@ async def verify_issue_parenting():
             assert await children(goal) == [step["id"]]
             counted = (await get_issue(step["id"], workspace, owner, db))["data"]
             assert (counted["subIssueCount"], counted["completedSubIssueCount"]) == (2, 0)
+
+            # Timeline drags send the read version: it saves and bumps once, then the stale
+            # version is refused without writing; the tree row carries the new dates and version.
+            dated = (await update_issue(leaf["id"], UpdateIssueInput(
+                startDate="2026-11-02", targetDate="2026-11-05", expectedVersion=leaf["version"]
+            ), workspace, owner, db))["data"]
+            assert dated["version"] == leaf["version"] + 1
+            with pytest.raises(ApiError) as error:
+                await update_issue(leaf["id"], UpdateIssueInput(
+                    targetDate="2026-11-09", expectedVersion=leaf["version"]
+                ), workspace, owner, db)
+            assert error.value.status_code == 409
+            row = next(item for item in (await list_sub_issues(step["id"], workspace, owner, db))["data"]
+                       if item["id"] == leaf["id"])
+            assert (str(row["startDate"])[:10], str(row["targetDate"])[:10], row["version"]) == (
+                "2026-11-02", "2026-11-05", dated["version"])
+
+            # The sub-issue sort rule is stored on the parent and only takes known values.
+            assert goal["subIssueSort"] == "manual"
+            saved = (await update_issue(
+                goal["id"], UpdateIssueInput(subIssueSort="status-desc"), workspace, owner, db
+            ))["data"]
+            assert saved["subIssueSort"] == "status-desc"
+            with pytest.raises(ValidationError):
+                UpdateIssueInput(subIssueSort="newest")
             await db.commit()
 
             # Archiving without the flag keeps children; an archived leaf drops out of the tree.

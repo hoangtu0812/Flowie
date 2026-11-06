@@ -29,7 +29,16 @@ class CreateIssueInput(BugCreateFields):
     actualEffort: float | None = Field(default=None, ge=0)
 
 
+SubIssueSort = Literal["manual", "identifier-asc", "identifier-desc", "status-asc", "status-desc"]
+
+
 class UpdateIssueInput(BugUpdateFields):
+    # Version the client read; a different current version refuses the update (409) so a drag on
+    # a stale timeline never overwrites someone else's change. Omitted keeps last-write-wins.
+    # VI: Version client đã đọc; version hiện tại khác thì từ chối (409) để thao tác kéo trên
+    # VI: timeline cũ không ghi đè thay đổi của người khác. Không gửi thì giữ ghi-sau-thắng.
+    expectedVersion: int | None = Field(default=None, ge=1)
+    subIssueSort: SubIssueSort | None = None
     title: str | None = Field(default=None, min_length=2, max_length=500)
     description: str | None = Field(default=None, max_length=10_000)
     statusId: str | None = None

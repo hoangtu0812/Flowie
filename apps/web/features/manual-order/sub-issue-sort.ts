@@ -21,3 +21,22 @@ export function sortSubIssues<T extends { id: string; identifier: string; status
       return comparison * direction || identifier(a, b) || a.id.localeCompare(b.id);
    });
 }
+
+/**
+ * Siblings in their saved manual order, the order the sub-issues API returns (`manual_order`, then
+ * id). Screens that receive issues in another order, such as the project Timeline, apply it before
+ * `sortSubIssues` so both show the same tree.
+ * VI: Anh em theo thứ tự thủ công đã lưu, đúng thứ tự API sub-issues trả (`manual_order`, rồi id).
+ * VI: Màn hình nhận issue theo thứ tự khác, như Timeline project, áp dụng hàm này trước
+ * VI: `sortSubIssues` để hai nơi hiển thị cùng một cây.
+ */
+export function byManualOrder<T extends { id: string; manualOrder?: string }>(
+   items: readonly T[]
+): T[] {
+   const position = (item: T) => BigInt(item.manualOrder || '0');
+   return [...items].sort((a, b) => {
+      const [left, right] = [position(a), position(b)];
+      if (left !== right) return left < right ? -1 : 1;
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+   });
+}

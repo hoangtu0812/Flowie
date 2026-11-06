@@ -24,3 +24,21 @@ export function issueSpan(issue: ScheduledIssue): { start: string; end: string |
       end: day(issue.targetDate) ?? day(issue.dueDate),
    };
 }
+
+/**
+ * Whether a sub-issue's bar leaves its parent's dates: it starts before the parent's planned start
+ * or ends after the parent's end (target end, else due date). A side is only compared when the
+ * parent has that date, so an unplanned parent never flags its children.
+ * VI: Thanh của sub-issue có vượt khỏi các ngày của cha không: bắt đầu trước ngày bắt đầu dự kiến
+ * VI: của cha hoặc kết thúc sau ngày kết thúc của cha (ngày kết thúc dự kiến, không có thì due
+ * VI: date). Chỉ so phía nào cha có ngày, nên cha chưa lên lịch không làm con bị đánh dấu.
+ */
+export function outsideParent(child: ScheduledIssue, parent: ScheduledIssue): boolean {
+   const own = issueSpan(child);
+   const parentStart = day(parent.startDate);
+   const parentEnd = issueSpan(parent).end;
+   return (
+      Boolean(parentStart && own.start < parentStart) ||
+      Boolean(parentEnd && own.end && own.end > parentEnd)
+   );
+}

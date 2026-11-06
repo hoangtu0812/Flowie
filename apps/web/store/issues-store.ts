@@ -21,8 +21,13 @@ import { loadJoinedWorkspaceTeams, type WorkspaceTeam } from '@/components/commo
 import { create } from 'zustand';
 import { Box } from 'lucide-react';
 import { toast } from 'sonner';
+import type { SubIssueSort } from '@/features/manual-order/sub-issue-sort';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+
+/** Shown when a timeline drag hits a newer version of the issue. VI: Báo khi kéo timeline gặp version mới hơn. */
+export const RESCHEDULE_CONFLICT =
+   'This issue changed since you loaded it. Reloaded the latest dates.';
 
 declare module '@/mock-data/issues' {
    interface Issue extends BugFields {
@@ -37,11 +42,14 @@ declare module '@/mock-data/issues' {
       /** Reporter of the issue; the API falls back to the creator. VI: Reporter; API mặc định là người tạo. */
       reporter?: User;
       releaseIds?: string[];
+      /** Saved sort rule of the sub-issue tree. VI: Quy tắc sort đã lưu của cây sub-issue. */
+      subIssueSort?: SubIssueSort;
    }
 }
 
 type NativeIssue = BugFields & {
    manualOrder?: string;
+   subIssueSort?: SubIssueSort;
    id: string;
    version: number;
    teamId: string | null;
@@ -228,6 +236,7 @@ function asIssue(native: NativeIssue): Issue {
       labels: (native.labelLinks ?? []).map(({ label }) => label),
       createdAt: native.createdAt,
       manualOrder: native.manualOrder,
+      subIssueSort: native.subIssueSort ?? 'manual',
       cycleId: native.cycleLinks?.[0]?.cycleId ?? '',
       releaseIds: native.releaseLinks?.map((link) => link.releaseId) ?? [],
       project: native.project
@@ -341,10 +350,16 @@ interface IssuesState {
    updateIssueProject: (issueId: string, newProject: Project | undefined) => Promise<boolean>;
 
    // Date management
+   /**
+    * With `expectedVersion` (timeline drags) a stale version is refused; the store then reloads the
+    * issue so its bar shows the current dates. VI: Có `expectedVersion` (kéo trên timeline) thì
+    * version cũ bị từ chối; store tải lại issue để thanh hiện đúng ngày hiện tại.
+    */
    updateIssueSchedule: (
       issueId: string,
-      schedule: { startDate?: string; targetDate?: string }
+      schedule: { startDate?: string; targetDate?: string; expectedVersion?: number }
    ) => Promise<boolean>;
+   updateIssueSubIssueSort: (issueId: string, sort: SubIssueSort) => Promise<boolean>;
    updateIssueEffort: (
       issueId: string,
       effort: { estimatedEffort?: number; actualEffort?: number }
@@ -965,9 +980,22 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
                body: JSON.stringify({
                   startDate: schedule.startDate ?? null,
                   targetDate: schedule.targetDate ?? null,
+                  expectedVersion: schedule.expectedVersion,
                }),
             }
          );
+         if (response.status === 409) {
+            const latest = await authenticatedFetch(
+               `${api}/issues/${issue.id}?${new URLSearchParams({ workspaceId })}`
+            ).then(responseData<NativeIssue>);
+            set((state) => {
+               const issues = state.issues.map((candidate) =>
+                  candidate.id === issueId ? asIssue(latest) : candidate
+               );
+               return { issues, issuesByStatus: groupIssuesByStatus(issues) };
+            });
+            throw new Error(RESCHEDULE_CONFLICT);
+         }
          if (!response.ok) {
             const payload = (await response.json().catch(() => null)) as {
                message?: string;
@@ -985,6 +1013,30 @@ export const useIssuesStore = create<IssuesState>((set, get) => ({
          return true;
       } catch (error) {
          toast.error(error instanceof Error ? error.message : 'Could not update issue schedule.');
+         return false;
+      }
+   },
+
+   updateIssueSubIssueSort: async (issueId, sort) => {
+      try {
+         const workspaceId = get().workspaceId ?? (await loadCurrentWorkspace()).id;
+         const updated = await authenticatedFetch(
+            `${api}/issues/${issueId}?${new URLSearchParams({ workspaceId })}`,
+            {
+               method: 'PATCH',
+               headers: { 'content-type': 'application/json' },
+               body: JSON.stringify({ subIssueSort: sort }),
+            }
+         ).then(responseData<NativeIssue>);
+         set((state) => {
+            const issues = state.issues.map((candidate) =>
+               candidate.id === issueId ? asIssue(updated) : candidate
+            );
+            return { issues, issuesByStatus: groupIssuesByStatus(issues) };
+         });
+         return true;
+      } catch (error) {
+         toast.error(error instanceof Error ? error.message : 'Could not save the sort.');
          return false;
       }
    },

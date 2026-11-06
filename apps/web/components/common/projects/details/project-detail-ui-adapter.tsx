@@ -2,6 +2,7 @@
 
 import type { ContentBlock } from '@circle/contracts';
 import type { Issue } from '@/types/issues';
+import type { SubIssueSort } from '@/features/manual-order/sub-issue-sort';
 import { priorities } from '@/lib/priority-presentations';
 import { health as projectHealth } from '@/lib/project-presentations';
 import type { Project } from '@/types/projects';
@@ -30,7 +31,15 @@ export type ProjectDetailUiProject = Project & {
    initiatives: LiveProject['initiativeLinks'];
 };
 
-export type ProjectDetailUiIssue = Issue & { cycleName?: string };
+export type ProjectDetailUiIssue = Issue & {
+   cycleName?: string;
+   version?: number;
+   manualOrder?: string;
+   subIssueSort?: SubIssueSort;
+   /** The team status as stored (the presentation status is mapped by name), for workflow order.
+    * VI: Trạng thái team như đã lưu (trạng thái hiển thị được map theo tên), để sắp theo workflow. */
+   workflowStatus?: { id: string; name: string; position: number };
+};
 
 const titleCase = (value: string) =>
    value
@@ -228,6 +237,14 @@ export function toIssueUi(
       estimatedEffort: issue.estimatedEffort ?? undefined,
       actualEffort: issue.actualEffort ?? undefined,
       dueDate: issue.dueDate ?? undefined,
+      version: issue.version,
+      manualOrder: issue.manualOrder,
+      subIssueSort: issue.subIssueSort,
+      workflowStatus: {
+         id: issue.status.id,
+         name: issue.status.name,
+         position: issue.status.position ?? 0,
+      },
    };
 }
 
