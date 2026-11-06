@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { parseAsStringLiteral, useQueryState } from 'nuqs';
+import { parseAsString, parseAsStringLiteral, useQueryState } from 'nuqs';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Heading } from '@astryxdesign/core/Text';
 import type { Issue } from '@/mock-data/issues';
@@ -9,6 +9,7 @@ import { IssueAgentRun } from './issue-agent-run';
 import { IssueDocuments } from '@/features/documents/issue-documents';
 import { IssueDocumentLinks } from '@/features/documents/issue-document-links';
 import { useIssueDocuments } from '@/features/documents/use-issue-documents';
+import { DocumentView } from '@/features/documents/document-page';
 import { ActivityEvents, CommentsSection } from '@/components/common/issues/details/activity-feed';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useLocale } from '@/features/shared/use-locale';
@@ -70,9 +71,49 @@ export function IssueContent({
    const tab = compact ? localTab : urlTab;
    const setTab = (next: string) =>
       compact ? setLocalTab(next as IssueTab) : void setUrlTab(next as IssueTab);
+   const [urlDocument, setUrlDocument] = useQueryState('doc', parseAsString);
+   const openDocument = compact ? null : urlDocument;
    return (
-      <HStack height="100%" gap={0} align="stretch" className="min-h-0 min-w-0 overflow-hidden">
-         <VStack isScrollable className="min-h-0 min-w-0 flex-1" align="center">
+      <HStack
+         height="100%"
+         gap={0}
+         align="stretch"
+         className="relative min-h-0 min-w-0 overflow-hidden"
+      >
+         {/*
+          * A related document opened from this page (`?doc=<id>`) covers only this body, the area
+          * MainLayout sizes below the task header, so the header (breadcrumb, favorite, actions,
+          * previous/next) stays usable and the document scrolls in its own pane: one scrollbar,
+          * header bottom to screen bottom. The task body stays mounted under it but `inert`, so
+          * closing restores the same tab, scroll position and unsaved drafts. The link opens with
+          * a history push, so browser Back also closes it; X replaces the entry.
+          * VI: Tài liệu liên quan mở từ trang này (`?doc=<id>`) chỉ phủ phần thân này, tức vùng
+          * VI: MainLayout tính chiều cao dưới header task, nên header (breadcrumb, sao, thao tác,
+          * VI: trước/sau) vẫn dùng được và tài liệu cuộn trong khung riêng: một thanh cuộn, từ mép
+          * VI: dưới header tới đáy màn hình. Thân task vẫn mount bên dưới nhưng `inert`, nên đóng
+          * VI: lại giữ nguyên tab, vị trí cuộn và bản nháp chưa lưu. Link mở bằng history push nên
+          * VI: Back của trình duyệt cũng đóng tài liệu; nút X thay thế entry hiện tại.
+          */}
+         {openDocument && (
+            <VStack
+               className="absolute inset-0 z-10 min-h-0 bg-background"
+               data-testid="issue-document-viewer"
+            >
+               <DocumentView
+                  key={openDocument}
+                  documentId={openDocument}
+                  pageTitle={false}
+                  onClose={() => void setUrlDocument(null)}
+                  onChanged={documents.reload}
+               />
+            </VStack>
+         )}
+         <VStack
+            isScrollable
+            className="min-h-0 min-w-0 flex-1"
+            align="center"
+            inert={Boolean(openDocument)}
+         >
             <VStack
                data-image-gallery
                width="100%"
@@ -116,7 +157,11 @@ export function IssueContent({
                      <IssueAgentRun key={issue.id} issueId={issue.id} />
                      <IssueTicketLink workspaceId={workspaceId} issueId={issue.id} orgId={orgId} />
                      <IssuePullRequests reviews={reviews} orgId={orgId} />
-                     <IssueDocuments state={documents} projectId={issue.project?.id} />
+                     <IssueDocuments
+                        state={documents}
+                        projectId={issue.project?.id}
+                        inPlace={!compact}
+                     />
                      <IssueSlaPanel issue={issue} />
                      <IssueReactions issueId={issue.id} />
                      <IssueSubIssues
@@ -144,6 +189,7 @@ export function IssueContent({
                isScrollable
                padding={5}
                className="hidden min-h-0 shrink-0 border-l border-border/60 bg-muted/10 lg:flex"
+               inert={Boolean(openDocument)}
             >
                <IssuePropertiesPanel issue={issue} detail={detail} reviews={reviews} />
             </VStack>

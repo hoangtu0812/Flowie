@@ -20,20 +20,26 @@ import { usePageEntity } from '@/features/shared/document-title';
  * buttons, earlier releases), so a reviewer can approve without going to Docs. Edit opens the
  * editor straight in edit mode; closing the editor reloads the document to show its new status.
  * `onChanged` runs after anything that may have changed the document's review state.
+ * `pageTitle={false}` leaves the browser tab title to the host page, used when the view is shown
+ * inside the task page so the tab keeps the task's name before, during and after it.
  * VI: Khung xem đầy đủ một tài liệu, mở từ task, tìm kiếm, link hoặc trang Phê duyệt. Hiển thị cùng
  * VI: khung xem trước như tab Docs (loại, trạng thái, phiên bản đã duyệt, SharePoint, nút duyệt,
  * VI: phiên bản cũ) để người duyệt duyệt được mà không phải vào Docs. Nút Sửa mở editor ở thẳng chế
  * VI: độ sửa; đóng editor thì tải lại tài liệu để hiện trạng thái mới. `onChanged` chạy sau mọi thao
  * VI: tác có thể làm đổi trạng thái duyệt của tài liệu.
+ * VI: `pageTitle={false}` để title tab trình duyệt cho trang chứa quyết định, dùng khi khung xem
+ * VI: nằm trong trang task để tab giữ tên task trước, trong và sau khi xem.
  */
 export function DocumentView({
    documentId,
    onClose,
    onChanged,
+   pageTitle = true,
 }: {
    documentId: string;
    onClose: () => void;
    onChanged?: () => void;
+   pageTitle?: boolean;
 }) {
    const tx = useMessages(messages);
 
@@ -41,7 +47,7 @@ export function DocumentView({
    const [document, setDocument] = useState<ProjectTreeDocument>(),
       [error, setError] = useState<string>(),
       [editing, setEditing] = useState(false);
-   usePageEntity(document?.title);
+   usePageEntity(pageTitle ? document?.title : undefined);
    const load = useCallback(
       () =>
          getDocument(documentId)
