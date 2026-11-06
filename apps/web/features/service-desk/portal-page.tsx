@@ -16,6 +16,8 @@ import { PreferenceSync } from '@/features/identity/preference-sync';
 import { useMessages } from '@/features/shared/use-messages';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { loadWorkspaceMemberships, type WorkspaceSummary } from '@/lib/workspaces';
+import { ServiceDeskAssistant, useAssistantStatus } from './assistant';
+import type { TicketPrefill } from './assistant-draft';
 import { messages } from './messages.vi';
 import {
    api,
@@ -61,6 +63,8 @@ export function ServiceDeskPortal() {
    const [selected, setSelected] = useSelectedTicket('/servicedesk');
    const [ticketState, setTicketState] = useState<TicketState>('open');
    const [dialog, setDialog] = useState<'new' | 'edit'>();
+   const [draft, setDraft] = useState<TicketPrefill>();
+   const [asking, setAsking] = useState(false);
 
    const open = useCallback(async () => {
       setError(undefined);
@@ -106,6 +110,11 @@ export function ServiceDeskPortal() {
    }, [workspaceId]);
    useEffect(() => void load(), [load]);
    useTicketUpdates(workspaceId, load);
+   const assistant = useAssistantStatus(workspaceId);
+   const newTicket = (prefill?: TicketPrefill) => {
+      setDraft(prefill);
+      setDialog('new');
+   };
 
    // Opening a ticket is reading it, so its dot clears here as it does in the Inbox.
    // VI: Mở ticket nghĩa là đã đọc, nên chấm tin mới được xoá giống như trong Inbox.
@@ -132,7 +141,12 @@ export function ServiceDeskPortal() {
             <Text type="label" className="flex-1">
                {tx('My tickets ({count})', { count: desk?.tickets.length ?? 0 })}
             </Text>
-            <Button type="button" size="sm" disabled={!desk} onClick={() => setDialog('new')}>
+            {isMobile && assistant && (
+               <Button type="button" size="sm" variant="outline" onClick={() => setAsking(true)}>
+                  {tx('Ask the assistant')}
+               </Button>
+            )}
+            <Button type="button" size="sm" disabled={!desk} onClick={() => newTicket()}>
                <Plus className="size-3.5" />
                {tx('New ticket')}
             </Button>
@@ -168,6 +182,17 @@ export function ServiceDeskPortal() {
       </VStack>
    );
 
+   const assistantPanel = workspace && assistant && (
+      <ServiceDeskAssistant
+         key={workspace.id}
+         workspaceId={workspace.id}
+         workspaceSlug={workspace.slug}
+         applications={assistant.applications}
+         onCreateTicket={newTicket}
+         onClose={isMobile ? () => setAsking(false) : undefined}
+      />
+   );
+
    const detail =
       workspaceId && ticket ? (
          <TicketDetail
@@ -185,9 +210,11 @@ export function ServiceDeskPortal() {
             }}
          />
       ) : (
-         <div className="grid h-full place-items-center p-6 text-center text-sm text-muted-foreground">
-            {tx('Select a ticket to read it.')}
-         </div>
+         assistantPanel || (
+            <div className="grid h-full place-items-center p-6 text-center text-sm text-muted-foreground">
+               {tx('Select a ticket to read it.')}
+            </div>
+         )
       );
 
    const picker = workspaces && !workspace && (
@@ -243,7 +270,7 @@ export function ServiceDeskPortal() {
             ) : (
                picker ||
                (isMobile ? (
-                  ticket ? (
+                  ticket || (asking && assistantPanel) ? (
                      detail
                   ) : (
                      list
@@ -263,9 +290,11 @@ export function ServiceDeskPortal() {
                workspaceId={workspaceId}
                projects={desk.projects}
                ticket={dialog === 'edit' ? ticket : undefined}
+               initial={dialog === 'new' ? draft : undefined}
                onClose={() => setDialog(undefined)}
                onSaved={(id, uploadError) => {
                   setDialog(undefined);
+                  setAsking(false);
                   setSelected(id);
                   setNotice(uploadError);
                   void load();

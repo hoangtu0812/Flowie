@@ -515,3 +515,84 @@ test('the desk works at phone width and the old Asks page redirects', async ({ b
       await requester.context.close();
    }
 });
+
+// The assistant answers from approved documents; when they fall short it hands its draft to the
+// ticket form, and nothing is created until the requester confirms. The AI calls are stubbed.
+// VI: Trợ lý trả lời từ tài liệu đã duyệt; khi tài liệu không đủ, trợ lý chuyển bản nháp cho form
+// VI: tạo ticket, và không có gì được tạo cho tới khi người yêu cầu xác nhận. Lời gọi AI được giả lập.
+test('the assistant offers a prefilled ticket when the documents fall short', async ({
+   browser,
+}) => {
+   const team = await signIn(browser, fixture.email);
+   const requester = await signIn(browser, fixture.deskRequesterEmail, {
+      width: 1280,
+      height: 800,
+   });
+   const page = requester.page;
+   const title = `Assistant draft ${Date.now()}`;
+   const asked: unknown[] = [];
+   await setServiceDesk(team.context, true);
+   try {
+      // Without an AI provider the desk stays as it was.
+      // VI: Khi chưa có provider AI, Service Desk giữ nguyên như cũ.
+      await page.reload();
+      await expect(page.getByText('Select a ticket to read it.')).toBeVisible();
+      await expect(page.getByRole('log', { name: 'Conversation' })).toHaveCount(0);
+
+      await page.route('**/asks/assistant/status?*', (route) =>
+         route.fulfill({
+            json: {
+               data: {
+                  available: true,
+                  applications: [{ projectId: fixture.projectId, name: 'Regression app' }],
+               },
+            },
+         })
+      );
+      await page.route('**/asks/assistant', async (route) => {
+         asked.push(route.request().postDataJSON());
+         await route.fulfill({
+            json: {
+               data: {
+                  status: 'not_found',
+                  answer: '',
+                  sources: [],
+                  ticket: {
+                     projectId: fixture.projectId,
+                     title,
+                     description: '**Trích hội thoại**\n> Payroll export fails',
+                  },
+               },
+            },
+         });
+      });
+      await page.reload();
+      const conversation = page.getByRole('log', { name: 'Conversation' });
+      await expect(conversation.getByText('I can help with: Regression app')).toBeVisible();
+      await page.getByRole('textbox', { name: 'Your question' }).fill('Payroll export fails');
+      await page.keyboard.press('Enter');
+      await expect(conversation.getByText('I could not find this in the documents.')).toBeVisible();
+      expect(asked).toEqual([
+         { workspaceId: fixture.workspace_id, question: 'Payroll export fails', history: [] },
+      ]);
+
+      const dialog = page.getByRole('dialog');
+      await conversation.getByRole('button', { name: 'Create ticket' }).click();
+      await expect(dialog.getByLabel('Title', { exact: true })).toHaveValue(title);
+      await expect(dialog.getByLabel('Description', { exact: true })).toHaveValue(
+         /Payroll export fails/
+      );
+      await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await expect(dialog).toHaveCount(0);
+      await expect(page.getByText(title, { exact: true })).toHaveCount(0);
+
+      await conversation.getByRole('button', { name: 'Create ticket' }).click();
+      await dialog.getByRole('button', { name: 'Create ticket', exact: true }).click();
+      await expect(dialog).toHaveCount(0);
+      await expect(page.getByText(title, { exact: true }).first()).toBeVisible();
+   } finally {
+      await setServiceDesk(team.context, false);
+      await team.context.close();
+      await requester.context.close();
+   }
+});

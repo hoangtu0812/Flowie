@@ -22,6 +22,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { useMessages } from '@/features/shared/use-messages';
 import { uploadAttachment } from '@/lib/attachments';
+import { initialProjectId, type TicketPrefill } from './assistant-draft';
 import { messages } from './messages.vi';
 import {
    createTicket,
@@ -51,19 +52,27 @@ export function TicketDialog({
    workspaceId,
    projects,
    ticket,
+   initial,
    onClose,
    onSaved,
 }: {
    workspaceId: string;
    projects: TicketProject[];
    ticket?: Ticket;
+   /**
+    * Values a new ticket starts with, such as the assistant's draft; ignored when editing.
+    * VI: Giá trị khởi tạo cho ticket mới, ví dụ bản nháp của trợ lý; bỏ qua khi sửa ticket.
+    */
+   initial?: TicketPrefill;
    onClose: () => void;
    onSaved: (ticketId: string, uploadError?: string) => void;
 }) {
    const tx = useMessages(messages);
-   const [projectId, setProjectId] = useState(projects[0]?.id ?? '');
-   const [title, setTitle] = useState(ticket?.title ?? '');
-   const [description, setDescription] = useState(ticket?.description ?? '');
+   const [projectId, setProjectId] = useState(initialProjectId(projects, initial?.projectId));
+   const [title, setTitle] = useState(ticket?.title ?? initial?.title ?? '');
+   const [description, setDescription] = useState(
+      ticket?.description ?? initial?.description ?? ''
+   );
    const [priority, setPriority] = useState<TicketPriority>(ticket?.priority ?? 'NONE');
    const [files, setFiles] = useState<File[]>([]);
    const [saving, setSaving] = useState(false);

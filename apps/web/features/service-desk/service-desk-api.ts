@@ -1,6 +1,7 @@
 import type { Attachment } from '@/lib/attachments';
 import { responseData } from '@/lib/http';
 import { authenticatedFetch } from '@/lib/workspaces';
+import type { AssistantReply, AssistantStatus, AssistantTurn } from './assistant-draft';
 
 export const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -215,3 +216,22 @@ export const listUnreadTicketNotifications = async (workspaceId: string) => {
 
 export const markNotificationRead = (id: string) =>
    authenticatedFetch(`${api}/notifications/${id}/read`, json('POST'));
+
+export const loadAssistantStatus = async (workspaceId: string) =>
+   responseData<AssistantStatus>(
+      await authenticatedFetch(`${api}/asks/assistant/status?${scoped(workspaceId)}`),
+      'Could not load the assistant.'
+   );
+
+export const askAssistant = async (
+   workspaceId: string,
+   question: string,
+   history: AssistantTurn[]
+) =>
+   responseData<AssistantReply>(
+      await authenticatedFetch(
+         `${api}/asks/assistant`,
+         json('POST', { workspaceId, question, history })
+      ),
+      'The assistant cannot answer right now.'
+   );
