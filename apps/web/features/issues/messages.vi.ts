@@ -1,6 +1,7 @@
 export const messages = {
    'Epic': 'Epic',
-   'Click to sort; Shift+click for multiple columns.': 'Bấm để sắp xếp; Shift+bấm để sắp xếp nhiều cột.',
+   'Click to sort; Shift+click for multiple columns.':
+      'Bấm để sắp xếp; Shift+bấm để sắp xếp nhiều cột.',
    'ascending': 'tăng dần',
    'descending': 'giảm dần',
    'default order': 'thứ tự mặc định',
@@ -114,6 +115,9 @@ export const messages = {
    'Back to issues': 'Về danh sách công việc',
    'Save description': 'Lưu mô tả',
    'Uploading image…': 'Đang tải ảnh…',
+   'Could not upload the image.': 'Không thể tải ảnh lên.',
+   'The workspace is still loading — try again in a moment.':
+      'Workspace đang tải — hãy thử lại sau giây lát.',
    'Images in this description': 'Ảnh trong mô tả',
    'Remove image': 'Xoá ảnh',
    'No description yet.': 'Chưa có mô tả.',

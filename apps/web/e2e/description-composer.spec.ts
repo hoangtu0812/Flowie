@@ -12,6 +12,9 @@ test('description actions stay inside one composer and retain save/cancel/paste 
    await page.getByLabel('Password', { exact: true }).fill(fixture.password);
    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
    await expect(page).toHaveURL(new RegExp(`/${fixture.slug}/`));
+   // This spec checks the Markdown textarea; Rich Text editing has its own spec.
+   // VI: Spec này kiểm tra textarea Markdown; sửa Rich Text có spec riêng.
+   await page.evaluate(() => localStorage.setItem('flowie.issue-description-mode', 'markdown'));
    const response = await context.request.post(`${api}/issues`, {
       data: {
          workspaceId: fixture.workspace_id,
