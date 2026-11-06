@@ -100,9 +100,11 @@ test('description actions stay inside one composer and retain save/cancel/paste 
          );
          const data = new DataTransfer();
          data.items.add(new File([bytes], 'synthetic.png', { type: 'image/png' }));
-         el.dispatchEvent(
-            new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: data })
-         );
+         // Firefox ignores clipboardData in the ClipboardEvent constructor, so it is set on the instance.
+         // VI: Firefox bỏ qua clipboardData trong constructor ClipboardEvent nên phải gán trên đối tượng.
+         const paste = new ClipboardEvent('paste', { bubbles: true, cancelable: true });
+         Object.defineProperty(paste, 'clipboardData', { value: data });
+         el.dispatchEvent(paste);
       });
       await expect(group.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
       release();

@@ -266,8 +266,13 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
-- The storage acceptance step no longer fails at random and stops production deployment: its MinIO fixtures now wait for `/minio/health/cluster`, because `/minio/health/ready` answers before S3 calls work. Test tooling only; nothing in the deployed app changes. (DTD-340)
+<<<<<<< HEAD
+- The storage acceptance step no longer fails at random and stops production deployment: its MinIO fixtures now wait for `/minio/health/cluster`, because `/minio/health/ready` answers before S3 calls work. Test tooling only; nothing in the deployed app changes. (DTD-340, #154)
   VI: Bước storage acceptance không còn fail ngẫu nhiên và dừng deploy production: fixture MinIO nay chờ `/minio/health/cluster`, vì `/minio/health/ready` trả lời trước khi lệnh S3 hoạt động. Chỉ đổi công cụ test, ứng dụng đã deploy không thay đổi. (DTD-340)
+=======
+- Dragging a row in manual order now works across a taller sibling: a sub-issue can pass one with expanded children in either direction, where it used to snap back. The rows swap when the pointer passes the sibling's middle. The purple Today line on timelines no longer blocks clicks on a bar beneath it. The browser tests that stopped the production workflow before its deploy step match the current interface again, and image paste tests now run in Firefox. No migration; rebuild `web`. (DTD-336, #153)
+  VI: Kéo hàng ở thứ tự thủ công nay đi qua được hàng cùng cấp cao hơn: sub-issue vượt được hàng đang mở con theo cả hai chiều, trước đây hàng bị bật về chỗ cũ. Hai hàng đổi chỗ khi con trỏ qua điểm giữa của hàng cùng cấp. Vạch Today màu tím trên timeline không còn chặn click vào thanh nằm dưới nó. Các test trình duyệt từng chặn workflow production trước bước deploy nay khớp lại giao diện hiện tại, và test dán ảnh nay chạy được trên Firefox. Không có migration; build lại `web`. (DTD-336)
+>>>>>>> origin/main
 - When an AI reply has the wrong format or a schedule breaks a rule, Agent asks the model to correct it once before showing an error. (DTD-331, #152)
   VI: Khi câu trả lời của AI sai định dạng hoặc lịch vi phạm quy tắc, Agent yêu cầu model sửa một lần trước khi báo lỗi. (DTD-331)
 

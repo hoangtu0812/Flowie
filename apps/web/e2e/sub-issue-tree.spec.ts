@@ -78,8 +78,9 @@ test('the sub-issue tree shows nested levels with progress and in-place due date
       await expect(rows.filter({ hasText: step.title })).toContainText('1/2');
 
       await page.goto(`/${fixture.slug}/project/${fixture.projectId}/issues`);
-      const goalLine = page.getByRole('link', { name: new RegExp(goal.title) });
-      await expect(goalLine.getByTestId('sub-issue-progress')).toHaveText('0/1');
+      await expect(
+         page.getByRole('button', { name: `Sub-issues of ${goal.identifier}` })
+      ).toHaveText('0/1');
    } finally {
       for (const issue of created.reverse()) {
          await context.request.delete(

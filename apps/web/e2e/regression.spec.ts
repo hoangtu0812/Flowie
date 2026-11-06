@@ -134,7 +134,7 @@ test('Assigned search keeps scope and notification preferences persist', async (
    await page.getByRole('button', { name: 'Search', exact: true }).click();
    await page.getByPlaceholder('Search issues...').fill('unassigned');
    await expect(page.getByText('Unassigned regression bug', { exact: true })).toHaveCount(0);
-   await expect(page.getByText(/No results in this view/)).toBeVisible();
+   await expect(page.getByText('No issues to show.', { exact: true })).toBeVisible();
    await page.goto(`/${fixture.slug}/team/GEN/all`);
    await page.getByRole('button', { name: 'Notification preferences' }).click();
    const option = page.getByRole('checkbox', {

@@ -602,7 +602,7 @@ export default function ProjectsTimeline({ groups, onProjectChanged }: ProjectsT
                {/* Today marker (hidden while it overlaps the sticky project list) */}
                {todayOffset !== null && !todayOverlapsList && (
                   <div
-                     className="absolute top-7 bottom-0 w-px bg-violet-500 z-10"
+                     className="absolute top-7 bottom-0 w-px bg-violet-500 z-10 pointer-events-none"
                      style={{ left: todayOffset }}
                   />
                )}
