@@ -6,15 +6,17 @@ import { messages } from '@/features/security/messages.vi';
 
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@astryxdesign/core/Button';
-import { HStack, VStack } from '@astryxdesign/core/Layout';
-import { Text, Heading } from '@astryxdesign/core/Text';
-import { List, ListItem } from '@astryxdesign/core/List';
+import { VStack } from '@astryxdesign/core/Layout';
+import { Text } from '@astryxdesign/core/Text';
 import { Token } from '@astryxdesign/core/Token';
 import { authenticatedFetch } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
 import { usePagedResource } from '@/features/shared/use-paged-resource';
 import { ResourcePagination } from '@/features/shared/resource-pagination';
+import { RefreshIconButton } from '@/features/shared/refresh-icon-button';
+import { SettingsRow, SettingsSection } from '@/components/common/settings/shared';
 import { securityApi, authApi, deviceLabel, type AccountSession } from './types';
+import { ConfirmRow } from './confirm-row';
 
 export function DeviceSessions({
    revision,
@@ -64,72 +66,83 @@ export function DeviceSessions({
    };
    return (
       <VStack as="section" aria-label={tx('Device sessions')} gap={3} width="100%">
-         <Heading level={2}>{tx('Signed-in devices')}</Heading>
-         <Text>
-            {tx(
+         <SettingsSection
+            title={tx('Signed-in devices')}
+            description={tx(
                'Revocation blocks subsequent API requests even if an access token has not expired. Realtime connections recheck session access within 15 seconds. Device names are reported by the browser; the last refresh time is not continuous activity tracking.'
             )}
-         </Text>
-         <HStack gap={2} wrap="wrap">
-            <Button label={tx('Refresh devices')} onClick={sessions.reload} isDisabled={busy} />
-            <Button
-               label={tx('Revoke other devices')}
-               onClick={() => setSelected('others')}
-               isDisabled={busy}
-            />
-         </HStack>
-         {selected && (
-            <>
-               <Text>
-                  {selected === 'others'
-                     ? tx('Sign out other devices now?')
-                     : `Sign out ${deviceLabel(selected.userAgent)} now?`}
-               </Text>
-               <HStack gap={2} wrap="wrap">
-                  <Button
-                     label={tx('Confirm device revocation')}
-                     onClick={() => void revoke()}
-                     isLoading={busy}
-                  />
-                  <Button
-                     label={tx('Cancel device revocation')}
-                     onClick={() => setSelected(undefined)}
-                     isDisabled={busy}
-                  />
-               </HStack>
-            </>
-         )}
-         {error && <Text role="alert">{error}</Text>}
-         {success && <Text role="status">{success}</Text>}
-         <List hasDividers>
-            {sessions.items.map((row) => (
-               <ListItem
-                  key={row.id}
-                  label={deviceLabel(row.userAgent, locale)}
-                  description={
-                     <VStack gap={2} width="100%">
-                        {row.current && <Token label={tx('Current device')} color="green" />}
-                        <Text>
-                           {tx('{value0} · {value1} · Signed in {value2} · Last refresh {value3}', {
-                              value0: row.ipAddress ?? tx('Unknown network'),
-                              value1: row.method,
-                              value2: securityDate(row.createdAt),
-                              value3: securityDate(row.lastUsedAt),
-                           })}
-                        </Text>
-                        {!row.current && (
-                           <Button
-                              label={tx('Revoke this device')}
-                              onClick={() => setSelected(row)}
-                              isDisabled={busy}
-                           />
-                        )}
-                     </VStack>
-                  }
+         >
+            <div className="flex flex-wrap items-center gap-2">
+               <Button
+                  label={tx('Revoke other devices')}
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setSelected('others')}
+                  isDisabled={busy}
                />
-            ))}
-         </List>
-         <ResourcePagination count={sessions.items.length} {...sessions} label={tx('devices')} />
+               <RefreshIconButton
+                  label={tx('Refresh devices')}
+                  onClick={sessions.reload}
+                  isDisabled={busy}
+               />
+            </div>
+            {selected && (
+               <ConfirmRow
+                  question={
+                     selected === 'others'
+                        ? tx('Sign out other devices now?')
+                        : `Sign out ${deviceLabel(selected.userAgent)} now?`
+                  }
+                  confirmLabel={tx('Confirm device revocation')}
+                  cancelLabel={tx('Cancel device revocation')}
+                  busy={busy}
+                  onConfirm={() => void revoke()}
+                  onCancel={() => setSelected(undefined)}
+               />
+            )}
+            {error && <Text role="alert">{error}</Text>}
+            {success && <Text role="status">{success}</Text>}
+            {sessions.items.length > 0 && (
+               <ul className="rounded-lg border bg-container divide-y divide-border/60">
+                  {sessions.items.map((row) => (
+                     <li key={row.id}>
+                        <SettingsRow
+                           wrap
+                           title={
+                              <>
+                                 <span>{deviceLabel(row.userAgent, locale)}</span>
+                                 {row.current && (
+                                    <Token label={tx('Current device')} color="green" size="sm" />
+                                 )}
+                              </>
+                           }
+                           description={tx(
+                              '{value0} · {value1} · Signed in {value2} · Last refresh {value3}',
+                              {
+                                 value0: row.ipAddress ?? tx('Unknown network'),
+                                 value1: row.method,
+                                 value2: securityDate(row.createdAt),
+                                 value3: securityDate(row.lastUsedAt),
+                              }
+                           )}
+                           trailing={
+                              !row.current && (
+                                 <Button
+                                    label={tx('Revoke this device')}
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={() => setSelected(row)}
+                                    isDisabled={busy}
+                                 />
+                              )
+                           }
+                        />
+                     </li>
+                  ))}
+               </ul>
+            )}
+            <ResourcePagination count={sessions.items.length} {...sessions} label={tx('devices')} />
+         </SettingsSection>
       </VStack>
    );
 }

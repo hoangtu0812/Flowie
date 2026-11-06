@@ -100,6 +100,7 @@ export function SettingsRow({
    onClick,
    muted,
    disabled,
+   wrap,
 }: {
    icon?: React.ReactNode;
    title: React.ReactNode;
@@ -110,6 +111,13 @@ export function SettingsRow({
    muted?: boolean;
    /** Keeps a settings row visible while preventing it from becoming interactive. */
    disabled?: boolean;
+   /**
+    * Lets the trailing control drop under the title when the row is narrower than the title's
+    * 12rem minimum plus the control, for list rows whose metadata must stay readable on phones.
+    * VI: Cho control bên phải xuống dưới tiêu đề khi hàng hẹp hơn 12rem tối thiểu của tiêu đề
+    * cộng với control, dùng cho hàng danh sách cần giữ thông tin dễ đọc trên điện thoại.
+    */
+   wrap?: boolean;
 }) {
    const Comp = onClick && !disabled ? 'button' : 'div';
    return (
@@ -118,6 +126,7 @@ export function SettingsRow({
          aria-disabled={disabled || undefined}
          className={cn(
             'w-full flex items-center gap-3 px-4 py-3 text-left',
+            wrap && 'flex-wrap',
             onClick && !disabled && 'hover:bg-accent/40 transition-colors cursor-pointer',
             (muted || disabled) && 'opacity-60',
             disabled && 'cursor-not-allowed'
@@ -128,8 +137,15 @@ export function SettingsRow({
                {icon}
             </span>
          )}
-         <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium flex items-center gap-2">{title}</div>
+         <div className={cn('flex-1', wrap ? 'min-w-48' : 'min-w-0')}>
+            <div
+               className={cn(
+                  'text-sm font-medium flex items-center gap-x-2 gap-y-1',
+                  wrap && 'flex-wrap'
+               )}
+            >
+               {title}
+            </div>
             {description && (
                <div className="text-xs text-muted-foreground mt-0.5">{description}</div>
             )}
