@@ -387,7 +387,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Changed
 
-- Agent rules in `AGENTS.md` now describe how Flowie actually ships: the server people use is pulled and rebuilt by hand, a green CT107 workflow does not mean a change is live there, and a new migration needs `migrate` rebuilt. The other projects' names match Flowie. Documentation only; nothing to deploy.
+- Agent rules in `AGENTS.md` now describe how Flowie actually ships: the server people use is pulled and rebuilt by hand, a green CT107 workflow does not mean a change is live there, and a new migration needs `migrate` rebuilt. The other projects' names match Flowie. Documentation only; nothing to deploy. (#156)
   VI: Quy tắc cho agent trong `AGENTS.md` nay mô tả đúng cách Flowie được triển khai: server mọi người dùng được pull và build lại thủ công, workflow CT107 xanh không có nghĩa thay đổi đã lên server đó, và migration mới cần build lại `migrate`. Tên các dự án khác khớp với Flowie. Chỉ là tài liệu; không cần triển khai.
 - Workspace Owners/Admins with document access can approve alongside team leads, including their own documents. Assigned reviewers must still agree; read-only, inactive and out-of-scope accounts remain excluded. Deploy API and web together; no migration. (DTD-270, #132)
   VI: Owner/Admin workspace có quyền truy cập được duyệt cùng lead, kể cả tài liệu tự tạo. Reviewer đã giao vẫn phải đồng ý; tài khoản chỉ đọc, ngừng hoạt động hoặc ngoài phạm vi không được duyệt. Triển khai API/web cùng bản; không migration.
