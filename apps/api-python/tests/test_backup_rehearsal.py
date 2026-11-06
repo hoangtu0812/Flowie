@@ -90,7 +90,13 @@ async def rehearse(root, monkeypatch):
             if process.poll() is not None:
                 raise RuntimeError("Synthetic MinIO exited")
             try:
-                with urlopen(endpoint + "/minio/health/ready", timeout=1):
+                # /minio/health/ready answers 200 before the object layer exists, so S3
+                # calls can still get 503 XMinioServerNotInitialized. /cluster answers
+                # 503 until the object layer, bucket metadata and IAM are initialized.
+                # VI: /minio/health/ready trả 200 trước khi object layer tồn tại, nên
+                # lệnh S3 vẫn có thể nhận 503 XMinioServerNotInitialized. /cluster trả
+                # 503 cho tới khi object layer, bucket metadata và IAM đã khởi tạo xong.
+                with urlopen(endpoint + "/minio/health/cluster", timeout=1):
                     return process, endpoint
             except OSError:
                 time.sleep(0.1)
