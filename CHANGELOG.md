@@ -387,7 +387,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Changed
 
-- Opening a related document from a task now shows it below the task header, so the breadcrumb, favorite, actions and previous/next stay usable, and Close returns to the task as it was (tab, scroll position, unsaved drafts). The task title in the breadcrumb returns to the task's main view. No migration; rebuild `web`. (DTD-381)
+- Opening a related document from a task now shows it below the task header, so the breadcrumb, favorite, actions and previous/next stay usable, and Close returns to the task as it was (tab, scroll position, unsaved drafts). The task title in the breadcrumb returns to the task's main view. No migration; rebuild `web`. (DTD-381, #157)
   VI: Mở tài liệu liên quan từ một task nay hiển thị ngay dưới header của task, nên breadcrumb, đánh dấu sao, thao tác và nút trước/sau vẫn dùng được, và nút Đóng quay về task như ban đầu (tab, vị trí cuộn, bản nháp chưa lưu). Tiêu đề task trên breadcrumb đưa về view chính của task. Không có migration; build lại `web`. (DTD-381)
 - Agent rules in `AGENTS.md` now describe how Flowie actually ships: the server people use is pulled and rebuilt by hand, a green CT107 workflow does not mean a change is live there, and a new migration needs `migrate` rebuilt. The other projects' names match Flowie. Documentation only; nothing to deploy. (#156)
   VI: Quy tắc cho agent trong `AGENTS.md` nay mô tả đúng cách Flowie được triển khai: server mọi người dùng được pull và build lại thủ công, workflow CT107 xanh không có nghĩa thay đổi đã lên server đó, và migration mới cần build lại `migrate`. Tên các dự án khác khớp với Flowie. Chỉ là tài liệu; không cần triển khai.
