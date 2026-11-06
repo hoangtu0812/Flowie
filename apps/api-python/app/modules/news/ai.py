@@ -10,7 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import _utcnow
 from ...core.errors import ApiError
-from ...domains.agent import _call_google, _call_openai, configured_provider
+from ...domains.agent import configured_provider
+from ...domains.ai_calls import call_provider
 from .feeds import plain_text
 
 logger = logging.getLogger(__name__)
@@ -101,11 +102,8 @@ def parse_analysis(raw: str, size: int) -> tuple[dict[int, dict[str, Any]], str 
     return results, _clean(payload.get('digest'), DIGEST_CHARS) or None
 
 
-async def _complete(provider: dict[str, str], system: str, history: list[dict[str, str]]) -> str:
-    # The Agent's provider calls send no tools/functions, so the model can only answer with text.
-    # VI: Hàm gọi provider của Agent không gửi tool/function nào, nên model chỉ trả lời bằng text.
-    call = _call_openai if provider['provider'] == 'OPENAI' else _call_google
-    return await call(provider, system, history)
+async def _complete(provider: dict[str, Any], system: str, history: list[dict[str, str]]) -> str:
+    return await call_provider(provider, 'news.analysis', system, history)
 
 
 async def analyze_workspace(db: AsyncSession, workspace_id: str, settings: Any) -> int:

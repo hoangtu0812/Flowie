@@ -93,6 +93,24 @@ async def overview(
             params,
         )
     ).mappings()
+    provider_calls = (
+        await db.execute(
+            text("""SELECT feature,count(*)::int AS calls,count(*) FILTER(WHERE outcome<>'ok')::int AS failed,
+        COALESCE(sum(input_tokens),0)::bigint AS "inputTokens",COALESCE(sum(output_tokens),0)::bigint AS "outputTokens",
+        percentile_cont(0.95) WITHIN GROUP(ORDER BY duration_ms) AS "p95Ms"
+        FROM ai_provider_calls WHERE workspace_id=:workspace AND created_at>CAST(:now AS timestamp)-INTERVAL '7 days'
+        GROUP BY feature ORDER BY COALESCE(sum(input_tokens),0)+COALESCE(sum(output_tokens),0) DESC"""),
+            params,
+        )
+    ).mappings()
+    provider_errors = (
+        await db.execute(
+            text("""SELECT feature,outcome,status_code AS "statusCode",model,created_at AS "createdAt"
+        FROM ai_provider_calls WHERE workspace_id=:workspace AND outcome<>'ok'
+        ORDER BY created_at DESC LIMIT 10"""),
+            params,
+        )
+    ).mappings()
     return {
         "data": {
             "limits": await limits(db, workspaceId),
@@ -100,6 +118,8 @@ async def overview(
             "tools": [dict(row) for row in tools],
             "runs": [dict(row) for row in runs],
             "recentErrors": [dict(row) for row in recent],
+            "providerCalls": [dict(row) for row in provider_calls],
+            "recentProviderErrors": [dict(row) for row in provider_errors],
             "awaitingReview": [dict(row) for row in awaiting],
             "evidencePolicy": "Agent-reported commits and tests are unverified until independently checked against the repository and CI.",
         }

@@ -645,6 +645,7 @@ model Workspace {
   clientErrorEvents      ClientErrorEvent[]
   aiLimits               AiWorkspaceLimit?
   aiToolWindows          AiToolWindow[]
+  aiProviderCalls        AiProviderCall[]
   id                     String                @id @default(cuid())
   organizationId         String                @map("organization_id")
   name                   String
@@ -748,6 +749,28 @@ model AiToolWindow {
   @@id([workspaceId, tool, windowStart])
   @@index([windowStart])
   @@map("ai_tool_windows")
+}
+
+/// One completion sent to a workspace's AI provider: usage and outcome only, never prompt or reply.
+/// VI: Một lần gọi provider AI của workspace: chỉ gồm usage và kết quả, không có prompt hay câu trả lời.
+model AiProviderCall {
+  id           String    @id @default(cuid())
+  workspaceId  String    @map("workspace_id")
+  feature      String
+  provider     String
+  model        String
+  outcome      String
+  statusCode   Int?      @map("status_code")
+  inputTokens  Int?      @map("input_tokens")
+  outputTokens Int?      @map("output_tokens")
+  attempts     Int
+  durationMs   Int       @map("duration_ms")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([createdAt])
+  @@map("ai_provider_calls")
 }
 
 model WorkspaceAgentProvider {

@@ -18,6 +18,21 @@ type Overview = {
    tools: { tool: string; calls: number; errors: number; p95Ms: number | null }[];
    runs: { state: string; count: number; expiredLeases: number }[];
    recentErrors: { tool: string; outcome: string; createdAt: string }[];
+   providerCalls: {
+      feature: string;
+      calls: number;
+      failed: number;
+      inputTokens: number;
+      outputTokens: number;
+      p95Ms: number | null;
+   }[];
+   recentProviderErrors: {
+      feature: string;
+      outcome: string;
+      statusCode: number | null;
+      model: string;
+      createdAt: string;
+   }[];
    evidencePolicy: string;
    awaitingReview: { id: string }[];
 };
@@ -130,6 +145,31 @@ export function OperationsPage() {
                               {tool.p95Ms === null ? 'unavailable' : Math.round(tool.p95Ms) + ' ms'}
                            </Text>
                         </HStack>
+                     ))}
+                     <Heading level={2}>AI provider usage (last 7 days)</Heading>
+                     {data.providerCalls.length === 0 && (
+                        <Text>No AI provider calls in this period.</Text>
+                     )}
+                     {data.providerCalls.map((call) => (
+                        <HStack key={call.feature} gap={3} wrap="wrap">
+                           <Text weight="medium">{call.feature}</Text>
+                           <Text>
+                              {call.calls} calls · {call.failed} failed ·{' '}
+                              {call.inputTokens.toLocaleString()} input tokens ·{' '}
+                              {call.outputTokens.toLocaleString()} output tokens · p95{' '}
+                              {call.p95Ms === null ? 'unavailable' : Math.round(call.p95Ms) + ' ms'}
+                           </Text>
+                        </HStack>
+                     ))}
+                     {data.recentProviderErrors.length > 0 && (
+                        <Heading level={2}>Recent AI provider errors</Heading>
+                     )}
+                     {data.recentProviderErrors.map((item, index) => (
+                        <Text key={index}>
+                           {item.feature} · {item.outcome}
+                           {item.statusCode === null ? '' : ` · HTTP ${item.statusCode}`} · {item.model}{' '}
+                           · {new Date(item.createdAt).toLocaleString()}
+                        </Text>
                      ))}
                      <Heading level={2}>Agent runs</Heading>
                      {data.runs.map((run) => (

@@ -775,6 +775,9 @@ test('AI operations budgets persist with real workspace administration', async (
       await expect(
          page.getByRole('heading', { name: 'Workspace budget', exact: true })
       ).toBeVisible();
+      await expect(
+         page.getByRole('heading', { name: 'AI provider usage (last 7 days)', exact: true })
+      ).toBeVisible();
       await page.getByLabel('Total tool calls per minute').fill('299');
       await page.getByLabel('Per-tool budgets (JSON)').fill('{"get_issue": 50}');
       await page.getByRole('button', { name: 'Save budgets', exact: true }).click();
