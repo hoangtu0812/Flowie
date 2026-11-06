@@ -17,31 +17,57 @@ import { DocumentHistory } from '@/features/documents/document-history';
 import { Selector } from '@astryxdesign/core/Selector';
 import { DOC_TYPES } from '@/features/documents/document-badges';
 import { markdownHeadings } from '@/lib/markdown-headings';
+import { cn } from '@/lib/utils';
 import type { DocStatus, DocType } from '@/lib/document-tree';
 
 /**
- * Table of contents for the view mode, shown once a document has three or more headings.
- * Links scroll inside the editor dialog instead of changing the page URL.
- * VI: Mục lục ở chế độ xem, hiện khi tài liệu có từ ba heading trở lên. Link cuộn bên trong
- * VI: hộp thoại editor thay vì đổi URL của trang.
+ * Table of contents, shown once a document has three or more headings. Links scroll smoothly
+ * to the heading inside whatever area scrolls it, instead of changing the page URL. The
+ * document viewer places it in a sidebar and passes `activeId` (the heading being read, marked
+ * with `aria-current`), `onNavigate` (called after a jump, so a narrow overlay can close) and a
+ * `className` that drops the boxed look.
+ * VI: Mục lục, hiện khi tài liệu có từ ba heading trở lên. Link cuộn mượt tới heading trong vùng
+ * VI: cuộn chứa nó thay vì đổi URL của trang. Khung xem tài liệu đặt nó trong sidebar và truyền
+ * VI: `activeId` (heading đang đọc, đánh dấu bằng `aria-current`), `onNavigate` (gọi sau khi nhảy
+ * VI: mục, để lớp phủ trên màn hình hẹp tự đóng) và `className` để bỏ khung viền.
  */
-export function TableOfContents({ content, label }: { content: string; label: string }) {
+export function TableOfContents({
+   content,
+   label,
+   activeId,
+   onNavigate,
+   className,
+}: {
+   content: string;
+   label: string;
+   activeId?: string;
+   onNavigate?: () => void;
+   className?: string;
+}) {
    const headings = markdownHeadings(content);
    if (headings.length < 3) return null;
    return (
-      <nav aria-label={label} className="rounded-md border border-border/60 p-3 text-sm">
+      <nav
+         aria-label={label}
+         className={cn('rounded-md border border-border/60 p-3 text-sm', className)}
+      >
          <p className="mb-1 text-xs font-medium text-muted-foreground uppercase">{label}</p>
          <ul className="space-y-0.5">
             {headings.map((heading) => (
                <li key={heading.id} style={{ paddingLeft: (heading.level - 1) * 12 }}>
                   <a
                      href={`#${heading.id}`}
-                     className="text-muted-foreground hover:text-foreground"
+                     aria-current={heading.id === activeId ? 'location' : undefined}
+                     className={cn(
+                        'text-muted-foreground hover:text-foreground',
+                        heading.id === activeId && 'font-medium text-foreground'
+                     )}
                      onClick={(event) => {
                         event.preventDefault();
                         document
                            .getElementById(heading.id)
                            ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        onNavigate?.();
                      }}
                   >
                      {heading.text}

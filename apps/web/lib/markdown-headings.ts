@@ -47,3 +47,23 @@ export function markdownHeadings(source: string) {
    }
    return headings;
 }
+
+/**
+ * Index of the heading being read, for the table of contents highlight. `tops` are heading
+ * positions in pixels from the top of the reading area, in document order; a heading counts as
+ * reached once its top is at or above `line`. Before the first heading is reached the first one
+ * is active. At the bottom of the area the last heading wins, because a short closing section
+ * can never scroll up to `line`.
+ * VI: Chỉ số heading đang đọc, dùng để tô sáng mục lục. `tops` là vị trí heading tính bằng pixel
+ * VI: từ đỉnh vùng đọc, theo thứ tự tài liệu; một heading được coi là đã tới khi đỉnh của nó ở
+ * VI: ngang hoặc trên `line`. Chưa tới heading nào thì heading đầu tiên được chọn. Ở cuối vùng
+ * VI: đọc thì heading cuối được chọn, vì phần cuối ngắn không bao giờ cuộn lên tới `line`.
+ */
+export function activeHeadingIndex(tops: number[], line: number, atBottom: boolean): number {
+   if (atBottom) return tops.length - 1;
+   let index = 0;
+   tops.forEach((top, position) => {
+      if (top <= line) index = position;
+   });
+   return index;
+}
