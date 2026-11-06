@@ -105,6 +105,11 @@ test('manual issue order supports drag, keyboard and reload', async ({ page }, t
    expect(placeholder!.height).toBeGreaterThanOrEqual(44);
    await page.screenshot({ path: testInfo.outputPath('manual-placeholder.png'), fullPage: true });
    await page.mouse.move(to.x + 80, to.y + 2, { steps: 12 });
+   // Rows swap on the frame after the pointer moves; releasing sooner keeps the old order.
+   // VI: Hàng đổi chỗ ở frame sau khi con trỏ di chuyển; thả sớm hơn sẽ giữ thứ tự cũ.
+   await expect(
+      page.locator('[data-order-id]:not([data-dnd-placeholder])').first()
+   ).toHaveAttribute('data-order-id', source.id);
    await page.mouse.up();
    expect((await saved).ok()).toBeTruthy();
    await expect(rows.first()).toHaveAttribute('data-order-id', source.id);
