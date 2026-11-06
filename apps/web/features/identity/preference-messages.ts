@@ -31,7 +31,10 @@ export const preferenceMessages = {
    'Automatically assign new tasks and bugs to me': 'Tự giao task và bug mới cho tôi',
    'Applies to the create dialog when you are eligible in the selected team. You can clear or change the assignee before saving.':
       'Áp dụng khi tạo công việc trong đội bạn được phép nhận việc. Bạn có thể bỏ hoặc đổi người phụ trách trước khi lưu.',
-   'Other preferences': 'Các tùy chọn khác',
+   'General': 'Chung',
+   'Time': 'Thời gian',
+   'Display': 'Hiển thị',
+   'Theme': 'Giao diện',
    'Display-name format, emoticon conversion and desktop deep links are not available yet.':
       'Định dạng tên hiển thị, đổi biểu tượng cảm xúc và liên kết mở ứng dụng máy tính chưa được hỗ trợ.',
 } as const;
