@@ -16,9 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
-- Agent answers questions about a specific issue by its identifier, such as "DTD-12 đang tới đâu rồi?", for up to 5 issues the asker may open. Agent personalization has a Test connection button that tries the saved provider and shows the reason when it fails. No migration; rebuild `api` and `web`. (DTD-331)
+- Agent answers questions about a specific issue by its identifier, such as "DTD-12 đang tới đâu rồi?", for up to 5 issues the asker may open. Agent personalization has a Test connection button that tries the saved provider and shows the reason when it fails. No migration; rebuild `api` and `web`. (DTD-331, #152)
   VI: Agent trả lời câu hỏi về một issue theo mã, ví dụ "DTD-12 đang tới đâu rồi?", tối đa 5 issue người hỏi được mở. Agent personalization có nút Test connection để thử provider đã lưu và hiện lý do khi lỗi. Không có migration; build lại `api` và `web`. (DTD-331)
-- Each person can make up to 60 AI calls per hour through Agent, Write with Agent and scheduling, so one account cannot run up the workspace's provider bill. Fixed reports and News are not counted. (DTD-331)
+- Each person can make up to 60 AI calls per hour through Agent, Write with Agent and scheduling, so one account cannot run up the workspace's provider bill. Fixed reports and News are not counted. (DTD-331, #152)
   VI: Mỗi người được gọi AI tối đa 60 lượt mỗi giờ qua Agent, Write with Agent và xếp lịch, để một tài khoản không thể đẩy chi phí provider của workspace lên cao. Báo cáo cố định và News không bị tính. (DTD-331)
 
 - AI operations shows AI provider usage for the last 7 days by feature (calls, failed calls, input and output tokens, p95 time) and the 10 latest provider errors. Only usage and outcome are stored, never prompts or replies, and rows are kept for 90 days. Includes a migration: rebuild `migrate`, `api` and `web`, and run `migrate` before `api`. (DTD-322, #151)
@@ -266,7 +266,7 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
-- When an AI reply has the wrong format or a schedule breaks a rule, Agent asks the model to correct it once before showing an error. (DTD-331)
+- When an AI reply has the wrong format or a schedule breaks a rule, Agent asks the model to correct it once before showing an error. (DTD-331, #152)
   VI: Khi câu trả lời của AI sai định dạng hoặc lịch vi phạm quy tắc, Agent yêu cầu model sửa một lần trước khi báo lỗi. (DTD-331)
 
 - Agent and News retry temporary AI provider failures, wait longer for large work such as scheduling and news analysis (up to 180 seconds), and report a reply that was cut off instead of "invalid format". Provider errors now name the HTTP status. A reverse proxy in front of the API must allow requests of up to 180 seconds, or scheduling can still be cut off. (DTD-322, #151)
