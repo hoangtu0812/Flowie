@@ -6,6 +6,8 @@ import { messages } from '@/features/security/messages.vi';
 import { useEffect, useState } from 'react';
 import { VStack, HStack } from '@astryxdesign/core/Layout';
 import { Text, Heading } from '@astryxdesign/core/Text';
+import { RefreshIconButton } from '@/features/shared/refresh-icon-button';
+import { SettingsSection } from '@/components/common/settings/shared';
 import { TextInput } from '@astryxdesign/core/TextInput';
 import { Button } from '@astryxdesign/core/Button';
 import { Selector } from '@astryxdesign/core/Selector';
@@ -69,261 +71,286 @@ export function Authenticator({ org, onChanged }: { org: string; onChanged: () =
    };
    return (
       <VStack as="section" aria-label={tx('Authenticator settings')} width="100%" gap={4}>
-         <Heading level={2}>{tx('Two-step verification')}</Heading>
-         <Text>
-            {tx(
+         <SettingsSection
+            title={tx('Two-step verification')}
+            description={tx(
                'Protect password and Microsoft sign-ins with an authenticator app. Existing integration tokens keep their scoped grants; manage them under Credentials.'
             )}
-         </Text>
-         {error && <Text role="alert">{error}</Text>}
-         <Button
-            label={tx('Refresh authenticator status')}
-            onClick={() => setRetry((value) => value + 1)}
-            isDisabled={busy}
-         />
-         {!status ? (
-            <Text>{tx('Loading authenticator settings…')}</Text>
-         ) : (
-            <>
-               <Token
-                  label={status.enabled ? tx('Authenticator enabled') : tx('Authenticator off')}
-                  color={status.enabled ? 'green' : 'default'}
+         >
+            <div className="flex flex-wrap items-center gap-2">
+               {status && (
+                  <Token
+                     size="sm"
+                     label={status.enabled ? tx('Authenticator enabled') : tx('Authenticator off')}
+                     color={status.enabled ? 'green' : 'default'}
+                  />
+               )}
+               <RefreshIconButton
+                  label={tx('Refresh authenticator status')}
+                  onClick={() => setRetry((value) => value + 1)}
+                  isDisabled={busy}
                />
-               {status.enabled && (
-                  <Text>
-                     {status.recoveryRemaining} {tx('recovery codes remain.')}
-                  </Text>
-               )}
-               {!status.available && (
-                  <Text>
-                     {tx(
-                        'Authenticator encryption keys are not configured. Enrollment is unavailable; existing factors still require verification. Recovery codes remain usable.'
-                     )}
-                  </Text>
-               )}
-               {codes.length > 0 ? (
-                  <VStack gap={3}>
-                     <Heading level={3}>{tx('Save your recovery codes')}</Heading>
+            </div>
+            {error && <Text role="alert">{error}</Text>}
+            {!status ? (
+               <Text>{tx('Loading authenticator settings…')}</Text>
+            ) : (
+               <>
+                  {status.enabled && (
+                     <Text>
+                        {status.recoveryRemaining} {tx('recovery codes remain.')}
+                     </Text>
+                  )}
+                  {!status.available && (
                      <Text>
                         {tx(
-                           'These codes are shown once. Store them securely outside this browser. Each code works once.'
+                           'Authenticator encryption keys are not configured. Enrollment is unavailable; existing factors still require verification. Recovery codes remain usable.'
                         )}
                      </Text>
-                     <VStack
-                        as="pre"
-                        className="overflow-auto font-mono"
-                        aria-label={tx('Recovery codes')}
-                     >
-                        {codes.join('\n')}
-                     </VStack>
-                     <HStack gap={2} wrap="wrap">
-                        <Button
-                           label={tx('Copy recovery codes')}
-                           onClick={() =>
-                              void run(async () => {
-                                 await navigator.clipboard.writeText(codes.join('\n'));
-                              })
-                           }
-                        />
-                        <Button label={tx('I saved these codes')} onClick={() => setCodes([])} />
-                     </HStack>
-                  </VStack>
-               ) : (
-                  <>
-                     {(enrollment || action || !status.enabled) && (
-                        <VStack gap={3}>
-                           {status.hasPassword ? (
-                              <TextInput
-                                 label={tx('Confirm account password')}
-                                 type="password"
-                                 htmlName="password"
-                                 value={password}
-                                 onChange={setPassword}
-                                 width="100%"
-                              />
-                           ) : (
-                              <>
-                                 <Text>
-                                    {tx(
-                                       'A Microsoft sign-in within the last five minutes is required. Completing a background token refresh does not renew this proof.'
-                                    )}
-                                 </Text>
-                                 <Button
-                                    label={tx('Verify with Microsoft')}
-                                    variant="ghost"
-                                    href={`${authApi}/microsoft/start?reauth=true&next=${encodeURIComponent(`/${org}/settings/security`)}`}
-                                 />
-                              </>
+                  )}
+                  {codes.length > 0 ? (
+                     <VStack gap={3}>
+                        <Heading level={3}>{tx('Save your recovery codes')}</Heading>
+                        <Text>
+                           {tx(
+                              'These codes are shown once. Store them securely outside this browser. Each code works once.'
                            )}
+                        </Text>
+                        <VStack
+                           as="pre"
+                           className="overflow-auto font-mono"
+                           aria-label={tx('Recovery codes')}
+                        >
+                           {codes.join('\n')}
                         </VStack>
-                     )}
-                     {!status.enabled && !enrollment && (
-                        <Button
-                           label={tx('Set up authenticator')}
-                           isDisabled={!status.available || busy}
-                           onClick={() =>
-                              void run(async () => {
-                                 setEnrollment(
-                                    await mfaRequest<Enrollment>('/setup', {
-                                       password: password || null,
-                                    })
-                                 );
-                                 setCode('');
-                              })
-                           }
-                        />
-                     )}
-                     {enrollment && (
-                        <VStack gap={3}>
-                           <Text>
-                              {tx(
-                                 'Scan this QR code in your authenticator app or enter the setup key. Expires at'
-                              )}
-                              {dateLabel(enrollment.expiresAt)}.
-                           </Text>
-                           {/* The QR must retain its complete quiet zone; an attachment thumbnail crops it. */}
-                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                           <img
-                              src={enrollment.qr}
-                              alt={tx('Authenticator setup QR code')}
-                              className="max-w-full self-start"
-                           />
-                           <TextInput
-                              label={tx('Authenticator setup key')}
-                              value={enrollment.secret}
-                              isReadOnly
-                              width="100%"
-                           />
-                           <TextInput
-                              label={tx('Authenticator verification code')}
-                              value={code}
-                              onChange={setCode}
-                              htmlName="one-time-code"
-                              width="100%"
-                           />
-                           <HStack gap={2} wrap="wrap">
-                              <Button
-                                 label={tx('Enable authenticator')}
-                                 isDisabled={busy || !code}
-                                 onClick={() =>
-                                    void run(async () => {
-                                       const result = await mfaRequest<{ recoveryCodes: string[] }>(
-                                          '/enable',
-                                          { password: password || null, code }
-                                       );
-                                       setStatus((current) =>
-                                          current
-                                             ? {
-                                                  ...current,
-                                                  enabled: true,
-                                                  recoveryRemaining: result.recoveryCodes.length,
-                                               }
-                                             : current
-                                       );
-                                       setCodes(result.recoveryCodes);
-                                       setEnrollment(undefined);
-                                       refresh();
-                                    })
-                                 }
-                              />
-                              <Button
-                                 label={tx('Discard setup key')}
-                                 isDisabled={busy}
-                                 onClick={() => {
-                                    setEnrollment(undefined);
-                                    setCode('');
-                                    setPassword('');
-                                 }}
-                              />
-                           </HStack>
-                        </VStack>
-                     )}
-                     {status.enabled && !action && (
                         <HStack gap={2} wrap="wrap">
                            <Button
-                              label={tx('Replace recovery codes')}
-                              isDisabled={busy}
-                              onClick={() => {
-                                 setAction('recovery-codes');
-                                 setCode('');
-                              }}
+                              size="sm"
+                              label={tx('Copy recovery codes')}
+                              onClick={() =>
+                                 void run(async () => {
+                                    await navigator.clipboard.writeText(codes.join('\n'));
+                                 })
+                              }
                            />
                            <Button
-                              label={tx('Disable authenticator')}
-                              isDisabled={busy}
-                              onClick={() => {
-                                 setAction('disable');
-                                 setCode('');
-                              }}
+                              size="sm"
+                              label={tx('I saved these codes')}
+                              onClick={() => setCodes([])}
                            />
                         </HStack>
-                     )}
-                     {action && (
-                        <VStack gap={3}>
-                           <Text>
-                              {action === 'disable'
-                                 ? tx(
-                                      'Disable two-step verification and revoke other browser sessions?'
-                                   )
-                                 : tx(
-                                      'Replace all remaining recovery codes and revoke other browser sessions? Previous codes will stop working.'
-                                   )}
-                           </Text>
-                           <Selector
-                              label={tx('Verification method')}
-                              value={kind}
-                              options={factorOptions}
-                              onChange={(value) => setKind(value as FactorKind)}
-                              width="100%"
-                           />
-                           <TextInput
-                              label={tx('Verification code')}
-                              value={code}
-                              onChange={setCode}
-                              htmlName="one-time-code"
-                              width="100%"
-                           />
-                           <HStack gap={2} wrap="wrap">
+                     </VStack>
+                  ) : (
+                     <>
+                        {(enrollment || action || !status.enabled) && (
+                           <VStack gap={3}>
+                              {status.hasPassword ? (
+                                 <TextInput
+                                    label={tx('Confirm account password')}
+                                    type="password"
+                                    htmlName="password"
+                                    value={password}
+                                    onChange={setPassword}
+                                    width={320}
+                                 />
+                              ) : (
+                                 <>
+                                    <Text>
+                                       {tx(
+                                          'A Microsoft sign-in within the last five minutes is required. Completing a background token refresh does not renew this proof.'
+                                       )}
+                                    </Text>
+                                    <div className="flex">
+                                       <Button
+                                          size="sm"
+                                          label={tx('Verify with Microsoft')}
+                                          variant="secondary"
+                                          href={`${authApi}/microsoft/start?reauth=true&next=${encodeURIComponent(`/${org}/settings/security`)}`}
+                                       />
+                                    </div>
+                                 </>
+                              )}
+                           </VStack>
+                        )}
+                        {!status.enabled && !enrollment && (
+                           <div className="flex">
                               <Button
-                                 label={tx('Confirm security change')}
-                                 isDisabled={busy || !code}
+                                 size="sm"
+                                 label={tx('Set up authenticator')}
+                                 isDisabled={!status.available || busy}
                                  onClick={() =>
                                     void run(async () => {
-                                       const result = await mfaRequest<{ recoveryCodes: string[] }>(
-                                          `/${action}`,
-                                          { password: password || null, code, kind }
+                                       setEnrollment(
+                                          await mfaRequest<Enrollment>('/setup', {
+                                             password: password || null,
+                                          })
                                        );
-                                       setStatus((current) =>
-                                          current
-                                             ? {
-                                                  ...current,
-                                                  enabled: action !== 'disable',
-                                                  recoveryRemaining: result.recoveryCodes.length,
-                                               }
-                                             : current
-                                       );
-                                       setCodes(result.recoveryCodes);
-                                       setAction(undefined);
-                                       refresh();
+                                       setCode('');
                                     })
                                  }
                               />
+                           </div>
+                        )}
+                        {enrollment && (
+                           <VStack gap={3}>
+                              <Text>
+                                 {tx(
+                                    'Scan this QR code in your authenticator app or enter the setup key. Expires at'
+                                 )}
+                                 {dateLabel(enrollment.expiresAt)}.
+                              </Text>
+                              {/* The QR must retain its complete quiet zone; an attachment thumbnail crops it. */}
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                 src={enrollment.qr}
+                                 alt={tx('Authenticator setup QR code')}
+                                 className="max-w-full self-start"
+                              />
+                              <TextInput
+                                 label={tx('Authenticator setup key')}
+                                 value={enrollment.secret}
+                                 isReadOnly
+                                 width={320}
+                              />
+                              <TextInput
+                                 label={tx('Authenticator verification code')}
+                                 value={code}
+                                 onChange={setCode}
+                                 htmlName="one-time-code"
+                                 width={320}
+                              />
+                              <HStack gap={2} wrap="wrap">
+                                 <Button
+                                    size="sm"
+                                    label={tx('Enable authenticator')}
+                                    isDisabled={busy || !code}
+                                    onClick={() =>
+                                       void run(async () => {
+                                          const result = await mfaRequest<{
+                                             recoveryCodes: string[];
+                                          }>('/enable', { password: password || null, code });
+                                          setStatus((current) =>
+                                             current
+                                                ? {
+                                                     ...current,
+                                                     enabled: true,
+                                                     recoveryRemaining: result.recoveryCodes.length,
+                                                  }
+                                                : current
+                                          );
+                                          setCodes(result.recoveryCodes);
+                                          setEnrollment(undefined);
+                                          refresh();
+                                       })
+                                    }
+                                 />
+                                 <Button
+                                    size="sm"
+                                    label={tx('Discard setup key')}
+                                    isDisabled={busy}
+                                    onClick={() => {
+                                       setEnrollment(undefined);
+                                       setCode('');
+                                       setPassword('');
+                                    }}
+                                 />
+                              </HStack>
+                           </VStack>
+                        )}
+                        {status.enabled && !action && (
+                           <HStack gap={2} wrap="wrap">
                               <Button
-                                 label={tx('Cancel security change')}
+                                 size="sm"
+                                 label={tx('Replace recovery codes')}
                                  isDisabled={busy}
                                  onClick={() => {
-                                    setAction(undefined);
+                                    setAction('recovery-codes');
                                     setCode('');
-                                    setPassword('');
+                                 }}
+                              />
+                              <Button
+                                 size="sm"
+                                 label={tx('Disable authenticator')}
+                                 isDisabled={busy}
+                                 onClick={() => {
+                                    setAction('disable');
+                                    setCode('');
                                  }}
                               />
                            </HStack>
-                        </VStack>
-                     )}
-                  </>
-               )}
-            </>
-         )}
+                        )}
+                        {action && (
+                           <VStack gap={3}>
+                              <Text>
+                                 {action === 'disable'
+                                    ? tx(
+                                         'Disable two-step verification and revoke other browser sessions?'
+                                      )
+                                    : tx(
+                                         'Replace all remaining recovery codes and revoke other browser sessions? Previous codes will stop working.'
+                                      )}
+                              </Text>
+                              <Selector
+                                 label={tx('Verification method')}
+                                 value={kind}
+                                 options={factorOptions}
+                                 onChange={(value) => setKind(value as FactorKind)}
+                                 width={320}
+                              />
+                              <TextInput
+                                 label={tx('Verification code')}
+                                 value={code}
+                                 onChange={setCode}
+                                 htmlName="one-time-code"
+                                 width={320}
+                              />
+                              <HStack gap={2} wrap="wrap">
+                                 <Button
+                                    size="sm"
+                                    label={tx('Confirm security change')}
+                                    isDisabled={busy || !code}
+                                    onClick={() =>
+                                       void run(async () => {
+                                          const result = await mfaRequest<{
+                                             recoveryCodes: string[];
+                                          }>(`/${action}`, {
+                                             password: password || null,
+                                             code,
+                                             kind,
+                                          });
+                                          setStatus((current) =>
+                                             current
+                                                ? {
+                                                     ...current,
+                                                     enabled: action !== 'disable',
+                                                     recoveryRemaining: result.recoveryCodes.length,
+                                                  }
+                                                : current
+                                          );
+                                          setCodes(result.recoveryCodes);
+                                          setAction(undefined);
+                                          refresh();
+                                       })
+                                    }
+                                 />
+                                 <Button
+                                    size="sm"
+                                    label={tx('Cancel security change')}
+                                    isDisabled={busy}
+                                    onClick={() => {
+                                       setAction(undefined);
+                                       setCode('');
+                                       setPassword('');
+                                    }}
+                                 />
+                              </HStack>
+                           </VStack>
+                        )}
+                     </>
+                  )}
+               </>
+            )}
+         </SettingsSection>
       </VStack>
    );
 }

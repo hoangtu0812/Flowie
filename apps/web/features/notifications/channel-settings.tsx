@@ -1,15 +1,19 @@
 'use client';
 import { useEffect, useState, useRef } from 'react';
-import { VStack } from '@astryxdesign/core/Layout';
-import { Heading, Text } from '@astryxdesign/core/Text';
+import { Text } from '@astryxdesign/core/Text';
 import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
-import { Button } from '@astryxdesign/core/Button';
+import { RefreshIconButton } from '@/features/shared/refresh-icon-button';
 import { DesignSurface } from '@/components/common/design-surface';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
 import { SubmissionGate } from '@/features/shared/submission-gate';
 import { useParams } from 'next/navigation';
-import { SettingsShell } from '@/components/common/settings/shared';
+import {
+   SettingsCard,
+   SettingsRow,
+   SettingsSection,
+   SettingsShell,
+} from '@/components/common/settings/shared';
 type ChannelState = {
    emailAvailable: boolean;
    emailEnabled: boolean;
@@ -120,92 +124,110 @@ export function ChannelSettings() {
             setSaving(false);
          }
       });
+   const channel = (
+      label: string,
+      description: string,
+      value: boolean,
+      isDisabled: boolean,
+      changes: (checked: boolean) => Partial<Channels>
+   ) => (
+      <SettingsRow
+         title={label}
+         description={description}
+         muted={isDisabled && !saving}
+         trailing={
+            <CheckboxInput
+               label={label}
+               isLabelHidden
+               value={value}
+               isDisabled={isDisabled}
+               onChange={(checked) => {
+                  void save(changes(checked));
+               }}
+            />
+         }
+      />
+   );
    return (
       <DesignSurface>
          <SettingsShell
             title="Notifications"
             description="Choose how Flowie delivers notifications to you"
+            action={
+               <RefreshIconButton
+                  label="Refresh delivery status"
+                  onClick={() => setReload((n) => n + 1)}
+               />
+            }
          >
-            <VStack as="main" gap={4} width="100%">
-               {!state && !error && <Text role="status">Loading notification settings…</Text>}
-               {error && <Text role="alert">{error}</Text>}
-               <Button label="Refresh delivery status" onClick={() => setReload((n) => n + 1)} />
-               {state && (
-                  <>
-                     <CheckboxInput
-                        label="Email notifications"
-                        value={state.emailEnabled}
-                        isDisabled={!state.emailAvailable || saving}
-                        onChange={(checked) => {
-                           void save({ emailEnabled: checked });
-                        }}
+            {(!state || error || saving) && (
+               <div className="flex flex-col gap-1 text-sm">
+                  {!state && !error && <Text role="status">Loading notification settings…</Text>}
+                  {error && <Text role="alert">{error}</Text>}
+                  {saving && <Text role="status">Saving…</Text>}
+               </div>
+            )}
+            {state && (
+               <SettingsCard>
+                  {channel(
+                     'Email notifications',
+                     state.emailAvailable
+                        ? 'Email is delivered privately with retries.'
+                        : 'Private SMTP delivery is not configured.',
+                     state.emailEnabled,
+                     !state.emailAvailable || saving,
+                     (checked) => ({ emailEnabled: checked })
+                  )}
+                  {channel(
+                     'Email about my tickets',
+                     'Replies and status changes on Service Desk tickets you raised, even when email notifications are off.',
+                     state.ticketEmailEnabled,
+                     !state.emailAvailable || saving,
+                     (checked) => ({ ticketEmailEnabled: checked })
+                  )}
+                  {channel(
+                     'Desktop notifications',
+                     'Desktop alerts require permission on each browser and appear while Flowie is in the background. Notification contents are kept private.',
+                     state.desktopEnabled,
+                     saving,
+                     (checked) => ({ desktopEnabled: checked })
+                  )}
+                  {channel(
+                     'Microsoft Teams',
+                     state.teamsAvailable
+                        ? 'When you are assigned an issue or mentioned in a comment, Flowie @mentions you in the Teams channel of the project, or of the workspace when the project has none.'
+                        : 'Teams is available when Microsoft sign-in is enabled.',
+                     state.teamsEnabled,
+                     !state.teamsAvailable || saving,
+                     (checked) => ({ teamsEnabled: checked })
+                  )}
+               </SettingsCard>
+            )}
+            <SettingsSection
+               title="Email delivery"
+               description="Up to 50 recent delivery records. Transient failures retry; delivery can be at least once."
+            >
+               <SettingsCard>
+                  {deliveries.length === 0 && (
+                     <SettingsRow title="No email delivery records." muted />
+                  )}
+                  {deliveries.map((item) => (
+                     <SettingsRow
+                        key={item.notificationId}
+                        title={
+                           item.deliveredAt ? 'Delivered' : item.failedAt ? 'Stopped' : 'Pending'
+                        }
+                        description={item.lastErrorCode}
+                        trailing={`attempts ${item.attempts}`}
                      />
-                     <Text>
-                        {state.emailAvailable
-                           ? 'Email is delivered privately with retries.'
-                           : 'Private SMTP delivery is not configured.'}
-                     </Text>
-                     <CheckboxInput
-                        label="Email about my tickets"
-                        value={state.ticketEmailEnabled}
-                        isDisabled={!state.emailAvailable || saving}
-                        onChange={(checked) => {
-                           void save({ ticketEmailEnabled: checked });
-                        }}
-                     />
-                     <Text>
-                        Replies and status changes on Service Desk tickets you raised, even when
-                        email notifications are off.
-                     </Text>
-                     <CheckboxInput
-                        label="Desktop notifications"
-                        value={state.desktopEnabled}
-                        isDisabled={saving}
-                        onChange={(checked) => {
-                           void save({ desktopEnabled: checked });
-                        }}
-                     />
-                     <Text>
-                        Desktop alerts require permission on each browser and appear while Flowie is
-                        in the background. Notification contents are kept private.
-                     </Text>
-                     <CheckboxInput
-                        label="Microsoft Teams"
-                        value={state.teamsEnabled}
-                        isDisabled={!state.teamsAvailable || saving}
-                        onChange={(checked) => {
-                           void save({ teamsEnabled: checked });
-                        }}
-                     />
-                     <Text>
-                        {state.teamsAvailable
-                           ? 'When you are assigned an issue or mentioned in a comment, Flowie @mentions you in the Teams channel of the project, or of the workspace when the project has none.'
-                           : 'Teams is available when Microsoft sign-in is enabled.'}
-                     </Text>
-                  </>
-               )}
-               {saving && <Text role="status">Saving…</Text>}
-               <Heading level={2}>Email delivery</Heading>
-               <Text>
-                  Up to 50 recent delivery records. Transient failures retry; delivery can be at
-                  least once.
-               </Text>
-               {deliveries.length === 0 && <Text>No email delivery records.</Text>}
-               {deliveries.map((item) => (
-                  <VStack key={item.notificationId} gap={1}>
-                     <Text>
-                        {item.deliveredAt ? 'Delivered' : item.failedAt ? 'Stopped' : 'Pending'} ·
-                        attempts {item.attempts}
-                     </Text>
-                     {item.lastErrorCode && <Text type="supporting">{item.lastErrorCode}</Text>}
-                  </VStack>
-               ))}
-               <Text>
-                  Discord and Microsoft Teams are configured in workspace Integrations; Teams is
-                  available when Microsoft sign-in is enabled. Native mobile and Slack delivery
-                  require separate integrations.
-               </Text>
-            </VStack>
+                  ))}
+               </SettingsCard>
+            </SettingsSection>
+            <p className="text-xs text-muted-foreground">
+               Discord and Microsoft Teams are configured in workspace Integrations; Teams is
+               available when Microsoft sign-in is enabled. Native mobile and Slack delivery require
+               separate integrations.
+            </p>
          </SettingsShell>
       </DesignSurface>
    );
