@@ -18,6 +18,7 @@ import {
    type ImportResult,
    type RecentImport,
 } from './client';
+import { SettingsRow, SettingsSection } from '@/components/common/settings/shared';
 
 export function ImportPanel({
    workspace,
@@ -201,12 +202,16 @@ export function ImportPanel({
             rows={6}
             maxLength={2 * 1024 * 1024}
          />
-         <Button
-            label={tx('Inspect CSV columns')}
-            onClick={() => void inspect()}
-            isLoading={busy}
-            isDisabled={!team}
-         />
+         <div className="flex">
+            <Button
+               size="sm"
+               label={tx('Inspect CSV columns')}
+               variant="secondary"
+               onClick={() => void inspect()}
+               isLoading={busy}
+               isDisabled={!team}
+            />
+         </div>
          {!!columns.length && (
             <>
                <Text>
@@ -237,12 +242,15 @@ export function ImportPanel({
                      />
                   ))}
                </HStack>
-               <Button
-                  label={tx('Preview CSV import')}
-                  onClick={() => void preview()}
-                  isLoading={busy}
-                  isDisabled={!mapping.externalId || !mapping.title}
-               />
+               <div className="flex">
+                  <Button
+                     size="sm"
+                     label={tx('Preview CSV import')}
+                     onClick={() => void preview()}
+                     isLoading={busy}
+                     isDisabled={!mapping.externalId || !mapping.title}
+                  />
+               </div>
             </>
          )}
          {error && <Text role="alert">{error}</Text>}
@@ -266,6 +274,7 @@ export function ImportPanel({
                <HStack gap={3} wrap="wrap">
                   {operation.state === 'PREVIEW' && (
                      <Button
+                        size="sm"
                         label={tx('Confirm import valid rows')}
                         onClick={() => void command('apply')}
                         isLoading={busy}
@@ -274,12 +283,14 @@ export function ImportPanel({
                   )}
                   {['PREVIEW', 'QUEUED', 'RUNNING'].includes(operation.state) && (
                      <Button
+                        size="sm"
                         label={tx('Cancel import')}
                         onClick={() => void command('cancel')}
                         isLoading={busy}
                      />
                   )}
                   <Button
+                     size="sm"
                      label={tx('Refresh import results')}
                      onClick={() => void open(operation.id)}
                      isLoading={busy}
@@ -298,45 +309,60 @@ export function ImportPanel({
                   ))}
                </List>
                {operation.nextAfter !== null && (
-                  <Button
-                     label={tx('Load more import rows')}
-                     isLoading={busy}
-                     isDisabled={importRunning(operation.state)}
-                     onClick={() =>
-                        void run(async () => {
-                           const data = await exchange<ImportResult>(
-                              `/imports/${operation.id}?${scope}&after=${operation.nextAfter}`
-                           );
-                           if (alive.current)
-                              setOperation({ ...data, rows: [...operation.rows, ...data.rows] });
-                        })
-                     }
-                  />
+                  <div className="flex">
+                     <Button
+                        size="sm"
+                        variant="ghost"
+                        label={tx('Load more import rows')}
+                        isLoading={busy}
+                        isDisabled={importRunning(operation.state)}
+                        onClick={() =>
+                           void run(async () => {
+                              const data = await exchange<ImportResult>(
+                                 `/imports/${operation.id}?${scope}&after=${operation.nextAfter}`
+                              );
+                              if (alive.current)
+                                 setOperation({ ...data, rows: [...operation.rows, ...data.rows] });
+                           })
+                        }
+                     />
+                  </div>
                )}
             </>
          )}
-         <Heading level={3}>{tx('Your latest 20 imports')}</Heading>
-         <Text>
-            {tx(
+         <SettingsSection
+            title={tx('Your latest 20 imports')}
+            description={tx(
                'Preview and result details are retained for 30 days. External IDs remain registered while their tasks exist.'
             )}
-         </Text>
-         <List hasDividers>
-            {recent.map((row) => (
-               <ListItem
-                  key={row.id}
-                  label={`${row.sourceKey} · ${row.state}`}
-                  description={dateLabel(row.createdAt)}
-                  endContent={
-                     <Button
-                        label={tx('Open import {value0}', { value0: row.id })}
-                        onClick={() => void open(row.id)}
-                        isDisabled={busy}
+         >
+            <ul className="rounded-lg border bg-container divide-y divide-border/60">
+               {recent.length === 0 && (
+                  <li>
+                     <SettingsRow title={tx('No imports yet.')} muted />
+                  </li>
+               )}
+               {recent.map((row) => (
+                  <li key={row.id}>
+                     <SettingsRow
+                        wrap
+                        title={`${row.sourceKey} · ${row.state}`}
+                        description={dateLabel(row.createdAt)}
+                        trailing={
+                           <Button
+                              size="sm"
+                              label={tx('Open')}
+                              aria-label={tx('Open import {value0}', { value0: row.id })}
+                              variant="ghost"
+                              onClick={() => void open(row.id)}
+                              isDisabled={busy}
+                           />
+                        }
                      />
-                  }
-               />
-            ))}
-         </List>
+                  </li>
+               ))}
+            </ul>
+         </SettingsSection>
       </VStack>
    );
 }

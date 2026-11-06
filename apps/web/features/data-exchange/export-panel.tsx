@@ -86,6 +86,7 @@ export function DocumentExportPanel({ workspace }: { workspace: string }) {
          </Text>
          <MultiSelector
             label={tx('Documents to export')}
+            width="min(28rem, 100%)"
             value={selected}
             onChange={setSelected}
             options={options.map((row) => ({ value: row.id, label: row.title }))}
@@ -96,21 +97,27 @@ export function DocumentExportPanel({ workspace }: { workspace: string }) {
             value={attachments}
             onChange={setAttachments}
          />
-         {after !== null && (
+         <div className="flex flex-wrap items-center gap-2">
+            {after !== null && (
+               <Button
+                  size="sm"
+                  label={
+                     options.length
+                        ? tx('Load more document options')
+                        : tx('Retry document options')
+                  }
+                  isLoading={busy}
+                  onClick={() => void load(after)}
+               />
+            )}
             <Button
-               label={
-                  options.length ? tx('Load more document options') : tx('Retry document options')
-               }
+               size="sm"
+               label={tx('Export selected documents ZIP')}
                isLoading={busy}
-               onClick={() => void load(after)}
+               isDisabled={!selected.length || selected.length > 100}
+               onClick={() => void exportZip()}
             />
-         )}
-         <Button
-            label={tx('Export selected documents ZIP')}
-            isLoading={busy}
-            isDisabled={!selected.length || selected.length > 100}
-            onClick={() => void exportZip()}
-         />
+         </div>
          {error && <Text role="alert">{error}</Text>}
       </VStack>
    );

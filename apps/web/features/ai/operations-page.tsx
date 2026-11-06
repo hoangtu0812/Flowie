@@ -3,15 +3,15 @@ import { useEffect, useState } from 'react';
 import { Button } from '@astryxdesign/core/Button';
 import { TextInput } from '@astryxdesign/core/TextInput';
 import { TextArea } from '@astryxdesign/core/TextArea';
-import { VStack, HStack } from '@astryxdesign/core/Layout';
-import { Heading, Text } from '@astryxdesign/core/Text';
+import { Text } from '@astryxdesign/core/Text';
 import { DesignSurface } from '@/components/common/design-surface';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
 import { QueryState } from '@/components/common/query-state';
 import { EvidenceVerification } from './evidence-verification';
 import { useParams } from 'next/navigation';
-import { SettingsShell } from '@/components/common/settings/shared';
+import { SettingsSection, SettingsShell } from '@/components/common/settings/shared';
+import { RefreshIconButton } from '@/features/shared/refresh-icon-button';
 type Overview = {
    limits: { totalPerMinute: number; perTool: Record<string, number> };
    usage: number;
@@ -74,110 +74,127 @@ export function OperationsPage() {
          active = false;
       };
    }, [refresh, orgId]);
+   const ms = (value: number | null) =>
+      value === null ? 'unavailable' : Math.round(value) + ' ms';
    return (
       <DesignSurface>
          <SettingsShell
             title="AI operations"
             description="Workspace administrators manage limits and review the last 24 hours of tool execution."
+            action={
+               <RefreshIconButton
+                  label="Refresh operations"
+                  onClick={() => setRefresh((n) => n + 1)}
+               />
+            }
          >
-            <VStack as="main" gap={4} width="100%">
-               <Button label="Refresh operations" onClick={() => setRefresh((n) => n + 1)} />
-               {error && <QueryState message={error} />}{' '}
-               {!data && !error && <Text role="status">Loading operations…</Text>}
-               {data && (
-                  <>
-                     <Heading level={2}>Workspace budget</Heading>
-                     <Text>
-                        {data.usage} / {data.limits.totalPerMinute} tool attempts in this minute
-                     </Text>
-                     <TextInput
-                        label="Total tool calls per minute"
-                        value={total}
-                        onChange={setTotal}
+            {error && <QueryState message={error} />}
+            {!data && !error && <Text role="status">Loading operations…</Text>}
+            {data && (
+               <>
+                  <SettingsSection
+                     title="Workspace budget"
+                     description={`${data.usage} / ${data.limits.totalPerMinute} tool attempts in this minute`}
+                  >
+                     <div className="flex flex-col gap-3 rounded-lg border bg-container px-4 py-3">
+                        <TextInput
+                           label="Total tool calls per minute"
+                           size="sm"
+                           width={200}
+                           value={total}
+                           onChange={setTotal}
+                        />
+                        <TextArea
+                           label="Per-tool budgets (JSON)"
+                           value={perTool}
+                           onChange={setPerTool}
+                           rows={4}
+                        />
+                        <div className="flex">
+                           <Button
+                              label="Save budgets"
+                              size="sm"
+                              clickAction={async () => {
+                                 try {
+                                    const parsed: unknown = JSON.parse(perTool);
+                                    if ((await loadCurrentWorkspace()).id !== workspace)
+                                       throw new Error('Workspace changed. Reload operations.');
+                                    if (
+                                       !parsed ||
+                                       typeof parsed !== 'object' ||
+                                       Array.isArray(parsed)
+                                    )
+                                       throw new Error(
+                                          'Use a JSON object of tool names and positive limits.'
+                                       );
+                                    await responseData(
+                                       await authenticatedFetch(
+                                          `${api}/ai-operations/limits?${new URLSearchParams({ workspaceId: workspace! })}`,
+                                          {
+                                             method: 'PUT',
+                                             headers: { 'content-type': 'application/json' },
+                                             body: JSON.stringify({
+                                                totalPerMinute: Number(total),
+                                                perTool: parsed,
+                                             }),
+                                          }
+                                       )
+                                    );
+                                    setRefresh((n) => n + 1);
+                                 } catch (reason) {
+                                    setError(
+                                       reason instanceof Error
+                                          ? reason.message
+                                          : 'Could not save limits.'
+                                    );
+                                 }
+                              }}
+                           />
+                        </div>
+                     </div>
+                  </SettingsSection>
+                  <SettingsSection title="Tool calls">
+                     <StatRows
+                        empty="No recorded tool calls in this period."
+                        rows={data.tools.map((tool) => ({
+                           key: tool.tool,
+                           name: tool.tool,
+                           detail: `${tool.calls} calls · ${tool.errors} errors · p95 ${ms(tool.p95Ms)}`,
+                           alert: tool.errors > 0,
+                        }))}
                      />
-                     <TextArea
-                        label="Per-tool budgets (JSON)"
-                        value={perTool}
-                        onChange={setPerTool}
-                        rows={4}
+                  </SettingsSection>
+                  <SettingsSection title="AI provider usage (last 7 days)">
+                     <StatRows
+                        empty="No AI provider calls in this period."
+                        rows={data.providerCalls.map((call) => ({
+                           key: call.feature,
+                           name: call.feature,
+                           detail: `${call.calls} calls · ${call.failed} failed · ${call.inputTokens.toLocaleString()} input tokens · ${call.outputTokens.toLocaleString()} output tokens · p95 ${ms(call.p95Ms)}`,
+                           alert: call.failed > 0,
+                        }))}
                      />
-                     <Button
-                        label="Save budgets"
-                        clickAction={async () => {
-                           try {
-                              const parsed: unknown = JSON.parse(perTool);
-                              if ((await loadCurrentWorkspace()).id !== workspace)
-                                 throw new Error('Workspace changed. Reload operations.');
-                              if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
-                                 throw new Error(
-                                    'Use a JSON object of tool names and positive limits.'
-                                 );
-                              await responseData(
-                                 await authenticatedFetch(
-                                    `${api}/ai-operations/limits?${new URLSearchParams({ workspaceId: workspace! })}`,
-                                    {
-                                       method: 'PUT',
-                                       headers: { 'content-type': 'application/json' },
-                                       body: JSON.stringify({
-                                          totalPerMinute: Number(total),
-                                          perTool: parsed,
-                                       }),
-                                    }
-                                 )
-                              );
-                              setRefresh((n) => n + 1);
-                           } catch (reason) {
-                              setError(
-                                 reason instanceof Error ? reason.message : 'Could not save limits.'
-                              );
-                           }
-                        }}
+                  </SettingsSection>
+                  {data.recentProviderErrors.length > 0 && (
+                     <SettingsSection title="Recent AI provider errors">
+                        <StatRows
+                           rows={data.recentProviderErrors.map((item, index) => ({
+                              key: String(index),
+                              name: `${item.feature} · ${item.outcome}`,
+                              detail: `${item.statusCode === null ? '' : `HTTP ${item.statusCode} · `}${item.model} · ${new Date(item.createdAt).toLocaleString()}`,
+                           }))}
+                        />
+                     </SettingsSection>
+                  )}
+                  <SettingsSection title="Agent runs" description={data.evidencePolicy}>
+                     <StatRows
+                        rows={data.runs.map((run) => ({
+                           key: run.state,
+                           name: run.state,
+                           detail: `${run.count} runs · expired leases ${run.expiredLeases}`,
+                           alert: run.expiredLeases > 0,
+                        }))}
                      />
-                     <Heading level={2}>Tool calls</Heading>
-                     {data.tools.length === 0 && (
-                        <Text>No recorded tool calls in this period.</Text>
-                     )}
-                     {data.tools.map((tool) => (
-                        <HStack key={tool.tool} gap={3} wrap="wrap">
-                           <Text weight="medium">{tool.tool}</Text>
-                           <Text>
-                              {tool.calls} calls · {tool.errors} errors · p95{' '}
-                              {tool.p95Ms === null ? 'unavailable' : Math.round(tool.p95Ms) + ' ms'}
-                           </Text>
-                        </HStack>
-                     ))}
-                     <Heading level={2}>AI provider usage (last 7 days)</Heading>
-                     {data.providerCalls.length === 0 && (
-                        <Text>No AI provider calls in this period.</Text>
-                     )}
-                     {data.providerCalls.map((call) => (
-                        <HStack key={call.feature} gap={3} wrap="wrap">
-                           <Text weight="medium">{call.feature}</Text>
-                           <Text>
-                              {call.calls} calls · {call.failed} failed ·{' '}
-                              {call.inputTokens.toLocaleString()} input tokens ·{' '}
-                              {call.outputTokens.toLocaleString()} output tokens · p95{' '}
-                              {call.p95Ms === null ? 'unavailable' : Math.round(call.p95Ms) + ' ms'}
-                           </Text>
-                        </HStack>
-                     ))}
-                     {data.recentProviderErrors.length > 0 && (
-                        <Heading level={2}>Recent AI provider errors</Heading>
-                     )}
-                     {data.recentProviderErrors.map((item, index) => (
-                        <Text key={index}>
-                           {item.feature} · {item.outcome}
-                           {item.statusCode === null ? '' : ` · HTTP ${item.statusCode}`} · {item.model}{' '}
-                           · {new Date(item.createdAt).toLocaleString()}
-                        </Text>
-                     ))}
-                     <Heading level={2}>Agent runs</Heading>
-                     {data.runs.map((run) => (
-                        <Text key={run.state}>
-                           {run.state}: {run.count} · expired leases {run.expiredLeases}
-                        </Text>
-                     ))}
-                     <Text>{data.evidencePolicy}</Text>
                      {workspace &&
                         data.awaitingReview.map((run) => (
                            <EvidenceVerification
@@ -186,17 +203,56 @@ export function OperationsPage() {
                               workspaceId={workspace}
                            />
                         ))}
-                     <Heading level={2}>Recent errors</Heading>
-                     {data.recentErrors.map((item, index) => (
-                        <Text key={index}>
-                           {item.tool} · {item.outcome} ·{' '}
-                           {new Date(item.createdAt).toLocaleString()}
-                        </Text>
-                     ))}
-                  </>
-               )}
-            </VStack>
+                  </SettingsSection>
+                  <SettingsSection title="Recent errors">
+                     <StatRows
+                        empty="No recent tool errors."
+                        rows={data.recentErrors.map((item, index) => ({
+                           key: String(index),
+                           name: `${item.tool} · ${item.outcome}`,
+                           detail: new Date(item.createdAt).toLocaleString(),
+                        }))}
+                     />
+                  </SettingsSection>
+               </>
+            )}
          </SettingsShell>
       </DesignSurface>
+   );
+}
+
+/**
+ * Bordered list of one-line rows (name left, measurements right) used by every AI operations
+ * section; the right part wraps under the name on narrow screens. `alert` marks a row that
+ * has errors so it stands out without changing its text.
+ * VI: Danh sách có viền gồm các hàng một dòng (tên bên trái, số liệu bên phải) dùng cho mọi mục
+ * AI operations; phần bên phải xuống dưới tên ở màn hình hẹp. `alert` đánh dấu hàng có lỗi để
+ * nổi bật mà không đổi nội dung chữ.
+ */
+function StatRows({
+   rows,
+   empty,
+}: {
+   rows: { key: string; name: string; detail: string; alert?: boolean }[];
+   empty?: string;
+}) {
+   if (!rows.length && !empty) return null;
+   return (
+      <ul className="rounded-lg border bg-container divide-y divide-border/60">
+         {!rows.length && <li className="px-4 py-2 text-sm text-muted-foreground">{empty}</li>}
+         {rows.map((row) => (
+            <li
+               key={row.key}
+               className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 px-4 py-2"
+            >
+               <span className="text-sm font-medium">{row.name}</span>
+               <span
+                  className={row.alert ? 'text-xs text-red-500' : 'text-xs text-muted-foreground'}
+               >
+                  {row.detail}
+               </span>
+            </li>
+         ))}
+      </ul>
    );
 }
