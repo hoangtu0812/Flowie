@@ -1,4 +1,15 @@
-export type DocType = 'FDS' | 'TDS' | 'ADR' | 'RCA' | 'GUIDE' | 'OTHER';
+export type DocType =
+   | 'FDS'
+   | 'TDS'
+   | 'BRD'
+   | 'SRS'
+   | 'PROTOTYPE'
+   | 'TEST'
+   | 'MINUTES'
+   | 'ADR'
+   | 'RCA'
+   | 'GUIDE'
+   | 'OTHER';
 export type DocStatus = 'DRAFT' | 'IN_REVIEW' | 'APPROVED';
 export type FolderKind = 'project' | 'module' | 'feature' | 'changes' | 'general';
 

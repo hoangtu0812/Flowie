@@ -20,7 +20,7 @@ from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
 from app.main import create_app
 from app.modules.mcp.application import ToolApplication
 from app.modules.mcp.connections import authenticate, create, revoke
-from app.modules.mcp.contracts import ConnectionInput, UpdateIssueTool
+from app.modules.mcp.contracts import ConnectionInput, CreateDocumentTool, UpdateIssueTool
 from app.modules.mcp.domain import ALL_SCOPES
 from app.modules.mcp.pagination import CursorCodec
 from app.modules.mcp.registry import visible_tools
@@ -65,6 +65,15 @@ class McpContractTests(unittest.TestCase):
                     "statusId": "done",
                 }
             )
+
+    def test_document_types_cover_new_kinds_and_reject_unknown(self):
+        from pydantic import ValidationError
+
+        base = {"idempotencyKey": "test-key", "title": "Spec"}
+        for kind in ("BRD", "SRS", "PROTOTYPE", "TEST", "MINUTES"):
+            self.assertEqual(CreateDocumentTool.model_validate({**base, "docType": kind}).docType, kind)
+        with self.assertRaises(ValidationError):
+            CreateDocumentTool.model_validate({**base, "docType": "XYZ"})
 
     def test_required_patch_values_cannot_be_null(self):
         from pydantic import ValidationError
@@ -864,9 +873,11 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             projectId=self.project,
             title="Bug analysis",
             content="First",
+            docType="PROTOTYPE",
             idempotencyKey="document-create-key",
         )
         document = created["data"]
+        self.assertEqual(document["docType"], "PROTOTYPE")
         await self.call(
             "update_document",
             documentId=document["id"],

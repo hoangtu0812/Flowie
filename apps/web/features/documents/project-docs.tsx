@@ -42,7 +42,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useLocale } from '@/features/shared/use-locale';
 import { useMessages } from '@/features/shared/use-messages';
 import { messages } from '@/features/documents/messages.vi';
-import { documentTemplate, documentTitle } from '@/lib/document-templates';
+import { documentTemplate, documentTitle, hasTemplate } from '@/lib/document-templates';
 import {
    buildTree,
    filterTree,
@@ -797,7 +797,7 @@ function NewDocumentDialog({
                   placeholder={feature ? tx('Feature name') : tx('Document title')}
                   aria-label={feature ? tx('Feature name') : tx('Document title')}
                />
-               {feature && (
+               {hasTemplate(type) && (
                   <p className="text-xs text-muted-foreground">
                      {tx('Starts from the {value0} template.', { value0: type })}
                   </p>

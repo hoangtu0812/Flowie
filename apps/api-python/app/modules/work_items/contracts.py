@@ -6,6 +6,14 @@ from pydantic import BaseModel, Field, field_validator
 
 from .bug_contracts import BugCreateFields, BugUpdateFields
 
+# Every document type REST and MCP accept. `documents.doc_type` is TEXT without a CHECK
+# constraint, so this list is the only gate: adding a type needs no migration.
+# VI: Mọi loại tài liệu REST và MCP chấp nhận. `documents.doc_type` là TEXT không có CHECK
+# VI: constraint, nên danh sách này là chốt kiểm tra duy nhất: thêm loại không cần migration.
+DocType = Literal[
+    "FDS", "TDS", "BRD", "SRS", "PROTOTYPE", "TEST", "MINUTES", "ADR", "RCA", "GUIDE", "OTHER"
+]
+
 IssuePriority = Literal["NONE", "LOW", "MEDIUM", "HIGH", "URGENT"]
 
 
@@ -80,7 +88,7 @@ class CreateDocumentInput(BaseModel):
     icon: str | None = Field(default=None, min_length=1, max_length=32)
     sourceType: Literal["markdown", "flowie", "upload", "link"] = "markdown"
     sourceUrl: str | None = Field(default=None, max_length=2048)
-    docType: Literal["FDS", "TDS", "ADR", "RCA", "GUIDE", "OTHER"] = "OTHER"
+    docType: DocType = "OTHER"
     status: Literal["DRAFT", "IN_REVIEW", "APPROVED"] = "DRAFT"
     pinned: bool = False
     position: int | None = Field(default=None, ge=0)
@@ -94,7 +102,7 @@ class UpdateDocumentInput(BaseModel):
     icon: str | None = Field(default=None, min_length=1, max_length=32)
     sourceType: Literal["markdown", "flowie", "upload", "link"] | None = None
     sourceUrl: str | None = Field(default=None, max_length=2048)
-    docType: Literal["FDS", "TDS", "ADR", "RCA", "GUIDE", "OTHER"] | None = None
+    docType: DocType | None = None
     status: Literal["DRAFT", "IN_REVIEW", "APPROVED"] | None = None
     pinned: bool | None = None
     position: int | None = Field(default=None, ge=0)

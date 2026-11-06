@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- Docs has five more document types: BRD (business requirements), SRS (software requirements), PROTOTYPE, TEST (test plan / UAT) and MINUTES (meeting minutes). Each has its own badge colour and appears in the Docs type filter and type pickers. A new document of these types starts from a template, titled `<TYPE> · <name>` like FDS/TDS. The REST API and MCP `create_document` / `update_document` accept the new types. The Service Desk assistant also answers from approved BRD documents. No migration; rebuild `api` and `web`. (DTD-478, #164)
+  VI: Docs có thêm năm loại tài liệu: BRD (yêu cầu nghiệp vụ), SRS (đặc tả yêu cầu phần mềm), PROTOTYPE, TEST (kế hoạch kiểm thử / UAT) và MINUTES (biên bản họp). Mỗi loại có màu badge riêng và có trong bộ lọc loại của Docs và các ô chọn loại. Tài liệu mới thuộc các loại này bắt đầu từ mẫu, tiêu đề `<LOẠI> · <tên>` như FDS/TDS. API REST và MCP `create_document` / `update_document` chấp nhận các loại mới. Trợ lý Service Desk trả lời thêm từ tài liệu BRD đã duyệt. Không có migration; build lại `api` và `web`. (DTD-478)
+
 - The document viewer shows the table of contents as a sidebar on the left of the text instead of a block above it. It stays in view while the text scrolls, highlights the section being read and jumps smoothly to a heading when clicked. A header button hides or shows it; it starts hidden on screens narrower than 1024px and floats over the text on phones. No migration; rebuild `web`. (DTD-382, #163)
   VI: Khung xem tài liệu hiển thị mục lục thành sidebar bên trái phần chữ thay cho khối nằm phía trên. Mục lục luôn nằm trong khung nhìn khi phần chữ cuộn, tô sáng mục đang đọc và cuộn mượt tới heading khi bấm. Nút trên thanh tiêu đề dùng để ẩn hoặc hiện mục lục; trên màn hình hẹp hơn 1024px mục lục mặc định ẩn, và trên điện thoại nó nổi trên phần chữ. Không có migration; build lại `web`. (DTD-382)
 

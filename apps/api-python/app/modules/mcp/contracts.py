@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator, field_validator
 
 from ..work_items.bug_contracts import BugCreateFields, BugUpdateFields, IssueType, BugSeverity
+from ..work_items.contracts import DocType
 from .domain import ALL_SCOPES, READ_SCOPES
 from .instructions import MAX_WORKFLOW_LENGTH
 
@@ -250,7 +251,7 @@ class UpdateCommentTool(VersionInput):
 class CreateDocumentTool(WriteInput):
     title: str = Field(min_length=2, max_length=250)
     content: str = Field(default="", max_length=100000)
-    docType: Literal["FDS", "TDS", "ADR", "RCA", "GUIDE", "OTHER"] | None = None
+    docType: DocType | None = None
     # Agents can draft and submit for review; approving (and so publishing) stays with people.
     # VI: Agent được soạn nháp và gửi duyệt; việc duyệt (và phát hành) do người thực hiện.
     status: Literal["DRAFT", "IN_REVIEW"] | None = None
@@ -279,7 +280,7 @@ class UpdateDocumentTool(VersionInput, DocumentInput):
     # Exact-text replacements applied to the current content instead of resending it.
     # VI: Các thay thế đoạn chính xác áp dụng lên nội dung hiện tại thay vì gửi lại cả bài.
     edits: list[DocumentEdit] | None = Field(default=None, min_length=1, max_length=50)
-    docType: Literal["FDS", "TDS", "ADR", "RCA", "GUIDE", "OTHER"] | None = None
+    docType: DocType | None = None
     # Agents can draft and submit for review; approving (and so publishing) stays with people.
     # VI: Agent được soạn nháp và gửi duyệt; việc duyệt (và phát hành) do người thực hiện.
     status: Literal["DRAFT", "IN_REVIEW"] | None = None
