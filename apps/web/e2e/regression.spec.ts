@@ -627,7 +627,7 @@ test('account preferences synchronize on a separate browser context and home nav
    let second: Awaited<ReturnType<typeof browser.newContext>> | undefined;
    try {
       await page.goto(`/${fixture.slug}/settings/preferences`);
-      await expect(page.getByText('Account preferences saved.', { exact: true })).toBeVisible();
+      await expect(page.getByRole('combobox', { name: 'Language', exact: true })).toBeVisible();
       await page
          .getByRole('checkbox', { name: 'Underline links', exact: true })
          .setChecked(!original.values.underlineLinks);

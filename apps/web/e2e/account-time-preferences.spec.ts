@@ -28,7 +28,7 @@ test('timezone and week start persist and optional self-assignment respects clea
    try {
       await page.waitForLoadState('networkidle');
       await page.goto(`/${fixture.slug}/settings/preferences`);
-      await expect(page.getByText('Account preferences saved.', { exact: true })).toBeVisible();
+      await expect(page.getByRole('combobox', { name: 'Language', exact: true })).toBeVisible();
       await page
          .getByRole('textbox', { name: 'Account timezone', exact: true })
          .fill('America/Los_Angeles');
@@ -47,6 +47,7 @@ test('timezone and week start persist and optional self-assignment respects clea
                (await (await context.request.get(endpoint)).json()).data.values.autoAssignSelf
          )
          .toBe(true);
+      await expect(page.getByText('Account preferences saved.', { exact: true })).toBeVisible();
       await page.reload();
       await expect(
          page.getByRole('textbox', { name: 'Account timezone', exact: true })

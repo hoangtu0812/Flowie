@@ -1,10 +1,9 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { CustomizeSidebarDialog } from '@/components/layout/sidebar/customize-sidebar-dialog';
 import { Button } from '@astryxdesign/core/Button';
 import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
-import { VStack } from '@astryxdesign/core/Layout';
-import { Heading, Text } from '@astryxdesign/core/Text';
 import { Selector } from '@astryxdesign/core/Selector';
 import { DesignSurface } from '@/components/common/design-surface';
 import {
@@ -16,9 +15,14 @@ import { useModifierKey } from '@/features/shared/use-modifier-key';
 import { useLocale } from '@/features/shared/use-locale';
 import { useMessages } from '@/features/shared/use-messages';
 import { preferenceMessages } from './preference-messages';
-import { TimePreferences } from './time-preferences';
+import { PREFERENCE_CONTROL_WIDTH, TimePreferences } from './time-preferences';
 import { ThemePreferences } from '@/components/common/settings/theme-preferences';
-import { SettingsShell } from '@/components/common/settings/shared';
+import {
+   SettingsCard,
+   SettingsRow,
+   SettingsSection,
+   SettingsShell,
+} from '@/components/common/settings/shared';
 
 export default function AccountPreferencesPage() {
    const state = useUiPreferencesStore(),
@@ -26,6 +30,16 @@ export default function AccountPreferencesPage() {
       tx = useMessages(preferenceMessages),
       modifier = useModifierKey();
    const [customizeOpen, setCustomizeOpen] = useState(false);
+   const previousStatus = useRef(state.syncStatus);
+   // Confirms a finished autosave with a short toast instead of a permanent status line; the
+   // initial load (loading → saved) stays silent because nothing was changed by the user.
+   // VI: Báo autosave xong bằng toast ngắn thay cho dòng trạng thái hiện mãi; lần tải đầu
+   // (loading → saved) không báo vì người dùng chưa đổi gì.
+   useEffect(() => {
+      if (previousStatus.current === 'saving' && state.syncStatus === 'saved')
+         toast.success(tx('Account preferences saved.'), { id: 'account-preferences-saved' });
+      previousStatus.current = state.syncStatus;
+   }, [state.syncStatus, tx]);
    return (
       <DesignSurface>
          <SettingsShell
@@ -33,107 +47,168 @@ export default function AccountPreferencesPage() {
             description={tx(
                'Preferences synchronize with your account. Theme and sidebar layout remain specific to this browser.'
             )}
-         >
-            <VStack as="main" gap={5} width="100%">
-               <Text role="status">
-                  {state.syncStatus === 'saved'
-                     ? tx('Account preferences saved.')
+            action={
+               <span role="status" className="text-xs text-muted-foreground shrink-0">
+                  {state.syncStatus === 'loading'
+                     ? tx('Synchronizing account preferences…')
                      : state.syncStatus === 'error'
                        ? tx('Preferences could not synchronize.')
-                       : tx('Synchronizing account preferences…')}
-               </Text>
-               {state.syncError && (
-                  <>
-                     <Text role="alert">{state.syncError}</Text>
-                     <Button
-                        label={tx('Reload account preferences')}
-                        onClick={state.reloadAccountPreferences}
-                     />
-                  </>
-               )}
-               {state.syncStatus !== 'loading' && (
-                  <VStack gap={4} width="100%">
-                     <Selector
-                        label={tx('Language')}
-                        value={state.locale}
-                        options={[
-                           { value: 'en', label: 'English' },
-                           { value: 'vi', label: 'Tiếng Việt' },
-                        ]}
-                        onChange={(value) => state.setLocale(value === 'vi' ? 'vi' : 'en')}
-                        width="100%"
-                     />
-                     <Selector
-                        label={tx('Default home view')}
-                        value={state.defaultHome}
-                        options={[
-                           { value: 'inbox', label: tx('Inbox') },
-                           { value: 'my-issues', label: tx('My issues') },
-                        ]}
-                        onChange={(value) => state.setDefaultHome(value as DefaultHome)}
-                        width="100%"
-                     />
-                     <Selector
-                        label={tx('Comment submission shortcut')}
-                        value={state.commentSubmitMode}
-                        options={[
-                           { value: 'modifier-enter', label: `${modifier}+Enter` },
-                           { value: 'enter', label: tx('Enter (Shift+Enter for a new line)') },
-                        ]}
-                        onChange={(value) =>
-                           state.setCommentSubmitMode(value as 'enter' | 'modifier-enter')
-                        }
-                        width="100%"
-                     />
-                     <TimePreferences />
-                     <VStack gap={1} width="100%">
-                        <CheckboxInput
-                           label={tx('Automatically assign new tasks and bugs to me')}
-                           value={state.autoAssignSelf}
-                           onChange={state.setAutoAssignSelf}
+                       : null}
+               </span>
+            }
+         >
+            {state.syncError && (
+               <SettingsCard>
+                  <SettingsRow
+                     title={<span role="alert">{state.syncError}</span>}
+                     trailing={
+                        <Button
+                           label={tx('Reload account preferences')}
+                           size="sm"
+                           variant="secondary"
+                           onClick={state.reloadAccountPreferences}
                         />
-                        <Text>
-                           {tx(
+                     }
+                  />
+               </SettingsCard>
+            )}
+            {state.syncStatus !== 'loading' && (
+               <>
+                  <SettingsSection title={tx('General')}>
+                     <SettingsCard>
+                        <SettingsRow
+                           title={tx('Language')}
+                           trailing={
+                              <Selector
+                                 label={tx('Language')}
+                                 isLabelHidden
+                                 size="sm"
+                                 width={PREFERENCE_CONTROL_WIDTH}
+                                 value={state.locale}
+                                 options={[
+                                    { value: 'en', label: 'English' },
+                                    { value: 'vi', label: 'Tiếng Việt' },
+                                 ]}
+                                 onChange={(value) => state.setLocale(value === 'vi' ? 'vi' : 'en')}
+                              />
+                           }
+                        />
+                        <SettingsRow
+                           title={tx('Default home view')}
+                           trailing={
+                              <Selector
+                                 label={tx('Default home view')}
+                                 isLabelHidden
+                                 size="sm"
+                                 width={PREFERENCE_CONTROL_WIDTH}
+                                 value={state.defaultHome}
+                                 options={[
+                                    { value: 'inbox', label: tx('Inbox') },
+                                    { value: 'my-issues', label: tx('My issues') },
+                                 ]}
+                                 onChange={(value) => state.setDefaultHome(value as DefaultHome)}
+                              />
+                           }
+                        />
+                        <SettingsRow
+                           title={tx('Comment submission shortcut')}
+                           trailing={
+                              <Selector
+                                 label={tx('Comment submission shortcut')}
+                                 isLabelHidden
+                                 size="sm"
+                                 width={PREFERENCE_CONTROL_WIDTH}
+                                 value={state.commentSubmitMode}
+                                 options={[
+                                    { value: 'modifier-enter', label: `${modifier}+Enter` },
+                                    {
+                                       value: 'enter',
+                                       label: tx('Enter (Shift+Enter for a new line)'),
+                                    },
+                                 ]}
+                                 onChange={(value) =>
+                                    state.setCommentSubmitMode(value as 'enter' | 'modifier-enter')
+                                 }
+                              />
+                           }
+                        />
+                        <SettingsRow
+                           title={tx('Automatically assign new tasks and bugs to me')}
+                           description={tx(
                               'Applies to the create dialog when you are eligible in the selected team. You can clear or change the assignee before saving.'
                            )}
-                        </Text>
-                     </VStack>
-                     <Selector
-                        label={tx('Font size')}
-                        value={state.fontSize}
-                        options={[
-                           { value: 'default', label: tx('Default') },
-                           { value: 'small', label: tx('Small') },
-                           { value: 'large', label: tx('Large') },
-                        ]}
-                        onChange={(value) => state.setFontSize(value as FontSize)}
-                        width="100%"
-                     />
-                     <Button
-                        label={tx('Customize sidebar')}
-                        onClick={() => setCustomizeOpen(true)}
-                     />
-                     <CheckboxInput
-                        label={tx('Use pointer cursors')}
-                        value={state.pointerCursors}
-                        onChange={state.setPointerCursors}
-                     />
-                     <CheckboxInput
-                        label={tx('Underline links')}
-                        value={state.underlineLinks}
-                        onChange={state.setUnderlineLinks}
-                     />
-                  </VStack>
-               )}
+                           trailing={
+                              <CheckboxInput
+                                 label={tx('Automatically assign new tasks and bugs to me')}
+                                 isLabelHidden
+                                 value={state.autoAssignSelf}
+                                 onChange={state.setAutoAssignSelf}
+                              />
+                           }
+                        />
+                     </SettingsCard>
+                  </SettingsSection>
+                  <TimePreferences />
+                  <SettingsSection title={tx('Display')}>
+                     <SettingsCard>
+                        <SettingsRow
+                           title={tx('Font size')}
+                           trailing={
+                              <Selector
+                                 label={tx('Font size')}
+                                 isLabelHidden
+                                 size="sm"
+                                 width={PREFERENCE_CONTROL_WIDTH}
+                                 value={state.fontSize}
+                                 options={[
+                                    { value: 'default', label: tx('Default') },
+                                    { value: 'small', label: tx('Small') },
+                                    { value: 'large', label: tx('Large') },
+                                 ]}
+                                 onChange={(value) => state.setFontSize(value as FontSize)}
+                              />
+                           }
+                        />
+                        <SettingsRow
+                           title={tx('Use pointer cursors')}
+                           trailing={
+                              <CheckboxInput
+                                 label={tx('Use pointer cursors')}
+                                 isLabelHidden
+                                 value={state.pointerCursors}
+                                 onChange={state.setPointerCursors}
+                              />
+                           }
+                        />
+                        <SettingsRow
+                           title={tx('Underline links')}
+                           trailing={
+                              <CheckboxInput
+                                 label={tx('Underline links')}
+                                 isLabelHidden
+                                 value={state.underlineLinks}
+                                 onChange={state.setUnderlineLinks}
+                              />
+                           }
+                        />
+                        <SettingsRow
+                           title={tx('Customize sidebar')}
+                           chevron
+                           onClick={() => setCustomizeOpen(true)}
+                        />
+                     </SettingsCard>
+                  </SettingsSection>
+               </>
+            )}
+            <SettingsSection title={tx('Theme')}>
                <ThemePreferences />
-               <Heading level={2}>{tx('Other preferences')}</Heading>
-               <Text>
-                  {tx(
-                     'Display-name format, emoticon conversion and desktop deep links are not available yet.'
-                  )}
-               </Text>
-               <CustomizeSidebarDialog open={customizeOpen} onOpenChange={setCustomizeOpen} />
-            </VStack>
+            </SettingsSection>
+            <p className="text-xs text-muted-foreground">
+               {tx(
+                  'Display-name format, emoticon conversion and desktop deep links are not available yet.'
+               )}
+            </p>
+            <CustomizeSidebarDialog open={customizeOpen} onOpenChange={setCustomizeOpen} />
          </SettingsShell>
       </DesignSurface>
    );
