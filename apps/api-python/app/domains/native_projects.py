@@ -861,6 +861,7 @@ async def _project_issue_rows(db: AsyncSession, project_id: str, workspace_id: s
         text(
             """SELECT i.*,
                       s.id AS status_id_value, s.name AS status_name, s.category AS status_category, s.color AS status_color,
+                      s.position AS status_position,
                       t.id AS team_id_value, t.name AS team_name, t.identifier AS team_identifier,
                       c.id AS creator_id_value, c.name AS creator_name, c.avatar_url AS creator_avatar_url,
                       a.id AS assignee_id_value, a.name AS assignee_name, a.avatar_url AS assignee_avatar_url
@@ -924,9 +925,16 @@ async def _project_issue_rows(db: AsyncSession, project_id: str, workspace_id: s
             'completedAt': row['completed_at'], 'canceledAt': row['canceled_at'],
             'archivedAt': row['archived_at'], 'createdAt': row['created_at'],
             'updatedAt': row['updated_at'],
+            # Version, manual order and the sort rule let the Timeline order sub-issues like their
+            # parent does and save drags without overwriting newer changes.
+            # VI: Version, thứ tự thủ công và quy tắc sort giúp Timeline sắp sub-issue như issue cha
+            # VI: và lưu thao tác kéo mà không ghi đè thay đổi mới hơn.
+            'version': row['version'], 'manualOrder': str(row['manual_order']),
+            'subIssueSort': row['sub_issue_sort'],
             'status': {
                 'id': row['status_id_value'], 'name': row['status_name'],
                 'category': row['status_category'], 'color': row['status_color'],
+                'position': row['status_position'],
             },
             'team': {'id': row['team_id_value'], 'name': row['team_name'], 'identifier': row['team_identifier']} if row['team_id_value'] else None,
             'creator': {'id': row['creator_id_value'], 'name': row['creator_name'], 'avatarUrl': row['creator_avatar_url']},

@@ -1882,6 +1882,9 @@ model Issue {
   /// Shared logical position; new rows start at zero until manually reordered.
   /// VI: Vị trí logic dùng chung; dòng mới bắt đầu tại không đến khi sắp xếp thủ công.
   manualOrder BigInt @default(0) @map("manual_order")
+  /// Sort rule of the sub-issue tree (manual, identifier-asc/desc, status-asc/desc).
+  /// VI: Quy tắc sắp xếp cây sub-issue (manual, identifier-asc/desc, status-asc/desc).
+  subIssueSort String @default("manual") @map("sub_issue_sort")
   id                String            @id @default(cuid())
   workspaceId       String            @map("workspace_id")
   teamId            String?           @map("team_id")

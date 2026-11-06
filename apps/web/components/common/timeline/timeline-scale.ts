@@ -92,3 +92,68 @@ export const offsetFor = (iso: string, monthWidth: number): number => {
    const clamped = Math.min(Math.max(time, RANGE_START), RANGE_END);
    return ((clamped - RANGE_START) / (RANGE_END - RANGE_START)) * totalWidthOf(monthWidth);
 };
+
+/* ------------------------------ Drag to reschedule ------------------------------ */
+
+/** Narrowest bar of a dated issue, so a one-day issue stays grabbable. */
+/** VI: Độ rộng nhỏ nhất của thanh issue có ngày, để issue một ngày vẫn nắm kéo được. */
+export const MIN_DATED_BAR_WIDTH = 20;
+/** Width of a bar without an end date (drawn dashed). */
+/** VI: Độ rộng thanh của issue chưa có ngày kết thúc (vẽ nét đứt). */
+export const MIN_UNSCHEDULED_BAR_WIDTH = 130;
+
+/** Pixels one day spans at a zoom. VI: Số pixel của một ngày ở mức zoom. */
+export const dayWidthOf = (monthWidth: number): number =>
+   offsetForTime(RANGE_START + DAY_MS, monthWidth);
+
+/**
+ * `YYYY-MM-DD` moved by whole days. UTC arithmetic keeps daylight-saving changes from shifting
+ * the date.
+ * VI: `YYYY-MM-DD` dời theo số ngày nguyên. Tính theo UTC để giờ mùa hè không làm lệch ngày.
+ */
+export const addDays = (iso: string, days: number): string =>
+   new Date(
+      Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))) +
+         days * DAY_MS
+   )
+      .toISOString()
+      .slice(0, 10);
+
+/** Left offset and width of a bar covering `start`..`end` (`end` null draws a fixed width). */
+/** VI: Toạ độ trái và độ rộng của thanh phủ `start`..`end` (`end` null thì độ rộng cố định). */
+export function barGeometry(start: string, end: string | null, monthWidth: number) {
+   const left = offsetFor(start, monthWidth);
+   const width = end
+      ? Math.max(offsetFor(end, monthWidth) - left, MIN_DATED_BAR_WIDTH)
+      : MIN_UNSCHEDULED_BAR_WIDTH;
+   return { left, width };
+}
+
+/** Part of a bar being dragged: the body moves it, the edges resize it. */
+/** VI: Phần thanh đang được kéo: thân để dời, hai mép để đổi độ dài. */
+export type DragMode = 'move' | 'start' | 'end';
+
+/**
+ * The dates a bar lands on after a drag of `days` whole days. Moving keeps the length (an issue
+ * without an end keeps none); a resize never puts the end before the start, it stops on the same
+ * day. Dragging the end of a bar without an end date sets one, so the caller passes the date
+ * under the bar's right edge as `end` for that mode.
+ * VI: Các ngày thanh rơi vào sau khi kéo `days` ngày nguyên. Dời giữ nguyên độ dài (issue chưa có
+ * VI: ngày kết thúc thì vẫn không có); đổi độ dài không bao giờ đặt ngày kết thúc trước ngày bắt
+ * VI: đầu mà dừng ở cùng ngày. Kéo mép phải của thanh chưa có ngày kết thúc sẽ đặt ngày đó, nên
+ * VI: nơi gọi truyền ngày dưới mép phải của thanh làm `end` cho chế độ này.
+ */
+export function dragSchedule(
+   span: { start: string; end: string | null },
+   mode: DragMode,
+   days: number
+): { start: string; end: string | null } {
+   const { start, end } = span;
+   if (mode === 'move') return { start: addDays(start, days), end: end && addDays(end, days) };
+   if (mode === 'start') {
+      const next = addDays(start, days);
+      return { start: end && next > end ? end : next, end };
+   }
+   const next = addDays(end ?? start, days);
+   return { start, end: next < start ? start : next };
+}

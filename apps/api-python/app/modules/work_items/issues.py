@@ -221,6 +221,11 @@ async def update_issue(
     issue = await _issue_row(db, issue_id, workspaceId, user["id"])
     await actor_context(db, user["id"])
     values = payload.model_dump(exclude_unset=True)
+    expected_version = values.pop("expectedVersion", None)
+    if expected_version is not None and issue["version"] != expected_version:
+        raise ApiError(409, "This issue changed since you loaded it.", "Conflict")
+    if "subIssueSort" in values and values["subIssueSort"] is None:
+        raise ApiError(400, "subIssueSort cannot be empty.", "Bad Request")
     previous_status_id = issue["statusId"]
     previous_assignee_id = issue["assignee"]["id"] if issue.get("assignee") else None
     if "statusId" in values and values["statusId"] is None:
@@ -280,6 +285,7 @@ async def update_issue(
         "startDate": "start_date",
         "targetDate": "target_date",
         "dueDate": "due_date",
+        "subIssueSort": "sub_issue_sort",
     }
     sets, params = [], {"issue_id": issue_id, "now": _utcnow()}
     for field, column in columns.items():

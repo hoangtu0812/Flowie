@@ -1,101 +1,100 @@
 'use client';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
+import { barGeometry, dayWidthOf } from '@/components/common/timeline/timeline-scale';
+import { TimelineFrame } from '@/components/common/timeline/timeline-frame';
+import { rescheduleIssue, useCanEditIssues } from '@/components/common/timeline/reschedule';
 import {
-   DropdownMenu,
-   DropdownMenuContent,
-   DropdownMenuItem,
-   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-   BIWEEKLY_DATES,
-   MONTHS,
-   monthWidthOf,
-   offsetFor,
-   offsetForTime,
-   totalWidthOf,
-   WEEKLY_DATES,
-   ZOOM_LEVELS,
-   type TimelineZoom,
-} from '@/components/common/timeline/timeline-scale';
+   byManualOrder,
+   sortSubIssues,
+   type SubIssueSort,
+} from '@/features/manual-order/sub-issue-sort';
 import { cn } from '@/lib/utils';
 import { issueSpan } from '@/lib/issue-span';
 import { issueTree } from '@/lib/issue-tree';
 import { TimelineIssueBar } from '@/components/common/timeline/timeline-issue-bar';
 import { IssuePeekPanel } from '@/components/common/issues/issue-peek-panel';
-import type { Issue } from '@/mock-data/issues';
+import type { ProjectDetailUiIssue } from './project-detail-ui-adapter';
 import { format, parseISO } from 'date-fns';
-import { Check, ChevronDown, ChevronRight } from 'lucide-react';
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronRight } from 'lucide-react';
+import { type ReactNode, useMemo, useState } from 'react';
 
-const MIN_DATED_BAR_WIDTH = 20;
-const MIN_UNSCHEDULED_BAR_WIDTH = 130;
-
-function rangeLabel(issue: Issue): string {
+function rangeLabel(issue: ProjectDetailUiIssue): string {
    const { start, end } = issueSpan(issue);
    const startLabel = format(parseISO(start), 'MMM d');
    return end && end !== start ? `${startLabel} – ${format(parseISO(end), 'MMM d')}` : startLabel;
 }
 
-function IssueBar({
-   issue,
-   monthWidth,
-   onSelect,
-}: {
-   issue: Issue;
-   monthWidth: number;
-   onSelect: (issueId: string) => void;
-}) {
-   const { start, end } = issueSpan(issue);
-   const left = offsetFor(start, monthWidth);
-   const width = end
-      ? Math.max(offsetFor(end, monthWidth) - left, MIN_DATED_BAR_WIDTH)
-      : MIN_UNSCHEDULED_BAR_WIDTH;
-
-   return (
-      <TimelineIssueBar
-         left={left}
-         width={width}
-         color={issue.status.color}
-         dashed={!end}
-         title={issue.title}
-         label={`${issue.identifier} · ${issue.title} — ${rangeLabel(issue)}`}
-         onClick={() => onSelect(issue.id)}
-      />
-   );
+/**
+ * Children of one issue in the order its tree uses everywhere: saved manual order first (the
+ * project payload is ordered by last update), then the branch root's saved sort rule. Status
+ * sorting follows the team workflow (`position`, then name, like the options API), keyed by the
+ * stored status because the presentation status is mapped by name.
+ * VI: Con của một issue theo đúng thứ tự cây của nó ở mọi nơi: trước hết là thứ tự thủ công đã lưu
+ * VI: (payload project được sắp theo lần cập nhật cuối), sau đó là quy tắc sort đã lưu của issue
+ * VI: gốc nhánh. Sort theo trạng thái đi theo workflow của team (`position`, rồi tên, như API
+ * VI: options), dùng trạng thái đã lưu vì trạng thái hiển thị được map theo tên.
+ */
+function orderedChildren(
+   children: ProjectDetailUiIssue[],
+   sort: SubIssueSort,
+   statuses: { id: string }[]
+): ProjectDetailUiIssue[] {
+   const rows = byManualOrder(children).map((issue) => ({
+      issue,
+      id: issue.id,
+      identifier: issue.identifier,
+      status: { id: issue.workflowStatus?.id ?? issue.status.id },
+   }));
+   return sortSubIssues(rows, sort, statuses).map((row) => row.issue);
 }
 
 /**
- * Project "Timeline" tab: the project's issues on the same month scale the
- * Projects timeline uses, so the two screens read as one instrument.
+ * Project "Timeline" tab: the project's issues on the same month scale the Projects timeline uses,
+ * grouped by status, with sub-issues nested under their parent in the order the parent's
+ * Sub-issues section shows (read only here: the order is changed in the parent issue). Members who
+ * may edit drag a bar to move it or its edges to change the start or end; the save sends the
+ * version this screen read and the project reloads afterwards, also after a conflict.
+ * VI: Tab "Timeline" của project: issue của project trên cùng thang tháng với timeline Projects,
+ * VI: nhóm theo trạng thái, sub-issue lồng dưới cha theo đúng thứ tự khu Sub-issues của cha (ở đây
+ * VI: chỉ xem: đổi thứ tự trong issue cha). Thành viên có quyền sửa kéo thanh để dời hoặc kéo mép
+ * VI: để đổi ngày bắt đầu/kết thúc; lần lưu gửi version màn hình đã đọc và project được tải lại
+ * VI: sau đó, kể cả khi xung đột.
  */
 export function ProjectIssuesTimeline({
    issues,
    onIssueChanged,
 }: {
-   issues: Issue[];
-   /** Reloads the project after a save in the peek panel so bars move at once.
-    * VI: Tải lại dự án sau khi lưu trong panel để thanh timeline đổi ngay. */
+   issues: ProjectDetailUiIssue[];
+   /** Reloads the project after a save in the peek panel or a drag so bars move at once.
+    * VI: Tải lại dự án sau khi lưu trong panel hoặc kéo thả để thanh timeline đổi ngay. */
    onIssueChanged?: () => void;
 }) {
-   const [zoom, setZoom] = useState<TimelineZoom>('week');
-   const [todayIso, setTodayIso] = useState<string | null>(null);
    const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
    const [peekIssueId, setPeekIssueId] = useState<string | null>(null);
-   const scrollRef = useRef<HTMLDivElement>(null);
-
-   const monthWidth = monthWidthOf(zoom);
-   const totalWidth = totalWidthOf(monthWidth);
-   const scaleDates = zoom === 'year' ? BIWEEKLY_DATES : WEEKLY_DATES;
-   const todayOffset = todayIso ? offsetFor(todayIso, monthWidth) : null;
-   const todayLabel = todayIso ? format(parseISO(todayIso), 'MMM d').toUpperCase() : null;
+   const canEdit = useCanEditIssues();
 
    const tree = useMemo(() => issueTree(issues), [issues]);
    const childrenByParent = tree.children;
+   const statuses = useMemo(
+      () =>
+         [
+            ...new Map(
+               issues.flatMap((issue) =>
+                  issue.workflowStatus
+                     ? [[issue.workflowStatus.id, issue.workflowStatus] as const]
+                     : []
+               )
+            ).values(),
+         ].sort((a, b) => a.position - b.position || a.name.localeCompare(b.name)),
+      [issues]
+   );
 
    const groups = useMemo(() => {
-      const byStatus = new Map<string, { name: string; color: string; issues: Issue[] }>();
+      const byStatus = new Map<
+         string,
+         { name: string; color: string; issues: ProjectDetailUiIssue[] }
+      >();
       for (const issue of tree.roots) {
          const group = byStatus.get(issue.status.id) ?? {
             name: issue.status.name,
@@ -111,23 +110,6 @@ export function ProjectIssuesTimeline({
       return [...byStatus.values()];
    }, [tree]);
 
-   const scrollToOffset = useCallback((offset: number, smooth = true) => {
-      const element = scrollRef.current;
-      if (!element) return;
-      const anchor = Math.max(element.clientWidth / 3, 300);
-      element.scrollTo({
-         left: Math.max(0, offset - anchor),
-         behavior: smooth ? 'smooth' : 'auto',
-      });
-   }, []);
-
-   useEffect(() => {
-      const iso = new Date().toISOString().slice(0, 10);
-      setTodayIso(iso);
-      // Open where the work is rather than in 2020, without an animation.
-      scrollToOffset(offsetFor(iso, monthWidthOf('week')), false);
-   }, [scrollToOffset]);
-
    if (issues.length === 0) {
       return (
          <div className="h-full grid place-items-center text-sm text-muted-foreground">
@@ -137,20 +119,48 @@ export function ProjectIssuesTimeline({
    }
 
    // Renders an issue row and, when opened, its sub-issues one level deeper; each level opens
-   // and closes on its own and indents by depth, so A → B → C trees show every level.
+   // and closes on its own and indents by depth, so A → B → C trees show every level. `sort` is
+   // the branch root's saved rule, applied to every level like the root's Sub-issues section.
    // VI: Render hàng issue và, khi mở, các sub-issue ở cấp sâu hơn; mỗi cấp mở/đóng độc lập và
-   // VI: thụt lề theo độ sâu, nên cây A → B → C hiển thị đủ mọi cấp.
-   const renderBranch = (item: Issue, depth: number): ReactNode => {
-      const children = childrenByParent.get(item.id) ?? [];
+   // VI: thụt lề theo độ sâu, nên cây A → B → C hiển thị đủ mọi cấp. `sort` là quy tắc đã lưu của
+   // VI: issue gốc nhánh, áp dụng cho mọi cấp giống khu Sub-issues của issue gốc.
+   const renderBranch = (
+      item: ProjectDetailUiIssue,
+      depth: number,
+      sort: SubIssueSort,
+      monthWidth: number
+   ): ReactNode => {
+      const children = orderedChildren(childrenByParent.get(item.id) ?? [], sort, statuses);
       const expanded = expandedParents.has(item.id);
+      const { start, end } = issueSpan(item);
+      const { left, width } = barGeometry(start, end, monthWidth);
       return (
          <div key={item.id}>
             <div className="relative h-8 flex items-center">
-               <IssueBar
-                  issue={item}
-                  monthWidth={monthWidth}
-                  onSelect={(issueId) =>
-                     setPeekIssueId((current) => (current === issueId ? null : issueId))
+               <TimelineIssueBar
+                  left={left}
+                  width={width}
+                  color={item.status.color}
+                  dashed={!end}
+                  title={item.title}
+                  label={`${item.identifier} · ${item.title} — ${rangeLabel(item)}`}
+                  onClick={() =>
+                     setPeekIssueId((current) => (current === item.id ? null : item.id))
+                  }
+                  schedule={
+                     canEdit
+                        ? {
+                             start,
+                             end,
+                             monthWidth,
+                             dayWidth: dayWidthOf(monthWidth),
+                             onChange: async (nextStart, nextEnd) => {
+                                const result = await rescheduleIssue(item, nextStart, nextEnd);
+                                if (result !== 'failed') onIssueChanged?.();
+                                return result === 'saved';
+                             },
+                          }
+                        : undefined
                   }
                />
                <div
@@ -194,13 +204,13 @@ export function ProjectIssuesTimeline({
                   )}
                </div>
             </div>
-            {expanded && children.map((child) => renderBranch(child, depth + 1))}
+            {expanded && children.map((child) => renderBranch(child, depth + 1, sort, monthWidth))}
          </div>
       );
    };
 
    return (
-      <div className="w-full h-full flex flex-col overflow-hidden">
+      <>
          {peekIssueId !== null && (
             <IssuePeekPanel
                issueId={peekIssueId}
@@ -208,121 +218,27 @@ export function ProjectIssuesTimeline({
                onChanged={onIssueChanged}
             />
          )}
-         <div className="flex items-center justify-end gap-2 px-6 h-10 border-b shrink-0">
-            <Button
-               size="xs"
-               variant="ghost"
-               onClick={() => todayOffset !== null && scrollToOffset(todayOffset)}
-            >
-               Today
-            </Button>
-            <DropdownMenu>
-               <DropdownMenuTrigger asChild>
-                  <Button size="xs" variant="outline" className="gap-1">
-                     {ZOOM_LEVELS.find((level) => level.id === zoom)?.label}
-                     <ChevronDown className="size-3.5" />
-                  </Button>
-               </DropdownMenuTrigger>
-               <DropdownMenuContent align="end">
-                  {ZOOM_LEVELS.map((level) => (
-                     <DropdownMenuItem key={level.id} onClick={() => setZoom(level.id)}>
-                        {level.label}
-                        {level.id === zoom && <Check className="ml-auto size-4" />}
-                     </DropdownMenuItem>
-                  ))}
-               </DropdownMenuContent>
-            </DropdownMenu>
-         </div>
-
-         <div ref={scrollRef} className="w-full flex-1 min-h-0 overflow-auto">
-            <div style={{ width: totalWidth }} className="relative min-h-full">
-               {/* Month scale: month names, weekly ticks and date labels */}
-               <div className="sticky top-0 z-20 border-b bg-container select-none">
-                  <div className="relative flex">
-                     {MONTHS.map((month) => (
-                        <div
-                           key={month.key}
-                           style={{ width: monthWidth }}
-                           className="shrink-0 px-2 pt-1.5 pb-0.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap overflow-hidden"
-                        >
-                           {month.label}
-                        </div>
-                     ))}
-                     <div className="absolute inset-x-0 bottom-0 pointer-events-none">
-                        {WEEKLY_DATES.map((date) => (
-                           <span
-                              key={date.time}
-                              className="absolute bottom-0 h-1 w-px bg-muted-foreground/30"
-                              style={{ left: offsetForTime(date.time, monthWidth) }}
-                           />
-                        ))}
-                     </div>
-                  </div>
-                  <div className="relative h-5">
-                     {scaleDates.map((date) => {
-                        const left = offsetForTime(date.time, monthWidth);
-                        // The today pill owns this stretch of the scale.
-                        if (todayOffset !== null && Math.abs(left - todayOffset) < 30) return null;
-                        return (
-                           <span
-                              key={date.time}
-                              className="absolute top-0 -translate-x-1/2 text-[10px] text-muted-foreground/80 whitespace-nowrap"
-                              style={{ left }}
-                           >
-                              {date.day}
-                           </span>
-                        );
-                     })}
-                     {todayOffset !== null && (
+         <TimelineFrame className="h-full">
+            {(monthWidth) =>
+               groups.map((group) => (
+                  <div key={group.name}>
+                     <div className="sticky left-0 flex items-center gap-2 px-4 h-8 text-xs font-medium bg-container border-y border-border/50 w-screen max-w-full">
                         <span
-                           className="absolute -top-0.5 -translate-x-1/2 text-[10px] font-semibold bg-violet-500 text-white rounded-full px-1.5 py-px uppercase whitespace-nowrap pointer-events-none z-10"
-                           style={{ left: todayOffset }}
-                        >
-                           {todayLabel}
-                        </span>
-                     )}
-                  </div>
-               </div>
-
-               {/* Month grid lines */}
-               <div className="absolute inset-0 top-7 flex pointer-events-none">
-                  {MONTHS.map((month) => (
-                     <div
-                        key={month.key}
-                        style={{ width: monthWidth }}
-                        className="shrink-0 border-r border-border/25 h-full"
-                     />
-                  ))}
-               </div>
-
-               {todayOffset !== null && (
-                  <div
-                     className="absolute top-7 bottom-0 w-px bg-violet-500 z-10 pointer-events-none"
-                     style={{ left: todayOffset }}
-                  />
-               )}
-
-               <div className="relative z-[5] pb-8">
-                  {groups.map((group) => (
-                     <div key={group.name}>
-                        <div className="sticky left-0 flex items-center gap-2 px-4 h-8 text-xs font-medium bg-container border-y border-border/50 w-screen max-w-full">
-                           <span
-                              className="size-2 rounded-full shrink-0"
-                              style={{ backgroundColor: group.color }}
-                           />
-                           {group.name}
-                           <span className="text-xs text-muted-foreground">
-                              {group.issues.length}
-                           </span>
-                        </div>
-                        <div className="py-1">
-                           {group.issues.map((issue) => renderBranch(issue, 0))}
-                        </div>
+                           className="size-2 rounded-full shrink-0"
+                           style={{ backgroundColor: group.color }}
+                        />
+                        {group.name}
+                        <span className="text-xs text-muted-foreground">{group.issues.length}</span>
                      </div>
-                  ))}
-               </div>
-            </div>
-         </div>
-      </div>
+                     <div className="py-1">
+                        {group.issues.map((issue) =>
+                           renderBranch(issue, 0, issue.subIssueSort ?? 'manual', monthWidth)
+                        )}
+                     </div>
+                  </div>
+               ))
+            }
+         </TimelineFrame>
+      </>
    );
 }

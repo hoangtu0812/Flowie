@@ -437,11 +437,11 @@ async def list_sub_issues(
     descendants: Annotated[bool, Query()] = False,
 ) -> dict[str, list[dict[str, Any]]]:
     """Direct children of an issue, or with `descendants=true` every level of its sub-issue tree.
-    Each row carries `parentIssueId` so the client can rebuild the tree, plus the status, assignee
-    and due date the tree rows show and edit.
+    Each row carries `parentIssueId` so the client can rebuild the tree, plus the status, assignee,
+    dates and version the tree rows and the sub-issue timeline show and edit.
     VI: Con trực tiếp của issue, hoặc mọi cấp của cây sub-issue khi `descendants=true`. Mỗi dòng
-    VI: có `parentIssueId` để client dựng lại cây, cùng trạng thái, assignee và due date mà các
-    VI: hàng của cây hiển thị và cho sửa.
+    VI: có `parentIssueId` để client dựng lại cây, cùng trạng thái, assignee, các ngày và version
+    VI: mà các hàng của cây và timeline sub-issue hiển thị và cho sửa.
     """
     parent = await _issue_row(db, issue_id, workspaceId, user['id'])
     if descendants:
@@ -458,6 +458,7 @@ async def list_sub_issues(
     result = await db.execute(
         text(
             '''SELECT child.id, child.identifier, child.title, child.parent_issue_id, child.due_date, child.manual_order,
+                      child.start_date, child.target_date, child.created_at, child.version,
                       child.priority::text AS priority,
                       status.id AS status_id, status.name AS status_name,
                       status.color AS status_color, status.category AS status_category,
@@ -479,6 +480,10 @@ async def list_sub_issues(
             'parentIssueId': row['parent_issue_id'],
             'manualOrder': str(row['manual_order']),
             'dueDate': row['due_date'],
+            'startDate': row['start_date'],
+            'targetDate': row['target_date'],
+            'createdAt': row['created_at'],
+            'version': row['version'],
             'priority': row['priority'],
             'status': {
                 'id': row['status_id'],

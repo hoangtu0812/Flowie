@@ -15,6 +15,7 @@ import { portfolioFetch } from '@/features/projects/portfolio-fetch';
 import { useParams } from 'next/navigation';
 import { RecoveryScreen } from '@/features/shared/recovery-screen';
 import { useIssuesStore } from '@/store/issues-store';
+import type { SubIssueSort } from '@/features/manual-order/sub-issue-sort';
 
 export type LiveProject = {
    id: string;
@@ -72,7 +73,10 @@ export type LiveProjectIssue = {
    estimatedEffort: number | null;
    actualEffort: number | null;
    dueDate: string | null;
-   status: { id: string; name: string; category: string; color: string };
+   version: number;
+   manualOrder: string;
+   subIssueSort: SubIssueSort;
+   status: { id: string; name: string; category: string; color: string; position: number };
    team: { id: string; name: string; identifier: string } | null;
    creator: { id: string; name: string; avatarUrl: string | null };
    assignee: { id: string; name: string; avatarUrl: string | null } | null;

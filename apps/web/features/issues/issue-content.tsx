@@ -165,6 +165,7 @@ export function IssueContent({
                      <IssueSlaPanel issue={issue} />
                      <IssueReactions issueId={issue.id} />
                      <IssueSubIssues
+                        issue={issue}
                         issueId={issue.id}
                         identifier={issue.identifier}
                         teamId={issue.teamId}

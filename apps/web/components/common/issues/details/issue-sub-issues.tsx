@@ -29,10 +29,14 @@ import {
    CircleCheck,
    CircleDashed,
    CircleX,
+   GanttChart,
+   List,
    ListPlus,
    Plus,
+   TriangleAlert,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { AssigneeUser } from '../assignee-user';
@@ -44,6 +48,10 @@ import { DesignSurface } from '@/components/common/design-surface';
 import { moveInList } from '@/features/manual-order/order';
 import { sortSubIssues, type SubIssueSort } from '@/features/manual-order/sub-issue-sort';
 import { ReorderRow, ReorderProvider } from '@/features/manual-order/reorder-row';
+import { outsideParent } from '@/lib/issue-span';
+import type { Issue } from '@/mock-data/issues';
+import { rescheduleIssue, useCanEditIssues } from '@/components/common/timeline/reschedule';
+import { IssueSubIssuesTimeline, type TimelineSubIssueRow } from './issue-sub-issues-timeline';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -56,6 +64,10 @@ type SubIssue = {
    title: string;
    parentIssueId: string | null;
    dueDate: string | null;
+   startDate: string | null;
+   targetDate: string | null;
+   createdAt: string;
+   version: number;
    status: SubIssueStatus;
    assignee: { id: string; name: string; avatarUrl: string | null } | null;
 };
@@ -107,20 +119,47 @@ const ProgressBadge = ({ items }: { items: SubIssue[] | undefined }) => {
    );
 };
 
-const isOverdue = (subIssue: SubIssue) =>
-   Boolean(subIssue.dueDate) &&
-   !['completed', 'canceled'].includes(subIssue.status.category.toLowerCase()) &&
-   new Date(subIssue.dueDate as string) < new Date(new Date().toDateString());
+// Past its end (target end, else due date) and still open. VI: Đã qua ngày kết thúc mà chưa xong.
+const isOverdue = (subIssue: SubIssue) => {
+   const end = subIssue.targetDate ?? subIssue.dueDate;
+   return (
+      Boolean(end) &&
+      !['completed', 'canceled'].includes(subIssue.status.category.toLowerCase()) &&
+      new Date(end as string) < new Date(new Date().toDateString())
+   );
+};
+
+/** Amber warning for a sub-issue outside the open issue's dates; keeps its column when hidden.
+ * VI: Cảnh báo cam cho sub-issue nằm ngoài các ngày của issue đang mở; ẩn vẫn giữ chỗ cột. */
+const OutsideMark = ({ show, identifier }: { show: boolean; identifier: string }) => (
+   <span className="flex size-4 shrink-0 items-center justify-center">
+      {show && (
+         <TriangleAlert
+            className="size-3.5 text-amber-500"
+            role="img"
+            aria-label={`Outside ${identifier}'s dates`}
+         >
+            <title>{`Outside ${identifier}'s dates`}</title>
+         </TriangleAlert>
+      )}
+   </span>
+);
 
 /**
  * Issue-detail sub-issue area backed by the parent-child Issue relationship. It loads every level
  * of descendants and shows them as an indented tree (Redmine style): each row has its own
- * expand/collapse toggle, status, progress of its direct children, due date and assignee. Status,
- * due date and assignee are edited in place through PATCH /issues/{id}; the status icon opens a
- * menu of the team's statuses, and since every row shares the open issue's team, one options
- * request serves the whole tree. All levels start expanded. A sub-issue is created new or picked
- * from existing issues ("Add existing"); picking one that has another parent asks to confirm the
- * move. Progress counts direct children only.
+ * expand/collapse toggle, status, progress of its direct children, start and end dates and
+ * assignee. Status, dates and assignee are edited in place through PATCH /issues/{id}; the status
+ * icon opens a menu of the team's statuses, and since every row shares the open issue's team, one
+ * options request serves the whole tree. All levels start expanded. A sub-issue is created new or
+ * picked from existing issues ("Add existing"); picking one that has another parent asks to
+ * confirm the move. Progress counts direct children only.
+ *
+ * The first row is the open issue itself with its own dates. A sub-issue whose bar leaves the open
+ * issue's dates shows an amber warning. The sort is saved on the open issue (`subIssueSort`), so
+ * every viewer and the project Timeline use it. The Timeline mode draws the same visible rows
+ * (same sort, same collapsed branches) on a date scale where members who may edit drag bars to
+ * change dates; saves send the version read, and a conflict reloads instead of overwriting.
  * VI: Khu sub-issue của chi tiết issue, dựa trên quan hệ cha–con. Khu này tải mọi cấp hậu duệ và
  * VI: hiển thị thành cây thụt lề (kiểu Redmine): mỗi hàng có nút mở/thu riêng, trạng thái, tiến độ
  * VI: theo con trực tiếp, due date và assignee. Trạng thái, due date và assignee sửa ngay tại chỗ qua
@@ -128,19 +167,37 @@ const isOverdue = (subIssue: SubIssue) =>
  * VI: với issue đang mở nên một request options đủ cho cả cây. Mọi cấp mặc định mở. Sub-issue được
  * VI: tạo mới hoặc chọn từ issue có sẵn ("Add existing"); chọn issue đang có cha khác sẽ hỏi xác
  * VI: nhận chuyển. Tiến độ chỉ tính con trực tiếp.
+ * VI:
+ * VI: Hàng đầu tiên là chính issue đang mở với các ngày của nó. Sub-issue có thanh vượt khỏi các
+ * VI: ngày của issue đang mở hiện cảnh báo màu cam. Sort được lưu trên issue đang mở
+ * VI: (`subIssueSort`) nên mọi người xem và Timeline project dùng cùng thứ tự. Chế độ Timeline vẽ
+ * VI: đúng các hàng đang hiển thị (cùng sort, cùng nhánh đang thu) trên thang ngày, nơi thành viên
+ * VI: có quyền sửa kéo thanh để đổi ngày; lần lưu gửi version đã đọc, xung đột thì tải lại thay vì
+ * VI: ghi đè.
  */
 export function IssueSubIssues({
+   issue,
    issueId,
    identifier,
    teamId,
    orgId,
 }: {
+   issue: Issue;
    issueId: string;
    identifier: string;
    teamId?: string;
    orgId: string;
 }) {
-   const { workspaceId, retryIssues, setIssueParent } = useIssuesStore();
+   const {
+      workspaceId,
+      retryIssues,
+      setIssueParent,
+      updateIssueSchedule,
+      updateIssueSubIssueSort,
+   } = useIssuesStore();
+   const router = useRouter();
+   const canEdit = useCanEditIssues();
+   const [mode, setMode] = useState<'list' | 'timeline'>('list');
    const [pickerOpen, setPickerOpen] = useState(false);
    const [subIssues, setSubIssues] = useState<SubIssue[]>([]);
    const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -150,9 +207,20 @@ export function IssueSubIssues({
    const [saving, setSaving] = useState(false);
    const [error, setError] = useState<string>();
    const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-   const [sort, setSort] = useState<SubIssueSort>('manual');
+   const savedSort = issue.subIssueSort ?? 'manual';
+   const [sort, setSort] = useState<SubIssueSort>(savedSort);
    const [statuses, setStatuses] = useState<SubIssueStatus[]>([]);
    const { roots, children } = useMemo(() => issueTree(subIssues), [subIssues]);
+   const outside = (subIssue: SubIssue) => outsideParent(subIssue, issue);
+
+   // The saved rule wins whenever the open issue reloads (another viewer may have changed it).
+   // VI: Quy tắc đã lưu được áp dụng mỗi khi issue đang mở tải lại (người khác có thể đã đổi).
+   useEffect(() => setSort(savedSort), [savedSort]);
+
+   const changeSort = async (next: SubIssueSort) => {
+      setSort(next);
+      if (!(await updateIssueSubIssueSort(issueId, next))) setSort(savedSort);
+   };
 
    useEffect(() => {
       if (!workspaceId) return;
@@ -300,14 +368,25 @@ export function IssueSubIssues({
                      <span className="truncate font-medium">{subIssue.title}</span>
                   </Link>
                   <ProgressBadge items={nested} />
+                  <OutsideMark show={outside(subIssue)} identifier={identifier} />
                   <span className="w-20 shrink-0">
                      <IssueDateCell
                         issueId={subIssue.id}
-                        value={subIssue.dueDate ?? undefined}
-                        kind="due"
+                        value={subIssue.startDate?.slice(0, 10)}
+                        kind="start"
+                        onSave={(startDate) =>
+                           patchSubIssue(subIssue.id, { startDate: startDate ?? null })
+                        }
+                     />
+                  </span>
+                  <span className="w-20 shrink-0">
+                     <IssueDateCell
+                        issueId={subIssue.id}
+                        value={subIssue.targetDate?.slice(0, 10)}
+                        kind="target"
                         accent={isOverdue(subIssue)}
-                        onSave={(dueDate) =>
-                           patchSubIssue(subIssue.id, { dueDate: dueDate ?? null })
+                        onSave={(targetDate) =>
+                           patchSubIssue(subIssue.id, { targetDate: targetDate ?? null })
                         }
                      />
                   </span>
@@ -325,6 +404,48 @@ export function IssueSubIssues({
             </ReorderRow>
          );
       });
+
+   // The rows the Timeline draws: the open issue, then the visible tree in the current sort.
+   // VI: Các hàng Timeline vẽ: issue đang mở, rồi cây đang hiển thị theo sort hiện tại.
+   const timelineRows = (): TimelineSubIssueRow[] => {
+      const rows: TimelineSubIssueRow[] = [
+         { issue, depth: -1, hasChildren: false, open: true, outside: false },
+      ];
+      const walk = (items: SubIssue[], depth: number) => {
+         for (const subIssue of sortSubIssues(items, sort, statuses)) {
+            const nested = children.get(subIssue.id);
+            const open = !collapsed.has(subIssue.id);
+            rows.push({
+               issue: subIssue,
+               depth,
+               hasChildren: Boolean(nested),
+               open,
+               outside: outside(subIssue),
+            });
+            if (nested && open) walk(nested, depth + 1);
+         }
+      };
+      walk(roots, 0);
+      return rows;
+   };
+
+   // The open issue saves through the store (its page reads it from there); sub-issues save
+   // directly and reload the tree, also after a conflict so the bar shows the current dates.
+   // VI: Issue đang mở lưu qua store (trang đọc nó từ đó); sub-issue lưu trực tiếp rồi tải lại
+   // VI: cây, kể cả khi xung đột để thanh hiện đúng ngày hiện tại.
+   const reschedule = async (target: { id: string }, start: string, end: string | null) => {
+      if (target.id === issueId)
+         return updateIssueSchedule(issueId, {
+            startDate: start,
+            targetDate: end ?? undefined,
+            expectedVersion: issue.version,
+         });
+      const subIssue = subIssues.find((item) => item.id === target.id);
+      if (!subIssue) return false;
+      const result = await rescheduleIssue(subIssue, start, end);
+      if (result !== 'failed') await load().catch(() => setState('error'));
+      return result === 'saved';
+   };
 
    const createSubIssue = async () => {
       if (!workspaceId || title.trim().length < 2) return;
@@ -395,6 +516,28 @@ export function IssueSubIssues({
                      Sub-issues <ProgressBadge items={roots} />
                   </h2>
                   <div className="flex items-center gap-1">
+                     <div
+                        className="flex items-center rounded-md border p-0.5"
+                        role="group"
+                        aria-label="Sub-issue view"
+                     >
+                        {(
+                           [
+                              ['list', List, 'List'],
+                              ['timeline', GanttChart, 'Timeline'],
+                           ] as const
+                        ).map(([value, Icon, label]) => (
+                           <Button
+                              key={value}
+                              size="xs"
+                              variant={mode === value ? 'secondary' : 'ghost'}
+                              aria-pressed={mode === value}
+                              onClick={() => setMode(value)}
+                           >
+                              <Icon className="size-3.5" /> {label}
+                           </Button>
+                        ))}
+                     </div>
                      <DesignSurface>
                         <Selector
                            label="Sort sub-issues"
@@ -402,7 +545,7 @@ export function IssueSubIssues({
                            size="sm"
                            variant="ghost"
                            value={sort}
-                           onChange={(value) => setSort(value as SubIssueSort)}
+                           onChange={(value) => void changeSort(value as SubIssueSort)}
                            options={[
                               { value: 'manual', label: 'Sort: Manual' },
                               { value: 'identifier-asc', label: 'Issue ID ascending' },
@@ -439,11 +582,52 @@ export function IssueSubIssues({
                      </Button>
                   </div>
                </div>
-               <ReorderProvider>
-                  <div className="flex flex-col border-t border-border/50">
-                     {renderRows(roots, 0)}
-                  </div>
-               </ReorderProvider>
+               {mode === 'timeline' ? (
+                  <IssueSubIssuesTimeline
+                     rows={timelineRows()}
+                     parentIdentifier={identifier}
+                     onToggle={toggle}
+                     onOpen={(target) => {
+                        if (target.id !== issueId)
+                           router.push(`/${orgId}/issue/${target.identifier}`);
+                     }}
+                     onReschedule={canEdit ? reschedule : undefined}
+                  />
+               ) : (
+                  <ReorderProvider>
+                     <div className="flex flex-col border-t border-border/50">
+                        <div
+                           className="w-full flex items-center gap-2 h-10 pl-1 pr-1 border-b border-border/50 bg-sidebar/40 text-sm min-w-0"
+                           data-testid="sub-issue-parent-row"
+                        >
+                           <span className="size-4 shrink-0" />
+                           <StatusIcon status={issue.status} />
+                           <span className="text-muted-foreground shrink-0 text-xs font-medium">
+                              {issue.identifier}
+                           </span>
+                           <span className="truncate font-semibold flex-1">{issue.title}</span>
+                           <ProgressBadge items={roots} />
+                           <span className="size-4 shrink-0" />
+                           <span className="w-20 shrink-0">
+                              <IssueDateCell
+                                 issueId={issue.id}
+                                 value={issue.startDate?.slice(0, 10)}
+                                 kind="start"
+                              />
+                           </span>
+                           <span className="w-20 shrink-0">
+                              <IssueDateCell
+                                 issueId={issue.id}
+                                 value={issue.targetDate?.slice(0, 10)}
+                                 kind="target"
+                              />
+                           </span>
+                           <span className="w-6 shrink-0" />
+                        </div>
+                        {renderRows(roots, 0)}
+                     </div>
+                  </ReorderProvider>
+               )}
             </>
          )}
 
