@@ -259,6 +259,8 @@ class AgentPlanningTests(unittest.TestCase):
             'Issue nào đã thêm tuần này?',
             'Which issues were created this week?',
             'What is the address of the release notes?',
+            'Cho tôi biết DTD-12',
+            'xử lý dtd-12',
         ):
             with self.subTest(message=message):
                 self.assertTrue(_is_open_question(message))
@@ -267,6 +269,7 @@ class AgentPlanningTests(unittest.TestCase):
             'Viết giúp mô tả cho task này được không?',
             'Plan the migration for next week?',
             'Can you add a task for onboarding?',
+            'Tạo sub-task cho DTD-12',
         ):
             with self.subTest(message=message):
                 self.assertFalse(_is_open_question(message))

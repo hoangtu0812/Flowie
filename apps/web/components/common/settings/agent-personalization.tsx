@@ -62,6 +62,7 @@ export default function AgentPersonalization() {
    const [canManage, setCanManage] = useState(false);
    const [loading, setLoading] = useState(true);
    const [saving, setSaving] = useState(false);
+   const [testing, setTesting] = useState(false);
    const [message, setMessage] = useState<string | null>(null);
    const [customSkill, setCustomSkill] = useState<CustomSkillDraft | null>(null);
    const [skillDetails, setSkillDetails] = useState<SkillRecord | null>(null);
@@ -220,6 +221,34 @@ export default function AgentPersonalization() {
          setMessage(error instanceof Error ? error.message : 'Could not save skill.');
       } finally {
          setSaving(false);
+      }
+   };
+
+   const testConnection = async () => {
+      setTesting(true);
+      setMessage(null);
+      try {
+         const workspace = await loadCurrentWorkspace();
+         const response = await authenticatedFetch(
+            `${api}/agent/providers/${provider}/test?workspaceId=${workspace.id}`,
+            { method: 'POST' }
+         );
+         const payload = (await response.json().catch(() => null)) as {
+            data?: { reachable: boolean; reason?: string };
+            message?: string;
+         } | null;
+         if (!response.ok || !payload?.data) {
+            throw new Error(payload?.message ?? 'Could not test the connection.');
+         }
+         setMessage(
+            payload.data.reachable
+               ? `${PROVIDERS[provider].label} answered with the saved settings.`
+               : (payload.data.reason ?? 'The provider did not answer.')
+         );
+      } catch (error) {
+         setMessage(error instanceof Error ? error.message : 'Could not test the connection.');
+      } finally {
+         setTesting(false);
       }
    };
 
@@ -595,14 +624,24 @@ export default function AgentPersonalization() {
                   <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                      <ShieldCheck className="size-4" /> Keys are never returned to this browser.
                   </span>
-                  <Button onClick={() => void save()} disabled={!canManage || loading || saving}>
-                     {saving ? (
-                        <LoaderCircle className="size-4 animate-spin" />
-                     ) : (
-                        <KeyRound className="size-4" />
-                     )}
-                     Save and activate
-                  </Button>
+                  <div className="flex items-center gap-2">
+                     <Button
+                        variant="outline"
+                        onClick={() => void testConnection()}
+                        disabled={!canManage || loading || testing || !selectedRecord?.configured}
+                     >
+                        {testing && <LoaderCircle className="size-4 animate-spin" />}
+                        Test connection
+                     </Button>
+                     <Button onClick={() => void save()} disabled={!canManage || loading || saving}>
+                        {saving ? (
+                           <LoaderCircle className="size-4 animate-spin" />
+                        ) : (
+                           <KeyRound className="size-4" />
+                        )}
+                        Save and activate
+                     </Button>
+                  </div>
                </div>
                {message && <p className="text-sm text-muted-foreground">{message}</p>}
             </div>

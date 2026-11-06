@@ -43,6 +43,7 @@ CALL_LIMITS = {
     'agent.plan': (120, 16_000),
     'agent.report': (120, 8_000),
     'agent.schedule': (180, 24_000),
+    'agent.test': (30, 1_000),
     'news.analysis': (180, 12_000),
 }
 
