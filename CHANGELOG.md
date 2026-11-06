@@ -266,6 +266,8 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
+- The storage acceptance step no longer fails at random and stops production deployment: its MinIO fixtures now wait for `/minio/health/cluster`, because `/minio/health/ready` answers before S3 calls work. Test tooling only; nothing in the deployed app changes. (DTD-340)
+  VI: Bước storage acceptance không còn fail ngẫu nhiên và dừng deploy production: fixture MinIO nay chờ `/minio/health/cluster`, vì `/minio/health/ready` trả lời trước khi lệnh S3 hoạt động. Chỉ đổi công cụ test, ứng dụng đã deploy không thay đổi. (DTD-340)
 - When an AI reply has the wrong format or a schedule breaks a rule, Agent asks the model to correct it once before showing an error. (DTD-331, #152)
   VI: Khi câu trả lời của AI sai định dạng hoặc lịch vi phạm quy tắc, Agent yêu cầu model sửa một lần trước khi báo lỗi. (DTD-331)
 
