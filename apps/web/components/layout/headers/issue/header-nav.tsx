@@ -153,12 +153,20 @@ export default function HeaderNav() {
             ))}
             <ChevronRight className="size-3.5 text-muted-foreground shrink-0" />
             {issue && (
-               <span className="text-sm min-w-0 truncate">
+               // Links to the task's main view, dropping `?doc` and `?tab`, so it closes a
+               // document opened from Related documents.
+               // VI: Link về view chính của task, bỏ `?doc` và `?tab`, nên đóng tài liệu đang
+               // VI: mở từ Tài liệu liên quan.
+               <Link
+                  href={issueHref(orgId, issue.identifier, fromProject)}
+                  className="text-sm min-w-0 truncate hover:opacity-80"
+                  data-testid="issue-title-breadcrumb"
+               >
                   <span className="font-medium text-muted-foreground mr-1.5">
                      {issue.identifier}
                   </span>
                   <span className="font-medium">{issue.title}</span>
-               </span>
+               </Link>
             )}
             {issue && (
                <>

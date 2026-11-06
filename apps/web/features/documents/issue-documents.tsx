@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Link2, TriangleAlert } from 'lucide-react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { useMessages } from '@/features/shared/use-messages';
 import { messages } from '@/features/documents/messages.vi';
@@ -18,23 +18,41 @@ import type { IssueDocumentsState } from './use-issue-documents';
  * Link document, the same picker as the Attachments tab, so a document is linked where the
  * warning appears; unlinking stays in the Attachments tab. Renders nothing while loading or on
  * error, and nothing for a task outside a project with no documents.
+ * With `inPlace` (the full task page), a document link keeps the task URL and adds `doc=<id>`,
+ * which the task page reads to show the document below the task header; other query values
+ * (`tab`, `from`) are kept so closing returns to the same view, and Ctrl/Cmd-click still opens
+ * the same task and document in a new tab. Without it (Inbox preview) the link opens the
+ * standalone document page.
  * VI: Tài liệu liên kết với issue (ví dụ FDS/TDS), mỗi mục mở trang tài liệu. Task thuộc dự
  * VI: án mà chưa liên kết FDS hoặc TDS sẽ hiện cảnh báo kèm link tới tab Docs của dự án (mức
  * VI: "cảnh báo trước" đã thống nhất; không chặn gì). Task thuộc dự án còn có nút Link
  * VI: document, cùng hộp chọn với tab Attachments, để liên kết tài liệu ngay tại chỗ có cảnh
  * VI: báo; gỡ liên kết vẫn ở tab Attachments. Không hiển thị khi đang tải hoặc lỗi, và không
  * VI: hiển thị với task ngoài dự án chưa có tài liệu.
+ * VI: Với `inPlace` (trang task đầy đủ), link tài liệu giữ URL task và thêm `doc=<id>`, trang task
+ * VI: đọc giá trị này để hiện tài liệu dưới header task; các query khác (`tab`, `from`) được giữ
+ * VI: để đóng tài liệu quay về đúng view, và Ctrl/Cmd-click vẫn mở cùng task và tài liệu ở tab
+ * VI: mới. Không có `inPlace` (xem nhanh ở Inbox) thì link mở trang tài liệu riêng.
  */
 export function IssueDocuments({
    state: { documents, link },
    projectId,
+   inPlace = false,
 }: {
    state: IssueDocumentsState;
    projectId?: string;
+   inPlace?: boolean;
 }) {
    const tx = useMessages(messages);
    const { orgId } = useParams<{ orgId: string }>();
    const [picking, setPicking] = useState(false);
+   const search = useSearchParams();
+   const documentHref = (id: string) => {
+      if (!inPlace) return `/${orgId}/documents/${id}`;
+      const query = new URLSearchParams(search?.toString());
+      query.set('doc', id);
+      return `?${query}`;
+   };
 
    if (!documents) return null;
    const missingSpec =
@@ -64,7 +82,7 @@ export function IssueDocuments({
             {documents.map((document) => (
                <li key={document.id}>
                   <Link
-                     href={`/${orgId}/documents/${document.id}`}
+                     href={documentHref(document.id)}
                      className="flex h-8 items-center gap-2 rounded-md px-2 text-sm hover:bg-accent/60"
                   >
                      <span aria-hidden="true">{document.icon}</span>
