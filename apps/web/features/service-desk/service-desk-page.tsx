@@ -24,6 +24,8 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useMessages } from '@/features/shared/use-messages';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { loadCurrentWorkspaceMembership } from '@/lib/workspaces';
+import { ServiceDeskAssistant, useAssistantStatus } from './assistant';
+import type { TicketPrefill } from './assistant-draft';
 import { messages } from './messages.vi';
 import {
    listTicketProjects,
@@ -69,6 +71,8 @@ export function ServiceDeskPage() {
    const [projectFilter, setProjectFilter] = useState(ALL_PROJECTS);
    const [ticketState, setTicketState] = useState<TicketState>('open');
    const [dialog, setDialog] = useState<'new' | 'edit'>();
+   const [draft, setDraft] = useState<TicketPrefill>();
+   const [asking, setAsking] = useState(false);
 
    const load = useCallback(async () => {
       try {
@@ -93,6 +97,11 @@ export function ServiceDeskPage() {
    }, [router, ticketId]);
    useEffect(() => void load(), [load]);
    useTicketUpdates(data?.workspaceId, load);
+   const assistant = useAssistantStatus(data?.workspaceId);
+   const newTicket = (prefill?: TicketPrefill) => {
+      setDraft(prefill);
+      setDialog('new');
+   };
 
    // Follows a ticket opened from the Inbox or a link into its tab. It runs once per ticket, so
    // later reloads cannot pull someone back from the tab they moved to.
@@ -128,7 +137,12 @@ export function ServiceDeskPage() {
             <Text type="label" className="flex-1">
                {tx('Service Desk')}
             </Text>
-            <Button type="button" size="sm" disabled={!data} onClick={() => setDialog('new')}>
+            {isMobile && assistant && tab === 'mine' && (
+               <Button type="button" size="sm" variant="outline" onClick={() => setAsking(true)}>
+                  {tx('Ask the assistant')}
+               </Button>
+            )}
+            <Button type="button" size="sm" disabled={!data} onClick={() => newTicket()}>
                <Plus className="size-3.5" />
                {tx('New ticket')}
             </Button>
@@ -204,6 +218,19 @@ export function ServiceDeskPage() {
       </VStack>
    );
 
+   // The assistant belongs to "My tickets"; the queue keeps its plain empty state.
+   // VI: Trợ lý thuộc tab "Ticket của tôi"; hàng đợi giữ trạng thái trống như cũ.
+   const assistantPanel = data && assistant && tab === 'mine' && (
+      <ServiceDeskAssistant
+         key={data.workspaceId}
+         workspaceId={data.workspaceId}
+         workspaceSlug={orgId}
+         applications={assistant.applications}
+         onCreateTicket={newTicket}
+         onClose={isMobile ? () => setAsking(false) : undefined}
+      />
+   );
+
    const preview =
       data && ticket ? (
          <TicketDetail
@@ -221,15 +248,17 @@ export function ServiceDeskPage() {
             }}
          />
       ) : (
-         <div className="grid h-full place-items-center p-6 text-center text-sm text-muted-foreground">
-            {tx('Select a ticket to read it.')}
-         </div>
+         assistantPanel || (
+            <div className="grid h-full place-items-center p-6 text-center text-sm text-muted-foreground">
+               {tx('Select a ticket to read it.')}
+            </div>
+         )
       );
 
    return (
       <>
          {isMobile ? (
-            ticket ? (
+            ticket || (asking && assistantPanel) ? (
                preview
             ) : (
                list
@@ -247,9 +276,11 @@ export function ServiceDeskPage() {
                workspaceId={data.workspaceId}
                projects={data.projects}
                ticket={dialog === 'edit' ? ticket : undefined}
+               initial={dialog === 'new' ? draft : undefined}
                onClose={() => setDialog(undefined)}
                onSaved={(id, uploadError) => {
                   setDialog(undefined);
+                  setAsking(false);
                   setSelected(id);
                   setNotice(uploadError);
                   void load();

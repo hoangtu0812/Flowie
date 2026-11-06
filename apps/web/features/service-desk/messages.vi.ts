@@ -96,4 +96,28 @@ export const messages = {
    'No tickets in this view.': 'Không có ticket nào ở mục này.',
    'The requester reopened this ticket. Move {issue} back to work, or mark the ticket as resolved.':
       'Người yêu cầu đã mở lại ticket này. Hãy chuyển {issue} về đang làm, hoặc đánh dấu ticket đã giải quyết.',
+   'Ask the assistant': 'Hỏi trợ lý',
+   'Back': 'Quay lại',
+   'Conversation': 'Hội thoại',
+   'Ask about an application and I will look in its approved documents.':
+      'Hãy hỏi về một ứng dụng, mình sẽ tìm trong tài liệu đã duyệt của ứng dụng đó.',
+   'I can help with: {names}': 'Mình có thể giúp về: {names}',
+   'Looking in the documents…': 'Đang tìm trong tài liệu…',
+   'You have asked a lot in the last hour. Try again later, or create a ticket.':
+      'Bạn đã hỏi nhiều trong một giờ qua. Hãy thử lại sau, hoặc tạo ticket.',
+   'The assistant cannot answer right now.': 'Trợ lý tạm thời không trả lời được.',
+   'Try again': 'Thử lại',
+   'Your question': 'Câu hỏi của bạn',
+   'Type your question': 'Nhập câu hỏi',
+   'Send question': 'Gửi câu hỏi',
+   'I could not find this in the documents.': 'Mình chưa tìm thấy thông tin này trong tài liệu.',
+   'Sources': 'Nguồn',
+   'Open document': 'Mở tài liệu',
+   'Did this solve your problem?': 'Thông tin này có giải quyết được vấn đề của bạn không?',
+   'Solved': 'Đã giải quyết',
+   'Not solved': 'Chưa giải quyết',
+   'Glad it helped.': 'Rất vui vì đã giúp được bạn.',
+   'Would you like to create a ticket so the team can help?':
+      'Bạn có muốn tạo ticket để team hỗ trợ không?',
+   'No, thanks': 'Không, cảm ơn',
 } as const;
