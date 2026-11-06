@@ -140,9 +140,10 @@ async def verify_scope():
             app, folder = await add_project(db, workspace, team)
             guide = await add_document(db, workspace, team, folder, author, body)
             fds = await add_document(db, workspace, team, folder, author, body, doc_type='FDS')
+            brd = await add_document(db, workspace, team, folder, author, body, doc_type='BRD')
             excluded = {
                 await add_document(db, workspace, team, folder, author, body, doc_type=kind)
-                for kind in ('TDS', 'ADR', 'RCA', 'OTHER')
+                for kind in ('TDS', 'SRS', 'PROTOTYPE', 'TEST', 'MINUTES', 'ADR', 'RCA', 'OTHER')
             }
             excluded.add(await add_document(db, workspace, team, folder, author, body, status='DRAFT'))
             excluded.add(await add_document(db, workspace, team, folder, author, body, status='IN_REVIEW'))
@@ -173,7 +174,7 @@ async def verify_scope():
             await db.commit()
 
             found = await knowledge_sources(db, workspace, member['id'], 'quen mat khau thi lam sao?')
-            assert {source['documentId'] for source in found} == {guide, fds}
+            assert {source['documentId'] for source in found} == {guide, fds, brd}
             assert all(source['projectId'] == app and source['heading'] == 'Đăng nhập › Quên mật khẩu' for source in found)
             assert all(source['canOpen'] for source in found)
             accented = await knowledge_sources(db, workspace, requester['id'], 'Quên mật khẩu thì làm sao?')

@@ -127,11 +127,18 @@ test('files sit in their folder and match only "all types" by filename', () => {
    assert.equal(filterTree(roots, '', 'FDS')[0].children.length, 0);
 });
 
-test('templates and titles follow the FDS/TDS convention', () => {
+test('templates and titles follow the "<TYPE> · name" convention', () => {
    assert.equal(documentTitle('FDS', ' Timeline '), 'FDS · Timeline');
    assert.equal(documentTitle('GUIDE', 'Runbook'), 'Runbook');
-   assert.match(documentTemplate('TDS', 'Timeline'), /^# TDS · Timeline/);
-   assert.equal(documentTemplate('OTHER', 'x'), '');
+   for (const type of ['FDS', 'TDS', 'BRD', 'SRS', 'PROTOTYPE', 'TEST', 'MINUTES'] as const) {
+      assert.match(
+         documentTemplate(type, 'Timeline'),
+         new RegExp(`^# ${type} · Timeline\n\n.*##`, 's')
+      );
+      assert.equal(documentTitle(type, 'Timeline'), `${type} · Timeline`);
+   }
+   for (const type of ['ADR', 'RCA', 'GUIDE', 'OTHER'] as const)
+      assert.equal(documentTemplate(type, 'x'), '');
 });
 
 test('table of contents reads headings outside code with unique anchors', () => {
