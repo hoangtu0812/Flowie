@@ -86,8 +86,13 @@ test('stable workspace links and owner deletion preserve other workspaces', asyn
    let deleted = false;
    try {
       await page.goto(`/${workspace.id}/settings/workspace`);
-      await page.getByRole('button', { name: 'Delete workspace', exact: true }).click();
       const dialog = page.getByRole('alertdialog', { name: 'Delete workspace?' });
+      // A click that lands before the settings page is interactive opens nothing, so it is repeated.
+      // VI: Lần bấm rơi vào lúc trang settings chưa tương tác được sẽ không mở gì, nên được bấm lại.
+      await expect(async () => {
+         await page.getByRole('button', { name: 'Delete workspace', exact: true }).click();
+         await expect(dialog).toBeVisible({ timeout: 1000 });
+      }).toPass();
       const confirm = dialog.getByRole('button', { name: 'Delete workspace permanently' });
       await expect(confirm).toBeDisabled();
       await dialog.getByLabel('Workspace name', { exact: true }).fill(name.toLowerCase());

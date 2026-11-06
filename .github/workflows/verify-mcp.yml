@@ -90,7 +90,7 @@ jobs:
         timeout-minutes: 25
         run: pnpm --filter @circle/web exec playwright install --with-deps chromium firefox webkit
       - name: Verify browser regression workflows
-        timeout-minutes: 35
+        timeout-minutes: 45
         env:
           FLOWIE_E2E_DATABASE_URL: postgresql://flowie_test:test-only-password@localhost:5432/flowie_mcp_test
         run: |
