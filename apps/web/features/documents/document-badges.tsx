@@ -5,7 +5,19 @@ import { messages } from '@/features/documents/messages.vi';
 import type { DocStatus, DocType } from '@/lib/document-tree';
 import { cn } from '@/lib/utils';
 
-export const DOC_TYPES: DocType[] = ['FDS', 'TDS', 'ADR', 'RCA', 'GUIDE', 'OTHER'];
+export const DOC_TYPES: DocType[] = [
+   'FDS',
+   'TDS',
+   'BRD',
+   'SRS',
+   'PROTOTYPE',
+   'TEST',
+   'MINUTES',
+   'ADR',
+   'RCA',
+   'GUIDE',
+   'OTHER',
+];
 export const DOC_STATUSES: { value: DocStatus; label: keyof typeof messages }[] = [
    { value: 'DRAFT', label: 'Draft' },
    { value: 'IN_REVIEW', label: 'In review' },
@@ -15,6 +27,11 @@ export const DOC_STATUSES: { value: DocStatus; label: keyof typeof messages }[] 
 const TYPE_TONES: Partial<Record<DocType, string>> = {
    FDS: 'bg-sky-500/15 text-sky-700 dark:text-sky-300',
    TDS: 'bg-violet-500/15 text-violet-700 dark:text-violet-300',
+   BRD: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
+   SRS: 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-300',
+   PROTOTYPE: 'bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300',
+   TEST: 'bg-orange-500/15 text-orange-700 dark:text-orange-300',
+   MINUTES: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300',
    ADR: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
    RCA: 'bg-red-500/15 text-red-700 dark:text-red-300',
 };

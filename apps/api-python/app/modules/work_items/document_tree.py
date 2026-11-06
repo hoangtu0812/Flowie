@@ -24,7 +24,6 @@ from ...core.identifiers import _cuid
 from .document_repository import _document_by_id, _documents, _team_access
 
 FolderKind = Literal["project", "module", "feature", "changes", "general"]
-DocType = Literal["FDS", "TDS", "ADR", "RCA", "GUIDE", "OTHER"]
 DocStatus = Literal["DRAFT", "IN_REVIEW", "APPROVED"]
 
 # Deep enough for project / module / feature / changes plus a few levels of grouping,

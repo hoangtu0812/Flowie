@@ -1,12 +1,12 @@
 """Knowledge the Service Desk assistant may answer from, and the passages it hands the model.
 
 Scope is decided here, in SQL, and never by the question or the model: the latest approved
-release of a GUIDE or FDS document filed under a project that accepts tickets, with the document,
+release of a GUIDE, FDS or BRD document filed under a project that accepts tickets, with the document,
 project and team not archived. Every workspace member may ask, so anything inside this scope can
 reach people outside the document's team; anything outside it must never reach the model.
 VI: Kiến thức trợ lý Service Desk được dùng để trả lời, và các đoạn văn bản đưa cho model.
 VI: Phạm vi được quyết định tại đây, bằng SQL, không bao giờ do câu hỏi hay model: bản phát hành
-VI: đã duyệt mới nhất của tài liệu GUIDE hoặc FDS nằm trong dự án nhận ticket, với tài liệu, dự án
+VI: đã duyệt mới nhất của tài liệu GUIDE, FDS hoặc BRD nằm trong dự án nhận ticket, với tài liệu, dự án
 VI: và team chưa lưu trữ. Mọi thành viên workspace đều hỏi được, nên nội dung trong phạm vi có thể
 VI: tới người ngoài team của tài liệu; nội dung ngoài phạm vi không bao giờ được tới model.
 """
@@ -61,7 +61,7 @@ JOIN LATERAL (
     SELECT release, title, content FROM document_releases
     WHERE document_id = d.id ORDER BY release DESC LIMIT 1
 ) r ON true
-WHERE d.workspace_id = :workspace AND d.archived_at IS NULL AND d.doc_type IN ('GUIDE', 'FDS')
+WHERE d.workspace_id = :workspace AND d.archived_at IS NULL AND d.doc_type IN ('GUIDE', 'FDS', 'BRD')
 """
 
 
@@ -199,10 +199,10 @@ async def knowledge_sources(db: AsyncSession, workspace_id: str, user_id: str, q
     if not terms:
         return []
     # shortcut: the search vector is computed per query without an index, which is fine for a few
-    # hundred approved GUIDE/FDS documents; add an IMMUTABLE fold function and a GIN index on
+    # hundred approved GUIDE/FDS/BRD documents; add an IMMUTABLE fold function and a GIN index on
     # document_releases when this query gets slow.
     # VI: shortcut: vector tìm kiếm được tính mỗi lần truy vấn, không có index, đủ cho vài trăm tài
-    # VI: liệu GUIDE/FDS đã duyệt; thêm hàm bỏ dấu IMMUTABLE và GIN index trên document_releases khi
+    # VI: liệu GUIDE/FDS/BRD đã duyệt; thêm hàm bỏ dấu IMMUTABLE và GIN index trên document_releases khi
     # VI: truy vấn này chậm.
     rows = await db.execute(
         text(f"""
