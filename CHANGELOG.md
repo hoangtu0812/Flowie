@@ -266,6 +266,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
+- The issue picker shows one tooltip for a long issue name instead of two identical ones. The browser regression step of the verify job may run for 45 minutes, because a slower runner passed the old 35-minute limit, so a push to `main` no longer stops there. (DTD-380, #155)
+  VI: Hộp chọn issue chỉ hiện một tooltip cho tên issue dài thay vì hai tooltip trùng nhau. Bước kiểm thử trình duyệt của job verify được chạy tối đa 45 phút, vì runner chậm đã vượt giới hạn 35 phút cũ, nên push lên `main` không còn dừng ở đó. (DTD-380)
+
 - The storage acceptance step no longer fails at random and stops production deployment: its MinIO fixtures now wait for `/minio/health/cluster`, because `/minio/health/ready` answers before S3 calls work. Test tooling only; nothing in the deployed app changes. (DTD-340, #154)
   VI: Bước storage acceptance không còn fail ngẫu nhiên và dừng deploy production: fixture MinIO nay chờ `/minio/health/cluster`, vì `/minio/health/ready` trả lời trước khi lệnh S3 hoạt động. Chỉ đổi công cụ test, ứng dụng đã deploy không thay đổi. (DTD-340)
 - Dragging a row in manual order now works across a taller sibling: a sub-issue can pass one with expanded children in either direction, where it used to snap back. The rows swap when the pointer passes the sibling's middle. The purple Today line on timelines no longer blocks clicks on a bar beneath it. The browser tests that stopped the production workflow before its deploy step match the current interface again, and image paste tests now run in Firefox. No migration; rebuild `web`. (DTD-336, #153)

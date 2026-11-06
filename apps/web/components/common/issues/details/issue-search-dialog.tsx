@@ -58,7 +58,7 @@ function CandidateRow({
          <ListItem
             ref={anchor}
             label={
-               <Text maxLines={1}>
+               <Text maxLines={1} hasTruncateTooltip={false}>
                   {issue.identifier} · {issue.title}
                </Text>
             }
