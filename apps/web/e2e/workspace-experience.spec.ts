@@ -72,6 +72,7 @@ async function fixture(page: Page, locale: 'en' | 'vi' = 'en') {
                name: slug === 'beta' ? 'Design workspace' : 'First workspace',
             },
          }));
+      if (path === '/approvals') data = { waiting: [], submitted: [], done: [] };
       if (path === '/teams')
          data = [{ id: 'team', name: 'Product team', key: 'DEV', joined: true, icon: '🛠️' }];
       if (path === '/issue-statuses') data = [{ id: 'todo', name: 'Todo', teamId: 'team' }];

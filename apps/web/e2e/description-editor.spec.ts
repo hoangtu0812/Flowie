@@ -149,9 +149,11 @@ test('pasted images in Rich Text keep caret placement and upload to the new issu
       );
       const data = new DataTransfer();
       data.items.add(new File([bytes], 'rich.png', { type: 'image/png' }));
-      element.dispatchEvent(
-         new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: data })
-      );
+      // Firefox ignores clipboardData in the ClipboardEvent constructor, so it is set on the instance.
+      // VI: Firefox bỏ qua clipboardData trong constructor ClipboardEvent nên phải gán trên đối tượng.
+      const paste = new ClipboardEvent('paste', { bubbles: true, cancelable: true });
+      Object.defineProperty(paste, 'clipboardData', { value: data });
+      element.dispatchEvent(paste);
    });
    await expect(field.getByRole('img', { name: 'rich.png', exact: true })).toBeVisible();
    await dialog.getByRole('button', { name: 'Markdown', exact: true }).click();

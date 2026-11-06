@@ -170,8 +170,11 @@ test('supplied branding loads locally and motion respects reduced-motion prefere
    ).toBeTruthy();
    await loadingLogo.evaluate((el) => (el as HTMLImageElement).decode());
    const entering = await loadingLogo.screenshot();
-   await page.waitForTimeout(700);
-   expect(await loadingLogo.screenshot()).not.toEqual(entering);
+   // A slow WebKit runner can paint the next frame later than a fixed wait allows.
+   // VI: Máy WebKit chậm có thể vẽ frame kế tiếp muộn hơn một khoảng chờ cố định.
+   await expect
+      .poll(async () => (await loadingLogo.screenshot()).equals(entering), { timeout: 8000 })
+      .toBe(false);
    await page.waitForTimeout(1800);
    await page.screenshot({ path: testInfo.outputPath('brand-shared-motion-mobile.png') });
    await page.emulateMedia({ reducedMotion: 'reduce' });

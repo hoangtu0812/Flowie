@@ -49,6 +49,7 @@ test('a requester outside the team follows a ticket the team answers and convert
    const team = await signIn(browser, fixture.email);
    const requester = await signIn(browser, fixture.deskRequesterEmail);
    const title = `Service Desk spec ${Date.now()}`;
+   let identifier = '';
    await setServiceDesk(team.context, true);
    try {
       // The page may have listed projects before the switch was turned on.
@@ -89,7 +90,7 @@ test('a requester outside the team follows a ticket the team answers and convert
       await team.page.getByRole('button', { name: 'Convert to issue', exact: true }).click();
       const issueLink = team.page.getByRole('link', { name: /^[A-Z0-9]+-\d+$/ });
       await expect(issueLink).toBeVisible();
-      const identifier = (await issueLink.textContent()) ?? '';
+      identifier = (await issueLink.textContent()) ?? '';
 
       // The ticket stays reachable from the issue, and a closed ticket leaves the default queue.
       // VI: Ticket vẫn mở được từ Issue, và ticket đã đóng rời khỏi hàng đợi mặc định.
@@ -146,6 +147,15 @@ test('a requester outside the team follows a ticket the team answers and convert
       await expect(team.page.getByText(`${title} closed`, { exact: true })).toBeVisible();
       await expect(team.page.getByText(title, { exact: true })).toHaveCount(0);
    } finally {
+      // Specs in later browsers count the shared project's issues, so the converted one must go.
+      // VI: Spec của trình duyệt chạy sau đếm issue trong dự án dùng chung nên phải xoá issue đã chuyển.
+      if (identifier) {
+         const issues = await team.context.request.get(`${api}/issues?${query}`);
+         const { id } = (await issues.json()).data.find(
+            (issue: { identifier: string }) => issue.identifier === identifier
+         );
+         await team.context.request.delete(`${api}/issues/${id}?${query}`);
+      }
       await setServiceDesk(team.context, false);
       await team.context.close();
       await requester.context.close();

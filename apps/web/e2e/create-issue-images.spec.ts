@@ -20,9 +20,11 @@ async function pasteImages(field: Locator, names: string[]) {
          (c) => c.charCodeAt(0)
       );
       for (const name of names) data.items.add(new File([bytes], name, { type: 'image/png' }));
-      element.dispatchEvent(
-         new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: data })
-      );
+      // Firefox ignores clipboardData in the ClipboardEvent constructor, so it is set on the instance.
+      // VI: Firefox bỏ qua clipboardData trong constructor ClipboardEvent nên phải gán trên đối tượng.
+      const paste = new ClipboardEvent('paste', { bubbles: true, cancelable: true });
+      Object.defineProperty(paste, 'clipboardData', { value: data });
+      element.dispatchEvent(paste);
    }, names);
 }
 test.beforeEach(async ({ page }) => {
