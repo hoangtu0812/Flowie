@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { attachmentIdFromUrl } from '../lib/attachment-url';
+import { attachmentIdFromUrl, attachmentPreviewKind } from '../lib/attachment-url';
 
 test('preview links resolve to their attachment on any host or base path', () => {
    for (const src of [
@@ -21,4 +21,13 @@ test('other images are left alone', () => {
       'data:image/png;base64,AAAA',
    ])
       assert.equal(attachmentIdFromUrl(src), undefined, src);
+});
+
+test('previewable attachments are picked by extension, others only download', () => {
+   assert.equal(attachmentPreviewKind('notes.MD'), 'markdown');
+   assert.equal(attachmentPreviewKind('spec.pdf'), 'pdf');
+   for (const name of ['report.html', 'plan.xlsx', 'data.csv', 'brief.docx', 'run.log'])
+      assert.equal(attachmentPreviewKind(name), 'page', name);
+   for (const name of ['deck.pptx', 'legacy.xls', 'archive.zip', 'html', 'page.html.exe'])
+      assert.equal(attachmentPreviewKind(name), null, name);
 });

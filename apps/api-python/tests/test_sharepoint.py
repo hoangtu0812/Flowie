@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.config import Settings, _async_database_url
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
 from app.modules.sharepoint.attachments import numbered, publish_attachments_due
-from app.modules.sharepoint.graph import SharePointError, parse_folder_url, safe_name
+from app.modules.sharepoint.graph import SharePointError, parse_folder_url, safe_name, viewer_url
 from app.modules.sharepoint.service import publish_due, publish_path, save_connection
 from app.modules.work_items.contracts import CreateDocumentInput, UpdateDocumentInput
 from app.modules.work_items.document_tree import create_folder, project_tree, scaffold_project_tree, update_folder
@@ -36,6 +36,20 @@ def test_folder_urls_and_names():
     assert [numbered("a.pdf", 1), numbered("a.pdf", 2), numbered("a.tar.gz", 3), numbered("README", 2)] == [
         "a.pdf", "a (2).pdf", "a.tar (3).gz", "README (2)",
     ]
+
+
+def test_viewer_urls_open_files_on_sharepoint_instead_of_downloading():
+    item = "https://contoso.sharepoint.com/sites/DTD/Shared%20Documents/Flowie/Attachments/FL-1%20A/"
+    assert viewer_url(item + "plan.xlsx", "Flowie/Attachments/FL-1 A/plan.xlsx") == item + "plan.xlsx?web=1"
+    assert viewer_url(item + "page.html", "Flowie/Attachments/FL-1 A/page.html") == (
+        "https://contoso.sharepoint.com/sites/DTD/Shared%20Documents/Forms/AllItems.aspx"
+        "?id=%2Fsites%2FDTD%2FShared%20Documents%2FFlowie%2FAttachments%2FFL-1%20A%2Fpage.html"
+        "&parent=%2Fsites%2FDTD%2FShared%20Documents%2FFlowie%2FAttachments%2FFL-1%20A"
+    )
+    assert viewer_url(item + "page.html", "Elsewhere/page.html") == item + "page.html?web=1"
+    layouts = "https://contoso.sharepoint.com/sites/DTD/_layouts/15/Doc.aspx?sourcedoc=%7B1%7D"
+    assert viewer_url(layouts, "Flowie/a.docx") == layouts
+    assert viewer_url(None, "Flowie/a.docx") is None
 
 
 @pytest.mark.skipif(not os.getenv("MCP_TEST_DATABASE_URL"), reason="Test database not configured")

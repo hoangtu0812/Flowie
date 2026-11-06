@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...core.clock import _utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import _cuid
+from ..sharepoint.graph import viewer_url
 from .document_repository import _document_by_id, _documents, _team_access
 
 FolderKind = Literal["project", "module", "feature", "changes", "general"]
@@ -555,7 +556,7 @@ async def publications_by_document(
     rows = (
         await db.execute(
             text(
-                """SELECT document_id, version, release, web_url, published_at, last_error FROM document_publications
+                """SELECT document_id, version, release, web_url, path, published_at, last_error FROM document_publications
                    WHERE document_id = ANY(CAST(:ids AS text[]))"""
             ),
             {"ids": document_ids},
@@ -565,7 +566,7 @@ async def publications_by_document(
         row["document_id"]: {
             "version": row["version"],
             "release": row["release"],
-            "webUrl": row["web_url"],
+            "webUrl": viewer_url(row["web_url"], row["path"]),
             "publishedAt": row["published_at"],
             "lastError": row["last_error"],
         }

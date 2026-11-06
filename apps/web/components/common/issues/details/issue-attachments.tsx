@@ -28,13 +28,13 @@ import { MarkdownPreview } from '@/components/common/markdown/markdown-preview';
 import { useLocale } from '@/features/shared/use-locale';
 import type { useIssueAttachments } from '@/features/issues/use-issue-attachments';
 import { attachmentPreviewUrl, isEmbeddableImage, type Attachment } from '@/lib/attachments';
+import { attachmentPreviewKind } from '@/lib/attachment-url';
 import { parseInstant } from '@/lib/time';
 import { authenticatedFetch } from '@/lib/workspaces';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 const downloadUrl = (attachment: Attachment) =>
    `${api}/attachments/${encodeURIComponent(attachment.id)}/download`;
-const isMarkdown = (attachment: Attachment) => /\.(md|markdown)$/i.test(attachment.filename);
 
 function formatSize(bytes: number) {
    if (bytes < 1024) return `${bytes} B`;
@@ -66,11 +66,13 @@ function TypeIcon({ attachment }: { attachment: Attachment }) {
 /**
  * Attachments tab of an issue: a header with the file count, New (a Markdown document saved as
  * a `.md` attachment) and Attach file, then a grid of cards. Images show a thumbnail that opens
- * the image viewer, `.md` files open a rendered preview, other files download. The state comes
- * from the parent so the tab label can show the file count while this tab is closed.
+ * the image viewer; Markdown, PDF, HTML, XLSX, CSV, DOCX and text files open a preview dialog
+ * (`attachmentPreviewKind`); other files download. The state comes from the parent so the tab
+ * label can show the file count while this tab is closed.
  * VI: Tab tệp đính kèm của công việc: thanh đầu có số tệp, nút Mới (tài liệu Markdown lưu thành
- * VI: tệp `.md`) và Đính kèm tệp, rồi lưới thẻ tệp. Ảnh có thumbnail mở trình xem ảnh, tệp `.md`
- * VI: mở bản xem đã hiển thị, tệp khác tải xuống. State do component cha giữ để nhãn tab hiện
+ * VI: tệp `.md`) và Đính kèm tệp, rồi lưới thẻ tệp. Ảnh có thumbnail mở trình xem ảnh; tệp
+ * VI: Markdown, PDF, HTML, XLSX, CSV, DOCX và văn bản mở hộp thoại xem trước
+ * VI: (`attachmentPreviewKind`); tệp khác tải xuống. State do component cha giữ để nhãn tab hiện
  * VI: được số tệp cả khi tab này đang đóng.
  */
 export function IssueAttachments({
@@ -165,7 +167,7 @@ export function IssueAttachments({
                               </div>
                               {label}
                            </>
-                        ) : isMarkdown(attachment) ? (
+                        ) : attachmentPreviewKind(attachment.filename) ? (
                            <button
                               type="button"
                               className="block w-full text-left"
@@ -221,7 +223,7 @@ export function IssueAttachments({
             />
          )}
          {viewing && (
-            <MarkdownAttachmentDialog attachment={viewing} onClose={() => setViewing(undefined)} />
+            <AttachmentPreviewDialog attachment={viewing} onClose={() => setViewing(undefined)} />
          )}
       </VStack>
    );
@@ -291,12 +293,23 @@ function NewMarkdownDialog({
 }
 
 /**
- * Rendered view of a `.md` attachment. The file is private, so its text is fetched with the
- * app's authenticated helper; react-markdown drops raw HTML, so the file cannot run scripts.
- * VI: Bản xem đã hiển thị của tệp `.md`. Tệp là riêng tư nên nội dung được tải bằng helper có xác
- * VI: thực của app; react-markdown bỏ HTML thô nên tệp không chạy được script.
+ * Preview of an attachment the app can show (`attachmentPreviewKind`). The file is private and
+ * the session cookie is SameSite=Lax, so it is fetched with the app's authenticated helper:
+ * Markdown from the download route, rendered by react-markdown, which drops raw HTML; PDF from the
+ * preview route into a blob URL for the browser's PDF viewer, revoked on close; every other kind
+ * as the HTML page the preview route builds, placed in an iframe `srcdoc` with an empty `sandbox`.
+ * The sandbox is what keeps an uploaded HTML file from running script with the app's origin, so it
+ * must never gain `allow-scripts` or `allow-same-origin`, and that page is never opened from a blob
+ * URL in a new tab.
+ * VI: Xem trước tệp đính kèm mà app hiển thị được (`attachmentPreviewKind`). Tệp là riêng tư và
+ * VI: cookie phiên là SameSite=Lax, nên được tải bằng helper có xác thực của app: Markdown lấy từ
+ * VI: route download, hiển thị bằng react-markdown vốn bỏ HTML thô; PDF lấy từ route preview thành
+ * VI: blob URL cho trình xem PDF của trình duyệt, thu hồi khi đóng; các loại khác là trang HTML do
+ * VI: route preview dựng, đặt trong iframe `srcdoc` có `sandbox` rỗng. Sandbox là thứ ngăn file HTML
+ * VI: tải lên chạy script với origin của app, nên không bao giờ được thêm `allow-scripts` hay
+ * VI: `allow-same-origin`, và trang đó không bao giờ được mở từ blob URL trong tab mới.
  */
-function MarkdownAttachmentDialog({
+function AttachmentPreviewDialog({
    attachment,
    onClose,
 }: {
@@ -304,26 +317,40 @@ function MarkdownAttachmentDialog({
    onClose: () => void;
 }) {
    const { t } = useLocale();
+   const kind = attachmentPreviewKind(attachment.filename);
    const [content, setContent] = useState<string>();
    const [failed, setFailed] = useState(false);
    useEffect(() => {
       let active = true;
+      let objectUrl: string | undefined;
       setContent(undefined);
       setFailed(false);
-      void authenticatedFetch(downloadUrl(attachment))
+      void authenticatedFetch(
+         kind === 'markdown' ? downloadUrl(attachment) : attachmentPreviewUrl(attachment.id)
+      )
          .then(async (response) => {
             if (!response.ok) throw new Error(response.statusText);
+            if (kind === 'pdf') {
+               const blob = new Blob([await response.arrayBuffer()], { type: 'application/pdf' });
+               objectUrl = URL.createObjectURL(blob);
+               if (active) setContent(objectUrl);
+               else URL.revokeObjectURL(objectUrl);
+               return;
+            }
             const text = await response.text();
             if (active) setContent(text);
          })
          .catch(() => active && setFailed(true));
       return () => {
          active = false;
+         if (objectUrl) URL.revokeObjectURL(objectUrl);
       };
-   }, [attachment]);
+   }, [attachment, kind]);
    return (
       <Dialog open onOpenChange={(open) => !open && onClose()}>
-         <DialogContent className="flex max-h-[90vh] flex-col sm:max-w-3xl">
+         <DialogContent
+            className={`flex max-h-[90vh] flex-col ${kind === 'markdown' ? 'sm:max-w-3xl' : 'sm:max-w-5xl'}`}
+         >
             <DialogHeader>
                <DialogTitle className="truncate">{attachment.filename}</DialogTitle>
             </DialogHeader>
@@ -332,8 +359,21 @@ function MarkdownAttachmentDialog({
                   <Text role="alert">{t('couldNotLoadFile')}</Text>
                ) : content === undefined ? (
                   <div className="h-40 animate-pulse rounded-md bg-accent/50" />
-               ) : (
+               ) : kind === 'markdown' ? (
                   <MarkdownPreview content={content} documentMedia />
+               ) : kind === 'pdf' ? (
+                  <iframe
+                     src={content}
+                     title={attachment.filename}
+                     className="h-[70vh] w-full border-0"
+                  />
+               ) : (
+                  <iframe
+                     sandbox=""
+                     srcDoc={content}
+                     title={attachment.filename}
+                     className="h-[70vh] w-full rounded-md border border-border bg-white"
+                  />
                )}
             </div>
             <DialogFooter>

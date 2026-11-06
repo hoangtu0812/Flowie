@@ -74,6 +74,51 @@ def parse_folder_url(url: str) -> tuple[str, str, list[str]]:
     return host, f"/{segments[0]}/{segments[1]}", segments[2:]
 
 
+OFFICE_EXTENSIONS = frozenset(
+    {"doc", "docx", "docm", "dotx", "xls", "xlsx", "xlsm", "xlsb", "ppt", "pptx", "pptm", "ppsx"}
+)
+
+
+def viewer_url(web_url: str | None, path: str | None) -> str | None:
+    """Link that opens an uploaded file on SharePoint instead of downloading it.
+
+    Graph returns the file's direct address as `webUrl`
+    (`https://<tenant>/sites/<site>/<library>/<path>`), and SharePoint answers that address
+    with a download for Office, HTML and most other types. Office files get `?web=1`, which
+    SharePoint redirects to Office for the web. Other files open in the library's file viewer
+    (`<library>/Forms/AllItems.aspx?id=<file>&parent=<folder>`), whose library is the direct
+    address minus `path`, the drive-relative path the file was uploaded to. A URL that is not
+    a direct address (it already has a query or goes through `/_layouts/`), or whose end does
+    not match `path`, is returned unchanged or with `?web=1`, never rebuilt from a guess.
+    Computed when read, so links stored before this existed are corrected without a backfill.
+    VI: Link mở file đã tải lên SharePoint thay vì tải file về. Graph trả về địa chỉ trực tiếp
+    VI: của file làm `webUrl` (`https://<tenant>/sites/<site>/<thư viện>/<đường dẫn>`), và
+    VI: SharePoint trả địa chỉ đó dưới dạng tải về với file Office, HTML và hầu hết loại khác.
+    VI: File Office được thêm `?web=1`, SharePoint chuyển sang Office for the web. File khác mở
+    VI: trong trình xem file của thư viện (`<thư viện>/Forms/AllItems.aspx?id=<file>&parent=<thư mục>`),
+    VI: thư viện là địa chỉ trực tiếp bỏ đi `path`, đường dẫn trong drive lúc tải lên. URL không
+    VI: phải địa chỉ trực tiếp (đã có query hoặc đi qua `/_layouts/`), hoặc phần cuối không khớp
+    VI: `path`, được giữ nguyên hoặc thêm `?web=1`, không dựng lại bằng phỏng đoán. Tính lúc đọc
+    VI: nên link đã lưu từ trước cũng được sửa mà không cần chạy bù dữ liệu.
+    """
+    if not web_url:
+        return None
+    parsed = urlparse(web_url)
+    if parsed.query or "/_layouts/" in parsed.path.lower():
+        return web_url
+    relative = (path or "").strip("/")
+    name = relative.rsplit("/", 1)[-1]
+    extension = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    file_path = unquote(parsed.path)
+    if extension in OFFICE_EXTENSIONS or not relative or not file_path.endswith(f"/{relative}"):
+        return f"{web_url}?web=1"
+    library = file_path[: -len(relative) - 1]
+    return (
+        f"https://{parsed.netloc}{quote(library)}/Forms/AllItems.aspx"
+        f"?id={quote(file_path, safe='')}&parent={quote(file_path.rsplit('/', 1)[0], safe='')}"
+    )
+
+
 def _failure(response: httpx.Response, action: str) -> SharePointError:
     if response.status_code in (401, 403):
         return SharePointError(
