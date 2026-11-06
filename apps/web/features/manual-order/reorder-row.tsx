@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useRef, useState, type ReactNode } from 'react';
+import { pointerIntersection, type CollisionDetector } from '@dnd-kit/collision';
 import { Feedback } from '@dnd-kit/dom';
 import { DragDropProvider } from '@dnd-kit/react';
 import { isSortable, useSortable } from '@dnd-kit/react/sortable';
@@ -23,6 +24,33 @@ const messages = {
 const BusyContext = createContext(false);
 
 type ReorderData = { commit: (index: number) => Promise<void> };
+
+// Sibling rows differ in height: a sub-issue with expanded children is several rows tall. After
+// a swap that taller row can still lie under the pointer, so the default detector reports it
+// again and swaps back, and a short row can never cross it. A sibling therefore counts only once
+// the pointer has passed its middle, moving away from the dragged row: after the swap the pointer
+// is on the near side of that middle, so the same sibling cannot trigger a second swap. Keyboard
+// moves use the sortable plugin's own detector and are not affected.
+// VI: Các hàng cùng cấp có chiều cao khác nhau: sub-issue đang mở con cao bằng nhiều hàng. Sau khi
+// VI: đổi chỗ, hàng cao hơn có thể vẫn nằm dưới con trỏ nên detector mặc định báo lại và đổi ngược,
+// VI: khiến hàng ngắn không bao giờ vượt qua được. Vì vậy hàng cùng cấp chỉ được tính khi con trỏ
+// VI: đã qua điểm giữa của nó theo hướng rời khỏi hàng đang kéo: sau khi đổi, con trỏ nằm phía gần
+// VI: của điểm giữa nên hàng đó không gây đổi lần hai. Di chuyển bằng bàn phím dùng detector riêng
+// VI: của plugin sortable nên không bị ảnh hưởng.
+const pastSiblingMiddle: CollisionDetector = (input) => {
+   const { droppable, dragOperation } = input;
+   const { source, position } = dragOperation;
+   if (!source || !droppable.shape) return null;
+   // Only sortable rows use this detector, so both entities carry their current index.
+   // VI: Chỉ hàng sortable dùng detector này nên cả hai đều có index hiện tại.
+   const from = (source as unknown as { index: number }).index;
+   const to = (droppable as unknown as { index: number }).index;
+   if (from === to) return null;
+   const { y } = position.current;
+   const middle = droppable.shape.center.y;
+   const passed = from < to ? y > middle : y < middle;
+   return passed ? pointerIntersection(input) : null;
+};
 
 export function ReorderProvider({ children }: { children: ReactNode }) {
    const [busy, setBusy] = useState(false);
@@ -135,6 +163,7 @@ export function ReorderRow({
       group,
       type: group,
       accept: group,
+      collisionDetector: pastSiblingMiddle,
       disabled: !enabled || !workspaceId || busy,
       data: { commit },
    });

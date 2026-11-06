@@ -261,6 +261,8 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Fixed
 
+- Dragging a row in manual order now works across a taller sibling: a sub-issue can pass one with expanded children in either direction, where it used to snap back. The rows swap when the pointer passes the sibling's middle. The purple Today line on timelines no longer blocks clicks on a bar beneath it. The browser tests that stopped the production workflow before its deploy step match the current interface again. No migration; rebuild `web`. (DTD-336)
+  VI: Kéo hàng ở thứ tự thủ công nay đi qua được hàng cùng cấp cao hơn: sub-issue vượt được hàng đang mở con theo cả hai chiều, trước đây hàng bị bật về chỗ cũ. Hai hàng đổi chỗ khi con trỏ qua điểm giữa của hàng cùng cấp. Vạch Today màu tím trên timeline không còn chặn click vào thanh nằm dưới nó. Các test trình duyệt từng chặn workflow production trước bước deploy nay khớp lại giao diện hiện tại. Không có migration; build lại `web`. (DTD-336)
 - Agent and News retry temporary AI provider failures, wait longer for large work such as scheduling and news analysis (up to 180 seconds), and report a reply that was cut off instead of "invalid format". Provider errors now name the HTTP status. A reverse proxy in front of the API must allow requests of up to 180 seconds, or scheduling can still be cut off. (DTD-322, #151)
   VI: Agent và News thử lại khi provider AI lỗi tạm thời, chờ lâu hơn với việc lớn như xếp lịch và phân tích tin (tối đa 180 giây), và báo câu trả lời bị cắt thay vì "sai định dạng". Lỗi provider nay nêu mã HTTP. Reverse proxy trước API phải cho phép request tới 180 giây, nếu không xếp lịch vẫn có thể bị cắt. (DTD-322)
 

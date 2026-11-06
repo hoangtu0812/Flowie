@@ -39,6 +39,12 @@ async function manual(page: Page) {
 async function dragRow(page: Page, handle: Locator, target: Locator, after = true) {
    await expect(page.locator('[data-dnd-dropping]')).toHaveCount(0);
    await expect(handle).toHaveAttribute('aria-roledescription', /.+/);
+   // Earlier specs lengthen the shared fixture issue, so the rows can start below the viewport,
+   // where a raw mouse press at their coordinates reaches nothing.
+   // VI: Các spec trước làm issue fixture dùng chung dài ra, nên hàng có thể nằm dưới viewport,
+   // VI: nơi thao tác chuột thô theo toạ độ không chạm vào phần tử nào.
+   await target.scrollIntoViewIfNeeded();
+   await handle.scrollIntoViewIfNeeded();
    const from = (await handle.boundingBox())!,
       to = (await target.boundingBox())!;
    const targetId = await target.getAttribute('data-order-id');
@@ -237,6 +243,22 @@ test('sub-issues reorder among siblings and retain nested children', async ({ pa
       );
       expect((await saved).ok()).toBeTruthy();
       await expect(rows.first()).toContainText(other.identifier);
+      await page.reload();
+      await expect(rows.first()).toContainText(other.identifier);
+      // The test always drags the childless row across the expanded one, whichever comes first.
+      // VI: Test luôn kéo hàng không có con qua hàng đang mở con, dù hàng nào đứng trước.
+      const crossed = page.waitForResponse(
+         (response) =>
+            response.url().endsWith('/manual-order') && response.request().method() === 'POST'
+      );
+      await dragRow(
+         page,
+         page.getByRole('button', { name: `Reorder ${b.identifier}`, exact: true }),
+         page.locator(`[data-order-id="${a.id}"]`),
+         other.id === b.id
+      );
+      expect((await crossed).ok()).toBeTruthy();
+      await expect(rows.first()).toContainText(moved.identifier);
       const detail = (
          await (
             await context.request.get(

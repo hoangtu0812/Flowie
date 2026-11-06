@@ -126,6 +126,9 @@ importers:
       '@circle/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@dnd-kit/collision':
+        specifier: 0.5.3
+        version: 0.5.3
       '@dnd-kit/dom':
         specifier: 0.5.3
         version: 0.5.3
