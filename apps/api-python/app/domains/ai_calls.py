@@ -45,6 +45,7 @@ CALL_LIMITS = {
     'agent.schedule': (180, 24_000),
     'agent.test': (30, 1_000),
     'news.analysis': (180, 12_000),
+    'servicedesk.answer': (60, 4_000),
 }
 
 

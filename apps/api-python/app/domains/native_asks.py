@@ -4,7 +4,7 @@ import json
 from datetime import timedelta
 from typing import Any, Literal
 
-from fastapi import Depends, Query
+from fastapi import Depends, Query, Request
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -15,6 +15,7 @@ from ..db.session import get_session
 from .auth import _cuid, _utcnow, current_user
 from .native_issues import CreateIssueInput, create_issue
 from .native_projects import _team_access, _workspace_access
+from .service_desk_assistant import AssistantQuestion, answer_question, assistant_status
 from ..modules.notifications.outbox import stage_notifications
 from ..services.notification_events import create_notification_batch, project_teams_batch, team_recipient_ids
 
@@ -185,6 +186,20 @@ async def list_service_desk_projects(workspaceId: str = Query(min_length=1), use
                                       WHERE project.workspace_id = :workspace_id AND project.service_desk_enabled
                                       AND project.archived_at IS NULL AND team.archived_at IS NULL ORDER BY project.name'''), {'workspace_id': workspaceId})
     return {'data': [{'id': row['id'], 'name': row['name'], 'teamId': row['team_id']} for row in result.mappings().all()]}
+
+
+@router.get('/assistant/status')
+async def get_assistant_status(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    await _role(db, workspaceId, user['id'])
+    return {'data': await assistant_status(db, workspaceId)}
+
+
+@router.post('/assistant')
+async def ask_assistant(payload: AssistantQuestion, request: Request, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    # Any active member may ask, like raising a ticket; what the answer can draw on is limited by the knowledge scope.
+    # VI: Mọi thành viên còn ACTIVE đều hỏi được, như khi tạo ticket; nội dung trả lời bị giới hạn bởi phạm vi tri thức.
+    await _role(db, payload.workspaceId, user['id'])
+    return {'data': await answer_question(request.app.state.settings, db, payload, user['id'])}
 
 
 @router.get('')
