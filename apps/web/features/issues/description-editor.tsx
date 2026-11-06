@@ -43,11 +43,17 @@ export function DescriptionEditor({
    onChange,
    isDisabled,
    onImages,
+   onTextPaste,
 }: {
    value: string;
    onChange: (value: string) => void;
    isDisabled: boolean;
    onImages: (files: File[]) => StagedImage[];
+   /**
+    * Optional handler for a Markdown-mode paste without images, such as titling a pasted link.
+    * VI: Handler tùy chọn cho thao tác dán không có ảnh ở chế độ Markdown, ví dụ đặt tiêu đề cho link dán.
+    */
+   onTextPaste?: (event: React.ClipboardEvent<HTMLTextAreaElement>) => void;
 }) {
    const tx = useMessages(messages);
    const [mode, setMode] = useState<'rich' | 'markdown'>('rich');
@@ -286,7 +292,7 @@ export function DescriptionEditor({
                onChange={(event) => onChange(event.target.value)}
                onPaste={(event) => {
                   const files = imagesFromClipboard(event.clipboardData);
-                  if (!files.length) return;
+                  if (!files.length) return onTextPaste?.(event);
                   event.preventDefault();
                   if (isDisabled) return;
                   const staged = onImages(files);

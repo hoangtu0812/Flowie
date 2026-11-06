@@ -342,6 +342,9 @@ test('description edits save explicitly and keep the draft across tabs', async (
    });
    expect(created.ok(), await created.text()).toBeTruthy();
    const issue = (await created.json()).data as { id: string; identifier: string };
+   // The Markdown mode keeps the textarea value assertions below.
+   // VI: Chế độ Markdown giữ được các kiểm tra giá trị textarea bên dưới.
+   await page.evaluate(() => localStorage.setItem('flowie.issue-description-mode', 'markdown'));
    try {
       await page.goto(`/${fixture.slug}/issue/${issue.identifier}`);
       await page.getByRole('button', { name: 'Edit description', exact: true }).click();

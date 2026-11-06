@@ -16,6 +16,8 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- Editing a task's description in task detail now uses the same editor as Create issue: Rich Text by default, Markdown with Preview, and the last mode remembered. Descriptions are still saved as Markdown; Save, Cancel, Esc, Ctrl/⌘+Enter and pasted images work as before, and a pasted image shows at once while it uploads. No migration; rebuild `web`. (DTD-262, DTD-388)
+  VI: Sửa mô tả task trong trang chi tiết nay dùng cùng editor với Create issue: Rich Text mặc định, Markdown có Preview và nhớ chế độ đã chọn. Mô tả vẫn lưu dạng Markdown; Save, Cancel, Esc, Ctrl/⌘+Enter và dán ảnh hoạt động như trước, ảnh dán hiện ngay trong lúc tải lên. Không có migration; build lại `web`. (DTD-262, DTD-388)
 - Agent answers questions about a specific issue by its identifier, such as "DTD-12 đang tới đâu rồi?", for up to 5 issues the asker may open. Agent personalization has a Test connection button that tries the saved provider and shows the reason when it fails. No migration; rebuild `api` and `web`. (DTD-331, #152)
   VI: Agent trả lời câu hỏi về một issue theo mã, ví dụ "DTD-12 đang tới đâu rồi?", tối đa 5 issue người hỏi được mở. Agent personalization có nút Test connection để thử provider đã lưu và hiện lý do khi lỗi. Không có migration; build lại `api` và `web`. (DTD-331)
 - Each person can make up to 60 AI calls per hour through Agent, Write with Agent and scheduling, so one account cannot run up the workspace's provider bill. Fixed reports and News are not counted. (DTD-331, #152)
