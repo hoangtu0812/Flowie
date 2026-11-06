@@ -16,6 +16,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
 
 ### Added
 
+- Issue attachments in HTML, XLSX, CSV, DOCX, PDF and plain text open a preview instead of downloading. HTML is shown as written but can never run script or load anything from the network; spreadsheets show each sheet as a table (first 500 rows and 50 columns, raw values without number formats). PowerPoint and old `.xls` files still download; open them on SharePoint. No migration; rebuild `api` and `web`. (DTD-479)
+  VI: Tệp đính kèm của issue dạng HTML, XLSX, CSV, DOCX, PDF và văn bản thường mở bản xem trước thay vì tải về. HTML hiển thị đúng như viết nhưng không bao giờ chạy được script hay tải gì từ mạng; bảng tính hiện từng sheet thành bảng (500 dòng và 50 cột đầu, giá trị thô không áp định dạng số). File PowerPoint và `.xls` cũ vẫn tải về; hãy mở chúng trên SharePoint. Không có migration; build lại `api` và `web`. (DTD-479)
+
 - The document viewer shows the table of contents as a sidebar on the left of the text instead of a block above it. It stays in view while the text scrolls, highlights the section being read and jumps smoothly to a heading when clicked. A header button hides or shows it; it starts hidden on screens narrower than 1024px and floats over the text on phones. No migration; rebuild `web`. (DTD-382, #163)
   VI: Khung xem tài liệu hiển thị mục lục thành sidebar bên trái phần chữ thay cho khối nằm phía trên. Mục lục luôn nằm trong khung nhìn khi phần chữ cuộn, tô sáng mục đang đọc và cuộn mượt tới heading khi bấm. Nút trên thanh tiêu đề dùng để ẩn hoặc hiện mục lục; trên màn hình hẹp hơn 1024px mục lục mặc định ẩn, và trên điện thoại nó nổi trên phần chữ. Không có migration; build lại `web`. (DTD-382)
 
@@ -279,6 +282,9 @@ example `(#19, 431edd6)`. Entries written before this rule stay as they are.
   VI: Pull request và liên kết task có thể luôn cập nhật mà không cần webhook: đặt `SCM_SYNC_INTERVAL_SECONDS` (mặc định tắt, tối thiểu 60) thì API đồng bộ mỗi kết nối GitHub/Azure DevOps đang hoạt động hoặc bị lỗi một lần mỗi chu kỳ, giống nút Sync. Mỗi kết nối chỉ chạy một lượt đồng bộ tại một thời điểm; bấm Sync khi đang đồng bộ sẽ báo "already synchronizing". Tạo lại service `api` sau khi đặt biến.
 
 ### Fixed
+
+- Open in SharePoint on attachments and published Docs documents opens the file on SharePoint instead of downloading it: Office files open in Office for the web, other files in the library's file viewer. Links of files copied earlier are corrected too. No migration; rebuild `api`. (DTD-479)
+  VI: Nút Mở trên SharePoint của tệp đính kèm và tài liệu Docs đã phát hành mở file trên SharePoint thay vì tải về: file Office mở bằng Office for the web, file khác mở trong trình xem file của thư viện. Link của các file đã sao chép trước đây cũng được sửa. Không có migration; build lại `api`. (DTD-479)
 
 - The issue picker shows one tooltip for a long issue name instead of two identical ones. The browser regression step of the verify job may run for 45 minutes, because a slower runner passed the old 35-minute limit, so a push to `main` no longer stops there. (DTD-380, #155)
   VI: Hộp chọn issue chỉ hiện một tooltip cho tên issue dài thay vì hai tooltip trùng nhau. Bước kiểm thử trình duyệt của job verify được chạy tối đa 45 phút, vì runner chậm đã vượt giới hạn 35 phút cũ, nên push lên `main` không còn dừng ở đó. (DTD-380)

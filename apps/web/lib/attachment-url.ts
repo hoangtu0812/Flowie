@@ -23,3 +23,22 @@ export function attachmentIdFromUrl(src: string): string | undefined {
    }
    return PREVIEW_PATH.exec(pathname)?.[1];
 }
+
+/**
+ * How the attachment dialog previews a file, chosen by extension; null means the file only
+ * downloads. `markdown` is rendered by the app, `pdf` is shown by the browser's PDF viewer from a
+ * blob URL, and `page` is an HTML page the API's preview route builds (HTML as written, XLSX and
+ * CSV as tables, DOCX converted, text escaped), shown in a sandboxed iframe that cannot run script.
+ * VI: Cách hộp thoại đính kèm xem trước một tệp, chọn theo đuôi tệp; null là tệp chỉ tải xuống.
+ * VI: `markdown` do app hiển thị, `pdf` do trình xem PDF của trình duyệt mở từ blob URL, còn `page`
+ * VI: là trang HTML do route preview của API dựng (HTML giữ nguyên, XLSX và CSV thành bảng, DOCX
+ * VI: được chuyển đổi, văn bản được escape), hiển thị trong iframe sandbox không chạy được script.
+ */
+export function attachmentPreviewKind(filename: string): 'markdown' | 'pdf' | 'page' | null {
+   const extension = /\.([a-z0-9]+)$/i.exec(filename)?.[1].toLowerCase() ?? '';
+   if (extension === 'md' || extension === 'markdown') return 'markdown';
+   if (extension === 'pdf') return 'pdf';
+   return ['html', 'htm', 'xlsx', 'xlsm', 'csv', 'docx', 'txt', 'log', 'json'].includes(extension)
+      ? 'page'
+      : null;
+}

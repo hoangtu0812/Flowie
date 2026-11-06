@@ -14,7 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
 from ..db.session import get_session
+from ..modules.sharepoint.graph import viewer_url
 from ..storage.minio import MinioStorage
+from .attachment_tables import UnreadableSpreadsheet, csv_sheet, table_page, xlsx_sheets
 from .auth import _cuid, _utcnow, current_user
 from .native_projects import _team_access, _workspace_access
 
@@ -71,7 +73,7 @@ def _present(row: Any) -> dict[str, Any]:
     # file has not been copied, which includes every row not read through the list query.
     # VI: `sharepoint` là bản sao do job SharePoint tạo (link hoặc lỗi gần nhất); null khi file
     # VI: chưa được sao chép, gồm mọi dòng không đọc qua truy vấn danh sách.
-    sharepoint = {'webUrl': row.get('sp_web_url'), 'lastError': row.get('sp_last_error')}
+    sharepoint = {'webUrl': viewer_url(row.get('sp_web_url'), row.get('sp_path')), 'lastError': row.get('sp_last_error')}
     return {'id': row['id'], 'workspaceId': row['workspace_id'], 'uploadedById': row['uploaded_by'], 'entityType': row['entity_type'], 'entityId': row['entity_id'], 'objectKey': row['object_key'], 'filename': row['filename'], 'mimeType': row['mime_type'], 'size': row['size'], 'createdAt': row['created_at'], 'sharepoint': sharepoint if any(sharepoint.values()) else None}
 
 
@@ -79,7 +81,7 @@ def _present(row: Any) -> dict[str, Any]:
 @public_router.get('')
 async def list_attachments(workspaceId: str = Query(min_length=1), entityType: EntityType = Query(), entityId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
     await _authorize_entity(db, workspaceId, entityType, entityId, user['id'])
-    result = await db.execute(text('SELECT a.*, pub.web_url AS sp_web_url, pub.last_error AS sp_last_error FROM attachments a LEFT JOIN attachment_publications pub ON pub.attachment_id = a.id WHERE a.workspace_id = :workspace_id AND a.entity_type = :entity_type AND a.entity_id = :entity_id ORDER BY a.created_at DESC'), {'workspace_id': workspaceId, 'entity_type': entityType, 'entity_id': entityId})
+    result = await db.execute(text('SELECT a.*, pub.web_url AS sp_web_url, pub.path AS sp_path, pub.last_error AS sp_last_error FROM attachments a LEFT JOIN attachment_publications pub ON pub.attachment_id = a.id WHERE a.workspace_id = :workspace_id AND a.entity_type = :entity_type AND a.entity_id = :entity_id ORDER BY a.created_at DESC'), {'workspace_id': workspaceId, 'entity_type': entityType, 'entity_id': entityId})
     return {'data': [_present(row) for row in result.mappings().all()]}
 
 
@@ -195,7 +197,35 @@ async def preview_attachment(attachment_id: str, request: Request, user: Any = D
             },
         )
 
-    if suffix == 'md':
+    # HTML is shown as the author wrote it but can never run: the `sandbox` CSP directive (no
+    # `allow-scripts`) gives the page an opaque origin and blocks scripts, forms and popups even
+    # when this URL is opened directly, and `default-src 'none'` stops it loading anything from
+    # the network. The same policy is repeated in a <meta> tag because the web app shows the text
+    # in an iframe `srcdoc`, where response headers do not apply (meta CSP cannot carry `sandbox`;
+    # the iframe's own `sandbox` attribute covers that).
+    # VI: HTML hiển thị đúng như tác giả viết nhưng không bao giờ chạy được: chỉ thị CSP `sandbox`
+    # VI: (không có `allow-scripts`) cho trang origin riêng và chặn script, form, popup kể cả khi
+    # VI: mở thẳng URL này, còn `default-src 'none'` chặn mọi tải từ mạng. Chính sách được lặp lại
+    # VI: trong thẻ <meta> vì web app hiển thị nội dung trong iframe `srcdoc`, nơi header phản hồi
+    # VI: không áp dụng (CSP qua meta không mang được `sandbox`; thuộc tính `sandbox` của iframe lo phần đó).
+    if suffix in ('html', 'htm'):
+        policy = "default-src 'none'; style-src 'unsafe-inline'; img-src data:"
+        return HTMLResponse(
+            f'<meta http-equiv="Content-Security-Policy" content="{policy}">' + body.decode('utf-8', errors='replace'),
+            headers={'content-security-policy': f'sandbox; {policy}', 'x-content-type-options': 'nosniff'},
+        )
+
+    if suffix in ('xlsx', 'xlsm', 'csv'):
+        try:
+            sheets = [csv_sheet(filename, body)] if suffix == 'csv' else xlsx_sheets(body)
+        except UnreadableSpreadsheet as error:
+            raise ApiError(422, str(error), 'Unprocessable Entity') from error
+        return HTMLResponse(
+            table_page(filename, sheets),
+            headers={'content-security-policy': "sandbox; default-src 'none'; style-src 'unsafe-inline'", 'x-content-type-options': 'nosniff'},
+        )
+
+    if suffix in ('md', 'txt', 'log', 'json'):
         text_content = body.decode('utf-8', errors='replace')
         return HTMLResponse(
             f'<!doctype html><html><head><meta charset="utf-8"><title>{escape(filename)}</title><style>body{{margin:0;padding:32px;font:14px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap}}</style></head><body>{escape(text_content)}</body></html>',

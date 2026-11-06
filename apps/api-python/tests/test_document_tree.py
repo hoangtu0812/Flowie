@@ -226,14 +226,14 @@ async def verify_document_tree():
             assert (page["release"], page["publication"]) == (1, None)
             await db.execute(
                 text(
-                    "INSERT INTO document_publications(document_id,workspace_id,release,web_url) VALUES (:doc,:workspace,1,'https://example.sharepoint.com/f.md')"
+                    "INSERT INTO document_publications(document_id,workspace_id,release,web_url,path) VALUES (:doc,:workspace,1,'https://example.sharepoint.com/sites/s/Docs/f.md','f.md')"
                 ),
                 {"doc": fds["id"], "workspace": workspace},
             )
             page = (await get_document(fds["id"], workspaceId=workspace, user=user, db=db))["data"]
             assert (page["publication"]["release"], page["publication"]["webUrl"]) == (
                 1,
-                "https://example.sharepoint.com/f.md",
+                "https://example.sharepoint.com/sites/s/Docs/Forms/AllItems.aspx?id=%2Fsites%2Fs%2FDocs%2Ff.md&parent=%2Fsites%2Fs%2FDocs",
             )
             await db.rollback()
     finally:
