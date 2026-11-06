@@ -149,6 +149,8 @@ export const messages = {
    'Approved': 'Đã duyệt',
    'Document status': 'Trạng thái tài liệu',
    'Contents': 'Mục lục',
+   'Show contents': 'Hiện mục lục',
+   'Hide contents': 'Ẩn mục lục',
    'Related documents': 'Tài liệu liên quan',
    'Diagram could not be rendered.': 'Không vẽ được sơ đồ.',
    'Upload PDF': 'Tải PDF lên',

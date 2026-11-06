@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -11,6 +11,7 @@ import {
    ExternalLink,
    FileText,
    Link2,
+   PanelLeft,
    Pencil,
    Send,
    Undo2,
@@ -45,6 +46,14 @@ import {
 import { DocStatusBadge, DocTypeBadge } from './document-badges';
 import { DocumentReviewPanel, useDocumentReview } from './doc-review';
 import type { DocumentReview } from './project-docs-api';
+import { activeHeadingIndex, markdownHeadings } from '@/lib/markdown-headings';
+
+/** Width from which the contents sidebar opens by default.
+ * VI: Độ rộng từ đó sidebar mục lục mặc định mở. */
+const WIDE_OUTLINE = '(min-width: 1024px)';
+/** Width from which the sidebar sits beside the text instead of floating over it (Tailwind md).
+ * VI: Độ rộng từ đó sidebar nằm cạnh phần chữ thay vì nổi trên nó (Tailwind md). */
+const SIDE_OUTLINE = '(min-width: 768px)';
 
 function PreviewHeader({
    children,
@@ -137,6 +146,60 @@ export function DocumentPreview({
    }, [document.id, selected]);
 
    const content = shown?.content ?? document.content;
+   const headings = useMemo(() => markdownHeadings(content), [content]);
+   const hasOutline = headings.length >= 3;
+   const [outlineOpen, setOutlineOpen] = useState(true);
+   const [activeId, setActiveId] = useState<string>();
+   const scrollRef = useRef<HTMLDivElement>(null);
+
+   // The contents sidebar starts closed below 1024px so the text keeps the reading width; the
+   // reader can still open it. Read after mount, because the server render has no viewport.
+   // VI: Dưới 1024px sidebar mục lục mặc định đóng để phần chữ giữ đủ độ rộng đọc; người đọc vẫn
+   // VI: mở được. Đọc sau khi mount vì lúc render trên server chưa có viewport.
+   useEffect(() => {
+      if (!window.matchMedia(WIDE_OUTLINE).matches) setOutlineOpen(false);
+   }, []);
+
+   // Scrollspy: on every scroll frame, the heading last scrolled past a line 80px below the top
+   // of the reading area becomes the highlighted contents entry. Headings missing from the
+   // rendered output are skipped; nothing is highlighted until the content has rendered.
+   // VI: Scrollspy: mỗi khung hình khi cuộn, heading cuối cùng đã cuộn qua đường cách đỉnh vùng
+   // VI: đọc 80px được tô sáng trong mục lục. Heading không có trong nội dung đã render bị bỏ qua;
+   // VI: chưa render xong thì chưa tô mục nào.
+   useEffect(() => {
+      const area = scrollRef.current;
+      if (!area || !hasOutline) return;
+      let frame = 0;
+      const update = () => {
+         frame = 0;
+         const top = area.getBoundingClientRect().top;
+         const found = headings.flatMap((heading) => {
+            const element = area.ownerDocument.getElementById(heading.id);
+            return element && area.contains(element)
+               ? [{ id: heading.id, top: element.getBoundingClientRect().top - top }]
+               : [];
+         });
+         if (found.length === 0) return;
+         const atBottom =
+            area.scrollTop > 0 && area.scrollTop + area.clientHeight >= area.scrollHeight - 2;
+         const index = activeHeadingIndex(
+            found.map((heading) => heading.top),
+            80,
+            atBottom
+         );
+         setActiveId(found[index].id);
+      };
+      const schedule = () => {
+         if (!frame) frame = requestAnimationFrame(update);
+      };
+      schedule();
+      area.addEventListener('scroll', schedule, { passive: true });
+      return () => {
+         area.removeEventListener('scroll', schedule);
+         cancelAnimationFrame(frame);
+      };
+   }, [headings, hasOutline]);
+
    return (
       <div className="flex h-full min-h-0 flex-col">
          <PreviewHeader
@@ -159,6 +222,18 @@ export function DocumentPreview({
                </>
             }
          >
+            {hasOutline && (
+               <Button
+                  size="xs"
+                  variant="ghost"
+                  aria-pressed={outlineOpen}
+                  aria-label={outlineOpen ? tx('Hide contents') : tx('Show contents')}
+                  title={outlineOpen ? tx('Hide contents') : tx('Show contents')}
+                  onClick={() => setOutlineOpen((open) => !open)}
+               >
+                  <PanelLeft className="size-3.5" />
+               </Button>
+            )}
             <span aria-hidden>{document.icon}</span>
             <h2 className="truncate text-sm font-medium">{document.title}</h2>
             <DocTypeBadge type={document.docType} />
@@ -175,57 +250,78 @@ export function DocumentPreview({
                onConfigure={onConfigureSharepoint}
             />
          </PreviewHeader>
-         <div className="min-h-0 flex-1 overflow-auto">
-            <VStack
-               gap={4}
-               className="w-full min-w-0 px-6 py-5"
-               data-testid="document-reading-area"
-            >
-               {releases.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                     <Select value={selected} onValueChange={setSelected}>
-                        <SelectTrigger
-                           className="h-7 w-auto gap-1 text-xs"
-                           aria-label={tx('Approved versions')}
-                        >
-                           <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                           <SelectItem value="current">{tx('Current version')}</SelectItem>
-                           {releases.map((release) => (
-                              <SelectItem key={release.release} value={String(release.release)}>
-                                 v{release.release} · {when(release.approvedAt)}
-                                 {release.approvedBy.name ? ` · ${release.approvedBy.name}` : ''}
-                              </SelectItem>
-                           ))}
-                        </SelectContent>
-                     </Select>
-                     {shown && (
-                        <span role="status">
-                           {tx('Viewing v{value0}, approved {value1} by {value2}.', {
-                              value0: String(shown.release),
-                              value1: when(shown.approvedAt),
-                              value2: shown.approvedBy.name ?? '—',
-                           })}
-                        </span>
-                     )}
-                     {releaseError && (
-                        <span role="alert">{tx('Could not load this version.')}</span>
-                     )}
-                  </div>
-               )}
-               <LinkedIssues documentId={document.id} />
-               <DocumentReviewPanel
-                  documentId={document.id}
-                  review={review}
-                  run={run}
-                  loading={loading}
-                  failed={failed}
-                  onRetry={retry}
-               />
-               <TableOfContents content={content} label={tx('Contents')} />
-               <MarkdownPreview content={content} documentMedia />
-            </VStack>
+         <div className="relative flex min-h-0 flex-1">
+            {hasOutline && outlineOpen && (
+               // Its own scroll column, so it stays in view while the text scrolls; below 768px
+               // it floats over the text and closes after a jump.
+               // VI: Cột cuộn riêng nên luôn nằm trong khung nhìn khi phần chữ cuộn; dưới 768px nó
+               // VI: nổi trên phần chữ và tự đóng sau khi nhảy mục.
+               <aside
+                  data-testid="document-outline"
+                  className="absolute inset-y-0 left-0 z-30 w-64 max-w-[80%] overflow-auto border-r bg-container px-4 py-5 shadow-lg md:static md:z-auto md:w-60 md:shrink-0 md:shadow-none"
+               >
+                  <TableOfContents
+                     content={content}
+                     label={tx('Contents')}
+                     activeId={activeId}
+                     className="border-0 p-0"
+                     onNavigate={() => {
+                        if (!window.matchMedia(SIDE_OUTLINE).matches) setOutlineOpen(false);
+                     }}
+                  />
+               </aside>
+            )}
+            <div ref={scrollRef} className="min-h-0 min-w-0 flex-1 overflow-auto">
+               <VStack
+                  gap={4}
+                  className="w-full min-w-0 px-6 py-5"
+                  data-testid="document-reading-area"
+               >
+                  {releases.length > 0 && (
+                     <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <Select value={selected} onValueChange={setSelected}>
+                           <SelectTrigger
+                              className="h-7 w-auto gap-1 text-xs"
+                              aria-label={tx('Approved versions')}
+                           >
+                              <SelectValue />
+                           </SelectTrigger>
+                           <SelectContent>
+                              <SelectItem value="current">{tx('Current version')}</SelectItem>
+                              {releases.map((release) => (
+                                 <SelectItem key={release.release} value={String(release.release)}>
+                                    v{release.release} · {when(release.approvedAt)}
+                                    {release.approvedBy.name ? ` · ${release.approvedBy.name}` : ''}
+                                 </SelectItem>
+                              ))}
+                           </SelectContent>
+                        </Select>
+                        {shown && (
+                           <span role="status">
+                              {tx('Viewing v{value0}, approved {value1} by {value2}.', {
+                                 value0: String(shown.release),
+                                 value1: when(shown.approvedAt),
+                                 value2: shown.approvedBy.name ?? '—',
+                              })}
+                           </span>
+                        )}
+                        {releaseError && (
+                           <span role="alert">{tx('Could not load this version.')}</span>
+                        )}
+                     </div>
+                  )}
+                  <LinkedIssues documentId={document.id} />
+                  <DocumentReviewPanel
+                     documentId={document.id}
+                     review={review}
+                     run={run}
+                     loading={loading}
+                     failed={failed}
+                     onRetry={retry}
+                  />
+                  <MarkdownPreview content={content} documentMedia />
+               </VStack>
+            </div>
          </div>
       </div>
    );
