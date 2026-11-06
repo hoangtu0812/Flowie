@@ -12,9 +12,9 @@
 
   | Project | Identifier | Repository |
   | --- | --- | --- |
-  | Turn Around Platform | `TAM` | `https://dev.azure.com/bsr-its/BSR-Digital-Operations-Platform` (`develop`) |
+  | Integrated Business Platform | `TAM` | `https://dev.azure.com/bsr-its/BSR-Digital-Operations-Platform` (`develop`) |
   | AI Platform | `AIP` | none configured |
-  | BSR-Meeting | `BSR-MEETING` | none configured |
+  | Meeting | `BSR-MEETING` | none configured |
 
 - Before working on a task, read its project (`get_issue_context`). If it is
   not `FL`, stop and say which project and repository it belongs to. This
@@ -24,11 +24,18 @@
 
 ## Deployment model
 
-- This repository has one deployed environment: **CT107 production**.
-- A push to `main` triggers `.github/workflows/deploy-production.yml`; there is
-  no staging, preview, or development deployment target.
+- The Flowie instance people use, which also serves the Flowie MCP endpoint,
+  runs on a server the maintainer deploys by hand: `git pull` in the server's
+  checkout, then rebuild and restart the Compose services. Merging to `main`
+  does not put a change on that server; it is live only after the maintainer
+  pulls and rebuilds.
+- A push to `main` also triggers `.github/workflows/deploy-production.yml`,
+  which verifies the build and deploys to **CT107**. A green run proves the
+  build and the CT107 deployment, not that the server people use has the
+  change, so never report a change as live from that run. There is no staging,
+  preview, or development deployment target.
 - A push that changes only Markdown files, `docs/`, `llms.txt`, or Unreleased
-  changelog entries skips verification and deployment
+  changelog entries skips that workflow's verification and deployment
   (`scripts/deploy-scope.sh`). A release heading in `CHANGELOG.md`, any other
   file, or a manual workflow run deploys.
 - Treat every change that reaches `main` as production-bound. Do not depend on
@@ -36,6 +43,16 @@
 - Prisma is the database schema owner. The Compose `migrate` service must
   complete successfully before `api` or `worker` starts. Never bypass this
   dependency or apply an uncommitted schema change directly to production.
+- `migrate` is built from its own image
+  (`infrastructure/docker/prisma-migrate.Dockerfile`). A change that adds a
+  migration must say, in its pull request and changelog entry, to rebuild
+  `migrate`, `api` and `web` and run `migrate` before `api`; rebuilding only
+  `web` and `api` leaves the new migration unapplied. After a deploy, compare
+  the migration count in the `migrate` logs with
+  `ls packages/database/prisma/migrations/*/migration.sql | wc -l`.
+- A server-side change, such as a new MCP tool, is not visible to agents until
+  the maintainer pulls, rebuilds and restarts the API, and the MCP client
+  reconnects.
 
 ## Change records
 
@@ -66,8 +83,10 @@
    `## [x.y.z] — YYYY-MM-DD HH:MM +07`, increment the semantic version, append
    each entry's merge commit short hash next to its pull request number, and
    leave a new empty `Unreleased` section.
-2. Let the production workflow deploy that exact commit. Verify its workflow,
-   API readiness, and migration result before declaring the release complete.
+2. Deploy that exact commit: let the production workflow deploy it to CT107,
+   and ask the maintainer to pull and rebuild it on the server people use.
+   Verify the workflow, API readiness, and migration result on that server
+   before declaring the release complete.
 3. Create annotated tag `vX.Y.Z` on the verified commit and publish a GitHub
    release whose notes are the matching `CHANGELOG.md` section. Never tag a
    revision that has not deployed successfully.
