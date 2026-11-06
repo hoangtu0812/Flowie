@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
 from ..db.session import get_session
+from ..modules.identity.password_reset import limit_request
 from .ai_calls import PROVIDER_LABELS, call_provider
 from .auth import _cuid, _utcnow, current_user
 from .native_issues import CreateIssueInput, create_issue
@@ -49,6 +50,14 @@ ProviderName = Literal['OPENAI', 'GOOGLE']
 
 logger = logging.getLogger(__name__)
 
+# Per person, per hour, across Agent chat, Write with Agent and scheduling. It bounds what one account
+# can spend on the workspace's key; the News worker is not a person and is not counted.
+# VI: Theo người, theo giờ, gồm Agent chat, Write with Agent và xếp lịch. Mức này giới hạn số tiền một
+# VI: tài khoản có thể tiêu trên key của workspace; worker News không phải người nên không bị tính.
+AGENT_HOURLY_LIMIT = 60
+PROVIDER_TEST_HOURLY_LIMIT = 20
+MENTIONED_ISSUE_LIMIT = 5
+MENTIONED_ISSUE_DESCRIPTION_CHARS = 800
 MAX_SOURCE_FILE_BYTES = 10 * 1024 * 1024
 MAX_SOURCE_TEXT_CHARS = 100_000
 SUPPORTED_SOURCE_SUFFIXES = {'.md', '.markdown', '.docx', '.xlsx'}
@@ -217,8 +226,11 @@ def _validated_endpoint(provider: ProviderName, endpoint: str, allowed_hosts: tu
     return normalized
 
 
-async def _configured_provider(request: Request, db: AsyncSession, workspace_id: str) -> dict[str, Any]:
-    return await configured_provider(request.app.state.settings, db, workspace_id)
+async def _configured_provider(request: Request, db: AsyncSession, workspace_id: str, user_id: str) -> dict[str, Any]:
+    settings = request.app.state.settings
+    provider = await configured_provider(settings, db, workspace_id)
+    await limit_request(db, settings.auth_jwt_secret, 'agent-ai', user_id, AGENT_HOURLY_LIMIT)
+    return provider
 
 
 async def configured_provider(settings: Any, db: AsyncSession, workspace_id: str) -> dict[str, Any]:
@@ -242,6 +254,10 @@ async def configured_provider(settings: Any, db: AsyncSession, workspace_id: str
     row = result.mappings().first()
     if not row:
         raise ApiError(409, 'Configure and activate an OpenAI or Google provider in Agent personalization first.', 'Conflict')
+    return _usable_provider(settings, db, row, workspace_id)
+
+
+def _usable_provider(settings: Any, db: AsyncSession, row: Any, workspace_id: str) -> dict[str, Any]:
     # Re-checks the saved URL so removing a host from AGENT_PROVIDER_ALLOWED_HOSTS stops calls to it.
     # VI: Kiểm tra lại URL đã lưu để việc gỡ host khỏi AGENT_PROVIDER_ALLOWED_HOSTS chặn các lệnh gọi tới nó.
     _validated_endpoint(row['provider'], row['endpoint'], settings.agent_provider_allowed_hosts)
@@ -376,6 +392,7 @@ WORK_REQUEST = re.compile(
     r'(?:create|draft|add|tạo|lập|thêm|viết)(?!\w)'
     r'|(?<!\w)(?<!the )(?<!a )(?<!our )(?<!my )(?<!this )plan(?!\w)'
 )
+ISSUE_MENTION = re.compile(r'(?<![\w-])[a-z][a-z0-9]+-\d+(?![\w-])', re.IGNORECASE)
 REPORT_TERMS = ('báo cáo', 'bao cao', 'report', 'briefing')
 REPORT_SCOPE_TERMS = (
     'lãnh đạo', 'lanh dao', 'chi tiết', 'chi tiet', 'tổng hợp', 'tong hop', 'tổng quan', 'tong quan',
@@ -423,7 +440,11 @@ def _is_open_question(message: str) -> bool:
     normalized = message.casefold().strip()
     if WORK_REQUEST.search(normalized):
         return False
-    return normalized.endswith('?') or any(term in normalized for term in OPEN_QUESTION_TERMS)
+    return (
+        normalized.endswith('?')
+        or any(term in normalized for term in OPEN_QUESTION_TERMS)
+        or ISSUE_MENTION.search(normalized) is not None
+    )
 
 
 def _is_vietnamese(message: str) -> bool:
@@ -1102,10 +1123,42 @@ def _parse_agent_proposal(raw: str) -> AgentProposal:
         raise first_error
 
 
-async def _draft_proposal(state: PlannerState) -> dict[str, Any]:
-    raw = await call_provider(state['provider'], 'agent.plan', state['system_prompt'], state['history'])
+async def _call_checked[T](
+    provider: dict[str, Any],
+    feature: str,
+    system_prompt: str,
+    history: list[dict[str, str]],
+    parse: Callable[[str], T],
+) -> T:
+    """Call the provider and return ``parse(reply)``, letting the model correct a bad reply once.
+
+    ``parse`` raises ``ValidationError`` for a malformed reply or ``ApiError`` for one that breaks a
+    rule. A second bad reply raises that error to the caller. Provider failures are not corrected
+    here because ``call_provider`` already retried them. Pydantic's error text can quote the reply,
+    so only a fixed sentence goes back into the prompt.
+    VI: Gọi provider và trả ``parse(reply)``, cho model sửa câu trả lời sai một lần. ``parse`` báo
+    VI: ``ValidationError`` khi sai định dạng hoặc ``ApiError`` khi vi phạm quy tắc. Sai lần hai thì
+    VI: lỗi được đẩy cho nơi gọi. Lỗi provider không được sửa ở đây vì ``call_provider`` đã thử lại.
+    VI: Nội dung lỗi của Pydantic có thể trích câu trả lời nên chỉ một câu cố định quay lại prompt.
+    """
+    raw = await call_provider(provider, feature, system_prompt, history)
     try:
-        proposal = _parse_agent_proposal(raw)
+        return parse(raw)
+    except (ValidationError, ApiError) as error:
+        reason = error.message if isinstance(error, ApiError) else 'It does not match the required JSON format.'
+    correction = [
+        *history,
+        {'role': 'assistant', 'content': raw},
+        {'role': 'user', 'content': f'Your reply was rejected: {reason} Return the complete corrected JSON object only.'},
+    ]
+    return parse(await call_provider(provider, feature, system_prompt, correction))
+
+
+async def _draft_proposal(state: PlannerState) -> dict[str, Any]:
+    try:
+        proposal = await _call_checked(
+            state['provider'], 'agent.plan', state['system_prompt'], state['history'], _parse_agent_proposal
+        )
     except ValidationError:
         # A malformed provider response must not discard the user's planning
         # turn or force a duplicate retry that can create duplicate work.
@@ -1309,6 +1362,38 @@ async def save_provider(provider: ProviderName, payload: ProviderInput, request:
     await db.commit()
     row = await db.execute(text('SELECT * FROM workspace_agent_providers WHERE workspace_id = :workspace_id AND provider = CAST(:provider AS "AgentProvider")'), {'workspace_id': workspaceId, 'provider': provider})
     return {'data': _provider_view(row.mappings().one())}
+
+
+@router.post('/providers/{provider}/test')
+async def check_provider(provider: ProviderName, request: Request, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    """Try the saved provider with one small call and say whether it answered.
+
+    It takes no URL or key from the client, so it cannot be used to reach an arbitrary host. A
+    provider failure is the answer here, so it returns 200 with the reason instead of an error.
+    VI: Thử provider đã lưu bằng một lần gọi nhỏ và cho biết có trả lời không. Không nhận URL hay key
+    VI: từ client nên không thể dùng để gọi host tuỳ ý. Lỗi provider chính là kết quả cần biết, nên
+    VI: trả 200 kèm lý do thay vì báo lỗi.
+    """
+    await _workspace_manager(db, workspaceId, user['id'])
+    settings = request.app.state.settings
+    await limit_request(db, settings.auth_jwt_secret, 'agent-provider-test', user['id'], PROVIDER_TEST_HOURLY_LIMIT)
+    result = await db.execute(
+        text('''SELECT provider, endpoint, model, api_key_encrypted FROM workspace_agent_providers
+                WHERE workspace_id = :workspace_id AND provider = CAST(:provider AS "AgentProvider")'''),
+        {'workspace_id': workspaceId, 'provider': provider},
+    )
+    row = result.mappings().first()
+    if not row:
+        raise ApiError(404, 'Save this provider before testing it.', 'Not Found')
+    await db.commit()
+    try:
+        await call_provider(
+            _usable_provider(settings, db, row, workspaceId), 'agent.test',
+            'Reply with exactly this JSON object: {"ok":true}', [{'role': 'user', 'content': 'Connection test'}],
+        )
+    except ApiError as error:
+        return {'data': {'reachable': False, 'reason': error.message}}
+    return {'data': {'reachable': True}}
 
 
 @router.get('/tools')
@@ -1686,12 +1771,11 @@ async def compose_project_update(
     if payload.notes and payload.notes.strip():
         facts['authorNotes'] = payload.notes.strip()
 
-    provider = await _configured_provider(request, db, payload.workspaceId)
+    provider = await _configured_provider(request, db, payload.workspaceId, user['id'])
     system_prompt = COMPOSE_UPDATE_PROMPT if payload.kind == 'update' else COMPOSE_COMMENT_PROMPT
     history = [{'role': 'user', 'content': json.dumps(facts, ensure_ascii=False)}]
-    raw = await call_provider(provider, 'agent.compose', system_prompt, history)
     try:
-        composed = ComposedText.model_validate_json(raw)
+        composed = await _call_checked(provider, 'agent.compose', system_prompt, history, ComposedText.model_validate_json)
     except ValidationError as error:
         raise ApiError(
             502, 'The AI provider returned a draft in an invalid format. Please try again.', 'Bad Gateway'
@@ -1836,14 +1920,18 @@ async def draft_project_schedule(
     """Return a validated proposal; schedule dates remain unchanged until the user applies it."""
     await _workspace_access(db, payload.workspaceId, user['id'])
     facts = await _project_schedule_facts(db, payload.workspaceId, project_id, user['id'])
-    provider = await _configured_provider(request, db, payload.workspaceId)
+    provider = await _configured_provider(request, db, payload.workspaceId, user['id'])
     history = [{'role': 'user', 'content': json.dumps(facts, ensure_ascii=False)}]
-    raw = await call_provider(provider, 'agent.schedule', PROJECT_SCHEDULE_PROMPT, history)
-    try:
+
+    def valid_schedule(raw: str) -> ProjectScheduleProposal:
         proposal = _parse_schedule_proposal(raw)
+        _validate_schedule_proposal(proposal, facts)
+        return proposal
+
+    try:
+        proposal = await _call_checked(provider, 'agent.schedule', PROJECT_SCHEDULE_PROMPT, history, valid_schedule)
     except ValidationError as error:
         raise ApiError(502, 'The AI provider returned a schedule in an invalid format. Please try again.', 'Bad Gateway') from error
-    _validate_schedule_proposal(proposal, facts)
     issue_lookup = {issue['id']: issue for issue in facts['issues']}
     return {
         'data': {
@@ -2036,7 +2124,7 @@ async def _assignment_turn(
         )
     await progress({'id': 'assignment.explain', 'label': 'Explaining the draft', 'state': 'running', 'orb': 'composing'})
     try:
-        provider: dict[str, Any] | None = await _configured_provider(request, db, workspace_id)
+        provider: dict[str, Any] | None = await _configured_provider(request, db, workspace_id, user['id'])
     except ApiError:
         provider = None
     valid_ids = {item['issueId'] for item in plan['suggestions']}
@@ -2165,6 +2253,40 @@ async def _portfolio_facts(db: AsyncSession, workspace_id: str, user_id: str) ->
     }
 
 
+async def _mentioned_issues(db: AsyncSession, workspace_id: str, user_id: str, message: str) -> list[dict[str, Any]]:
+    """Issues named by identifier in ``message`` that the asker may open, for the analyst facts.
+
+    An identifier that does not exist and one outside the asker's teams give the same result, so a
+    question cannot reveal that an issue exists.
+    VI: Các issue được nêu mã trong ``message`` mà người hỏi được mở, dùng cho dữ liệu hỏi đáp. Mã
+    VI: không tồn tại và mã ngoài team của người hỏi cho cùng kết quả, nên câu hỏi không lộ được
+    VI: việc một issue có tồn tại hay không.
+    """
+    identifiers = list(dict.fromkeys(match.upper() for match in ISSUE_MENTION.findall(message)))[:MENTIONED_ISSUE_LIMIT]
+    if not identifiers:
+        return []
+    rows = await db.execute(
+        text('''SELECT issue.identifier, issue.title, status.name AS status, issue.priority,
+                       assignee.name AS assignee, project.identifier AS project, issue.start_date,
+                       issue.target_date, issue.due_date, issue.updated_at,
+                       LEFT(issue.description, :description_chars) AS description
+                FROM issues issue
+                JOIN issue_statuses status ON status.id = issue.status_id
+                LEFT JOIN projects project ON project.id = issue.project_id
+                LEFT JOIN users assignee ON assignee.id = issue.assignee_id
+                WHERE issue.workspace_id = :workspace_id AND issue.identifier = ANY(:identifiers)
+                  AND issue.archived_at IS NULL
+                  AND EXISTS (SELECT 1 FROM team_members member
+                              WHERE member.team_id = issue.team_id AND member.user_id = :user_id)
+                ORDER BY issue.identifier'''),
+        {
+            'workspace_id': workspace_id, 'identifiers': identifiers, 'user_id': user_id,
+            'description_chars': MENTIONED_ISSUE_DESCRIPTION_CHARS,
+        },
+    )
+    return [dict(row) for row in rows.mappings().all()]
+
+
 async def _analyst_turn(
     request: Request,
     db: AsyncSession,
@@ -2188,10 +2310,11 @@ async def _analyst_turn(
     """
     label = 'leadership report' if kind == 'report' else 'answer'
     await progress({'id': 'provider.configure', 'label': 'Preparing the active AI provider', 'state': 'running', 'orb': 'working'})
-    provider = await _configured_provider(request, db, workspace_id)
+    provider = await _configured_provider(request, db, workspace_id, user['id'])
     await progress({'id': 'provider.configure', 'label': 'AI provider ready', 'state': 'completed', 'orb': 'working'})
     await progress({'id': 'analyst.facts', 'label': 'Collecting progress, overdue and workload data', 'state': 'running', 'orb': 'searching'})
     facts = await _portfolio_facts(db, workspace_id, user['id'])
+    facts['mentionedIssues'] = await _mentioned_issues(db, workspace_id, user['id'], message)
     history: list[dict[str, str]] = []
     if not is_new_conversation:
         recent = await db.execute(
@@ -2205,9 +2328,8 @@ async def _analyst_turn(
     await progress({'id': 'provider.chat', 'label': f"Calling {provider['provider'].title()} to write the {label}", 'state': 'running', 'orb': 'composing'})
     base_prompt = LEADERSHIP_REPORT_PROMPT if kind == 'report' else ANALYST_ANSWER_PROMPT
     system_prompt = f'{base_prompt}\nWorkspace facts:\n{json.dumps(facts, ensure_ascii=False, default=str)}'
-    raw = await call_provider(provider, f'agent.{kind}', system_prompt, history)
     try:
-        body = AnalystText.model_validate_json(raw).body.strip()
+        body = (await _call_checked(provider, f'agent.{kind}', system_prompt, history, AnalystText.model_validate_json)).body.strip()
     except ValidationError as error:
         raise ApiError(502, 'The AI provider returned an answer in an invalid format. Please try again.', 'Bad Gateway') from error
     await progress({'id': 'provider.chat', 'label': f'{label.capitalize()} received', 'state': 'completed', 'orb': 'composing'})
@@ -2377,7 +2499,7 @@ async def _process_message(
         return data
 
     await progress({'id': 'provider.configure', 'label': 'Preparing the active AI provider', 'state': 'running', 'orb': 'working'})
-    provider = await _configured_provider(request, db, workspace_id)
+    provider = await _configured_provider(request, db, workspace_id, user['id'])
     await progress({'id': 'provider.configure', 'label': 'AI provider ready', 'state': 'completed', 'orb': 'working'})
 
     # A turn becomes durable only after its provider response validates. This
