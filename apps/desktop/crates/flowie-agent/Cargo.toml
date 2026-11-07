@@ -9,3 +9,4 @@ license.workspace = true
 workspace = true
 
 [dependencies]
+flowie-platform = { path = "../flowie-platform" }

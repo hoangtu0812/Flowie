@@ -1,23 +1,22 @@
-//! Provider adapters for Claude Code and Codex, their capability probes, and
-//! the lifecycle of the processes they run. Children never inherit the
-//! application environment, and cancelling a run must take the whole process
-//! tree with it, not just the direct child.
-//! VI: Adapter provider cho Claude Code và Codex, probe khả năng của chúng, và
-//! VI: vòng đời các tiến trình chúng chạy. Tiến trình con không bao giờ kế thừa
-//! VI: môi trường của ứng dụng, và hủy một run phải mang theo cả cây tiến trình
-//! VI: chứ không chỉ tiến trình con trực tiếp.
+//! Provider adapters for Claude Code and Codex, and the lifecycle of the
+//! processes they run.
 //!
-//! Scaffolding only: the behaviour arrives with DTD-496.
-//! VI: Mới là khung: hành vi sẽ có ở DTD-496.
+//! The crate answers two questions: can this machine run this provider at
+//! all, and what happened when it did. It never relaxes a provider's own
+//! safety settings to make a run succeed: a sandbox flag the runner depends
+//! on being absent is reported as a tool too old, not worked around.
+//! VI: Adapter provider cho Claude Code và Codex, cùng vòng đời các tiến trình
+//! VI: chúng chạy.
+//! VI: Crate trả lời hai câu hỏi: máy này có chạy được provider này không, và
+//! VI: chuyện gì đã xảy ra khi chạy. Nó không bao giờ nới lỏng thiết lập an
+//! VI: toàn của provider để một run thành công: thiếu một flag sandbox mà
+//! VI: runner phụ thuộc thì được báo là công cụ quá cũ, chứ không tìm cách
+//! VI: lách.
 
-pub fn crate_name() -> &'static str {
-    "flowie-agent"
-}
+pub mod error;
+pub mod provider;
+pub mod stream;
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn crate_is_wired_into_the_workspace() {
-        assert_eq!(super::crate_name(), "flowie-agent");
-    }
-}
+pub use error::{Error, Result};
+pub use provider::{Capability, Provider};
+pub use stream::{Finished, LINE_LIMIT};
