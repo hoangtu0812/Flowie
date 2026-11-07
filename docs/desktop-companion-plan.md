@@ -380,7 +380,7 @@ không phải điều kiện để chạy task.
 
 ## 7. Cấu trúc code và adapter theo nền tảng
 
-Cấu trúc *đề xuất*, chưa tạo trong repository:
+Cấu trúc **đã tồn tại** trong repository kể từ DTD-493:
 
 ```text
 apps/desktop/
@@ -642,7 +642,7 @@ phụ thuộc nền tảng, trong project **FL**, team **DTD**:
 
 | Task | Phạm vi |
 | --- | --- |
-| **DTD-487** (EPIC, cha) | Lõi Rust, MCP client, port runner, vòng nhận việc, UI cấu hình local, contract server còn thiếu. Không chia theo hệ điều hành để tránh nhân đôi logic nghiệp vụ. |
+| **DTD-487** (EPIC, cha) | Lõi Rust, MCP client, port runner, vòng nhận việc, UI cấu hình local, contract server còn thiếu. Không chia theo hệ điều hành để tránh nhân đôi logic nghiệp vụ. Subtask đã xong: DTD-493, DTD-494, DTD-495, DTD-496, DTD-498. |
 | **DTD-488** | Nền tảng Windows: tray, kho credential Windows, phân giải CLI theo PATHEXT và shim `.cmd`, hủy cây tiến trình, bộ cài NSIS, code signing, WebView2. |
 | **DTD-489** | Nền tảng macOS: menu bar, Keychain, PATH của app GUI, process group, `.app` trong `.dmg`, Developer ID signing và notarization, WKWebView. |
 
