@@ -27,6 +27,18 @@ class UiValues(BaseModel):
     timezone: str | None = Field(default=None, max_length=100)
     weekStart: Literal[0, 1, 6] = 1
     autoAssignSelf: bool = False
+    # Release the account was last told about, as the version string the web
+    # bundle carries from CHANGELOG.md (for example "0.13.0"). None means no
+    # release has ever been announced to it, which the web app treats as "adopt
+    # the running version silently" so a first sign-in is not interrupted.
+    # Bounded because it is free text from the client, never an identifier the
+    # API resolves.
+    # VI: Bản phát hành mà tài khoản được thông báo gần nhất, theo chuỗi phiên
+    # bản mà bundle web mang từ CHANGELOG.md (ví dụ "0.13.0"). None nghĩa là
+    # chưa từng thông báo bản nào, và web coi đó là "âm thầm nhận phiên bản đang
+    # chạy" để không chen vào lần đăng nhập đầu tiên. Có giới hạn độ dài vì đây
+    # là văn bản tự do từ client, không phải identifier mà API tra cứu.
+    lastSeenReleaseVersion: str | None = Field(default=None, max_length=50)
 
     @field_validator("timezone")
     @classmethod
@@ -38,6 +50,31 @@ class UiValues(BaseModel):
         )
         time_zone(normalized)
         return normalized
+
+
+def known_values(stored):
+    """Drop stored settings this build does not know about.
+
+    UiValues forbids extra fields so a client cannot write junk into the
+    document, but the same model validates what is already in the database. A
+    row written by a newer release, or left behind after rolling the API back,
+    would otherwise make a plain read of the account's preferences fail and lock
+    the person out of every screen that waits for them. Unknown keys stay in the
+    JSON document untouched, because writes merge rather than replace, so an
+    upgrade or a roll-forward starts honouring them again.
+
+    VI: Bỏ các thiết lập đã lưu mà bản dựng này không biết.
+
+    UiValues chặn field lạ để client không ghi rác vào document, nhưng cùng
+    model đó cũng validate dữ liệu đã có trong cơ sở dữ liệu. Một bản ghi do
+    phiên bản mới hơn tạo ra, hoặc còn sót lại sau khi rollback API, nếu không
+    lọc sẽ làm chính việc đọc preferences của tài khoản lỗi và khoá người dùng
+    khỏi mọi màn hình đang chờ dữ liệu đó. Các khoá lạ vẫn nằm nguyên trong JSON
+    vì đường ghi là merge chứ không ghi đè, nên khi nâng cấp lại thì chúng được
+    dùng tiếp.
+    """
+    fields = UiValues.model_fields
+    return {key: value for key, value in (stored or {}).items() if key in fields}
 
 
 class PreferencesUpdate(BaseModel):
@@ -63,7 +100,7 @@ async def read_preferences(db, user_id):
     return {
         "accountId": user_id,
         "values": UiValues.model_validate(
-            row["preferences"] if row else {}
+            known_values(row["preferences"] if row else {})
         ).model_dump(),
         "version": row["version"] if row else 0,
     }
@@ -92,7 +129,7 @@ async def write_preferences(db, user_id, payload):
             "Preferences changed on another device. Reload before saving.",
             "Conflict",
         )
-    values = UiValues.model_validate(saved["preferences"]).model_dump()
+    values = UiValues.model_validate(known_values(saved["preferences"])).model_dump()
     if "timezone" in payload.values.model_fields_set and values["timezone"]:
         await db.execute(
             text("UPDATE users SET timezone=:zone,updated_at=:now WHERE id=:user"),

@@ -1,6 +1,7 @@
 import asyncio
 import os
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.config import _async_database_url
@@ -10,6 +11,7 @@ from app.core.errors import ApiError
 from app.modules.identity.preferences import (
     UiValues,
     PreferencesUpdate,
+    known_values,
     read_preferences,
     write_preferences,
 )
@@ -108,9 +110,53 @@ async def verify_preferences():
                 and automatic["values"]["weekStart"] == 6
             )
             assert automatic["values"]["defaultWorkspaceId"] is None
+            # The release an account was told about is per account: a new one
+            # starts with none, the recorded value survives later writes of
+            # unrelated settings, and it never leaks to another account.
+            assert initial["values"]["lastSeenReleaseVersion"] is None
+            announced = await write_preferences(
+                db,
+                user,
+                PreferencesUpdate(
+                    accountId=user,
+                    expectedVersion=4,
+                    values=UiValues(lastSeenReleaseVersion="0.13.0"),
+                ),
+            )
+            assert announced["values"]["lastSeenReleaseVersion"] == "0.13.0"
+            unrelated = await write_preferences(
+                db,
+                user,
+                PreferencesUpdate(
+                    accountId=user, expectedVersion=5, values=UiValues(fontSize="large")
+                ),
+            )
+            assert unrelated["values"]["lastSeenReleaseVersion"] == "0.13.0"
+            assert (await read_preferences(db, user))["values"][
+                "lastSeenReleaseVersion"
+            ] == "0.13.0"
+            assert (await read_preferences(db, other))["values"][
+                "lastSeenReleaseVersion"
+            ] is None
             await db.rollback()
     finally:
         await engine.dispose()
+
+
+def test_stored_preferences_survive_settings_this_build_does_not_know():
+    stored = {
+        "locale": "vi",
+        "lastSeenReleaseVersion": "0.13.0",
+        "settingFromANewerRelease": True,
+    }
+    assert known_values(stored) == {"locale": "vi", "lastSeenReleaseVersion": "0.13.0"}
+    assert (
+        UiValues.model_validate(known_values(stored)).lastSeenReleaseVersion == "0.13.0"
+    )
+    assert known_values(None) == {} and known_values({}) == {}
+    # Clients still cannot invent settings, only the database may carry extras.
+    with pytest.raises(ValidationError):
+        UiValues(settingFromANewerRelease=True)
 
 
 def test_account_timezone_requires_recognized_iana_zone():
