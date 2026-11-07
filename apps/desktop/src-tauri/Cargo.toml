@@ -1,0 +1,21 @@
+[package]
+name = "flowie-desktop"
+description = "Flowie Desktop companion shell"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2.7.4", features = [] }
+
+[dependencies]
+# `image-png` is required to load the tray icon from a PNG; without it the
+# icon call does not compile. Measured in the DTD-492 spike.
+# VI: `image-png` là bắt buộc để nạp icon tray từ PNG; thiếu nó thì lời gọi
+# VI: icon không biên dịch được. Đo được trong spike DTD-492.
+tauri = { version = "2.12.5", features = ["tray-icon", "image-png"] }
+flowie-core = { path = "../crates/flowie-core" }

@@ -28,9 +28,20 @@ fi
 # CHANGELOG.md, which is checked separately below.
 # VI: Không image build hay runtime nào đọc file Markdown, docs/ hoặc llms.txt,
 # VI: ngoại trừ CHANGELOG.md, được kiểm tra riêng ở dưới.
+#
+# apps/desktop/ is the Flowie Desktop Cargo workspace. No server image copies
+# it and no runtime reads it; it ships as a signed installer from its own
+# workflow, so a push that only touches it must not rebuild or redeploy the
+# server. A range that touches both still deploys, because the first non
+# exempt path decides.
+# VI: apps/desktop/ là Cargo workspace của Flowie Desktop. Không image server
+# VI: nào copy nó và không runtime nào đọc nó; nó phát hành dưới dạng bộ cài đã
+# VI: ký từ workflow riêng, nên push chỉ chạm nó thì không được build lại hay
+# VI: deploy lại server. Dải commit chạm cả hai thì vẫn deploy, vì path đầu tiên
+# VI: không thuộc nhóm miễn trừ sẽ quyết định.
 while IFS= read -r path; do
   case "$path" in
-    docs/* | *.md | llms.txt) ;;
+    docs/* | *.md | llms.txt | apps/desktop/*) ;;
     *) decide true ;;
   esac
 done < <(git diff --name-only --no-renames "$before" "$after")
