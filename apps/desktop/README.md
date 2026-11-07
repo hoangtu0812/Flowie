@@ -28,6 +28,20 @@ cargo test --workspace
 
 Toolchain ghim trong `rust-toolchain.toml`; không nêu phiên bản ở nơi khác.
 
+## Kiểm tra mã macOS từ máy Windows
+
+Mã trong nhánh `cfg(unix)` không được biên dịch trên Windows, nên lỗi của nó
+chỉ lộ ra ở CI. Kiểm chéo trước khi đẩy:
+
+```bash
+rustup target add aarch64-apple-darwin
+cd apps/desktop
+cargo clippy --target aarch64-apple-darwin   -p flowie-core -p flowie-agent -p flowie-repository -p flowie-platform   --all-targets -- -D warnings
+```
+
+Không kiểm được `flowie-mcp` và `src-tauri` theo cách này: `ring` và các crate
+Apple của Tauri cần một C compiler cho macOS. Hai crate đó chỉ có CI xác nhận.
+
 ## Ràng buộc đã biết
 
 - **Windows**: `src-tauri/icons/icon.ico` bắt buộc phải có, nếu không `tauri-build`

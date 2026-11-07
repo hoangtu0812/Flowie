@@ -24,7 +24,7 @@
 //! VI: phải spawn ở trạng thái suspended qua CreateProcessW.
 
 use std::io;
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::time::Duration;
 
 /// How long a tree gets to exit after a polite signal before it is killed.
@@ -47,9 +47,9 @@ pub fn terminate_tree(pid: u32) -> io::Result<()> {
     {
         let status = Command::new("taskkill")
             .args(["/PID", &pid.to_string(), "/T", "/F"])
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
             .status()?;
         // Exit code 128 means the process was already gone, which is the
         // outcome the caller wanted.
@@ -68,10 +68,24 @@ pub fn terminate_tree(pid: u32) -> io::Result<()> {
         // A negative pid addresses the whole process group.
         // VI: pid âm nhắm tới cả process group.
         let group = -(pid as i32);
+        // Signalling a process group has no safe wrapper in the standard
+        // library: `kill` is a libc call, so the FFI boundary is the only
+        // unsafety here. The arguments are a pid this function was handed and
+        // a constant signal number. SIGTERM first so a well behaved tree can
+        // shut itself down, SIGKILL after the grace period for one that will
+        // not.
+        // VI: Gửi tín hiệu cho một process group không có lớp bọc an toàn
+        // VI: trong thư viện chuẩn: `kill` là một lời gọi libc nên ranh giới
+        // VI: FFI là phần không an toàn duy nhất ở đây. Tham số gồm một pid
+        // VI: hàm này nhận được và một hằng số tín hiệu. SIGTERM trước để một
+        // VI: cây tiến trình cư xử đúng mực tự tắt, SIGKILL sau thời gian ân
+        // VI: hạn cho cây không chịu tắt.
+        #[allow(unsafe_code)]
         unsafe {
             libc_kill(group, 15);
         }
         std::thread::sleep(GRACE);
+        #[allow(unsafe_code)]
         unsafe {
             libc_kill(group, 9);
         }
@@ -79,7 +93,12 @@ pub fn terminate_tree(pid: u32) -> io::Result<()> {
     }
 }
 
+// Declaring foreign functions is itself unsafe code; these two are the whole
+// surface this crate borrows from libc.
+// VI: Khai báo hàm ngoại cũng là mã không an toàn; hai hàm này là toàn bộ bề
+// VI: mặt crate này mượn từ libc.
 #[cfg(unix)]
+#[allow(unsafe_code)]
 extern "C" {
     #[link_name = "kill"]
     fn libc_kill(pid: i32, signal: i32) -> i32;
@@ -102,6 +121,14 @@ pub fn spawn_in_own_group(command: &mut Command) {
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
+        // `pre_exec` is unsafe because its closure runs in the forked child
+        // between fork and exec, where only async-signal-safe calls are
+        // allowed. `setsid` is on that list and nothing else happens here.
+        // VI: `pre_exec` không an toàn vì closure của nó chạy trong tiến trình
+        // VI: con đã fork, ở giữa fork và exec, nơi chỉ các lời gọi an toàn
+        // VI: với tín hiệu bất đồng bộ được phép. `setsid` nằm trong danh sách
+        // VI: đó và ở đây không có gì khác xảy ra.
+        #[allow(unsafe_code)]
         unsafe {
             command.pre_exec(|| {
                 if libc_setsid() == -1 {
@@ -116,6 +143,7 @@ pub fn spawn_in_own_group(command: &mut Command) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::process::Stdio;
 
     #[test]
     fn terminating_a_vanished_process_is_not_an_error() {
