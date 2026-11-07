@@ -1,7 +1,11 @@
 # Kế hoạch Flowie Desktop và Rust Companion
 
-Ngày lập: 2026-11-07. Trạng thái: kế hoạch đề xuất, chưa có mã nguồn app và chưa có
-FDS/TDS đồng bộ trên Flowie.
+Ngày lập: 2026-11-07. Cập nhật: 2026-11-08.
+
+Trạng thái: **P1 đã hiện thực xong**. Workspace `apps/desktop` tồn tại trong
+repository với năm crate có hành vi thật và 106 test chạy trên cả Windows lẫn macOS.
+P0 chưa đóng vì nửa macOS cần máy Mac, và hai quyết định G1, G4 vẫn chưa chốt. Chưa
+có FDS/TDS đồng bộ trên Flowie.
 
 Project: **Flowie (FL)**, team **DTD**. Repository: `hoangtu0812/Flowie`, base `main`.
 Task theo dõi: **DTD-487** (phần dùng chung), **DTD-488** (Windows), **DTD-489**
@@ -10,6 +14,43 @@ Task theo dõi: **DTD-487** (phần dùng chung), **DTD-488** (Windows), **DTD-4
 Cách đọc tài liệu: mọi phát biểu về hệ thống **hiện tại** đều dẫn `file:line` để kiểm
 lại; mọi phát biểu về **tương lai** được gắn nhãn *đề xuất* hoặc *cần chốt*. Không có
 câu nào mô tả tính năng chưa tồn tại như thể đã có.
+
+## 0. Trạng thái hiện tại
+
+| Hạng mục | Trạng thái | Bằng chứng |
+| --- | --- | --- |
+| P0 spike, nửa Windows | Xong | DTD-492, 5/6 hạng mục đạt, hạng mục 4 còn đường thành công |
+| P0 spike, nửa macOS | **Chưa chạy** | Cần máy Mac |
+| P1.1 scaffold, CI, deploy-scope | Xong | DTD-493, PR #175 |
+| P1.2 `flowie-mcp` | Xong | DTD-494, PR #176 |
+| P1.3 `flowie-repository` | Xong | DTD-495, PR #177 và #178 |
+| P1.4 `flowie-agent` | Xong | DTD-496, PR #179 |
+| P1.5 `flowie-core` | Xong | DTD-498, PR #180 |
+| P2 companion MVP | Chưa bắt đầu | DTD-501 |
+
+**G7 đã giải quyết và được chứng minh trên production**: push chỉ chạm
+`apps/desktop/**` dừng ở job `Detect deployable changes`, còn `verify` và
+`Build and deploy to CT107` đều skipped (run 42402571301 trên `10b3ca8a`).
+
+**G1 và G4 vẫn mở.** `flowie-core` hiện thực cơ chế xử lý budget với chính sách là
+tham số cấu hình, không tự chốt thay người phụ trách.
+
+**Còn nợ của P1**: golden trace đối chiếu với runner Python thật (tiêu chí 1 và 4 ở
+mục 11) chưa chạy được vì token trên máy thử thuộc workspace khác.
+
+### Điều đã học được, khác với giả định ban đầu
+
+- **Job Object không giết được cây tiến trình** nếu gán sau khi spawn: con cháu sinh
+  ra trước lúc gán vẫn sống. Đo được 2/3 tiến trình sống sót, trong khi `taskkill /T /F`
+  không để lại gì. Mục 7 của tài liệu này ban đầu nêu Job Object như lựa chọn tương
+  đương; thực tế nó chỉ tương đương nếu spawn ở trạng thái suspended qua `CreateProcessW`.
+- **Không cần crate MCP bên thứ ba**: client viết tay khoảng 170 dòng nói chuyện được
+  với server production.
+- **Tauri trên Windows bắt buộc có `src-tauri/icons/icon.ico`** và cần feature
+  `image-png` để nạp icon tray từ PNG. Thiếu file ico thì `tauri-build` dừng.
+- **Mã `cfg(unix)` không được bản build Windows kiểm tra chút nào.** Một lần merge đã
+  đưa mã hỏng macOS vào `main` vì chỉ kiểm trên Windows. Cách kiểm chéo nay nằm trong
+  `apps/desktop/README.md`.
 
 ## 1. Vấn đề cần giải quyết
 
@@ -339,7 +380,7 @@ không phải điều kiện để chạy task.
 
 ## 7. Cấu trúc code và adapter theo nền tảng
 
-Cấu trúc *đề xuất*, chưa tạo trong repository:
+Cấu trúc **đã tồn tại** trong repository kể từ DTD-493:
 
 ```text
 apps/desktop/
@@ -365,7 +406,7 @@ crate dựa trên giả định trước khi làm thử nghiệm tương thích 
 | Giao diện nền | System tray | Menu bar, quyết định ẩn/hiện Dock theo trạng thái cửa sổ |
 | Credential | Kho credential được Windows bảo vệ (chốt API cụ thể ở P0) | Keychain |
 | Phân giải CLI | PATH/PATHEXT, đường dẫn có dấu và khoảng trắng, shim `.cmd` | PATH của app GUI khác terminal; cho chọn executable rõ ràng |
-| Hủy tiến trình | Quản lý cả cây tiến trình; đánh giá Job Object so với `taskkill` hiện dùng | Process group, SIGTERM rồi SIGKILL khi quá hạn |
+| Hủy tiến trình | `taskkill /T /F` cả cây, đã đo là sạch; Job Object chỉ dùng được nếu spawn suspended qua `CreateProcessW`, giá trị thật của nó là `KILL_ON_JOB_CLOSE` | Process group, SIGTERM rồi SIGKILL khi quá hạn |
 | Autostart | Theo user đăng nhập | Login item theo user đăng nhập |
 | WebView | WebView2 | WKWebView |
 | Bộ cài đề xuất | NSIS `.exe`; MSI chỉ khi IT yêu cầu | `.app` trong `.dmg` |
@@ -601,7 +642,7 @@ phụ thuộc nền tảng, trong project **FL**, team **DTD**:
 
 | Task | Phạm vi |
 | --- | --- |
-| **DTD-487** (EPIC, cha) | Lõi Rust, MCP client, port runner, vòng nhận việc, UI cấu hình local, contract server còn thiếu. Không chia theo hệ điều hành để tránh nhân đôi logic nghiệp vụ. |
+| **DTD-487** (EPIC, cha) | Lõi Rust, MCP client, port runner, vòng nhận việc, UI cấu hình local, contract server còn thiếu. Không chia theo hệ điều hành để tránh nhân đôi logic nghiệp vụ. Subtask đã xong: DTD-493, DTD-494, DTD-495, DTD-496, DTD-498. |
 | **DTD-488** | Nền tảng Windows: tray, kho credential Windows, phân giải CLI theo PATHEXT và shim `.cmd`, hủy cây tiến trình, bộ cài NSIS, code signing, WebView2. |
 | **DTD-489** | Nền tảng macOS: menu bar, Keychain, PATH của app GUI, process group, `.app` trong `.dmg`, Developer ID signing và notarization, WKWebView. |
 

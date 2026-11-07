@@ -1,0 +1,25 @@
+# Cargo workspace for Flowie Desktop. It is deliberately separate from the pnpm
+# workspace: pnpm globs `apps/*` but ignores a directory without package.json,
+# so the two build systems do not meet.
+# VI: Cargo workspace của Flowie Desktop. Cố ý tách khỏi pnpm workspace: pnpm
+# VI: quét `apps/*` nhưng bỏ qua thư mục không có package.json, nên hai hệ
+# VI: thống build không giẫm lên nhau.
+[workspace]
+resolver = "2"
+members = [
+    "crates/flowie-core",
+    "crates/flowie-mcp",
+    "crates/flowie-agent",
+    "crates/flowie-repository",
+    "crates/flowie-platform",
+    "src-tauri",
+]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2021"
+publish = false
+license = "UNLICENSED"
+
+[workspace.lints.rust]
+unsafe_code = "warn"

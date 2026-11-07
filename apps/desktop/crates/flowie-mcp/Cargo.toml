@@ -1,0 +1,21 @@
+[package]
+name = "flowie-mcp"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+# rustls rather than the platform TLS stack: one verified behaviour on both
+# Windows and macOS, and no OpenSSL to ship in the installer.
+# VI: Dùng rustls thay cho TLS của hệ điều hành: một hành vi đã kiểm chứng trên
+# VI: cả Windows và macOS, và không phải đóng gói OpenSSL vào bộ cài.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "io-util"] }

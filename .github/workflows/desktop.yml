@@ -1,0 +1,99 @@
+name: Verify Flowie Desktop
+
+# The desktop workspace builds for the machines it ships to, so a Windows
+# build passing is no evidence for macOS and the reverse. Both run on every
+# change that touches the workspace or the rule that exempts it from the
+# server deployment.
+# VI: Workspace desktop build cho đúng những máy nó phát hành tới, nên build
+# VI: Windows xanh không phải bằng chứng cho macOS và ngược lại. Cả hai chạy
+# VI: với mọi thay đổi chạm workspace hoặc chạm quy tắc miễn trừ nó khỏi việc
+# VI: deploy server.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/desktop/**'
+      - '.github/workflows/desktop.yml'
+      - 'scripts/deploy-scope.sh'
+      - 'scripts/tests/deploy-scope.test.sh'
+  pull_request:
+    paths:
+      - 'apps/desktop/**'
+      - '.github/workflows/desktop.yml'
+      - 'scripts/deploy-scope.sh'
+      - 'scripts/tests/deploy-scope.test.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flowie-desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: apps/desktop
+
+jobs:
+  desktop:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # rust-toolchain.toml pins the version, so no toolchain is named here;
+      # naming one in two places is how the two drift apart.
+      # VI: rust-toolchain.toml đã ghim phiên bản nên ở đây không nêu toolchain;
+      # VI: nêu ở hai nơi chính là cách để chúng lệch nhau.
+      - name: Show toolchain
+        run: |
+          rustup show active-toolchain
+          cargo --version
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/desktop/target
+          key: ${{ matrix.os }}-cargo-${{ hashFiles('apps/desktop/Cargo.lock') }}
+          restore-keys: ${{ matrix.os }}-cargo-
+
+      - name: Formatting
+        run: cargo fmt --all --check
+
+      - name: Lints
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Tests
+        run: cargo test --workspace --all-targets
+
+      - name: Build
+        run: cargo build --workspace
+
+  deploy-scope:
+    name: deployment scope rules
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # Guards the rule that keeps a desktop-only push from rebuilding and
+      # redeploying the server, and the rule that still deploys when a range
+      # touches the server too.
+      # VI: Bảo vệ quy tắc giữ cho push chỉ chạm desktop không build lại và
+      # VI: deploy lại server, và quy tắc vẫn deploy khi dải commit chạm cả
+      # VI: server.
+      - name: Deployment scope cases
+        run: bash scripts/tests/deploy-scope.test.sh
