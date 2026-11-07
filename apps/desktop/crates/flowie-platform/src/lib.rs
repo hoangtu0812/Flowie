@@ -11,6 +11,10 @@
 //! VI: Mới là khung: hành vi sẽ có ở DTD-496 và hai task nền tảng DTD-488,
 //! VI: DTD-489.
 
+pub mod process;
+
+pub use process::{spawn_in_own_group, terminate_tree};
+
 pub fn crate_name() -> &'static str {
     "flowie-platform"
 }
