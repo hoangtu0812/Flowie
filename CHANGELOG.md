@@ -3,21 +3,26 @@
 All notable changes to Flowie are documented here.
 
 Each released section is headed by its version and the moment it went to
-production: `## [x.y.z] — YYYY-MM-DD HH:MM +07`. The Help menu in the app reads
-this file at build time, so the topmost released section is exactly what users
-see under "What's new" — a release that is not written down here is a release
-nobody can identify. Work that has not shipped yet stays under Unreleased.
+production: `## [x.y.z] — YYYY-MM-DD HH:MM +07`. The app reads this file at
+build time, so the topmost released section is exactly what users see under
+"What's new" and in the dialog that announces a new release — a release that is
+not written down here is a release nobody can identify. Work that has not
+shipped yet stays under Unreleased, and is shown to nobody until a release
+commit promotes it.
 
 Each entry is written in English with an indented `VI:` Vietnamese line, and
 ends with its pull request number and, once released, its merge commit, for
 example `(#19, 431edd6)`. Entries written before this rule stay as they are.
+Write both halves for people, not for the repository: the app shows each entry
+in the language the reader's account is set to, and hides the trailing task,
+pull request and commit references, which are for us.
 
 ## Unreleased
 
 ### Added
 
-- Flowie now tells each person once when it reaches a new release. On the first visit after an update a dialog lists that release's changes, with its version, release time and a link to the full changelog. Closing it — the close button, Escape or a click outside — is remembered on the account rather than the browser, so it stays closed on another computer and after clearing the cache, and the next release shows it exactly once again. An account with no release recorded yet is never interrupted: it adopts the running version silently and starts seeing announcements from the release after it, so this release itself announces nothing. Help & feedback → "What's new" is unchanged and now shows the same notes from the same source. Stored settings an older API does not recognise no longer break reading a person's preferences. No migration; rebuild `api` and `web` together, because the new bundle saves a setting an older API would reject. (DTD-491, #170)
-  VI: Flowie nay thông báo cho mỗi người đúng một lần khi lên bản phát hành mới. Lần đầu vào Flowie sau khi cập nhật, một hộp thoại liệt kê các thay đổi của bản đó, kèm số phiên bản, thời điểm phát hành và liên kết tới lịch sử cập nhật đầy đủ. Việc đóng hộp thoại — bằng nút đóng, phím Escape hay bấm ra ngoài — được ghi nhớ theo tài khoản chứ không theo trình duyệt, nên vẫn đóng khi mở trên máy khác hoặc sau khi xoá cache, và bản phát hành kế tiếp lại hiện đúng một lần. Tài khoản chưa ghi nhận bản nào thì không bị chen ngang: hệ thống âm thầm nhận phiên bản đang chạy và chỉ thông báo từ bản sau, nên chính bản này không thông báo cho ai. Mục Help & feedback → "Có gì mới" giữ nguyên và nay hiển thị cùng nội dung từ cùng một nguồn. Thiết lập đã lưu mà API bản cũ không biết cũng không còn làm việc đọc preferences của người dùng bị lỗi. Không có migration; build lại `api` và `web` cùng nhau, vì bundle mới lưu một thiết lập mà API bản cũ sẽ từ chối. (DTD-491)
+- Flowie now tells each person once when it reaches a new release. On the first visit after an update a dialog lists that release's changes, with its version, release time and a link to the full changelog. Closing it — the close button, Escape or a click outside — is remembered on the account rather than the browser, so it stays closed on another computer and after clearing the cache, and the next release shows it exactly once again. An account with no release recorded yet is never interrupted: it adopts the running version silently and starts seeing announcements from the release after it, so this release itself announces nothing. Help & feedback → "What's new" shows the same notes from the same source. Both now read each change in the language the account is set to, instead of one line carrying the English and Vietnamese sentences and the internal task, pull request and commit references together. Stored settings an older API does not recognise no longer break reading a person's preferences. No migration; rebuild `api` and `web` together, because the new bundle saves a setting an older API would reject. (DTD-491, #170)
+  VI: Flowie nay thông báo cho mỗi người đúng một lần khi lên bản phát hành mới. Lần đầu vào Flowie sau khi cập nhật, một hộp thoại liệt kê các thay đổi của bản đó, kèm số phiên bản, thời điểm phát hành và liên kết tới lịch sử cập nhật đầy đủ. Việc đóng hộp thoại — bằng nút đóng, phím Escape hay bấm ra ngoài — được ghi nhớ theo tài khoản chứ không theo trình duyệt, nên vẫn đóng khi mở trên máy khác hoặc sau khi xoá cache, và bản phát hành kế tiếp lại hiện đúng một lần. Tài khoản chưa ghi nhận bản nào thì không bị chen ngang: hệ thống âm thầm nhận phiên bản đang chạy và chỉ thông báo từ bản sau, nên chính bản này không thông báo cho ai. Mục Help & feedback → "Có gì mới" hiển thị cùng nội dung từ cùng một nguồn. Cả hai nay đọc mỗi thay đổi theo ngôn ngữ của tài khoản, thay vì một dòng chứa lẫn câu tiếng Anh, câu tiếng Việt và các mã task, pull request, commit nội bộ. Thiết lập đã lưu mà API bản cũ không biết cũng không còn làm việc đọc preferences của người dùng bị lỗi. Không có migration; build lại `api` và `web` cùng nhau, vì bundle mới lưu một thiết lập mà API bản cũ sẽ từ chối. (DTD-491)
 
 ## [0.13.0] — 2026-11-07 21:10 +07
 

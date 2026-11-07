@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useUiPreferencesStore } from '@/store/ui-preferences-store';
 import { helpTopics, helpShortcuts } from '@/features/identity/help-content';
-import { APP_HIGHLIGHTS, releaseLabel } from '@/lib/release';
+import { APP_HIGHLIGHTS, noteText, releaseLabel } from '@/lib/release';
 import { ReleaseNotes } from '@/features/identity/release-notes';
 
 type HelpView = 'guide' | 'shortcuts' | 'updates';
@@ -89,8 +89,8 @@ export function HelpButton() {
             <DesignSurface>
                <VStack gap={2} padding={2}>
                   {APP_HIGHLIGHTS.slice(0, 3).map((highlight) => (
-                     <Text key={highlight} type="supporting" maxLines={2}>
-                        {highlight}
+                     <Text key={highlight.en} type="supporting" maxLines={2}>
+                        {noteText(highlight, locale)}
                      </Text>
                   ))}
                   {!APP_HIGHLIGHTS.length && (

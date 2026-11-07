@@ -1,3 +1,5 @@
+import type { ReleaseNote } from './changelog';
+
 /**
  * Release identity of this bundle, baked in from CHANGELOG.md by next.config.
  * Every value can be empty when the app is built outside the repository, so
@@ -10,12 +12,29 @@ export const APP_RELEASED_AT = process.env.NEXT_PUBLIC_APP_RELEASED_AT ?? '';
 
 export const CHANGELOG_URL = 'https://github.com/hoangtu0812/Flowie/blob/main/CHANGELOG.md';
 
-function parseNotes(value: string): string[] {
+export type { ReleaseNote };
+
+/**
+ * Entries baked in by next.config, each carrying both languages. Anything that
+ * is not a pair of strings is dropped rather than rendered, because these
+ * values survive a build with an older or hand-set environment variable and a
+ * half-parsed entry would reach users as a dialog full of `undefined`.
+ * VI: Các mục được next.config bake vào, mỗi mục mang cả hai thứ tiếng. Giá trị
+ * không phải một cặp chuỗi thì bị bỏ thay vì render, vì các giá trị này vẫn tồn
+ * tại khi build với biến môi trường cũ hoặc do người đặt tay, và một mục phân
+ * tích dở sẽ đến tay user thành hộp thoại đầy chữ `undefined`.
+ */
+function parseNotes(value: string): ReleaseNote[] {
    try {
       const parsed: unknown = JSON.parse(value);
-      return Array.isArray(parsed)
-         ? parsed.filter((item): item is string => typeof item === 'string')
-         : [];
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter(
+         (item): item is ReleaseNote =>
+            typeof item === 'object' &&
+            item !== null &&
+            typeof (item as ReleaseNote).en === 'string' &&
+            typeof (item as ReleaseNote).vi === 'string'
+      );
    } catch {
       return [];
    }
@@ -24,6 +43,33 @@ function parseNotes(value: string): string[] {
 /** First entries of the current release, used by the Help menu's "What's new". */
 export const APP_HIGHLIGHTS = parseNotes(process.env.NEXT_PUBLIC_APP_HIGHLIGHTS ?? '[]');
 export const APP_RELEASE_NOTES = parseNotes(process.env.NEXT_PUBLIC_APP_RELEASE_NOTES ?? '[]');
+
+/**
+ * The entry in the language the account reads, falling back to English.
+ *
+ * The fallback is not cosmetic: entries written before the bilingual changelog
+ * rule have no Vietnamese half at all, and an entry whose `VI:` line was
+ * forgotten would otherwise render as a blank bullet, which reads as a bug in
+ * the product rather than a gap in the changelog.
+ *
+ * The locale is spelled out instead of imported from the shared Locale type so
+ * this module stays free of path aliases and can be compiled by the unit test
+ * runner on its own.
+ *
+ * VI: Mục theo ngôn ngữ tài khoản đang đọc, lùi về tiếng Anh khi không có.
+ *
+ * Việc lùi về tiếng Anh không phải cho đẹp: các mục viết trước quy tắc changelog
+ * song ngữ không có nửa tiếng Việt, và một mục bị quên dòng `VI:` nếu không lùi
+ * sẽ render thành dòng trống, nhìn như lỗi của sản phẩm chứ không phải thiếu sót
+ * của changelog.
+ *
+ * Kiểu ngôn ngữ được viết thẳng thay vì import từ kiểu Locale dùng chung để
+ * module này không phụ thuộc path alias và tự biên dịch được dưới trình chạy
+ * unit test.
+ */
+export function noteText(note: ReleaseNote, locale: 'en' | 'vi'): string {
+   return locale === 'vi' && note.vi ? note.vi : note.en;
+}
 
 /** "v0.2.0 · 2026-08-26 19:41 +07", or just the half that is known. */
 export function releaseLabel(): string {
