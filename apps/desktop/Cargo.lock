@@ -818,6 +818,9 @@ dependencies = [
 [[package]]
 name = "flowie-agent"
 version = "0.0.0"
+dependencies = [
+ "flowie-platform",
+]
 
 [[package]]
 name = "flowie-core"
@@ -845,6 +848,9 @@ dependencies = [
 [[package]]
 name = "flowie-platform"
 version = "0.0.0"
+dependencies = [
+ "tempfile",
+]
 
 [[package]]
 name = "flowie-repository"
