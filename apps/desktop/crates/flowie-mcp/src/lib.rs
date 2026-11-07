@@ -1,24 +1,27 @@
-//! MCP client and the Flowie tool contract: the streamable HTTP transport, the
-//! `{data: ...}` envelope, and typed wrappers for the tools a runner needs.
-//! Every error the server can return must stay distinguishable here, because
-//! the shell shows a different state for a revoked token, a missing scope, a
-//! lost lease and an exhausted run budget.
-//! VI: Client MCP và hợp đồng tool Flowie: transport streamable HTTP, envelope
-//! VI: `{data: ...}`, và lớp bọc có kiểu cho các tool runner cần. Mọi lỗi server
-//! VI: trả về phải giữ được tính phân biệt ở đây, vì vỏ ứng dụng hiển thị trạng
-//! VI: thái khác nhau cho token bị thu hồi, thiếu scope, mất lease và hết budget.
+//! MCP client and the Flowie tool contract for the desktop companion.
 //!
-//! Scaffolding only: the behaviour arrives with DTD-494.
-//! VI: Mới là khung: hành vi sẽ có ở DTD-494.
+//! The crate owns three things: a validated endpoint, a transport that speaks
+//! MCP streamable HTTP to the Flowie server, and the run-lifecycle contract
+//! with the limits the server enforces. Everything it can fail with is a named
+//! variant, because the companion shows a different state for a revoked token,
+//! a missing scope, a lost lease and a network outage.
+//! VI: Crate sở hữu ba thứ: một endpoint đã kiểm tra, một transport nói MCP
+//! VI: streamable HTTP với server Flowie, và hợp đồng vòng đời run kèm các giới
+//! VI: hạn server áp dụng. Mọi cách nó có thể thất bại đều là một biến thể có
+//! VI: tên, vì companion hiển thị trạng thái khác nhau cho token bị thu hồi,
+//! VI: thiếu scope, mất lease và mất mạng.
+//!
+//! The token never reaches a log: it lives behind a type whose `Debug` is
+//! redacted, and it is stripped out of transport error strings.
+//! VI: Token không bao giờ tới được log: nó nằm sau một kiểu có `Debug` bị che,
+//! VI: và bị loại khỏi chuỗi lỗi của transport.
 
-pub fn crate_name() -> &'static str {
-    "flowie-mcp"
-}
+pub mod client;
+pub mod contract;
+pub mod endpoint;
+pub mod error;
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn crate_is_wired_into_the_workspace() {
-        assert_eq!(super::crate_name(), "flowie-mcp");
-    }
-}
+pub use client::{Client, Token};
+pub use contract::{Lease, Outcome, RunResult, TestEvidence, TestResult};
+pub use endpoint::Endpoint;
+pub use error::{Error, Result};
