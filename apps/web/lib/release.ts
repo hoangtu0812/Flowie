@@ -1,5 +1,3 @@
-import type { ReleaseNote } from './changelog';
-
 /**
  * Release identity of this bundle, baked in from CHANGELOG.md by next.config.
  * Every value can be empty when the app is built outside the repository, so
@@ -12,7 +10,15 @@ export const APP_RELEASED_AT = process.env.NEXT_PUBLIC_APP_RELEASED_AT ?? '';
 
 export const CHANGELOG_URL = 'https://github.com/hoangtu0812/Flowie/blob/main/CHANGELOG.md';
 
-export type { ReleaseNote };
+/**
+ * One changelog entry, in both languages the changelog records it in. Declared
+ * here rather than imported from next.config so nothing in the app pulls the
+ * config into its module graph.
+ * VI: Một mục changelog, ở cả hai thứ tiếng mà changelog ghi lại. Khai báo ở đây
+ * thay vì import từ next.config để không phần nào của app kéo tệp cấu hình vào
+ * đồ thị module của mình.
+ */
+export type ReleaseNote = { en: string; vi: string };
 
 /**
  * Entries baked in by next.config, each carrying both languages. Anything that

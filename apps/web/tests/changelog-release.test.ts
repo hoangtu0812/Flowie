@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { releaseFromChangelog } from '../lib/changelog';
+import { releaseFromChangelog } from '../next.config';
 import { noteText } from '../lib/release';
 
 const sample = [
