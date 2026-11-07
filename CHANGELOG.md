@@ -19,6 +19,11 @@ pull request and commit references, which are for us.
 
 ## Unreleased
 
+### Changed
+
+- Flowie wears the new pixel-art identity. The logo, the loading animation and the app icon all come from the supplied Pixel Motion Kit: a 5.5-second loop where three ribbons slide in, the wordmark letters appear one at a time and the green dot pops, drawn separately for the light and dark themes. The animation is a self-contained SVG that runs no script and loads nothing from the network, and it settles on the finished logo by itself for anyone who asks for reduced motion. The artwork is kept pixel-sharp at every size instead of being smoothed. The browser tab, bookmark and installed-app icon change with it, so a browser may keep showing the old one until its cached copy expires. The loading animation is also about three times heavier than the one it replaces, which is paid only while a screen is loading. Rebuild `web`. (DTD-497, #172)
+  VI: Flowie mang nhận diện pixel-art mới. Logo, animation lúc tải và icon ứng dụng đều lấy từ bộ Pixel Motion Kit được cung cấp: một vòng 5,5 giây trong đó ba dải màu trượt vào, các chữ của wordmark lần lượt hiện ra và chấm xanh bật lên, vẽ riêng cho theme sáng và theme tối. Animation là một SVG tự chứa, không chạy script và không tải gì từ mạng, và tự dừng ở logo hoàn chỉnh cho người chọn giảm chuyển động. Hình được giữ sắc nét theo từng điểm ảnh ở mọi kích thước thay vì bị làm mượt. Icon trên tab trình duyệt, trong bookmark và của ứng dụng đã cài cũng đổi theo, nên trình duyệt có thể còn hiện icon cũ cho tới khi bản lưu trong cache hết hạn. Animation lúc tải cũng nặng gấp khoảng ba lần bản cũ, và chỉ phải tải khi màn hình đang chờ dữ liệu. Build lại `web`. (DTD-497)
+
 ### Fixed
 
 - The web container starts again. `next start` reloads `next.config.ts` on boot, so the image has to carry the files that config imports, and the one added alongside the release announcement below was missing from it: the server exited with `MODULE_NOT_FOUND` before answering a single request, and the proxy in front of it returned `502 Bad Gateway` for the whole site. A unit test now fails if an import is added to the config without the matching line in the image, because neither the build nor the browser tests can catch this — both run from a full checkout, where the file is always present. Rebuild `web`. (DTD-504, #171)
