@@ -26,7 +26,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useUiPreferencesStore } from '@/store/ui-preferences-store';
 import { helpTopics, helpShortcuts } from '@/features/identity/help-content';
-import { APP_HIGHLIGHTS, APP_RELEASE_NOTES, CHANGELOG_URL, releaseLabel } from '@/lib/release';
+import { APP_HIGHLIGHTS, releaseLabel } from '@/lib/release';
+import { ReleaseNotes } from '@/features/identity/release-notes';
 
 type HelpView = 'guide' | 'shortcuts' | 'updates';
 const useHelpStore = create<{ view: HelpView | null; setView: (view: HelpView | null) => void }>(
@@ -284,39 +285,7 @@ export function HelpCenter() {
                      </List>
                   </VStack>
                )}
-               {view === 'updates' && (
-                  <VStack gap={4}>
-                     <VStack gap={1}>
-                        <Heading level={2}>{updates}</Heading>
-                        {releaseLabel() && (
-                           <Text color="secondary">{'Flowie ' + releaseLabel()}</Text>
-                        )}
-                     </VStack>
-                     {APP_RELEASE_NOTES.length ? (
-                        <List listStyle="disc" hasDividers>
-                           {APP_RELEASE_NOTES.map((highlight) => (
-                              <ListItem key={highlight} label={<Text>{highlight}</Text>} />
-                           ))}
-                        </List>
-                     ) : (
-                        <Text>
-                           {copy(
-                              'No release notes are included in this build.',
-                              'Bản dựng này chưa có thông tin phát hành.'
-                           )}
-                        </Text>
-                     )}
-                     <HStack>
-                        <Button
-                           label={copy('Full changelog', 'Lịch sử cập nhật đầy đủ')}
-                           icon={<ExternalLink />}
-                           href={CHANGELOG_URL}
-                           target="_blank"
-                           rel="noreferrer"
-                        />
-                     </HStack>
-                  </VStack>
-               )}
+               {view === 'updates' && <ReleaseNotes locale={locale} heading={updates} />}
             </VStack>
          </Dialog>
       </DesignSurface>

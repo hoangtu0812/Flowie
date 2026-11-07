@@ -16,6 +16,7 @@ const keys = [
    'timezone',
    'weekStart',
    'autoAssignSelf',
+   'lastSeenReleaseVersion',
 ] as const;
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 type Values = Pick<ReturnType<typeof useUiPreferencesStore.getState>, (typeof keys)[number]>;
@@ -45,6 +46,7 @@ export function PreferenceSync() {
             store.setState({
                ...saved.values,
                defaultWorkspaceId: saved.values.defaultWorkspaceId ?? null,
+               lastSeenReleaseVersion: saved.values.lastSeenReleaseVersion ?? null,
                accountId: user.id,
                syncStatus: 'saved',
             });

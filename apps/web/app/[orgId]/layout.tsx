@@ -9,6 +9,7 @@ import { CommandPalette } from '@/components/layout/command-palette';
 import { BodyInteractionGuard } from '@/components/layout/body-interaction-guard';
 import { PresenceHeartbeat } from '@/components/common/presence-heartbeat';
 import { PreferenceSync } from '@/features/identity/preference-sync';
+import { ReleaseAnnouncement } from '@/features/identity/release-announcement';
 import { WorkspaceCanonicalRoute } from '@/components/layout/workspace-canonical-route';
 
 /**
@@ -25,6 +26,7 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
          <BodyInteractionGuard />
          <PresenceHeartbeat />
          <PreferenceSync />
+         <ReleaseAnnouncement />
          <CreateIssueModalProvider />
          <IssueActionDialog />
          <IssueRelationDialog />
