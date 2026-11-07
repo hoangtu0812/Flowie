@@ -26,13 +26,19 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
          <BodyInteractionGuard />
          <PresenceHeartbeat />
          <PreferenceSync />
-         <ReleaseAnnouncement />
          <CreateIssueModalProvider />
          <IssueActionDialog />
          <IssueRelationDialog />
          <CommandPalette />
          <AppSidebar />
+         {/* Always-mounted dialogs sit after the navigation chrome: a closed dialog
+             still contributes its frame and close control to the document, and
+             keeping both in one place leaves the shell's real controls first.
+             VI: Các dialog luôn mount nằm sau phần khung điều hướng: một dialog
+             đang đóng vẫn góp khung và nút đóng của nó vào tài liệu, nên đặt cả
+             hai cùng một chỗ giữ cho các control thật của khung app đứng trước. */}
          <HelpCenter />
+         <ReleaseAnnouncement />
          <div className="h-svh overflow-hidden lg:p-2 w-full">
             <div className="lg:border lg:rounded-md overflow-hidden flex flex-col items-center justify-start bg-container h-full w-full">
                {children}

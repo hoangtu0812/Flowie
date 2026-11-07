@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
 import { VStack } from '@astryxdesign/core/Layout';
 import { DesignSurface } from '@/components/common/design-surface';
 import { useUiPreferencesStore } from '@/store/ui-preferences-store';
 import { APP_VERSION, releaseAnnouncement } from '@/lib/release';
 import { ReleaseNotes } from './release-notes';
+import { recordSeenRelease } from './account-preferences';
 
 /**
  * Tells the account, once, that Flowie reached a new release.
@@ -19,12 +20,14 @@ import { ReleaseNotes } from './release-notes';
  * Mounted inside the workspace layout next to PreferenceSync, so it never runs
  * on sign-in or recovery screens, where there is no account to record against.
  *
- * `settled` makes the decision at most once per page load. Without it, the
- * write that records the version would feed back through the store and a failed
- * autosave could pop the dialog a second time while the person is working.
- * Writing is fire-and-forget: the shared autosave in PreferenceSync carries it,
- * and a write that fails only means the dialog returns on a later visit, which
- * is far better than blocking the person behind a modal that cannot be closed.
+ * `settled` makes the decision at most once per page load, so a write that
+ * fails cannot pop the dialog a second time while the person is working.
+ * Writing is fire-and-forget through recordSeenRelease, which sends its own
+ * request rather than riding the shared preference autosave: this is
+ * bookkeeping triggered by merely opening the app, and a failure of it must
+ * leave both the person and the rest of the preference UI alone. The cost is
+ * that the announcement returns on a later visit, which is far better than
+ * blocking someone behind a modal or disabling controls they were using.
  *
  * VI: Thông báo cho tài khoản, đúng một lần, rằng Flowie đã lên bản mới.
  *
@@ -37,34 +40,40 @@ import { ReleaseNotes } from './release-notes';
  * bao giờ chạy ở trang đăng nhập hay khôi phục mật khẩu, nơi chưa có tài khoản
  * để ghi nhận.
  *
- * `settled` bảo đảm chỉ quyết định một lần cho mỗi lần tải trang. Không có nó,
- * lệnh ghi phiên bản sẽ dội lại qua store và một lần autosave lỗi có thể làm
- * dialog bật lên lần thứ hai giữa lúc người dùng đang làm việc. Việc ghi là
- * fire-and-forget: autosave dùng chung trong PreferenceSync lo phần gửi, và ghi
- * thất bại chỉ khiến dialog hiện lại ở lần truy cập sau, vẫn tốt hơn nhiều so
- * với việc chặn người dùng sau một modal không đóng được.
+ * `settled` bảo đảm chỉ quyết định một lần cho mỗi lần tải trang, nên một lệnh
+ * ghi hỏng không thể làm dialog bật lên lần thứ hai giữa lúc người dùng đang
+ * làm việc. Việc ghi là fire-and-forget qua recordSeenRelease, hàm này gửi
+ * request riêng chứ không đi nhờ autosave preferences dùng chung: đây là ghi
+ * chép nền chỉ do mở ứng dụng mà có, nên khi hỏng nó phải để yên cả người dùng
+ * lẫn phần giao diện preferences còn lại. Cái giá là thông báo sẽ quay lại ở
+ * lần truy cập sau, vẫn tốt hơn nhiều so với việc chặn người dùng sau một modal
+ * hoặc khoá mất những control họ đang dùng.
  */
 export function ReleaseAnnouncement() {
    const locale = useUiPreferencesStore((state) => state.locale);
    const lastSeen = useUiPreferencesStore((state) => state.lastSeenReleaseVersion);
    const syncStatus = useUiPreferencesStore((state) => state.syncStatus);
-   const setLastSeen = useUiPreferencesStore((state) => state.setLastSeenReleaseVersion);
+   const accountId = useUiPreferencesStore((state) => state.accountId);
    const [isOpen, setIsOpen] = useState(false);
    const settled = useRef(false);
+
+   const record = useCallback(() => {
+      if (accountId) void recordSeenRelease(accountId, APP_VERSION).catch(() => {});
+   }, [accountId]);
 
    useEffect(() => {
       if (settled.current) return;
       const decision = releaseAnnouncement(APP_VERSION, lastSeen, syncStatus);
       if (decision === 'idle' || decision === 'wait') return;
       settled.current = true;
-      if (decision === 'adopt') setLastSeen(APP_VERSION);
+      if (decision === 'adopt') record();
       else setIsOpen(true);
-   }, [lastSeen, syncStatus, setLastSeen]);
+   }, [lastSeen, syncStatus, record]);
 
    const copy = (en: string, vi: string) => (locale === 'vi' ? vi : en);
    const dismiss = () => {
       setIsOpen(false);
-      setLastSeen(APP_VERSION);
+      record();
    };
    return (
       <DesignSurface>
@@ -88,7 +97,24 @@ export function ReleaseAnnouncement() {
                      if (!value) dismiss();
                   }}
                />
-               <ReleaseNotes locale={locale} />
+               {/* A closed dialog still renders its children, so building the notes
+                   unconditionally left every changelog sentence of the running
+                   release in the document of every workspace page: invisible, but
+                   reachable by find-in-page, by assistive technology walking the
+                   tree, and by anything matching on text. Only the notes are
+                   withheld. The header stays, because it is two fixed sentences
+                   rather than the release's content, and because it is what gives
+                   the dialog its accessible name — withholding it too leaves the
+                   opened dialog unlabelled.
+                   VI: Dialog đang đóng vẫn render phần con, nên dựng nội dung vô
+                   điều kiện đã để lại mọi câu changelog của bản đang chạy trong
+                   tài liệu của mọi trang workspace: không nhìn thấy, nhưng tìm
+                   trong trang, công nghệ trợ giúp duyệt cây và mọi thứ khớp theo
+                   văn bản đều chạm tới được. Chỉ phần nội dung bị giữ lại. Header
+                   vẫn render, vì nó là hai câu cố định chứ không phải nội dung bản
+                   phát hành, và vì chính nó tạo tên khả truy cập cho dialog — giữ
+                   lại cả nó thì dialog khi mở sẽ không có tên. */}
+               {isOpen && <ReleaseNotes locale={locale} />}
             </VStack>
          </Dialog>
       </DesignSurface>

@@ -16,7 +16,19 @@ test('a new release announces itself once per account and stays closed afterward
 }) => {
    test.setTimeout(90000);
    const errors: string[] = [];
-   page.on('pageerror', (value) => errors.push(value.message));
+   // WebKit reports a request cancelled by navigation as a page error worded
+   // "… due to access control checks.", so each goto here contributes one per
+   // RSC prefetch still in flight. Those are cancelled loads, not exceptions the
+   // app threw, and no other engine surfaces them this way — the assertion below
+   // is still looking for real exceptions from the announcement.
+   // VI: WebKit báo request bị huỷ do điều hướng thành page error với nội dung
+   // "… due to access control checks.", nên mỗi lần goto ở đây sinh thêm một
+   // dòng cho từng RSC prefetch còn đang bay. Đó là request bị huỷ, không phải
+   // exception do app ném ra, và không engine nào khác báo kiểu này — khẳng định
+   // bên dưới vẫn đang tìm exception thật từ phần thông báo.
+   page.on('pageerror', (value) => {
+      if (!/due to access control checks\.$/.test(value.message)) errors.push(value.message);
+   });
    await page.goto('/auth/login');
    await page.getByLabel('Email', { exact: true }).fill(fixture.email);
    await page.getByLabel('Password', { exact: true }).fill(fixture.password);
