@@ -23,12 +23,26 @@ export function FlowieLogo({
    // The server cannot read saved themes; defer variant choice while keeping identical media dimensions.
    // VI: Server không đọc được theme đã lưu; hoãn chọn biến thể nhưng giữ cùng kích thước media.
    const suffix = mounted && resolvedTheme === 'dark' ? '-dark' : '';
-   const source = withBasePath(label ? `/brand/flowie-logo${suffix}.svg` : '/flowie-icon.svg');
-   const motion = withBasePath(
-      label ? `/brand/flowie-motion${suffix}-v2.svg` : '/brand/flowie-symbol-motion-v2.svg'
+   const source = withBasePath(
+      label ? `/brand/flowie-pixel-logo${suffix}.svg` : '/flowie-icon.svg'
    );
-   const width = label ? 1110 : 400;
-   const height = label ? 350 : 400;
+   // The supplied kit animates the full logo only. Its standalone icon ships as
+   // Lottie and animated WebP for the mobile apps, and the WebP alone is 652KB,
+   // which is not worth committing for a combination no screen renders: every
+   // caller that sets `loading` also sets `label`. The icon therefore keeps its
+   // static artwork while loading rather than gaining a motion file of its own.
+   // VI: Bộ asset được cung cấp chỉ có animation cho logo đầy đủ. Phần icon
+   // riêng được giao dưới dạng Lottie và WebP động cho app mobile, riêng tệp
+   // WebP đã 652KB, không đáng đưa vào repository cho một tổ hợp không màn hình
+   // nào render: mọi nơi truyền `loading` đều truyền cả `label`. Vì vậy icon giữ
+   // ảnh tĩnh khi đang tải thay vì có thêm một tệp động riêng.
+   const motion = label ? withBasePath(`/brand/flowie-pixel-motion${suffix}.svg`) : source;
+   // The kit's own pixel dimensions. They set the media box's aspect ratio, so a
+   // stale number here does not crop the artwork, it stretches it.
+   // VI: Kích thước pixel gốc của bộ kit. Chúng quyết định tỷ lệ khung media, nên
+   // một con số cũ ở đây không làm cắt hình mà làm hình bị kéo méo.
+   const width = label ? 1100 : 390;
+   const height = label ? 360 : 390;
    const fullWidth = size === 'large' ? 'w-64' : 'w-32';
    return (
       <HStack gap={0} className={cn('inline-flex max-w-full shrink-0', className)}>
