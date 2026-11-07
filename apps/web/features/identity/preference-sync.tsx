@@ -5,6 +5,20 @@ import { authenticatedFetch } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
 import { loadCurrentUser } from './current-user';
 import { AutosaveController } from '@/features/documents/autosave-controller';
+/**
+ * Settings this controller owns: it reads them, writes them back when they
+ * change, and reports every failure as the account's sync status. Screens
+ * disable preference actions while that status is not 'saved', so only values a
+ * person actually changed belong here. `lastSeenReleaseVersion` is deliberately
+ * absent: it is bookkeeping written on its own by recordSeenRelease, and a
+ * failed write of it must not disable anything.
+ * VI: Các thiết lập do controller này quản: nó đọc, ghi lại khi thay đổi, và báo
+ * mọi lỗi thành trạng thái sync của tài khoản. Các màn hình khoá thao tác
+ * preferences khi trạng thái đó không phải 'saved', nên chỉ những giá trị do
+ * người dùng thực sự đổi mới thuộc về đây. `lastSeenReleaseVersion` cố ý không
+ * có mặt: đó là ghi chép nền do recordSeenRelease tự ghi, và việc ghi hỏng nó
+ * không được khoá bất cứ thứ gì.
+ */
 const keys = [
    'locale',
    'commentSubmitMode',
@@ -16,7 +30,6 @@ const keys = [
    'timezone',
    'weekStart',
    'autoAssignSelf',
-   'lastSeenReleaseVersion',
 ] as const;
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 type Values = Pick<ReturnType<typeof useUiPreferencesStore.getState>, (typeof keys)[number]>;
@@ -36,7 +49,7 @@ export function PreferenceSync() {
          try {
             const user = await loadCurrentUser();
             const saved = await responseData<{
-               values: Values;
+               values: Values & { lastSeenReleaseVersion?: string | null };
                version: number;
                accountId: string;
             }>(await authenticatedFetch(`${api}/users/me/ui-preferences`));
