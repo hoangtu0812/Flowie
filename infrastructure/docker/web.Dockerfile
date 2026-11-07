@@ -41,6 +41,18 @@ ARG NEXT_PUBLIC_BASE_PATH=
 ENV NEXT_PUBLIC_BASE_PATH=$NEXT_PUBLIC_BASE_PATH
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/apps/web/next.config.ts ./apps/web/next.config.ts
+# Reloading the config also loads everything it imports, so each of those files
+# has to exist here as well. A missing one makes `next start` exit immediately
+# with MODULE_NOT_FOUND and the proxy in front of the container answers 502,
+# which no build or browser test catches because both run from a full checkout.
+# apps/web/tests/next-config-runtime.test.ts fails if an import is added here
+# without its COPY.
+# VI: Nạp lại config cũng nạp mọi thứ nó import, nên từng tệp đó cũng phải có mặt
+# ở đây. Thiếu một tệp là `next start` thoát ngay với MODULE_NOT_FOUND và proxy
+# đứng trước container trả về 502, điều mà cả build lẫn test trình duyệt đều
+# không phát hiện vì cả hai chạy từ bản checkout đầy đủ.
+# apps/web/tests/next-config-runtime.test.ts sẽ fail nếu thêm import mà quên COPY.
+COPY --from=build /app/apps/web/lib/changelog.ts ./apps/web/lib/changelog.ts
 COPY --from=build /app/apps/web/.next ./apps/web/.next
 COPY --from=build /app/apps/web/node_modules ./apps/web/node_modules
 # Retain assets at both the process root and the Next project root. `next start apps/web`
