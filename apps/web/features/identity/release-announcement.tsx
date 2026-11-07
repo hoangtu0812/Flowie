@@ -86,34 +86,36 @@ export function ReleaseAnnouncement() {
             padding={5}
             width={640}
          >
-            {/* A closed dialog still renders its children, so building the notes
-                unconditionally would leave every changelog sentence of the
-                running release in the document of every workspace page: invisible,
-                but present for find-in-page, for assistive technology walking the
-                tree, and for anything matching on text. Build them only while the
-                dialog is open, the way the help dialog builds a view only while
-                that view is chosen.
-                VI: Dialog đang đóng vẫn render phần con của nó, nên dựng nội dung
-                vô điều kiện sẽ để lại mọi câu changelog của bản đang chạy trong
-                tài liệu của mọi trang workspace: không nhìn thấy, nhưng vẫn có mặt
-                với chức năng tìm trong trang, với công nghệ trợ giúp duyệt cây, và
-                với bất cứ thứ gì khớp theo văn bản. Chỉ dựng khi dialog đang mở,
-                giống cách dialog trợ giúp chỉ dựng một mục khi mục đó được chọn. */}
-            {isOpen && (
-               <VStack gap={4} width="100%">
-                  <DialogHeader
-                     title={copy("What's new in Flowie", 'Flowie có gì mới')}
-                     subtitle={copy(
-                        'Flowie was updated. Here is what changed in this release.',
-                        'Flowie vừa được cập nhật. Dưới đây là những thay đổi của bản này.'
-                     )}
-                     onOpenChange={(value) => {
-                        if (!value) dismiss();
-                     }}
-                  />
-                  <ReleaseNotes locale={locale} />
-               </VStack>
-            )}
+            <VStack gap={4} width="100%">
+               <DialogHeader
+                  title={copy("What's new in Flowie", 'Flowie có gì mới')}
+                  subtitle={copy(
+                     'Flowie was updated. Here is what changed in this release.',
+                     'Flowie vừa được cập nhật. Dưới đây là những thay đổi của bản này.'
+                  )}
+                  onOpenChange={(value) => {
+                     if (!value) dismiss();
+                  }}
+               />
+               {/* A closed dialog still renders its children, so building the notes
+                   unconditionally left every changelog sentence of the running
+                   release in the document of every workspace page: invisible, but
+                   reachable by find-in-page, by assistive technology walking the
+                   tree, and by anything matching on text. Only the notes are
+                   withheld. The header stays, because it is two fixed sentences
+                   rather than the release's content, and because it is what gives
+                   the dialog its accessible name — withholding it too leaves the
+                   opened dialog unlabelled.
+                   VI: Dialog đang đóng vẫn render phần con, nên dựng nội dung vô
+                   điều kiện đã để lại mọi câu changelog của bản đang chạy trong
+                   tài liệu của mọi trang workspace: không nhìn thấy, nhưng tìm
+                   trong trang, công nghệ trợ giúp duyệt cây và mọi thứ khớp theo
+                   văn bản đều chạm tới được. Chỉ phần nội dung bị giữ lại. Header
+                   vẫn render, vì nó là hai câu cố định chứ không phải nội dung bản
+                   phát hành, và vì chính nó tạo tên khả truy cập cho dialog — giữ
+                   lại cả nó thì dialog khi mở sẽ không có tên. */}
+               {isOpen && <ReleaseNotes locale={locale} />}
+            </VStack>
          </Dialog>
       </DesignSurface>
    );
