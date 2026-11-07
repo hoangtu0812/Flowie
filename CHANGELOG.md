@@ -19,6 +19,11 @@ pull request and commit references, which are for us.
 
 ## Unreleased
 
+### Added
+
+- The repository now holds `apps/desktop`, the Cargo workspace for the Flowie Desktop companion: five empty crates, a Tauri shell that opens a tray icon, and a pinned Rust toolchain. Nothing is released from it yet and no screen changes. A push that only touches this workspace no longer rebuilds or redeploys the server, while a push that also touches the server still does; that rule has its own test suite. The desktop workspace is verified by its own workflow on Windows and macOS runners, separately from the production pipeline. No migration and no rebuild. (DTD-493, #175)
+  VI: Repository nay có `apps/desktop`, Cargo workspace của companion Flowie Desktop: năm crate rỗng, một vỏ Tauri mở được icon tray, và toolchain Rust đã ghim phiên bản. Chưa có gì được phát hành từ đó và không màn hình nào thay đổi. Push chỉ chạm workspace này không còn build lại hay deploy lại server, còn push chạm cả server thì vẫn deploy; quy tắc đó có bộ kiểm thử riêng. Workspace desktop được kiểm bằng workflow riêng trên runner Windows và macOS, tách khỏi pipeline production. Không có migration và không cần build lại. (DTD-493)
+
 ### Changed
 
 - Flowie wears the new pixel-art identity. The logo, the loading animation and the app icon all come from the supplied Pixel Motion Kit: a 5.5-second loop where three ribbons slide in, the wordmark letters appear one at a time and the green dot pops, drawn separately for the light and dark themes. The animation is a self-contained SVG that runs no script and loads nothing from the network, and it settles on the finished logo by itself for anyone who asks for reduced motion. The artwork is kept pixel-sharp at every size instead of being smoothed. The browser tab, bookmark and installed-app icon change with it, so a browser may keep showing the old one until its cached copy expires. The loading animation is also about three times heavier than the one it replaces, which is paid only while a screen is loading. Rebuild `web`. (DTD-497, #172)

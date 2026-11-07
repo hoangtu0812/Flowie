@@ -1,0 +1,43 @@
+# Flowie Desktop
+
+Cargo workspace cho ứng dụng desktop dùng chung Windows và macOS. Thiết kế và
+lộ trình nằm ở [kế hoạch desktop](../../docs/desktop-companion-plan.md); công
+việc được theo dõi ở DTD-487.
+
+Hiện tại đây mới là khung: các crate chưa có hành vi.
+
+## Cấu trúc
+
+| Thư mục | Nội dung | Task |
+| --- | --- | --- |
+| `crates/flowie-core` | Cấu hình, state machine của run, journal | DTD-498 |
+| `crates/flowie-mcp` | Client MCP và hợp đồng tool Flowie | DTD-494 |
+| `crates/flowie-agent` | Adapter Claude/Codex, vòng đời tiến trình | DTD-496 |
+| `crates/flowie-repository` | Git, worktree, test đã duyệt | DTD-495 |
+| `crates/flowie-platform` | Credential, autostart, khác biệt theo OS | DTD-496, DTD-488, DTD-489 |
+| `src-tauri` | Vỏ ứng dụng Tauri 2: tray và cửa sổ cấu hình | DTD-501 |
+| `ui` | Giao diện cấu hình cục bộ | DTD-501 |
+
+## Build
+
+```bash
+cd apps/desktop
+cargo build --workspace
+cargo test --workspace
+```
+
+Toolchain ghim trong `rust-toolchain.toml`; không nêu phiên bản ở nơi khác.
+
+## Ràng buộc đã biết
+
+- **Windows**: `src-tauri/icons/icon.ico` bắt buộc phải có, nếu không `tauri-build`
+  dừng khi sinh file resource. Nạp icon tray từ PNG cần feature `image-png`.
+- **Windows, đường dẫn dài**: `link.exe` báo `LNK1104` khi đường dẫn tới thư mục
+  `target` chạm giới hạn của nó. Checkout sâu thì đặt `CARGO_TARGET_DIR` tới một
+  thư mục ngắn, ví dụ `%TEMP%td`.
+- Thư mục này **không** kích hoạt deploy server. `scripts/deploy-scope.sh` miễn
+  trừ `apps/desktop/*`, và `scripts/tests/deploy-scope.test.sh` bảo vệ quy tắc
+  đó. Một commit chạm cả desktop lẫn server thì vẫn deploy server.
+- CI của desktop là `.github/workflows/desktop.yml`, chạy trên `windows-latest`
+  và `macos-latest`. Build xanh ở một nền tảng không phải bằng chứng cho nền
+  tảng còn lại.
