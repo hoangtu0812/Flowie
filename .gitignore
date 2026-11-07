@@ -57,5 +57,13 @@ apps/web/playwright-report/
 
 /photos
 
+# Local MCP client configuration: each machine points at its own Flowie
+# endpoint and names the environment variable holding its token, so the file
+# is per-developer and must never be committed.
+# VI: Cấu hình MCP client cục bộ: mỗi máy trỏ tới endpoint Flowie của riêng nó
+# VI: và nêu tên biến môi trường chứa token, nên file này thuộc từng lập trình
+# VI: viên và không bao giờ được commit.
+.mcp.json
+
 # editors
 .idea/
