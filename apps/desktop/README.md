@@ -59,6 +59,10 @@ Apple của Tauri cần một C compiler cho macOS. Hai crate đó chỉ có CI 
 - **Windows, đường dẫn dài**: `link.exe` báo `LNK1104` khi đường dẫn tới thư mục
   `target` chạm giới hạn của nó. Checkout sâu thì đặt `CARGO_TARGET_DIR` tới một
   thư mục ngắn, ví dụ `%TEMP%td`.
+- **Sửa mã bằng PowerShell**: `Set-Content` và `-replace` đọc file theo codepage
+  ANSI của hệ thống rồi ghi lại bằng UTF-8, biến toàn bộ chữ tiếng Việt thành
+  mojibake. `cargo clippy` chỉ chặn được những byte trở thành ký tự vô hình, còn
+  phần hỏng lại lọt qua CI. Sửa file nguồn bằng công cụ giữ nguyên UTF-8.
 - Thư mục này **không** kích hoạt deploy server. `scripts/deploy-scope.sh` miễn
   trừ `apps/desktop/*`, và `scripts/tests/deploy-scope.test.sh` bảo vệ quy tắc
   đó. Một commit chạm cả desktop lẫn server thì vẫn deploy server.
