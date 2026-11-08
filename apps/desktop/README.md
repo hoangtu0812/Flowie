@@ -42,6 +42,16 @@ cargo clippy --target aarch64-apple-darwin   -p flowie-core -p flowie-agent -p f
 Không kiểm được `flowie-mcp` và `src-tauri` theo cách này: `ring` và các crate
 Apple của Tauri cần một C compiler cho macOS. Hai crate đó chỉ có CI xác nhận.
 
+## Hạn chế đã biết của bản hiện tại
+
+- Mở bản thứ hai trên cùng một tài khoản thì nó **thoát im lặng**. Thông báo
+  được ghi ra stderr, nhưng bản release dùng `windows_subsystem = "windows"`
+  nên không có console để đọc. Người dùng bấm icon và thấy như không có gì xảy
+  ra. Hành vi đúng là đưa cửa sổ của bản đang chạy lên trước; việc này cần
+  plugin single-instance của Tauri và được theo dõi trong DTD-501.
+- Nội dung menu tray chưa được kiểm bằng mắt người; CI chỉ build chứ không
+  chạy giao diện.
+
 ## Ràng buộc đã biết
 
 - **Windows**: `src-tauri/icons/icon.ico` bắt buộc phải có, nếu không `tauri-build`
