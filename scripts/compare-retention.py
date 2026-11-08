@@ -1,23 +1,59 @@
 """Compares the retiring worker's retention decisions with the Python port's.
 
-Both run over byte-identical clones of one seeded database and every row either
-could write is compared. Usage:
+Run this on a development machine, never on a server: it drops and recreates
+databases. Run it while `apps/worker` still exists — DTD-519 phase 2 deletes
+it, and with it the only other implementation there is to compare against.
 
-    RETENTION_DIFF_DATABASE_URL=postgresql://flowie_test:...@localhost:5432/flowie_x \
-        python scripts/compare-retention.py
+Setup, once:
 
-The URL must be a loopback `flowie_*` database and its role must be allowed to
-create databases: the script drops and recreates three of them beside it.
+    docker compose up -d postgres
+    docker exec circle-postgres psql -U circle -d circle -c "CREATE ROLE flowie_test LOGIN PASSWORD 'test-only-password' SUPERUSER;"
+    pnpm install
+    pip install -r apps/api-python/requirements.txt
 
-Exits non-zero when the two disagree, or when they agree on something the
-fixture says is wrong.
+Run it, PowerShell:
 
-VI: So quyết định lưu giữ của worker sắp nghỉ với bản port Python. Cả hai chạy
-trên các bản sao giống hệt từng byte của một database đã gieo và mọi dòng mà
-một trong hai có thể ghi đều được so sánh. URL phải là database `flowie_*` trên
-loopback và role của nó phải được phép tạo database: script này xoá và tạo lại
-ba database bên cạnh nó. Thoát với mã khác 0 khi hai bên lệch nhau, hoặc khi
-hai bên cùng đồng ý một điều mà bộ dữ liệu nói là sai.
+    $env:RETENTION_DIFF_DATABASE_URL = "postgresql://flowie_test:test-only-password@localhost:5433/flowie_scratch"
+    python scripts/compare-retention.py
+
+Run it, bash:
+
+    RETENTION_DIFF_DATABASE_URL="postgresql://flowie_test:test-only-password@localhost:5433/flowie_scratch" python scripts/compare-retention.py
+
+5433 is this repository's default POSTGRES_PORT.
+
+The database named in that URL is neither read nor written. The URL does two
+things only: it says which server to work on, and it is the safety check — the
+host must be loopback and the name must start with `flowie_`, so the script
+cannot be pointed at production by accident. All the work happens in three
+databases it creates and drops beside that one: `retention_diff_base`,
+`retention_diff_worker` and `retention_diff_python`.
+
+The role needs to create databases and to terminate connections to the
+template it clones from; on a local test server SUPERUSER covers both.
+
+Exits non-zero when the two implementations disagree, and also when they agree
+on something the fixture says is wrong.
+
+VI: So quyết định lưu giữ của worker sắp nghỉ với bản port Python.
+
+Chạy ở máy lập trình viên, không bao giờ trên server: script này xoá và tạo lại
+database. Chạy khi `apps/worker` còn tồn tại — DTD-519 giai đoạn 2 sẽ xoá nó,
+cùng với đó là bản cài đặt thứ hai duy nhất để đối chiếu. Phần chuẩn bị và lệnh
+chạy cho PowerShell lẫn bash xem ở trên.
+
+Database nêu trong URL không được đọc cũng không được ghi. URL chỉ làm hai
+việc: nói rõ làm trên server nào, và làm chốt an toàn — host phải là loopback
+và tên phải bắt đầu bằng `flowie_`, để không thể lỡ tay trỏ vào production. Mọi
+thao tác thật diễn ra trong ba database mà script tự tạo rồi tự xoá bên cạnh
+database đó: `retention_diff_base`, `retention_diff_worker` và
+`retention_diff_python`.
+
+Role cần quyền tạo database và quyền ngắt kết nối tới template mà nó nhân bản;
+trên máy test thì SUPERUSER bao cả hai.
+
+Thoát với mã khác 0 khi hai bản cài đặt lệch nhau, và cả khi hai bên cùng đồng
+ý một điều mà bộ dữ liệu nói là sai.
 """
 import os
 import sys
@@ -32,5 +68,15 @@ from differential_retention.compare import run  # noqa: E402
 if __name__ == '__main__':
     url = os.environ.get('RETENTION_DIFF_DATABASE_URL')
     if not url:
-        raise SystemExit('Set RETENTION_DIFF_DATABASE_URL to a loopback flowie_* database.')
+        raise SystemExit(
+            'Set RETENTION_DIFF_DATABASE_URL to a loopback flowie_* database naming the '
+            'server to work on.\n'
+            'That database is left alone; the script creates and drops retention_diff_base, '
+            'retention_diff_worker and retention_diff_python beside it.\n\n'
+            '  PowerShell: $env:RETENTION_DIFF_DATABASE_URL = '
+            '"postgresql://flowie_test:test-only-password@localhost:5433/flowie_scratch"\n'
+            '  bash:       RETENTION_DIFF_DATABASE_URL='
+            '"postgresql://flowie_test:test-only-password@localhost:5433/flowie_scratch" \\\n'
+            '                  python scripts/compare-retention.py'
+        )
     raise SystemExit(run(url))

@@ -74,7 +74,10 @@ PROBES = {
     # VI: timestamptz ở đây sẽ che đúng điều đó, bằng cách đọc chuỗi naive theo
     # VI: múi giờ của chính server. Đó là lỗi đầu tiên công cụ này tìm ra, nên
     # VI: phép so phải giữ được khả năng tìm lại nó.
-    'cycle audits': """SELECT action
+    # Raw: the backslashes belong to Postgres's regexp, not to Python.
+    # VI: Chuỗi raw: dấu gạch chéo ngược thuộc về regexp của Postgres, không
+    # VI: phải của Python.
+    'cycle audits': r"""SELECT action
                               || ' team=' || COALESCE(metadata->>'teamId', '?')
                               || ' weeks=' || COALESCE(metadata->>'cadenceWeeks', '?')
                               || ' start=' || regexp_replace(regexp_replace(
@@ -185,7 +188,13 @@ def _report(stage: str, worker: dict, python: dict,
 async def main(url: str) -> int:
     parts = urlsplit(url)
     if parts.hostname not in {'localhost', '127.0.0.1', '::1'} or not (parts.path or '').startswith('/flowie_'):
-        raise SystemExit('This drops and recreates databases: point it at a loopback flowie_* database.')
+        raise SystemExit(
+            f'Refusing to work on {url!r}.\n'
+            'This script drops and recreates databases, so it only runs against a loopback '
+            'host with a database name starting with flowie_.\n'
+            'That database is itself left alone: it names the server to use and proves the '
+            'target is not production.'
+        )
     base, worker_db, python_db = 'retention_diff_base', 'retention_diff_worker', 'retention_diff_python'
 
     await _admin(url, [f'DROP DATABASE IF EXISTS {name}' for name in (worker_db, python_db, base)]
