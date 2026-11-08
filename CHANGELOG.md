@@ -19,6 +19,11 @@ pull request and commit references, which are for us.
 
 ## Unreleased
 
+### Fixed
+
+- The server now writes the operational notes its background work has always tried to write. Uvicorn, which runs the API, sets up logging for itself and leaves everything else at a level that throws away anything short of a warning, so for as long as these jobs have existed their notes went nowhere — how many reminders went out, how many digests were delivered, how many source-control records were processed. It surfaced because the team policy scan, newly added in reporting-only mode, has nothing but a log line as output: it ran correctly and looked exactly like a job that had never started. The level can be turned down for a quieter server. Rebuild the API. (DTD-519)
+  VI: Server nay ghi ra những ghi chú vận hành mà phần việc nền của nó vẫn luôn cố ghi. Uvicorn, thứ chạy API, thiết lập logging cho riêng nó và để mọi thứ còn lại ở mức vứt bỏ tất cả những gì nhẹ hơn cảnh báo, nên suốt từ khi các job này tồn tại, ghi chú của chúng không đi tới đâu — bao nhiêu lời nhắc đã gửi, bao nhiêu bản tổng hợp đã giao, bao nhiêu bản ghi source-control đã xử lý. Chuyện lộ ra nhờ lượt quét chính sách team vừa thêm ở chế độ chỉ báo cáo, thứ có đầu ra duy nhất là một dòng log: nó chạy đúng nhưng trông y hệt một job chưa từng khởi động. Có thể hạ mức log xuống nếu muốn server ít ồn hơn. Cần build lại API. (DTD-519)
+
 ### Added
 
 - The desktop companion’s tray menu can now open the task it is working on, and Flowie itself, in the browser the person already uses and is already signed in to. The address is worked out from the server the companion is connected to, so it cannot point at a different Flowie than the one it takes work from, and nothing has to be configured twice. Both entries stay switched off until the server has said which workspace the connection belongs to, because an entry that opens nothing is worse than one that is plainly unavailable. (DTD-501, #217)
