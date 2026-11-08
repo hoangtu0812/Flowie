@@ -60,19 +60,13 @@ có CI xác nhận.
 - **Windows, đường dẫn dài**: `link.exe` báo `LNK1104` khi đường dẫn tới thư mục
   `target` chạm giới hạn của nó. Checkout sâu thì đặt `CARGO_TARGET_DIR` tới một
   thư mục ngắn, ví dụ `%TEMP%td`.
-<<<<<<< HEAD
-- Thư mục này không nằm trong image server nào. Trước đây có `deploy-scope.sh`
-  miễn trừ nó khỏi pipeline deploy production; pipeline đó đã bị bỏ, mọi server
-  nay được deploy tay, nên không còn quy tắc miễn trừ nào để giữ.
-=======
 - **Sửa mã bằng PowerShell**: `Set-Content` và `-replace` đọc file theo codepage
   ANSI của hệ thống rồi ghi lại bằng UTF-8, biến toàn bộ chữ tiếng Việt thành
   mojibake. `cargo clippy` chỉ chặn được những byte trở thành ký tự vô hình, còn
   phần hỏng lại lọt qua CI. Sửa file nguồn bằng công cụ giữ nguyên UTF-8.
-- Thư mục này **không** kích hoạt deploy server. `scripts/deploy-scope.sh` miễn
-  trừ `apps/desktop/*`, và `scripts/tests/deploy-scope.test.sh` bảo vệ quy tắc
-  đó. Một commit chạm cả desktop lẫn server thì vẫn deploy server.
->>>>>>> origin/main
+- Thư mục này không nằm trong image server nào. Trước đây có `deploy-scope.sh`
+  miễn trừ nó khỏi pipeline deploy production; pipeline đó đã bị bỏ, mọi server
+  nay được deploy tay, nên không còn quy tắc miễn trừ nào để giữ.
 - CI của desktop là `.github/workflows/desktop.yml`, chạy trên `windows-latest`
   và `macos-latest`. Build xanh ở một nền tảng không phải bằng chứng cho nền
   tảng còn lại.
