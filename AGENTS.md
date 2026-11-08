@@ -29,15 +29,15 @@
   checkout, then rebuild and restart the Compose services. Merging to `main`
   does not put a change on that server; it is live only after the maintainer
   pulls and rebuilds.
-- A push to `main` also triggers `.github/workflows/deploy-production.yml`,
-  which verifies the build and deploys to **CT107**. A green run proves the
-  build and the CT107 deployment, not that the server people use has the
-  change, so never report a change as live from that run. There is no staging,
-  preview, or development deployment target.
-- A push that changes only Markdown files, `docs/`, `llms.txt`, or Unreleased
-  changelog entries skips that workflow's verification and deployment
-  (`scripts/deploy-scope.sh`). A release heading in `CHANGELOG.md`, any other
-  file, or a manual workflow run deploys.
+- Nothing deploys automatically. `.github/workflows/verify-mcp.yml` checks pull
+  requests and `.github/workflows/desktop.yml` checks the desktop workspace;
+  neither deploys anywhere, and no workflow runs on a push to `main`. Every
+  environment is deployed by hand from its own checkout, so merging changes no
+  running system. There is no staging, preview, or development target.
+- Because `main` itself is unchecked, a commit pushed straight to it — a
+  release commit is the usual case — has passed nothing. Run `verify-mcp.yml`
+  on that commit with `workflow_dispatch` and require it green before relying
+  on it.
 - Treat every change that reaches `main` as production-bound. Do not depend on
   a later environment to discover schema, configuration, or deployment errors.
 - Prisma is the database schema owner. The Compose `migrate` service must
@@ -83,13 +83,18 @@
    `## [x.y.z] — YYYY-MM-DD HH:MM +07`, increment the semantic version, append
    each entry's merge commit short hash next to its pull request number, and
    leave a new empty `Unreleased` section.
-2. Deploy that exact commit: let the production workflow deploy it to CT107,
-   and ask the maintainer to pull and rebuild it on the server people use.
-   Verify the workflow, API readiness, and migration result on that server
-   before declaring the release complete.
-3. Create annotated tag `vX.Y.Z` on the verified commit and publish a GitHub
+2. Check that exact commit: run `verify-mcp.yml` on it with
+   `workflow_dispatch` and require a green result. Nothing runs on a push to
+   `main`, so without this the release commit — the one commit that changes
+   the version and the release notes baked into the web image — is the only
+   revision nobody checked.
+3. Create annotated tag `vX.Y.Z` on the checked commit and publish a GitHub
    release whose notes are the matching `CHANGELOG.md` section. Never tag a
-   revision that has not deployed successfully.
+   revision whose checks have not passed.
+4. Ask the maintainer to pull and rebuild on each server they run, and say
+   which services need rebuilding. A release is tagged, not deployed: it
+   reaches people only when they have done that, so never report it as live
+   until they confirm.
 
 ## Feature documents (FDS/TDS)
 
