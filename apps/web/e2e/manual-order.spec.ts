@@ -237,10 +237,26 @@ test('sub-issues reorder among siblings and retain nested children', async ({ pa
       );
       const moved = rootOrder[1].includes(b.identifier) ? b : a;
       await expect(page.locator('[data-dnd-dropping]')).toHaveCount(0);
-      await page.getByRole('button', { name: `Reorder ${moved.identifier}`, exact: true }).focus();
-      await page.keyboard.press('Space');
-      await page.keyboard.press('ArrowUp');
-      await page.keyboard.press('Space');
+      const keyboardHandle = page.getByRole('button', {
+         name: `Reorder ${moved.identifier}`,
+         exact: true,
+      });
+      // dnd-kit writes the handle's role description once it has registered the
+      // row, and its keyboard sensor answers nothing before that. Pressing
+      // straight after focus sent the whole sequence into a row that was not
+      // draggable yet: the pick-up never happened, the order never changed, and
+      // the failure read as a missing feature rather than a race. The same
+      // guard already protects the pointer path in dragRow.
+      // VI: dnd-kit ghi role description của tay cầm khi đã đăng ký xong hàng đó,
+      // VI: và bộ cảm biến bàn phím của nó không đáp lại gì trước thời điểm ấy.
+      // VI: Bấm ngay sau khi focus sẽ gửi cả chuỗi phím vào một hàng chưa kéo
+      // VI: được: thao tác nhấc lên không xảy ra, thứ tự không đổi, và lỗi hiện
+      // VI: ra như thiếu tính năng chứ không phải tranh chấp thời điểm. Đường đi
+      // VI: bằng chuột trong dragRow vốn đã được chính bước canh này bảo vệ.
+      await expect(keyboardHandle).toHaveAttribute('aria-roledescription', /.+/);
+      await keyboardHandle.press('Space');
+      await keyboardHandle.press('ArrowUp');
+      await keyboardHandle.press('Space');
       await expect(rows.first()).toContainText(moved.identifier);
       await page.reload();
       await expect(rows.first()).toContainText(moved.identifier);
