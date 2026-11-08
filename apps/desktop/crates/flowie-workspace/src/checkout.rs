@@ -92,13 +92,15 @@ impl Workspace for Checkout {
         Ok(())
     }
 
-    fn create_worktree(&mut self, run_id: &str) -> Result<(), RunFailure> {
+    fn create_worktree(&mut self, run_id: &str) -> Result<PathBuf, RunFailure> {
         let repository = self
             .repository
             .as_ref()
             .ok_or_else(|| RunFailure::Precondition("the checkout was never verified".into()))?;
-        self.worktree = Some(repository.worktree(run_id).map_err(reportable)?);
-        Ok(())
+        let worktree = repository.worktree(run_id).map_err(reportable)?;
+        let path = worktree.path().to_path_buf();
+        self.worktree = Some(worktree);
+        Ok(path)
     }
 
     fn run_approved_tests(&mut self) -> Result<Vec<TestOutcome>, RunFailure> {

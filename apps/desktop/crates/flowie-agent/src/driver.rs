@@ -23,7 +23,7 @@
 //! VI: và prompt đi qua standard input để một tiêu đề task dàn dựng không bao
 //! VI: giờ trở thành một phần của dòng lệnh.
 
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
@@ -58,7 +58,6 @@ pub struct Driver {
     /// VI: Lệnh cần chạy, khi máy đặt nó ở chỗ khác tên thông thường của
     /// VI: provider.
     pub program: Option<String>,
-    pub worktree: PathBuf,
     /// The task as the server described it, handed to the agent unchanged.
     /// VI: Task đúng như server mô tả, đưa cho agent nguyên vẹn.
     pub context: Value,
@@ -82,7 +81,13 @@ impl Driver {
 
     /// Runs one turn and returns the structured answer.
     /// VI: Chạy một lượt và trả về câu trả lời có cấu trúc.
-    fn turn(&self, phase: Phase, prompt_text: &str, schema: &Value) -> Result<Value> {
+    fn turn(
+        &self,
+        worktree: &Path,
+        phase: Phase,
+        prompt_text: &str,
+        schema: &Value,
+    ) -> Result<Value> {
         let program = self.program();
         let path = flowie_platform::executable::resolve(program).ok_or_else(|| Error::Spawn {
             program: program.to_string(),
@@ -99,7 +104,7 @@ impl Driver {
                 // VI: không được mang sang lượt có quyền ghi.
                 let session = uuid::Uuid::new_v4().to_string();
                 let arguments = invoke::claude_arguments(phase, schema, &session, &self.issue);
-                let finished = self.execute(&path, &arguments, prompt_text)?;
+                let finished = self.execute(worktree, &path, &arguments, prompt_text)?;
                 invoke::extract_claude_result(finished.stdout.lines())
             }
             Provider::Codex => {
@@ -124,8 +129,8 @@ impl Driver {
                 })?;
 
                 let arguments =
-                    invoke::codex_arguments(phase, &schema_path, &result_path, &self.worktree);
-                self.execute(&path, &arguments, prompt_text)?;
+                    invoke::codex_arguments(phase, &schema_path, &result_path, worktree);
+                self.execute(worktree, &path, &arguments, prompt_text)?;
                 invoke::read_codex_result(&result_path)
             }
         }
@@ -135,7 +140,8 @@ impl Driver {
     /// VI: Khởi động agent, đưa prompt vào và chờ nó.
     fn execute(
         &self,
-        path: &std::path::Path,
+        worktree: &Path,
+        path: &Path,
         arguments: &[String],
         prompt_text: &str,
     ) -> Result<stream::Finished> {
@@ -143,7 +149,7 @@ impl Driver {
         let mut command = Command::new(path);
         command
             .args(arguments)
-            .current_dir(&self.worktree)
+            .current_dir(worktree)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -203,15 +209,19 @@ impl Agent for Driver {
         }
     }
 
-    fn review(&mut self) -> std::result::Result<Review, RunFailure> {
+    fn review(&mut self, worktree: &Path) -> std::result::Result<Review, RunFailure> {
         let text = prompt::review_prompt(&self.context, self.today);
         let answer = self
-            .turn(Phase::Review, &text, &prompt::review_schema())
+            .turn(worktree, Phase::Review, &text, &prompt::review_schema())
             .map_err(reportable)?;
         prompt::checked_review(&answer, self.provider, self.today).map_err(reportable)
     }
 
-    fn implement(&mut self, plan: &str) -> std::result::Result<String, RunFailure> {
+    fn implement(
+        &mut self,
+        worktree: &Path,
+        plan: &str,
+    ) -> std::result::Result<String, RunFailure> {
         // The plan travels inside the context rather than as a separate
         // instruction, so the agent reads it as part of the task it was given
         // instead of as something appended afterwards.
@@ -224,7 +234,7 @@ impl Agent for Driver {
         }
         let text = prompt::task_prompt(&context);
         let answer = self
-            .turn(Phase::Implement, &text, &prompt::summary_schema())
+            .turn(worktree, Phase::Implement, &text, &prompt::summary_schema())
             .map_err(reportable)?;
         prompt::checked_summary(&answer, self.provider).map_err(reportable)
     }
@@ -255,7 +265,6 @@ mod tests {
         Driver {
             provider,
             program: Some(program.to_string()),
-            worktree: std::env::temp_dir(),
             context: json!({ "issue": { "identifier": "DTD-1" } }),
             issue: "DTD-1".into(),
             timeout: Duration::from_secs(5),
@@ -281,7 +290,9 @@ mod tests {
         // VI: Tới lúc review thì issue đã bị claim, nên đây phải là thứ được báo
         // VI: cho server chứ không phải một lần dừng lặng lẽ.
         let mut subject = driver(Provider::Codex, "flowie-no-such-agent-binary");
-        let error = subject.review().expect_err("the tool is absent");
+        let error = subject
+            .review(&std::env::temp_dir())
+            .expect_err("the tool is absent");
         match error {
             RunFailure::Reportable(detail) => {
                 assert!(detail.contains("flowie-no-such-agent-binary"), "{detail}")
