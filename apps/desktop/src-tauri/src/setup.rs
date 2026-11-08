@@ -168,6 +168,11 @@ pub fn save_setup(
     if let Ok(mut held) = companion.config.lock() {
         *held = Some(parsed);
     }
+    // Saved settings are tried at once rather than at the end of a backoff
+    // that the old settings earned.
+    // VI: Thiết lập vừa lưu được thử ngay, thay vì đợi hết một khoảng lùi mà
+    // VI: thiết lập cũ gây ra.
+    companion.shared.request_retry();
     Ok(())
 }
 
@@ -213,7 +218,15 @@ pub fn save_token(companion: State<'_, Companion>, token: String) -> Result<(), 
     CredentialStore::new(account)
         .map_err(|error| error.to_string())?
         .save(token.trim())
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+    // The whole reason someone pastes a token is to find out whether it works.
+    // Making them wait out a five-minute backoff first leaves them unable to
+    // tell a token that is still wrong from a turn that has not come round.
+    // VI: Lý do duy nhất khiến người ta dán một token vào là để biết nó có chạy
+    // VI: hay không. Bắt họ chờ hết một khoảng lùi năm phút khiến họ không phân
+    // VI: biệt được token vẫn sai với lượt thử chưa tới.
+    companion.shared.request_retry();
+    Ok(())
 }
 
 /// Removes the stored token, which is what someone does when they hand the
@@ -226,7 +239,15 @@ pub fn forget_token(companion: State<'_, Companion>) -> Result<(), String> {
     CredentialStore::new(account)
         .map_err(|error| error.to_string())?
         .delete()
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+    // Removing a token changes what this machine can do just as much as adding
+    // one, and the window should say so at once rather than keep reporting a
+    // state that belonged to the token that is gone.
+    // VI: Xoá token làm thay đổi khả năng của máy này ngang với việc thêm token,
+    // VI: và cửa sổ phải nói ra điều đó ngay thay vì tiếp tục báo một trạng thái
+    // VI: thuộc về token đã bị xoá.
+    companion.shared.request_retry();
+    Ok(())
 }
 
 /// The credential account the saved configuration names.

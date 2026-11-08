@@ -154,6 +154,14 @@ fn main() {
             let pause = MenuItem::with_id(app, "pause", pause_label(paused), true, None::<&str>)?;
             let cancel =
                 MenuItem::with_id(app, "cancel", "Hủy lượt đang chạy", true, None::<&str>)?;
+            // Always available, because the thing it fixes is a wait, and a
+            // wait is exactly the state in which the entry that would end it
+            // must not itself be disabled.
+            // VI: Luôn dùng được, vì thứ nó giải quyết là một lần chờ, và lúc
+            // VI: đang chờ chính là lúc mục menu kết thúc lần chờ đó không được
+            // VI: phép bị vô hiệu hoá.
+            let retry =
+                MenuItem::with_id(app, "retry", "Thử kết nối lại ngay", true, None::<&str>)?;
             // Both start disabled: neither address is known until the server
             // has said which workspace this connection belongs to, and an
             // entry that opens nothing is worse than one that is plainly off.
@@ -190,8 +198,8 @@ fn main() {
             let menu = Menu::with_items(
                 app,
                 &[
-                    &status, &open_task, &open_site, &pause, &cancel, &open, &version, &update,
-                    &quit,
+                    &status, &open_task, &open_site, &retry, &pause, &cancel, &open, &version,
+                    &update, &quit,
                 ],
             )?;
 
@@ -222,6 +230,7 @@ fn main() {
                         let _ = pause_handle.set_text(pause_label(now_paused));
                     }
                     "cancel" => clicked.request_cancel(),
+                    "retry" => clicked.request_retry(),
                     // Opened in the person's own browser, where they are
                     // already signed in; a webview of ours would ask them to
                     // sign in again to read their own task.
