@@ -18,6 +18,7 @@
 //! VI: nghĩa của các trạng thái nằm trong các crate, nơi chúng kiểm thử được mà
 //! VI: không cần khởi động một ứng dụng desktop.
 
+mod setup;
 mod startup;
 mod worker;
 
@@ -41,7 +42,7 @@ use worker::Shared;
 /// VI: Giao diện cục bộ viết bằng tiếng Việt, và locale Flowie của tài khoản
 /// VI: chưa biết được trước lần gọi thành công đầu tiên, nên tray bắt đầu bằng
 /// VI: cùng ngôn ngữ với cửa sổ thay vì đoán.
-const VIETNAMESE: bool = true;
+pub const VIETNAMESE: bool = true;
 
 /// How often the tray line is refreshed from what the worker reports.
 /// VI: Dòng trên tray được làm mới từ báo cáo của worker bao lâu một lần.
@@ -51,10 +52,10 @@ const REFRESH: Duration = Duration::from_millis(500);
 /// read a half-written configuration.
 /// VI: Mọi thứ các callback của menu cần, sau một khoá duy nhất để một cú click
 /// VI: không đọc phải cấu hình đang ghi dở.
-struct Companion {
-    directory: PathBuf,
-    config: Mutex<Option<CompanionConfig>>,
-    shared: Arc<Shared>,
+pub struct Companion {
+    pub directory: PathBuf,
+    pub config: Mutex<Option<CompanionConfig>>,
+    pub shared: Arc<Shared>,
     /// Held for its lifetime; dropping it releases the machine.
     /// VI: Giữ suốt vòng đời; thả ra là nhả máy cho bản khác.
     _instance: InstanceGuard,
@@ -62,6 +63,12 @@ struct Companion {
 
 fn main() {
     tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![
+            setup::load_setup,
+            setup::save_setup,
+            setup::save_token,
+            setup::forget_token,
+        ])
         .setup(|app| {
             let directory = app
                 .path()

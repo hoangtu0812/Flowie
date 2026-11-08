@@ -1,17 +1,59 @@
 <!doctype html>
 <html lang="vi">
-   <head>
-      <meta charset="utf-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <title>Flowie Desktop</title>
-   </head>
-   <body>
-      <main>
-         <h1>Flowie Desktop</h1>
-         <p>
-            Cửa sổ cấu hình cục bộ. Màn hình thiết lập máy và chẩn đoán sẽ được
-            thêm ở DTD-501.
-         </p>
-      </main>
-   </body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Flowie Desktop</title>
+    <link rel="stylesheet" href="app.css" />
+  </head>
+  <body>
+    <h1>Flowie Desktop</h1>
+    <p class="lead">
+      Thiết lập máy này. Mọi thay đổi được kiểm bằng đúng bộ quy tắc companion
+      dùng khi chạy, nên thứ gì lưu được ở đây là thứ chạy được.
+    </p>
+
+    <section>
+      <h2>Trạng thái</h2>
+      <div class="row">
+        <span class="state" id="state">Đang đọc…</span>
+        <span id="activity" class="path"></span>
+      </div>
+      <output id="problem" class="bad"></output>
+    </section>
+
+    <section>
+      <h2>Token</h2>
+      <p class="lead tight">
+        Token nằm trong kho credential của hệ điều hành, không bao giờ nằm trong
+        file cấu hình. Lưu cấu hình trước, rồi mới lưu token.
+      </p>
+      <input
+        id="token"
+        type="password"
+        placeholder="flowie_live_…"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <div class="row spaced">
+        <button id="save-token" type="button">Lưu token</button>
+        <button id="forget-token" type="button">Xoá token</button>
+        <span id="token-state" class="path"></span>
+      </div>
+      <output id="token-result"></output>
+    </section>
+
+    <section>
+      <h2>Cấu hình</h2>
+      <textarea id="configuration" spellcheck="false"></textarea>
+      <div class="row spaced">
+        <button id="save" type="button">Lưu cấu hình</button>
+        <button id="reload" type="button">Đọc lại từ đĩa</button>
+      </div>
+      <output id="save-result"></output>
+      <p class="path" id="path"></p>
+    </section>
+
+    <script src="app.js"></script>
+  </body>
 </html>
