@@ -26,7 +26,23 @@ transport = ["dep:reqwest"]
 # Windows and macOS, and no OpenSSL to ship in the installer.
 # VI: Dùng rustls thay cho TLS của hệ điều hành: một hành vi đã kiểm chứng trên
 # VI: cả Windows và macOS, và không phải đóng gói OpenSSL vào bộ cài.
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"], optional = true }
+#
+# Its roots come from the operating system, not from the bundle baked into the
+# binary. A Flowie behind an organisation's own certificate authority is
+# reached by every browser on the machine because that root is in the system
+# store; a companion carrying Mozilla's list instead cannot see it, and reports
+# a server that is plainly working as unreachable. Taking the system's roots
+# also means a certificate the organisation has withdrawn stops being trusted
+# here when they withdraw it, rather than whenever this application is next
+# rebuilt.
+# VI: Root lấy từ hệ điều hành chứ không từ bộ đóng sẵn trong binary. Một Flowie
+# VI: chạy sau CA riêng của tổ chức thì mọi trình duyệt trên máy đều tới được vì
+# VI: root đó nằm trong kho hệ thống; một companion mang theo danh sách của
+# VI: Mozilla thì không thấy nó, và báo một server đang chạy bình thường là
+# VI: không liên lạc được. Lấy root của hệ thống cũng có nghĩa một chứng chỉ mà
+# VI: tổ chức đã thu hồi sẽ thôi được tin ở đây ngay khi họ thu hồi, chứ không
+# VI: phải đợi tới lần build lại kế tiếp của ứng dụng này.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-native-roots"], optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

@@ -494,9 +494,28 @@ fn tool_error(name: &str, text: &str) -> Error {
 /// VI: Lấy `message` dành cho người đọc từ envelope lỗi của server, dự phòng
 /// VI: bằng nguyên body để một hình dạng bất ngờ vẫn được báo chứ không bị nuốt.
 fn extract_message(text: &str) -> String {
+    // Two shapes, because a refusal can come from either end of the stack. The
+    // MCP layer answers with `message`; the HTTP layer in front of it — the one
+    // that rejects a token before any tool is reached — answers with `error`.
+    // Reading only the first put a whole JSON document where a sentence
+    // belonged, so the person was shown
+    // `{"error":"The MCP token is invalid, expired or revoked."}` instead of
+    // the sentence inside it.
+    // VI: Hai hình dạng, vì một lời từ chối có thể tới từ một trong hai tầng.
+    // VI: Tầng MCP trả lời bằng `message`; tầng HTTP phía trước nó — tầng từ chối
+    // VI: token trước khi chạm tới bất kỳ tool nào — trả lời bằng `error`. Chỉ
+    // VI: đọc cái thứ nhất khiến cả một tài liệu JSON bị đặt vào chỗ đáng lẽ là
+    // VI: một câu, nên người dùng nhìn thấy
+    // VI: `{"error":"The MCP token is invalid, expired or revoked."}` thay vì
+    // VI: chính câu nằm bên trong nó.
     serde_json::from_str::<Value>(text)
         .ok()
-        .and_then(|value| value["message"].as_str().map(str::to_string))
+        .and_then(|value| {
+            value["message"]
+                .as_str()
+                .or_else(|| value["error"].as_str())
+                .map(str::to_string)
+        })
         .unwrap_or_else(|| text.to_string())
 }
 
@@ -561,6 +580,28 @@ fn parse_payload(text: &str) -> Result<Value> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_refusal_from_the_http_layer_reads_as_a_sentence_not_a_document() {
+        // The gate in front of MCP answers with `error`, the MCP layer with
+        // `message`. Reading only one put a JSON document in front of the
+        // person where the sentence inside it belonged.
+        // VI: Lớp chặn phía trước MCP trả lời bằng `error`, tầng MCP bằng
+        // VI: `message`. Chỉ đọc một trong hai khiến người dùng nhìn thấy cả
+        // VI: một tài liệu JSON ở chỗ đáng lẽ là câu nằm bên trong nó.
+        assert_eq!(
+            extract_message(r#"{"error":"The MCP token is invalid, expired or revoked."}"#),
+            "The MCP token is invalid, expired or revoked."
+        );
+        assert_eq!(
+            extract_message(r#"{"message":"missing runs:write"}"#),
+            "missing runs:write"
+        );
+        // Anything that is not JSON is passed through rather than hidden.
+        // VI: Thứ gì không phải JSON thì giữ nguyên chứ không giấu đi.
+        assert_eq!(extract_message("502 Bad Gateway"), "502 Bad Gateway");
+    }
+
     use super::*;
 
     #[test]

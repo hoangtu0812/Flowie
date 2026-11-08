@@ -18,4 +18,4 @@
 
 pub mod server;
 
-pub use server::{Access, Assigned, Connection};
+pub use server::{Access, Assigned, Connection, Refusal};

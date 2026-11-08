@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import AsyncExitStack, asynccontextmanager
 import asyncio
+import logging
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -69,6 +70,19 @@ from .modules.operations.heartbeats import supervise
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     runtime = settings or Settings.from_environment()
+    # Uvicorn configures only its own `uvicorn.*` loggers, leaving the root
+    # logger at WARNING with no handler, so every `logger.info` under `app/`
+    # went nowhere. `basicConfig` attaches a handler only when the root has
+    # none, so a host that already configured logging keeps its own setup.
+    # VI: Uvicorn chỉ cấu hình các logger `uvicorn.*` của nó và để root ở mức
+    # VI: WARNING không có handler, nên mọi `logger.info` dưới `app/` đều rơi vào
+    # VI: hư không. `basicConfig` chỉ gắn handler khi root chưa có cái nào, nên
+    # VI: một môi trường đã tự cấu hình logging vẫn giữ nguyên thiết lập riêng.
+    logging.basicConfig(
+        level=runtime.log_level,
+        format='%(asctime)s %(levelname)s %(name)s %(message)s',
+    )
+    logging.getLogger().setLevel(runtime.log_level)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):

@@ -67,6 +67,31 @@ pub struct SetupView {
     /// The task in hand, when there is one.
     /// VI: Task đang làm, nếu có.
     pub activity: Option<String>,
+    /// What the agent last said it is doing inside that task. Separate from
+    /// the task because a task that has not moved for twenty minutes and a
+    /// task being worked on look identical without it.
+    /// VI: Agent nói lần gần nhất rằng nó đang làm gì bên trong task đó. Tách
+    /// VI: khỏi task vì thiếu nó thì một task đứng im hai mươi phút và một task
+    /// VI: đang được làm trông y hệt nhau.
+    pub doing: Option<String>,
+    /// Which agent is running right now, or `None` when none is. Reported
+    /// instead of the configured provider so an idle machine does not read as
+    /// a busy one.
+    /// VI: Agent nào đang chạy ngay lúc này, hoặc `None` khi không có. Báo cái
+    /// VI: này thay vì provider trong cấu hình để một máy đang rảnh không bị đọc
+    /// VI: thành một máy đang bận.
+    pub agent: Option<String>,
+    /// Why the state is what it is, when the state alone does not say. This is
+    /// the difference between a window that reports a problem and one that
+    /// reports a problem a person can act on.
+    /// VI: Vì sao trạng thái lại như vậy, khi riêng trạng thái không nói đủ.
+    /// VI: Đây là khác biệt giữa một cửa sổ báo có vấn đề và một cửa sổ báo một
+    /// VI: vấn đề người dùng xử lý được.
+    pub reason: Option<String>,
+    /// The running build, so a report names a version rather than "the latest
+    /// one".
+    /// VI: Bản đang chạy, để một báo cáo nêu được số hiệu thay vì "bản mới nhất".
+    pub version: String,
     /// Whether the machine will actually start the companion at sign-in, read
     /// back from the system rather than from the file, so a registration that
     /// did not take is visible.
@@ -97,6 +122,10 @@ pub fn load_setup(app: tauri::AppHandle, companion: State<'_, Companion>) -> Set
         state: readiness.summary(crate::VIETNAMESE),
         needs_person: readiness.needs_person(),
         activity: companion.shared.task(),
+        doing: companion.shared.activity(),
+        agent: companion.shared.agent().map(str::to_string),
+        reason: readiness.reason().map(str::to_string),
+        version: app.package_info().version.to_string(),
         starts_at_login: app.autolaunch().is_enabled().unwrap_or(false),
         problem,
     }
@@ -139,6 +168,11 @@ pub fn save_setup(
     if let Ok(mut held) = companion.config.lock() {
         *held = Some(parsed);
     }
+    // Saved settings are tried at once rather than at the end of a backoff
+    // that the old settings earned.
+    // VI: Thiết lập vừa lưu được thử ngay, thay vì đợi hết một khoảng lùi mà
+    // VI: thiết lập cũ gây ra.
+    companion.shared.request_retry();
     Ok(())
 }
 
@@ -184,7 +218,15 @@ pub fn save_token(companion: State<'_, Companion>, token: String) -> Result<(), 
     CredentialStore::new(account)
         .map_err(|error| error.to_string())?
         .save(token.trim())
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+    // The whole reason someone pastes a token is to find out whether it works.
+    // Making them wait out a five-minute backoff first leaves them unable to
+    // tell a token that is still wrong from a turn that has not come round.
+    // VI: Lý do duy nhất khiến người ta dán một token vào là để biết nó có chạy
+    // VI: hay không. Bắt họ chờ hết một khoảng lùi năm phút khiến họ không phân
+    // VI: biệt được token vẫn sai với lượt thử chưa tới.
+    companion.shared.request_retry();
+    Ok(())
 }
 
 /// Removes the stored token, which is what someone does when they hand the
@@ -197,7 +239,15 @@ pub fn forget_token(companion: State<'_, Companion>) -> Result<(), String> {
     CredentialStore::new(account)
         .map_err(|error| error.to_string())?
         .delete()
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+    // Removing a token changes what this machine can do just as much as adding
+    // one, and the window should say so at once rather than keep reporting a
+    // state that belonged to the token that is gone.
+    // VI: Xoá token làm thay đổi khả năng của máy này ngang với việc thêm token,
+    // VI: và cửa sổ phải nói ra điều đó ngay thay vì tiếp tục báo một trạng thái
+    // VI: thuộc về token đã bị xoá.
+    companion.shared.request_retry();
+    Ok(())
 }
 
 /// The credential account the saved configuration names.
