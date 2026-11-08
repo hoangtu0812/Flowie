@@ -21,7 +21,7 @@ pull request and commit references, which are for us.
 
 ### Added
 
-- The desktop companion’s tray menu can now open the task it is working on, and Flowie itself, in the browser the person already uses and is already signed in to. The address is worked out from the server the companion is connected to, so it cannot point at a different Flowie than the one it takes work from, and nothing has to be configured twice. Both entries stay switched off until the server has said which workspace the connection belongs to, because an entry that opens nothing is worse than one that is plainly unavailable. (DTD-501)
+- The desktop companion’s tray menu can now open the task it is working on, and Flowie itself, in the browser the person already uses and is already signed in to. The address is worked out from the server the companion is connected to, so it cannot point at a different Flowie than the one it takes work from, and nothing has to be configured twice. Both entries stay switched off until the server has said which workspace the connection belongs to, because an entry that opens nothing is worse than one that is plainly unavailable. (DTD-501, #217)
   VI: Menu tray của companion desktop nay mở được task nó đang làm, và mở được chính Flowie, bằng trình duyệt mà người dùng đang dùng và đã đăng nhập sẵn. Địa chỉ được dẫn ra từ chính server mà companion đang kết nối, nên nó không thể trỏ tới một Flowie khác với nơi nó nhận việc, và không phải cấu hình thêm lần nữa. Cả hai mục vẫn tắt cho tới khi server cho biết kết nối thuộc workspace nào, vì một mục bấm vào không mở gì thì tệ hơn một mục tắt hẳn. (DTD-501)
 
 ### Added
