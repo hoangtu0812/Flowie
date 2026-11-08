@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..core.clock import _utcnow
 from ..core.identifiers import _cuid
+from ..core.utc_responses import utc_response_value
 
 logger = logging.getLogger(__name__)
 
@@ -94,9 +95,17 @@ async def _create_generated_cycle(db: AsyncSession, team: dict[str, Any], names:
                 VALUES (:id, :workspace_id, NULL, 'cycle.auto_generated', 'cycle', :entity_id,
                         CAST(:metadata AS jsonb), :now)'''),
         {'id': _cuid(), 'workspace_id': team['workspace_id'], 'entity_id': cycle_id,
+         # The span lands in a jsonb column that no response serialiser touches
+         # again, so the offset has to be attached here. The worker this
+         # replaces wrote a UTC designator and a reader of the audit trail
+         # would otherwise take these for local times.
+         # VI: Khoảng ngày rơi vào cột jsonb mà không bộ tuần tự hoá phản hồi
+         # VI: nào chạm tới nữa, nên offset phải được gắn ngay ở đây. Worker mà
+         # VI: nó thay thế có ghi chỉ báo UTC, và người đọc nhật ký kiểm toán
+         # VI: nếu không sẽ hiểu đây là giờ địa phương.
          'metadata': json.dumps({'teamId': team['id'], 'cadenceWeeks': team['cycle_cadence_weeks'],
-                                 'startDate': start_date.isoformat(),
-                                 'endDate': end_date.isoformat()}), 'now': now},
+                                 'startDate': utc_response_value(start_date).isoformat(),
+                                 'endDate': utc_response_value(end_date).isoformat()}), 'now': now},
     )
     return True
 

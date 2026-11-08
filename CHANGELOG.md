@@ -21,6 +21,11 @@ pull request and commit references, which are for us.
 
 ### Fixed
 
+- The audit trail for an automatically generated cycle now records its start and end with the time zone they are in, so the record reads as the same two days everywhere. The dates were being written without any marker saying they were UTC, which anyone reading the trail later would have taken for local time and been out by a time zone. Found by running the retiring background worker and its replacement against two identical copies of the same database and comparing what each one wrote, rather than by reading the code. (DTD-519)
+  VI: Nhật ký kiểm toán của một cycle được sinh tự động nay ghi ngày bắt đầu và kết thúc kèm múi giờ của chúng, nên bản ghi đọc ở đâu cũng ra đúng hai ngày đó. Trước đây ngày được ghi mà không có dấu hiệu nào nói rằng đó là giờ UTC, và người đọc nhật ký về sau sẽ hiểu nhầm thành giờ địa phương, lệch nguyên một múi giờ. Phát hiện được nhờ cho worker nền sắp nghỉ và bản thay thế của nó cùng chạy trên hai bản sao giống hệt nhau của một database rồi so những gì mỗi bên ghi ra, chứ không phải nhờ đọc mã. (DTD-519)
+
+### Fixed
+
 - Flowie Desktop shows the Flowie logo. It was showing a ring left over from the template this repository was started from, which is not Flowie’s mark and appears nowhere else in the product. The icon now comes from the same artwork the web application uses for its own, so the two cannot drift apart again. (DTD-488, #219)
   VI: Flowie Desktop hiển thị đúng logo Flowie. Trước đó nó hiện một vòng tròn sót lại từ template mà repository này khởi đi, không phải biểu tượng của Flowie và không xuất hiện ở bất cứ đâu khác trong sản phẩm. Icon nay lấy từ chính phần hình mà ứng dụng web dùng cho icon của nó, nên hai bên không thể lệch nhau lần nữa. (DTD-488)
 
