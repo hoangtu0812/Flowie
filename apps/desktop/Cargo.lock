@@ -830,6 +830,8 @@ name = "flowie-agent"
 version = "0.0.0"
 dependencies = [
  "flowie-platform",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
