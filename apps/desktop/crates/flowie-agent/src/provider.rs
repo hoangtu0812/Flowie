@@ -59,6 +59,23 @@ pub enum Provider {
     Codex,
 }
 
+/// The configured provider is the same choice, named in the crate that stores
+/// it. Converting here rather than in every caller means one exhaustive match
+/// has to be updated when a third agent is added, instead of several that can
+/// each be missed.
+/// VI: Provider trong cấu hình là cùng một lựa chọn, chỉ được gọi tên ở crate
+/// VI: lưu nó. Chuyển đổi ở đây thay vì ở từng bên gọi nghĩa là khi thêm agent
+/// VI: thứ ba thì chỉ một match bắt-buộc-đủ-nhánh phải sửa, chứ không phải nhiều
+/// VI: chỗ mà mỗi chỗ đều có thể bị bỏ sót.
+impl From<flowie_core::config::Provider> for Provider {
+    fn from(configured: flowie_core::config::Provider) -> Self {
+        match configured {
+            flowie_core::config::Provider::Claude => Provider::Claude,
+            flowie_core::config::Provider::Codex => Provider::Codex,
+        }
+    }
+}
+
 impl Provider {
     pub fn default_program(self) -> &'static str {
         match self {
@@ -125,6 +142,39 @@ pub enum Capability {
 impl Capability {
     pub fn is_ready(&self) -> bool {
         matches!(self, Capability::Ready { .. })
+    }
+
+    /// What a person has to do before this machine can run the agent, or
+    /// `None` when there is nothing to do.
+    ///
+    /// Install, update and sign in are three different errands, and a run that
+    /// cannot start is only useful to someone if it says which one. The
+    /// missing flags are named, because "update the tool" is not something a
+    /// person can act on when the tool reports itself as current.
+    /// VI: Một người phải làm gì trước khi máy này chạy được agent, hoặc `None`
+    /// VI: khi không có gì phải làm.
+    /// VI: Cài đặt, cập nhật và đăng nhập là ba việc khác nhau, và một run không
+    /// VI: khởi động được chỉ có ích cho ai đó nếu nó nói rõ việc nào. Các flag
+    /// VI: còn thiếu được nêu tên, vì "cập nhật công cụ" là thứ người dùng không
+    /// VI: hành động theo được khi công cụ tự báo rằng nó đã mới nhất.
+    pub fn needs(&self) -> Option<String> {
+        match self {
+            Capability::Ready { .. } => None,
+            Capability::NotInstalled { program } => {
+                Some(format!("{program} is not installed on this machine"))
+            }
+            Capability::TooOld {
+                path,
+                missing_flags,
+            } => Some(format!(
+                "{} is too old; it does not support {}",
+                path.display(),
+                missing_flags.join(", ")
+            )),
+            Capability::NotSignedIn { path } => {
+                Some(format!("nobody is signed in to {}", path.display()))
+            }
+        }
     }
 }
 

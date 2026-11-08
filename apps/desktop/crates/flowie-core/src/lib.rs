@@ -33,7 +33,9 @@ pub use journal::{Entry, Recovery};
 pub use lease::{BudgetPolicy, Decision, LeaseTracker, HEARTBEAT_INTERVAL, SERVER_LEASE};
 pub use poll::Schedule;
 pub use readiness::{Readiness, REQUIRED_SCOPES};
-pub use run::{Achievement, Completed, DocType, FeatureDoc, Review, Run, RunFailure, TestOutcome};
+pub use run::{
+    Achievement, Completed, DocType, FeatureDoc, Review, Run, RunFailure, TaskContext, TestOutcome,
+};
 pub use sequence::{plan, Outcome, Step, ORDER};
 pub use translate::translate;
 
