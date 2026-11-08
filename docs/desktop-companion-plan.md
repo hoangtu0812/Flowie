@@ -28,9 +28,13 @@ câu nào mô tả tính năng chưa tồn tại như thể đã có.
 | P1.5 `flowie-core` | Xong | DTD-498, PR #180 |
 | P2 companion MVP | Chưa bắt đầu | DTD-501 |
 
-**G7 đã giải quyết và được chứng minh trên production**: push chỉ chạm
-`apps/desktop/**` dừng ở job `Detect deployable changes`, còn `verify` và
-`Build and deploy to CT107` đều skipped (run 42402571301 trên `10b3ca8a`).
+**G7 không còn tồn tại.** Nó từng được giải quyết và chứng minh trên production:
+push chỉ chạm `apps/desktop/**` dừng ở job `Detect deployable changes`, còn
+`verify` và `Build and deploy to CT107` đều skipped (run 42402571301 trên
+`10b3ca8a`). Sau đó DTD-514 (PR #186) gỡ bỏ toàn bộ deploy production tự động:
+cả `scripts/deploy-scope.sh` lẫn `.github/workflows/deploy-production.yml` đều
+không còn trong repository. Không còn pipeline nào để một thay đổi desktop kích
+hoạt nhầm, nên rủi ro này khép lại chứ không phải đang được canh giữ.
 
 **G1 và G4 vẫn mở.** `flowie-core` hiện thực cơ chế xử lý budget với chính sách là
 tham số cấu hình, không tự chốt thay người phụ trách.
@@ -295,12 +299,13 @@ dọn khi thành công (§3.5). *Hướng xử lý:* chính sách lưu session/w
 (giữ worktree khi người dùng bật “cho phép tiếp tục session”), và chỉ hiện nút tiếp tục
 khi đã kiểm chứng trên máy đích. **Giai đoạn: P5.**
 
-**G7 — `deploy-scope.sh` sẽ deploy production vì thay đổi desktop.** Script chỉ bỏ qua
-`docs/*`, `*.md` và `llms.txt`; mọi path khác cho `deploy=true`
-(`scripts/deploy-scope.sh`). *Hệ quả:* commit đầu tiên tạo `apps/desktop` sẽ kích hoạt
-build và deploy CT107 dù không đổi gì phía server. *Hướng xử lý:* mở rộng
-`deploy-scope.sh` trong **cùng commit** tạo `apps/desktop`, kèm test cho dải commit chỉ
-chạm desktop. **Giai đoạn: commit đầu của P1.**
+**G7 — `deploy-scope.sh` sẽ deploy production vì thay đổi desktop. Đã đóng.**
+*Nguyên văn vấn đề:* script chỉ bỏ qua `docs/*`, `*.md` và `llms.txt`; mọi path khác
+cho `deploy=true`, nên commit đầu tiên tạo `apps/desktop` sẽ build và deploy CT107
+dù không đổi gì phía server. *Đã làm:* mở rộng `deploy-scope.sh` ngay trong commit
+tạo `apps/desktop`, kèm test cho dải commit chỉ chạm desktop, và chứng minh trên
+một lần push thật. *Về sau:* DTD-514 (PR #186) gỡ bỏ cả script lẫn workflow
+deploy production, nên không còn gì để mở rộng hay canh giữ nữa.
 
 ## 5. Phạm vi
 
@@ -590,7 +595,7 @@ run; chữ ký updater và chữ ký nền tảng là hai phần quản lý riê
 | Desktop | Tray/menu đúng theo OS; menu còn phản hồi khi agent đang chạy; DPI và theme; đóng cửa sổ; autostart opt-in; gỡ cài đặt không xóa repository |
 | UI đầy đủ | WebView2 và WKWebView; auth/MFA/SSO; download và upload; navigation; preview; link ngoài; chặn IPC từ origin không được phép |
 | Phát hành | Bộ cài và chữ ký; cài trên máy sạch; update hợp lệ và update sai chữ ký; giữ cấu hình; tương thích với phiên bản server cũ và mới được công bố |
-| CI | `deploy-scope.sh` với dải commit chỉ chạm `apps/desktop`, chỉ chạm docs, và chạm cả server |
+| CI | `.github/workflows/desktop.yml` trên `windows-latest` và `macos-latest`; không còn deploy-scope sau khi DTD-514 gỡ pipeline production |
 
 Unit test tập trung vào state machine, retry và idempotency, validation, xử lý argument.
 Integration test dùng provider giả để tái hiện lỗi xác định. Smoke test dùng CLI thật và
@@ -601,13 +606,13 @@ task fixture đã duyệt, chạy trên từng OS. Không dùng việc sinh code
 
 - Companion có pipeline build/test/artifact riêng, dùng runner Windows và macOS. Bản
   desktop chỉ phát hành sau khi nghiệm thu artifact của nền tảng tương ứng.
-- **`deploy-scope.sh`.** Hiện tại mọi path ngoài `docs/*`, `*.md`, `llms.txt` đều cho
-  `deploy=true`, nên commit đầu tiên tạo `apps/desktop` sẽ build và deploy CT107. Việc
-  mở rộng script phải nằm trong chính commit đó, kèm test (G7). Không giả định
-  desktop-only change tự được bỏ qua.
-- Mọi thay đổi server cần maintainer `git pull` và rebuild trên server người dùng thật
-  sự dùng. Một lần chạy workflow production xanh chỉ chứng minh build và deploy CT107,
-  không chứng minh server đó đã có thay đổi.
+- **Không còn deploy production tự động.** DTD-514 (PR #186) gỡ bỏ
+  `scripts/deploy-scope.sh` và `.github/workflows/deploy-production.yml`, nên mối lo
+  cũ rằng một thay đổi desktop kích hoạt deploy server không còn nữa (G7). CI của
+  desktop là `.github/workflows/desktop.yml` và chỉ có nó.
+- Mọi thay đổi server cần maintainer `git pull` và rebuild trên server người dùng
+  thật sự dùng. Sau DTD-514 đây là **cách duy nhất** một thay đổi tới được server đó;
+  không còn workflow nào tự deploy, nên merge vào `main` không đưa gì lên server cả.
 - **Migration.** Nếu G4 (nhận diện thiết bị) hoặc G2 (tạo run theo thiết bị) cần schema
   mới, Prisma vẫn là chủ sở hữu schema: pull request và changelog phải ghi rõ rebuild
   `migrate`, `api`, `web` và chạy `migrate` trước `api`; sau deploy so số migration
@@ -630,7 +635,7 @@ task fixture đã duyệt, chạy trên từng OS. Không dùng việc sinh code
 | G4 | Không có danh tính thiết bị trên `mcp_connections` | Tray và admin không nhận diện máy | P0 |
 | G5 | Không có push, phải polling | Độ trễ nhận việc và tải server | P2 |
 | G6 | Session bàn giao chưa có cơ sở | Nút “tiếp tục session” có thể không dùng được | P5 |
-| G7 | `deploy-scope.sh` deploy production vì thay đổi desktop | Deploy ngoài ý muốn | Commit đầu P1 |
+| G7 | `deploy-scope.sh` deploy production vì thay đổi desktop | Deploy ngoài ý muốn | Đã đóng: xử lý ở commit đầu P1, rồi DTD-514 gỡ hẳn pipeline |
 | R1 | Chi phí port Python sang Rust vượt dự kiến | Trễ toàn bộ lộ trình | Đánh giá cuối P1, đường lùi §2.3 |
 | R2 | Thiếu Apple Developer ID, chứng chỉ Windows hoặc máy Mac | P3 không thể hoàn thành | P0 (§12.1) |
 | R3 | IdP không cho đăng nhập trong WebView | P4 cần flow trình duyệt hệ thống | P4 |
@@ -680,5 +685,5 @@ Bước đầu tiên là **P0 trên cả Windows và macOS**, cùng với việc
   và tiếp tục phiên.
 - [Local Flowie runner](local-codex-runner.md): cấu hình và hành vi vận hành hiện có.
 - Mã nguồn đối chiếu: `scripts/flowie_runner/`,
-  `apps/api-python/app/modules/agent_runs/`, `apps/api-python/app/modules/mcp/registry.py`,
-  `scripts/deploy-scope.sh`.
+  `apps/api-python/app/modules/agent_runs/`, `apps/api-python/app/modules/mcp/registry.py`.
+  `scripts/deploy-scope.sh` từng nằm trong danh sách này; DTD-514 đã gỡ bỏ nó.
