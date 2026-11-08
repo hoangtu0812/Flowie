@@ -47,6 +47,7 @@ pub struct Shared {
     readiness: Mutex<Readiness>,
     task: Mutex<Option<String>>,
     activity: Mutex<Option<String>>,
+    site: Mutex<Option<String>>,
     cancel: AtomicBool,
     stop: AtomicBool,
 }
@@ -57,6 +58,7 @@ impl Shared {
             readiness: Mutex::new(readiness),
             task: Mutex::new(None),
             activity: Mutex::new(None),
+            site: Mutex::new(None),
             cancel: AtomicBool::new(false),
             stop: AtomicBool::new(false),
         }
@@ -91,6 +93,29 @@ impl Shared {
     /// VI: nhau: task giữ nguyên suốt một lượt chạy, còn dòng kia đổi vài giây một lần.
     pub fn activity(&self) -> Option<String> {
         self.activity.lock().ok().and_then(|held| held.clone())
+    }
+
+    /// Where this Flowie lives in a browser, once the server has said which
+    /// workspace the connection belongs to. `None` until then, and the menu
+    /// entries that open a page stay disabled.
+    /// VI: Flowie này nằm ở đâu trong trình duyệt, sau khi server cho biết kết nối
+    /// VI: thuộc workspace nào. Trước đó là `None`, và các mục menu mở trang vẫn bị vô
+    /// VI: hiệu hoá.
+    pub fn site(&self) -> Option<String> {
+        self.site.lock().ok().and_then(|held| held.clone())
+    }
+
+    /// The address of the task in hand, when there is one and the workspace is
+    /// known.
+    /// VI: Địa chỉ của task đang làm, khi có task và đã biết workspace.
+    pub fn task_url(&self) -> Option<String> {
+        Some(format!("{}/issue/{}", self.site()?, self.task()?))
+    }
+
+    fn set_site(&self, value: Option<String>) {
+        if let Ok(mut held) = self.site.lock() {
+            *held = value;
+        }
     }
 
     fn set_task(&self, line: Option<String>) {
@@ -197,6 +222,18 @@ fn attempt(directory: &Path, shared: &Arc<Shared>, schedule: &mut Schedule) -> O
         }
     };
     schedule.succeeded();
+
+    // Asked once and kept: the workspace a connection belongs to does not
+    // change under it, and asking every pass would spend a call a minute on
+    // an answer nobody waits for.
+    // VI: Hỏi một lần rồi giữ: workspace mà một kết nối thuộc về không tự đổi,
+    // VI: và hỏi lại mỗi lượt sẽ tốn một lời gọi mỗi phút cho một câu trả lời
+    // VI: không ai phải chờ.
+    if shared.site().is_none() {
+        if let Ok(site) = connection.workspace_site() {
+            shared.set_site(site);
+        }
+    }
 
     let state = readiness::assess(&config, &access.scopes, access.writes_enabled);
     shared.set_readiness(state.clone());
@@ -465,6 +502,36 @@ mod tests {
             "waited {:?}",
             started.elapsed()
         );
+    }
+
+    #[test]
+    fn a_task_address_needs_both_the_workspace_and_the_task() {
+        // Half an address opens nothing. The menu entry is disabled on
+        // exactly this condition, so getting it wrong means a dead click.
+        // VI: Nửa địa chỉ thì không mở được gì. Mục menu bị vô hiệu hoá đúng
+        // VI: theo điều kiện này, nên sai ở đây nghĩa là một cú bấm vô tác dụng.
+        let shared = Shared::new(Readiness::Ready);
+        assert!(shared.task_url().is_none(), "nothing known yet");
+
+        shared.set_task(Some("DTD-204".into()));
+        assert!(
+            shared.task_url().is_none(),
+            "the workspace is still unknown"
+        );
+
+        shared.set_site(Some(
+            "https://flowie.example.com/phong-chuyen-doi-so".into(),
+        ));
+        assert_eq!(
+            shared.task_url().as_deref(),
+            Some("https://flowie.example.com/phong-chuyen-doi-so/issue/DTD-204")
+        );
+
+        // Idle again: the workspace stays, the task does not.
+        // VI: Rảnh trở lại: workspace ở lại, task thì không.
+        shared.set_task(None);
+        assert!(shared.task_url().is_none());
+        assert!(shared.site().is_some());
     }
 
     #[test]

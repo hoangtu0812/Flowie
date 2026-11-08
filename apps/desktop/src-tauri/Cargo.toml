@@ -47,6 +47,11 @@ serde_json = "1"
 # VI: registry: cùng một lời gọi chạy được trên macOS, nơi cơ chế là launch agent
 # VI: chứ không phải khóa registry.
 tauri-plugin-autostart = "2"
+# Opens a page in whatever browser the person already uses, rather than in
+# a webview of ours where they would not be signed in.
+# VI: Mở một trang bằng đúng trình duyệt người dùng đang dùng, thay vì trong một
+# VI: webview của chúng ta nơi họ chưa đăng nhập.
+tauri-plugin-opener = "2"
 
 [dev-dependencies]
 tempfile = "3"

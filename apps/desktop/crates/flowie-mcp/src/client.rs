@@ -164,6 +164,14 @@ impl Client {
     // VI: nên giá trị đi qua không định kiểu; các tool vòng đời bên dưới có
     // VI: kiểu vì crate này sở hữu hợp đồng của chúng.
 
+    /// The workspaces this connection can see. Their slugs are what a browser
+    /// address needs, and nothing else reports them.
+    /// VI: Các workspace mà kết nối này thấy được. Slug của chúng là thứ một địa chỉ
+    /// VI: trình duyệt cần, và không chỗ nào khác báo chúng.
+    pub async fn list_workspaces(&mut self) -> Result<Value> {
+        self.call("list_workspaces", json!({})).await
+    }
+
     pub async fn get_my_access(&mut self) -> Result<Value> {
         self.call("get_my_access", json!({})).await
     }
