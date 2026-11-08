@@ -53,6 +53,26 @@ impl Endpoint {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// The same server as a person would open in a browser.
+    ///
+    /// Every endpoint ends with `/mcp/`, which `parse` enforces, so removing
+    /// that leaves the address the web application is served from. Deriving it
+    /// rather than configuring it separately means the two cannot be set to
+    /// different servers by mistake, which would send someone to a task on a
+    /// machine the companion never talks to.
+    /// VI: Cùng một server nhưng dưới dạng một người sẽ mở trong trình duyệt.
+    /// VI: Mọi endpoint đều kết thúc bằng `/mcp/`, điều `parse` bắt buộc, nên bỏ phần
+    /// VI: đó đi sẽ còn lại địa chỉ phục vụ ứng dụng web. Dẫn ra thay vì cấu hình riêng
+    /// VI: nghĩa là hai thứ không thể bị đặt nhầm sang hai server khác nhau, điều sẽ đẩy
+    /// VI: người dùng tới một task trên máy mà companion chưa bao giờ nói chuyện.
+    pub fn site(&self) -> String {
+        self.0
+            .strip_suffix("/mcp/")
+            .unwrap_or(&self.0)
+            .trim_end_matches('/')
+            .to_string()
+    }
 }
 
 struct Parts {
@@ -100,6 +120,23 @@ fn url_parts(raw: &str) -> Result<Parts> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_browser_address_is_the_endpoint_without_its_mcp_path() {
+        for (endpoint, site) in [
+            (
+                "https://flowie.example.com/mcp/",
+                "https://flowie.example.com",
+            ),
+            (
+                "https://example.com/flowie/mcp/",
+                "https://example.com/flowie",
+            ),
+            ("http://localhost:3000/mcp/", "http://localhost:3000"),
+        ] {
+            assert_eq!(Endpoint::parse(endpoint).expect(endpoint).site(), site);
+        }
+    }
+
     use super::*;
 
     #[test]

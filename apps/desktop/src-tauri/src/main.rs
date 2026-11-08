@@ -69,6 +69,7 @@ fn main() {
         // VI: Không truyền argument nào ở lần khởi động theo đăng nhập:
         // VI: companion khởi động giống nhau dù được gọi theo cách nào, nên
         // VI: chỉ có một hành vi để suy luận thay vì hai.
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
@@ -152,9 +153,23 @@ fn main() {
             let pause = MenuItem::with_id(app, "pause", pause_label(paused), true, None::<&str>)?;
             let cancel =
                 MenuItem::with_id(app, "cancel", "Hủy lượt đang chạy", true, None::<&str>)?;
-            let open = MenuItem::with_id(app, "open", "Mở cấu hình", true, None::<&str>)?;
+            // Both start disabled: neither address is known until the server
+            // has said which workspace this connection belongs to, and an
+            // entry that opens nothing is worse than one that is plainly off.
+            // VI: Cả hai bắt đầu ở trạng thái vô hiệu: chưa biết địa chỉ nào cho tới khi
+            // VI: server cho biết kết nối này thuộc workspace nào, và một mục bấm vào
+            // VI: không mở gì cả thì tệ hơn một mục tắt hẳn.
+            let open_task =
+                MenuItem::with_id(app, "task", "Mở task đang làm", false, None::<&str>)?;
+            let open_site = MenuItem::with_id(app, "site", "Mở Flowie", false, None::<&str>)?;
+            let open = MenuItem::with_id(app, "open", "Cấu hình và chẩn đoán", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Thoát", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&status, &pause, &cancel, &open, &quit])?;
+            let menu = Menu::with_items(
+                app,
+                &[
+                    &status, &open_task, &open_site, &pause, &cancel, &open, &quit,
+                ],
+            )?;
 
             let status_handle = status.clone();
             let pause_handle = pause.clone();
@@ -177,6 +192,22 @@ fn main() {
                         let _ = pause_handle.set_text(pause_label(now_paused));
                     }
                     "cancel" => clicked.request_cancel(),
+                    // Opened in the person's own browser, where they are
+                    // already signed in; a webview of ours would ask them to
+                    // sign in again to read their own task.
+                    // VI: Mở bằng trình duyệt của chính người dùng, nơi họ đã đăng nhập;
+                    // VI: một webview của chúng ta sẽ bắt họ đăng nhập lại để đọc task của
+                    // VI: chính mình.
+                    "task" => {
+                        if let Some(url) = clicked.task_url() {
+                            let _ = tauri_plugin_opener::open_url(url, None::<&str>);
+                        }
+                    }
+                    "site" => {
+                        if let Some(url) = clicked.site() {
+                            let _ = tauri_plugin_opener::open_url(url, None::<&str>);
+                        }
+                    }
                     "quit" => {
                         // Asked, not forced: the run stops at its next step and
                         // hands the task back, which is the difference between
@@ -200,6 +231,8 @@ fn main() {
             // VI: đang làm gì" chỉ có một câu trả lời chứ không phải hai câu có
             // VI: thể mâu thuẫn.
             let reported = Arc::clone(&shared);
+            let task_handle = open_task.clone();
+            let site_handle = open_site.clone();
             std::thread::spawn(move || loop {
                 std::thread::sleep(REFRESH);
                 let _ = status_handle.set_text(tray_line(
@@ -207,6 +240,8 @@ fn main() {
                     reported.activity().as_deref(),
                     &reported.readiness(),
                 ));
+                let _ = task_handle.set_enabled(reported.task_url().is_some());
+                let _ = site_handle.set_enabled(reported.site().is_some());
                 if running.is_finished() {
                     return;
                 }

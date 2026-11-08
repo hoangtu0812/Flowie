@@ -109,6 +109,7 @@ fn assigned(item: &Value) -> Option<Assigned> {
 pub struct Connection {
     runtime: tokio::runtime::Runtime,
     client: Client,
+    site: String,
     lease: Option<Lease>,
     warnings: Vec<String>,
 }
@@ -132,6 +133,7 @@ impl Connection {
             .map_err(|error| {
                 RunFailure::Precondition(format!("no runtime for the connection: {error}"))
             })?;
+        let site = endpoint.site();
         let mut client = Client::new(endpoint, token).map_err(|error| translate(&error))?;
         runtime
             .block_on(client.initialize())
@@ -139,6 +141,7 @@ impl Connection {
         Ok(Self {
             runtime,
             client,
+            site,
             lease: None,
             warnings: Vec::new(),
         })
@@ -224,6 +227,36 @@ impl Connection {
             .as_array()
             .map(|items| items.iter().filter_map(assigned).collect())
             .unwrap_or_default())
+    }
+
+    /// Where a person would open this Flowie in a browser, with the
+    /// workspace the connection belongs to.
+    ///
+    /// The slug comes from the server because nothing local knows it, and the
+    /// address comes from the endpoint so the two cannot point at different
+    /// servers. Returns nothing when the connection can see no workspace,
+    /// which leaves the menu entries disabled rather than opening a link that
+    /// goes nowhere.
+    /// VI: Nơi một người sẽ mở Flowie này trong trình duyệt, kèm workspace mà kết nối
+    /// VI: thuộc về.
+    /// VI: Slug lấy từ server vì không gì ở máy biết nó, còn địa chỉ lấy từ endpoint để
+    /// VI: hai thứ không trỏ về hai server khác nhau. Trả về rỗng khi kết nối không thấy
+    /// VI: workspace nào, để các mục menu bị vô hiệu hoá thay vì mở một liên kết dẫn tới
+    /// VI: hư không.
+    pub fn workspace_site(&mut self) -> Result<Option<String>, RunFailure> {
+        let site = self.site.clone();
+        let Self {
+            runtime,
+            client,
+            lease,
+            ..
+        } = self;
+        let page = finish(runtime, lease, client.list_workspaces())?;
+        Ok(page["items"]
+            .as_array()
+            .and_then(|items| items.first())
+            .and_then(|first| first["slug"].as_str())
+            .map(|slug| format!("{site}/{slug}")))
     }
 
     /// The lease, or a precondition failure naming the real mistake: a step
@@ -350,6 +383,7 @@ impl Server for Connection {
             client,
             lease,
             warnings,
+            ..
         } = self;
         for (index, doc) in docs.iter().enumerate() {
             // Each document gets its own key derived from the step's key, so a

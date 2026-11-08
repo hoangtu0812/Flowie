@@ -19,6 +19,16 @@ pull request and commit references, which are for us.
 
 ## Unreleased
 
+### Fixed
+
+- Flowie Desktop shows the Flowie logo. It was showing a ring left over from the template this repository was started from, which is not Flowie’s mark and appears nowhere else in the product. The icon now comes from the same artwork the web application uses for its own, so the two cannot drift apart again. (DTD-488, #219)
+  VI: Flowie Desktop hiển thị đúng logo Flowie. Trước đó nó hiện một vòng tròn sót lại từ template mà repository này khởi đi, không phải biểu tượng của Flowie và không xuất hiện ở bất cứ đâu khác trong sản phẩm. Icon nay lấy từ chính phần hình mà ứng dụng web dùng cho icon của nó, nên hai bên không thể lệch nhau lần nữa. (DTD-488)
+
+### Added
+
+- The desktop companion’s tray menu can now open the task it is working on, and Flowie itself, in the browser the person already uses and is already signed in to. The address is worked out from the server the companion is connected to, so it cannot point at a different Flowie than the one it takes work from, and nothing has to be configured twice. Both entries stay switched off until the server has said which workspace the connection belongs to, because an entry that opens nothing is worse than one that is plainly unavailable. (DTD-501, #217)
+  VI: Menu tray của companion desktop nay mở được task nó đang làm, và mở được chính Flowie, bằng trình duyệt mà người dùng đang dùng và đã đăng nhập sẵn. Địa chỉ được dẫn ra từ chính server mà companion đang kết nối, nên nó không thể trỏ tới một Flowie khác với nơi nó nhận việc, và không phải cấu hình thêm lần nữa. Cả hai mục vẫn tắt cho tới khi server cho biết kết nối thuộc workspace nào, vì một mục bấm vào không mở gì thì tệ hơn một mục tắt hẳn. (DTD-501)
+
 ### Changed
 
 - The checks a pull request waits for now finish in about a quarter of the time. Almost all of the wait was one step: the browser tests, which drive three browsers one test at a time because they all share a single database, and that alone was thirty-eight of the forty-six minutes. Each browser now gets its own job with its own database, so the three run side by side instead of in a queue, and the rest of the checks — backend, storage, web build — run beside them rather than behind them. No test was changed and no browser was dropped, so a pull request is checked exactly as thoroughly as before; it simply stops costing most of an hour. Checks also now skip the halves a change cannot affect, while anything that is not a pull request still runs every one of them, because a release must never be judged on a subset. (DTD-520, #218)
