@@ -19,6 +19,11 @@ pull request and commit references, which are for us.
 
 ## Unreleased
 
+### Fixed
+
+- The download offered for the desktop companion is the one that was just built, and only that one. A build kept the installer from an earlier version beside the new one, so the download held two and nothing said which was which. Anyone who picked the wrong one installed a version older than the release they got it from. (DTD-488)
+  VI: Bản tải về cho companion desktop nay là đúng bản vừa được build, và chỉ có bản đó. Trước đây mỗi lần build giữ lại cả bộ cài của phiên bản trước bên cạnh bản mới, nên bản tải về có hai file mà không gì chỉ ra file nào là file nào. Ai chọn nhầm sẽ cài một phiên bản cũ hơn chính bản phát hành họ tải nó về. (DTD-488)
+
 ### Removed
 
 - The old NestJS backend has been deleted. It was replaced by the Python API some time ago and has not run anywhere since: no container was built from it, no check ever compiled or tested it, and the app has not spoken to it. It nonetheless stayed in the commands everyone uses, so `pnpm dev` started a second API that was not the real one and `pnpm build` spent its time compiling fourteen thousand lines nobody runs — a newcomer could reasonably have believed that was the backend. Nothing a user can see changes, and no database or deployment change comes with it. The migration notes that told people not to delete it now record why that rule no longer applies. (DTD-518, #211)
