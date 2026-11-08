@@ -21,7 +21,7 @@ pull request and commit references, which are for us.
 
 ### Fixed
 
-- The download offered for the desktop companion is the one that was just built, and only that one. A build kept the installer from an earlier version beside the new one, so the download held two and nothing said which was which. Anyone who picked the wrong one installed a version older than the release they got it from. (DTD-488)
+- The download offered for the desktop companion is the one that was just built, and only that one. A build kept the installer from an earlier version beside the new one, so the download held two and nothing said which was which. Anyone who picked the wrong one installed a version older than the release they got it from. (DTD-488, #215)
   VI: Bản tải về cho companion desktop nay là đúng bản vừa được build, và chỉ có bản đó. Trước đây mỗi lần build giữ lại cả bộ cài của phiên bản trước bên cạnh bản mới, nên bản tải về có hai file mà không gì chỉ ra file nào là file nào. Ai chọn nhầm sẽ cài một phiên bản cũ hơn chính bản phát hành họ tải nó về. (DTD-488)
 
 ### Removed
