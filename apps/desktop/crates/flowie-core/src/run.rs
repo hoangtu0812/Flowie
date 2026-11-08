@@ -21,12 +21,98 @@ use crate::journal::Entry;
 use crate::lease::{BudgetPolicy, Decision, LeaseTracker};
 use crate::sequence::{Outcome, Step};
 
+/// Which of a feature's two documents a draft is.
+/// VI: Bản nháp thuộc tài liệu nào trong hai tài liệu của một tính năng.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DocType {
+    /// Behaviour, rules, acceptance criteria.
+    /// VI: Hành vi, quy tắc, tiêu chí chấp nhận.
+    Fds,
+    /// Design, data, API, tests.
+    /// VI: Thiết kế, dữ liệu, API, kiểm thử.
+    Tds,
+}
+
+impl DocType {
+    /// The name the server's document tree uses.
+    /// VI: Tên mà cây tài liệu của server dùng.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DocType::Fds => "FDS",
+            DocType::Tds => "TDS",
+        }
+    }
+}
+
+/// Smallest and largest each field of a draft may be, mirroring what the
+/// server accepts.
+///
+/// Checked here so a draft the server would reject stops the run before it is
+/// sent: the alternative is discovering it mid-run, after the issue has been
+/// claimed and the agent has already done the reading.
+/// VI: Giới hạn nhỏ nhất và lớn nhất cho từng trường của một bản nháp, theo
+/// VI: đúng những gì server chấp nhận.
+/// VI: Kiểm ở đây để một bản nháp server sẽ từ chối bị dừng trước khi gửi:
+/// VI: cách còn lại là phát hiện giữa chừng, sau khi issue đã bị claim và agent
+/// VI: đã đọc xong.
+pub const DOC_NAME_LIMITS: (usize, usize) = (2, 120);
+pub const DOC_CONTENT_LIMITS: (usize, usize) = (1, 95_000);
+pub const DOC_SUMMARY_LIMITS: (usize, usize) = (3, 500);
+
+/// One feature document as the reviewing pass drafted it.
+/// VI: Một tài liệu tính năng đúng như lượt review đã soạn.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FeatureDoc {
+    pub module: String,
+    pub feature: String,
+    pub doc_type: DocType,
+    pub content: String,
+    pub change_summary: String,
+}
+
+impl FeatureDoc {
+    /// Rejects a draft the server would reject, naming the field at fault.
+    ///
+    /// Lengths are counted in characters rather than bytes, because the
+    /// documents are written in Vietnamese as often as in English and a byte
+    /// count would refuse a document well inside the real limit.
+    /// VI: Từ chối một bản nháp mà server sẽ từ chối, nêu rõ trường nào sai.
+    /// VI: Độ dài đếm theo ký tự chứ không theo byte, vì tài liệu được viết
+    /// VI: bằng tiếng Việt không kém gì tiếng Anh, và đếm theo byte sẽ từ chối
+    /// VI: một tài liệu còn nằm trong giới hạn thật.
+    pub fn validate(&self) -> Result<(), String> {
+        let fields = [
+            ("module", &self.module, DOC_NAME_LIMITS),
+            ("feature", &self.feature, DOC_NAME_LIMITS),
+            ("content", &self.content, DOC_CONTENT_LIMITS),
+            ("changeSummary", &self.change_summary, DOC_SUMMARY_LIMITS),
+        ];
+        for (name, value, (least, most)) in fields {
+            let length = value.chars().count();
+            if !(least..=most).contains(&length) {
+                return Err(format!(
+                    "{name} must be {least} to {most} characters, got {length}"
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
 /// What the agent produced during the read-only pass.
 /// VI: Những gì agent tạo ra trong lượt chỉ đọc.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Review {
     pub plan: String,
     pub target_date: String,
+    /// The FDS and TDS of every feature this change touches, as full updated
+    /// Markdown. Empty is legitimate and means the change alters no documented
+    /// behaviour or design, which the plan is expected to say.
+    /// VI: FDS và TDS của mọi tính năng mà thay đổi này chạm tới, dưới dạng
+    /// VI: Markdown đầy đủ đã cập nhật. Rỗng là hợp lệ và nghĩa là thay đổi
+    /// VI: không làm đổi hành vi hay thiết kế nào đã tài liệu hoá, điều mà kế
+    /// VI: hoạch phải nói rõ.
+    pub feature_docs: Vec<FeatureDoc>,
 }
 
 /// One executed check, carrying everything the result contract requires of
@@ -112,7 +198,17 @@ pub trait Server {
     fn read_context(&mut self, issue: &str) -> Result<(), RunFailure>;
     fn claim(&mut self, issue: &str, key: &str) -> Result<String, RunFailure>;
     fn heartbeat(&mut self, progress: Option<&str>, key: &str) -> Result<(), RunFailure>;
-    fn save_feature_docs(&mut self, issue: &str, key: &str) -> Result<(), RunFailure>;
+    /// Saves the drafts the reviewing pass produced. An empty slice is a
+    /// legitimate call: it says the change altered no documented behaviour.
+    /// VI: Lưu các bản nháp mà lượt review tạo ra. Một slice rỗng là lời gọi
+    /// VI: hợp lệ: nó nói rằng thay đổi không làm đổi hành vi nào đã tài liệu
+    /// VI: hoá.
+    fn save_feature_docs(
+        &mut self,
+        issue: &str,
+        docs: &[FeatureDoc],
+        key: &str,
+    ) -> Result<(), RunFailure>;
     fn read_issue_version(&mut self, issue: &str) -> Result<i64, RunFailure>;
     fn record_schedule(
         &mut self,
@@ -263,10 +359,27 @@ impl Run<'_> {
         self.step(Step::Review);
 
         self.guard()?;
+        // Validated before anything is sent, so a draft the server would
+        // refuse stops the run here with the field named, rather than part way
+        // through saving a set of documents.
+        // VI: Kiểm trước khi gửi bất cứ thứ gì, để một bản nháp server sẽ từ
+        // VI: chối làm run dừng ngay tại đây kèm tên trường sai, thay vì dừng
+        // VI: khi đang lưu dở một bộ tài liệu.
+        for draft in &review.feature_docs {
+            if let Err(detail) = draft.validate() {
+                return Err(RunFailure::Reportable(format!(
+                    "the {} draft for {}/{} is not valid: {detail}",
+                    draft.doc_type.as_str(),
+                    draft.module,
+                    draft.feature
+                )));
+            }
+        }
         let key = self
             .journal
             .key_for("feature-docs", &format!("{}-docs", self.issue));
-        self.server.save_feature_docs(&self.issue, &key)?;
+        self.server
+            .save_feature_docs(&self.issue, &review.feature_docs, &key)?;
         self.step(Step::SaveFeatureDocs);
 
         // After the documents, never before: saving them bumps the issue
@@ -471,6 +584,9 @@ mod tests {
         /// VI: Những gì `report` nhận được, để test khẳng định bằng chứng đã đi
         /// VI: tới đích chứ không chỉ khẳng định có một lời gọi.
         reported: Option<Achievement>,
+        /// What `save_feature_docs` was handed, for the same reason.
+        /// VI: Những gì `save_feature_docs` nhận được, cũng vì lý do đó.
+        saved: Option<Vec<FeatureDoc>>,
     }
 
     impl FakeServer {
@@ -497,7 +613,13 @@ mod tests {
         fn heartbeat(&mut self, _progress: Option<&str>, _key: &str) -> Result<(), RunFailure> {
             self.note("heartbeat")
         }
-        fn save_feature_docs(&mut self, _issue: &str, _key: &str) -> Result<(), RunFailure> {
+        fn save_feature_docs(
+            &mut self,
+            _issue: &str,
+            docs: &[FeatureDoc],
+            _key: &str,
+        ) -> Result<(), RunFailure> {
+            self.saved = Some(docs.to_vec());
             self.note("save_feature_docs")
         }
         fn read_issue_version(&mut self, _issue: &str) -> Result<i64, RunFailure> {
@@ -575,6 +697,7 @@ mod tests {
 
     struct FakeAgent {
         log: Rc<RefCell<Recorder>>,
+        feature_docs: Vec<FeatureDoc>,
     }
 
     impl Agent for FakeAgent {
@@ -587,6 +710,7 @@ mod tests {
             Ok(Review {
                 plan: "do the thing".into(),
                 target_date: "2026-12-01".into(),
+                feature_docs: self.feature_docs.clone(),
             })
         }
         fn implement(&mut self, _plan: &str) -> Result<String, RunFailure> {
@@ -621,6 +745,18 @@ mod tests {
     /// it cares about.
     /// VI: Một bài kiểm tra đã chạy với exit code cho trước, để mỗi test chỉ
     /// VI: nói đúng điều nó quan tâm.
+    /// A draft that passes every limit, which a test then spoils one field of.
+    /// VI: Một bản nháp đạt mọi giới hạn, để test làm sai đúng một trường.
+    fn draft() -> FeatureDoc {
+        FeatureDoc {
+            module: "Desktop".into(),
+            feature: "Companion".into(),
+            doc_type: DocType::Fds,
+            content: "# Companion\n\nBehaviour.".into(),
+            change_summary: "Describes the companion run.".into(),
+        }
+    }
+
     fn executed(exit_code: i32) -> TestOutcome {
         TestOutcome {
             name: "approved-local-test-1".into(),
@@ -640,6 +776,7 @@ mod tests {
                 fail_on: None,
                 lease_lost_on: None,
                 reported: None,
+                saved: None,
             },
             workspace: FakeWorkspace {
                 log: Rc::clone(&log),
@@ -647,7 +784,10 @@ mod tests {
                 commit: Some("0123abc".into()),
                 kept: None,
             },
-            agent: FakeAgent { log },
+            agent: FakeAgent {
+                log,
+                feature_docs: vec![draft()],
+            },
             control: FakeControl {
                 cancel: false,
                 elapsed: 0,
@@ -885,6 +1025,119 @@ mod tests {
         let reported = harness.server.reported.clone().expect("a report was owed");
         assert!(reported.pull_request_url.is_none());
         assert_eq!(reported.commit.as_deref(), Some("0123abc"));
+    }
+
+    #[test]
+    fn the_drafts_the_review_produced_are_the_ones_saved() {
+        // The port used to receive no drafts at all, which left nothing to
+        // save and made the step a call that could only ever do nothing.
+        // VI: Cổng này trước đây không nhận bản nháp nào, nên không có gì để
+        // VI: lưu và bước đó chỉ là một lời gọi mãi mãi không làm gì.
+        let mut harness = harness();
+        let completed = run(&mut harness, false);
+        assert_eq!(completed.outcome, Outcome::AwaitingReview);
+        assert_eq!(harness.server.saved, Some(vec![draft()]));
+    }
+
+    #[test]
+    fn a_change_that_documents_nothing_still_saves_an_empty_set() {
+        // An empty list is a legitimate answer, not a missing one: it says the
+        // change altered no documented behaviour. The step still runs so the
+        // journal records it, and so the server sees the decision.
+        // VI: Danh sách rỗng là một câu trả lời hợp lệ chứ không phải câu trả
+        // VI: lời thiếu: nó nói rằng thay đổi không làm đổi hành vi nào đã tài
+        // VI: liệu hoá. Bước này vẫn chạy để journal ghi lại, và để server thấy
+        // VI: được quyết định đó.
+        let mut harness = harness();
+        harness.agent.feature_docs = vec![];
+        let completed = run(&mut harness, false);
+        assert_eq!(completed.outcome, Outcome::AwaitingReview);
+        assert_eq!(harness.server.saved, Some(vec![]));
+        assert!(completed.journal.has_completed(Step::SaveFeatureDocs));
+    }
+
+    #[test]
+    fn a_draft_the_server_would_refuse_stops_the_run_before_it_is_sent() {
+        // Sending it would fail part way through a set of documents, leaving
+        // some saved and some not, and the complaint would arrive from the
+        // server rather than naming the field here.
+        // VI: Gửi đi sẽ hỏng khi đang lưu dở một bộ tài liệu, để một phần được
+        // VI: lưu và một phần không, và lời phàn nàn sẽ tới từ server chứ không
+        // VI: nêu tên trường sai ngay ở đây.
+        let mut harness = harness();
+        let mut spoiled = draft();
+        spoiled.change_summary = "no".into(); // below the 3-character minimum
+        harness.agent.feature_docs = vec![spoiled];
+
+        let completed = run(&mut harness, false);
+        assert_eq!(completed.outcome, Outcome::Failed);
+        assert!(harness.server.saved.is_none(), "nothing may be sent");
+        let detail = completed.detail.unwrap_or_default();
+        assert!(detail.contains("changeSummary"), "got {detail}");
+        assert!(detail.contains("FDS"), "the document is named: {detail}");
+    }
+
+    #[test]
+    fn every_draft_field_has_its_limits_enforced() {
+        /// Spoils one field of an otherwise valid draft.
+        /// VI: Làm sai một trường của bản nháp vốn hợp lệ.
+        type Spoil = fn(&mut FeatureDoc);
+
+        let long = "x".repeat(200);
+        let cases: [(&str, Spoil, &str); 6] = [
+            ("module too short", |d| d.module = "a".into(), "module"),
+            ("module too long", |d| d.module = "x".repeat(121), "module"),
+            (
+                "feature too short",
+                |d| d.feature = String::new(),
+                "feature",
+            ),
+            ("content empty", |d| d.content = String::new(), "content"),
+            (
+                "summary too short",
+                |d| d.change_summary = "ab".into(),
+                "changeSummary",
+            ),
+            (
+                "summary too long",
+                |d| d.change_summary = "y".repeat(501),
+                "changeSummary",
+            ),
+        ];
+        for (what, spoil, field) in cases {
+            let mut doc = draft();
+            spoil(&mut doc);
+            let error = doc.validate().unwrap_err();
+            assert!(error.contains(field), "{what}: got {error}");
+        }
+        // A valid draft at the edges is accepted rather than refused.
+        // VI: Một bản nháp hợp lệ ở sát giới hạn được chấp nhận chứ không bị từ
+        // VI: chối.
+        let mut edge = draft();
+        edge.module = "ab".into();
+        edge.change_summary = "abc".into();
+        edge.content = long;
+        assert!(edge.validate().is_ok());
+    }
+
+    #[test]
+    fn draft_limits_are_counted_in_characters_not_bytes() {
+        // Vietnamese text costs up to three bytes a character, so a byte count
+        // would refuse a document well inside the real limit.
+        // VI: Chữ tiếng Việt tốn tới ba byte một ký tự, nên đếm theo byte sẽ từ
+        // VI: chối một tài liệu còn nằm trong giới hạn thật.
+        let mut doc = draft();
+        doc.change_summary = "Mô tả thay đổi tài liệu. ".repeat(16);
+        let (_, most) = DOC_SUMMARY_LIMITS;
+        assert!(
+            doc.change_summary.chars().count() <= most,
+            "inside the limit in characters"
+        );
+        assert!(
+            doc.change_summary.len() > most,
+            "but over it in bytes, which is the point"
+        );
+        assert!(doc.validate().is_ok(), "a byte count would refuse this");
     }
 
     #[test]
