@@ -299,3 +299,85 @@ async fn a_contract_violation_never_reaches_the_network() {
     assert!(matches!(error, Error::Contract(_)), "got {error:?}");
     assert_eq!(seen.lock().unwrap().bodies.len(), 2);
 }
+
+#[tokio::test]
+async fn an_issue_write_carries_the_version_it_is_guarded_by() {
+    let (url, seen) = stub(vec![
+        initialize_reply(),
+        Reply::json(json!({ "jsonrpc": "2.0" })),
+        Reply::json(json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "result": { "structuredContent": { "data": { "version": 8 } } }
+        })),
+        Reply::json(json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "result": { "structuredContent": { "data": { "id": "ccomment1" } } }
+        })),
+    ])
+    .await;
+
+    let mut client = connect(&url).await;
+    client.initialize().await.unwrap();
+
+    let updated = client
+        .update_issue(
+            "cissue1",
+            7,
+            &json!({ "targetDate": "2026-12-01" }),
+            "key-schedule",
+        )
+        .await
+        .unwrap();
+    assert_eq!(updated["version"], json!(8));
+
+    client
+        .add_comment("cissue1", "Plan before implementation", "key-plan")
+        .await
+        .unwrap();
+
+    let record = seen.lock().unwrap();
+    let update = &record.bodies[2]["params"]["arguments"];
+    assert_eq!(record.bodies[2]["params"]["name"], "update_issue");
+    // The version the caller read travels with the write; without it two
+    // writers overwrite each other silently.
+    // VI: Version mà bên gọi đã đọc đi kèm lần ghi; thiếu nó thì hai bên ghi sẽ
+    // VI: âm thầm đè lên nhau.
+    assert_eq!(update["expectedVersion"], json!(7));
+    assert_eq!(update["targetDate"], json!("2026-12-01"));
+    assert_eq!(update["idempotencyKey"], json!("key-schedule"));
+
+    let comment = &record.bodies[3]["params"]["arguments"];
+    assert_eq!(record.bodies[3]["params"]["name"], "add_comment");
+    assert_eq!(comment["content"], json!("Plan before implementation"));
+    assert_eq!(comment["idempotencyKey"], json!("key-plan"));
+}
+
+#[tokio::test]
+async fn a_field_colliding_with_an_owned_argument_never_reaches_the_network() {
+    // Only two replies are queued, so a request that should not be sent makes
+    // the test hang rather than pass quietly.
+    // VI: Chỉ xếp sẵn hai phản hồi, nên một request lẽ ra không được gửi sẽ làm
+    // VI: test treo chứ không lặng lẽ đạt.
+    let (url, seen) = stub(vec![
+        initialize_reply(),
+        Reply::json(json!({ "jsonrpc": "2.0" })),
+    ])
+    .await;
+
+    let mut client = connect(&url).await;
+    client.initialize().await.unwrap();
+
+    let error = client
+        .update_issue(
+            "cissue1",
+            7,
+            &json!({ "expectedVersion": 1, "targetDate": "2026-12-01" }),
+            "key-1",
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, Error::Contract(_)), "got {error:?}");
+    assert_eq!(seen.lock().unwrap().bodies.len(), 2);
+}
