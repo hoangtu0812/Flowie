@@ -89,13 +89,19 @@ jobs:
       - name: Install browser test dependencies
         timeout-minutes: 25
         run: pnpm --filter @circle/web exec playwright install --with-deps chromium firefox webkit
+      # A green suite runs about 30 minutes. The ceiling allows for a slow
+      # runner, for the retry a failing test now gets, and for the run going
+      # all the way through instead of stopping at the fifth failure.
+      # VI: Bộ test xanh chạy khoảng 30 phút. Mức trần này tính thêm cho máy chạy
+      # chậm, cho lần thử lại mà một test hỏng nay được cấp, và cho việc chạy hết
+      # thay vì dừng ở lỗi thứ năm.
       - name: Verify browser regression workflows
-        timeout-minutes: 45
+        timeout-minutes: 75
         env:
           FLOWIE_E2E_DATABASE_URL: postgresql://flowie_test:test-only-password@localhost:5432/flowie_mcp_test
         run: |
           python scripts/seed-ui-regression.py
-          pnpm --filter @circle/web test:e2e --max-failures=5
+          pnpm --filter @circle/web test:e2e
       - uses: actions/upload-artifact@v4
         if: failure() || cancelled()
         with:
