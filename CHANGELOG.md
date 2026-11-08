@@ -19,6 +19,11 @@ pull request and commit references, which are for us.
 
 ## Unreleased
 
+### Removed
+
+- The old NestJS backend has been deleted. It was replaced by the Python API some time ago and has not run anywhere since: no container was built from it, no check ever compiled or tested it, and the app has not spoken to it. It nonetheless stayed in the commands everyone uses, so `pnpm dev` started a second API that was not the real one and `pnpm build` spent its time compiling fourteen thousand lines nobody runs — a newcomer could reasonably have believed that was the backend. Nothing a user can see changes, and no database or deployment change comes with it. The migration notes that told people not to delete it now record why that rule no longer applies. (DTD-518, #211)
+  VI: Backend NestJS cũ đã bị xóa. Nó được thay bằng API Python từ lâu và từ đó không chạy ở đâu cả: không container nào được dựng từ nó, không bước kiểm tra nào từng biên dịch hay chạy test cho nó, và ứng dụng cũng không nói chuyện với nó. Dù vậy nó vẫn nằm trong các lệnh mọi người dùng hằng ngày, nên `pnpm dev` khởi động thêm một API không phải API thật, còn `pnpm build` thì mất thời gian biên dịch mười bốn nghìn dòng không ai chạy — một người mới hoàn toàn có thể tin đó mới là backend. Không có gì người dùng thấy được thay đổi, và không kèm thay đổi database hay triển khai nào. Ghi chú migration vốn dặn không được xóa nó nay ghi rõ vì sao quy tắc đó không còn áp dụng. (DTD-518)
+
 ## [0.16.0] — 2026-11-08 21:05 +07
 
 ### Added
