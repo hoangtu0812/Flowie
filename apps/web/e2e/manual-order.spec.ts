@@ -80,8 +80,17 @@ test('manual issue order supports drag, keyboard and reload', async ({ page }, t
    ).toBeVisible();
    await expect(page.getByRole('button', { name: /^Reorder / })).toHaveCount(0);
    await manual(page);
-   const rows = page.locator('[data-order-id]');
-   await expect(rows).toHaveCount(2);
+   // Count only the rows this fixture seeded. The issues list shows everything
+   // in the project, so an issue another spec failed to clean up is counted here
+   // too and fails a test that never touched it — which is how a timeout in
+   // epic-type on one browser project broke this one on the next.
+   // VI: Chỉ đếm những dòng do fixture này tạo. Danh sách issue hiển thị mọi thứ
+   // trong project, nên một issue mà spec khác không dọn kịp cũng bị đếm vào đây
+   // và làm hỏng một test không hề liên quan — đúng cách mà một lần timeout của
+   // epic-type ở project trình duyệt này làm hỏng test này ở project kế tiếp.
+   const seeded = (fixture.issues as { id: string }[]).map((item) => item.id);
+   const rows = page.locator(seeded.map((id) => `[data-order-id="${id}"]`).join(','));
+   await expect(rows).toHaveCount(seeded.length);
    const ids = await rows.evaluateAll((items) =>
       items.map((item) => item.getAttribute('data-order-id'))
    );

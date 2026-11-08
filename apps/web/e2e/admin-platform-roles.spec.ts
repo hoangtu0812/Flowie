@@ -14,6 +14,16 @@ async function openUsers(page: Page, email: string) {
    await page.getByLabel('Password', { exact: true }).fill(fixture.password);
    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
    await expect(page).not.toHaveURL(/\/auth\/login/);
+   // Wait for the sign-in redirect to finish, not merely for the URL to stop
+   // being the login page: the latter is already true while the app is still
+   // navigating, and the goto below then collides with that navigation and
+   // fails with "interrupted by another navigation".
+   // VI: Chờ redirect sau đăng nhập kết thúc hẳn, chứ không chỉ chờ URL thôi là
+   // trang đăng nhập: điều sau đã đúng ngay khi app vẫn đang điều hướng, và lệnh
+   // goto bên dưới sẽ đâm vào lần điều hướng đó rồi báo "interrupted by another
+   // navigation".
+   await page.waitForURL((url) => !url.pathname.startsWith('/auth/login'));
+   await page.waitForLoadState('networkidle');
    await page.goto('/admin');
    await page.getByRole('button', { name: 'Users', exact: true }).click();
 }
