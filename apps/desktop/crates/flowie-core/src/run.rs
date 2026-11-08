@@ -23,6 +23,20 @@ use crate::journal::Entry;
 use crate::lease::{BudgetPolicy, Decision, LeaseTracker};
 use crate::sequence::{Outcome, Step};
 
+/// The task as the server describes it, on its way to the agent.
+///
+/// Core never looks inside. It is the agent that understands this, and the
+/// server that produces it; the rules only need to know that it exists and
+/// that it reaches the agent unchanged. Keeping it opaque is what stops the
+/// orchestrator growing opinions about a shape it does not own.
+/// VI: Task theo mô tả của server, trên đường tới agent.
+/// VI: Core không bao giờ nhìn vào bên trong. Agent mới là bên hiểu nó và server
+/// VI: là bên tạo ra nó; các quy tắc chỉ cần biết nó tồn tại và tới được agent
+/// VI: nguyên vẹn. Giữ nó ở dạng không trong suốt là thứ ngăn orchestrator sinh
+/// VI: ra quan điểm về một hình dạng không thuộc về nó.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TaskContext(pub serde_json::Value);
+
 /// Which of a feature's two documents a draft is.
 /// VI: Bản nháp thuộc tài liệu nào trong hai tài liệu của một tính năng.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -197,7 +211,11 @@ pub enum RunFailure {
 /// What the run needs from the Flowie server.
 /// VI: Những gì run cần từ server Flowie.
 pub trait Server {
-    fn read_context(&mut self, issue: &str) -> Result<(), RunFailure>;
+    /// Reads everything the agent will need about the task. The agent
+    /// cannot ask for it itself, so this step is what produces it.
+    /// VI: Đọc mọi thứ agent sẽ cần biết về task. Agent không tự hỏi được, nên
+    /// VI: bước này chính là nơi tạo ra nó.
+    fn read_context(&mut self, issue: &str) -> Result<TaskContext, RunFailure>;
     fn claim(&mut self, issue: &str, key: &str) -> Result<String, RunFailure>;
     fn heartbeat(&mut self, progress: Option<&str>, key: &str) -> Result<(), RunFailure>;
     /// Saves the drafts the reviewing pass produced. An empty slice is a
@@ -255,8 +273,13 @@ pub trait Workspace {
 /// VI: Những gì run cần từ agent.
 pub trait Agent {
     fn probe(&mut self) -> Result<(), RunFailure>;
-    fn review(&mut self, worktree: &Path) -> Result<Review, RunFailure>;
-    fn implement(&mut self, worktree: &Path, plan: &str) -> Result<String, RunFailure>;
+    fn review(&mut self, worktree: &Path, task: &TaskContext) -> Result<Review, RunFailure>;
+    fn implement(
+        &mut self,
+        worktree: &Path,
+        task: &TaskContext,
+        plan: &str,
+    ) -> Result<String, RunFailure>;
 }
 
 /// Asked between steps so a person can stop a run without waiting for it.
@@ -352,7 +375,7 @@ impl Run<'_> {
         self.agent.probe()?;
         self.step(Step::VerifyEnvironment);
 
-        self.server.read_context(&self.issue)?;
+        let task = self.server.read_context(&self.issue)?;
         self.step(Step::ReadContext);
 
         let key = self
@@ -367,7 +390,7 @@ impl Run<'_> {
         self.step(Step::CreateWorktree);
 
         self.beat(Some("Reviewing the issue (read-only)"))?;
-        let review = self.agent.review(&worktree)?;
+        let review = self.agent.review(&worktree, &task)?;
         self.step(Step::Review);
 
         self.guard()?;
@@ -418,7 +441,7 @@ impl Run<'_> {
 
         self.guard()?;
         self.beat(Some("Implementing the plan"))?;
-        let summary = self.agent.implement(&worktree, &review.plan)?;
+        let summary = self.agent.implement(&worktree, &task, &review.plan)?;
         self.step(Step::Implement);
 
         self.guard()?;
@@ -623,8 +646,9 @@ mod tests {
     }
 
     impl Server for FakeServer {
-        fn read_context(&mut self, _issue: &str) -> Result<(), RunFailure> {
-            self.note("read_context")
+        fn read_context(&mut self, issue: &str) -> Result<TaskContext, RunFailure> {
+            self.note("read_context")?;
+            Ok(TaskContext(serde_json::json!({ "issue": issue })))
         }
         fn claim(&mut self, _issue: &str, _key: &str) -> Result<String, RunFailure> {
             self.note("claim")?;
@@ -723,6 +747,11 @@ mod tests {
         /// VI: Nơi agent được bảo làm việc, để test kiểm được đó là worktree chứ
         /// VI: không phải chỗ nào khác.
         worked_in: Option<PathBuf>,
+        /// The task the agent was handed, so a test can check it is the
+        /// one the server produced rather than anything invented here.
+        /// VI: Task mà agent được trao, để test kiểm được đó là thứ server tạo
+        /// VI: ra chứ không phải thứ bịa ra ở đây.
+        given: Option<TaskContext>,
     }
 
     impl Agent for FakeAgent {
@@ -730,7 +759,8 @@ mod tests {
             self.log.borrow_mut().calls.push("probe".into());
             Ok(())
         }
-        fn review(&mut self, worktree: &Path) -> Result<Review, RunFailure> {
+        fn review(&mut self, worktree: &Path, task: &TaskContext) -> Result<Review, RunFailure> {
+            self.given = Some(task.clone());
             // The agent is told where to work, and the path is the one the
             // workspace just cut rather than anything this double invented.
             // VI: Agent được cho biết làm việc ở đâu, và đường dẫn đó là thứ workspace
@@ -743,7 +773,13 @@ mod tests {
                 feature_docs: self.feature_docs.clone(),
             })
         }
-        fn implement(&mut self, worktree: &Path, _plan: &str) -> Result<String, RunFailure> {
+        fn implement(
+            &mut self,
+            worktree: &Path,
+            task: &TaskContext,
+            _plan: &str,
+        ) -> Result<String, RunFailure> {
+            self.given = Some(task.clone());
             self.worked_in = Some(worktree.to_path_buf());
             self.log.borrow_mut().calls.push("implement".into());
             Ok("did the thing".into())
@@ -820,6 +856,7 @@ mod tests {
                 log,
                 feature_docs: vec![draft()],
                 worked_in: None,
+                given: None,
             },
             control: FakeControl {
                 cancel: false,
@@ -1104,6 +1141,22 @@ mod tests {
         let reported = harness.server.reported.clone().expect("a report was owed");
         assert!(reported.pull_request_url.is_none());
         assert_eq!(reported.commit.as_deref(), Some("0123abc"));
+    }
+
+    #[test]
+    fn the_task_the_server_read_is_the_task_the_agent_is_given() {
+        // The agent cannot ask the server anything: it has file tools only.
+        // So whatever the read step produced has to reach it unchanged, or the
+        // agent works on a task it was never told about.
+        // VI: Agent không hỏi server được gì cả: nó chỉ có công cụ thao tác
+        // VI: file. Nên thứ bước đọc tạo ra phải tới được agent nguyên vẹn, nếu
+        // VI: không agent sẽ làm một task nó chưa từng được cho biết.
+        let mut harness = harness();
+        run(&mut harness, false);
+        assert_eq!(
+            harness.agent.given,
+            Some(TaskContext(serde_json::json!({ "issue": "DTD-1" })))
+        );
     }
 
     #[test]

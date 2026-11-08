@@ -35,7 +35,7 @@
 
 use std::future::Future;
 
-use flowie_core::run::{Achievement, FeatureDoc, RunFailure, Server, TestOutcome};
+use flowie_core::run::{Achievement, FeatureDoc, RunFailure, Server, TaskContext, TestOutcome};
 use flowie_core::sequence::Outcome;
 use flowie_core::translate;
 use flowie_mcp::{
@@ -244,15 +244,34 @@ fn finish<T>(
 }
 
 impl Server for Connection {
-    fn read_context(&mut self, issue: &str) -> Result<(), RunFailure> {
+    fn read_context(&mut self, issue: &str) -> Result<TaskContext, RunFailure> {
         let Self {
             runtime,
             client,
             lease,
             ..
         } = self;
-        finish(runtime, lease, client.get_issue_context(issue))?;
-        Ok(())
+        // The same four parts the Python runner assembles, because the agent
+        // is prompted with this and has been read against that shape. The
+        // issue itself and its wider context are required; the repository
+        // instructions and the existing documents are not, because a project
+        // with neither is ordinary and failing the run over it would stop work
+        // that could have been done.
+        // VI: Đúng bốn phần mà runner Python ghép lại, vì agent được prompt
+        // VI: bằng thứ này và đã được đọc theo hình dạng đó. Bản thân issue và
+        // VI: phần context rộng hơn là bắt buộc; phần hướng dẫn repository và
+        // VI: các tài liệu đã có thì không, vì một project không có cả hai là
+        // VI: chuyện bình thường, và làm hỏng run vì điều đó sẽ chặn một công
+        // VI: việc vốn làm được.
+        let detail = finish(runtime, lease, client.get_issue(issue))?;
+        let wider = finish(runtime, lease, client.get_issue_context(issue))?;
+        let documents = finish(runtime, lease, client.get_feature_docs(issue))
+            .unwrap_or_else(|_| json!({ "linked": [], "features": [] }));
+        Ok(TaskContext(json!({
+            "issue": detail,
+            "context": wider,
+            "featureDocs": documents,
+        })))
     }
 
     fn claim(&mut self, issue: &str, key: &str) -> Result<String, RunFailure> {
