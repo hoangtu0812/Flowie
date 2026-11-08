@@ -25,7 +25,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use flowie_agent::driver::{Driver, DEFAULT_TIMEOUT};
-use flowie_connection::{Assigned, Connection};
+use flowie_connection::{Assigned, Connection, Refusal};
 use flowie_core::config::RepositoryMapping;
 use flowie_core::run::{Control, Run, RunFailure};
 use flowie_core::{readiness, CompanionConfig, Entry, Readiness, Schedule};
@@ -46,6 +46,7 @@ const TICK: Duration = Duration::from_millis(250);
 pub struct Shared {
     readiness: Mutex<Readiness>,
     task: Mutex<Option<String>>,
+    agent: Mutex<Option<&'static str>>,
     activity: Mutex<Option<String>>,
     site: Mutex<Option<String>>,
     cancel: AtomicBool,
@@ -57,6 +58,7 @@ impl Shared {
         Self {
             readiness: Mutex::new(readiness),
             task: Mutex::new(None),
+            agent: Mutex::new(None),
             activity: Mutex::new(None),
             site: Mutex::new(None),
             cancel: AtomicBool::new(false),
@@ -81,6 +83,24 @@ impl Shared {
     /// VI: Task đang được làm, dùng cho dòng trên tray. `None` nghĩa là đang rảnh.
     pub fn task(&self) -> Option<String> {
         self.task.lock().ok().and_then(|held| held.clone())
+    }
+
+    /// Which agent is working right now, or `None` when none is.
+    ///
+    /// Held separately from the configured provider because the configuration
+    /// says what would run, not what is running: a machine configured for
+    /// Codex and sitting idle must not read as "Codex is working on
+    /// something". It is set when a run starts and cleared when it ends, so
+    /// the two questions a person actually asks — is anything running, and
+    /// which agent — are answered by one value.
+    /// VI: Agent nào đang làm việc ngay lúc này, hoặc `None` khi không có.
+    /// VI: Giữ tách khỏi provider trong cấu hình vì cấu hình nói thứ sẽ chạy chứ
+    /// VI: không phải thứ đang chạy: một máy cấu hình Codex và đang rảnh không
+    /// VI: được đọc ra thành "Codex đang làm gì đó". Nó được đặt khi một run bắt
+    /// VI: đầu và xoá khi run kết thúc, nên hai câu hỏi người dùng thật sự hỏi —
+    /// VI: có gì đang chạy không, và agent nào — được trả lời bằng một giá trị.
+    pub fn agent(&self) -> Option<&'static str> {
+        self.agent.lock().ok().and_then(|held| *held)
     }
 
     /// What the agent said it is doing, the last time it said anything.
@@ -115,6 +135,12 @@ impl Shared {
     fn set_site(&self, value: Option<String>) {
         if let Ok(mut held) = self.site.lock() {
             *held = value;
+        }
+    }
+
+    fn set_agent(&self, name: Option<&'static str>) {
+        if let Ok(mut held) = self.agent.lock() {
+            *held = name;
         }
     }
 
@@ -206,18 +232,18 @@ fn attempt(directory: &Path, shared: &Arc<Shared>, schedule: &mut Schedule) -> O
 
     let mut connection = match connect(&config) {
         Ok(connection) => connection,
-        Err(failure) => {
+        Err(refusal) => {
             schedule.failed();
-            shared.set_readiness(disconnected(&failure));
+            shared.set_readiness(refused(refusal));
             return Some(interval);
         }
     };
 
     let access = match connection.access() {
         Ok(access) => access,
-        Err(failure) => {
+        Err(refusal) => {
             schedule.failed();
-            shared.set_readiness(disconnected(&failure));
+            shared.set_readiness(refused(refusal));
             return Some(interval);
         }
     };
@@ -290,6 +316,7 @@ fn work(
         .unwrap_or_else(|| assigned.issue_id.clone());
     shared.set_task(Some(label.clone()));
     shared.set_activity(None);
+    shared.set_agent(Some(config.provider.label()));
     // A cancel asked for while idle must not end the run that starts next.
     // VI: Một lệnh hủy yêu cầu lúc đang rảnh không được kết thúc run bắt đầu
     // VI: ngay sau đó.
@@ -346,6 +373,7 @@ fn work(
 
     shared.set_task(None);
     shared.set_activity(None);
+    shared.set_agent(None);
     shared.cancel.store(false, Ordering::SeqCst);
     // The outcome is not written over the readiness the server reported: how a
     // run ended says nothing about whether the machine can take the next one,
@@ -383,15 +411,21 @@ impl Control for Operator<'_> {
     }
 }
 
-fn connect(config: &CompanionConfig) -> Result<Connection, RunFailure> {
-    let endpoint = Endpoint::parse(&config.endpoint)
-        .map_err(|error| RunFailure::Precondition(error.to_string()))?;
-    let store = CredentialStore::new(&config.credential_account)
-        .map_err(|error| RunFailure::Precondition(error.to_string()))?;
-    let secret = store
-        .read()
-        .map_err(|error| RunFailure::Precondition(error.to_string()))?;
-    let token = Token::new(secret).map_err(|error| RunFailure::Precondition(error.to_string()))?;
+fn connect(config: &CompanionConfig) -> Result<Connection, Refusal> {
+    let local =
+        |error: &dyn std::fmt::Display| Refusal::Other(RunFailure::Precondition(error.to_string()));
+    let endpoint = Endpoint::parse(&config.endpoint).map_err(|error| local(&error))?;
+    let store = CredentialStore::new(&config.credential_account).map_err(|error| local(&error))?;
+    let secret = store.read().map_err(|error| local(&error))?;
+    // A token the local store will not give back, or one this client will not
+    // send, is the person's to fix in the same place as one the server
+    // refuses: the token field. Reporting it as a lost connection would send
+    // them to the network instead.
+    // VI: Một token mà kho credential không trả lại được, hay một token client
+    // VI: này không chịu gửi đi, đều là thứ người dùng sửa ở đúng một chỗ như
+    // VI: token bị server từ chối: ô nhập token. Báo nó thành mất kết nối sẽ
+    // VI: đẩy họ đi kiểm tra mạng.
+    let token = Token::new(secret).map_err(|error| Refusal::Credential(error.to_string()))?;
     Connection::open(endpoint, token)
 }
 
@@ -403,6 +437,24 @@ fn connect(config: &CompanionConfig) -> Result<Connection, RunFailure> {
 /// VI: không phải thứ cần hỏi người dùng: một token bị thu hồi sẽ hiện ra dưới
 /// VI: dạng một lời gọi bị từ chối, và lượt sau báo lại qua chính câu trả lời
 /// VI: của server.
+/// What a refused connection means for the machine.
+///
+/// A credential the server will not take is the one failure here that a person
+/// has to act on, and it has to say so: `needs_person` drives whether the tray
+/// asks for attention, so a rejected token reported as a lost connection sits
+/// there silently retrying a token that will never work.
+/// VI: Một kết nối bị từ chối có nghĩa gì với máy này.
+/// VI: Credential mà server không nhận là thất bại duy nhất ở đây cần người xử
+/// VI: lý, và nó phải nói ra điều đó: `needs_person` quyết định tray có đòi chú
+/// VI: ý hay không, nên một token bị khước từ mà báo thành mất kết nối sẽ ngồi
+/// VI: im thử lại mãi một token không bao giờ chạy được.
+fn refused(refusal: Refusal) -> Readiness {
+    match refusal {
+        Refusal::Credential(reason) => Readiness::NeedsSignIn { reason },
+        Refusal::Other(failure) => disconnected(&failure),
+    }
+}
+
 fn disconnected(failure: &RunFailure) -> Readiness {
     let detail = match failure {
         RunFailure::Precondition(detail) | RunFailure::Reportable(detail) => detail.clone(),
@@ -453,6 +505,26 @@ fn today() -> time::Date {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_rejected_token_asks_the_person_rather_than_waiting_for_the_network() {
+        // `needs_person` is what makes the tray ask for attention. A rejected
+        // token reported as a lost connection sits there retrying a token that
+        // is never going to work, and says nothing while it does.
+        // VI: `needs_person` là thứ khiến tray đòi được chú ý. Một token bị
+        // VI: khước từ mà báo thành mất kết nối sẽ ngồi thử lại mãi một token
+        // VI: không bao giờ chạy được, và không nói gì trong suốt thời gian đó.
+        let asked = refused(Refusal::Credential("the token is revoked".into()));
+        assert!(asked.needs_person(), "{asked:?}");
+        assert_eq!(asked.reason(), Some("the token is revoked"));
+
+        let waited = refused(Refusal::Other(RunFailure::Precondition(
+            "the host did not answer".into(),
+        )));
+        assert!(!waited.needs_person(), "{waited:?}");
+        assert_eq!(waited.reason(), Some("the host did not answer"));
+    }
+
     use super::*;
 
     #[test]

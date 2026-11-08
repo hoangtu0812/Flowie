@@ -67,6 +67,31 @@ pub struct SetupView {
     /// The task in hand, when there is one.
     /// VI: Task đang làm, nếu có.
     pub activity: Option<String>,
+    /// What the agent last said it is doing inside that task. Separate from
+    /// the task because a task that has not moved for twenty minutes and a
+    /// task being worked on look identical without it.
+    /// VI: Agent nói lần gần nhất rằng nó đang làm gì bên trong task đó. Tách
+    /// VI: khỏi task vì thiếu nó thì một task đứng im hai mươi phút và một task
+    /// VI: đang được làm trông y hệt nhau.
+    pub doing: Option<String>,
+    /// Which agent is running right now, or `None` when none is. Reported
+    /// instead of the configured provider so an idle machine does not read as
+    /// a busy one.
+    /// VI: Agent nào đang chạy ngay lúc này, hoặc `None` khi không có. Báo cái
+    /// VI: này thay vì provider trong cấu hình để một máy đang rảnh không bị đọc
+    /// VI: thành một máy đang bận.
+    pub agent: Option<String>,
+    /// Why the state is what it is, when the state alone does not say. This is
+    /// the difference between a window that reports a problem and one that
+    /// reports a problem a person can act on.
+    /// VI: Vì sao trạng thái lại như vậy, khi riêng trạng thái không nói đủ.
+    /// VI: Đây là khác biệt giữa một cửa sổ báo có vấn đề và một cửa sổ báo một
+    /// VI: vấn đề người dùng xử lý được.
+    pub reason: Option<String>,
+    /// The running build, so a report names a version rather than "the latest
+    /// one".
+    /// VI: Bản đang chạy, để một báo cáo nêu được số hiệu thay vì "bản mới nhất".
+    pub version: String,
     /// Whether the machine will actually start the companion at sign-in, read
     /// back from the system rather than from the file, so a registration that
     /// did not take is visible.
@@ -97,6 +122,10 @@ pub fn load_setup(app: tauri::AppHandle, companion: State<'_, Companion>) -> Set
         state: readiness.summary(crate::VIETNAMESE),
         needs_person: readiness.needs_person(),
         activity: companion.shared.task(),
+        doing: companion.shared.activity(),
+        agent: companion.shared.agent().map(str::to_string),
+        reason: readiness.reason().map(str::to_string),
+        version: app.package_info().version.to_string(),
         starts_at_login: app.autolaunch().is_enabled().unwrap_or(false),
         problem,
     }

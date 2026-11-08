@@ -50,6 +50,19 @@ impl Provider {
             Provider::Codex => "codex",
         }
     }
+
+    /// The name to show a person, which is not the command name: someone
+    /// reading the tray wants to know which agent is working on their task,
+    /// and `claude` lowercase reads as a file rather than a product.
+    /// VI: Tên hiển thị cho người đọc, khác tên lệnh: người nhìn tray muốn biết
+    /// VI: agent nào đang làm task của họ, và `claude` viết thường đọc ra như một
+    /// VI: file chứ không phải một sản phẩm.
+    pub fn label(self) -> &'static str {
+        match self {
+            Provider::Claude => "Claude",
+            Provider::Codex => "Codex",
+        }
+    }
 }
 
 /// One repository this machine may work in.
