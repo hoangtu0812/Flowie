@@ -454,16 +454,16 @@ fn a_connection_that_cannot_write_is_reported_as_read_only() {
     ]);
 
     let mut connection = connect(&url);
-    let (scopes, writes) = connection.access().expect("access is readable");
+    let access = connection.access().expect("access is readable");
     assert_eq!(
-        scopes,
+        access.scopes,
         vec!["issues:read".to_string(), "runs:read".to_string()]
     );
     // The field was absent. A connection that cannot write fails at its first
     // write, after the issue is already claimed, so absent must mean no.
     // VI: Trường này không có. Một kết nối không ghi được sẽ hỏng ở lần ghi đầu
     // VI: tiên, khi issue đã bị claim, nên thiếu trường phải hiểu là không.
-    assert!(!writes);
+    assert!(!access.writes_enabled);
 }
 
 #[test]

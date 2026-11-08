@@ -59,6 +59,23 @@ pub enum Provider {
     Codex,
 }
 
+/// The configured provider is the same choice, named in the crate that stores
+/// it. Converting here rather than in every caller means one exhaustive match
+/// has to be updated when a third agent is added, instead of several that can
+/// each be missed.
+/// VI: Provider trong cấu hình là cùng một lựa chọn, chỉ được gọi tên ở crate
+/// VI: lưu nó. Chuyển đổi ở đây thay vì ở từng bên gọi nghĩa là khi thêm agent
+/// VI: thứ ba thì chỉ một match bắt-buộc-đủ-nhánh phải sửa, chứ không phải nhiều
+/// VI: chỗ mà mỗi chỗ đều có thể bị bỏ sót.
+impl From<flowie_core::config::Provider> for Provider {
+    fn from(configured: flowie_core::config::Provider) -> Self {
+        match configured {
+            flowie_core::config::Provider::Claude => Provider::Claude,
+            flowie_core::config::Provider::Codex => Provider::Codex,
+        }
+    }
+}
+
 impl Provider {
     pub fn default_program(self) -> &'static str {
         match self {

@@ -55,6 +55,22 @@ const PENDING: &str = "PENDING";
 /// VI: hoá ra không dùng được.
 const POLL_LIMIT: u32 = 5;
 
+/// What the server says this connection is and may do.
+///
+/// Returned as a named type rather than a tuple because the connection id is
+/// the identity a run is recorded against: a journal that names the wrong
+/// connection cannot be matched back to the run it describes.
+/// VI: Những gì server nói về kết nối này và những gì nó được phép làm.
+/// VI: Trả về dưới dạng một kiểu có tên chứ không phải tuple, vì connection id
+/// VI: là danh tính mà một run được ghi theo: một journal nêu sai connection thì
+/// VI: không khớp lại được với run mà nó mô tả.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Access {
+    pub connection_id: String,
+    pub scopes: Vec<String>,
+    pub writes_enabled: bool,
+}
+
 /// One piece of work waiting for this machine.
 /// VI: Một phần việc đang chờ máy này.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -142,7 +158,7 @@ impl Connection {
     /// the readiness check the companion runs before it takes any work.
     /// VI: Các scope kết nối này có và nó có được ghi hay không, dành cho bước
     /// VI: kiểm tra sẵn sàng mà companion chạy trước khi nhận bất kỳ việc nào.
-    pub fn access(&mut self) -> Result<(Vec<String>, bool), RunFailure> {
+    pub fn access(&mut self) -> Result<Access, RunFailure> {
         let Self {
             runtime,
             client,
@@ -166,7 +182,14 @@ impl Connection {
         // VI: hỏng ở lần ghi đầu tiên, khi issue đã bị claim, nên cách hiểu thận
         // VI: trọng mới là cách đúng.
         let writes = value["writesEnabled"].as_bool().unwrap_or(false);
-        Ok((scopes, writes))
+        Ok(Access {
+            connection_id: value["connectionId"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string(),
+            scopes,
+            writes_enabled: writes,
+        })
     }
 
     /// Work this connection has been given and has not started yet.
