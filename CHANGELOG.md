@@ -21,6 +21,9 @@ pull request and commit references, which are for us.
 
 ### Fixed
 
+- A token Flowie Desktop’s server will not accept now asks the person to sign in again, instead of reporting a lost connection. The companion treated every failure to reach the server the same way, so a revoked or mistyped token sat on “Disconnected” — a state that means wait, nobody needs to do anything — while it retried a token that was never going to work. The message the server sends back is also shown as the sentence it is rather than as the JSON document it arrives in. (DTD-532)
+  VI: Một token mà server của Flowie Desktop không chấp nhận nay yêu cầu người dùng đăng nhập lại, thay vì báo mất kết nối. Companion trước đây đối xử như nhau với mọi thất bại khi liên lạc server, nên một token bị thu hồi hay gõ sai sẽ nằm ở “Mất kết nối” — trạng thái có nghĩa là cứ chờ, không ai cần làm gì — trong khi nó thử lại một token không bao giờ chạy được. Lời nhắn server trả về cũng được hiển thị đúng là một câu chứ không phải cả tài liệu JSON chứa nó. (DTD-532)
+
 - Flowie Desktop says why it cannot reach the server instead of only that it cannot. The companion already worked out the reason — the call that was refused, the host that could not be answered, the token the server would not take — and showed it nowhere, so a machine stuck on “Disconnected” gave the person at it nothing to act on and three different repairs to guess between. The reason now appears in the setup window beside the state. (DTD-532)
   VI: Flowie Desktop nêu rõ vì sao không liên lạc được với server chứ không chỉ nói là không liên lạc được. Companion vốn đã biết lý do — lời gọi bị từ chối, host không trả lời, token server không nhận — nhưng không hiển thị ở đâu cả, nên một máy kẹt ở “Mất kết nối” không cho người dùng thứ gì để xử lý và để họ đoán giữa ba cách sửa khác nhau. Lý do nay hiện ngay cạnh trạng thái trong cửa sổ thiết lập. (DTD-532)
 

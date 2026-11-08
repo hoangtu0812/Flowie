@@ -25,7 +25,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use flowie_agent::driver::{Driver, DEFAULT_TIMEOUT};
-use flowie_connection::{Assigned, Connection};
+use flowie_connection::{Assigned, Connection, Refusal};
 use flowie_core::config::RepositoryMapping;
 use flowie_core::run::{Control, Run, RunFailure};
 use flowie_core::{readiness, CompanionConfig, Entry, Readiness, Schedule};
@@ -232,18 +232,18 @@ fn attempt(directory: &Path, shared: &Arc<Shared>, schedule: &mut Schedule) -> O
 
     let mut connection = match connect(&config) {
         Ok(connection) => connection,
-        Err(failure) => {
+        Err(refusal) => {
             schedule.failed();
-            shared.set_readiness(disconnected(&failure));
+            shared.set_readiness(refused(refusal));
             return Some(interval);
         }
     };
 
     let access = match connection.access() {
         Ok(access) => access,
-        Err(failure) => {
+        Err(refusal) => {
             schedule.failed();
-            shared.set_readiness(disconnected(&failure));
+            shared.set_readiness(refused(refusal));
             return Some(interval);
         }
     };
@@ -411,15 +411,21 @@ impl Control for Operator<'_> {
     }
 }
 
-fn connect(config: &CompanionConfig) -> Result<Connection, RunFailure> {
-    let endpoint = Endpoint::parse(&config.endpoint)
-        .map_err(|error| RunFailure::Precondition(error.to_string()))?;
-    let store = CredentialStore::new(&config.credential_account)
-        .map_err(|error| RunFailure::Precondition(error.to_string()))?;
-    let secret = store
-        .read()
-        .map_err(|error| RunFailure::Precondition(error.to_string()))?;
-    let token = Token::new(secret).map_err(|error| RunFailure::Precondition(error.to_string()))?;
+fn connect(config: &CompanionConfig) -> Result<Connection, Refusal> {
+    let local =
+        |error: &dyn std::fmt::Display| Refusal::Other(RunFailure::Precondition(error.to_string()));
+    let endpoint = Endpoint::parse(&config.endpoint).map_err(|error| local(&error))?;
+    let store = CredentialStore::new(&config.credential_account).map_err(|error| local(&error))?;
+    let secret = store.read().map_err(|error| local(&error))?;
+    // A token the local store will not give back, or one this client will not
+    // send, is the person's to fix in the same place as one the server
+    // refuses: the token field. Reporting it as a lost connection would send
+    // them to the network instead.
+    // VI: Một token mà kho credential không trả lại được, hay một token client
+    // VI: này không chịu gửi đi, đều là thứ người dùng sửa ở đúng một chỗ như
+    // VI: token bị server từ chối: ô nhập token. Báo nó thành mất kết nối sẽ
+    // VI: đẩy họ đi kiểm tra mạng.
+    let token = Token::new(secret).map_err(|error| Refusal::Credential(error.to_string()))?;
     Connection::open(endpoint, token)
 }
 
@@ -431,6 +437,24 @@ fn connect(config: &CompanionConfig) -> Result<Connection, RunFailure> {
 /// VI: không phải thứ cần hỏi người dùng: một token bị thu hồi sẽ hiện ra dưới
 /// VI: dạng một lời gọi bị từ chối, và lượt sau báo lại qua chính câu trả lời
 /// VI: của server.
+/// What a refused connection means for the machine.
+///
+/// A credential the server will not take is the one failure here that a person
+/// has to act on, and it has to say so: `needs_person` drives whether the tray
+/// asks for attention, so a rejected token reported as a lost connection sits
+/// there silently retrying a token that will never work.
+/// VI: Một kết nối bị từ chối có nghĩa gì với máy này.
+/// VI: Credential mà server không nhận là thất bại duy nhất ở đây cần người xử
+/// VI: lý, và nó phải nói ra điều đó: `needs_person` quyết định tray có đòi chú
+/// VI: ý hay không, nên một token bị khước từ mà báo thành mất kết nối sẽ ngồi
+/// VI: im thử lại mãi một token không bao giờ chạy được.
+fn refused(refusal: Refusal) -> Readiness {
+    match refusal {
+        Refusal::Credential(reason) => Readiness::NeedsSignIn { reason },
+        Refusal::Other(failure) => disconnected(&failure),
+    }
+}
+
 fn disconnected(failure: &RunFailure) -> Readiness {
     let detail = match failure {
         RunFailure::Precondition(detail) | RunFailure::Reportable(detail) => detail.clone(),
@@ -481,6 +505,26 @@ fn today() -> time::Date {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_rejected_token_asks_the_person_rather_than_waiting_for_the_network() {
+        // `needs_person` is what makes the tray ask for attention. A rejected
+        // token reported as a lost connection sits there retrying a token that
+        // is never going to work, and says nothing while it does.
+        // VI: `needs_person` là thứ khiến tray đòi được chú ý. Một token bị
+        // VI: khước từ mà báo thành mất kết nối sẽ ngồi thử lại mãi một token
+        // VI: không bao giờ chạy được, và không nói gì trong suốt thời gian đó.
+        let asked = refused(Refusal::Credential("the token is revoked".into()));
+        assert!(asked.needs_person(), "{asked:?}");
+        assert_eq!(asked.reason(), Some("the token is revoked"));
+
+        let waited = refused(Refusal::Other(RunFailure::Precondition(
+            "the host did not answer".into(),
+        )));
+        assert!(!waited.needs_person(), "{waited:?}");
+        assert_eq!(waited.reason(), Some("the host did not answer"));
+    }
+
     use super::*;
 
     #[test]

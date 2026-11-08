@@ -39,7 +39,7 @@ use flowie_core::run::{Achievement, FeatureDoc, RunFailure, Server, TaskContext,
 use flowie_core::sequence::Outcome;
 use flowie_core::translate;
 use flowie_mcp::{
-    Client, Endpoint, Lease, Outcome as Reported, RunResult, TestEvidence, TestResult, Token,
+    Client, Endpoint, Error, Lease, Outcome as Reported, RunResult, TestEvidence, TestResult, Token,
 };
 use serde_json::{json, Value};
 
@@ -126,18 +126,20 @@ impl Connection {
     /// VI: dựng ở đây được chạy bằng `block_on`, thứ sẽ panic khi trên thread đã
     /// VI: có một runtime đang chạy. Companion khởi động orchestrator trên một
     /// VI: thread riêng, và đó là nơi dành cho hàm này.
-    pub fn open(endpoint: Endpoint, token: Token) -> Result<Self, RunFailure> {
+    pub fn open(endpoint: Endpoint, token: Token) -> Result<Self, Refusal> {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .map_err(|error| {
-                RunFailure::Precondition(format!("no runtime for the connection: {error}"))
+                Refusal::Other(RunFailure::Precondition(format!(
+                    "no runtime for the connection: {error}"
+                )))
             })?;
         let site = endpoint.site();
-        let mut client = Client::new(endpoint, token).map_err(|error| translate(&error))?;
+        let mut client = Client::new(endpoint, token).map_err(|error| Refusal::of(&error))?;
         runtime
             .block_on(client.initialize())
-            .map_err(|error| translate(&error))?;
+            .map_err(|error| Refusal::of(&error))?;
         Ok(Self {
             runtime,
             client,
@@ -161,14 +163,14 @@ impl Connection {
     /// the readiness check the companion runs before it takes any work.
     /// VI: Các scope kết nối này có và nó có được ghi hay không, dành cho bước
     /// VI: kiểm tra sẵn sàng mà companion chạy trước khi nhận bất kỳ việc nào.
-    pub fn access(&mut self) -> Result<Access, RunFailure> {
+    pub fn access(&mut self) -> Result<Access, Refusal> {
         let Self {
             runtime,
             client,
             lease,
             ..
         } = self;
-        let value = finish(runtime, lease, client.get_my_access())?;
+        let value = settle(runtime, lease, client.get_my_access())?;
         let scopes = value["scopes"]
             .as_array()
             .map(|items| {
@@ -281,21 +283,78 @@ impl Connection {
 /// VI: `&mut self`, vì future đã vay mượn client: tách các lần vay chính là thứ
 /// VI: cho phép gọi và xoá lease ở cùng một chỗ mà không phải đóng hộp mọi
 /// VI: future chỉ để lách borrow checker.
+/// Why opening a connection, or asking it what it may do, did not work.
+///
+/// The two arms call for opposite responses, and telling them apart is the
+/// whole reason this type exists. A token the server will not take is fixed by
+/// the person at the machine pasting a new one; everything else — a host that
+/// does not answer, a refused handshake — is waited out. Reporting a rejected
+/// token as a lost connection tells someone to check their network and wait
+/// for a repair that is never going to arrive, because nothing is broken
+/// except the credential they are not being asked about.
+/// VI: Vì sao việc mở kết nối, hoặc hỏi kết nối được làm gì, không thành.
+/// VI: Hai nhánh đòi hai phản ứng ngược nhau, và phân biệt chúng chính là lý do
+/// VI: kiểu dữ liệu này tồn tại. Một token server không nhận thì người ngồi ở
+/// VI: máy dán token mới là xong; mọi thứ còn lại — host không trả lời, bắt tay
+/// VI: bị từ chối — thì chờ qua. Báo một token bị khước từ thành mất kết nối sẽ
+/// VI: bảo người dùng đi kiểm tra mạng và chờ một lần sửa không bao giờ tới, vì
+/// VI: chẳng có gì hỏng ngoài đúng cái credential mà không ai hỏi tới.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Refusal {
+    /// The server would not accept the token at all.
+    /// VI: Server hoàn toàn không chấp nhận token.
+    Credential(String),
+    /// Anything else, already translated into the orchestrator's vocabulary.
+    /// VI: Mọi thứ còn lại, đã dịch sang ngôn ngữ của orchestrator.
+    Other(RunFailure),
+}
+
+impl Refusal {
+    fn of(error: &Error) -> Self {
+        match error {
+            Error::Unauthorized { message } => Refusal::Credential(message.clone()),
+            other => Refusal::Other(translate(other)),
+        }
+    }
+}
+
+impl From<Refusal> for RunFailure {
+    fn from(refusal: Refusal) -> Self {
+        match refusal {
+            // Unchanged from what `translate` produced for this error before
+            // the distinction existed, so a step that only needs to stop keeps
+            // stopping the same way.
+            // VI: Giữ nguyên thứ `translate` sinh ra cho lỗi này từ trước khi có
+            // VI: sự phân biệt, nên một bước chỉ cần dừng vẫn dừng y như cũ.
+            Refusal::Credential(message) => RunFailure::Precondition(message),
+            Refusal::Other(failure) => failure,
+        }
+    }
+}
+
 fn finish<T>(
     runtime: &tokio::runtime::Runtime,
     lease: &mut Option<Lease>,
     future: impl Future<Output = flowie_mcp::Result<T>>,
 ) -> Result<T, RunFailure> {
+    settle(runtime, lease, future).map_err(RunFailure::from)
+}
+
+fn settle<T>(
+    runtime: &tokio::runtime::Runtime,
+    lease: &mut Option<Lease>,
+    future: impl Future<Output = flowie_mcp::Result<T>>,
+) -> Result<T, Refusal> {
     runtime.block_on(future).map_err(|error| {
-        let failure = translate(&error);
-        if failure == RunFailure::LeaseLost {
+        let refusal = Refusal::of(&error);
+        if refusal == Refusal::Other(RunFailure::LeaseLost) {
             // The run belongs to someone else now, so this connection must not
             // use the lease again even if a later step asks it to.
             // VI: Run giờ thuộc về người khác, nên kết nối này không được dùng
             // VI: lại lease dù một bước sau có yêu cầu.
             *lease = None;
         }
-        failure
+        refusal
     })
 }
 
@@ -610,6 +669,36 @@ fn detail(failure: &RunFailure) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_token_the_server_will_not_take_is_told_apart_from_a_broken_connection() {
+        // They call for opposite responses: one is fixed by pasting a new
+        // token, the other by waiting. Collapsing them left a revoked token
+        // retrying forever behind a message about the network.
+        // VI: Hai thứ đòi hai phản ứng ngược nhau: một thứ sửa bằng cách dán
+        // VI: token mới, thứ kia bằng cách chờ. Gộp chúng lại khiến một token bị
+        // VI: thu hồi cứ thử lại mãi sau một thông báo về mạng.
+        assert_eq!(
+            Refusal::of(&Error::Unauthorized {
+                message: "the token is invalid, expired or revoked".into(),
+            }),
+            Refusal::Credential("the token is invalid, expired or revoked".into())
+        );
+        assert!(matches!(
+            Refusal::of(&Error::Transport("the host did not answer".into())),
+            Refusal::Other(_)
+        ));
+
+        // A caller that only needs to stop still gets exactly what it got
+        // before the distinction existed.
+        // VI: Một bên gọi chỉ cần dừng vẫn nhận đúng thứ nó nhận từ trước khi có
+        // VI: sự phân biệt này.
+        assert_eq!(
+            RunFailure::from(Refusal::Credential("rejected".into())),
+            RunFailure::Precondition("rejected".into())
+        );
+    }
+
     use super::*;
     use flowie_core::run::DocType;
 
