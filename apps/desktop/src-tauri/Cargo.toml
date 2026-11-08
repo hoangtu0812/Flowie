@@ -20,6 +20,26 @@ tauri-build = { version = "2.7.4", features = [] }
 tauri = { version = "2.12.5", features = ["tray-icon", "image-png"] }
 flowie-core = { path = "../crates/flowie-core" }
 flowie-platform = { path = "../crates/flowie-platform" }
+# The shell is where every adapter finally meets: the server, the checkout
+# and the agent. Nothing else in the workspace depends on all three.
+# VI: Vỏ ứng dụng là nơi mọi adapter cuối cùng gặp nhau: server, checkout và
+# VI: agent. Không phần nào khác trong workspace phụ thuộc cả ba.
+flowie-agent = { path = "../crates/flowie-agent" }
+flowie-connection = { path = "../crates/flowie-connection" }
+flowie-mcp = { path = "../crates/flowie-mcp" }
+flowie-repository = { path = "../crates/flowie-repository" }
+flowie-workspace = { path = "../crates/flowie-workspace" }
+# now_local is what keeps a target end date on the person's own calendar;
+# in Vietnam a UTC date is still yesterday until mid-morning.
+# VI: now_local là thứ giữ ngày kết thúc dự kiến theo đúng lịch của người dùng;
+# VI: ở Việt Nam, ngày theo UTC vẫn là hôm qua cho tới giữa buổi sáng.
+time = { version = "0.3", features = ["local-offset"] }
+# The configuration window reads and writes the same JSON the companion
+# runs on, so it needs the same two crates to parse and report it.
+# VI: Cửa sổ cấu hình đọc và ghi đúng JSON mà companion đang chạy, nên nó cần
+# VI: đúng hai crate đó để parse và báo lỗi.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [dev-dependencies]
 tempfile = "3"

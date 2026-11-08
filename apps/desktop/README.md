@@ -28,6 +28,41 @@ cargo test --workspace
 
 Toolchain ghim trong `rust-toolchain.toml`; không nêu phiên bản ở nơi khác.
 
+## Chạy thử trên Windows
+
+Chưa có bộ cài. Lấy bản build theo một trong hai cách:
+
+- Tải artifact `flowie-desktop-windows` từ lần chạy CI `Verify Flowie Desktop`
+  của commit cần thử; hoặc
+- Tự build: `cd apps/desktop && cargo build --release -p flowie-desktop`, file
+  nằm ở `target/release/flowie-desktop.exe`.
+
+Chạy file đó. Ứng dụng nằm ở khay hệ thống, **không mở cửa sổ nào**; bấm icon
+tray rồi chọn **Mở cấu hình**.
+
+Trong cửa sổ cấu hình:
+
+1. Sửa phần **Cấu hình** (đã điền sẵn một ví dụ). `project_id` lấy từ Flowie,
+   `path` là checkout có thật trên máy này, và `approved_tests` là **những lệnh
+   duy nhất** được phép chạy với tư cách test.
+2. Bấm **Lưu cấu hình**. Sai ở đâu sẽ báo ngay tại chỗ.
+3. Dán token Flowie rồi bấm **Lưu token**. Token vào kho credential của hệ điều
+   hành, không bao giờ nằm trong file cấu hình.
+4. Dòng **Trạng thái** sẽ chuyển sang `Sẵn sàng` khi kết nối dùng được. Nếu
+   thiếu quyền, nó nêu đúng tên scope còn thiếu.
+
+Sau đó giao một task cho connection này trong Flowie. Companion nhận việc trong
+vòng một chu kỳ poll, và dòng trên tray đổi thành tên task.
+
+Hai điều cần biết:
+
+- **Máy này phải có `claude` hoặc `codex` trên PATH** và đã đăng nhập. Thiếu
+  thì trạng thái nói rõ phải cài, cập nhật, hay đăng nhập.
+- **Thoát ứng dụng sẽ trả task lại**, không giết giữa chừng; run dừng ở bước kế
+  tiếp. Chờ vài giây là bình thường.
+
+Bản build này **chưa ký số**. Windows SmartScreen sẽ cảnh báo ở lần chạy đầu.
+
 ## Kiểm tra mã macOS từ máy Windows
 
 Mã trong nhánh `cfg(unix)` không được biên dịch trên Windows, nên lỗi của nó
@@ -36,7 +71,7 @@ chỉ lộ ra ở CI. Kiểm chéo trước khi đẩy:
 ```bash
 rustup target add aarch64-apple-darwin
 cd apps/desktop
-cargo clippy --target aarch64-apple-darwin   -p flowie-core -p flowie-agent -p flowie-repository -p flowie-platform   --all-targets -- -D warnings
+cargo clippy --target aarch64-apple-darwin   -p flowie-core -p flowie-agent -p flowie-repository -p flowie-platform -p flowie-workspace   --all-targets -- -D warnings
 ```
 
 Không kiểm được `flowie-mcp`, `flowie-connection` và `src-tauri` theo cách này:

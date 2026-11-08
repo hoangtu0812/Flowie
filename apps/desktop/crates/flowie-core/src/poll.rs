@@ -48,6 +48,16 @@ impl Schedule {
         Self { base, failures: 0 }
     }
 
+    /// The configured idle interval this schedule was built around, so a
+    /// caller can notice the configuration changed without keeping its own
+    /// copy and letting the two drift apart.
+    /// VI: Chu kỳ lúc rảnh đã cấu hình mà lịch này được dựng quanh nó, để bên
+    /// VI: gọi nhận ra cấu hình đã đổi mà không phải giữ bản sao riêng rồi để
+    /// VI: hai bên lệch nhau.
+    pub fn base(&self) -> Duration {
+        self.base
+    }
+
     pub fn failures(&self) -> u32 {
         self.failures
     }

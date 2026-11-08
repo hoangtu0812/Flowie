@@ -9,6 +9,7 @@ from collections.abc import Awaitable, Callable
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from ..core.utc_responses import utc_response_value
 from ..domains.auth import _cuid, _utcnow
 
 
@@ -35,6 +36,14 @@ async def deliver_due_reminders(factory: async_sessionmaker[AsyncSession]) -> in
         )
         reminders = due.mappings().all()
         for reminder in reminders:
+            # remind_at is stored UTC-naive, and this payload lands in a jsonb
+            # column that no response serialiser touches again, so the offset
+            # has to be attached here. Without it the string reads back as a
+            # local time and a reader one zone away sees the wrong instant.
+            # VI: remind_at lưu dạng naive-UTC, và payload này rơi vào cột jsonb
+            # mà không bộ tuần tự hoá phản hồi nào chạm tới nữa, nên offset phải
+            # được gắn ngay ở đây. Thiếu nó thì chuỗi đọc lại thành giờ địa
+            # phương và người ở múi giờ khác thấy sai thời điểm.
             await db.execute(
                 text(
                     '''INSERT INTO notifications
@@ -45,7 +54,7 @@ async def deliver_due_reminders(factory: async_sessionmaker[AsyncSession]) -> in
                 {
                     'id': _cuid(), 'workspace_id': reminder['workspace_id'],
                     'user_id': reminder['user_id'], 'issue_id': reminder['issue_id'],
-                    'data': json.dumps({'identifier': reminder['identifier'], 'title': reminder['title'], 'remindAt': reminder['remind_at'].isoformat()}),
+                    'data': json.dumps({'identifier': reminder['identifier'], 'title': reminder['title'], 'remindAt': utc_response_value(reminder['remind_at']).isoformat()}),
                     'now': now,
                 },
             )
