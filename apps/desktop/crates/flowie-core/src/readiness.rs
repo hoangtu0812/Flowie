@@ -102,6 +102,32 @@ impl Readiness {
         )
     }
 
+    /// Why the companion is in this state, when the state alone does not say.
+    ///
+    /// The summary is a label and has to stay short enough for a tray entry,
+    /// so everything that makes a state actionable — which call was refused,
+    /// which host could not be reached, why a token was rejected — lives here
+    /// instead. A screen that shows only the label leaves someone guessing
+    /// between a wrong server, a revoked token and a blocked network, which
+    /// are three different repairs.
+    /// VI: Vì sao companion đang ở trạng thái này, khi riêng trạng thái không
+    /// VI: nói đủ.
+    /// VI: Phần tóm tắt là một nhãn và phải đủ ngắn cho một mục trên tray, nên
+    /// VI: mọi thứ làm cho trạng thái hành động được — lời gọi nào bị từ chối,
+    /// VI: host nào không tới được, vì sao token bị khước từ — nằm ở đây. Một
+    /// VI: màn hình chỉ hiện cái nhãn sẽ để người dùng đoán giữa sai server,
+    /// VI: token bị thu hồi và mạng bị chặn, ba thứ cần ba cách sửa khác nhau.
+    pub fn reason(&self) -> Option<&str> {
+        match self {
+            Readiness::NeedsSignIn { reason } => Some(reason),
+            Readiness::Disconnected { detail } => Some(detail),
+            Readiness::NotConfigured
+            | Readiness::MissingScopes { .. }
+            | Readiness::Paused
+            | Readiness::Ready => None,
+        }
+    }
+
     /// A single line for the tray, in the reader's language.
     /// VI: Một dòng cho tray, theo ngôn ngữ người đọc.
     pub fn summary(&self, vietnamese: bool) -> String {
@@ -180,6 +206,44 @@ pub fn assess(config: &CompanionConfig, scopes: &[String], writes_enabled: bool)
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn every_state_a_person_must_act_on_carries_a_reason() {
+        // A label alone sends someone to the wrong repair: "Mất kết nối" reads
+        // the same whether the host is unreachable, the token belongs to
+        // another server, or a proxy refused the handshake.
+        // VI: Chỉ một cái nhãn sẽ đẩy người dùng đi sửa sai chỗ: "Mất kết nối"
+        // VI: đọc giống hệt nhau dù host không tới được, token thuộc về server
+        // VI: khác, hay một proxy từ chối bắt tay.
+        assert_eq!(
+            Readiness::Disconnected {
+                detail: "the server refused the call".into()
+            }
+            .reason(),
+            Some("the server refused the call")
+        );
+        assert_eq!(
+            Readiness::NeedsSignIn {
+                reason: "no token is stored for this endpoint".into()
+            }
+            .reason(),
+            Some("no token is stored for this endpoint")
+        );
+
+        // The states that already say everything in their label carry none,
+        // so the window does not repeat itself.
+        // VI: Những trạng thái đã nói đủ trong nhãn thì không mang thêm lý do,
+        // để cửa sổ không lặp lại chính nó.
+        assert_eq!(Readiness::Ready.reason(), None);
+        assert_eq!(Readiness::Paused.reason(), None);
+        assert_eq!(Readiness::NotConfigured.reason(), None);
+        let missing = Readiness::MissingScopes {
+            scopes: vec!["runs:write".into()],
+        };
+        assert_eq!(missing.reason(), None);
+        assert!(missing.summary(true).contains("runs:write"));
+    }
+
     use super::*;
     use crate::config::{CompanionConfig, Provider, RepositoryMapping};
     use std::path::PathBuf;

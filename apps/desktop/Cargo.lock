@@ -1092,6 +1092,7 @@ dependencies = [
  "flowie-platform",
  "flowie-repository",
  "flowie-workspace",
+ "reqwest 0.12.28",
  "serde",
  "serde_json",
  "tauri",
@@ -1100,6 +1101,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tempfile",
  "time",
+ "tokio",
 ]
 
 [[package]]
