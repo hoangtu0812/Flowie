@@ -1,0 +1,25 @@
+[package]
+name = "flowie-workspace"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+# The checkout side of a run. flowie-repository sits below flowie-core, which
+# depends on it for the branch rules, so the adapter cannot live there without
+# a cycle; it lives here instead. Neither crate takes the transport, so this
+# one stays inside the macOS cross-check.
+# VI: Phía checkout của một run. flowie-repository nằm dưới flowie-core, vốn
+# VI: phụ thuộc nó để lấy quy tắc nhánh, nên adapter không thể nằm ở đó mà không
+# VI: tạo vòng lặp; nó nằm ở đây. Cả hai crate đều không lấy transport, nên crate
+# VI: này vẫn nằm trong cross-check macOS.
+flowie-core = { path = "../flowie-core" }
+flowie-platform = { path = "../flowie-platform" }
+flowie-repository = { path = "../flowie-repository" }
+
+[dev-dependencies]
+tempfile = "3"

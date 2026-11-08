@@ -36,7 +36,7 @@ chỉ lộ ra ở CI. Kiểm chéo trước khi đẩy:
 ```bash
 rustup target add aarch64-apple-darwin
 cd apps/desktop
-cargo clippy --target aarch64-apple-darwin   -p flowie-core -p flowie-agent -p flowie-repository -p flowie-platform   --all-targets -- -D warnings
+cargo clippy --target aarch64-apple-darwin   -p flowie-core -p flowie-agent -p flowie-repository -p flowie-platform -p flowie-workspace   --all-targets -- -D warnings
 ```
 
 Không kiểm được `flowie-mcp`, `flowie-connection` và `src-tauri` theo cách này:
