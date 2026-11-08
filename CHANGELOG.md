@@ -19,6 +19,11 @@ pull request and commit references, which are for us.
 
 ## Unreleased
 
+### Fixed
+
+- Flowie Desktop shows the Flowie logo. It was showing a ring left over from the template this repository was started from, which is not Flowie’s mark and appears nowhere else in the product. The icon now comes from the same artwork the web application uses for its own, so the two cannot drift apart again. (DTD-488, #219)
+  VI: Flowie Desktop hiển thị đúng logo Flowie. Trước đó nó hiện một vòng tròn sót lại từ template mà repository này khởi đi, không phải biểu tượng của Flowie và không xuất hiện ở bất cứ đâu khác trong sản phẩm. Icon nay lấy từ chính phần hình mà ứng dụng web dùng cho icon của nó, nên hai bên không thể lệch nhau lần nữa. (DTD-488)
+
 ### Added
 
 - The desktop companion’s tray menu can now open the task it is working on, and Flowie itself, in the browser the person already uses and is already signed in to. The address is worked out from the server the companion is connected to, so it cannot point at a different Flowie than the one it takes work from, and nothing has to be configured twice. Both entries stay switched off until the server has said which workspace the connection belongs to, because an entry that opens nothing is worse than one that is plainly unavailable. (DTD-501, #217)
