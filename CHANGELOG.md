@@ -21,7 +21,7 @@ pull request and commit references, which are for us.
 
 ### Fixed
 
-- The what's new dialog scrolls, so a release with more entries than fit on a screen can be read to the end. It previously grew to the height of the window and clipped whatever was left, with no way to reach it: 0.14.0 announced eleven changes and nothing below the fifth could be seen. The header and its close button now stay in place while the entries scroll under them. Rebuild `web`. (DTD-513, #183)
+- The what's new dialog scrolls, so a release with more entries than fit on a screen can be read to the end. It previously grew to the height of the window and clipped whatever was left, with no way to reach it: 0.14.0 announced eleven changes and nothing below the fifth could be seen. The header and its close button now stay in place while the entries scroll under them. Rebuild `web`. (DTD-513, #184)
   VI: Hộp thoại "Có gì mới" cuộn được, nên một bản phát hành nhiều mục hơn một màn hình vẫn đọc được tới cuối. Trước đó nó giãn tới chiều cao cửa sổ rồi cắt cụt phần còn lại mà không có cách nào xem tiếp: bản 0.14.0 thông báo mười một thay đổi và không ai nhìn thấy gì từ mục thứ năm trở xuống. Tiêu đề và nút đóng nay đứng yên trong khi các mục cuộn bên dưới. Build lại `web`. (DTD-513)
 
 ## [0.14.0] — 2026-11-08 06:58 +07
