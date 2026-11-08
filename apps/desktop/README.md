@@ -39,8 +39,19 @@ cd apps/desktop
 cargo clippy --target aarch64-apple-darwin   -p flowie-core -p flowie-agent -p flowie-repository -p flowie-platform   --all-targets -- -D warnings
 ```
 
-Không kiểm được `flowie-mcp` và `src-tauri` theo cách này: `ring` và các crate
-Apple của Tauri cần một C compiler cho macOS. Hai crate đó chỉ có CI xác nhận.
+Không kiểm được `flowie-mcp`, `flowie-connection` và `src-tauri` theo cách này:
+`ring` và các crate Apple của Tauri cần một C compiler cho macOS. Ba crate đó chỉ
+có CI xác nhận.
+
+## Hạn chế đã biết của bản hiện tại
+
+- Mở bản thứ hai trên cùng một tài khoản thì nó **thoát im lặng**. Thông báo
+  được ghi ra stderr, nhưng bản release dùng `windows_subsystem = "windows"`
+  nên không có console để đọc. Người dùng bấm icon và thấy như không có gì xảy
+  ra. Hành vi đúng là đưa cửa sổ của bản đang chạy lên trước; việc này cần
+  plugin single-instance của Tauri và được theo dõi trong DTD-501.
+- Nội dung menu tray chưa được kiểm bằng mắt người; CI chỉ build chứ không
+  chạy giao diện.
 
 ## Ràng buộc đã biết
 
@@ -49,6 +60,10 @@ Apple của Tauri cần một C compiler cho macOS. Hai crate đó chỉ có CI 
 - **Windows, đường dẫn dài**: `link.exe` báo `LNK1104` khi đường dẫn tới thư mục
   `target` chạm giới hạn của nó. Checkout sâu thì đặt `CARGO_TARGET_DIR` tới một
   thư mục ngắn, ví dụ `%TEMP%td`.
+- **Sửa mã bằng PowerShell**: `Set-Content` và `-replace` đọc file theo codepage
+  ANSI của hệ thống rồi ghi lại bằng UTF-8, biến toàn bộ chữ tiếng Việt thành
+  mojibake. `cargo clippy` chỉ chặn được những byte trở thành ký tự vô hình, còn
+  phần hỏng lại lọt qua CI. Sửa file nguồn bằng công cụ giữ nguyên UTF-8.
 - Thư mục này **không** kích hoạt deploy server. `scripts/deploy-scope.sh` miễn
   trừ `apps/desktop/*`, và `scripts/tests/deploy-scope.test.sh` bảo vệ quy tắc
   đó. Một commit chạm cả desktop lẫn server thì vẫn deploy server.

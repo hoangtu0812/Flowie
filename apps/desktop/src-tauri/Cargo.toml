@@ -19,3 +19,8 @@ tauri-build = { version = "2.7.4", features = [] }
 # VI: icon không biên dịch được. Đo được trong spike DTD-492.
 tauri = { version = "2.12.5", features = ["tray-icon", "image-png"] }
 flowie-core = { path = "../crates/flowie-core" }
+flowie-platform = { path = "../crates/flowie-platform" }
+
+[dev-dependencies]
+tempfile = "3"
+

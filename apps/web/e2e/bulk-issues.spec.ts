@@ -54,9 +54,19 @@ test('bulk changes preview without mutation, execute and resume after reload', a
          timeout: 20000,
       });
       const changed = (await (await context.request.get(`${api}/issues?${query}`)).json()).data as {
+         id: string;
          priority: string;
       }[];
-      expect(changed.every((row) => row.priority === 'URGENT')).toBeTruthy();
+      // Judge only the issues this test saw before applying the change. The query
+      // filters the whole team, so an issue left behind by another spec lands in
+      // the result and fails an assertion about work this test never did.
+      // VI: Chỉ xét những issue mà test này đã thấy trước khi áp dụng thay đổi.
+      // Query lọc trên toàn team, nên một issue do spec khác bỏ lại sẽ lọt vào kết
+      // quả và làm hỏng một khẳng định về phần việc test này không hề làm.
+      const seen = new Set(before.map(({ id }) => id));
+      expect(
+         changed.filter(({ id }) => seen.has(id)).every((row) => row.priority === 'URGENT')
+      ).toBeTruthy();
       await page.reload();
       await page.getByRole('button', { name: 'Issue actions', exact: true }).click();
       await page.getByRole('menuitem', { name: 'Bulk changes', exact: true }).click();
