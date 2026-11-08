@@ -13,12 +13,14 @@
 //! VI: runner phụ thuộc thì được báo là công cụ quá cũ, chứ không tìm cách
 //! VI: lách.
 
+pub mod driver;
 pub mod error;
 pub mod invoke;
 pub mod prompt;
 pub mod provider;
 pub mod stream;
 
+pub use driver::{Driver, DEFAULT_TIMEOUT};
 pub use error::{Error, Result};
 pub use invoke::{Phase, CODEX_RESULT_MAX};
 pub use prompt::{checked_review, checked_summary, review_prompt, task_prompt};

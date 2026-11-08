@@ -23,6 +23,14 @@ serde_json = "1"
 # VI: Phép tính lịch, cho ngày kết thúc dự kiến. Vốn đã có trong lock qua Tauri,
 # VI: và thuần Rust, nên không tốn thêm gì so với trước.
 time = { version = "0.3", default-features = false, features = ["std"] }
+# Codex takes its schema and writes its answer through files, which live in a
+# directory removed when the turn ends however it ends.
+# VI: Codex nhận schema và ghi câu trả lời qua file, đặt trong một thư mục bị
+# VI: xoá khi lượt chạy kết thúc, dù kết thúc theo cách nào.
+tempfile = "3"
+# Claude requires a session id in UUID form.
+# VI: Claude đòi session id ở dạng UUID.
+uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 tempfile = "3"
