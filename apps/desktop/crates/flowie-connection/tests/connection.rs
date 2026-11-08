@@ -21,7 +21,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use flowie_connection::Connection;
+use flowie_connection::{Assigned, Connection};
 use flowie_core::run::{Achievement, DocType, FeatureDoc, RunFailure, Server, TestOutcome};
 use flowie_core::sequence::Outcome;
 use flowie_mcp::{Endpoint, Token};
@@ -464,4 +464,116 @@ fn a_connection_that_cannot_write_is_reported_as_read_only() {
     // VI: Trường này không có. Một kết nối không ghi được sẽ hỏng ở lần ghi đầu
     // VI: tiên, khi issue đã bị claim, nên thiếu trường phải hiểu là không.
     assert!(!writes);
+}
+
+#[test]
+fn polling_asks_only_for_work_routed_to_this_connection() {
+    // The page shape is taken from a live list_runs response, not invented:
+    // a row carries the run id, the issue id and what a person calls the task.
+    // VI: Hình dạng trang lấy từ một phản hồi list_runs thật chứ không bịa: một
+    // VI: dòng mang run id, issue id và cách một người gọi task.
+    let (url, seen) = stub(vec![
+        Reply::handshake(),
+        Reply::empty(),
+        Reply::data(json!({
+            "items": [
+                {
+                    "id": "crun0000000000000000000001",
+                    "issueId": "cissue1",
+                    "issueIdentifier": "DTD-204",
+                    "issueTitle": "Chuẩn hoá Package",
+                    "state": "PENDING",
+                    "assignedToThisConnection": true,
+                    "progress": null,
+                    "pullRequestUrl": null
+                },
+                {
+                    "id": "crun0000000000000000000002",
+                    "issueId": "cissue2",
+                    "state": "PENDING"
+                }
+            ],
+            "nextCursor": null,
+            "truncated": false
+        })),
+    ]);
+
+    let mut connection = connect(&url);
+    let waiting = connection
+        .assigned_runs(Some("cproject1"))
+        .expect("the page is readable");
+
+    assert_eq!(
+        waiting,
+        vec![
+            Assigned {
+                run_id: "crun0000000000000000000001".into(),
+                issue_id: "cissue1".into(),
+                identifier: Some("DTD-204".into()),
+                title: Some("Chuẩn hoá Package".into()),
+            },
+            // A row without a title is still work; only the tray line is poorer.
+            // VI: Một dòng không có tiêu đề vẫn là việc; chỉ dòng trên tray nghèo đi.
+            Assigned {
+                run_id: "crun0000000000000000000002".into(),
+                issue_id: "cissue2".into(),
+                identifier: None,
+                title: None,
+            },
+        ]
+    );
+
+    let record = seen.lock().expect("the recorder");
+    let arguments = record
+        .arguments_of("list_runs")
+        .expect("the server was asked");
+    // Letting the server filter is what keeps the companion from ever trying
+    // to claim a run routed to a different machine.
+    // VI: Để server lọc chính là thứ giữ cho companion không bao giờ thử claim
+    // VI: một run được định tuyến cho máy khác.
+    assert_eq!(arguments["assignedToThisConnection"], json!(true));
+    assert_eq!(arguments["state"], json!("PENDING"));
+    assert_eq!(arguments["projectId"], json!("cproject1"));
+}
+
+#[test]
+fn a_row_that_cannot_be_claimed_or_tracked_is_skipped_not_fatal() {
+    // One unusable row must not cost the whole poll: the rest of the page is
+    // still work this machine was given.
+    // VI: Một dòng không dùng được không được làm hỏng cả lần poll: phần còn lại
+    // VI: của trang vẫn là việc máy này được giao.
+    let (url, _seen) = stub(vec![
+        Reply::handshake(),
+        Reply::empty(),
+        Reply::data(json!({
+            "items": [
+                { "issueId": "cissue1" },
+                { "id": "crun1" },
+                { "id": "crun2", "issueId": "cissue2" }
+            ]
+        })),
+    ]);
+
+    let mut connection = connect(&url);
+    let waiting = connection
+        .assigned_runs(None)
+        .expect("the page is readable");
+    assert_eq!(waiting.len(), 1);
+    assert_eq!(waiting[0].run_id, "crun2");
+}
+
+#[test]
+fn nothing_waiting_is_an_empty_list_rather_than_a_failure() {
+    // The ordinary case: an idle machine polls and finds nothing.
+    // VI: Trường hợp thường gặp: một máy rảnh poll và không thấy gì.
+    let (url, _seen) = stub(vec![
+        Reply::handshake(),
+        Reply::empty(),
+        Reply::data(json!({ "items": [], "nextCursor": null })),
+    ]);
+    let mut connection = connect(&url);
+    assert!(connection
+        .assigned_runs(None)
+        .expect("an empty page is fine")
+        .is_empty());
 }
