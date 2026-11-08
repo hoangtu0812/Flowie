@@ -43,6 +43,50 @@ use flowie_mcp::{
 };
 use serde_json::{json, Value};
 
+/// The state a run sits in while it waits for the machine it was routed to.
+/// VI: Trạng thái một run nằm chờ máy mà nó được định tuyến tới.
+const PENDING: &str = "PENDING";
+
+/// How many waiting runs to ask about at once. The companion takes one run at
+/// a time, so this only needs to be enough to see that there is work and to
+/// skip over an entry that turns out to be unusable.
+/// VI: Hỏi về bao nhiêu run đang chờ mỗi lần. Companion chỉ làm một run tại một
+/// VI: thời điểm, nên con số này chỉ cần đủ để thấy có việc và để bỏ qua một mục
+/// VI: hoá ra không dùng được.
+const POLL_LIMIT: u32 = 5;
+
+/// One piece of work waiting for this machine.
+/// VI: Một phần việc đang chờ máy này.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Assigned {
+    pub run_id: String,
+    pub issue_id: String,
+    /// What a person calls the task, for the tray line. The server may not
+    /// send it, and a run is still workable without it.
+    /// VI: Cách một người gọi task, dùng cho dòng trên tray. Server có thể không
+    /// VI: gửi, và thiếu nó thì run vẫn làm được.
+    pub identifier: Option<String>,
+    pub title: Option<String>,
+}
+
+/// Reads one waiting run, or skips it.
+///
+/// A row without an issue id cannot be claimed and a row without a run id
+/// cannot be tracked, so neither is worth carrying forward; the rest of the
+/// page is still usable, which is why this skips rather than fails.
+/// VI: Đọc một run đang chờ, hoặc bỏ qua nó.
+/// VI: Một dòng thiếu issue id thì không claim được và thiếu run id thì không
+/// VI: theo dõi được, nên không đáng mang theo; phần còn lại của trang vẫn dùng
+/// VI: được, nên ở đây bỏ qua chứ không báo lỗi.
+fn assigned(item: &Value) -> Option<Assigned> {
+    Some(Assigned {
+        run_id: item["id"].as_str()?.to_string(),
+        issue_id: item["issueId"].as_str()?.to_string(),
+        identifier: item["issueIdentifier"].as_str().map(str::to_string),
+        title: item["issueTitle"].as_str().map(str::to_string),
+    })
+}
+
 /// A connection to one Flowie server, holding the lease for the run it
 /// claimed.
 /// VI: Một kết nối tới một server Flowie, giữ lease của run mà nó đã claim.
@@ -123,6 +167,40 @@ impl Connection {
         // VI: trọng mới là cách đúng.
         let writes = value["writesEnabled"].as_bool().unwrap_or(false);
         Ok((scopes, writes))
+    }
+
+    /// Work this connection has been given and has not started yet.
+    ///
+    /// A run reaches `PENDING` when something routes an issue to this
+    /// connection; only that connection may claim it, so there is no race to
+    /// win here and no reason to ask for anyone else's work. Asking the server
+    /// to filter is what keeps that true: a companion that fetched everything
+    /// and filtered locally would be one mistake away from claiming a run
+    /// routed to a different machine, which the server would refuse anyway but
+    /// only after the attempt.
+    /// VI: Việc đã được giao cho kết nối này và chưa bắt đầu.
+    /// VI: Một run ở trạng thái `PENDING` khi có thứ gì đó định tuyến một issue
+    /// VI: tới kết nối này; chỉ kết nối đó được claim, nên không có cuộc đua nào
+    /// VI: để thắng và không có lý do gì hỏi việc của người khác. Để server lọc
+    /// VI: chính là thứ giữ cho điều đó đúng: một companion lấy hết rồi tự lọc
+    /// VI: sẽ chỉ cách một sai sót là đi claim một run định tuyến cho máy khác,
+    /// VI: điều server vẫn từ chối nhưng chỉ sau khi đã thử.
+    pub fn assigned_runs(&mut self, project: Option<&str>) -> Result<Vec<Assigned>, RunFailure> {
+        let Self {
+            runtime,
+            client,
+            lease,
+            ..
+        } = self;
+        let page = finish(
+            runtime,
+            lease,
+            client.list_runs(Some(PENDING), project, true, POLL_LIMIT),
+        )?;
+        Ok(page["items"]
+            .as_array()
+            .map(|items| items.iter().filter_map(assigned).collect())
+            .unwrap_or_default())
     }
 
     /// The lease, or a precondition failure naming the real mistake: a step
