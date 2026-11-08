@@ -75,7 +75,24 @@ jobs:
         with:
           go-version: '1.24.8'
           cache: false
+      # Keeps the pinned restic archive between runs. Without it every run
+      # downloads from a third party's release hosting, and an outage there
+      # fails the job before a single test has run — it blocked a release for
+      # hours. The key carries the version, so a bump fetches once and then
+      # stops touching that host again.
+      # VI: Giữ lại tệp restic đã ghim giữa các lần chạy. Không có nó thì mỗi
+      # lần chạy đều tải từ nơi phát hành của bên thứ ba, và sự cố bên đó làm
+      # hỏng job trước khi có một test nào chạy — việc này từng chặn một bản
+      # phát hành suốt nhiều giờ. Khoá cache mang theo số phiên bản, nên khi
+      # nâng phiên bản thì tải một lần rồi thôi không chạm tới host đó nữa.
+      - name: Cache the pinned restic archive
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/flowie-restic
+          key: restic-0.19.1
       - name: Verify pinned source MinIO and SMTP transports
+        env:
+          RESTIC_CACHE_DIR: ${{ runner.temp }}/flowie-restic
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-client-16
