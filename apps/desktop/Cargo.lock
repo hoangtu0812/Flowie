@@ -835,6 +835,13 @@ dependencies = [
 [[package]]
 name = "flowie-core"
 version = "0.0.0"
+dependencies = [
+ "flowie-mcp",
+ "flowie-repository",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
 
 [[package]]
 name = "flowie-desktop"
