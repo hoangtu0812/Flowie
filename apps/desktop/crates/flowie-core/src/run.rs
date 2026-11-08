@@ -17,6 +17,8 @@
 //! VI: mạng giữa lúc commit và lúc báo kết quả — và không tình huống nào trong
 //! VI: số đó tới được bằng cách chạy thật rồi hy vọng.
 
+use std::path::{Path, PathBuf};
+
 use crate::journal::Entry;
 use crate::lease::{BudgetPolicy, Decision, LeaseTracker};
 use crate::sequence::{Outcome, Step};
@@ -236,7 +238,11 @@ pub trait Server {
 /// VI: Những gì run cần từ checkout.
 pub trait Workspace {
     fn verify(&mut self) -> Result<(), RunFailure>;
-    fn create_worktree(&mut self, run_id: &str) -> Result<(), RunFailure>;
+    /// Cuts the working copy for this run and says where it is. The agent
+    /// has to be told where to work, and nothing else in the run knows.
+    /// VI: Cắt bản làm việc cho run này và cho biết nó ở đâu. Agent phải
+    /// VI: được cho biết làm việc ở đâu, và không phần nào khác của run biết điều đó.
+    fn create_worktree(&mut self, run_id: &str) -> Result<PathBuf, RunFailure>;
     fn run_approved_tests(&mut self) -> Result<Vec<TestOutcome>, RunFailure>;
     fn commit(&mut self, message: &str) -> Result<Option<String>, RunFailure>;
     fn publish(&mut self) -> Result<Option<String>, RunFailure>;
@@ -249,8 +255,8 @@ pub trait Workspace {
 /// VI: Những gì run cần từ agent.
 pub trait Agent {
     fn probe(&mut self) -> Result<(), RunFailure>;
-    fn review(&mut self) -> Result<Review, RunFailure>;
-    fn implement(&mut self, plan: &str) -> Result<String, RunFailure>;
+    fn review(&mut self, worktree: &Path) -> Result<Review, RunFailure>;
+    fn implement(&mut self, worktree: &Path, plan: &str) -> Result<String, RunFailure>;
 }
 
 /// Asked between steps so a person can stop a run without waiting for it.
@@ -357,11 +363,11 @@ impl Run<'_> {
         self.step(Step::Claim);
 
         self.guard()?;
-        self.workspace.create_worktree(&run_id)?;
+        let worktree = self.workspace.create_worktree(&run_id)?;
         self.step(Step::CreateWorktree);
 
         self.beat(Some("Reviewing the issue (read-only)"))?;
-        let review = self.agent.review()?;
+        let review = self.agent.review(&worktree)?;
         self.step(Step::Review);
 
         self.guard()?;
@@ -412,7 +418,7 @@ impl Run<'_> {
 
         self.guard()?;
         self.beat(Some("Implementing the plan"))?;
-        let summary = self.agent.implement(&review.plan)?;
+        let summary = self.agent.implement(&worktree, &review.plan)?;
         self.step(Step::Implement);
 
         self.guard()?;
@@ -683,9 +689,9 @@ mod tests {
             self.log.borrow_mut().calls.push("verify".into());
             Ok(())
         }
-        fn create_worktree(&mut self, _run: &str) -> Result<(), RunFailure> {
+        fn create_worktree(&mut self, run: &str) -> Result<PathBuf, RunFailure> {
             self.log.borrow_mut().calls.push("create_worktree".into());
-            Ok(())
+            Ok(PathBuf::from("worktrees").join(run))
         }
         fn run_approved_tests(&mut self) -> Result<Vec<TestOutcome>, RunFailure> {
             self.log
@@ -712,6 +718,11 @@ mod tests {
     struct FakeAgent {
         log: Rc<RefCell<Recorder>>,
         feature_docs: Vec<FeatureDoc>,
+        /// Where the agent was told to work, so a test can check it was
+        /// the worktree and not somewhere else.
+        /// VI: Nơi agent được bảo làm việc, để test kiểm được đó là worktree chứ
+        /// VI: không phải chỗ nào khác.
+        worked_in: Option<PathBuf>,
     }
 
     impl Agent for FakeAgent {
@@ -719,7 +730,12 @@ mod tests {
             self.log.borrow_mut().calls.push("probe".into());
             Ok(())
         }
-        fn review(&mut self) -> Result<Review, RunFailure> {
+        fn review(&mut self, worktree: &Path) -> Result<Review, RunFailure> {
+            // The agent is told where to work, and the path is the one the
+            // workspace just cut rather than anything this double invented.
+            // VI: Agent được cho biết làm việc ở đâu, và đường dẫn đó là thứ workspace
+            // VI: vừa cắt ra chứ không phải thứ bản giả này tự bịa.
+            self.worked_in = Some(worktree.to_path_buf());
             self.log.borrow_mut().calls.push("review".into());
             Ok(Review {
                 plan: "do the thing".into(),
@@ -727,7 +743,8 @@ mod tests {
                 feature_docs: self.feature_docs.clone(),
             })
         }
-        fn implement(&mut self, _plan: &str) -> Result<String, RunFailure> {
+        fn implement(&mut self, worktree: &Path, _plan: &str) -> Result<String, RunFailure> {
+            self.worked_in = Some(worktree.to_path_buf());
             self.log.borrow_mut().calls.push("implement".into());
             Ok("did the thing".into())
         }
@@ -802,6 +819,7 @@ mod tests {
             agent: FakeAgent {
                 log,
                 feature_docs: vec![draft()],
+                worked_in: None,
             },
             control: FakeControl {
                 cancel: false,
@@ -883,7 +901,7 @@ mod tests {
             fn verify(&mut self) -> Result<(), RunFailure> {
                 Err(RunFailure::Precondition("wrong checkout".into()))
             }
-            fn create_worktree(&mut self, _: &str) -> Result<(), RunFailure> {
+            fn create_worktree(&mut self, _: &str) -> Result<PathBuf, RunFailure> {
                 panic!("must not reach the worktree")
             }
             fn run_approved_tests(&mut self) -> Result<Vec<TestOutcome>, RunFailure> {
@@ -1086,6 +1104,26 @@ mod tests {
         let reported = harness.server.reported.clone().expect("a report was owed");
         assert!(reported.pull_request_url.is_none());
         assert_eq!(reported.commit.as_deref(), Some("0123abc"));
+    }
+
+    #[test]
+    fn the_agent_is_told_where_the_workspace_cut_the_working_copy() {
+        // The agent has to work somewhere, and the only place that is correct
+        // is the worktree this run was given. Before this the path travelled
+        // outside the ports, which meant the two adapters had to agree about
+        // it without the run ever saying so.
+        // VI: Agent phải làm việc ở đâu đó, và nơi duy nhất đúng là worktree mà
+        // VI: run này được cấp. Trước đây đường dẫn đi vòng ngoài các cổng,
+        // VI: nghĩa là hai adapter phải tự thống nhất với nhau mà run không hề
+        // VI: nói ra điều đó.
+        let mut harness = harness();
+        let completed = run(&mut harness, false);
+        assert_eq!(completed.outcome, Outcome::AwaitingReview);
+        assert_eq!(
+            harness.agent.worked_in,
+            Some(PathBuf::from("worktrees").join("crun1")),
+            "the agent worked in the worktree the workspace cut"
+        );
     }
 
     #[test]
