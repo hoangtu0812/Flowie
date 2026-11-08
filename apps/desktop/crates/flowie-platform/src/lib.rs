@@ -6,23 +6,27 @@
 //! VI: executable, hủy cây tiến trình và tự khởi động. Giữ khác biệt ở đây là
 //! VI: cách để các crate còn lại giống hệt nhau trên cả hai nền tảng.
 //!
-//! Three of those differences are implemented: the environment a child is
-//! allowed to see, resolving an executable the way the platform really finds
-//! it, and ending a process together with everything it started. The
-//! credential store and autostart arrive with the platform tasks DTD-488 and
-//! DTD-489.
-//! VI: Ba trong số các khác biệt đó đã được hiện thực: môi trường một tiến
-//! VI: trình con được phép nhìn thấy, phân giải executable đúng cách nền tảng
-//! VI: thật sự tìm nó, và kết thúc một tiến trình cùng mọi thứ nó đã khởi
-//! VI: động. Kho credential và tự khởi động sẽ có ở hai task nền tảng DTD-488
-//! VI: và DTD-489.
+//! Implemented here: the environment a child is allowed to see, resolving an
+//! executable the way the platform really finds it, ending a process together
+//! with everything it started, the credential store that holds the Flowie
+//! token, and the lock that keeps one companion per machine. Autostart and
+//! the installers arrive with the platform tasks DTD-488 and DTD-489.
+//! VI: Đã hiện thực ở đây: môi trường một tiến trình con được phép nhìn thấy,
+//! VI: phân giải executable đúng cách nền tảng thật sự tìm nó, kết thúc một
+//! VI: tiến trình cùng mọi thứ nó đã khởi động, kho credential giữ token
+//! VI: Flowie, và khoá giữ cho mỗi máy chỉ một companion. Tự khởi động và bộ
+//! VI: cài sẽ có ở hai task nền tảng DTD-488 và DTD-489.
 
+pub mod credential;
 pub mod environment;
 pub mod executable;
+pub mod instance;
 pub mod process;
 
+pub use credential::{CredentialError, CredentialStore};
 pub use environment::child_environment;
 pub use executable::resolve;
+pub use instance::{acquire, InstanceError, InstanceGuard};
 pub use process::{spawn_in_own_group, terminate_tree};
 
 pub fn crate_name() -> &'static str {
