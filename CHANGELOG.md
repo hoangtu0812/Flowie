@@ -21,8 +21,16 @@ pull request and commit references, which are for us.
 
 ### Fixed
 
+- Flowie Desktop says why it cannot reach the server instead of only that it cannot. The companion already worked out the reason — the call that was refused, the host that could not be answered, the token the server would not take — and showed it nowhere, so a machine stuck on “Disconnected” gave the person at it nothing to act on and three different repairs to guess between. The reason now appears in the setup window beside the state. (DTD-532)
+  VI: Flowie Desktop nêu rõ vì sao không liên lạc được với server chứ không chỉ nói là không liên lạc được. Companion vốn đã biết lý do — lời gọi bị từ chối, host không trả lời, token server không nhận — nhưng không hiển thị ở đâu cả, nên một máy kẹt ở “Mất kết nối” không cho người dùng thứ gì để xử lý và để họ đoán giữa ba cách sửa khác nhau. Lý do nay hiện ngay cạnh trạng thái trong cửa sổ thiết lập. (DTD-532)
+
 - Flowie Desktop shows the Flowie logo. It was showing a ring left over from the template this repository was started from, which is not Flowie’s mark and appears nowhere else in the product. The icon now comes from the same artwork the web application uses for its own, so the two cannot drift apart again. (DTD-488, #219)
   VI: Flowie Desktop hiển thị đúng logo Flowie. Trước đó nó hiện một vòng tròn sót lại từ template mà repository này khởi đi, không phải biểu tượng của Flowie và không xuất hiện ở bất cứ đâu khác trong sản phẩm. Icon nay lấy từ chính phần hình mà ứng dụng web dùng cho icon của nó, nên hai bên không thể lệch nhau lần nữa. (DTD-488)
+
+### Added
+
+- The desktop companion names the agent that is working, and says which version of itself is running. The tray line reads “Claude · DTD-204 · Editing apps/web/page.tsx” while a run is under way and falls back to the machine state when none is, so a machine merely configured for an agent never reads as one running it. The version appears on the tray menu and in the setup window, taken from the build rather than written out, so it cannot name a version that is not installed. (DTD-532)
+  VI: Companion desktop nêu tên agent đang làm việc, và cho biết nó đang chạy phiên bản nào. Dòng trên tray đọc là “Claude · DTD-204 · Editing apps/web/page.tsx” khi có run đang chạy và trở về trạng thái máy khi không có, nên một máy mới chỉ được cấu hình cho agent không bao giờ bị đọc thành máy đang chạy agent đó. Phiên bản hiện trên menu tray và trong cửa sổ thiết lập, lấy từ chính bản build chứ không viết tay, nên nó không thể nêu một phiên bản không được cài. (DTD-532)
 
 ### Added
 

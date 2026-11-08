@@ -44,10 +44,25 @@ async function refresh() {
   }
   el("state").textContent = view.state;
   el("state").className = "state " + (view.needsPerson ? "bad" : "");
-  el("activity").textContent = view.activity
-    ? "đang làm " + view.activity
-    : "";
+  // Who is working, on what, and what they are doing inside it. Without the
+  // agent's name an idle machine and a working one read the same, and without
+  // the line a task that has not moved for twenty minutes looks like progress.
+  // VI: Ai đang làm, làm task nào, và đang làm gì bên trong task đó. Thiếu tên
+  // VI: agent thì máy đang rảnh và máy đang làm việc đọc ra như nhau, còn thiếu
+  // VI: dòng mô tả thì một task đứng im hai mươi phút trông vẫn như đang chạy.
+  const working = [
+    view.agent,
+    view.activity ? "đang làm " + view.activity : null,
+    view.doing,
+  ].filter(Boolean);
+  el("activity").textContent = working.join(" · ");
+  // The reason the state gives, which is the only part a person can act on:
+  // a refused call, an unreachable host, a rejected token.
+  // VI: Lý do mà trạng thái đưa ra, phần duy nhất người dùng xử lý được: một
+  // VI: lời gọi bị từ chối, một host không tới được, một token bị khước từ.
+  show("reason", view.reason || "", false);
   show("problem", view.problem || "", false);
+  el("version").textContent = "Phiên bản " + view.version;
   el("path").textContent = view.path;
   el("token-state").textContent = view.hasToken
     ? "đã có token"

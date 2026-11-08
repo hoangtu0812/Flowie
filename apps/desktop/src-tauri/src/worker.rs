@@ -46,6 +46,7 @@ const TICK: Duration = Duration::from_millis(250);
 pub struct Shared {
     readiness: Mutex<Readiness>,
     task: Mutex<Option<String>>,
+    agent: Mutex<Option<&'static str>>,
     activity: Mutex<Option<String>>,
     site: Mutex<Option<String>>,
     cancel: AtomicBool,
@@ -57,6 +58,7 @@ impl Shared {
         Self {
             readiness: Mutex::new(readiness),
             task: Mutex::new(None),
+            agent: Mutex::new(None),
             activity: Mutex::new(None),
             site: Mutex::new(None),
             cancel: AtomicBool::new(false),
@@ -81,6 +83,24 @@ impl Shared {
     /// VI: Task đang được làm, dùng cho dòng trên tray. `None` nghĩa là đang rảnh.
     pub fn task(&self) -> Option<String> {
         self.task.lock().ok().and_then(|held| held.clone())
+    }
+
+    /// Which agent is working right now, or `None` when none is.
+    ///
+    /// Held separately from the configured provider because the configuration
+    /// says what would run, not what is running: a machine configured for
+    /// Codex and sitting idle must not read as "Codex is working on
+    /// something". It is set when a run starts and cleared when it ends, so
+    /// the two questions a person actually asks — is anything running, and
+    /// which agent — are answered by one value.
+    /// VI: Agent nào đang làm việc ngay lúc này, hoặc `None` khi không có.
+    /// VI: Giữ tách khỏi provider trong cấu hình vì cấu hình nói thứ sẽ chạy chứ
+    /// VI: không phải thứ đang chạy: một máy cấu hình Codex và đang rảnh không
+    /// VI: được đọc ra thành "Codex đang làm gì đó". Nó được đặt khi một run bắt
+    /// VI: đầu và xoá khi run kết thúc, nên hai câu hỏi người dùng thật sự hỏi —
+    /// VI: có gì đang chạy không, và agent nào — được trả lời bằng một giá trị.
+    pub fn agent(&self) -> Option<&'static str> {
+        self.agent.lock().ok().and_then(|held| *held)
     }
 
     /// What the agent said it is doing, the last time it said anything.
@@ -115,6 +135,12 @@ impl Shared {
     fn set_site(&self, value: Option<String>) {
         if let Ok(mut held) = self.site.lock() {
             *held = value;
+        }
+    }
+
+    fn set_agent(&self, name: Option<&'static str>) {
+        if let Ok(mut held) = self.agent.lock() {
+            *held = name;
         }
     }
 
@@ -290,6 +316,7 @@ fn work(
         .unwrap_or_else(|| assigned.issue_id.clone());
     shared.set_task(Some(label.clone()));
     shared.set_activity(None);
+    shared.set_agent(Some(config.provider.label()));
     // A cancel asked for while idle must not end the run that starts next.
     // VI: Một lệnh hủy yêu cầu lúc đang rảnh không được kết thúc run bắt đầu
     // VI: ngay sau đó.
@@ -346,6 +373,7 @@ fn work(
 
     shared.set_task(None);
     shared.set_activity(None);
+    shared.set_agent(None);
     shared.cancel.store(false, Ordering::SeqCst);
     // The outcome is not written over the readiness the server reported: how a
     // run ended says nothing about whether the machine can take the next one,

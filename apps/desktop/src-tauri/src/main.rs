@@ -162,12 +162,27 @@ fn main() {
             let open_task =
                 MenuItem::with_id(app, "task", "Mở task đang làm", false, None::<&str>)?;
             let open_site = MenuItem::with_id(app, "site", "Mở Flowie", false, None::<&str>)?;
+            // Read from the package so the number on the tray is the number of
+            // the build that is running. A written-out string survives a
+            // release untouched and then tells someone they are on a version
+            // they are not, which is worse than showing nothing.
+            // VI: Đọc từ package để số hiện trên tray là số của chính bản đang
+            // VI: chạy. Một chuỗi viết tay sẽ sống sót qua một lần phát hành mà
+            // VI: không ai sửa, rồi nói với người dùng rằng họ đang dùng một
+            // VI: phiên bản họ không dùng — tệ hơn là không hiện gì.
+            let version = MenuItem::with_id(
+                app,
+                "version",
+                format!("Phiên bản {}", app.package_info().version),
+                false,
+                None::<&str>,
+            )?;
             let open = MenuItem::with_id(app, "open", "Cấu hình và chẩn đoán", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Thoát", true, None::<&str>)?;
             let menu = Menu::with_items(
                 app,
                 &[
-                    &status, &open_task, &open_site, &pause, &cancel, &open, &quit,
+                    &status, &open_task, &open_site, &pause, &cancel, &open, &version, &quit,
                 ],
             )?;
 
@@ -236,6 +251,7 @@ fn main() {
             std::thread::spawn(move || loop {
                 std::thread::sleep(REFRESH);
                 let _ = status_handle.set_text(tray_line(
+                    reported.agent(),
                     reported.task().as_deref(),
                     reported.activity().as_deref(),
                     &reported.readiness(),
@@ -292,11 +308,27 @@ fn main() {
 /// VI: task nào.
 /// VI: Nhận các giá trị qua tham số thay vì tự đọc bên trong giúp quyết định này kiểm
 /// VI: được mà không cần một ứng dụng đang chạy.
-fn tray_line(task: Option<&str>, activity: Option<&str>, readiness: &Readiness) -> String {
-    match (task, activity) {
+fn tray_line(
+    agent: Option<&str>,
+    task: Option<&str>,
+    activity: Option<&str>,
+    readiness: &Readiness,
+) -> String {
+    let doing = match (task, activity) {
         (Some(task), Some(doing)) => format!("Đang làm {task} · {doing}"),
         (Some(task), None) => format!("Đang làm {task}"),
-        (None, _) => readiness.summary(VIETNAMESE),
+        (None, _) => return readiness.summary(VIETNAMESE),
+    };
+    // The agent's name leads because it answers the question that comes
+    // first: whether anything is running at all. A line that opens with the
+    // task reads the same whether an agent is driving it or the run is wedged
+    // between steps.
+    // VI: Tên agent đứng đầu vì nó trả lời câu hỏi tới trước: có thứ gì đang
+    // VI: chạy hay không. Một dòng mở đầu bằng tên task đọc giống hệt nhau dù
+    // VI: agent đang điều khiển nó hay run đang kẹt giữa hai bước.
+    match agent {
+        Some(agent) => format!("{agent} · {doing}"),
+        None => doing,
     }
 }
 
@@ -360,20 +392,38 @@ mod tests {
         // VI: Trong lúc một run đang chạy, thứ máy có thể làm tiếp không phải là
         // VI: thông tin hữu ích để hiển thị.
         assert_eq!(
-            tray_line(None, None, &Readiness::Ready),
+            tray_line(None, None, None, &Readiness::Ready),
             Readiness::Ready.summary(VIETNAMESE)
         );
-        assert!(tray_line(Some("DTD-204"), None, &Readiness::Ready).contains("DTD-204"));
+        assert!(tray_line(None, Some("DTD-204"), None, &Readiness::Ready).contains("DTD-204"));
 
         // With both, a person can tell a working agent from a stuck one.
         // VI: Có cả hai thì người dùng phân biệt được agent đang chạy với agent kẹt.
         let both = tray_line(
+            Some("Claude"),
             Some("DTD-204"),
             Some("Editing app/page.tsx"),
             &Readiness::Ready,
         );
         assert!(both.contains("DTD-204"), "{both}");
         assert!(both.contains("Editing app/page.tsx"), "{both}");
+    }
+
+    #[test]
+    fn the_tray_names_the_agent_only_while_one_is_running() {
+        // A machine set up for an agent is not a machine running it. Naming
+        // the provider while nothing runs tells someone work is under way when
+        // the companion is sitting idle.
+        // VI: Một máy được cấu hình cho agent nào đó không phải là máy đang chạy
+        // VI: agent đó. Nêu tên provider trong lúc không có gì chạy sẽ nói với
+        // VI: người dùng rằng công việc đang diễn ra trong khi companion đang rảnh.
+        let idle = tray_line(Some("Claude"), None, None, &Readiness::Ready);
+        assert_eq!(idle, Readiness::Ready.summary(VIETNAMESE));
+        assert!(!idle.contains("Claude"), "{idle}");
+
+        let working = tray_line(Some("Codex"), Some("DTD-204"), None, &Readiness::Ready);
+        assert!(working.starts_with("Codex"), "{working}");
+        assert!(working.contains("DTD-204"), "{working}");
     }
 
     #[test]
@@ -385,7 +435,7 @@ mod tests {
         let offline = Readiness::Disconnected {
             detail: "timed out".into(),
         };
-        assert!(tray_line(Some("DTD-204"), None, &offline).contains("DTD-204"));
+        assert!(tray_line(Some("Claude"), Some("DTD-204"), None, &offline).contains("DTD-204"));
     }
 
     #[test]
