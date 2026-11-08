@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
-import { VStack } from '@astryxdesign/core/Layout';
+import { Layout, LayoutContent } from '@astryxdesign/core/Layout';
 import { DesignSurface } from '@/components/common/design-surface';
 import { useUiPreferencesStore } from '@/store/ui-preferences-store';
 import { APP_VERSION, releaseAnnouncement } from '@/lib/release';
@@ -83,21 +83,35 @@ export function ReleaseAnnouncement() {
                if (!value) dismiss();
             }}
             purpose="info"
-            padding={5}
             width={640}
          >
-            <VStack gap={4} width="100%">
-               <DialogHeader
-                  title={copy("What's new in Flowie", 'Flowie có gì mới')}
-                  subtitle={copy(
-                     'Flowie was updated. Here is what changed in this release.',
-                     'Flowie vừa được cập nhật. Dưới đây là những thay đổi của bản này.'
-                  )}
-                  onOpenChange={(value) => {
-                     if (!value) dismiss();
-                  }}
-               />
-               {/* A closed dialog still renders its children, so building the notes
+            {/* A release can hold more entries than fit on one screen, so the
+                body scrolls while the header and its close button stay put.
+                Without a scrolling layout the dialog grows to its maximum
+                height and clips the rest, with no way to reach it — which is
+                what 0.14.0 shipped, an eleven-entry release nobody could read
+                past the fifth bullet of.
+                VI: Một bản phát hành có thể nhiều mục hơn một màn hình, nên phần
+                thân cuộn được còn header và nút đóng đứng yên. Không có layout
+                cuộn thì dialog giãn tới chiều cao tối đa rồi cắt cụt phần còn
+                lại, không cách nào xem tiếp — đúng điều bản 0.14.0 đã phát hành,
+                một bản mười một mục mà không ai đọc quá được mục thứ năm. */}
+            <Layout
+               header={
+                  <DialogHeader
+                     title={copy("What's new in Flowie", 'Flowie có gì mới')}
+                     subtitle={copy(
+                        'Flowie was updated. Here is what changed in this release.',
+                        'Flowie vừa được cập nhật. Dưới đây là những thay đổi của bản này.'
+                     )}
+                     onOpenChange={(value) => {
+                        if (!value) dismiss();
+                     }}
+                  />
+               }
+               content={
+                  <LayoutContent>
+                     {/* A closed dialog still renders its children, so building the notes
                    unconditionally left every changelog sentence of the running
                    release in the document of every workspace page: invisible, but
                    reachable by find-in-page, by assistive technology walking the
@@ -114,8 +128,10 @@ export function ReleaseAnnouncement() {
                    vẫn render, vì nó là hai câu cố định chứ không phải nội dung bản
                    phát hành, và vì chính nó tạo tên khả truy cập cho dialog — giữ
                    lại cả nó thì dialog khi mở sẽ không có tên. */}
-               {isOpen && <ReleaseNotes locale={locale} />}
-            </VStack>
+                     {isOpen && <ReleaseNotes locale={locale} />}
+                  </LayoutContent>
+               }
+            />
          </Dialog>
       </DesignSurface>
    );

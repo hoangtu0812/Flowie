@@ -24,6 +24,11 @@ pull request and commit references, which are for us.
 - The automated production deployment is gone. Pushing to `main` no longer builds or deploys anything, because every server that runs Flowie is deployed by hand from its own checkout and the pipeline was deploying a machine nobody was using as their Flowie. Pull requests are still checked exactly as before. The rule that decided whether a push was worth deploying, and the tests guarding it, go with it. Releases now run the pull-request check on the release commit by hand before tagging, since nothing else looks at `main`; `AGENTS.md` and `docs/release-process.md` describe the new sequence. No rebuild needed for this change itself. (DTD-514, #186)
   VI: Phần tự động deploy production đã bị bỏ. Push lên `main` không còn build hay deploy gì nữa, vì mọi server chạy Flowie đều được deploy tay từ checkout riêng và pipeline chỉ đang deploy một máy không ai dùng làm Flowie của mình. Pull request vẫn được kiểm đúng như trước. Quy tắc quyết định một lần push có đáng deploy hay không, cùng các test bảo vệ nó, cũng bị bỏ theo. Quy trình phát hành nay chạy tay pipeline kiểm tra trên chính commit release trước khi tạo tag, vì không còn gì ngó tới `main`; `AGENTS.md` và `docs/release-process.md` mô tả trình tự mới. Bản thân thay đổi này không cần build lại gì. (DTD-514)
 
+### Fixed
+
+- The what's new dialog scrolls, so a release with more entries than fit on a screen can be read to the end. It previously grew to the height of the window and clipped whatever was left, with no way to reach it: 0.14.0 announced eleven changes and nothing below the fifth could be seen. The header and its close button now stay in place while the entries scroll under them. Rebuild `web`. (DTD-513, #184)
+  VI: Hộp thoại "Có gì mới" cuộn được, nên một bản phát hành nhiều mục hơn một màn hình vẫn đọc được tới cuối. Trước đó nó giãn tới chiều cao cửa sổ rồi cắt cụt phần còn lại mà không có cách nào xem tiếp: bản 0.14.0 thông báo mười một thay đổi và không ai nhìn thấy gì từ mục thứ năm trở xuống. Tiêu đề và nút đóng nay đứng yên trong khi các mục cuộn bên dưới. Build lại `web`. (DTD-513)
+
 ## [0.15.0] — 2026-11-08 19:30 +07
 
 ### Added
