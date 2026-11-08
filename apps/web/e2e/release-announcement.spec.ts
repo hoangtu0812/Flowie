@@ -76,6 +76,21 @@ test('a new release announces itself once per account and stays closed afterward
       await page.goto(`/${fixture.slug}/dashboard`);
       await expect(announcement).toBeVisible();
       await expect(announcement).toContainText(`Flowie v${running}`);
+      // Every entry has to be reachable. A release carries as many entries as it
+      // carries, so the dialog must stay inside the viewport and scroll its body
+      // rather than grow past the screen and clip the rest: 0.14.0 shipped with
+      // eleven entries and nothing below the fifth could be read. Scrolling to
+      // the last one is a no-op when they already fit, so this holds either way.
+      // VI: Mọi mục đều phải xem được. Một bản phát hành có bao nhiêu mục là bấy
+      // nhiêu, nên dialog phải nằm trong khung nhìn và cuộn phần thân thay vì
+      // giãn quá màn hình rồi cắt cụt phần còn lại: bản 0.14.0 phát hành với mười
+      // một mục mà không đọc được gì dưới mục thứ năm. Cuộn tới mục cuối không
+      // làm gì khi chúng vốn đã vừa màn hình, nên khẳng định này đúng cả hai cách.
+      const viewport = page.viewportSize()!;
+      expect((await announcement.boundingBox())!.height).toBeLessThanOrEqual(viewport.height);
+      const lastEntry = announcement.getByRole('listitem').last();
+      await lastEntry.scrollIntoViewIfNeeded();
+      await expect(lastEntry).toBeInViewport();
       await announcement.getByRole('button', { name: 'Close', exact: true }).click();
       await expect(announcement).toHaveCount(0);
       await expect
