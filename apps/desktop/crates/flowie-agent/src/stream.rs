@@ -90,9 +90,25 @@ pub fn read_lines<R: Read>(
 /// VI: hiệu lực thật: một agent khởi động qua shell hay package manager để lại
 /// VI: tiến trình cháu đang giữ các pipe, và đọc những pipe đó sẽ bị chặn tới
 /// VI: khi tiến trình cháu tự kết thúc.
-pub fn wait_with_deadline(
+pub fn wait_with_deadline(child: Child, timeout: Duration) -> std::result::Result<Finished, Error> {
+    wait_watching(child, timeout, |_| {})
+}
+
+/// The same, with each line of standard output handed over as it arrives.
+///
+/// An unattended run is otherwise opaque until it ends: these lines are what
+/// turn twenty silent minutes into a tray that says what the agent is doing.
+/// The callback runs on the reading thread and must not block, or it holds up
+/// the pipe it is reading from.
+/// VI: Giống hàm trên, nhưng mỗi dòng standard output được trao lại ngay khi tới.
+/// VI: Một lượt chạy không người canh thì mờ mịt cho tới lúc kết thúc: chính những
+/// VI: dòng này biến hai mươi phút im lặng thành một tray nói rõ agent đang làm gì.
+/// VI: Callback chạy trên thread đang đọc nên không được chặn, nếu không nó giữ luôn
+/// VI: cái pipe mà nó đang đọc.
+pub fn wait_watching(
     mut child: Child,
     timeout: Duration,
+    mut on_line: impl FnMut(&str) + Send + 'static,
 ) -> std::result::Result<Finished, Error> {
     let pid = child.id();
     let stdout = child.stdout.take();
@@ -104,6 +120,7 @@ pub fn wait_with_deadline(
         std::thread::spawn(move || {
             let mut collected = String::new();
             let _ = read_lines(stream, |line| {
+                on_line(&line);
                 collected.push_str(&line);
                 collected.push('\n');
             });

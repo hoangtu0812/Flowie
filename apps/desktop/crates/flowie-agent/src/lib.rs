@@ -16,6 +16,7 @@
 pub mod driver;
 pub mod error;
 pub mod invoke;
+pub mod progress;
 pub mod prompt;
 pub mod provider;
 pub mod stream;
@@ -23,6 +24,7 @@ pub mod stream;
 pub use driver::{Driver, DEFAULT_TIMEOUT};
 pub use error::{Error, Result};
 pub use invoke::{Phase, CODEX_RESULT_MAX};
+pub use progress::{describe_claude_event, one_line, PROGRESS_LIMIT};
 pub use prompt::{checked_review, checked_summary, review_prompt, task_prompt};
 pub use provider::{Capability, Provider};
 pub use stream::{Finished, LINE_LIMIT};

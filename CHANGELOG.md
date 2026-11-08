@@ -19,6 +19,11 @@ pull request and commit references, which are for us.
 
 ## Unreleased
 
+### Added
+
+- The desktop companion now says what the agent is actually doing, both on the tray and on the task in Flowie: “Editing apps/web/page.tsx” rather than “Implementing the plan”, which is true of every run and so says nothing about this one. Without it a task sat unchanged for twenty minutes and nobody could tell a working agent from a stuck one. File names are shown relative to the copy the agent is working in, so the folder layout of someone’s own machine never reaches the server. When the agent says nothing, the step keeps describing itself rather than going blank. (DTD-501)
+  VI: Companion desktop nay nói rõ agent đang thực sự làm gì, cả trên tray lẫn trên task trong Flowie: “Editing apps/web/page.tsx” thay vì “Implementing the plan”, câu đúng với mọi run nên chẳng nói lên điều gì về run này. Thiếu nó thì một task nằm im suốt hai mươi phút và không ai phân biệt được agent đang chạy với agent đang kẹt. Tên file hiển thị tương đối so với bản sao mà agent đang làm việc, nên cách sắp xếp thư mục trên máy của ai đó không bao giờ tới server. Khi agent không nói gì, bước đang chạy vẫn tự mô tả chứ không để trống. (DTD-501)
+
 ### Fixed
 
 - The download offered for the desktop companion is the one that was just built, and only that one. A build kept the installer from an earlier version beside the new one, so the download held two and nothing said which was which. Anyone who picked the wrong one installed a version older than the release they got it from. (DTD-488, #215)

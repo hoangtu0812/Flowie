@@ -45,6 +45,7 @@ const TICK: Duration = Duration::from_millis(250);
 #[derive(Debug)]
 pub struct Shared {
     readiness: Mutex<Readiness>,
+    task: Mutex<Option<String>>,
     activity: Mutex<Option<String>>,
     cancel: AtomicBool,
     stop: AtomicBool,
@@ -54,6 +55,7 @@ impl Shared {
     pub fn new(readiness: Readiness) -> Self {
         Self {
             readiness: Mutex::new(readiness),
+            task: Mutex::new(None),
             activity: Mutex::new(None),
             cancel: AtomicBool::new(false),
             stop: AtomicBool::new(false),
@@ -75,8 +77,26 @@ impl Shared {
 
     /// The task being worked on, for the tray line. `None` means idle.
     /// VI: Task đang được làm, dùng cho dòng trên tray. `None` nghĩa là đang rảnh.
+    pub fn task(&self) -> Option<String> {
+        self.task.lock().ok().and_then(|held| held.clone())
+    }
+
+    /// What the agent said it is doing, the last time it said anything.
+    ///
+    /// Separate from the task because they answer different questions and
+    /// change at different rates: the task holds for a whole run, the line
+    /// changes every few seconds.
+    /// VI: Agent nói nó đang làm gì, tính từ lần cuối nó nói.
+    /// VI: Tách khỏi task vì hai thứ trả lời hai câu hỏi khác nhau và đổi với nhịp khác
+    /// VI: nhau: task giữ nguyên suốt một lượt chạy, còn dòng kia đổi vài giây một lần.
     pub fn activity(&self) -> Option<String> {
         self.activity.lock().ok().and_then(|held| held.clone())
+    }
+
+    fn set_task(&self, line: Option<String>) {
+        if let Ok(mut held) = self.task.lock() {
+            *held = line;
+        }
     }
 
     fn set_activity(&self, line: Option<String>) {
@@ -115,7 +135,7 @@ pub fn start(directory: PathBuf, shared: Arc<Shared>) -> std::thread::JoinHandle
         .expect("the worker thread starts")
 }
 
-fn serve(directory: &Path, shared: &Shared) {
+fn serve(directory: &Path, shared: &Arc<Shared>) {
     let mut schedule = Schedule::new(Duration::from_secs(10));
     while !shared.stopping() {
         let configured = attempt(directory, shared, &mut schedule);
@@ -142,7 +162,7 @@ fn serve(directory: &Path, shared: &Shared) {
 /// one. Returns the configured idle interval when it could be read.
 /// VI: Một lượt: xác định máy này làm được gì, và làm một run nếu có. Trả về chu
 /// VI: kỳ lúc rảnh đã cấu hình nếu đọc được.
-fn attempt(directory: &Path, shared: &Shared, schedule: &mut Schedule) -> Option<Duration> {
+fn attempt(directory: &Path, shared: &Arc<Shared>, schedule: &mut Schedule) -> Option<Duration> {
     let startup = crate::startup::assess_local(directory);
     let Some(config) = startup.config else {
         shared.set_readiness(startup.readiness);
@@ -224,14 +244,15 @@ fn work(
     config: &CompanionConfig,
     mapping: &RepositoryMapping,
     assigned: Assigned,
-    shared: &Shared,
+    shared: &Arc<Shared>,
     connection_id: &str,
 ) {
     let label = assigned
         .identifier
         .clone()
         .unwrap_or_else(|| assigned.issue_id.clone());
-    shared.set_activity(Some(label.clone()));
+    shared.set_task(Some(label.clone()));
+    shared.set_activity(None);
     // A cancel asked for while idle must not end the run that starts next.
     // VI: Một lệnh hủy yêu cầu lúc đang rảnh không được kết thúc run bắt đầu
     // VI: ngay sau đó.
@@ -247,15 +268,25 @@ fn work(
         mapping.approved_tests.clone(),
         DEFAULT_TIMEOUT,
     );
+    // Cloned into the sink because the agent reports from its own reading
+    // thread, which outlives neither this function nor the borrow checker's
+    // patience with a reference.
+    // VI: Được clone vào sink vì agent báo về từ thread đọc của riêng nó, thứ không
+    // VI: sống lâu hơn hàm này và cũng không được borrow checker chấp nhận qua tham
+    // VI: chiếu.
+    let reporting = Arc::clone(shared);
     let mut driver = Driver {
         provider: config.provider.into(),
         program: None,
         issue: label.clone(),
         timeout: DEFAULT_TIMEOUT,
         today: today(),
+        progress: Some(Arc::new(move |line: String| {
+            reporting.set_activity(Some(line));
+        })),
     };
     let operator = Operator {
-        shared,
+        shared: shared.as_ref(),
         started: Instant::now(),
     };
 
@@ -276,6 +307,7 @@ fn work(
     }
     .execute();
 
+    shared.set_task(None);
     shared.set_activity(None);
     shared.cancel.store(false, Ordering::SeqCst);
     // The outcome is not written over the readiness the server reported: how a
@@ -295,6 +327,10 @@ struct Operator<'a> {
 }
 
 impl Control for Operator<'_> {
+    fn activity(&self) -> Option<String> {
+        self.shared.activity()
+    }
+
     fn cancel_requested(&self) -> bool {
         // Quitting counts as cancelling: a run handed back is one another
         // machine can pick up, while one abandoned mid-step holds the task
@@ -434,10 +470,15 @@ mod tests {
     #[test]
     fn the_tray_line_is_empty_until_there_is_work() {
         let shared = Shared::new(Readiness::Ready);
+        assert!(shared.task().is_none());
         assert!(shared.activity().is_none());
-        shared.set_activity(Some("DTD-1".into()));
-        assert_eq!(shared.activity().as_deref(), Some("DTD-1"));
+        shared.set_task(Some("DTD-1".into()));
+        shared.set_activity(Some("Reading notes.md".into()));
+        assert_eq!(shared.task().as_deref(), Some("DTD-1"));
+        assert_eq!(shared.activity().as_deref(), Some("Reading notes.md"));
+        shared.set_task(None);
         shared.set_activity(None);
+        assert!(shared.task().is_none());
         assert!(shared.activity().is_none());
     }
 

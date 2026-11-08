@@ -96,7 +96,7 @@ pub fn load_setup(app: tauri::AppHandle, companion: State<'_, Companion>) -> Set
         has_token: stored_token(&companion.directory),
         state: readiness.summary(crate::VIETNAMESE),
         needs_person: readiness.needs_person(),
-        activity: companion.shared.activity(),
+        activity: companion.shared.task(),
         starts_at_login: app.autolaunch().is_enabled().unwrap_or(false),
         problem,
     }
