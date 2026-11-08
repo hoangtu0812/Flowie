@@ -27,7 +27,7 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
-use flowie_core::run::{Agent, Review, RunFailure};
+use flowie_core::run::{Agent, Review, RunFailure, TaskContext};
 use serde_json::{json, Value};
 use time::Date;
 
@@ -58,9 +58,6 @@ pub struct Driver {
     /// VI: Lệnh cần chạy, khi máy đặt nó ở chỗ khác tên thông thường của
     /// VI: provider.
     pub program: Option<String>,
-    /// The task as the server described it, handed to the agent unchanged.
-    /// VI: Task đúng như server mô tả, đưa cho agent nguyên vẹn.
-    pub context: Value,
     pub issue: String,
     pub timeout: Duration,
     /// The day the estimate counts from, passed in rather than read from a
@@ -209,8 +206,12 @@ impl Agent for Driver {
         }
     }
 
-    fn review(&mut self, worktree: &Path) -> std::result::Result<Review, RunFailure> {
-        let text = prompt::review_prompt(&self.context, self.today);
+    fn review(
+        &mut self,
+        worktree: &Path,
+        task: &TaskContext,
+    ) -> std::result::Result<Review, RunFailure> {
+        let text = prompt::review_prompt(&task.0, self.today);
         let answer = self
             .turn(worktree, Phase::Review, &text, &prompt::review_schema())
             .map_err(reportable)?;
@@ -220,6 +221,7 @@ impl Agent for Driver {
     fn implement(
         &mut self,
         worktree: &Path,
+        task: &TaskContext,
         plan: &str,
     ) -> std::result::Result<String, RunFailure> {
         // The plan travels inside the context rather than as a separate
@@ -228,7 +230,7 @@ impl Agent for Driver {
         // VI: Kế hoạch đi bên trong context chứ không phải một chỉ thị riêng,
         // VI: để agent đọc nó như một phần của task được giao thay vì như một
         // VI: thứ nối thêm vào sau.
-        let mut context = self.context.clone();
+        let mut context = task.0.clone();
         if let Some(fields) = context.as_object_mut() {
             fields.insert("plan".into(), json!(plan));
         }
@@ -261,11 +263,14 @@ mod tests {
     use super::*;
     use time::Month;
 
+    fn task() -> TaskContext {
+        TaskContext(json!({ "issue": { "identifier": "DTD-1" } }))
+    }
+
     fn driver(provider: Provider, program: &str) -> Driver {
         Driver {
             provider,
             program: Some(program.to_string()),
-            context: json!({ "issue": { "identifier": "DTD-1" } }),
             issue: "DTD-1".into(),
             timeout: Duration::from_secs(5),
             today: Date::from_calendar_date(2026, Month::November, 8).expect("a real date"),
@@ -291,7 +296,7 @@ mod tests {
         // VI: cho server chứ không phải một lần dừng lặng lẽ.
         let mut subject = driver(Provider::Codex, "flowie-no-such-agent-binary");
         let error = subject
-            .review(&std::env::temp_dir())
+            .review(&std::env::temp_dir(), &task())
             .expect_err("the tool is absent");
         match error {
             RunFailure::Reportable(detail) => {
@@ -303,8 +308,11 @@ mod tests {
 
     #[test]
     fn the_plan_travels_inside_the_context_given_to_the_agent() {
-        let subject = driver(Provider::Claude, "whatever");
-        let mut context = subject.context.clone();
+        // The agent reads the plan as part of the task it was handed rather
+        // than as an instruction bolted on after it.
+        // VI: Agent đọc kế hoạch như một phần của task được giao chứ không phải
+        // VI: một chỉ thị nối thêm vào sau.
+        let mut context = task().0;
         context
             .as_object_mut()
             .expect("an object")
