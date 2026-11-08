@@ -14,9 +14,20 @@ current NestJS application as a behavior reference; it is not a license to chang
 | Legacy API runtime port | `4000` before facade split |
 | Database migration owner | Prisma until final Python cutover |
 
-Rollback rule: do not delete or alter `apps/api`, `apps/worker`, or Prisma migrations while a
-domain is still routed to legacy NestJS. A failed Python domain is routed back to its legacy
-endpoint through the facade; Git rollback remains available through `38cca0b`.
+Rollback rule (**closed**): this rule applied while a domain was still routed to legacy
+NestJS. No domain is any more. The Python API holds no legacy upstream — there is no
+legacy base URL in `app/core/config.py` or `.env.example`, and every `httpx` client in
+`apps/api-python` targets an external service, not NestJS. No Compose service builds
+`infrastructure/docker/api.Dockerfile`, and `verify-mcp.yml` never built, linted or tested
+it. `apps/api` was therefore deleted in DTD-518, and `apps/worker` is to follow in DTD-519.
+
+The original rule read: do not delete or alter `apps/api`, `apps/worker`, or Prisma
+migrations while a domain is still routed to legacy NestJS; a failed Python domain is
+routed back to its legacy endpoint through the facade. That return path no longer exists.
+Prisma remains the schema owner and its migrations are still not to be altered.
+
+Git rollback remains available through `38cca0b`, and the deleted tree stays reachable in
+history at the commit before DTD-518.
 
 ## Schema fingerprints
 
