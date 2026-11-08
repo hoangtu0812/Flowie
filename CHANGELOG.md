@@ -19,34 +19,34 @@ pull request and commit references, which are for us.
 
 ## Unreleased
 
+## [0.16.0] — 2026-11-08 21:05 +07
+
 ### Added
 
-- Flowie Desktop now carries the Flowie mark instead of a blank placeholder, in the tray, the window, the installer and the taskbar. It also installs the browser runtime it needs when a machine does not already have it, so a fresh Windows 11 machine no longer ends up with an application that starts and shows nothing. And it can be told to start when you sign in, which is off until you turn it on: a program that picks up work at sign-in without being asked is deciding something that belongs to whoever owns the machine. The setting is read back from the system rather than from the file, so a registration that did not take is visible instead of silently ignored. (DTD-488, #212)
+- Flowie Desktop now carries the Flowie mark instead of a blank placeholder, in the tray, the window, the installer and the taskbar. It also installs the browser runtime it needs when a machine does not already have it, so a fresh Windows 11 machine no longer ends up with an application that starts and shows nothing. And it can be told to start when you sign in, which is off until you turn it on: a program that picks up work at sign-in without being asked is deciding something that belongs to whoever owns the machine. The setting is read back from the system rather than from the file, so a registration that did not take is visible instead of silently ignored. (DTD-488, #212, 91f7640)
   VI: Flowie Desktop nay mang biểu tượng Flowie thay cho ô trống, ở tray, cửa sổ, bộ cài và thanh tác vụ. Nó cũng tự cài runtime trình duyệt mà nó cần khi máy chưa có, nên một máy Windows 11 mới tinh không còn rơi vào cảnh ứng dụng khởi động lên rồi không hiện gì. Và nó có thể được đặt để khởi động cùng lúc bạn đăng nhập, mặc định tắt cho tới khi bạn bật: một chương trình tự nhận việc lúc đăng nhập mà không ai yêu cầu là đang tự quyết một việc thuộc về chủ máy. Thiết lập này được đọc lại từ hệ thống chứ không từ file, nên một lần đăng ký không ăn sẽ hiện ra chứ không bị bỏ qua âm thầm. (DTD-488)
 
-### Changed
 
-- A release must now carry the desktop installer as a download, not only describe the companion in its notes. CI artifacts expire and are buried inside workflow runs; a release asset stays. (DTD-488, #212)
-  VI: Một bản phát hành nay phải mang theo bộ cài desktop dưới dạng file tải về, chứ không chỉ mô tả companion trong ghi chú. Artifact của CI hết hạn và bị chôn trong các lần chạy workflow; asset của release thì ở lại. (DTD-488)
-
-### Added
-
-- Flowie Desktop now has a Windows installer. Every build produces one, it installs for the person who runs it so no administrator is needed, and it carries the same version number as the release it came from rather than one of its own. It is not signed yet, so Windows warns the first time it runs: that makes it something to try on your own machine, not something to hand to other people. (DTD-488, #210)
+- Flowie Desktop now has a Windows installer. Every build produces one, it installs for the person who runs it so no administrator is needed, and it carries the same version number as the release it came from rather than one of its own. It is not signed yet, so Windows warns the first time it runs: that makes it something to try on your own machine, not something to hand to other people. (DTD-488, #210, 19c9378)
   VI: Flowie Desktop nay có bộ cài Windows. Mỗi lần build đều sinh ra một bộ, cài theo người chạy nó nên không cần quyền quản trị, và mang đúng số hiệu của bản phát hành sinh ra nó chứ không phải một số riêng. Nó chưa được ký số nên Windows cảnh báo ở lần chạy đầu: vì vậy đây là bản để tự thử trên máy mình, chưa phải thứ đem đưa cho người khác. (DTD-488)
 
 ### Changed
 
-- The Flowie Desktop plan no longer describes a production deployment pipeline that was removed. It had said a desktop change could trigger a server deploy and that a green pipeline run proved the build reached a machine; both stopped being true when the automated deployment was dropped, and a plan that describes machinery nobody has is a plan that sends someone looking for it. Documentation only. (DTD-501, #209)
+- A release must now carry the desktop installer as a download, not only describe the companion in its notes. CI artifacts expire and are buried inside workflow runs; a release asset stays. (DTD-488, #212, 91f7640)
+  VI: Một bản phát hành nay phải mang theo bộ cài desktop dưới dạng file tải về, chứ không chỉ mô tả companion trong ghi chú. Artifact của CI hết hạn và bị chôn trong các lần chạy workflow; asset của release thì ở lại. (DTD-488)
+
+
+- The Flowie Desktop plan no longer describes a production deployment pipeline that was removed. It had said a desktop change could trigger a server deploy and that a green pipeline run proved the build reached a machine; both stopped being true when the automated deployment was dropped, and a plan that describes machinery nobody has is a plan that sends someone looking for it. Documentation only. (DTD-501, #209, 3764dfb)
   VI: Kế hoạch Flowie Desktop không còn mô tả một pipeline deploy production đã bị gỡ bỏ. Nó từng nói một thay đổi desktop có thể kích hoạt deploy server, và một lần chạy pipeline xanh chứng minh bản build đã tới một máy; cả hai đều hết đúng khi deploy tự động bị bỏ, và một kế hoạch mô tả bộ máy không ai có là kế hoạch đẩy người ta đi tìm nó. Chỉ là tài liệu. (DTD-501)
 
 ### Removed
 
-- The automated production deployment is gone. Pushing to `main` no longer builds or deploys anything, because every server that runs Flowie is deployed by hand from its own checkout and the pipeline was deploying a machine nobody was using as their Flowie. Pull requests are still checked exactly as before. The rule that decided whether a push was worth deploying, and the tests guarding it, go with it. Releases now run the pull-request check on the release commit by hand before tagging, since nothing else looks at `main`; `AGENTS.md` and `docs/release-process.md` describe the new sequence. No rebuild needed for this change itself. (DTD-514, #186)
+- The automated production deployment is gone. Pushing to `main` no longer builds or deploys anything, because every server that runs Flowie is deployed by hand from its own checkout and the pipeline was deploying a machine nobody was using as their Flowie. Pull requests are still checked exactly as before. The rule that decided whether a push was worth deploying, and the tests guarding it, go with it. Releases now run the pull-request check on the release commit by hand before tagging, since nothing else looks at `main`; `AGENTS.md` and `docs/release-process.md` describe the new sequence. No rebuild needed for this change itself. (DTD-514, #186, 1c68c82)
   VI: Phần tự động deploy production đã bị bỏ. Push lên `main` không còn build hay deploy gì nữa, vì mọi server chạy Flowie đều được deploy tay từ checkout riêng và pipeline chỉ đang deploy một máy không ai dùng làm Flowie của mình. Pull request vẫn được kiểm đúng như trước. Quy tắc quyết định một lần push có đáng deploy hay không, cùng các test bảo vệ nó, cũng bị bỏ theo. Quy trình phát hành nay chạy tay pipeline kiểm tra trên chính commit release trước khi tạo tag, vì không còn gì ngó tới `main`; `AGENTS.md` và `docs/release-process.md` mô tả trình tự mới. Bản thân thay đổi này không cần build lại gì. (DTD-514)
 
 ### Fixed
 
-- The what's new dialog scrolls, so a release with more entries than fit on a screen can be read to the end. It previously grew to the height of the window and clipped whatever was left, with no way to reach it: 0.14.0 announced eleven changes and nothing below the fifth could be seen. The header and its close button now stay in place while the entries scroll under them. Rebuild `web`. (DTD-513, #184)
+- The what's new dialog scrolls, so a release with more entries than fit on a screen can be read to the end. It previously grew to the height of the window and clipped whatever was left, with no way to reach it: 0.14.0 announced eleven changes and nothing below the fifth could be seen. The header and its close button now stay in place while the entries scroll under them. Rebuild `web`. (DTD-513, #184, 40e8928)
   VI: Hộp thoại "Có gì mới" cuộn được, nên một bản phát hành nhiều mục hơn một màn hình vẫn đọc được tới cuối. Trước đó nó giãn tới chiều cao cửa sổ rồi cắt cụt phần còn lại mà không có cách nào xem tiếp: bản 0.14.0 thông báo mười một thay đổi và không ai nhìn thấy gì từ mục thứ năm trở xuống. Tiêu đề và nút đóng nay đứng yên trong khi các mục cuộn bên dưới. Build lại `web`. (DTD-513)
 
 ## [0.15.0] — 2026-11-08 19:30 +07
