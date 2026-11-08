@@ -19,6 +19,11 @@ pull request and commit references, which are for us.
 
 ## Unreleased
 
+### Changed
+
+- The Flowie Desktop plan no longer describes a production deployment pipeline that was removed. It had said a desktop change could trigger a server deploy and that a green pipeline run proved the build reached a machine; both stopped being true when the automated deployment was dropped, and a plan that describes machinery nobody has is a plan that sends someone looking for it. Documentation only. (DTD-501)
+  VI: Kế hoạch Flowie Desktop không còn mô tả một pipeline deploy production đã bị gỡ bỏ. Nó từng nói một thay đổi desktop có thể kích hoạt deploy server, và một lần chạy pipeline xanh chứng minh bản build đã tới một máy; cả hai đều hết đúng khi deploy tự động bị bỏ, và một kế hoạch mô tả bộ máy không ai có là kế hoạch đẩy người ta đi tìm nó. Chỉ là tài liệu. (DTD-501)
+
 ### Removed
 
 - The automated production deployment is gone. Pushing to `main` no longer builds or deploys anything, because every server that runs Flowie is deployed by hand from its own checkout and the pipeline was deploying a machine nobody was using as their Flowie. Pull requests are still checked exactly as before. The rule that decided whether a push was worth deploying, and the tests guarding it, go with it. Releases now run the pull-request check on the release commit by hand before tagging, since nothing else looks at `main`; `AGENTS.md` and `docs/release-process.md` describe the new sequence. No rebuild needed for this change itself. (DTD-514, #186)
