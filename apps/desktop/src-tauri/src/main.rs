@@ -203,6 +203,7 @@ fn main() {
             std::thread::spawn(move || loop {
                 std::thread::sleep(REFRESH);
                 let _ = status_handle.set_text(tray_line(
+                    reported.task().as_deref(),
                     reported.activity().as_deref(),
                     &reported.readiness(),
                 ));
@@ -238,19 +239,29 @@ fn main() {
         });
 }
 
-/// What the tray shows: the task in hand when there is one, otherwise the
-/// state of the machine.
+/// What the tray shows: the task in hand and what the agent is doing inside
+/// it, or the state of the machine when there is no task.
 ///
-/// Taking both as arguments rather than reading them inside keeps this
+/// Both are shown because they answer different questions. The task alone
+/// leaves a person watching "Đang làm DTD-204" for twenty minutes with no way
+/// to tell a working agent from a stuck one; the line alone loses which task
+/// it belongs to.
+///
+/// Taking the values as arguments rather than reading them inside keeps this
 /// decidable without a running application.
-/// VI: Những gì tray hiển thị: task đang làm nếu có, nếu không thì trạng thái
-/// VI: của máy.
-/// VI: Nhận cả hai qua tham số thay vì tự đọc bên trong giúp quyết định này
-/// VI: kiểm được mà không cần một ứng dụng đang chạy.
-fn tray_line(activity: Option<&str>, readiness: &Readiness) -> String {
-    match activity {
-        Some(task) => format!("Đang làm {task}"),
-        None => readiness.summary(VIETNAMESE),
+/// VI: Những gì tray hiển thị: task đang làm và agent đang làm gì bên trong task
+/// VI: đó, hoặc trạng thái của máy khi không có task nào.
+/// VI: Hiển thị cả hai vì chúng trả lời hai câu hỏi khác nhau. Chỉ có tên task thì
+/// VI: người dùng nhìn "Đang làm DTD-204" suốt hai mươi phút mà không phân biệt được
+/// VI: agent đang chạy với agent đang kẹt; chỉ có dòng mô tả thì mất thông tin nó thuộc
+/// VI: task nào.
+/// VI: Nhận các giá trị qua tham số thay vì tự đọc bên trong giúp quyết định này kiểm
+/// VI: được mà không cần một ứng dụng đang chạy.
+fn tray_line(task: Option<&str>, activity: Option<&str>, readiness: &Readiness) -> String {
+    match (task, activity) {
+        (Some(task), Some(doing)) => format!("Đang làm {task} · {doing}"),
+        (Some(task), None) => format!("Đang làm {task}"),
+        (None, _) => readiness.summary(VIETNAMESE),
     }
 }
 
@@ -314,10 +325,20 @@ mod tests {
         // VI: Trong lúc một run đang chạy, thứ máy có thể làm tiếp không phải là
         // VI: thông tin hữu ích để hiển thị.
         assert_eq!(
-            tray_line(None, &Readiness::Ready),
+            tray_line(None, None, &Readiness::Ready),
             Readiness::Ready.summary(VIETNAMESE)
         );
-        assert!(tray_line(Some("DTD-204"), &Readiness::Ready).contains("DTD-204"));
+        assert!(tray_line(Some("DTD-204"), None, &Readiness::Ready).contains("DTD-204"));
+
+        // With both, a person can tell a working agent from a stuck one.
+        // VI: Có cả hai thì người dùng phân biệt được agent đang chạy với agent kẹt.
+        let both = tray_line(
+            Some("DTD-204"),
+            Some("Editing app/page.tsx"),
+            &Readiness::Ready,
+        );
+        assert!(both.contains("DTD-204"), "{both}");
+        assert!(both.contains("Editing app/page.tsx"), "{both}");
     }
 
     #[test]
@@ -329,7 +350,7 @@ mod tests {
         let offline = Readiness::Disconnected {
             detail: "timed out".into(),
         };
-        assert!(tray_line(Some("DTD-204"), &offline).contains("DTD-204"));
+        assert!(tray_line(Some("DTD-204"), None, &offline).contains("DTD-204"));
     }
 
     #[test]
