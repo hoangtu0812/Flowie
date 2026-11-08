@@ -26,6 +26,8 @@ use flowie_platform::credential::CredentialStore;
 use serde::Serialize;
 use tauri::State;
 
+use tauri_plugin_autostart::ManagerExt;
+
 use crate::Companion;
 
 /// Everything the window draws in one answer, so it cannot show a token state
@@ -65,13 +67,20 @@ pub struct SetupView {
     /// The task in hand, when there is one.
     /// VI: Task đang làm, nếu có.
     pub activity: Option<String>,
+    /// Whether the machine will actually start the companion at sign-in, read
+    /// back from the system rather than from the file, so a registration that
+    /// did not take is visible.
+    /// VI: Máy có thật sự khởi động companion lúc đăng nhập hay không, đọc từ hệ
+    /// VI: thống chứ không từ file, để một lần đăng ký không ăn thì nhìn thấy
+    /// VI: được.
+    pub starts_at_login: bool,
     /// Why the configuration on disk cannot be used, when that is the case.
     /// VI: Vì sao cấu hình trên đĩa không dùng được, nếu đúng là vậy.
     pub problem: Option<String>,
 }
 
 #[tauri::command]
-pub fn load_setup(companion: State<'_, Companion>) -> SetupView {
+pub fn load_setup(app: tauri::AppHandle, companion: State<'_, Companion>) -> SetupView {
     let path = CompanionConfig::path_in(&companion.directory);
     let raw = std::fs::read_to_string(&path).unwrap_or_default();
     let problem = match CompanionConfig::load(&companion.directory) {
@@ -88,6 +97,7 @@ pub fn load_setup(companion: State<'_, Companion>) -> SetupView {
         state: readiness.summary(crate::VIETNAMESE),
         needs_person: readiness.needs_person(),
         activity: companion.shared.activity(),
+        starts_at_login: app.autolaunch().is_enabled().unwrap_or(false),
         problem,
     }
 }
@@ -104,12 +114,24 @@ pub fn load_setup(companion: State<'_, Companion>) -> SetupView {
 /// VI: đây với đúng lời phàn nàn companion sẽ đưa ra, thay vì được ghi xuống rồi
 /// VI: mới bị phát hiện ở lượt poll kế tiếp.
 #[tauri::command]
-pub fn save_setup(companion: State<'_, Companion>, configuration: String) -> Result<(), String> {
+pub fn save_setup(
+    app: tauri::AppHandle,
+    companion: State<'_, Companion>,
+    configuration: String,
+) -> Result<(), String> {
     let parsed: CompanionConfig =
         serde_json::from_str(&configuration).map_err(|error| error.to_string())?;
     parsed
         .save(&companion.directory)
         .map_err(|error| error.to_string())?;
+    // Registration follows the saved file, not the other way round. Doing it
+    // after the save means a configuration that was refused never changes what
+    // happens at sign-in.
+    // VI: Việc đăng ký đi theo file đã lưu chứ không ngược lại. Làm sau khi lưu
+    // VI: nghĩa là một cấu hình bị từ chối không bao giờ đổi được điều xảy ra
+    // VI: lúc đăng nhập.
+    apply_start_at_login(&app, parsed.start_at_login)?;
+
     // The tray's pause entry works off this copy, so it is replaced rather
     // than left describing the previous file.
     // VI: Mục tạm dừng trên tray hoạt động dựa vào bản sao này, nên nó được thay
@@ -118,6 +140,33 @@ pub fn save_setup(companion: State<'_, Companion>, configuration: String) -> Res
         *held = Some(parsed);
     }
     Ok(())
+}
+
+/// Brings the sign-in registration into line with the setting.
+///
+/// Read back afterwards rather than assumed: a registration that silently
+/// failed would leave the window reporting a choice the machine will not
+/// honour, which is worse than refusing to save it.
+/// VI: Đưa phần đăng ký khởi động-lúc-đăng-nhập về đúng thiết lập.
+/// VI: Đọc lại sau khi đặt chứ không mặc định là xong: một lần đăng ký hỏng âm
+/// VI: thầm sẽ để cửa sổ báo một lựa chọn mà máy không thực hiện, và điều đó tệ
+/// VI: hơn là từ chối lưu nó.
+pub fn apply_start_at_login(app: &tauri::AppHandle, wanted: bool) -> Result<(), String> {
+    let manager = app.autolaunch();
+    let result = if wanted {
+        manager.enable()
+    } else {
+        manager.disable()
+    };
+    result.map_err(|error| format!("không đặt được khởi động cùng đăng nhập: {error}"))?;
+
+    match manager.is_enabled() {
+        Ok(actual) if actual == wanted => Ok(()),
+        Ok(actual) => Err(format!(
+            "đã yêu cầu khởi động cùng đăng nhập = {wanted} nhưng hệ thống báo {actual}"
+        )),
+        Err(error) => Err(format!("không đọc lại được trạng thái khởi động: {error}")),
+    }
 }
 
 /// Puts the token in the operating system's credential store.
@@ -199,6 +248,7 @@ mod tests {
             }],
             poll_seconds: 10,
             paused: false,
+            start_at_login: false,
         }
     }
 

@@ -91,7 +91,13 @@
 3. Create annotated tag `vX.Y.Z` on the checked commit and publish a GitHub
    release whose notes are the matching `CHANGELOG.md` section. Never tag a
    revision whose checks have not passed.
-4. Ask the maintainer to pull and rebuild on each server they run, and say
+4. Attach the desktop installers to that release as assets, taken from the
+   `Verify Flowie Desktop` run of the tagged commit. A release whose notes
+   describe the companion but offer no way to install it leaves a reader
+   hunting through workflow runs for a file, and CI artifacts expire while a
+   release asset does not. Say in the notes that the installer is unsigned for
+   as long as that is true.
+5. Ask the maintainer to pull and rebuild on each server they run, and say
    which services need rebuilding. A release is tagged, not deployed: it
    reaches people only when they have done that, so never report it as live
    until they confirm.

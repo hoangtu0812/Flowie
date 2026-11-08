@@ -63,6 +63,16 @@ pub struct Companion {
 
 fn main() {
     tauri::Builder::default()
+        // No arguments on the sign-in launch: the companion starts the
+        // same way however it was started, so there is one behaviour to
+        // reason about rather than two.
+        // VI: Không truyền argument nào ở lần khởi động theo đăng nhập:
+        // VI: companion khởi động giống nhau dù được gọi theo cách nào, nên
+        // VI: chỉ có một hành vi để suy luận thay vì hai.
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .invoke_handler(tauri::generate_handler![
             setup::load_setup,
             setup::save_setup,
@@ -107,6 +117,22 @@ fn main() {
             // VI: Vẫn khởi động kể cả khi máy chưa được thiết lập: worker báo
             // VI: lại điều gì đang thiếu ở mỗi lượt, nên hoàn tất thiết lập xong
             // VI: là có hiệu lực mà không phải khởi động lại ứng dụng.
+            // The file records what the person chose; the system records
+            // what will happen. They drift when a machine is reimaged or
+            // the entry is removed by hand, so startup makes the system
+            // match the file rather than leaving a stale answer.
+            // VI: File ghi điều người dùng đã chọn; hệ thống ghi điều sẽ xảy ra.
+            // VI: Hai bên lệch nhau khi máy được cài lại hoặc mục khởi động bị
+            // VI: xóa bằng tay, nên lúc khởi động sẽ đưa hệ thống về đúng file
+            // VI: thay vì để một câu trả lời cũ.
+            if let Some(config) = assessed.config.as_ref() {
+                if let Err(detail) =
+                    setup::apply_start_at_login(app.handle(), config.start_at_login)
+                {
+                    eprintln!("{detail}");
+                }
+            }
+
             let running = worker::start(directory.clone(), Arc::clone(&shared));
 
             app.manage(Companion {

@@ -114,6 +114,19 @@ pub struct CompanionConfig {
     /// VI: làm nốt việc hiện tại và không nhận thêm.
     #[serde(default)]
     pub paused: bool,
+    /// Whether the companion starts when the person signs in.
+    ///
+    /// Off unless someone turns it on. A task runner that appears at
+    /// sign-in without being asked is a program taking a decision that
+    /// belongs to whoever owns the machine, and it would start claiming
+    /// work before they knew it was running.
+    /// VI: Companion có khởi động cùng lúc người dùng đăng nhập hay không.
+    /// VI: Mặc định tắt trừ khi có người bật. Một chương trình nhận việc tự hiện
+    /// VI: ra lúc đăng nhập mà không ai yêu cầu là chương trình tự quyết một việc
+    /// VI: thuộc về chủ máy, và nó sẽ bắt đầu nhận task trước khi họ biết nó đang
+    /// VI: chạy.
+    #[serde(default)]
+    pub start_at_login: bool,
 }
 
 fn default_poll_seconds() -> u64 {
@@ -312,6 +325,7 @@ mod tests {
             repositories: vec![mapping()],
             poll_seconds: 10,
             paused: false,
+            start_at_login: false,
         }
     }
 

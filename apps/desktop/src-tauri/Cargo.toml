@@ -40,6 +40,13 @@ time = { version = "0.3", features = ["local-offset"] }
 # VI: đúng hai crate đó để parse và báo lỗi.
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Registers the companion to start at sign-in. A plugin rather than a
+# registry write of our own: the same call works on macOS, where the
+# mechanism is a launch agent and nothing like a registry key.
+# VI: Đăng ký companion khởi động cùng lúc đăng nhập. Dùng plugin thay vì tự ghi
+# VI: registry: cùng một lời gọi chạy được trên macOS, nơi cơ chế là launch agent
+# VI: chứ không phải khóa registry.
+tauri-plugin-autostart = "2"
 
 [dev-dependencies]
 tempfile = "3"
