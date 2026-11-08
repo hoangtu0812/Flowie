@@ -21,12 +21,16 @@ pub mod config;
 pub mod error;
 pub mod journal;
 pub mod lease;
+pub mod poll;
+pub mod readiness;
 pub mod sequence;
 
 pub use config::{CompanionConfig, Provider, RepositoryMapping};
 pub use error::ConfigError;
 pub use journal::{Entry, Recovery};
 pub use lease::{BudgetPolicy, Decision, LeaseTracker, HEARTBEAT_INTERVAL, SERVER_LEASE};
+pub use poll::Schedule;
+pub use readiness::{Readiness, REQUIRED_SCOPES};
 pub use sequence::{plan, Outcome, Step, ORDER};
 
 /// Marks the crate as wired into the workspace build.
