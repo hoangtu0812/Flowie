@@ -19,6 +19,11 @@ pull request and commit references, which are for us.
 
 ## Unreleased
 
+### Added
+
+- A way to check the background job that closes and files away old issues against the separate worker it is replacing, by giving both an identical copy of the same data and comparing everything each one wrote. It exists because the question could not be answered any other way: no team on the live server has these policies turned on, so both do nothing there and agreeing about nothing proves nothing. The comparison already earned its place once, catching a date written without its time zone that the ordinary tests had missed because they counted the records instead of reading them. It only works while the old worker is still here and stops being possible the moment it is removed, so it is worth running before then. Developer tooling; nothing about the product changes and nothing needs rebuilding. (DTD-519)
+  VI: Một cách đối chiếu công việc nền đóng và cất đi những issue cũ với worker riêng mà nó đang thay thế, bằng cách cho cả hai một bản sao giống hệt nhau của cùng dữ liệu rồi so mọi thứ mỗi bên ghi ra. Nó ra đời vì câu hỏi này không thể trả lời bằng cách nào khác: trên server thật chưa team nào bật các chính sách đó, nên cả hai đều không làm gì và việc cùng không làm gì thì không chứng minh được điều gì. Phép đối chiếu đã chứng tỏ giá trị ngay lần đầu, bắt được một ngày tháng ghi thiếu múi giờ mà các test thông thường bỏ sót vì chúng đếm số bản ghi thay vì đọc nội dung. Nó chỉ chạy được chừng nào worker cũ còn ở đây và sẽ hết khả dụng ngay khi worker bị gỡ, nên đáng chạy trước lúc đó. Công cụ cho lập trình viên; không có gì về sản phẩm thay đổi và không cần build lại gì. (DTD-519)
+
 ### Fixed
 
 - The audit trail for an automatically generated cycle now records its start and end with the time zone they are in, so the record reads as the same two days everywhere. The dates were being written without any marker saying they were UTC, which anyone reading the trail later would have taken for local time and been out by a time zone. Found by running the retiring background worker and its replacement against two identical copies of the same database and comparing what each one wrote, rather than by reading the code. (DTD-519)
