@@ -203,6 +203,7 @@ mod tests {
             }],
             poll_seconds: 10,
             paused,
+            start_at_login: false,
         }
     }
 

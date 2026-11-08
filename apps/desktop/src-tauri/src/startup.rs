@@ -159,6 +159,7 @@ mod tests {
             }],
             poll_seconds: 10,
             paused: false,
+            start_at_login: false,
         }
     }
 
