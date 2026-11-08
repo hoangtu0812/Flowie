@@ -21,6 +21,16 @@ pull request and commit references, which are for us.
 
 ### Added
 
+- Flowie Desktop now carries the Flowie mark instead of a blank placeholder, in the tray, the window, the installer and the taskbar. It also installs the browser runtime it needs when a machine does not already have it, so a fresh Windows 11 machine no longer ends up with an application that starts and shows nothing. And it can be told to start when you sign in, which is off until you turn it on: a program that picks up work at sign-in without being asked is deciding something that belongs to whoever owns the machine. The setting is read back from the system rather than from the file, so a registration that did not take is visible instead of silently ignored. (DTD-488)
+  VI: Flowie Desktop nay mang biểu tượng Flowie thay cho ô trống, ở tray, cửa sổ, bộ cài và thanh tác vụ. Nó cũng tự cài runtime trình duyệt mà nó cần khi máy chưa có, nên một máy Windows 11 mới tinh không còn rơi vào cảnh ứng dụng khởi động lên rồi không hiện gì. Và nó có thể được đặt để khởi động cùng lúc bạn đăng nhập, mặc định tắt cho tới khi bạn bật: một chương trình tự nhận việc lúc đăng nhập mà không ai yêu cầu là đang tự quyết một việc thuộc về chủ máy. Thiết lập này được đọc lại từ hệ thống chứ không từ file, nên một lần đăng ký không ăn sẽ hiện ra chứ không bị bỏ qua âm thầm. (DTD-488)
+
+### Changed
+
+- A release must now carry the desktop installer as a download, not only describe the companion in its notes. CI artifacts expire and are buried inside workflow runs; a release asset stays. (DTD-488)
+  VI: Một bản phát hành nay phải mang theo bộ cài desktop dưới dạng file tải về, chứ không chỉ mô tả companion trong ghi chú. Artifact của CI hết hạn và bị chôn trong các lần chạy workflow; asset của release thì ở lại. (DTD-488)
+
+### Added
+
 - Flowie Desktop now has a Windows installer. Every build produces one, it installs for the person who runs it so no administrator is needed, and it carries the same version number as the release it came from rather than one of its own. It is not signed yet, so Windows warns the first time it runs: that makes it something to try on your own machine, not something to hand to other people. (DTD-488, #210)
   VI: Flowie Desktop nay có bộ cài Windows. Mỗi lần build đều sinh ra một bộ, cài theo người chạy nó nên không cần quyền quản trị, và mang đúng số hiệu của bản phát hành sinh ra nó chứ không phải một số riêng. Nó chưa được ký số nên Windows cảnh báo ở lần chạy đầu: vì vậy đây là bản để tự thử trên máy mình, chưa phải thứ đem đưa cho người khác. (DTD-488)
 
