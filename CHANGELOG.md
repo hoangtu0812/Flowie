@@ -21,7 +21,7 @@ pull request and commit references, which are for us.
 
 ### Fixed
 
-- Flowie Desktop shows the Flowie logo. It was showing a ring left over from the template this repository was started from, which is not Flowie’s mark and appears nowhere else in the product. The icon now comes from the same artwork the web application uses for its own, so the two cannot drift apart again. (DTD-488)
+- Flowie Desktop shows the Flowie logo. It was showing a ring left over from the template this repository was started from, which is not Flowie’s mark and appears nowhere else in the product. The icon now comes from the same artwork the web application uses for its own, so the two cannot drift apart again. (DTD-488, #219)
   VI: Flowie Desktop hiển thị đúng logo Flowie. Trước đó nó hiện một vòng tròn sót lại từ template mà repository này khởi đi, không phải biểu tượng của Flowie và không xuất hiện ở bất cứ đâu khác trong sản phẩm. Icon nay lấy từ chính phần hình mà ứng dụng web dùng cho icon của nó, nên hai bên không thể lệch nhau lần nữa. (DTD-488)
 
 ### Added
