@@ -91,6 +91,18 @@ class Settings:
     # không ghi gì cho tới khi được bật có chủ đích. Nó tắt trong lúc worker BullMQ còn giữ job này,
     # để hai bên không bao giờ cùng ghi vào một dòng.
     team_policy_writes_enabled: bool = False
+    # Level for the application's own loggers. Uvicorn configures only its own
+    # `uvicorn.*` loggers and leaves the root logger at WARNING with no handler, so
+    # without this every `logger.info` in `app/` is discarded — which is why a job
+    # reporting what it would do produced no output at all. INFO by default because
+    # the job logs are written to be read, and each one only speaks when it did
+    # something.
+    # VI: Mức log cho chính các logger của ứng dụng. Uvicorn chỉ cấu hình các logger
+    # `uvicorn.*` của nó và để root ở mức WARNING không có handler, nên thiếu thiết lập
+    # này thì mọi `logger.info` trong `app/` đều bị bỏ đi — đó chính là lý do một job
+    # báo cáo việc nó định làm lại không in ra gì cả. Mặc định INFO vì các log của job
+    # được viết ra để có người đọc, và mỗi log chỉ lên tiếng khi nó đã làm việc gì đó.
+    log_level: str = 'INFO'
     # Lowercase `host` or `host:port` entries for self-hosted, OpenAI-compatible AI endpoints
     # (for example a LiteLLM gateway on the internal network). Workspace administrators may save
     # a provider URL on these hosts over HTTP or HTTPS; every other host must be the provider's
@@ -149,6 +161,7 @@ class Settings:
             scm_sync_interval_seconds=_sync_interval(int(getenv('SCM_SYNC_INTERVAL_SECONDS', '0'))),
             team_policy_scan_interval_seconds=max(60, int(getenv('TEAM_POLICY_SCAN_INTERVAL_SECONDS', '3600'))),
             team_policy_writes_enabled=getenv('TEAM_POLICY_WRITES_ENABLED', 'false').lower() == 'true',
+            log_level=getenv('LOG_LEVEL', 'INFO').strip().upper() or 'INFO',
             smtp_host=getenv('SMTP_HOST', '').strip(),
             smtp_port=int(getenv('SMTP_PORT', '587')),
             smtp_username=getenv('SMTP_USERNAME', '').strip(),
