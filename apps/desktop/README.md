@@ -39,8 +39,9 @@ cd apps/desktop
 cargo clippy --target aarch64-apple-darwin   -p flowie-core -p flowie-agent -p flowie-repository -p flowie-platform   --all-targets -- -D warnings
 ```
 
-Không kiểm được `flowie-mcp` và `src-tauri` theo cách này: `ring` và các crate
-Apple của Tauri cần một C compiler cho macOS. Hai crate đó chỉ có CI xác nhận.
+Không kiểm được `flowie-mcp`, `flowie-connection` và `src-tauri` theo cách này:
+`ring` và các crate Apple của Tauri cần một C compiler cho macOS. Ba crate đó chỉ
+có CI xác nhận.
 
 ## Hạn chế đã biết của bản hiện tại
 
