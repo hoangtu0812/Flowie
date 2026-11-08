@@ -79,6 +79,24 @@ jobs:
       - name: Build
         run: cargo build --workspace
 
+      # A release binary anyone can download and run. There is no installer
+      # yet, so without this the only way to try a change is to build it, and
+      # "it compiles" keeps standing in for "it works".
+      # VI: Một bản release ai cũng tải về chạy được. Chưa có bộ cài, nên thiếu
+      # VI: bước này thì cách duy nhất để thử một thay đổi là tự build, và "nó
+      # VI: biên dịch được" cứ bị dùng thay cho "nó chạy được".
+      - name: Build the companion for trying out
+        run: cargo build --release -p flowie-desktop
+
+      - name: Keep the Windows build
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: flowie-desktop-windows
+          path: apps/desktop/target/release/flowie-desktop.exe
+          if-no-files-found: error
+          retention-days: 14
+
   deploy-scope:
     name: deployment scope rules
     runs-on: ubuntu-latest
