@@ -52,6 +52,16 @@ tauri-plugin-autostart = "2"
 # VI: Mở một trang bằng đúng trình duyệt người dùng đang dùng, thay vì trong một
 # VI: webview của chúng ta nơi họ chưa đăng nhập.
 tauri-plugin-opener = "2"
+# Asks GitHub whether a newer release exists. Same TLS stack as the MCP
+# client, so the installer carries one of them rather than two, and it sits in
+# this crate because the shell is already outside the macOS cross-check that
+# ring's C dependency would otherwise break.
+# VI: Hỏi GitHub xem đã có bản phát hành mới hơn chưa. Dùng cùng bộ TLS với
+# VI: client MCP để bộ cài mang một bộ chứ không phải hai, và đặt ở crate này vì
+# VI: vỏ ứng dụng vốn đã nằm ngoài phần cross-check macOS mà phụ thuộc C của ring
+# VI: sẽ làm hỏng.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+tokio = { version = "1", features = ["rt", "time"] }
 
 [dev-dependencies]
 tempfile = "3"

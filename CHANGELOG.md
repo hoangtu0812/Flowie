@@ -32,6 +32,11 @@ pull request and commit references, which are for us.
 
 ### Added
 
+- Flowie Desktop says when a newer version has been published, and opens the release page. It asks GitHub at startup and every six hours; until a newer release is actually seen the menu entry stays plainly unavailable rather than present and inert. It does not download or install anything: the installer is not signed yet, so a companion that fetched its own replacement would run whatever answered. A failed check is silent, because GitHub not answering says nothing about whether this machine can take work. (DTD-533)
+  VI: Flowie Desktop cho biết khi có phiên bản mới được công bố, và mở trang phát hành. Nó hỏi GitHub lúc khởi động và mỗi sáu giờ; chứng nào chưa thực sự thấy bản mới hơn thì mục menu vẫn tắt hẳn chứ không hiện ra rồi bấm không làm gì. Nó không tải và không cài: bộ cài chưa được ký số, nên một companion tự tải bản thay thế của chính nó sẽ chạy bất cứ thứ gì trả lời nó. Một lần kiểm tra hỏng thì im lặng, vì GitHub không trả lời chẳng nói gì về việc máy này có nhận việc được hay không. (DTD-533)
+
+### Added
+
 - The desktop companion names the agent that is working, and says which version of itself is running. The tray line reads “Claude · DTD-204 · Editing apps/web/page.tsx” while a run is under way and falls back to the machine state when none is, so a machine merely configured for an agent never reads as one running it. The version appears on the tray menu and in the setup window, taken from the build rather than written out, so it cannot name a version that is not installed. (DTD-532)
   VI: Companion desktop nêu tên agent đang làm việc, và cho biết nó đang chạy phiên bản nào. Dòng trên tray đọc là “Claude · DTD-204 · Editing apps/web/page.tsx” khi có run đang chạy và trở về trạng thái máy khi không có, nên một máy mới chỉ được cấu hình cho agent không bao giờ bị đọc thành máy đang chạy agent đó. Phiên bản hiện trên menu tray và trong cửa sổ thiết lập, lấy từ chính bản build chứ không viết tay, nên nó không thể nêu một phiên bản không được cài. (DTD-532)
 

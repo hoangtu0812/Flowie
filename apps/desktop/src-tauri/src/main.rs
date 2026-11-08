@@ -20,6 +20,7 @@
 
 mod setup;
 mod startup;
+mod update;
 mod worker;
 
 use std::path::PathBuf;
@@ -177,18 +178,32 @@ fn main() {
                 false,
                 None::<&str>,
             )?;
+            // Disabled and neutral until a newer release has actually been
+            // seen. An entry that is always there and sometimes does nothing
+            // teaches people to ignore it.
+            // VI: Vô hiệu và trung tính cho tới khi thật sự thấy một bản phát
+            // VI: hành mới hơn. Một mục lúc nào cũng có mặt và đôi khi bấm vào
+            // VI: không làm gì sẽ dạy người dùng bỏ qua nó.
+            let update = MenuItem::with_id(app, "update", "Chưa có bản mới", false, None::<&str>)?;
             let open = MenuItem::with_id(app, "open", "Cấu hình và chẩn đoán", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Thoát", true, None::<&str>)?;
             let menu = Menu::with_items(
                 app,
                 &[
-                    &status, &open_task, &open_site, &pause, &cancel, &open, &version, &quit,
+                    &status, &open_task, &open_site, &pause, &cancel, &open, &version, &update,
+                    &quit,
                 ],
             )?;
 
             let status_handle = status.clone();
             let pause_handle = pause.clone();
             let clicked = Arc::clone(&shared);
+            let available: update::Available = Arc::new(Mutex::new(None));
+            update::watch(
+                app.package_info().version.to_string(),
+                Arc::clone(&available),
+            );
+            let offered = Arc::clone(&available);
             TrayIconBuilder::with_id("flowie")
                 .icon(Image::from_bytes(include_bytes!("../icons/icon.png"))?)
                 .tooltip("Flowie Desktop")
@@ -223,6 +238,23 @@ fn main() {
                             let _ = tauri_plugin_opener::open_url(url, None::<&str>);
                         }
                     }
+                    // The release page, not a download. Nothing here installs
+                    // anything: the installer is unsigned, so a companion that
+                    // fetched and ran its own replacement would run whatever
+                    // answered.
+                    // VI: Mở trang phát hành chứ không tải về. Không có gì ở đây
+                    // VI: tự cài: bộ cài chưa ký số, nên một companion tự tải và
+                    // VI: chạy bản thay thế của chính nó sẽ chạy bất cứ thứ gì
+                    // VI: trả lời nó.
+                    "update" => {
+                        let url = offered
+                            .lock()
+                            .ok()
+                            .and_then(|held| held.as_ref().map(|newer| newer.url.clone()));
+                        if let Some(url) = url {
+                            let _ = tauri_plugin_opener::open_url(url, None::<&str>);
+                        }
+                    }
                     "quit" => {
                         // Asked, not forced: the run stops at its next step and
                         // hands the task back, which is the difference between
@@ -248,6 +280,8 @@ fn main() {
             let reported = Arc::clone(&shared);
             let task_handle = open_task.clone();
             let site_handle = open_site.clone();
+            let update_handle = update.clone();
+            let watched = Arc::clone(&available);
             std::thread::spawn(move || loop {
                 std::thread::sleep(REFRESH);
                 let _ = status_handle.set_text(tray_line(
@@ -258,6 +292,11 @@ fn main() {
                 ));
                 let _ = task_handle.set_enabled(reported.task_url().is_some());
                 let _ = site_handle.set_enabled(reported.site().is_some());
+                if let Some(newer) = watched.lock().ok().and_then(|held| held.clone()) {
+                    let _ =
+                        update_handle.set_text(format!("Có bản mới {} — tải về", newer.version));
+                    let _ = update_handle.set_enabled(true);
+                }
                 if running.is_finished() {
                     return;
                 }
