@@ -19,6 +19,11 @@ pull request and commit references, which are for us.
 
 ## Unreleased
 
+### Added
+
+- The hourly job that closes issues nobody has touched and files away ones that are long settled now also exists inside the main server, where the rest of the background work already lives. It changes nothing yet: it runs every check and writes down which issues it would have closed and filed away, and touches none of them, so its decisions can be held against the separate worker that still does the real work before anything is handed over. The move also gives these rules their first real tests — until now the only tests for them ran against a stand-in database that answered every question the same way, so the part that decides which of your issues get closed was never actually checked. Nothing to rebuild beyond the usual API image, and no database change. (DTD-519)
+  VI: Công việc chạy mỗi giờ để đóng những issue không ai còn động tới và cất đi những issue đã xong từ lâu nay cũng có mặt ngay trong server chính, nơi phần việc nền còn lại vốn đã nằm sẵn. Hiện nó chưa đổi gì: nó chạy đủ mọi bước kiểm tra rồi ghi lại những issue lẽ ra nó đã đóng và đã cất, và không đụng vào issue nào, để các quyết định của nó được đối chiếu với worker riêng vẫn đang làm việc thật trước khi bàn giao. Lần chuyển này cũng cho những quy tắc đó bộ test thật đầu tiên — tới nay test duy nhất cho chúng chạy trên một database giả trả lời mọi câu hỏi như nhau, nên phần quyết định issue nào của bạn bị đóng thực ra chưa từng được kiểm. Không cần build lại gì ngoài image API như thường lệ, và không có thay đổi database. (DTD-519)
+
 ### Removed
 
 - The old NestJS backend has been deleted. It was replaced by the Python API some time ago and has not run anywhere since: no container was built from it, no check ever compiled or tested it, and the app has not spoken to it. It nonetheless stayed in the commands everyone uses, so `pnpm dev` started a second API that was not the real one and `pnpm build` spent its time compiling fourteen thousand lines nobody runs — a newcomer could reasonably have believed that was the backend. Nothing a user can see changes, and no database or deployment change comes with it. The migration notes that told people not to delete it now record why that rule no longer applies. (DTD-518, #211)

@@ -104,6 +104,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         reminder_task = tracked('reminders',reminder_loop(session_factory, reminder_stop),reminder_stop)
         digest_stop = asyncio.Event()
         digest_task = tracked('digest',digest_loop(session_factory, digest_stop),digest_stop)
+        from .jobs.team_policies import team_policy_loop
+        team_policy_stop = asyncio.Event()
+        team_policy_task = tracked('team-policies', team_policy_loop(
+            session_factory, team_policy_stop,
+            interval_seconds=runtime.team_policy_scan_interval_seconds,
+            writes_enabled=runtime.team_policy_writes_enabled), team_policy_stop)
         dispatch_stop = asyncio.Event()
         dispatch_task = tracked('team-dispatcher',dispatcher_loop(session_factory, dispatch_stop),dispatch_stop)
         scm_stop = asyncio.Event()
@@ -117,8 +123,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             reminder_stop.set()
             digest_stop.set()
             dispatch_stop.set()
+            team_policy_stop.set()
             scm_stop.set()
-            await asyncio.gather(*[task for task in [reminder_task,digest_task,dispatch_task,scm_task,scm_sync_task,outbox_task,channel_task,maintenance_task,agent_runs_task,bulk_task,import_task,recurring_task,sla_task,ticket_status_task,sharepoint_task,news_task] if task],return_exceptions=True)
+            await asyncio.gather(*[task for task in [reminder_task,digest_task,dispatch_task,team_policy_task,scm_task,scm_sync_task,outbox_task,channel_task,maintenance_task,agent_runs_task,bulk_task,import_task,recurring_task,sla_task,ticket_status_task,sharepoint_task,news_task] if task],return_exceptions=True)
             await mcp_stack.aclose()
             await engine.dispose()
 
