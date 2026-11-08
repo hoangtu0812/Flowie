@@ -100,9 +100,18 @@ jobs:
       # VI: va thuoc DTD-488.
       - name: Build the Windows installer
         if: matrix.os == 'windows-latest'
+        # The bundle directory is removed first because the target directory is
+        # cached: an installer from an earlier version survives there, and the
+        # upload glob would pick it up too, so the artifact would offer two
+        # versions and no way to tell which one was just built.
+        # VI: Thư mục bundle bị xoá trước vì thư mục target được cache: bộ cài
+        # VI: của phiên bản trước còn nằm lại, và glob tải lên sẽ quét trúng cả nó,
+        # VI: nên artifact sẽ có hai phiên bản mà không biết bản nào vừa được build.
         run: |
           cargo install tauri-cli --version "^2" --locked
+          Remove-Item -Recurse -Force ../target/release/bundle -ErrorAction SilentlyContinue
           cargo tauri bundle
+        shell: pwsh
         working-directory: apps/desktop/src-tauri
 
       - name: Keep the Windows installer
