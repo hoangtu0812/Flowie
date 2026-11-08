@@ -869,6 +869,8 @@ dependencies = [
  "flowie-platform",
  "flowie-repository",
  "flowie-workspace",
+ "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
  "tempfile",
