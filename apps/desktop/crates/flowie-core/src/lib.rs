@@ -17,13 +17,25 @@
 //! VI: idempotency mới khi thử lại — mà không cần server, repository hay agent
 //! VI: chen vào.
 
+pub mod config;
+pub mod error;
 pub mod journal;
 pub mod lease;
+pub mod poll;
+pub mod readiness;
+pub mod run;
 pub mod sequence;
+pub mod translate;
 
+pub use config::{CompanionConfig, Provider, RepositoryMapping};
+pub use error::ConfigError;
 pub use journal::{Entry, Recovery};
 pub use lease::{BudgetPolicy, Decision, LeaseTracker, HEARTBEAT_INTERVAL, SERVER_LEASE};
+pub use poll::Schedule;
+pub use readiness::{Readiness, REQUIRED_SCOPES};
+pub use run::{Achievement, Completed, DocType, FeatureDoc, Review, Run, RunFailure, TestOutcome};
 pub use sequence::{plan, Outcome, Step, ORDER};
+pub use translate::translate;
 
 /// Marks the crate as wired into the workspace build.
 /// VI: Đánh dấu crate đã được nối vào bản build của workspace.

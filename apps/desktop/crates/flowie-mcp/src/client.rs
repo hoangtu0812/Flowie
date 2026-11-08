@@ -281,6 +281,89 @@ impl Client {
         self.call("report_run_result", arguments).await
     }
 
+    // Issue and document writes. These are what a run does to the task itself
+    // rather than to its own lifecycle: the plan comment, the target date and
+    // the feature documents.
+    // VI: Các lần ghi lên issue và tài liệu. Đây là những gì một run tác động
+    // VI: lên chính task chứ không lên vòng đời của nó: comment kế hoạch, ngày
+    // VI: kết thúc dự kiến và các tài liệu tính năng.
+
+    /// Adds a comment to an issue.
+    /// VI: Thêm một comment vào issue.
+    pub async fn add_comment(
+        &mut self,
+        issue_id: &str,
+        content: &str,
+        idempotency_key: &str,
+    ) -> Result<Value> {
+        self.call(
+            "add_comment",
+            json!({
+                "issueId": issue_id,
+                "content": content,
+                "idempotencyKey": idempotency_key
+            }),
+        )
+        .await
+    }
+
+    /// Changes fields on an issue, guarded by the version the caller read.
+    ///
+    /// `expected_version` is not optional on purpose. Two writers that both
+    /// skip it overwrite each other silently, and the run writes to an issue a
+    /// person may be editing at the same moment. `changes` carries the fields
+    /// to set and may not name the three arguments this method owns, so a
+    /// caller cannot smuggle in a different issue, a different version or a
+    /// different idempotency key than the ones it passed.
+    /// VI: Thay đổi các trường của một issue, có version mà bên gọi đã đọc làm
+    /// VI: chốt.
+    /// VI: `expected_version` cố ý không phải tùy chọn. Hai bên ghi mà cùng bỏ
+    /// VI: qua nó sẽ âm thầm đè lên nhau, và run ghi lên một issue mà một người
+    /// VI: có thể đang sửa cùng lúc. `changes` mang các trường cần đặt và không
+    /// VI: được nêu ba tham số mà method này sở hữu, nên bên gọi không thể lén
+    /// VI: đưa vào một issue khác, một version khác hay một idempotency key
+    /// VI: khác với thứ nó đã truyền.
+    pub async fn update_issue(
+        &mut self,
+        issue_id: &str,
+        expected_version: i64,
+        changes: &Value,
+        idempotency_key: &str,
+    ) -> Result<Value> {
+        let mut arguments = json!({
+            "issueId": issue_id,
+            "expectedVersion": expected_version,
+            "idempotencyKey": idempotency_key
+        });
+        merge_fields(&mut arguments, changes, "update_issue")?;
+        self.call("update_issue", arguments).await
+    }
+
+    /// Creates or updates one feature document (an FDS or a TDS).
+    ///
+    /// `draft` is the document as the reviewing pass produced it. Its shape
+    /// belongs to the server's tool rather than to this crate, so it passes
+    /// through untyped, with the same guard against overriding the arguments
+    /// this method owns.
+    /// VI: Tạo hoặc cập nhật một tài liệu tính năng (FDS hoặc TDS).
+    /// VI: `draft` là tài liệu đúng như lượt review tạo ra. Hình dạng của nó
+    /// VI: thuộc về tool của server chứ không thuộc crate này, nên nó đi qua
+    /// VI: không định kiểu, với cùng một lớp chặn việc ghi đè các tham số mà
+    /// VI: method này sở hữu.
+    pub async fn upsert_feature_doc(
+        &mut self,
+        issue_id: &str,
+        draft: &Value,
+        idempotency_key: &str,
+    ) -> Result<Value> {
+        let mut arguments = json!({
+            "issueId": issue_id,
+            "idempotencyKey": idempotency_key
+        });
+        merge_fields(&mut arguments, draft, "upsert_feature_doc")?;
+        self.call("upsert_feature_doc", arguments).await
+    }
+
     async fn post(&mut self, body: Value, expect_reply: bool) -> Result<Option<Value>> {
         let mut request = self
             .http
@@ -322,6 +405,45 @@ impl Client {
         self.next_id += 1;
         id
     }
+}
+
+/// Copies caller-supplied fields into a prepared argument object, refusing any
+/// that would replace an argument the calling method already set.
+///
+/// Those arguments are the ones that decide which issue is written, which
+/// version the write is guarded by and which key makes a retry idempotent. A
+/// field that silently replaced one of them would turn a safe call into an
+/// unguarded write against something else, so the collision is an error the
+/// caller has to see rather than something resolved by whichever side happens
+/// to be copied last.
+/// VI: Chép các trường do bên gọi cung cấp vào một object tham số đã dựng sẵn,
+/// từ chối bất kỳ trường nào sẽ thay thế một tham số mà method gọi đã đặt.
+/// VI: Những tham số đó quyết định issue nào bị ghi, version nào làm chốt cho
+/// VI: lần ghi, và key nào khiến lần thử lại là idempotent. Một trường âm thầm
+/// VI: thay thế một trong số đó sẽ biến một lời gọi an toàn thành một lần ghi
+/// VI: không chốt lên thứ khác, nên xung đột là lỗi bên gọi phải thấy chứ không
+/// VI: phải thứ được giải quyết bằng việc bên nào tình cờ được chép sau.
+fn merge_fields(arguments: &mut Value, fields: &Value, tool: &str) -> Result<()> {
+    let Some(fields) = fields.as_object() else {
+        return Err(Error::Contract(format!(
+            "{tool} fields must be a JSON object"
+        )));
+    };
+    let reserved: Vec<String> = arguments
+        .as_object()
+        .map(|owned| owned.keys().cloned().collect())
+        .unwrap_or_default();
+    for name in fields.keys() {
+        if reserved.iter().any(|owned| owned == name) {
+            return Err(Error::Contract(format!(
+                "{tool} fields must not set {name}"
+            )));
+        }
+    }
+    for (name, value) in fields {
+        arguments[name] = value.clone();
+    }
+    Ok(())
 }
 
 fn lease_arguments(lease: &Lease, idempotency_key: &str) -> Value {
@@ -519,5 +641,61 @@ mod tests {
         assert_eq!(arguments["runId"], json!("crun1"));
         assert_eq!(arguments["fencingToken"], json!(7));
         assert_eq!(arguments["idempotencyKey"], json!("key-1"));
+    }
+
+    #[test]
+    fn supplied_fields_are_added_alongside_the_arguments_the_method_owns() {
+        let mut arguments = json!({ "issueId": "cissue1", "idempotencyKey": "key-1" });
+        merge_fields(
+            &mut arguments,
+            &json!({ "targetDate": "2026-12-01", "estimatedEffort": 2 }),
+            "update_issue",
+        )
+        .unwrap();
+        assert_eq!(arguments["issueId"], json!("cissue1"));
+        assert_eq!(arguments["targetDate"], json!("2026-12-01"));
+        assert_eq!(arguments["estimatedEffort"], json!(2));
+    }
+
+    #[test]
+    fn a_supplied_field_can_never_replace_an_argument_the_method_owns() {
+        // Replacing one of these turns a guarded write to one issue into an
+        // unguarded write to another, which is worth an error rather than
+        // depending on which side is copied last.
+        // VI: Thay thế một trong những tham số này biến một lần ghi có chốt lên
+        // VI: một issue thành một lần ghi không chốt lên issue khác, điều đáng
+        // VI: báo lỗi chứ không nên phụ thuộc vào bên nào được chép sau.
+        for intruder in ["issueId", "expectedVersion", "idempotencyKey"] {
+            let mut arguments = json!({
+                "issueId": "cissue1",
+                "expectedVersion": 3,
+                "idempotencyKey": "key-1"
+            });
+            let error = merge_fields(
+                &mut arguments,
+                &json!({ intruder: "someone else" }),
+                "update_issue",
+            )
+            .unwrap_err();
+            assert!(
+                matches!(&error, Error::Contract(detail) if detail.contains(intruder)),
+                "{intruder} was accepted: {error:?}"
+            );
+            // The prepared arguments are left exactly as they were.
+            // VI: Các tham số đã dựng được giữ nguyên như cũ.
+            assert_eq!(arguments["expectedVersion"], json!(3));
+            assert_eq!(arguments["issueId"], json!("cissue1"));
+        }
+    }
+
+    #[test]
+    fn fields_that_are_not_an_object_are_refused() {
+        let mut arguments = json!({ "issueId": "cissue1" });
+        for wrong in [json!("a string"), json!([1, 2]), json!(null)] {
+            assert!(matches!(
+                merge_fields(&mut arguments, &wrong, "upsert_feature_doc"),
+                Err(Error::Contract(_))
+            ));
+        }
     }
 }

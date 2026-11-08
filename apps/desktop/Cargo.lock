@@ -830,19 +830,40 @@ name = "flowie-agent"
 version = "0.0.0"
 dependencies = [
  "flowie-platform",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "flowie-connection"
+version = "0.0.0"
+dependencies = [
+ "flowie-core",
+ "flowie-mcp",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
 name = "flowie-core"
 version = "0.0.0"
+dependencies = [
+ "flowie-mcp",
+ "flowie-repository",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
 
 [[package]]
 name = "flowie-desktop"
 version = "0.0.0"
 dependencies = [
  "flowie-core",
+ "flowie-platform",
  "tauri",
  "tauri-build",
+ "tempfile",
 ]
 
 [[package]]

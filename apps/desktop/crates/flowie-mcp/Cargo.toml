@@ -8,12 +8,25 @@ license.workspace = true
 [lints]
 workspace = true
 
+[features]
+# The transport is optional so a crate that only needs the contract and
+# the endpoint rules does not inherit reqwest and its TLS stack. That
+# matters beyond binary size: ring needs a C compiler for the target, so
+# a crate that pulls it in can no longer be lint-checked for macOS from
+# a Windows machine.
+# VI: Transport là tuỳ chọn để một crate chỉ cần hợp đồng và quy tắc
+# endpoint không phải kéo theo reqwest cùng bộ TLS của nó. Điều này quan
+# trọng hơn chuyện dung lượng: ring cần C compiler cho target, nên crate
+# nào kéo nó vào thì không còn kiểm lint cho macOS từ máy Windows được.
+default = ["transport"]
+transport = ["dep:reqwest"]
+
 [dependencies]
 # rustls rather than the platform TLS stack: one verified behaviour on both
 # Windows and macOS, and no OpenSSL to ship in the installer.
 # VI: Dùng rustls thay cho TLS của hệ điều hành: một hành vi đã kiểm chứng trên
 # VI: cả Windows và macOS, và không phải đóng gói OpenSSL vào bộ cài.
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"], optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

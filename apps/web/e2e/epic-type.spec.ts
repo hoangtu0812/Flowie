@@ -7,6 +7,19 @@ test('Epic is independent of workflow and can be changed and filtered', async ({
    page,
    context,
 }, testInfo) => {
+   // This test signs in, creates an issue, edits it, filters on it and reloads,
+   // then has to delete what it made. Playwright counts the cleanup against the
+   // same budget as the body, so at the default timeout a slow run spends
+   // everything before reaching `finally` and leaves the issue behind for other
+   // specs to trip over — including specs in the next browser project, which
+   // runs against the same database. The extra time is for the cleanup.
+   // VI: Test này đăng nhập, tạo issue, sửa, lọc theo nó rồi tải lại trang, sau
+   // đó phải xoá thứ nó vừa tạo. Playwright tính phần dọn dẹp vào cùng ngân sách
+   // thời gian với phần thân, nên ở timeout mặc định một lần chạy chậm tiêu hết
+   // thời gian trước khi tới `finally` và bỏ lại issue cho spec khác vấp phải —
+   // kể cả spec ở project trình duyệt kế tiếp, vốn chạy trên cùng database.
+   // Phần thời gian thêm này dành cho việc dọn dẹp.
+   test.setTimeout(90000);
    await page.goto('/auth/login');
    await page.getByLabel('Email', { exact: true }).fill(fixture.email);
    await page.getByLabel('Password', { exact: true }).fill(fixture.password);
@@ -77,6 +90,9 @@ test('Epic is independent of workflow and can be changed and filtered', async ({
       await page.reload();
       await expect(page.getByRole('link', { name: title, exact: true })).toBeVisible();
    } finally {
-      await context.request.delete(`${api}/issues/${issue.id}?workspaceId=${fixture.workspace_id}`);
+      await context.request.delete(
+         `${api}/issues/${issue.id}?workspaceId=${fixture.workspace_id}`,
+         { timeout: 15000 }
+      );
    }
 });

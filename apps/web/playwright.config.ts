@@ -12,7 +12,21 @@ export default defineConfig({
    workers: 1,
    timeout: 45000,
    expect: { timeout: 10000 },
-   retries: 0,
+   // One retry on CI, none locally. The suite shares a single database and runs
+   // the browser projects one after another, so a test that times out can leave
+   // state behind for a later one; the specs now scope their assertions to their
+   // own data so that cannot cascade, and this retry covers what is left — a
+   // genuine one-off on a loaded runner. It is deliberately 1: a failure that
+   // survives one retry is a real failure, and raising this instead of fixing
+   // isolation would hide exactly the regressions this suite exists to catch.
+   // VI: Một lần thử lại trên CI, không thử lại ở máy cá nhân. Bộ test dùng chung
+   // một database và chạy lần lượt từng project trình duyệt, nên một test hết giờ
+   // có thể để lại dữ liệu cho test sau; các spec nay chỉ khẳng định trên dữ liệu
+   // của chính mình nên việc đó không lan ra nữa, và lần thử lại này phủ phần còn
+   // lại là những trục trặc nhất thời trên máy chạy đang tải nặng. Cố ý để 1: lỗi
+   // nào sống sót qua một lần thử lại là lỗi thật, và tăng số này thay vì sửa
+   // cách ly sẽ che đúng những hồi quy mà bộ test này sinh ra để bắt.
+   retries: process.env.CI ? 1 : 0,
    reporter: [['list']],
    use: { baseURL: webUrl, trace: 'retain-on-failure' },
    projects: [

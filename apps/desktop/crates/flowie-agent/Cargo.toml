@@ -10,3 +10,7 @@ workspace = true
 
 [dependencies]
 flowie-platform = { path = "../flowie-platform" }
+serde_json = "1"
+
+[dev-dependencies]
+tempfile = "3"
