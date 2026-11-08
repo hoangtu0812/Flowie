@@ -21,7 +21,7 @@ pull request and commit references, which are for us.
 
 ### Changed
 
-- The Flowie Desktop plan no longer describes a production deployment pipeline that was removed. It had said a desktop change could trigger a server deploy and that a green pipeline run proved the build reached a machine; both stopped being true when the automated deployment was dropped, and a plan that describes machinery nobody has is a plan that sends someone looking for it. Documentation only. (DTD-501)
+- The Flowie Desktop plan no longer describes a production deployment pipeline that was removed. It had said a desktop change could trigger a server deploy and that a green pipeline run proved the build reached a machine; both stopped being true when the automated deployment was dropped, and a plan that describes machinery nobody has is a plan that sends someone looking for it. Documentation only. (DTD-501, #209)
   VI: Kế hoạch Flowie Desktop không còn mô tả một pipeline deploy production đã bị gỡ bỏ. Nó từng nói một thay đổi desktop có thể kích hoạt deploy server, và một lần chạy pipeline xanh chứng minh bản build đã tới một máy; cả hai đều hết đúng khi deploy tự động bị bỏ, và một kế hoạch mô tả bộ máy không ai có là kế hoạch đẩy người ta đi tìm nó. Chỉ là tài liệu. (DTD-501)
 
 ### Removed
