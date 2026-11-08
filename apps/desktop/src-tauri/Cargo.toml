@@ -60,7 +60,7 @@ tauri-plugin-opener = "2"
 # VI: client MCP để bộ cài mang một bộ chứ không phải hai, và đặt ở crate này vì
 # VI: vỏ ứng dụng vốn đã nằm ngoài phần cross-check macOS mà phụ thuộc C của ring
 # VI: sẽ làm hỏng.
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-native-roots"] }
 tokio = { version = "1", features = ["rt", "time"] }
 
 [dev-dependencies]

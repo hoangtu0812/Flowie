@@ -19,6 +19,14 @@ pull request and commit references, which are for us.
 
 ## Unreleased
 
+### Fixed
+
+- Flowie Desktop can reach a Flowie served behind an organisation's own certificate authority. It carried a fixed list of public certificate authorities compiled into it, so a server whose certificate was issued internally — one every browser on the same machine opens without complaint — was reported as unreachable, with nothing to say that the certificate was the reason. It now uses the certificate authorities the operating system trusts, which is also what makes a withdrawn certificate stop being trusted here as soon as it is withdrawn rather than at the next rebuild. (DTD-537)
+  VI: Flowie Desktop liên lạc được với một Flowie chạy sau CA riêng của tổ chức. Trước đây nó mang theo một danh sách CA công khai cố định được biên dịch sẵn vào trong, nên một server có chứng chỉ do nội bộ cấp — thứ mà mọi trình duyệt trên cùng máy đó mở bình thường — bị báo là không liên lạc được, mà không có gì cho biết chứng chỉ mới là lý do. Nay nó dùng đúng những CA mà hệ điều hành tin, và đó cũng là thứ khiến một chứng chỉ bị thu hồi thôi được tin ở đây ngay khi bị thu hồi chứ không phải đợi lần build lại kế tiếp. (DTD-537)
+
+- Saving a token in Flowie Desktop is tried at once instead of waiting out the delay the earlier failures earned. After a run of refusals the companion waits up to five minutes between attempts, which is right for a server that is down and wrong for a person who has just pasted a new token: they saved it, watched the same complaint sit there unchanged, and could not tell a token that was still wrong from an attempt that had not come round yet. Saving a token, removing one, or saving the configuration now wakes the companion immediately, and the tray has an entry to ask for an attempt by hand. (DTD-536)
+  VI: Lưu token trong Flowie Desktop được thử ngay thay vì đợi hết khoảng chờ mà những lần hỏng trước đó gây ra. Sau một chuỗi bị từ chối, companion chờ tới năm phút giữa hai lượt — đúng với một server đang hỏng và sai với một người vừa dán token mới: họ lưu xong, nhìn đúng lời phàn nàn cũ nằm im, và không phân biệt được token vẫn sai với lượt thử chưa tới. Lưu token, xoá token hay lưu cấu hình nay đánh thức companion ngay, và tray có thêm một mục để tự yêu cầu thử lại. (DTD-536)
+
 ## [0.17.0] — 2026-11-08 23:00 +07
 
 ### Fixed
