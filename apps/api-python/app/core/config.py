@@ -81,6 +81,16 @@ class Settings:
     # VI: Số giây giữa các lần đồng bộ source-control định kỳ cho server webhook không tới được.
     # 0 là tắt; giá trị dương tối thiểu 60 để bảo vệ giới hạn tần suất của provider.
     scm_sync_interval_seconds: int = 0
+    # Seconds between team retention and cycle cadence scans; minimum 60.
+    # VI: Số giây giữa các lượt quét chính sách lưu giữ và nhịp cycle của team; tối thiểu 60.
+    team_policy_scan_interval_seconds: int = 3600
+    # The scan cancels and archives people's issues on its own, so it reports what it would do
+    # and writes nothing until this is switched on deliberately. It stays off while the BullMQ
+    # worker still owns the job, so the two never write the same rows.
+    # VI: Lượt quét tự huỷ và tự lưu trữ issue của người dùng, nên nó chỉ báo cáo việc định làm và
+    # không ghi gì cho tới khi được bật có chủ đích. Nó tắt trong lúc worker BullMQ còn giữ job này,
+    # để hai bên không bao giờ cùng ghi vào một dòng.
+    team_policy_writes_enabled: bool = False
     # Lowercase `host` or `host:port` entries for self-hosted, OpenAI-compatible AI endpoints
     # (for example a LiteLLM gateway on the internal network). Workspace administrators may save
     # a provider URL on these hosts over HTTP or HTTPS; every other host must be the provider's
@@ -137,6 +147,8 @@ class Settings:
             scm_github_app_private_key=getenv('SCM_GITHUB_APP_PRIVATE_KEY', '').replace('\\n', '\n').strip(),
             scm_github_webhook_secret=getenv('SCM_GITHUB_WEBHOOK_SECRET', '').strip(),
             scm_sync_interval_seconds=_sync_interval(int(getenv('SCM_SYNC_INTERVAL_SECONDS', '0'))),
+            team_policy_scan_interval_seconds=max(60, int(getenv('TEAM_POLICY_SCAN_INTERVAL_SECONDS', '3600'))),
+            team_policy_writes_enabled=getenv('TEAM_POLICY_WRITES_ENABLED', 'false').lower() == 'true',
             smtp_host=getenv('SMTP_HOST', '').strip(),
             smtp_port=int(getenv('SMTP_PORT', '587')),
             smtp_username=getenv('SMTP_USERNAME', '').strip(),
