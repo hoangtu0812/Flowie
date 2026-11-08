@@ -310,20 +310,26 @@ impl Run<'_> {
         let mut achieved = Achievement::default();
         match self.drive(&mut achieved) {
             Ok(summary) => self.finish(Outcome::AwaitingReview, Some(summary), achieved),
-            Err(RunFailure::Precondition(detail)) => {
-                // Nothing was claimed, so there is nothing to tell the server
-                // and no worktree to keep.
-                // VI: Chưa claim gì nên không có gì để báo server và không có
-                // VI: worktree nào để giữ.
-                Completed {
-                    outcome: Outcome::Failed,
-                    journal: self.journal,
-                    detail: Some(detail),
-                }
-            }
             Err(RunFailure::LeaseLost) => self.finish(Outcome::StoppedUncertain, None, achieved),
             Err(RunFailure::Cancelled) => self.finish(Outcome::Released, None, achieved),
-            Err(RunFailure::Reportable(detail)) => {
+            // A precondition is not proof that nothing was claimed. Most of
+            // them do arrive during the read-only checks, but a credential
+            // revoked or a scope withdrawn part way through reads as one too,
+            // and so does a step needing a lease the connection no longer
+            // holds. Deciding from the failure alone would end a claimed run
+            // without reporting it and without retiring its worktree, leaving
+            // the work on disk and the task held until the lease expired.
+            // `finish` reads the journal, which knows whether the claim
+            // actually happened.
+            // VI: Một precondition không chứng minh được là chưa claim gì. Phần
+            // VI: lớn chúng xuất hiện ở các bước chỉ đọc, nhưng một credential
+            // VI: bị thu hồi hay một scope bị rút giữa chừng cũng đọc ra như
+            // VI: vậy, và một bước cần lease mà kết nối không còn giữ cũng thế.
+            // VI: Quyết định chỉ dựa theo loại thất bại sẽ kết thúc một run đã
+            // VI: claim mà không báo kết quả và không dọn worktree, để công việc
+            // VI: nằm lại trên đĩa và task bị giữ tới khi lease hết hạn.
+            // VI: `finish` đọc journal, thứ biết rõ claim đã xảy ra hay chưa.
+            Err(RunFailure::Precondition(detail)) | Err(RunFailure::Reportable(detail)) => {
                 self.finish(Outcome::Failed, Some(detail), achieved)
             }
         }
@@ -579,6 +585,7 @@ mod tests {
         log: Rc<RefCell<Recorder>>,
         fail_on: Option<&'static str>,
         lease_lost_on: Option<&'static str>,
+        precondition_on: Option<&'static str>,
         /// What `report` was handed, so a test can assert the evidence
         /// survived the journey rather than only that a call happened.
         /// VI: Những gì `report` nhận được, để test khẳng định bằng chứng đã đi
@@ -594,6 +601,13 @@ mod tests {
             self.log.borrow_mut().calls.push(what.to_string());
             if self.lease_lost_on == Some(what) {
                 return Err(RunFailure::LeaseLost);
+            }
+            if self.precondition_on == Some(what) {
+                // What a revoked credential or a withdrawn scope looks like
+                // once translated, which can happen after the claim.
+                // VI: Hình dạng của một credential bị thu hồi hay một scope bị
+                // VI: rút sau khi đã dịch, điều có thể xảy ra sau khi claim.
+                return Err(RunFailure::Precondition(format!("{what} refused")));
             }
             if self.fail_on == Some(what) {
                 return Err(RunFailure::Reportable(format!("{what} failed")));
@@ -775,6 +789,7 @@ mod tests {
                 log: Rc::clone(&log),
                 fail_on: None,
                 lease_lost_on: None,
+                precondition_on: None,
                 reported: None,
                 saved: None,
             },
@@ -926,6 +941,52 @@ mod tests {
         // The work stays on disk so a person can see what the agent did.
         // VI: Công việc ở lại trên đĩa để người ta xem được agent đã làm gì.
         assert_eq!(harness.workspace.kept, Some(true));
+    }
+
+    #[test]
+    fn a_credential_withdrawn_after_the_claim_is_still_reported_and_cleaned_up() {
+        // A revoked credential or a withdrawn scope reads as a precondition,
+        // and so does a step needing a lease the connection no longer holds.
+        // Treating every precondition as "nothing was claimed" would end a
+        // claimed run silently and leave its worktree behind.
+        // VI: Một credential bị thu hồi hay một scope bị rút đọc ra như một
+        // VI: precondition, và một bước cần lease mà kết nối không còn giữ cũng
+        // VI: vậy. Coi mọi precondition là "chưa claim gì" sẽ kết thúc một run
+        // VI: đã claim trong im lặng và bỏ lại worktree của nó.
+        let mut harness = harness();
+        harness.server.precondition_on = Some("post_plan");
+        let completed = run(&mut harness, false);
+
+        assert_eq!(completed.outcome, Outcome::Failed);
+        let calls = harness.log.borrow().calls.clone();
+        assert!(calls.iter().any(|c| c == "claim"), "the run did claim");
+        assert!(
+            calls.iter().any(|c| c == "report:failed"),
+            "a claimed run owes the server a result: {calls:?}"
+        );
+        // The work stays on disk, but the worktree is accounted for rather
+        // than abandoned without a decision.
+        // VI: Công việc ở lại trên đĩa, nhưng worktree được xử lý đàng hoàng chứ
+        // VI: không bị bỏ mặc mà không có quyết định nào.
+        assert_eq!(harness.workspace.kept, Some(true));
+        assert!(completed.journal.reported);
+    }
+
+    #[test]
+    fn a_precondition_before_the_claim_still_tells_the_server_nothing() {
+        // The other half of the same rule: nothing was claimed, so there is no
+        // result the server is owed.
+        // VI: Nửa còn lại của cùng quy tắc: chưa claim gì nên server không được
+        // VI: nợ kết quả nào.
+        let mut harness = harness();
+        harness.server.precondition_on = Some("read_context");
+        let completed = run(&mut harness, false);
+
+        assert_eq!(completed.outcome, Outcome::Failed);
+        let calls = harness.log.borrow().calls.clone();
+        assert!(!calls.iter().any(|c| c == "claim"));
+        assert!(!calls.iter().any(|c| c.starts_with("report")));
+        assert!(!completed.journal.reported);
     }
 
     #[test]
