@@ -9,8 +9,20 @@ license.workspace = true
 workspace = true
 
 [dependencies]
+# The Review this crate produces is the run's own vocabulary, which lives in
+# flowie-core. Core does not depend on this crate, so there is no cycle, and
+# neither crate takes the transport, so both stay in the macOS cross-check.
+# VI: Review mà crate này tạo ra là từ vựng của chính run, và nó nằm trong
+# VI: flowie-core. Core không phụ thuộc crate này nên không có vòng lặp, và cả hai
+# VI: crate đều không lấy transport nên vẫn nằm trong cross-check macOS.
+flowie-core = { path = "../flowie-core" }
 flowie-platform = { path = "../flowie-platform" }
 serde_json = "1"
+# Calendar arithmetic, for the target end date. Already in the lock by way of
+# Tauri, and pure Rust, so it costs nothing the build was not paying.
+# VI: Phép tính lịch, cho ngày kết thúc dự kiến. Vốn đã có trong lock qua Tauri,
+# VI: và thuần Rust, nên không tốn thêm gì so với trước.
+time = { version = "0.3", default-features = false, features = ["std"] }
 
 [dev-dependencies]
 tempfile = "3"

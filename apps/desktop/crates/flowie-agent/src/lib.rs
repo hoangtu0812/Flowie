@@ -15,10 +15,12 @@
 
 pub mod error;
 pub mod invoke;
+pub mod prompt;
 pub mod provider;
 pub mod stream;
 
 pub use error::{Error, Result};
 pub use invoke::{Phase, CODEX_RESULT_MAX};
+pub use prompt::{checked_review, checked_summary, review_prompt, task_prompt};
 pub use provider::{Capability, Provider};
 pub use stream::{Finished, LINE_LIMIT};

@@ -829,9 +829,11 @@ dependencies = [
 name = "flowie-agent"
 version = "0.0.0"
 dependencies = [
+ "flowie-core",
  "flowie-platform",
  "serde_json",
  "tempfile",
+ "time",
 ]
 
 [[package]]
