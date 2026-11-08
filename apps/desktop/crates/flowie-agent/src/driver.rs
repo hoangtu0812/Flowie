@@ -65,6 +65,13 @@ pub struct Driver {
     /// VI: Ngày mà phần ước lượng đếm từ đó, được truyền vào chứ không đọc từ
     /// VI: đồng hồ, để một run tái lập được.
     pub today: Date,
+    /// Told what the agent is doing, each time a line of its output says
+    /// something. The driver does not know or care who is listening; the
+    /// shell puts it on the tray and the run puts it on the heartbeat.
+    /// VI: Được báo agent đang làm gì, mỗi khi một dòng output của nó nói lên điều
+    /// VI: gì đó. Driver không biết và không cần biết ai đang nghe; vỏ ứng dụng đưa
+    /// VI: nó lên tray còn run đưa nó lên heartbeat.
+    pub progress: Option<std::sync::Arc<dyn Fn(String) + Send + Sync>>,
 }
 
 impl Driver {
@@ -101,7 +108,7 @@ impl Driver {
                 // VI: không được mang sang lượt có quyền ghi.
                 let session = uuid::Uuid::new_v4().to_string();
                 let arguments = invoke::claude_arguments(phase, schema, &session, &self.issue);
-                let finished = self.execute(worktree, &path, &arguments, prompt_text)?;
+                let finished = self.execute_watching(worktree, &path, &arguments, prompt_text)?;
                 invoke::extract_claude_result(finished.stdout.lines())
             }
             Provider::Codex => {
@@ -133,6 +140,39 @@ impl Driver {
         }
     }
 
+    /// Runs a turn whose output is a stream of events, reporting as it goes.
+    ///
+    /// Only Claude is driven this way. Codex writes its answer to a file and
+    /// says nothing meanwhile, so there is nothing to report until it ends;
+    /// the Python runner behaves the same way for the same reason.
+    /// VI: Chạy một lượt mà output là một dòng sự kiện, vừa chạy vừa báo.
+    /// VI: Chỉ Claude được điều khiển theo cách này. Codex ghi câu trả lời ra file và
+    /// VI: không nói gì trong lúc đó, nên không có gì để báo cho tới khi xong; runner
+    /// VI: Python cũng làm vậy vì cùng lý do.
+    fn execute_watching(
+        &self,
+        worktree: &Path,
+        path: &Path,
+        arguments: &[String],
+        prompt_text: &str,
+    ) -> Result<stream::Finished> {
+        let sink = self.progress.clone();
+        let root = worktree.to_path_buf();
+        self.start(worktree, path, arguments, prompt_text, move |line| {
+            let Some(sink) = sink.as_ref() else { return };
+            let Ok(event) = serde_json::from_str::<Value>(line) else {
+                // Not every line is an event; a line that is not JSON is
+                // noise rather than a reason to stop reading.
+                // VI: Không phải dòng nào cũng là sự kiện; một dòng không phải JSON là
+                // VI: nhiễu chứ không phải lý do để ngừng đọc.
+                return;
+            };
+            if let Some(said) = crate::progress::describe_claude_event(&event, &root) {
+                sink(said);
+            }
+        })
+    }
+
     /// Starts the agent, feeds it the prompt and waits for it.
     /// VI: Khởi động agent, đưa prompt vào và chờ nó.
     fn execute(
@@ -141,6 +181,19 @@ impl Driver {
         path: &Path,
         arguments: &[String],
         prompt_text: &str,
+    ) -> Result<stream::Finished> {
+        self.start(worktree, path, arguments, prompt_text, |_| {})
+    }
+
+    /// The same, watching each line of output as it arrives.
+    /// VI: Giống hàm trên, nhưng theo dõi từng dòng output ngay khi nó tới.
+    fn start(
+        &self,
+        worktree: &Path,
+        path: &Path,
+        arguments: &[String],
+        prompt_text: &str,
+        on_line: impl FnMut(&str) + Send + 'static,
     ) -> Result<stream::Finished> {
         let program = self.program().to_string();
         let mut command = Command::new(path);
@@ -166,7 +219,7 @@ impl Driver {
             message: error.to_string(),
         })?;
         stream::write_prompt(&mut child, prompt_text)?;
-        let finished = stream::wait_with_deadline(child, self.timeout)?;
+        let finished = stream::wait_watching(child, self.timeout, on_line)?;
 
         if finished.status != 0 {
             // The worktree is deliberately left as it is. Whatever the agent
@@ -274,6 +327,7 @@ mod tests {
             issue: "DTD-1".into(),
             timeout: Duration::from_secs(5),
             today: Date::from_calendar_date(2026, Month::November, 8).expect("a real date"),
+            progress: None,
         }
     }
 

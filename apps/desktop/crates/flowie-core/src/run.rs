@@ -287,6 +287,19 @@ pub trait Agent {
 /// VI: chờ nó xong.
 pub trait Control {
     fn cancel_requested(&self) -> bool;
+    /// What the agent is doing at this moment, when anything is known.
+    ///
+    /// The run has no other way to find out: the agent's output is read by
+    /// the adapter, not by these rules. Returning `None` leaves the step's own
+    /// description in place, which is what happens between turns and for an
+    /// agent that reports nothing.
+    /// VI: Agent đang làm gì ngay lúc này, nếu biết được.
+    /// VI: Run không có cách nào khác để biết: output của agent do adapter đọc chứ
+    /// VI: không phải do các quy tắc này. Trả về `None` thì giữ nguyên mô tả của chính
+    /// VI: bước đó, điều xảy ra giữa hai lượt và với một agent không báo gì.
+    fn activity(&self) -> Option<String> {
+        None
+    }
     /// Seconds since the claim, which the lease rules need. Supplied rather
     /// than read from a clock so the rules can be exercised without waiting.
     /// VI: Số giây kể từ lúc claim, thứ các quy tắc lease cần. Được cung cấp
@@ -578,7 +591,18 @@ impl Run<'_> {
             }
             Decision::Heartbeat { with_progress } => {
                 let key = format!("{}-beat-{}", self.issue, elapsed.as_secs());
-                let line = if with_progress { progress } else { None };
+                // What the agent is doing now beats the name of the step it is
+                // doing it in: "Editing apps/web/page.tsx" tells someone
+                // watching far more than "Implementing the plan".
+                // VI: Thứ agent đang làm lúc này hơn hẳn tên của bước nó đang
+                // VI: làm: "Editing apps/web/page.tsx" nói với người đang theo
+                // VI: dõi nhiều hơn hẳn "Implementing the plan".
+                let live = self.control.activity();
+                let line = if with_progress {
+                    live.as_deref().or(progress)
+                } else {
+                    None
+                };
                 match self.server.heartbeat(line, &key) {
                     Ok(()) => self.lease.heartbeat_succeeded(elapsed, with_progress),
                     Err(RunFailure::LeaseLost) => return Err(RunFailure::LeaseLost),
@@ -620,6 +644,11 @@ mod tests {
         /// VI: Những gì `report` nhận được, để test khẳng định bằng chứng đã đi
         /// VI: tới đích chứ không chỉ khẳng định có một lời gọi.
         reported: Option<Achievement>,
+        /// Every progress line the server was sent, so a test can check which
+        /// description actually travelled.
+        /// VI: Mọi dòng tiến độ server nhận được, để test kiểm được mô tả nào thực
+        /// VI: sự đã đi tới nơi.
+        beats: Vec<String>,
         /// What `save_feature_docs` was handed, for the same reason.
         /// VI: Những gì `save_feature_docs` nhận được, cũng vì lý do đó.
         saved: Option<Vec<FeatureDoc>>,
@@ -654,7 +683,10 @@ mod tests {
             self.note("claim")?;
             Ok("crun1".into())
         }
-        fn heartbeat(&mut self, _progress: Option<&str>, _key: &str) -> Result<(), RunFailure> {
+        fn heartbeat(&mut self, progress: Option<&str>, _key: &str) -> Result<(), RunFailure> {
+            if let Some(line) = progress {
+                self.beats.push(line.to_string());
+            }
             self.note("heartbeat")
         }
         fn save_feature_docs(
@@ -789,6 +821,7 @@ mod tests {
     struct FakeControl {
         cancel: bool,
         elapsed: u64,
+        doing: Option<String>,
     }
 
     impl Control for FakeControl {
@@ -797,6 +830,9 @@ mod tests {
         }
         fn elapsed_seconds(&self) -> u64 {
             self.elapsed
+        }
+        fn activity(&self) -> Option<String> {
+            self.doing.clone()
         }
     }
 
@@ -844,6 +880,7 @@ mod tests {
                 lease_lost_on: None,
                 precondition_on: None,
                 reported: None,
+                beats: Vec::new(),
                 saved: None,
             },
             workspace: FakeWorkspace {
@@ -861,6 +898,7 @@ mod tests {
             control: FakeControl {
                 cancel: false,
                 elapsed: 0,
+                doing: None,
             },
         }
     }
@@ -1141,6 +1179,43 @@ mod tests {
         let reported = harness.server.reported.clone().expect("a report was owed");
         assert!(reported.pull_request_url.is_none());
         assert_eq!(reported.commit.as_deref(), Some("0123abc"));
+    }
+
+    #[test]
+    fn the_heartbeat_carries_what_the_agent_is_doing_when_it_says() {
+        // "Editing apps/web/page.tsx" tells someone watching far more than
+        // "Implementing the plan", which is true of every run and therefore
+        // says nothing about this one.
+        // VI: "Editing apps/web/page.tsx" nói với người đang theo dõi nhiều hơn
+        // VI: hẳn "Implementing the plan", câu đúng với mọi run nên chẳng nói
+        // VI: lên điều gì về run này.
+        let mut harness = harness();
+        harness.control.doing = Some("Editing apps/web/page.tsx".into());
+        run(&mut harness, false);
+
+        let beats = harness.server.beats.clone();
+        assert!(
+            beats.iter().any(|line| line == "Editing apps/web/page.tsx"),
+            "got {beats:?}"
+        );
+    }
+
+    #[test]
+    fn the_step_describes_itself_when_the_agent_says_nothing() {
+        // Between turns the agent reports nothing, and a blank heartbeat would
+        // replace a useful line with silence.
+        // VI: Giữa hai lượt thì agent không báo gì, và một heartbeat trống sẽ
+        // VI: thay một dòng hữu ích bằng khoảng lặng.
+        let mut harness = harness();
+        assert!(harness.control.doing.is_none());
+        run(&mut harness, false);
+
+        let beats = harness.server.beats.clone();
+        assert!(!beats.is_empty(), "the run did heartbeat");
+        assert!(
+            beats.iter().all(|line| !line.is_empty()),
+            "no heartbeat carried an empty line: {beats:?}"
+        );
     }
 
     #[test]
