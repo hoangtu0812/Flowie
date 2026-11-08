@@ -51,9 +51,36 @@ for attempt in $(seq 1 60); do
             mkdir -p "$RESTIC_CACHE_DIR"
             restic_archive="$RESTIC_CACHE_DIR/restic_0.19.1_linux_amd64.bz2"
         fi
+        restic_url=https://github.com/restic/restic/releases/download/v0.19.1/restic_0.19.1_linux_amd64.bz2
+        restic_unavailable=
         if ! echo "$restic_sha  $restic_archive" | sha256sum --check --status 2>/dev/null; then
-            curl --fail --location --retry 5 --retry-all-errors --output "$restic_archive" https://github.com/restic/restic/releases/download/v0.19.1/restic_0.19.1_linux_amd64.bz2
-            echo "$restic_sha  $restic_archive" | sha256sum --check
+            if curl --fail --location --retry 5 --retry-all-errors --output "$restic_archive" "$restic_url"; then
+                # An archive that arrives but does not hash to the pinned value
+                # is a failure, never a skip: that is corruption or substitution,
+                # not somebody else's outage, and it must stop the job.
+                # VI: Tệp tải về được nhưng hash không khớp giá trị đã ghim là
+                # lỗi, không bao giờ được bỏ qua: đó là hỏng dữ liệu hoặc bị
+                # tráo, không phải sự cố của bên khác, và phải dừng job.
+                echo "$restic_sha  $restic_archive" | sha256sum --check
+            else
+                rm -f "$restic_archive"
+                restic_unavailable=1
+            fi
+        fi
+        # The archive is hosted by a third party, and an outage there used to
+        # fail this job before any test ran, blocking every merge. Losing one
+        # rehearsal while somebody else's host is down is a smaller cost than
+        # stopping all work, so the rehearsal is skipped and said out loud.
+        # Everything above this point has already run and still has to pass.
+        # VI: Tệp nén do bên thứ ba lưu trữ, và sự cố bên đó từng làm hỏng job
+        # này trước khi có test nào chạy, chặn mọi lần merge. Mất một lần diễn
+        # tập trong lúc host của người khác đang chết là cái giá nhỏ hơn việc
+        # dừng toàn bộ công việc, nên phần diễn tập được bỏ qua và nói rõ ra.
+        # Mọi thứ phía trên vẫn đã chạy và vẫn phải đạt.
+        if [ -n "$restic_unavailable" ]; then
+            echo "::warning title=Backup rehearsal skipped::Could not download restic from $restic_url, so test_backup_rehearsal.py did not run. Every other storage check did. Re-run once that host recovers."
+            echo "SKIPPED: backup rehearsal, restic could not be downloaded from $restic_url" >&2
+            exit 0
         fi
         bzip2 --decompress --stdout "$restic_archive" > "$GOBIN/restic"
         chmod 700 "$GOBIN/restic"
