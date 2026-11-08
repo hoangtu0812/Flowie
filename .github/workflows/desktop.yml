@@ -2,26 +2,20 @@ name: Verify Flowie Desktop
 
 # The desktop workspace builds for the machines it ships to, so a Windows
 # build passing is no evidence for macOS and the reverse. Both run on every
-# change that touches the workspace or the rule that exempts it from the
-# server deployment.
+# change that touches the workspace.
 # VI: Workspace desktop build cho đúng những máy nó phát hành tới, nên build
 # VI: Windows xanh không phải bằng chứng cho macOS và ngược lại. Cả hai chạy
-# VI: với mọi thay đổi chạm workspace hoặc chạm quy tắc miễn trừ nó khỏi việc
-# VI: deploy server.
+# VI: với mọi thay đổi chạm workspace.
 on:
   push:
     branches: [main]
     paths:
       - 'apps/desktop/**'
       - '.github/workflows/desktop.yml'
-      - 'scripts/deploy-scope.sh'
-      - 'scripts/tests/deploy-scope.test.sh'
   pull_request:
     paths:
       - 'apps/desktop/**'
       - '.github/workflows/desktop.yml'
-      - 'scripts/deploy-scope.sh'
-      - 'scripts/tests/deploy-scope.test.sh'
   workflow_dispatch:
 
 permissions:
@@ -78,22 +72,3 @@ jobs:
 
       - name: Build
         run: cargo build --workspace
-
-  deploy-scope:
-    name: deployment scope rules
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: .
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      # Guards the rule that keeps a desktop-only push from rebuilding and
-      # redeploying the server, and the rule that still deploys when a range
-      # touches the server too.
-      # VI: Bảo vệ quy tắc giữ cho push chỉ chạm desktop không build lại và
-      # VI: deploy lại server, và quy tắc vẫn deploy khi dải commit chạm cả
-      # VI: server.
-      - name: Deployment scope cases
-        run: bash scripts/tests/deploy-scope.test.sh

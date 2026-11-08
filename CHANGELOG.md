@@ -19,6 +19,11 @@ pull request and commit references, which are for us.
 
 ## Unreleased
 
+### Removed
+
+- The automated production deployment is gone. Pushing to `main` no longer builds or deploys anything, because every server that runs Flowie is deployed by hand from its own checkout and the pipeline was deploying a machine nobody was using as their Flowie. Pull requests are still checked exactly as before. The rule that decided whether a push was worth deploying, and the tests guarding it, go with it. Releases now run the pull-request check on the release commit by hand before tagging, since nothing else looks at `main`; `AGENTS.md` and `docs/release-process.md` describe the new sequence. No rebuild needed for this change itself. (DTD-514, #185)
+  VI: Phần tự động deploy production đã bị bỏ. Push lên `main` không còn build hay deploy gì nữa, vì mọi server chạy Flowie đều được deploy tay từ checkout riêng và pipeline chỉ đang deploy một máy không ai dùng làm Flowie của mình. Pull request vẫn được kiểm đúng như trước. Quy tắc quyết định một lần push có đáng deploy hay không, cùng các test bảo vệ nó, cũng bị bỏ theo. Quy trình phát hành nay chạy tay pipeline kiểm tra trên chính commit release trước khi tạo tag, vì không còn gì ngó tới `main`; `AGENTS.md` và `docs/release-process.md` mô tả trình tự mới. Bản thân thay đổi này không cần build lại gì. (DTD-514)
+
 ### Added
 
 - The desktop companion can keep its Flowie token in the operating system's own credential store rather than in a file, and tells apart a machine that has not been set up yet from one whose credential store will not answer — a locked keychain is a different problem from a fresh installation, and sending someone to the wrong one wastes their time. It also refuses to run twice on the same machine for the same person, because the server does not limit how many tasks one connection may hold at once, so two copies would each pick up work and neither would know about the other. Quitting or crashing releases that claim immediately. Two people signed into one computer are unaffected. Nothing is visible to anyone yet; no screen, API or deployment changes. (DTD-501, #183)

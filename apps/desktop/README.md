@@ -49,9 +49,9 @@ Apple của Tauri cần một C compiler cho macOS. Hai crate đó chỉ có CI 
 - **Windows, đường dẫn dài**: `link.exe` báo `LNK1104` khi đường dẫn tới thư mục
   `target` chạm giới hạn của nó. Checkout sâu thì đặt `CARGO_TARGET_DIR` tới một
   thư mục ngắn, ví dụ `%TEMP%td`.
-- Thư mục này **không** kích hoạt deploy server. `scripts/deploy-scope.sh` miễn
-  trừ `apps/desktop/*`, và `scripts/tests/deploy-scope.test.sh` bảo vệ quy tắc
-  đó. Một commit chạm cả desktop lẫn server thì vẫn deploy server.
+- Thư mục này không nằm trong image server nào. Trước đây có `deploy-scope.sh`
+  miễn trừ nó khỏi pipeline deploy production; pipeline đó đã bị bỏ, mọi server
+  nay được deploy tay, nên không còn quy tắc miễn trừ nào để giữ.
 - CI của desktop là `.github/workflows/desktop.yml`, chạy trên `windows-latest`
   và `macos-latest`. Build xanh ở một nền tảng không phải bằng chứng cho nền
   tảng còn lại.
