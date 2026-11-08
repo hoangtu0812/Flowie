@@ -30,14 +30,19 @@ Toolchain ghim trong `rust-toolchain.toml`; không nêu phiên bản ở nơi kh
 
 ## Chạy thử trên Windows
 
-Chưa có bộ cài. Lấy bản build theo một trong hai cách:
+Lấy bản cần thử theo một trong ba cách, từ lần chạy CI `Verify Flowie Desktop`
+của commit cần thử:
 
-- Tải artifact `flowie-desktop-windows` từ lần chạy CI `Verify Flowie Desktop`
-  của commit cần thử; hoặc
-- Tự build: `cd apps/desktop && cargo build --release -p flowie-desktop`, file
-  nằm ở `target/release/flowie-desktop.exe`.
+- **Bộ cài**: artifact `flowie-desktop-windows-installer`, một file
+  `Flowie Desktop_<phiên bản>_x64-setup.exe`. Cài theo từng người dùng nên không
+  cần quyền quản trị.
+- **Chỉ file chạy**: artifact `flowie-desktop-windows`.
+- **Tự build**: `cd apps/desktop && cargo build --release -p flowie-desktop`, file
+  nằm ở `target/release/flowie-desktop.exe`. Muốn cả bộ cài thì
+  `cargo install tauri-cli --version "^2" --locked` rồi `cargo tauri bundle` trong
+  `apps/desktop/src-tauri`.
 
-Chạy file đó. Ứng dụng nằm ở khay hệ thống, **không mở cửa sổ nào**; bấm icon
+Cài xong, hoặc chạy thẳng file exe. Ứng dụng nằm ở khay hệ thống, **không mở cửa sổ nào**; bấm icon
 tray rồi chọn **Mở cấu hình**.
 
 Trong cửa sổ cấu hình:
@@ -61,7 +66,9 @@ Hai điều cần biết:
 - **Thoát ứng dụng sẽ trả task lại**, không giết giữa chừng; run dừng ở bước kế
   tiếp. Chờ vài giây là bình thường.
 
-Bản build này **chưa ký số**. Windows SmartScreen sẽ cảnh báo ở lần chạy đầu.
+Bản build này **chưa ký số**. Windows SmartScreen sẽ cảnh báo ở lần chạy đầu, với
+cả bộ cài lẫn file exe. Ký số cần chứng chỉ của tổ chức và thuộc `DTD-488`; chưa ký
+thì đây là bản để tự thử, chưa phải thứ đem phát cho người khác.
 
 ## Kiểm tra mã macOS từ máy Windows
 

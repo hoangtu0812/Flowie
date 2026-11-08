@@ -57,6 +57,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
+            ~/.cargo/bin/cargo-tauri.exe
             apps/desktop/target
           key: ${{ matrix.os }}-cargo-${{ hashFiles('apps/desktop/Cargo.lock') }}
           restore-keys: ${{ matrix.os }}-cargo-
@@ -88,5 +89,27 @@ jobs:
         with:
           name: flowie-desktop-windows
           path: apps/desktop/target/release/flowie-desktop.exe
+          if-no-files-found: error
+          retention-days: 14
+
+      # The installer is what a person can actually be handed. It is not
+      # signed, so Windows warns on first run; signing needs the organisation's
+      # certificate and belongs to DTD-488.
+      # VI: Bo cai moi la thu dua cho mot nguoi duoc. No chua duoc ky so nen
+      # VI: Windows se canh bao o lan chay dau; ky so can chung chi cua to chuc
+      # VI: va thuoc DTD-488.
+      - name: Build the Windows installer
+        if: matrix.os == 'windows-latest'
+        run: |
+          cargo install tauri-cli --version "^2" --locked
+          cargo tauri bundle
+        working-directory: apps/desktop/src-tauri
+
+      - name: Keep the Windows installer
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: flowie-desktop-windows-installer
+          path: apps/desktop/target/release/bundle/nsis/*-setup.exe
           if-no-files-found: error
           retention-days: 14

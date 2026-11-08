@@ -19,6 +19,11 @@ pull request and commit references, which are for us.
 
 ## Unreleased
 
+### Added
+
+- Flowie Desktop now has a Windows installer. Every build produces one, it installs for the person who runs it so no administrator is needed, and it carries the same version number as the release it came from rather than one of its own. It is not signed yet, so Windows warns the first time it runs: that makes it something to try on your own machine, not something to hand to other people. (DTD-488)
+  VI: Flowie Desktop nay có bộ cài Windows. Mỗi lần build đều sinh ra một bộ, cài theo người chạy nó nên không cần quyền quản trị, và mang đúng số hiệu của bản phát hành sinh ra nó chứ không phải một số riêng. Nó chưa được ký số nên Windows cảnh báo ở lần chạy đầu: vì vậy đây là bản để tự thử trên máy mình, chưa phải thứ đem đưa cho người khác. (DTD-488)
+
 ### Changed
 
 - The Flowie Desktop plan no longer describes a production deployment pipeline that was removed. It had said a desktop change could trigger a server deploy and that a green pipeline run proved the build reached a machine; both stopped being true when the automated deployment was dropped, and a plan that describes machinery nobody has is a plan that sends someone looking for it. Documentation only. (DTD-501, #209)
