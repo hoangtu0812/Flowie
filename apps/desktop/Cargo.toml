@@ -12,6 +12,7 @@ members = [
     "crates/flowie-agent",
     "crates/flowie-repository",
     "crates/flowie-platform",
+    "crates/flowie-connection",
     "src-tauri",
 ]
 

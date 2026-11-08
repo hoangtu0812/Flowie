@@ -1,0 +1,30 @@
+[package]
+name = "flowie-connection"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+# This crate is where the transport and the rules meet, so it is the one crate
+# that takes flowie-mcp with its transport on. Keeping it separate from
+# flowie-core is what lets core stay free of the TLS stack and therefore
+# lint-checkable for macOS from a Windows machine.
+# VI: Crate này là nơi transport và các quy tắc gặp nhau, nên nó là crate duy
+# VI: nhất lấy flowie-mcp kèm transport. Tách nó khỏi flowie-core là điều giúp
+# VI: core không dính bộ TLS và nhờ vậy vẫn kiểm lint được cho macOS từ máy
+# VI: Windows.
+flowie-core = { path = "../flowie-core" }
+flowie-mcp = { path = "../flowie-mcp" }
+serde_json = "1"
+# Only the runtime: this crate turns the client's async calls into the blocking
+# calls the orchestrator's ports are written in, and needs nothing else.
+# VI: Chỉ cần runtime: crate này biến các lời gọi async của client thành lời gọi
+# VI: blocking mà các cổng của orchestrator dùng, và không cần gì thêm.
+tokio = { version = "1", features = ["rt"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "io-util"] }

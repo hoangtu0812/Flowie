@@ -835,6 +835,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "flowie-connection"
+version = "0.0.0"
+dependencies = [
+ "flowie-core",
+ "flowie-mcp",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "flowie-core"
 version = "0.0.0"
 dependencies = [
