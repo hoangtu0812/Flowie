@@ -29,12 +29,61 @@ pub struct Review {
     pub target_date: String,
 }
 
-/// One executed check, as the result contract needs it.
-/// VI: Một lần kiểm tra đã chạy, theo đúng thứ hợp đồng kết quả cần.
+/// One executed check, carrying everything the result contract requires of
+/// it.
+///
+/// A name and a verdict alone cannot be audited, and the server rejects
+/// evidence that arrives without the command, the exit code, the duration and
+/// a log tail. Those travel through the port instead of being left behind,
+/// because an adapter cannot invent evidence it never received, and a run that
+/// cannot report its checks cannot be recorded as review-ready at all.
+/// VI: Một lần kiểm tra đã chạy, mang theo mọi thứ hợp đồng kết quả đòi hỏi.
+/// VI: Chỉ có tên và kết luận thì không kiểm toán được, và server từ chối bằng
+/// VI: chứng thiếu lệnh, exit code, thời lượng và phần đuôi log. Những thứ đó
+/// VI: đi qua cổng chứ không bị bỏ lại, vì một adapter không thể bịa ra bằng
+/// VI: chứng nó chưa từng nhận, và một run không báo được các bài kiểm tra của
+/// VI: nó thì không được ghi là sẵn sàng review.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TestOutcome {
     pub name: String,
-    pub passed: bool,
+    pub command: Vec<String>,
+    pub exit_code: i32,
+    pub duration_ms: u64,
+    pub log: String,
+}
+
+impl TestOutcome {
+    /// Passing is the exit code being zero, never a flag stored beside it: a
+    /// flag can contradict the code it is meant to summarise, and a result
+    /// claiming success over a non-zero exit is exactly the contradiction the
+    /// server refuses.
+    /// VI: Đạt nghĩa là exit code bằng không, không bao giờ là một cờ lưu riêng
+    /// VI: bên cạnh: một cờ có thể mâu thuẫn với exit code mà nó định tóm tắt,
+    /// VI: và một kết quả khẳng định thành công trên một exit code khác không
+    /// VI: chính là mâu thuẫn server từ chối.
+    pub fn passed(&self) -> bool {
+        self.exit_code == 0
+    }
+}
+
+/// What a run has to show for itself, gathered as it goes.
+///
+/// The server refuses to record work as review-ready without a commit and at
+/// least one passing check behind it, so this travels with the run to the
+/// report rather than being reconstructed at the end from information that is
+/// no longer in scope. It is filled in as each step succeeds, which also means
+/// a run that ends early still reports the evidence it did manage to produce.
+/// VI: Những gì một run có để trình ra, được thu lại dần trong lúc chạy.
+/// VI: Server từ chối ghi công việc là sẵn sàng review khi phía sau không có
+/// VI: commit và ít nhất một bài kiểm tra đạt, nên dữ liệu này đi cùng run tới
+/// VI: lúc báo kết quả chứ không bị dựng lại ở phút cuối từ những thông tin đã
+/// VI: ra khỏi tầm. Nó được điền dần mỗi khi một bước thành công, nhờ vậy một
+/// VI: run kết thúc sớm vẫn báo được phần bằng chứng nó đã kịp tạo ra.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Achievement {
+    pub commit: Option<String>,
+    pub pull_request_url: Option<String>,
+    pub tests: Vec<TestOutcome>,
 }
 
 /// Anything that can go wrong during a run, at the granularity the outcome
@@ -73,7 +122,17 @@ pub trait Server {
         key: &str,
     ) -> Result<(), RunFailure>;
     fn post_plan(&mut self, issue: &str, plan: &str, key: &str) -> Result<(), RunFailure>;
-    fn report(&mut self, outcome: Outcome, summary: &str, key: &str) -> Result<(), RunFailure>;
+    /// Reports the ending. `achieved` is what the run produced, which the
+    /// server requires for a review-ready result and will not accept without.
+    /// VI: Báo kết cục. `achieved` là những gì run tạo ra, thứ server đòi hỏi
+    /// VI: cho một kết quả sẵn sàng review và không nhận nếu thiếu.
+    fn report(
+        &mut self,
+        outcome: Outcome,
+        summary: &str,
+        achieved: &Achievement,
+        key: &str,
+    ) -> Result<(), RunFailure>;
     fn release(&mut self, key: &str) -> Result<(), RunFailure>;
 }
 
@@ -146,8 +205,15 @@ impl Run<'_> {
     /// VI: Hủy và mất quyền sở hữu được kiểm giữa các bước chứ không chỉ ở đầu,
     /// VI: vì các bước tốn kém nằm ở giữa.
     pub fn execute(mut self) -> Completed {
-        match self.drive() {
-            Ok(summary) => self.finish(Outcome::AwaitingReview, Some(summary)),
+        // Held here rather than on `Run` so the caller is not made to supply
+        // an empty one, and so every ending has the same view of what the run
+        // actually produced.
+        // VI: Giữ ở đây chứ không đặt trên `Run` để bên gọi không phải truyền
+        // VI: vào một giá trị rỗng, và để mọi kết cục cùng thấy một bức tranh
+        // VI: về những gì run thật sự tạo ra.
+        let mut achieved = Achievement::default();
+        match self.drive(&mut achieved) {
+            Ok(summary) => self.finish(Outcome::AwaitingReview, Some(summary), achieved),
             Err(RunFailure::Precondition(detail)) => {
                 // Nothing was claimed, so there is nothing to tell the server
                 // and no worktree to keep.
@@ -159,13 +225,15 @@ impl Run<'_> {
                     detail: Some(detail),
                 }
             }
-            Err(RunFailure::LeaseLost) => self.finish(Outcome::StoppedUncertain, None),
-            Err(RunFailure::Cancelled) => self.finish(Outcome::Released, None),
-            Err(RunFailure::Reportable(detail)) => self.finish(Outcome::Failed, Some(detail)),
+            Err(RunFailure::LeaseLost) => self.finish(Outcome::StoppedUncertain, None, achieved),
+            Err(RunFailure::Cancelled) => self.finish(Outcome::Released, None, achieved),
+            Err(RunFailure::Reportable(detail)) => {
+                self.finish(Outcome::Failed, Some(detail), achieved)
+            }
         }
     }
 
-    fn drive(&mut self) -> Result<String, RunFailure> {
+    fn drive(&mut self, achieved: &mut Achievement) -> Result<String, RunFailure> {
         // Read-only checks first. A run that cannot possibly succeed should
         // not have claimed anything, because claiming is what takes the
         // issue away from every other machine.
@@ -231,7 +299,14 @@ impl Run<'_> {
         self.guard()?;
         self.beat(Some("Running approved tests"))?;
         let tests = self.workspace.run_approved_tests()?;
-        if let Some(failed) = tests.iter().find(|test| !test.passed) {
+        // Recorded before the verdict is examined, so a run that stops on a
+        // failing check still reports what it ran: the evidence is the most
+        // useful thing a person gets out of that ending.
+        // VI: Ghi lại trước khi xét kết luận, để một run dừng vì kiểm tra hỏng
+        // VI: vẫn báo được nó đã chạy gì: bằng chứng chính là thứ hữu ích nhất
+        // VI: một người nhận được từ kết cục đó.
+        achieved.tests = tests.clone();
+        if let Some(failed) = tests.iter().find(|test| !test.passed()) {
             // A failing test ends the run here. Committing and reporting
             // success past this point would present work as review-ready
             // that its own checks reject.
@@ -249,10 +324,16 @@ impl Run<'_> {
         let commit = self
             .workspace
             .commit(&format!("flowie run {}", self.issue))?;
+        achieved.commit = commit.clone();
         self.step(Step::Commit);
 
         if self.publish {
-            self.workspace.publish()?;
+            // The address of what was published belongs in the result: it is
+            // how a person reaches the work without being told to go looking
+            // for it.
+            // VI: Địa chỉ của thứ đã publish thuộc về kết quả: đó là cách một
+            // VI: người tới được công việc mà không phải tự đi tìm.
+            achieved.pull_request_url = self.workspace.publish()?;
             self.step(Step::Publish);
         }
 
@@ -272,17 +353,24 @@ impl Run<'_> {
 
     /// Reports the outcome if one is owed, then decides the worktree.
     /// VI: Báo kết cục nếu còn nợ, rồi quyết định số phận worktree.
-    fn finish(mut self, outcome: Outcome, detail: Option<String>) -> Completed {
+    fn finish(
+        mut self,
+        outcome: Outcome,
+        detail: Option<String>,
+        achieved: Achievement,
+    ) -> Completed {
         if outcome.reports_to_server() && self.journal.has_completed(Step::Claim) {
             let key = self
                 .journal
                 .key_for("report", &format!("{}-report", self.issue));
             let reported = match outcome {
                 Outcome::Released => self.server.release(&key),
-                other => {
-                    self.server
-                        .report(other, detail.as_deref().unwrap_or("the run ended"), &key)
-                }
+                other => self.server.report(
+                    other,
+                    detail.as_deref().unwrap_or("the run ended"),
+                    &achieved,
+                    &key,
+                ),
             };
             if reported.is_ok() {
                 self.journal.reported = true;
@@ -378,6 +466,11 @@ mod tests {
         log: Rc<RefCell<Recorder>>,
         fail_on: Option<&'static str>,
         lease_lost_on: Option<&'static str>,
+        /// What `report` was handed, so a test can assert the evidence
+        /// survived the journey rather than only that a call happened.
+        /// VI: Những gì `report` nhận được, để test khẳng định bằng chứng đã đi
+        /// VI: tới đích chứ không chỉ khẳng định có một lời gọi.
+        reported: Option<Achievement>,
     }
 
     impl FakeServer {
@@ -427,8 +520,10 @@ mod tests {
             &mut self,
             outcome: Outcome,
             _summary: &str,
+            achieved: &Achievement,
             _key: &str,
         ) -> Result<(), RunFailure> {
+            self.reported = Some(achieved.clone());
             self.note(match outcome {
                 Outcome::AwaitingReview => "report:awaiting_review",
                 Outcome::Failed => "report:failed",
@@ -522,6 +617,20 @@ mod tests {
         control: FakeControl,
     }
 
+    /// One executed check with the given exit code, so a test says only what
+    /// it cares about.
+    /// VI: Một bài kiểm tra đã chạy với exit code cho trước, để mỗi test chỉ
+    /// VI: nói đúng điều nó quan tâm.
+    fn executed(exit_code: i32) -> TestOutcome {
+        TestOutcome {
+            name: "approved-local-test-1".into(),
+            command: vec!["pnpm".into(), "test".into()],
+            exit_code,
+            duration_ms: 1_200,
+            log: "ok".into(),
+        }
+    }
+
     fn harness() -> Harness {
         let log = Rc::new(RefCell::new(Recorder::default()));
         Harness {
@@ -530,13 +639,11 @@ mod tests {
                 log: Rc::clone(&log),
                 fail_on: None,
                 lease_lost_on: None,
+                reported: None,
             },
             workspace: FakeWorkspace {
                 log: Rc::clone(&log),
-                tests: vec![TestOutcome {
-                    name: "approved-local-test-1".into(),
-                    passed: true,
-                }],
+                tests: vec![executed(0)],
                 commit: Some("0123abc".into()),
                 kept: None,
             },
@@ -662,16 +769,20 @@ mod tests {
     #[test]
     fn a_failing_test_stops_before_the_commit_and_is_reported() {
         let mut harness = harness();
-        harness.workspace.tests = vec![TestOutcome {
-            name: "approved-local-test-1".into(),
-            passed: false,
-        }];
+        harness.workspace.tests = vec![executed(1)];
         let completed = run(&mut harness, false);
 
         assert_eq!(completed.outcome, Outcome::Failed);
         let calls = harness.log.borrow().calls.clone();
         assert!(!calls.iter().any(|c| c == "commit"));
         assert!(calls.iter().any(|c| c == "report:failed"));
+        // The check that stopped the run is the most useful thing to hand
+        // over, so it is reported rather than dropped.
+        // VI: Bài kiểm tra đã làm run dừng là thứ hữu ích nhất để trao lại, nên
+        // VI: nó được báo đi chứ không bị bỏ.
+        let reported = harness.server.reported.clone().expect("a report was owed");
+        assert_eq!(reported.tests, vec![executed(1)]);
+        assert!(reported.commit.is_none(), "nothing was committed");
         // The work stays on disk so a person can see what the agent did.
         // VI: Công việc ở lại trên đĩa để người ta xem được agent đã làm gì.
         assert_eq!(harness.workspace.kept, Some(true));
@@ -740,12 +851,57 @@ mod tests {
     }
 
     #[test]
+    fn a_review_ready_report_carries_what_the_server_requires_of_it() {
+        // The server refuses a review-ready result without a commit and at
+        // least one passing check. Reporting the outcome alone would mean
+        // every clean run was rejected at the last step and then recorded as
+        // failed, which is the worst possible reading of a run that worked.
+        // VI: Server từ chối một kết quả sẵn sàng review nếu thiếu commit và ít
+        // VI: nhất một bài kiểm tra đạt. Chỉ báo kết cục thôi thì mọi run sạch
+        // VI: sẽ đều bị từ chối ở bước cuối rồi bị ghi là thất bại, cách hiểu
+        // VI: tệ nhất có thể về một run đã chạy đúng.
+        let mut harness = harness();
+        let completed = run(&mut harness, true);
+        assert_eq!(completed.outcome, Outcome::AwaitingReview);
+
+        let reported = harness.server.reported.clone().expect("a report was owed");
+        assert_eq!(reported.commit.as_deref(), Some("0123abc"));
+        assert_eq!(
+            reported.pull_request_url.as_deref(),
+            Some("https://example.com/pr/1")
+        );
+        assert_eq!(reported.tests.len(), 1);
+        assert!(reported.tests.iter().all(TestOutcome::passed));
+    }
+
+    #[test]
+    fn a_run_that_was_not_published_reports_no_address_for_it() {
+        // Inventing a pull request address for work that was never published
+        // would send a person to something that does not exist.
+        // VI: Bịa ra một địa chỉ pull request cho công việc chưa publish sẽ đẩy
+        // VI: người dùng tới một thứ không tồn tại.
+        let mut harness = harness();
+        run(&mut harness, false);
+        let reported = harness.server.reported.clone().expect("a report was owed");
+        assert!(reported.pull_request_url.is_none());
+        assert_eq!(reported.commit.as_deref(), Some("0123abc"));
+    }
+
+    #[test]
+    fn passing_is_decided_by_the_exit_code_alone() {
+        // A verdict stored beside the exit code can contradict it, and the
+        // server rejects a success reported over a non-zero exit.
+        // VI: Một kết luận lưu cạnh exit code có thể mâu thuẫn với nó, và server
+        // VI: từ chối một thành công báo trên exit code khác không.
+        assert!(executed(0).passed());
+        assert!(!executed(1).passed());
+        assert!(!executed(-1).passed());
+    }
+
+    #[test]
     fn the_journal_records_what_happened_rather_than_what_was_intended() {
         let mut harness = harness();
-        harness.workspace.tests = vec![TestOutcome {
-            name: "approved-local-test-1".into(),
-            passed: false,
-        }];
+        harness.workspace.tests = vec![executed(1)];
         let completed = run(&mut harness, false);
 
         assert!(completed.journal.has_completed(Step::Claim));
