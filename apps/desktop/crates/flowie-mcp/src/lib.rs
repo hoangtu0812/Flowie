@@ -16,11 +16,13 @@
 //! VI: Token không bao giờ tới được log: nó nằm sau một kiểu có `Debug` bị che,
 //! VI: và bị loại khỏi chuỗi lỗi của transport.
 
+#[cfg(feature = "transport")]
 pub mod client;
 pub mod contract;
 pub mod endpoint;
 pub mod error;
 
+#[cfg(feature = "transport")]
 pub use client::{Client, Token};
 pub use contract::{Lease, Outcome, RunResult, TestEvidence, TestResult};
 pub use endpoint::Endpoint;
