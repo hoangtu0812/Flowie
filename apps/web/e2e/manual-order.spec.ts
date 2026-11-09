@@ -254,9 +254,23 @@ test('sub-issues reorder among siblings and retain nested children', async ({ pa
       // VI: ra như thiếu tính năng chứ không phải tranh chấp thời điểm. Đường đi
       // VI: bằng chuột trong dragRow vốn đã được chính bước canh này bảo vệ.
       await expect(keyboardHandle).toHaveAttribute('aria-roledescription', /.+/);
+      // Each key is a separate step for dnd-kit: the pick-up starts the drag a
+      // frame later, the arrow moves the row a frame after that, and the drop
+      // commits whatever index the row holds at that moment. Pressing the three
+      // keys back to back let WebKit drop before the move landed, so the order
+      // never changed. Wait for each step to show before the next key.
+      // VI: Mỗi phím là một bước riêng với dnd-kit: nhấc lên bắt đầu kéo ở khung
+      // VI: hình sau, mũi tên dời hàng ở khung hình kế tiếp, và thả sẽ lưu đúng vị
+      // VI: trí hàng đang có lúc đó. Bấm liền ba phím khiến WebKit thả trước khi
+      // VI: hàng kịp dời, nên thứ tự không đổi. Chờ từng bước hiện ra rồi mới bấm
+      // VI: phím tiếp theo.
       await keyboardHandle.press('Space');
+      await expect(page.locator('[data-dnd-dragging]')).not.toHaveCount(0);
       await keyboardHandle.press('ArrowUp');
+      await expect(rows.first()).toContainText(moved.identifier);
       await keyboardHandle.press('Space');
+      await expect(page.locator('[data-dnd-dragging]')).toHaveCount(0);
+      await expect(page.locator('[data-dnd-dropping]')).toHaveCount(0);
       await expect(rows.first()).toContainText(moved.identifier);
       await page.reload();
       await expect(rows.first()).toContainText(moved.identifier);
