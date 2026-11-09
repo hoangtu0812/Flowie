@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { usePathname, useParams } from 'next/navigation';
-import { Bug, Download, ListChecks, MoreHorizontal } from 'lucide-react';
+import { Bug, Download, FileSpreadsheet, ListChecks, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
    DropdownMenu,
@@ -98,6 +98,10 @@ function ListActions({
                <DropdownMenuItem onSelect={() => void run()}>
                   <Download />
                   {tx('Export matching issues CSV')}
+               </DropdownMenuItem>
+               <DropdownMenuItem onSelect={() => void run('xlsx')}>
+                  <FileSpreadsheet />
+                  {tx('Export matching issues to Excel')}
                </DropdownMenuItem>
                {hasBugReport && (
                   <DropdownMenuItem

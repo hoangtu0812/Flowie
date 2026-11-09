@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
+from app.domains.attachment_tables import xlsx_sheets
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
 from app.modules.data_exchange.contracts import (
     DocumentExport,
@@ -249,6 +250,13 @@ async def verify_exchange():
             )
             values = list(csv.reader(StringIO(exported.decode("utf-8-sig"))))
             assert len(values) == 2 and values[1][2] == "\t=SUM(1)"
+            workbook = await export_issues(
+                db,
+                user,
+                IssueExport(workspaceId=workspace, query={"query": "=SUM"}, format="xlsx"),
+            )
+            [(_, sheet, _)] = xlsx_sheets(workbook)
+            assert len(sheet) == 2 and sheet[1][1] == "=SUM(1)" and sheet[1][3]
             document = (
                 await create_document(
                     CreateDocumentInput(

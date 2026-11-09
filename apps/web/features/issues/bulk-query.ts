@@ -11,7 +11,11 @@ export function bulkQuery(encoded: string): Record<string, unknown> {
       'query',
    ]);
    for (const [key, value] of new URLSearchParams(encoded)) {
-      if (['workspaceId', 'limit', 'cursor'].includes(key)) continue;
+      // Sort and ordering change only the row order, never which issues match, so a sorted
+      // list can still be exported or bulk-changed.
+      // VI: Sort và ordering chỉ đổi thứ tự dòng, không đổi công việc nào khớp, nên danh sách
+      // VI: đang sort vẫn xuất hoặc sửa hàng loạt được.
+      if (['workspaceId', 'limit', 'cursor', 'sort', 'ordering'].includes(key)) continue;
       if (allowed.has(key)) result[key] = value;
       else if (key === 'categories') result[key] = value.split(',');
       else if (key === 'filters') result[key] = JSON.parse(value);

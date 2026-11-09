@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { openFilterSection } from './filter-menu';
 import { readFileSync } from 'node:fs';
 const fixture = JSON.parse(readFileSync('.e2e-fixture.json', 'utf8'));
 const api = 'http://localhost:4000/api/v1';
@@ -79,8 +80,7 @@ test('Epic is independent of workflow and can be changed and filtered', async ({
       ).toBe('BACKLOG');
       await page.screenshot({ path: testInfo.outputPath('epic-properties.png'), fullPage: true });
       await page.goto(`/${fixture.slug}/issues`);
-      await page.getByRole('button', { name: 'Filter', exact: true }).click();
-      await page.getByRole('option', { name: 'Issue type', exact: true }).click();
+      await openFilterSection(page, 'Issue type');
       await page.getByRole('option', { name: 'Epic', exact: true }).click();
       await page.keyboard.press('Escape');
       await expect(page.getByRole('link', { name: title, exact: true })).toBeVisible();

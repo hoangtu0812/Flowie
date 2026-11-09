@@ -42,6 +42,9 @@ class IssueExport(BaseModel):
     model_config = ConfigDict(extra="forbid")
     workspaceId: str = Field(min_length=1, max_length=100)
     query: IssueSelectionQuery = Field(default_factory=IssueSelectionQuery)
+    # csv: import-compatible columns with IDs; xlsx: readable names for people.
+    # VI: csv: cột tương thích import, dùng ID; xlsx: tên dễ đọc cho người xem.
+    format: Literal["csv", "xlsx"] = "csv"
 
 
 class DocumentExport(BaseModel):
