@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import sys
 import unittest
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
+
+from pydantic import ValidationError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -34,9 +36,9 @@ class DispatcherBudgetTests(unittest.TestCase):
         settings = DispatcherSettingsInput.model_validate({"maxActionsPerDay": 10})
         self.assertEqual(settings.maxActionsPerDay, 10)
         self.assertTrue(settings.dryRun)
-        with self.assertRaises(Exception):
+        with self.assertRaises(ValidationError):
             DispatcherSettingsInput.model_validate({"maxActionsPerDay": 0})
-        with self.assertRaises(Exception):
+        with self.assertRaises(ValidationError):
             DispatcherSettingsInput.model_validate({"maxActionsPerDay": 21})
 
 
@@ -92,13 +94,13 @@ class DispatcherReportTests(unittest.TestCase):
 class DispatcherScheduleTests(unittest.TestCase):
     def test_cutoff_is_today_0830_naive_utc(self) -> None:
         now = datetime(2026, 9, 10, 15, 0, tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"))
-        cutoff = dispatch_cutoff_utc(now.astimezone(timezone.utc))
+        cutoff = dispatch_cutoff_utc(now.astimezone(UTC))
         self.assertEqual(cutoff, datetime(2026, 9, 10, 1, 30))
         self.assertIsNone(cutoff.tzinfo)
 
     def test_next_run_skips_to_tomorrow_after_window(self) -> None:
         now = datetime(2026, 9, 10, 9, 0, tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"))
-        seconds = seconds_until_next_dispatch(now.astimezone(timezone.utc))
+        seconds = seconds_until_next_dispatch(now.astimezone(UTC))
         self.assertAlmostEqual(seconds, 23.5 * 3600, delta=2.0)
 
 

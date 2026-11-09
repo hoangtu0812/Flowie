@@ -1,0 +1,49 @@
+# Lint rules for the Python API and scripts. Run from the repository root:
+# `ruff check apps/api-python scripts`. CI runs the same command, so a local
+# run and CI agree (DTD-522).
+# VI: Luật lint cho API Python và script. Chạy ở gốc repository:
+# VI: `ruff check apps/api-python scripts`. CI chạy đúng lệnh này nên chạy tại
+# VI: máy và chạy trên CI cho cùng kết quả.
+target-version = "py312"
+src = ["apps/api-python", "scripts"]
+
+[lint]
+select = ["F", "E", "W", "I", "UP", "B"]
+ignore = [
+  # Line length, one-line compound statements, late imports and assigned
+  # lambdas are the compact style much of the older code was written in.
+  # Changing it is a formatting job, not a lint finding.
+  # VI: Độ dài dòng, nhiều lệnh trên một dòng, import muộn và lambda gán biến là
+  # VI: kiểu viết gọn của phần lớn mã cũ. Đổi nó là việc format, không phải lỗi lint.
+  "E501",
+  "E701",
+  "E702",
+  "E402",
+  "E731",
+]
+
+[lint.per-file-ignores]
+# The legacy domain modules re-export private helpers on purpose
+# (`from ..modules.x import _y as _y` and plain imports other modules rely on),
+# so an "unused" import there may be load-bearing. DTD-523 folds them away.
+# VI: Các module domain cũ cố ý re-export helper nội bộ, nên một import "thừa" ở
+# VI: đó có thể đang được nơi khác dùng. DTD-523 sẽ dồn và xoá chúng.
+"apps/api-python/app/domains/*" = ["F401"]
+
+[lint.flake8-bugbear]
+# FastAPI declares dependencies and parameters as default values by design.
+# VI: FastAPI khai dependency và tham số bằng giá trị mặc định theo thiết kế.
+extend-immutable-calls = [
+  "fastapi.Depends",
+  "fastapi.Query",
+  "fastapi.Path",
+  "fastapi.Body",
+  "fastapi.Form",
+  "fastapi.File",
+  "fastapi.Header",
+  "fastapi.Cookie",
+  "fastapi.Security",
+]
+
+[lint.isort]
+known-first-party = ["app", "tests"]

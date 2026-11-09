@@ -1,14 +1,15 @@
 import json
-from datetime import timezone
+from datetime import UTC
 
 from sqlalchemy import text
 
 from ...core.clock import _utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import _cuid
-from .repository import TABLES, record, scope as archive_scope
-from ..access.projects import _workspace_access, _team_access
+from ..access.projects import _team_access, _workspace_access
 from ..work_items.lifecycle import actor_context
+from .repository import TABLES, record
+from .repository import scope as archive_scope
 
 
 async def restore_preview(db, workspace, user, kind, identifier, *, lock=False):
@@ -91,7 +92,7 @@ async def restore_preview(db, workspace, user, kind, identifier, *, lock=False):
 async def restore(db, workspace, user, kind, identifier, expected):
     preview = await restore_preview(db, workspace, user, kind, identifier, lock=True)
     normalized = (
-        expected.astimezone(timezone.utc).replace(tzinfo=None)
+        expected.astimezone(UTC).replace(tzinfo=None)
         if expected.tzinfo
         else expected
     )

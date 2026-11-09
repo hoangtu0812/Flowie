@@ -7,7 +7,13 @@ import pytest
 
 from app.core.errors import ApiError
 from app.domains import native_attachments
-from app.domains.attachment_tables import MAX_ROWS, UnreadableSpreadsheet, csv_sheet, table_page, xlsx_sheets
+from app.domains.attachment_tables import (
+    MAX_ROWS,
+    UnreadableSpreadsheet,
+    csv_sheet,
+    table_page,
+    xlsx_sheets,
+)
 
 MAIN = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
 REL = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'

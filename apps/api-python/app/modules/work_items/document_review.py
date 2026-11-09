@@ -18,9 +18,9 @@ from ...core.clock import _utcnow
 from ...core.errors import ApiError
 from ...modules.notifications.outbox import stage_notifications
 from ...services.notification_events import create_notification_batch
+from ..access.membership import _workspace_role
 from ..audit.write import record_change
 from .document_repository import _team_access
-from ..access.membership import _workspace_role
 
 Decision = Literal["APPROVED", "CHANGES_REQUESTED"]
 

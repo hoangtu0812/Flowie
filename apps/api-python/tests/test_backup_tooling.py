@@ -1,7 +1,7 @@
 import importlib
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest

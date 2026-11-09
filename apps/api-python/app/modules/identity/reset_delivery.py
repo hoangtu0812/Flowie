@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from email.message import EmailMessage
 from urllib.parse import urlsplit
+
 from ...core.config import Settings
 from ...services.private_email import send_private_email
 

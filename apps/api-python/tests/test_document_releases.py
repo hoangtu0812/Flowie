@@ -2,7 +2,6 @@ import asyncio
 import os
 
 import pytest
-from tests.document_review_support import approve
 from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -14,6 +13,7 @@ from app.modules.mcp.contracts import UpdateDocumentTool
 from app.modules.work_items.contracts import CreateDocumentInput, UpdateDocumentInput
 from app.modules.work_items.document_history import list_releases, release_row
 from app.modules.work_items.documents import create_document, update_document
+from tests.document_review_support import approve
 
 
 def test_agents_cannot_approve_documents():

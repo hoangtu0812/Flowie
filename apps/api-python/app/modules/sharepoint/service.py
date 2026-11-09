@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import timezone
+from datetime import UTC
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -146,7 +146,7 @@ def release_markdown(release: Any) -> str:
     VI: Nội dung phiên bản kèm front matter YAML ghi version, người duyệt và thời điểm duyệt (giờ
     VI: Việt Nam), để bản đọc ngoài Flowie vẫn biết nội dung nào đã được duyệt và khi nào.
     VI: Chuỗi được ghi bằng `json.dumps`, là chuỗi YAML trong ngoặc kép hợp lệ."""
-    approved = release["approved_at"].replace(tzinfo=timezone.utc).astimezone(VIETNAM)
+    approved = release["approved_at"].replace(tzinfo=UTC).astimezone(VIETNAM)
     header = [
         "---",
         f"title: {json.dumps(release['title'], ensure_ascii=False)}",

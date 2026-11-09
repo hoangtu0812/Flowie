@@ -6,8 +6,8 @@ from ....core.utc_responses import UtcAPIRouter
 from ....db.session import get_session
 from ....domains.auth import current_user
 from ..password_reset import limit_request
-from .queries import session_page, event_page, credential_page
 from .credentials import revoke_credential
+from .queries import credential_page, event_page, session_page
 
 
 async def private_response(response: Response):

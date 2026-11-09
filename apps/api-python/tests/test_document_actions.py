@@ -24,7 +24,6 @@ from app.modules.work_items.documents import (
 )
 from tests.document_review_support import add_member, approve
 
-
 pytestmark = pytest.mark.skipif(
     not os.getenv("MCP_TEST_DATABASE_URL"), reason="Test database not configured"
 )

@@ -16,9 +16,14 @@ from app.db.session import get_session
 from app.domains.auth import create_workspace_bootstrap
 from app.main import create_app
 from app.modules.identity.security.sessions import access_token
-from app.services.notification_events import _teams_webhooks
 from app.modules.notifications.outbox import deliver
-from app.services.microsoft_teams import teams_available, teams_mention_message, teams_message, valid_teams_webhook
+from app.services.microsoft_teams import (
+    teams_available,
+    teams_mention_message,
+    teams_message,
+    valid_teams_webhook,
+)
+from app.services.notification_events import _teams_webhooks
 
 
 def test_teams_webhook_accepts_only_workflow_trigger_hosts():

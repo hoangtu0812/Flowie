@@ -2,7 +2,7 @@ import argparse
 import json
 import os
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from . import manifest
@@ -55,7 +55,7 @@ def main():
     if args.command == "status":
         data = json.loads(args.status_file.read_text())
         age = (
-            datetime.now(timezone.utc) - datetime.fromisoformat(data["completedAt"])
+            datetime.now(UTC) - datetime.fromisoformat(data["completedAt"])
         ).total_seconds()
         if data.get("state") != "SUCCEEDED" or age > 28 * 3600:
             raise RuntimeError(
@@ -109,12 +109,12 @@ def main():
                     "state": "SUCCEEDED",
                     "snapshot": snapshot,
                     "files": files,
-                    "completedAt": datetime.now(timezone.utc).isoformat(),
+                    "completedAt": datetime.now(UTC).isoformat(),
                 }
             except Exception:
                 status = {
                     "state": "FAILED",
-                    "completedAt": datetime.now(timezone.utc).isoformat(),
+                    "completedAt": datetime.now(UTC).isoformat(),
                 }
                 write_status(args.status_file, status)
                 raise

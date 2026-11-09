@@ -175,7 +175,7 @@ async def activity_page(
     limit=50,
     cursor=None,
 ):
-    from ..access.projects import _workspace_access, _team_access
+    from ..access.projects import _team_access, _workspace_access
 
     await _workspace_access(db, workspace_id, user_id)
     if issue_id:

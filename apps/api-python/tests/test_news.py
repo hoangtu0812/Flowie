@@ -5,7 +5,14 @@ import httpx
 import pytest
 
 from app.core.errors import ApiError
-from app.modules.news.feeds import fetch_feed, feed_url, news_card, news_cutoff_utc, parse_feed, plain_text
+from app.modules.news.feeds import (
+    feed_url,
+    fetch_feed,
+    news_card,
+    news_cutoff_utc,
+    parse_feed,
+    plain_text,
+)
 
 NOW = datetime(2026, 10, 30, 0, 0)
 

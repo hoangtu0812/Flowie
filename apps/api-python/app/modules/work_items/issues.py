@@ -1,33 +1,36 @@
 from __future__ import annotations
+
 from typing import Any
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from ...core.clock import _utcnow
+from ...core.dates import _date
 from ...core.errors import ApiError
 from ...core.identifiers import _cuid
-from ...core.clock import _utcnow
 from ...modules.notifications.outbox import stage_notifications
-from .bug_contracts import BUG_COLUMNS
-from .contracts import CreateIssueInput, UpdateIssueInput
-from ...core.dates import _date
-from ..access.projects import _team_access, _workspace_access
-from ..sla.policies import select_policy
-from ..sla.synchronization import initialize_cycle, locked_issue, safe_clock, sync_issue
 from ...services.notification_events import (
     create_notification_batch,
     issue_recipient_ids,
     team_recipient_ids,
 )
+from ..access.projects import _team_access, _workspace_access
+from ..sla.policies import select_policy
+from ..sla.synchronization import initialize_cycle, locked_issue, safe_clock, sync_issue
+from .bug_contracts import BUG_COLUMNS
+from .contracts import CreateIssueInput, UpdateIssueInput
+from .issue_activity import _transition, _write_activity
+from .issue_hierarchy import validate_parent
+from .issue_numbering import allocate_issue_number
+from .issue_queries import _issue_row, _person_name, _project_name, _status_name
 from .issue_rules import (
     _enforce_start_gate,
     _validate_references,
-    _validate_schedule_dates,
     _validate_release_ids,
+    _validate_schedule_dates,
 )
-from .issue_queries import _issue_row, _status_name, _person_name, _project_name
-from .issue_activity import _write_activity, _transition
 from .lifecycle import actor_context
-from .issue_numbering import allocate_issue_number
-from .issue_hierarchy import validate_parent
 
 
 async def create_issue(

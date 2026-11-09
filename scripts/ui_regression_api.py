@@ -9,11 +9,12 @@ url = urlsplit(os.environ['FLOWIE_E2E_DATABASE_URL'])
 if url.hostname not in {'localhost', '127.0.0.1', '::1'} or url.username != 'flowie_test' or not url.path.startswith('/flowie_'):
     raise RuntimeError('UI harness requires an isolated loopback test database.')
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'apps/api-python'))
-from app.main import create_app
+from cryptography.fernet import Fernet
+
 from app.core.config import Settings
 from app.domains import native_attachments, native_emojis
+from app.main import create_app
 from app.modules.data_exchange import api as data_exchange_api
-from cryptography.fernet import Fernet
 
 
 class FixtureStorage:

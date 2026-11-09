@@ -1,15 +1,16 @@
 from typing import Literal
+
 from fastapi import Depends, Request
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
 from ...domains.auth import current_user
+from ..access.projects import _workspace_access
 from ..identity.password_reset import limit_request
 from .bulk_contracts import BulkPreview
-from .bulk_service import bulk_preview, bulk_result, bulk_command
-from ..access.projects import _workspace_access
+from .bulk_service import bulk_command, bulk_preview, bulk_result
 
 router = UtcAPIRouter(prefix="/api/v1/bulk-issues", tags=["bulk-issues"])
 

@@ -4,8 +4,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.errors import ApiError
-from .domain import Principal
 from ..access.project_scope import project_read_scope
+from .domain import Principal
 
 
 class AccessPolicy:

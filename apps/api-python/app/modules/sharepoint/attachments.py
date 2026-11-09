@@ -32,7 +32,13 @@ from ...core.config import Settings
 from ...core.errors import ApiError
 from ...storage.minio import MinioStorage
 from .graph import GraphClient, SharePointError, safe_name
-from .service import BATCH, MAX_BACKOFF_MINUTES, _folder_names, connection_row, graph_client
+from .service import (
+    BATCH,
+    MAX_BACKOFF_MINUTES,
+    _folder_names,
+    connection_row,
+    graph_client,
+)
 
 # Every attachment of a publishing project is numbered within its SharePoint folder (`copy`),
 # archived issues and deleted comments included, so a later file can never take the name of

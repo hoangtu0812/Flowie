@@ -23,8 +23,7 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 from typing import Any, cast
 
-from sqlalchemy import text
-from sqlalchemy import CursorResult
+from sqlalchemy import CursorResult, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..core.clock import _utcnow

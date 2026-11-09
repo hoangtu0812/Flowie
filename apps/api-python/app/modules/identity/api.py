@@ -1,11 +1,12 @@
 from fastapi import BackgroundTasks, Depends, Request
 from pydantic import BaseModel, Field
-from ...core.utc_responses import UtcAPIRouter
+
 from ...core.errors import ApiError
+from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
 from ...services.auth_policy import microsoft_sign_in_enabled, require_password_sign_in
 from .password_reset import consume_reset, issue_reset, limit_request
-from .reset_delivery import delivery_enabled, deliver_reset
+from .reset_delivery import deliver_reset, delivery_enabled
 
 router = UtcAPIRouter(prefix="/api/v1/auth/password-reset", tags=["password-reset"])
 

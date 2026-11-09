@@ -11,7 +11,9 @@ const compat = new FlatCompat({
 
 const eslintConfig = [
    {
-      ignores: ['.next/**', 'dist/**'],
+      // .test-build holds the compiled unit tests and is regenerated on every run.
+      // VI: .test-build chứa unit test đã biên dịch và được tạo lại mỗi lần chạy.
+      ignores: ['.next/**', 'dist/**', '.test-build/**'],
    },
    ...compat.extends('next/core-web-vitals', 'next/typescript'),
    {

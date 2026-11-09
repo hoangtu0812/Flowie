@@ -4,7 +4,7 @@ import asyncio
 import os
 import sys
 import unittest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlalchemy import text
@@ -14,9 +14,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.config import _async_database_url
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
-from app.domains.scm.contracts import ProviderRepository, ProviderReview, ProviderReviewer, ProviderRevision
-from app.domains.scm.service import upsert_repository, upsert_review
 from app.domains.reviews import list_reviews
+from app.domains.scm.contracts import (
+    ProviderRepository,
+    ProviderReview,
+    ProviderReviewer,
+    ProviderRevision,
+)
+from app.domains.scm.service import upsert_repository, upsert_review
 
 
 class ScmPersistenceIntegrationTests(unittest.TestCase):
@@ -114,8 +119,8 @@ class ScmPersistenceIntegrationTests(unittest.TestCase):
                         headRevision='abc123',
                         latestRevisionKey='abc123',
                         remoteUrl='https://example.invalid/reviews/42',
-                        externalCreatedAt=datetime.now(timezone.utc),
-                        externalUpdatedAt=datetime.now(timezone.utc),
+                        externalCreatedAt=datetime.now(UTC),
+                        externalUpdatedAt=datetime.now(UTC),
                         reviewers=[ProviderReviewer(externalUserId='reviewer-1', decision='PENDING')],
                         revisions=[ProviderRevision(externalRevisionId='abc123', headRevision='abc123')],
                     )
@@ -234,8 +239,8 @@ class ScmPersistenceIntegrationTests(unittest.TestCase):
                         headRevision='def456',
                         latestRevisionKey='def456',
                         remoteUrl='https://example.invalid/reviews/43',
-                        externalCreatedAt=datetime.now(timezone.utc),
-                        externalUpdatedAt=datetime.now(timezone.utc),
+                        externalCreatedAt=datetime.now(UTC),
+                        externalUpdatedAt=datetime.now(UTC),
                     )
                     detected_id = await upsert_review(db, repository, detected)
                     await upsert_review(db, repository, detected)

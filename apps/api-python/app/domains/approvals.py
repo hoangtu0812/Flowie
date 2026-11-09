@@ -11,7 +11,8 @@ VI: thứ mà trang tài liệu sẽ từ chối. Quyết định và duyệt v�
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from fastapi import Depends, Query
 from sqlalchemy import text
@@ -23,7 +24,6 @@ from ..modules.access.membership import _workspace_role
 from ..modules.access.team_scope import workspace_team_scope
 from ..modules.work_items.document_review import approval_block, approver_ids
 from .auth import current_user
-
 
 router = APIRouter(prefix='/api/v1/approvals', tags=['approvals'])
 

@@ -1,33 +1,47 @@
 from __future__ import annotations
 
-from ..modules.access.project_scope import project_read_scope
-
-from datetime import timedelta
-
-from ..modules.work_items.issue_relations import _relation_kind as _relation_kind
-
-from ..modules.work_items.issue_relations import _add_issue_relation as _add_issue_relation
-
-from ..modules.work_items.issue_activity import _write_activity as _write_activity, _transition as _transition
-
-from ..modules.work_items.issue_rules import _validate_schedule_dates as _validate_schedule_dates, _ensure_circle_issue_statuses as _ensure_circle_issue_statuses, _validate_references as _validate_references, _validate_release_ids as _validate_release_ids, _validate_template_references as _validate_template_references
-
-from ..modules.work_items.issue_hierarchy import issue_ancestors
-from ..modules.work_items.issue_queries import _issue_row as _issue_row, _relation_summary as _relation_summary, _template_row as _template_row, _status_name as _status_name, _person_name as _person_name, _project_name as _project_name
-
 import json
-from datetime import datetime, timedelta, timezone
-from typing import Any, Literal, Annotated
+from datetime import UTC, datetime, timedelta, timezone
+from typing import Annotated, Any, Literal
 
 from fastapi import Depends, Query, Request
-from ..core.utc_responses import UtcAPIRouter as APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..modules.work_items.contracts import CreateIssueInput, UpdateIssueInput
 from ..core.errors import ApiError
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
+from ..modules.access.project_scope import project_read_scope
+from ..modules.work_items.contracts import CreateIssueInput, UpdateIssueInput
+from ..modules.work_items.issue_activity import _transition as _transition
+from ..modules.work_items.issue_activity import _write_activity as _write_activity
+from ..modules.work_items.issue_hierarchy import issue_ancestors
+from ..modules.work_items.issue_queries import _issue_row as _issue_row
+from ..modules.work_items.issue_queries import _person_name as _person_name
+from ..modules.work_items.issue_queries import _project_name as _project_name
+from ..modules.work_items.issue_queries import _relation_summary as _relation_summary
+from ..modules.work_items.issue_queries import _status_name as _status_name
+from ..modules.work_items.issue_queries import _template_row as _template_row
+from ..modules.work_items.issue_relations import (
+    _add_issue_relation as _add_issue_relation,
+)
+from ..modules.work_items.issue_relations import _relation_kind as _relation_kind
+from ..modules.work_items.issue_rules import (
+    _ensure_circle_issue_statuses as _ensure_circle_issue_statuses,
+)
+from ..modules.work_items.issue_rules import (
+    _validate_references as _validate_references,
+)
+from ..modules.work_items.issue_rules import (
+    _validate_release_ids as _validate_release_ids,
+)
+from ..modules.work_items.issue_rules import (
+    _validate_schedule_dates as _validate_schedule_dates,
+)
+from ..modules.work_items.issue_rules import (
+    _validate_template_references as _validate_template_references,
+)
 from ..services.notification_events import (
     create_notification_batch,
     issue_recipient_ids,
@@ -39,7 +53,6 @@ from .native_projects import _date, _team_access, _workspace_access
 from .native_slas import resolve_deadline
 from .teams import _manager
 from .workflow_catalog import DEFAULT_CIRCLE_ISSUE_STATUSES
-
 
 # Mutations remain staged under the private prefix. Read endpoints are exposed
 # through the audited public router below once their Circle adapter is ready.
@@ -167,8 +180,8 @@ async def list_issues(
     ordering: Literal['manual'] | None = None,
     sort: Annotated[str | None, Query(max_length=2000)] = None,
 ) -> dict:
-    from ..modules.work_items.issue_search import search_page
     from ..core.config import Settings
+    from ..modules.work_items.issue_search import search_page
     await _workspace_access(db, workspaceId, user['id'])
     if teamId:
         await _team_access(db, workspaceId, teamId, user['id'])
@@ -282,8 +295,8 @@ async def create_issue(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    from ..modules.work_items.issues import create_issue as operation
     from ..db.mutations import commit_mutation
+    from ..modules.work_items.issues import create_issue as operation
 
     return await commit_mutation(db, lambda: operation(payload=payload, user=user, db=db))
 
@@ -826,7 +839,7 @@ async def set_issue_reminder(
 ) -> dict[str, dict[str, Any]]:
     await _issue_row(db, issue_id, payload.workspaceId, user['id'])
     remind_at = (
-        payload.remindAt.astimezone(timezone.utc).replace(tzinfo=None)
+        payload.remindAt.astimezone(UTC).replace(tzinfo=None)
         if payload.remindAt.tzinfo
         else payload.remindAt
     )
@@ -891,8 +904,8 @@ async def update_issue(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    from ..modules.work_items.issues import update_issue as operation
     from ..db.mutations import commit_mutation
+    from ..modules.work_items.issues import update_issue as operation
 
     return await commit_mutation(db, lambda: operation(issue_id=issue_id, payload=payload, workspaceId=workspaceId, user=user, db=db))
 

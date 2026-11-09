@@ -10,8 +10,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
-from app.modules.work_items.bulk_contracts import BulkPreview, BulkChanges
-from app.modules.work_items.bulk_service import bulk_preview, bulk_result, bulk_command
+from app.modules.work_items.bulk_contracts import BulkChanges, BulkPreview
+from app.modules.work_items.bulk_service import bulk_command, bulk_preview, bulk_result
 from app.modules.work_items.bulk_worker import process_bulk_item
 from app.modules.work_items.issue_rules import _validate_references
 

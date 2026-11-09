@@ -1,5 +1,4 @@
 from __future__ import annotations
-from ..modules.operations.heartbeats import progress
 
 import asyncio
 import json
@@ -11,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..core.utc_responses import utc_response_value
 from ..domains.auth import _cuid, _utcnow
-
+from ..modules.operations.heartbeats import progress
 
 logger = logging.getLogger(__name__)
 

@@ -1,16 +1,16 @@
-from typing import Any
-from io import BytesIO
 import json
 import re
-from zipfile import ZipFile, ZIP_DEFLATED
+from io import BytesIO
+from typing import Any
+from zipfile import ZIP_DEFLATED, ZipFile
 
 from sqlalchemy import text
 
 from ...core.csv_export import csv_bytes
 from ...core.errors import ApiError
 from ..access.projects import _workspace_access
-from ..work_items.issue_search import issue_scope
 from ..work_items.document_repository import _team_access
+from ..work_items.issue_search import issue_scope
 
 
 async def export_issues(db, user, payload):

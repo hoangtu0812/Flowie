@@ -14,8 +14,8 @@ from .cycles import (
     save_cycle,
     transition,
 )
-from .policies import select_policy
 from .jobs import reschedule
+from .policies import select_policy
 
 
 async def locked_issue(db, identifier):

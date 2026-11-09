@@ -3,9 +3,14 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from ..work_items.bug_contracts import BugCreateFields, BugUpdateFields, IssueType, BugSeverity
+from ..work_items.bug_contracts import (
+    BugCreateFields,
+    BugSeverity,
+    BugUpdateFields,
+    IssueType,
+)
 from ..work_items.contracts import DocType
 from .domain import ALL_SCOPES, READ_SCOPES
 from .instructions import MAX_WORKFLOW_LENGTH

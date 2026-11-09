@@ -9,7 +9,11 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
-from app.domains.workspaces import UpdateWorkspaceInput, resolve_workspace, update_workspace
+from app.domains.workspaces import (
+    UpdateWorkspaceInput,
+    resolve_workspace,
+    update_workspace,
+)
 
 
 def test_workspace_slug_is_limited_to_63_characters():

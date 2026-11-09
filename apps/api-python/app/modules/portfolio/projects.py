@@ -136,8 +136,8 @@ async def project_page(
     ).scalar_one()
     if cursor:
         if manual:
-            from ..work_items.manual_order import decode_rank_cursor
             from ...core.errors import ApiError
+            from ..work_items.manual_order import decode_rank_cursor
 
             params["after"], params["rank"] = decode_rank_cursor(codec, cursor)
             exists = (

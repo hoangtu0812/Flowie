@@ -1,15 +1,17 @@
 from datetime import timedelta
+
 from fastapi import Depends, Query, Request
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
-from ...core.utc_responses import UtcAPIRouter
+
 from ...core.clock import _utcnow
 from ...core.errors import ApiError
+from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
 from ...domains.auth import current_user
+from ...services.microsoft_teams import teams_available
 from ..access.membership import _workspace_role
 from ..identity.reset_delivery import delivery_enabled
-from ...services.microsoft_teams import teams_available
 from .access import notification_scope
 
 router = UtcAPIRouter(prefix="/api/v1/notifications", tags=["notification-delivery"])

@@ -1,5 +1,5 @@
 from calendar import monthrange
-from datetime import datetime, time, timedelta, timezone
+from datetime import UTC, datetime, time, timedelta
 
 from ...core.errors import ApiError
 from ...core.timezones import local_instant, time_zone
@@ -8,9 +8,9 @@ from ...core.timezones import local_instant, time_zone
 def next_occurrence(rule, after):
     zone = time_zone(rule.timezone)
     if after.tzinfo:
-        after = after.astimezone(timezone.utc).replace(tzinfo=None)
+        after = after.astimezone(UTC).replace(tzinfo=None)
     day = max(
-        rule.startDate, after.replace(tzinfo=timezone.utc).astimezone(zone).date()
+        rule.startDate, after.replace(tzinfo=UTC).astimezone(zone).date()
     )
     anchor_monday = rule.startDate - timedelta(days=rule.startDate.weekday())
     hour, minute = map(int, rule.time.split(":"))

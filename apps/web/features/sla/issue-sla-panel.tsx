@@ -77,8 +77,14 @@ function ClockPanel({ workspace, issue }: { workspace: string; issue: Issue }) {
       void load();
       return () => {
          alive.current = false;
+         // The counter must advance from its value at cleanup time to cancel the request in flight; copying it into the effect would cancel nothing.
+         // VI: Bộ đếm phải tăng từ giá trị tại lúc cleanup để huỷ request đang chạy; chép nó vào effect thì không huỷ được gì.
+         // eslint-disable-next-line react-hooks/exhaustive-deps
          generation.current++;
       };
+      // load reads exactly the inputs listed here and is recreated every render, so listing it would rerun the effect on every render.
+      // VI: load đọc đúng các input liệt kê ở đây và được tạo lại mỗi lần render, nên thêm nó vào sẽ chạy lại effect mỗi lần render.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
    }, [workspace, issue.id, issue.version, refresh]);
    useEffect(() => {
       if (history) return;
@@ -86,6 +92,9 @@ function ClockPanel({ workspace, issue }: { workspace: string; issue: Issue }) {
          if (document.visibilityState === 'visible') void load();
       }, 30000);
       return () => clearInterval(timer);
+      // load reads exactly the inputs listed here and is recreated every render, so listing it would rerun the effect on every render.
+      // VI: load đọc đúng các input liệt kê ở đây và được tạo lại mỗi lần render, nên thêm nó vào sẽ chạy lại effect mỗi lần render.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
    }, [history, workspace, issue.id, issue.version]);
    const command = async (name: 'apply' | 'retry') => {
       if (inflight.current || !data) return;

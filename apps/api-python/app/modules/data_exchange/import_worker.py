@@ -5,10 +5,10 @@ from sqlalchemy import text
 
 from ...core.clock import _utcnow
 from ...core.errors import ApiError
+from ..access.projects import _team_access
 from ..operations.heartbeats import progress
 from ..work_items.contracts import CreateIssueInput
 from ..work_items.issues import create_issue
-from ..access.projects import _team_access
 from .import_service import duplicate_key
 
 

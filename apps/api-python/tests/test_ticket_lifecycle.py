@@ -29,7 +29,6 @@ from tests.document_review_support import add_member
 from tests.test_service_desk_asks import add_project, forbidden
 from tests.test_ticket_messages import inbox, set_issue_category
 
-
 NOW = _utcnow()
 EARLIER = NOW - timedelta(hours=1)
 

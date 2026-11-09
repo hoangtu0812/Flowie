@@ -3,18 +3,17 @@ from __future__ import annotations
 from typing import Literal
 
 from fastapi import Depends, Query, Request
-from ...core.utc_responses import UtcAPIRouter as APIRouter
 from sqlalchemy import text
 
 from ...core.clock import _utcnow
 from ...core.pagination import CursorCodec
+from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
 from ...domains.auth import current_user
 from ..access.membership import _workspace_role
 from . import connections, instructions
 from .contracts import ConnectionInput, ConnectionUpdateInput, InstructionsInput
-from .domain import ALL_SCOPES
-from .domain import Principal
+from .domain import ALL_SCOPES, Principal
 from .policy import AccessPolicy
 
 router = APIRouter(prefix="/api/v1/mcp", tags=["mcp-connections"])

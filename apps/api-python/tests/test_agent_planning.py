@@ -9,35 +9,35 @@ from unittest.mock import AsyncMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.core.errors import ApiError
 from pydantic import ValidationError
 
+from app.core.errors import ApiError
 from app.domains.agent import (
     ANALYST_ANSWER_PROMPT,
     COMPOSE_COMMENT_PROMPT,
     COMPOSE_UPDATE_PROMPT,
     LEADERSHIP_REPORT_PROMPT,
     PROJECT_SCHEDULE_PROMPT,
-    UNTRUSTED_FACTS_RULE,
-    _assignment_explainer_prompt,
-    _source_text,
-    _system_prompt,
     TOOL_DETAILS,
+    UNTRUSTED_FACTS_RULE,
     AgentProposal,
     AnalystText,
-    _is_open_question,
-    _is_report_request,
     ProjectScheduleProposal,
     _apply_personal_skill_defaults,
-    _is_initiative_delivery_question,
+    _assignment_explainer_prompt,
     _is_bare_creation_request,
+    _is_initiative_delivery_question,
+    _is_open_question,
+    _is_overdue_issue_question,
     _is_project_delivery_question,
+    _is_report_request,
     _is_stale_issue_question,
     _matching_read_only_capability,
     _parse_agent_proposal,
     _parse_schedule_proposal,
+    _source_text,
     _sse,
-    _is_overdue_issue_question,
+    _system_prompt,
     _validate_proposal,
     _validate_schedule_proposal,
     _validated_endpoint,
@@ -294,7 +294,7 @@ class AgentPlanningTests(unittest.TestCase):
             self.assertIn(UNTRUSTED_FACTS_RULE, prompt)
 
     def test_source_text_drops_nul_for_postgres(self) -> None:
-        upload = SimpleNamespace(filename='plan.md', read=AsyncMock(return_value='a\x00b'.encode()))
+        upload = SimpleNamespace(filename='plan.md', read=AsyncMock(return_value=b'a\x00b'))
         self.assertEqual(asyncio.run(_source_text([upload])), '### plan.md\nab')
 
     def test_lists_the_analyst_tool(self) -> None:

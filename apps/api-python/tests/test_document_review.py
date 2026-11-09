@@ -13,8 +13,8 @@ from app.modules.work_items.contracts import CreateDocumentInput, UpdateDocument
 from app.modules.work_items.document_review import (
     DecisionInput,
     ReviewersInput,
-    decide,
     approver_ids,
+    decide,
     review_state,
     set_reviewers,
 )

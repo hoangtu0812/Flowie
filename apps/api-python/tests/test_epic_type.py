@@ -1,22 +1,24 @@
 import asyncio
 import json
 import os
+
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
 from app.core.config import _async_database_url
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
-from app.modules.work_items.contracts import CreateIssueInput, UpdateIssueInput
-from app.modules.work_items.issues import create_issue, update_issue
-from app.modules.work_items.issue_search import search_page
-from app.modules.work_items.query_contract import IssueSelectionQuery
-from app.modules.work_items.saved_view_config import IssueViewConfig
 from app.modules.mcp.contracts import (
     CreateIssueTool,
-    UpdateIssueTool,
     SearchIssuesInput,
+    UpdateIssueTool,
 )
 from app.modules.recurring.contracts import RecurringTemplate
+from app.modules.work_items.contracts import CreateIssueInput, UpdateIssueInput
+from app.modules.work_items.issue_search import search_page
+from app.modules.work_items.issues import create_issue, update_issue
+from app.modules.work_items.query_contract import IssueSelectionQuery
+from app.modules.work_items.saved_view_config import IssueViewConfig
 
 
 def test_epic_contracts_remain_independent_of_status():

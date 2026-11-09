@@ -53,6 +53,9 @@ export function RevisionHistory({ workspace, policy }: { workspace: string; poli
       return () => {
          active.current = false;
       };
+      // load reads exactly the inputs listed here and is recreated every render, so listing it would rerun the effect on every render.
+      // VI: load đọc đúng các input liệt kê ở đây và được tạo lại mỗi lần render, nên thêm nó vào sẽ chạy lại effect mỗi lần render.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
    }, []);
    return (
       <VStack gap={3} width="100%">

@@ -16,9 +16,10 @@ import asyncio
 import json
 import logging
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from os import getenv
-from typing import Any, Iterable
+from typing import Any
 
 import httpx
 from fastapi import WebSocket

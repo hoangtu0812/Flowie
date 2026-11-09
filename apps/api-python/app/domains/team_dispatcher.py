@@ -12,18 +12,18 @@ announced on Discord. Dry-run mode reports what would happen without writing.
 
 import json
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
 from fastapi import Depends, Query
-from ..core.utc_responses import UtcAPIRouter as APIRouter
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
 from .auth import _cuid, _utcnow, current_user
 from .team_insights import (
@@ -81,7 +81,7 @@ def dispatch_cutoff_utc(now: datetime | None = None) -> datetime:
         current.replace(
             hour=DISPATCH_HOUR, minute=DISPATCH_MINUTE, second=0, microsecond=0
         )
-        .astimezone(timezone.utc)
+        .astimezone(UTC)
         .replace(tzinfo=None)
     )
 

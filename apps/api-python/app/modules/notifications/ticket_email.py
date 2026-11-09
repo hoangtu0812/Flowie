@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from datetime import datetime, timedelta
-from typing import Any, Mapping
-
+from typing import Any
 
 # Delivery rows are queued whether or not the server has SMTP, so without this limit turning SMTP
 # on later would send every old ticket event at once.

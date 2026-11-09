@@ -12,7 +12,6 @@ from app.domains.native_documents import get_document, list_folders
 from app.modules.work_items.contracts import (
     CreateDocumentInput,
     CreateIssueInput,
-    UpdateDocumentInput,
 )
 from app.modules.work_items.document_tree import (
     create_folder,
@@ -24,7 +23,7 @@ from app.modules.work_items.document_tree import (
     scaffold_project_tree,
     update_folder,
 )
-from app.modules.work_items.documents import create_document, update_document
+from app.modules.work_items.documents import create_document
 from app.modules.work_items.issues import create_issue
 from tests.document_review_support import approve
 

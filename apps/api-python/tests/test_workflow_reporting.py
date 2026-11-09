@@ -1,6 +1,6 @@
 import asyncio
-from datetime import datetime
 import os
+from datetime import datetime
 
 import pytest
 from pydantic import ValidationError
@@ -10,10 +10,10 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
-from app.modules.reporting.contracts import WorkflowReport
-from app.modules.reporting.repository import workflow_report, workload_page
 from app.modules.reporting.breakdowns import change_page, project_page
+from app.modules.reporting.contracts import WorkflowReport
 from app.modules.reporting.dashboard import dashboard_report
+from app.modules.reporting.repository import workflow_report, workload_page
 
 
 def test_report_ranges_use_local_day_boundaries_and_preserve_unknown_future_days():

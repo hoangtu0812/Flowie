@@ -1,5 +1,5 @@
 import csv
-from io import StringIO, BytesIO
+from io import BytesIO, StringIO
 from unicodedata import normalize
 
 from .errors import ApiError

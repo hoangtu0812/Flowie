@@ -1,15 +1,15 @@
 """Optional real encrypted S3, PostgreSQL and physical MinIO recovery rehearsal."""
 
 import asyncio
-from dataclasses import replace
 import json
 import os
-from pathlib import Path
 import shutil
 import socket
 import subprocess
 import sys
 import time
+from dataclasses import replace
+from pathlib import Path
 from urllib.parse import unquote, urlsplit
 from urllib.request import urlopen
 from uuid import uuid4
@@ -24,8 +24,8 @@ from app.storage.minio import MinioStorage
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts"))
 from flowie_backup import manifest
-from flowie_backup.repository import Repository
 from flowie_backup.process import run
+from flowie_backup.repository import Repository
 
 TOOLS = [
     "BACKUP_RESTIC_BINARY",

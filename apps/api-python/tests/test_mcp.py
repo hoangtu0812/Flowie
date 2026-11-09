@@ -20,14 +20,17 @@ from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
 from app.main import create_app
 from app.modules.mcp.application import ToolApplication
 from app.modules.mcp.connections import authenticate, create, revoke
-from app.modules.mcp.contracts import ConnectionInput, CreateDocumentTool, UpdateIssueTool
+from app.modules.mcp.contracts import (
+    ConnectionInput,
+    CreateDocumentTool,
+    UpdateIssueTool,
+)
 from app.modules.mcp.domain import ALL_SCOPES
 from app.modules.mcp.pagination import CursorCodec
 from app.modules.mcp.registry import visible_tools
 from app.modules.mcp.transport import SERVER_INSTRUCTIONS
 from app.modules.work_items.contracts import CreateIssueInput
 from app.modules.work_items.issues import create_issue
-
 
 PASSING_TEST = {
     "name": "approved-local-test-1",
@@ -98,6 +101,7 @@ class McpUploadTypeTests(unittest.TestCase):
         # Slim container images have no /etc/mime.types; images must still preview inline.
         # VI: Image container slim không có /etc/mime.types; ảnh vẫn phải xem trước được.
         from unittest.mock import patch
+
         from app.modules.mcp.uploads import upload_type
 
         with patch("app.modules.mcp.uploads.guess_type", return_value=(None, None)):
@@ -492,6 +496,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self,
     ):
         from unittest.mock import AsyncMock, patch
+
         from app.domains.auth import password_hasher
 
         host = create_app(
@@ -545,13 +550,13 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(denied.status_code, 401)
 
     async def test_password_reset_expires_is_single_use_and_revokes_credentials(self):
+        from app.core.identifiers import _hash_token
+        from app.domains.auth import password_hasher
         from app.modules.identity.password_reset import (
-            issue_reset,
             consume_reset,
+            issue_reset,
             limit_request,
         )
-        from app.domains.auth import password_hasher
-        from app.core.identifiers import _hash_token
 
         async with self.factory() as db:
             await db.execute(
@@ -624,9 +629,9 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(limited.exception.status_code, 429)
 
     async def test_web_comment_retry_is_deduplicated_after_commit(self):
+        from app.db.mutations import commit_mutation
         from app.modules.work_items.comments import create_comment
         from app.modules.work_items.contracts import CreateCommentInput
-        from app.db.mutations import commit_mutation
 
         payload = CreateCommentInput(
             workspaceId=self.workspace,
@@ -1176,6 +1181,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_management_cookie_auth_and_rate_limit(self):
         from starlette.requests import Request
+
         from app.modules.identity.security.sessions import create_session
 
         host = create_app(replace(self.settings, mcp_rate_limit=1))
@@ -1278,6 +1284,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_workspace_instructions_edit_and_initialize(self):
         from pydantic import ValidationError
+
         from app.modules.mcp import instructions
         from app.modules.mcp.contracts import InstructionsInput
 
@@ -1404,7 +1411,9 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_mcp_log_details_summary_and_scope(self):
         from unittest.mock import patch
+
         from starlette.requests import Request
+
         from app.modules.identity.security.sessions import create_session
 
         await self.call("get_my_access")
@@ -1545,6 +1554,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_audit_page_filters_and_repository_management(self):
         from starlette.requests import Request
+
         from app.modules.identity.security.sessions import create_session
 
         await self.call("get_my_access")
@@ -1747,6 +1757,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_transactional_outbox_failure_retry_and_success(self):
         from unittest.mock import AsyncMock, patch
+
         from app.modules.notifications.outbox import process_one
 
         async with self.factory() as db:
@@ -1844,7 +1855,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(identifiers), 1001)
 
     async def test_team_membership_routes_revoke_mcp_access(self):
-        from app.domains.teams import update_member, remove_member, TeamMemberRoleInput
+        from app.domains.teams import TeamMemberRoleInput, remove_member, update_member
 
         async with self.factory() as db:
             result = await update_member(
@@ -2158,6 +2169,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         # VI: chủ kết nối, còn kết nối bị thu hồi hoặc URL giả/hết hạn không lưu gì.
         from unittest.mock import AsyncMock, patch
         from urllib.parse import urlsplit
+
         from app.modules.mcp import uploads
 
         with self.assertRaises(ApiError):

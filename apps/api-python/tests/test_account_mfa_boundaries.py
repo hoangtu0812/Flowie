@@ -1,8 +1,8 @@
 import asyncio
-from dataclasses import replace
-from datetime import timedelta, timezone
 import json
 import os
+from dataclasses import replace
+from datetime import UTC, timedelta
 from types import SimpleNamespace
 
 import httpx
@@ -10,7 +10,7 @@ import pytest
 from argon2 import PasswordHasher
 from cryptography.fernet import Fernet
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from starlette.requests import Request
 
 from app.core.clock import _utcnow
@@ -20,11 +20,11 @@ from app.core.identifiers import _cuid, _hash_token
 from app.db.session import get_session
 from app.domains import auth
 from app.main import create_app
-from app.modules.identity.password_reset import issue_reset, consume_reset
+from app.modules.identity.password_reset import consume_reset, issue_reset
 from app.modules.identity.security.mfa import login
 from app.modules.identity.security.mfa.crypto import (
-    new_secret,
     encrypt_secret,
+    new_secret,
     recovery_hash,
     totp,
 )
@@ -150,7 +150,7 @@ async def verify_boundaries(monkeypatch):
                 for _ in range(2)
             ]
             await db.commit()
-        counter = int(_utcnow().replace(tzinfo=timezone.utc).timestamp()) // 30
+        counter = int(_utcnow().replace(tzinfo=UTC).timestamp()) // 30
         results = await asyncio.gather(
             *(attempt(raw, totp(secret, counter), "AUTHENTICATOR") for raw in raws)
         )

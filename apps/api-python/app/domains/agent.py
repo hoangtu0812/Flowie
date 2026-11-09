@@ -4,19 +4,19 @@ import asyncio
 import json
 import logging
 import re
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import date, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
-from typing import Any, AsyncIterator, Awaitable, Callable, Literal, TypedDict
+from typing import Any, Literal, TypedDict
 from urllib.parse import urlsplit
-from zipfile import BadZipFile, ZipFile
 from xml.etree import ElementTree
+from zipfile import BadZipFile, ZipFile
 from zoneinfo import ZoneInfo
 
 import mammoth
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import Depends, File, Form, Query, Request, UploadFile
-from ..core.utc_responses import UtcAPIRouter as APIRouter
 from fastapi.responses import StreamingResponse
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -24,6 +24,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
 from ..modules.identity.password_reset import limit_request
 from .ai_calls import PROVIDER_LABELS, call_provider
@@ -43,7 +44,6 @@ from .team_insights import (
     hcm_today,
     workload_report,
 )
-
 
 router = APIRouter(prefix='/api/v1/agent', tags=['agent'])
 ProviderName = Literal['OPENAI', 'GOOGLE']

@@ -1,11 +1,11 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.domains.scm.contracts import ProviderReview
 from app.domains.scm.service import detected_issue_keys
 
 
 def review(source_ref: str, title: str, description: str | None = None) -> ProviderReview:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return ProviderReview(
         externalReviewId='1',
         title=title,

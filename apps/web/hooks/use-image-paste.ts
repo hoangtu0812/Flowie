@@ -34,6 +34,9 @@ export function useImagePaste({
    onChange,
 }: UseImagePasteOptions) {
    const [uploading, setUploading] = useState(false);
+   // The upload scope must reset whenever the upload target changes, which is what these keys say.
+   // VI: Phạm vi upload phải đặt lại mỗi khi đích upload đổi, và các khoá này nói đúng điều đó.
+   // eslint-disable-next-line react-hooks/exhaustive-deps
    const scope = useMemo(() => ({ busy: false }), [workspaceId, entityType, entityId]);
    const currentScope = useRef(scope);
    currentScope.current = scope;

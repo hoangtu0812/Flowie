@@ -1,15 +1,17 @@
 import asyncio
 import os
+
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
-from app.modules.work_items.contracts import CreateIssueInput, CreateDocumentInput
-from app.modules.work_items.issues import create_issue
-from app.modules.work_items.documents import create_document
 from app.modules.search.service import search
+from app.modules.work_items.contracts import CreateDocumentInput, CreateIssueInput
+from app.modules.work_items.documents import create_document
+from app.modules.work_items.issues import create_issue
 
 
 @pytest.mark.skipif(

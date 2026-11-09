@@ -1,7 +1,7 @@
 import asyncio
+import os
 from dataclasses import replace
 from datetime import timedelta
-import os
 from types import SimpleNamespace
 
 import jwt
@@ -10,20 +10,20 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from starlette.requests import Request
 
+from app.core.clock import _utcnow
 from app.core.config import Settings, _async_database_url
 from app.core.errors import ApiError
 from app.core.identifiers import _cuid, _hash_token
-from app.core.clock import _utcnow
 from app.domains.auth import create_workspace_bootstrap
-from app.modules.identity.security.sessions import (
-    create_session,
-    rotate_session,
-    decode_access,
-    active_identity,
-    revoke_sessions,
-    access_token,
-)
 from app.modules.identity.security.realtime import serve_notifications
+from app.modules.identity.security.sessions import (
+    access_token,
+    active_identity,
+    create_session,
+    decode_access,
+    revoke_sessions,
+    rotate_session,
+)
 
 
 @pytest.mark.skipif(

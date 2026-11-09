@@ -1,13 +1,12 @@
-from typing import Any
 import re
+from typing import Any
 
 from sqlalchemy import text
 
 from ...core.errors import ApiError
 from ...core.pagination import CursorCodec
-from ..access.projects import _workspace_manager
 from ..access.project_scope import project_read_scope
-
+from ..access.projects import _workspace_manager
 
 EVENTS = """WITH events AS (
     SELECT 'audit:'||id AS id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at FROM audit_logs

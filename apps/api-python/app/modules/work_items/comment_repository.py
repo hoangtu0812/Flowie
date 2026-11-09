@@ -1,7 +1,10 @@
 from __future__ import annotations
+
 from typing import Any
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from ...core.errors import ApiError
 from .contracts import CommentInput
 from .issue_queries import _issue_row

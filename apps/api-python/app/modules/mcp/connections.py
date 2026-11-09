@@ -7,9 +7,9 @@ from secrets import token_urlsafe
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ...core.clock import _utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import _cuid, _hash_token
-from ...core.clock import _utcnow
 from ..access.membership import _workspace_role
 from .contracts import ConnectionInput, ConnectionUpdateInput
 from .domain import Principal

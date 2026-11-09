@@ -1,6 +1,7 @@
 from __future__ import annotations
-from secrets import token_urlsafe
+
 from hashlib import sha256
+from secrets import token_urlsafe
 
 
 def _cuid() -> str:

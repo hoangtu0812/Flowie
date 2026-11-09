@@ -1,7 +1,7 @@
 import asyncio
+import os
 from dataclasses import replace
 from datetime import timedelta
-import os
 
 import httpx
 import pytest
@@ -9,25 +9,25 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from starlette.requests import Request
 
-from app.core.config import Settings, _async_database_url
 from app.core.clock import _utcnow
+from app.core.config import Settings, _async_database_url
 from app.core.errors import ApiError
 from app.core.identifiers import _cuid, _hash_token
 from app.db.session import get_session
 from app.domains.auth import create_workspace_bootstrap
 from app.main import create_app
+from app.modules.identity.security.credentials import revoke_credential
+from app.modules.identity.security.queries import (
+    credential_page,
+    event_page,
+    session_page,
+)
 from app.modules.identity.security.sessions import (
+    active_identity,
     create_session,
     decode_access,
-    active_identity,
     logout_session,
 )
-from app.modules.identity.security.queries import (
-    session_page,
-    event_page,
-    credential_page,
-)
-from app.modules.identity.security.credentials import revoke_credential
 
 
 @pytest.mark.skipif(

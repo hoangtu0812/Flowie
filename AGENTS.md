@@ -55,11 +55,15 @@
   the maintainer pulls, rebuilds and restarts the API, and the MCP client
   reconnects.
 
-## Type checking
+## Type checking and lint
 
 - `apps/api-python` is type checked with mypy (`apps/api-python/mypy.ini`,
   pinned `mypy==2.4.1` in CI). Run `mypy app` from `apps/api-python` before
   opening a pull request that touches Python.
+- Lint before opening a pull request: `ruff check apps/api-python scripts`
+  from the repository root (rules in `ruff.toml`) and
+  `pnpm --filter @circle/web lint --max-warnings 0`. CI runs the same commands.
+  Silence a finding only on its own line, with the reason beside it.
 - Every package except `app/domains` is checked including unannotated
   function bodies. Never weaken the level of a package that passes, and never
   add a blanket `# type: ignore`: fix the type, or ignore one error code on one

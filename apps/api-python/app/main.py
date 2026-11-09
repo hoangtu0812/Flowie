@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from contextlib import AsyncExitStack, asynccontextmanager
 import asyncio
 import logging
+from contextlib import AsyncExitStack, asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -13,58 +13,58 @@ from .core.config import Settings
 from .core.errors import ApiError, api_error_handler, validation_error_handler
 from .core.readiness import dependency_status
 from .db.session import create_session_factory
-from .domains.auth import router as auth_router
-from .modules.identity.api import router as password_reset_router
 from .domains.agent import router as agent_router
-from .domains.native_admin import router as admin_router
-from .domains.native_activities import router as native_activities_router
+from .domains.approvals import router as approvals_router
+from .domains.auth import router as auth_router
+from .domains.labels import router as labels_router
+from .domains.link_metadata import router as link_metadata_router
 from .domains.native_activities import public_router as activities_router
-from .domains.native_attachments import router as native_attachments_router
+from .domains.native_activities import router as native_activities_router
+from .domains.native_admin import router as admin_router
+from .domains.native_asks import router as asks_router
 from .domains.native_attachments import public_router as attachments_router
-from .domains.native_comments import router as native_comments_router
+from .domains.native_attachments import router as native_attachments_router
 from .domains.native_comments import public_router as comments_router
-from .domains.native_cycles import router as native_cycles_router
+from .domains.native_comments import router as native_comments_router
+from .domains.native_customer_requests import router as customer_requests_router
 from .domains.native_cycles import public_router as cycles_router
-from .domains.native_issues import public_router as issues_router
-from .domains.native_issues import router as native_issues_router
+from .domains.native_cycles import router as native_cycles_router
+from .domains.native_documents import router as native_documents_router
+from .domains.native_emojis import router as emojis_router
 from .domains.native_initiatives import public_router as initiatives_router
 from .domains.native_initiatives import router as native_initiatives_router
-from .domains.native_documents import router as native_documents_router
-from .domains.native_customer_requests import router as customer_requests_router
-from .domains.native_asks import router as asks_router
-from .domains.native_slas import router as slas_router
-from .domains.native_pulse import router as pulse_router
-from .domains.native_emojis import router as emojis_router
-from .domains.link_metadata import router as link_metadata_router
-from .domains.native_notifications import router as notifications_router
 from .domains.native_integrations import router as integrations_router
-from .domains.native_views import router as views_router
-from .modules.work_items.manual_order import router as manual_order_router
+from .domains.native_issues import public_router as issues_router
+from .domains.native_issues import router as native_issues_router
+from .domains.native_notifications import router as notifications_router
 from .domains.native_projects import public_router as projects_router
 from .domains.native_projects import router as native_projects_router
+from .domains.native_pulse import router as pulse_router
 from .domains.native_releases import router as releases_router
-from .domains.labels import router as labels_router
-from .domains.teams import router as teams_router
-from .domains.team_insights import digest_router as digest_router
-from .domains.team_insights import router as team_insights_router
-from .domains.team_dispatcher import router as team_dispatcher_router
-from .domains.users import router as users_router
-from .domains.workspaces import router as workspaces_router
-from .jobs.reminders import reminder_loop
-from .jobs.digest import digest_loop
-from .jobs.dispatcher import dispatcher_loop
+from .domains.native_slas import router as slas_router
+from .domains.native_views import router as views_router
+from .domains.reviews import router as reviews_router
 from .domains.scm.router import router as scm_router
 from .domains.scm.router import webhook_router as scm_webhook_router
+from .domains.team_dispatcher import router as team_dispatcher_router
+from .domains.team_insights import digest_router as digest_router
+from .domains.team_insights import router as team_insights_router
+from .domains.teams import router as teams_router
+from .domains.users import router as users_router
+from .domains.workspaces import router as workspaces_router
+from .jobs.digest import digest_loop
+from .jobs.dispatcher import dispatcher_loop
+from .jobs.reminders import reminder_loop
 from .jobs.scm_deliveries import scm_delivery_loop
 from .jobs.scm_sync import scm_sync_loop
-from .domains.reviews import router as reviews_router
-from .domains.approvals import router as approvals_router
+from .modules.agent_runs.api import router as agent_runs_router
+from .modules.identity.api import router as password_reset_router
 from .modules.mcp.api import router as mcp_management_router
+from .modules.mcp.maintenance import maintenance_loop
 from .modules.mcp.uploads import router as mcp_upload_router
 from .modules.notifications.outbox import outbox_loop
-from .modules.agent_runs.api import router as agent_runs_router
-from .modules.mcp.maintenance import maintenance_loop
 from .modules.operations.heartbeats import supervise
+from .modules.work_items.manual_order import router as manual_order_router
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -140,11 +140,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await engine.dispose()
 
     from fastapi import Depends
+
     from .modules.access.read_only import enforce_read_only_role
     # Read-only workspace admins are refused every write in one place (DTD-190).
     # VI: Quản trị workspace chỉ đọc bị từ chối mọi thao tác ghi tại một chỗ (DTD-190).
     app = FastAPI(title='Flowie Python API', version='0.1.0', lifespan=lifespan, dependencies=[Depends(enforce_read_only_role)])
-    from .modules.operations.diagnostics import install_diagnostics, build_identity
+    from .modules.operations.diagnostics import build_identity, install_diagnostics
     install_diagnostics(app)
     app.state.settings = runtime
     app.include_router(mcp_management_router)

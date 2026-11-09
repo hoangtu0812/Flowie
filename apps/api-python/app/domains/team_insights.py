@@ -9,18 +9,18 @@ same payloads; it must never recompute them.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from os import getenv
 from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
 from fastapi import Depends, Query
-from ..core.utc_responses import UtcAPIRouter as APIRouter
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
 from .auth import _utcnow, current_user
 
@@ -145,7 +145,7 @@ def digest_cutoff_utc(now: datetime | None = None) -> datetime:
     current = (now or _utcnow()).astimezone(HCM)
     return (
         current.replace(hour=DIGEST_HOUR, minute=0, second=0, microsecond=0)
-        .astimezone(timezone.utc)
+        .astimezone(UTC)
         .replace(tzinfo=None)
     )
 

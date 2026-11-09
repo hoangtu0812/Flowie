@@ -1,7 +1,7 @@
 import re
 
-from app.modules.mcp.registry import TOOLS
 from app.modules.mcp.instructions import INSTRUCTIONS_PREAMBLE, server_instructions
+from app.modules.mcp.registry import TOOLS
 from app.modules.mcp.transport import SERVER_INSTRUCTIONS
 
 

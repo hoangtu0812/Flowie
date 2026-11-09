@@ -10,7 +10,7 @@ from app.core.config import _async_database_url
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
 from app.domains.native_notifications import list_notifications
 from app.modules.notifications.access import readable_records
-from app.modules.notifications.outbox import stage_notifications, process_one
+from app.modules.notifications.outbox import process_one, stage_notifications
 from app.services.notification_events import create_notification_batch
 
 

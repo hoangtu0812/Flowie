@@ -5,7 +5,6 @@ from datetime import timedelta
 from urllib.parse import unquote
 
 import httpx
-from tests.document_review_support import approve
 import pytest
 from cryptography.fernet import Fernet
 from sqlalchemy import text
@@ -14,11 +13,22 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.config import Settings, _async_database_url
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
 from app.modules.sharepoint.attachments import numbered, publish_attachments_due
-from app.modules.sharepoint.graph import SharePointError, parse_folder_url, safe_name, viewer_url
+from app.modules.sharepoint.graph import (
+    SharePointError,
+    parse_folder_url,
+    safe_name,
+    viewer_url,
+)
 from app.modules.sharepoint.service import publish_due, publish_path, save_connection
 from app.modules.work_items.contracts import CreateDocumentInput, UpdateDocumentInput
-from app.modules.work_items.document_tree import create_folder, project_tree, scaffold_project_tree, update_folder
+from app.modules.work_items.document_tree import (
+    create_folder,
+    project_tree,
+    scaffold_project_tree,
+    update_folder,
+)
 from app.modules.work_items.documents import create_document, update_document
+from tests.document_review_support import approve
 
 FOLDER = "https://contoso.sharepoint.com/sites/DTD/Shared%20Documents/Flowie"
 

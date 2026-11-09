@@ -1,8 +1,8 @@
 import asyncio
 import base64
-from dataclasses import replace
-from datetime import datetime, timedelta, timezone
 import os
+from dataclasses import replace
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import httpx
@@ -10,7 +10,7 @@ import pytest
 from argon2 import PasswordHasher
 from cryptography.fernet import Fernet
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from starlette.requests import Request
 
 from app.core.clock import _utcnow
@@ -19,24 +19,23 @@ from app.core.errors import ApiError
 from app.core.identifiers import _cuid
 from app.db.session import get_session
 from app.main import create_app
+from app.modules.identity.security.mfa import commands
+from app.modules.identity.security.mfa.crypto import (
+    decrypt_secret,
+    encrypt_secret,
+    matching_counter,
+    totp,
+)
+from app.modules.identity.security.mfa.login import COOKIE, begin_login, finish_login
 from app.modules.identity.security.sessions import (
-    create_session,
     active_identity,
+    create_session,
     decode_access,
     rotate_session,
 )
-from app.modules.identity.security.mfa import commands
-from app.modules.identity.security.mfa.crypto import (
-    totp,
-    matching_counter,
-    encrypt_secret,
-    decrypt_secret,
-    recovery_hash,
-)
-from app.modules.identity.security.mfa.login import begin_login, finish_login, COOKIE
 from app.services.microsoft_identity import (
-    authentication_instant,
     MicrosoftIdentityClient,
+    authentication_instant,
 )
 
 
@@ -52,7 +51,7 @@ def test_rfc6238_sha1_vectors_window_replay_and_encryption_binding():
     ]:
         assert totp(secret, seconds // 30, 8) == expected
     now = datetime(2026, 10, 15, 12, 0, 15)
-    counter = int(now.replace(tzinfo=timezone.utc).timestamp()) // 30
+    counter = int(now.replace(tzinfo=UTC).timestamp()) // 30
     assert matching_counter(secret, totp(secret, counter), now) == counter
     assert matching_counter(secret, totp(secret, counter), now, counter) is None
     assert matching_counter(secret, totp(secret, counter - 2), now) is None
@@ -76,7 +75,7 @@ def test_rfc6238_sha1_vectors_window_replay_and_encryption_binding():
     assert authentication_instant(True) is None
     assert (
         authentication_instant(
-            int(_utcnow().replace(tzinfo=timezone.utc).timestamp()) + 120
+            int(_utcnow().replace(tzinfo=UTC).timestamp()) + 120
         )
         is None
     )
@@ -165,7 +164,7 @@ async def verify_mfa():
                 setup["qr"].startswith("data:image/svg+xml")
                 and "otpauth" in setup["uri"]
             )
-            counter = int(_utcnow().replace(tzinfo=timezone.utc).timestamp()) // 30
+            counter = int(_utcnow().replace(tzinfo=UTC).timestamp()) // 30
             proof = SimpleNamespace(
                 password=password,
                 code=totp(setup["secret"], counter),

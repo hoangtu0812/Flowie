@@ -1,22 +1,25 @@
 from __future__ import annotations
+
 import json
 from typing import Any
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from ...core.clock import _utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import _cuid
-from ...core.clock import _utcnow
 from ...modules.notifications.outbox import stage_notifications
-from .comment_mentions import validate_mentions
-from .contracts import CommentInput, CreateCommentInput
-from ..access.projects import _workspace_access
-from .issue_queries import _issue_row
-from .issue_activity import _write_activity
-from .comment_repository import _comment_input, _comment
 from ...services.notification_events import (
     create_notification_batch,
     issue_recipient_ids,
 )
+from ..access.projects import _workspace_access
+from .comment_mentions import validate_mentions
+from .comment_repository import _comment, _comment_input
+from .contracts import CommentInput, CreateCommentInput
+from .issue_activity import _write_activity
+from .issue_queries import _issue_row
 
 
 async def create_comment(

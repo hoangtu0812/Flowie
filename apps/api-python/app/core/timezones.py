@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .errors import ApiError
@@ -19,7 +19,7 @@ def local_instant(wall: datetime, zone: ZoneInfo):
     # Choose the first fold; move gaps to the first valid wall minute, including date-line jumps.
     for minutes in range(26 * 60 + 1):
         candidate = wall + timedelta(minutes=minutes)
-        instant = candidate.replace(tzinfo=zone, fold=0).astimezone(timezone.utc)
+        instant = candidate.replace(tzinfo=zone, fold=0).astimezone(UTC)
         if instant.astimezone(zone).replace(tzinfo=None) == candidate:
             return instant.replace(tzinfo=None)
     raise ApiError(400, "The requested local time cannot be resolved.", "Bad Request")

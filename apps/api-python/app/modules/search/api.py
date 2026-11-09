@@ -1,5 +1,7 @@
 from typing import Annotated, Literal
+
 from fastapi import Depends, Query, Request
+
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
 from ...domains.auth import current_user

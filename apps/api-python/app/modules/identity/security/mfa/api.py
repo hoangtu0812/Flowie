@@ -6,22 +6,22 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from .....core.errors import ApiError
-from .....services.auth_policy import microsoft_sign_in_enabled
 from .....core.utc_responses import UtcAPIRouter
 from .....db.session import get_session
 from .....domains.auth import (
-    current_user,
-    _set_cookies,
     _authenticated_user,
     _first_workspace,
     _runtime_user,
+    _set_cookies,
+    current_user,
 )
+from .....services.auth_policy import microsoft_sign_in_enabled
 from ...password_reset import limit_request
 from ..api import private_response
 from . import commands
 from .crypto import keyring
+from .login import COOKIE, clear_challenge, finish_login
 from .repository import factor
-from .login import finish_login, COOKIE, clear_challenge
 
 router = UtcAPIRouter(tags=["mfa"], dependencies=[Depends(private_response)])
 

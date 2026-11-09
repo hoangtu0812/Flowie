@@ -1,5 +1,4 @@
 from __future__ import annotations
-from ..operations.heartbeats import progress
 
 import asyncio
 import json
@@ -13,10 +12,11 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...core.identifiers import _cuid
 from ...core.clock import _utcnow
+from ...core.identifiers import _cuid
 from ...services.microsoft_teams import teams_message
 from ...services.notification_events import NotificationBatch, notification_hub
+from ..operations.heartbeats import progress
 
 logger = logging.getLogger(__name__)
 

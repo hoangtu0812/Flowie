@@ -5,7 +5,7 @@ from ...core.errors import ApiError
 from ..audit.write import record_change
 from ..work_items.issue_queries import _issue_row
 from ..work_items.lifecycle import actor_context
-from .synchronization import locked_issue, latest_cycle, reapply_policy
+from .synchronization import latest_cycle, locked_issue, reapply_policy
 
 
 async def apply_current_policy(db, workspace, user, identifier, payload):

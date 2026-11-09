@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from hashlib import sha256
 import hmac
+from datetime import UTC, datetime
+from hashlib import sha256
 from urllib.parse import quote, urlsplit
 
 import httpx
@@ -45,7 +45,7 @@ class MinioStorage:
         self._bucket_ready = True
 
     async def _request(self, method: str, path: str, body: bytes = b'', content_type: str | None = None, *, maximum_bytes: int | None = None) -> httpx.Response:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         amz_date = now.strftime('%Y%m%dT%H%M%SZ')
         day = now.strftime('%Y%m%d')
         payload_hash = sha256(body).hexdigest()

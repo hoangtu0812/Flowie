@@ -8,10 +8,10 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
-from app.modules.work_items.workflow_statuses import mutate_status, statuses
-from app.modules.work_items.issue_rules import _ensure_circle_issue_statuses
 from app.modules.work_items.contracts import CreateIssueInput
+from app.modules.work_items.issue_rules import _ensure_circle_issue_statuses
 from app.modules.work_items.issues import create_issue
+from app.modules.work_items.workflow_statuses import mutate_status, statuses
 
 
 @pytest.mark.skipif(not os.getenv('MCP_TEST_DATABASE_URL'), reason='Test database not configured')

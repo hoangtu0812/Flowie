@@ -46,8 +46,8 @@ async def public_url(url: str) -> str:
             parts.hostname, parts.port or (443 if parts.scheme == 'https' else 80),
             type=socket.SOCK_STREAM,
         )
-    except (socket.gaierror, UnicodeError):
-        raise ApiError(400, 'The link host could not be resolved.', 'Bad Request')
+    except (socket.gaierror, UnicodeError) as error:
+        raise ApiError(400, 'The link host could not be resolved.', 'Bad Request') from error
     if not infos or not all(
         ipaddress.ip_address(info[4][0].split('%')[0]).is_global for info in infos
     ):

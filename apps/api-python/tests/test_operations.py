@@ -3,13 +3,13 @@ from dataclasses import replace
 from unittest.mock import AsyncMock, patch
 
 import httpx
-from fastapi import FastAPI
 import pytest
+from fastapi import FastAPI
 
 from app.core.config import Settings
 from app.core.readiness import bounded_probe
-from app.modules.operations.diagnostics import install_diagnostics, logger
 from app.modules.operations.api import ClientError
+from app.modules.operations.diagnostics import install_diagnostics, logger
 from app.storage.minio import MinioStorage
 
 

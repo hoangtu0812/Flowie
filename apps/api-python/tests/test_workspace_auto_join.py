@@ -9,12 +9,22 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
-from app.domains.auth import _cuid, _upsert_microsoft_user, _utcnow, create_workspace_bootstrap
-from app.domains.workspaces import AutoJoinInput, auto_join_status, leave, remove_member, update_auto_join
+from app.domains.auth import (
+    _cuid,
+    _upsert_microsoft_user,
+    _utcnow,
+    create_workspace_bootstrap,
+)
+from app.domains.workspaces import (
+    AutoJoinInput,
+    auto_join_status,
+    leave,
+    remove_member,
+    update_auto_join,
+)
 from app.services.microsoft_identity import MicrosoftProfile
 from tests.document_review_support import add_member
 from tests.test_service_desk_asks import add_project
-
 
 TENANT = "11111111-1111-1111-1111-111111111111"
 OTHER_TENANT = "22222222-2222-2222-2222-222222222222"

@@ -16,11 +16,10 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
-from sqlalchemy import text
-from sqlalchemy import CursorResult
+from sqlalchemy import CursorResult, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..core.clock import _utcnow
@@ -35,7 +34,7 @@ def start_of_utc_day(value: datetime) -> datetime:
 
     VI: Nửa đêm UTC của thời điểm đã cho, trả về dạng naive cho khớp với cột.
     """
-    moment = value.astimezone(timezone.utc).replace(tzinfo=None) if value.tzinfo else value
+    moment = value.astimezone(UTC).replace(tzinfo=None) if value.tzinfo else value
     return datetime(moment.year, moment.month, moment.day)
 
 

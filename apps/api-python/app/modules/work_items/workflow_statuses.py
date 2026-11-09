@@ -1,15 +1,15 @@
-from datetime import datetime, timezone
 import json
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
+from ...core.audit_context import audit_source
 from ...core.clock import _utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import _cuid
-from ...core.audit_context import audit_source
-from ..access.projects import _workspace_access, _workspace_manager, _team_access
+from ..access.projects import _team_access, _workspace_access, _workspace_manager
 
 Category = Literal['TRIAGE', 'BACKLOG', 'UNSTARTED', 'STARTED', 'COMPLETED', 'CANCELED']
 
@@ -54,7 +54,7 @@ async def mutate_status(db, workspace, user, values=None, *, identifier=None, ex
             raise ApiError(404,'Issue status not found.','Not Found')
         if previous['team_id']:
             await _team_access(db,workspace,previous['team_id'],user['id'])
-        instant = expected.astimezone(timezone.utc).replace(tzinfo=None) if expected and expected.tzinfo else expected
+        instant = expected.astimezone(UTC).replace(tzinfo=None) if expected and expected.tzinfo else expected
         if instant != previous['updated_at']:
             raise ApiError(409,'This status changed. Reload before saving.','Conflict')
         references = (await db.execute(text('''SELECT

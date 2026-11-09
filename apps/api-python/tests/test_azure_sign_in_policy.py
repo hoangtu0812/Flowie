@@ -18,10 +18,10 @@ from app.db.session import get_session
 from app.domains.auth import _upsert_microsoft_user
 from app.domains.workspaces import InviteMemberInput, invitation_candidates, invite
 from app.main import create_app
-from app.services.microsoft_identity import MicrosoftProfile
+from app.modules.identity import password_reset
 from app.modules.identity.security.mfa import login as mfa_login
 from app.modules.identity.security.mfa.proofs import first_factor
-from app.modules.identity import password_reset
+from app.services.microsoft_identity import MicrosoftProfile
 
 
 def test_azure_configuration_blocks_every_password_entry_point():

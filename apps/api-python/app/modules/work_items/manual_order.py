@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Literal
+
 from fastapi import Depends
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
@@ -10,8 +11,8 @@ from ...core.errors import ApiError
 from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
 from ...domains.auth import _utcnow, current_user
-from ..access.projects import _workspace_access
 from ..access.project_scope import project_read_scope
+from ..access.projects import _workspace_access
 
 router = UtcAPIRouter(prefix="/api/v1/manual-order", tags=["manual-order"])
 

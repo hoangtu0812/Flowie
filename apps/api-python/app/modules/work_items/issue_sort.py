@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+
 from sqlalchemy import text
+
 from ...core.errors import ApiError
 from .issue_queries import _issue_rows
 

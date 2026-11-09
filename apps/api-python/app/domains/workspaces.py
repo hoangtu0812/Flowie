@@ -6,18 +6,24 @@ from datetime import timedelta
 from typing import Any, Literal
 
 from fastapi import Depends, Query, Request, Response
-from ..core.utc_responses import UtcAPIRouter as APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
-from ..services.auth_policy import microsoft_sign_in_enabled
 from ..core.slugs import RESERVED_WORKSPACE_SLUGS, url_slug
-from ..modules.access.read_only import ADMIN_READ_ROLES
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
-from .auth import _cuid, _normalized_email, _utcnow, create_workspace_bootstrap, current_user
+from ..modules.access.read_only import ADMIN_READ_ROLES
+from ..services.auth_policy import microsoft_sign_in_enabled
+from .auth import (
+    _cuid,
+    _normalized_email,
+    _utcnow,
+    create_workspace_bootstrap,
+    current_user,
+)
 
 router = APIRouter(prefix='/api/v1/workspaces', tags=['workspaces'])
 

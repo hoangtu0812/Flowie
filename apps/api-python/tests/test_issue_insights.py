@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.config import _async_database_url
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
-from app.modules.work_items.issue_search import search_page
 from app.modules.work_items.issue_insights import issue_insights
+from app.modules.work_items.issue_search import search_page
 
 
 @pytest.mark.skipif(not os.getenv('MCP_TEST_DATABASE_URL'), reason='Test database not configured')

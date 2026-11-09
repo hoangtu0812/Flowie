@@ -219,6 +219,9 @@ function useProjectsDataSource(teamIdentifier?: string): ProjectData {
       alive.current = true;
       return () => {
          alive.current = false;
+         // The counter must advance from its value at cleanup time to cancel the request in flight; copying it into the effect would cancel nothing.
+         // VI: Bộ đếm phải tăng từ giá trị tại lúc cleanup để huỷ request đang chạy; chép nó vào effect thì không huỷ được gì.
+         // eslint-disable-next-line react-hooks/exhaustive-deps
          generation.current++;
       };
    }, []);
