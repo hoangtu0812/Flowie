@@ -26,6 +26,13 @@ test('issue project breadcrumb appears from All issues and direct links, opens p
    });
    await crumb.click();
    await expect(page).toHaveURL(/\/project\/[^/]+\/issues$/);
+   // The URL changes before the project page has finished loading, and a goto
+   // issued in that gap is cut off by the navigation still in flight. Wait for
+   // the page itself, which lists this issue.
+   // VI: URL đổi trước khi trang project tải xong, và một lệnh goto gửi trong
+   // VI: khoảng đó bị chính điều hướng đang chạy cắt ngang. Chờ chính trang đó,
+   // VI: trang có liệt kê issue này.
+   await expect(page.getByRole('link', { name: issue.title, exact: true })).toBeVisible();
    try {
       expect(
          (
