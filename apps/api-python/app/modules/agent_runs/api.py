@@ -243,10 +243,24 @@ async def list_automations(
     db=Depends(get_session),
 ):
     await manager_policy(db, workspaceId, user)
+    # Names are joined in so a rule reads as "project · label · connection"
+    # without the page looking each id up. Inner joins are safe: a rule is
+    # deleted in cascade with its project, label and connection.
+    # VI: Ghép tên vào để một luật đọc được là "dự án · nhãn · kết nối" mà
+    # VI: trang không phải tra từng id. Inner join an toàn: luật bị xoá dây
+    # VI: chuyền cùng dự án, nhãn và kết nối của nó.
     rows = (
         await db.execute(
             text(
-                'SELECT id,name,enabled,daily_limit AS "dailyLimit",project_id AS "projectId" FROM agent_automations WHERE workspace_id=:workspace ORDER BY created_at DESC LIMIT 100'
+                """SELECT rule.id,rule.name,rule.enabled,rule.daily_limit AS "dailyLimit",
+                rule.project_id AS "projectId",project.name AS "projectName",
+                rule.label_id AS "labelId",label.name AS "labelName",
+                rule.connection_id AS "connectionId",connection.name AS "connectionName"
+                FROM agent_automations rule
+                JOIN projects project ON project.id=rule.project_id
+                JOIN labels label ON label.id=rule.label_id
+                JOIN mcp_connections connection ON connection.id=rule.connection_id
+                WHERE rule.workspace_id=:workspace ORDER BY rule.created_at DESC LIMIT 100"""
             ),
             {"workspace": workspaceId},
         )

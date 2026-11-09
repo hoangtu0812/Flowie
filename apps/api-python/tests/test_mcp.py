@@ -1968,6 +1968,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         from app.modules.agent_runs.api import (
             configure_automation,
             configure_repository,
+            list_automations,
         )
         from app.modules.agent_runs.contracts import AutomationInput, RepositoryInput
         from app.modules.agent_runs.dispatcher import process_event
@@ -2018,6 +2019,18 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 self.user,
                 db,
             )
+            [rule] = (await list_automations(self.workspace, self.user, db))["data"]
+            self.assertEqual(
+                {key: rule[key] for key in ("labelId", "labelName", "connectionId", "connectionName", "projectId")},
+                {
+                    "labelId": label,
+                    "labelName": "AI requested",
+                    "connectionId": self.connection["id"],
+                    "connectionName": "Integration test",
+                    "projectId": self.project,
+                },
+            )
+            self.assertTrue(rule["projectName"])
             await db.execute(
                 text("UPDATE issues SET title=title WHERE id=:issue"),
                 {"issue": self.issue["id"]},

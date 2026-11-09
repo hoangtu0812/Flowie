@@ -22,9 +22,13 @@ import {
 export function AgentCoordination({
    workspaceId,
    canManage,
+   refreshKey,
 }: {
    workspaceId: string;
    canManage: boolean;
+   /** Changing it reloads runs and rules, e.g. after an automation is created elsewhere. */
+   /** VI: Đổi giá trị này thì tải lại run và luật, ví dụ sau khi tạo automation ở chỗ khác. */
+   refreshKey?: number;
 }) {
    const [runs, setRuns] = useState<AgentRun[]>([]);
    const [summary, setSummary] = useState<AgentRunSummary[]>([]);
@@ -48,7 +52,7 @@ export function AgentCoordination({
       void refresh().catch((cause: unknown) =>
          setError(cause instanceof Error ? cause.message : 'Could not load agent runs.')
       );
-   }, [refresh]);
+   }, [refresh, refreshKey]);
 
    async function perform(operation: () => Promise<unknown>, success: string) {
       setBusy(true);
@@ -168,12 +172,12 @@ export function AgentCoordination({
          )}
          {!runs.length && <Text color="secondary">No coding agent runs yet.</Text>}
          {canManage && (
-            <List hasDividers header={<Heading level={4}>Event automations</Heading>}>
+            <List hasDividers header={<Heading level={4}>Label automations</Heading>}>
                {automations.map((automation) => (
                   <ListItem
                      key={automation.id}
                      label={automation.name}
-                     description={`${automation.enabled ? 'Enabled' : 'Disabled'} · up to ${automation.dailyLimit} runs per day`}
+                     description={`${automation.projectName} · label "${automation.labelName}" · ${automation.connectionName} · ${automation.enabled ? 'Enabled' : 'Disabled'} · up to ${automation.dailyLimit} runs per day`}
                      endContent={
                         <Button
                            label="Disable automation"

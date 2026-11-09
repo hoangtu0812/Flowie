@@ -8,6 +8,11 @@ export type AgentAutomation = {
    enabled: boolean;
    dailyLimit: number;
    projectId: string;
+   projectName: string;
+   labelId: string;
+   labelName: string;
+   connectionId: string;
+   connectionName: string;
 };
 export type AgentRun = {
    id: string;
