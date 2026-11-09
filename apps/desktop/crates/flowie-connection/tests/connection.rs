@@ -577,3 +577,29 @@ fn nothing_waiting_is_an_empty_list_rather_than_a_failure() {
         .expect("an empty page is fine")
         .is_empty());
 }
+
+#[test]
+fn a_project_id_from_another_server_reads_as_unknown_not_as_a_lost_connection() {
+    // The id exists here, the next one does not, and a refused token is still
+    // a failure rather than "unknown": only "not found" may mean a wrong id.
+    // VI: Id thứ nhất có ở đây, id thứ hai thì không, còn token bị từ chối vẫn
+    // VI: là thất bại chứ không phải "không có": chỉ "không tìm thấy" mới được
+    // VI: hiểu là sai id.
+    let (url, seen) = stub(vec![
+        Reply::handshake(),
+        Reply::empty(),
+        Reply::data(json!({ "id": "cproj1", "name": "Flowie" })),
+        Reply::failure(404, "Project not found in the allowed scope."),
+        Reply::failure(401, "The token was revoked."),
+    ]);
+    let mut connection = connect(&url);
+    assert!(connection.project_visible("cproj1").expect("found"));
+    assert!(!connection
+        .project_visible("cother")
+        .expect("not found is an answer"));
+    assert!(connection.project_visible("cproj1").is_err());
+    assert_eq!(
+        seen.lock().unwrap().arguments_of("get_project"),
+        Some(json!({ "projectId": "cproj1" }))
+    );
+}

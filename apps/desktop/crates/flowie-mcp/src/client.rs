@@ -176,6 +176,15 @@ impl Client {
         self.call("get_my_access", json!({})).await
     }
 
+    /// One project this connection can read. The server answers 404 both when
+    /// the id does not exist and when the connection may not read it.
+    /// VI: Một project mà kết nối này đọc được. Server trả 404 cả khi id không
+    /// VI: tồn tại lẫn khi kết nối không được đọc nó.
+    pub async fn get_project(&mut self, project_id: &str) -> Result<Value> {
+        self.call("get_project", json!({ "projectId": project_id }))
+            .await
+    }
+
     pub async fn get_project_repositories(&mut self, project_id: &str) -> Result<Value> {
         self.call(
             "get_project_repositories",

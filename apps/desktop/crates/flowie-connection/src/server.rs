@@ -231,6 +231,29 @@ impl Connection {
             .unwrap_or_default())
     }
 
+    /// Whether a project id from the configuration names a project this
+    /// connection can read on this server.
+    ///
+    /// An id copied from another Flowie server leaves the companion polling a
+    /// project that does not exist here, and an empty queue looks exactly like
+    /// a machine with nothing to do. Only "not found" and a malformed id mean
+    /// `false`; any other failure is returned so the caller treats it as the
+    /// lost connection it is, not as a wrong id.
+    /// VI: Một project id trong cấu hình có trỏ tới project mà kết nối này đọc
+    /// VI: được trên server này không.
+    /// VI: Một id chép từ server Flowie khác khiến companion hỏi việc cho một
+    /// VI: project không tồn tại ở đây, và hàng đợi rỗng trông y hệt một máy
+    /// VI: đang không có việc. Chỉ "không tìm thấy" và id sai dạng mới là
+    /// VI: `false`; mọi lỗi khác được trả về để bên gọi coi là mất kết nối
+    /// VI: đúng như bản chất, không coi là sai id.
+    pub fn project_visible(&mut self, project: &str) -> Result<bool, RunFailure> {
+        match self.runtime.block_on(self.client.get_project(project)) {
+            Ok(_) => Ok(true),
+            Err(Error::NotFound { .. } | Error::InvalidArguments { .. }) => Ok(false),
+            Err(error) => Err(RunFailure::from(Refusal::of(&error))),
+        }
+    }
+
     /// Where a person would open this Flowie in a browser, with the
     /// workspace the connection belongs to.
     ///

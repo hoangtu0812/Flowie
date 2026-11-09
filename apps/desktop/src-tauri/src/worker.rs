@@ -214,8 +214,9 @@ pub fn start(directory: PathBuf, shared: Arc<Shared>) -> std::thread::JoinHandle
 
 fn serve(directory: &Path, shared: &Arc<Shared>) {
     let mut schedule = Schedule::new(Duration::from_secs(10));
+    let mut verified = None;
     while !shared.stopping() {
-        let configured = attempt(directory, shared, &mut schedule);
+        let configured = attempt(directory, shared, &mut schedule, &mut verified);
         // The configured interval is only known once the file has been read,
         // so the schedule is rebuilt when it changes rather than fixed at
         // startup, which would ignore an edit until the app restarted.
@@ -250,7 +251,12 @@ fn serve(directory: &Path, shared: &Arc<Shared>) {
 /// one. Returns the configured idle interval when it could be read.
 /// VI: Một lượt: xác định máy này làm được gì, và làm một run nếu có. Trả về chu
 /// VI: kỳ lúc rảnh đã cấu hình nếu đọc được.
-fn attempt(directory: &Path, shared: &Arc<Shared>, schedule: &mut Schedule) -> Option<Duration> {
+fn attempt(
+    directory: &Path,
+    shared: &Arc<Shared>,
+    schedule: &mut Schedule,
+    verified: &mut Option<String>,
+) -> Option<Duration> {
     let startup = crate::startup::assess_local(directory);
     let Some(config) = startup.config else {
         shared.set_readiness(startup.readiness);
@@ -298,7 +304,42 @@ fn attempt(directory: &Path, shared: &Arc<Shared>, schedule: &mut Schedule) -> O
         }
     }
 
-    let state = readiness::assess(&config, &access.scopes, access.writes_enabled);
+    let mut state = readiness::assess(&config, &access.scopes, access.writes_enabled);
+    // Every mapped project is checked against this server once, and the
+    // answer is kept only when all of them match: a key covering the server,
+    // the connection and the ids means an edit to any of them asks again,
+    // while a machine still pointing at a wrong id asks every pass, so
+    // granting the project on the web brings it back without a restart.
+    // VI: Mọi project đã ánh xạ được đối chiếu với server này một lần, và kết
+    // VI: quả chỉ được giữ khi tất cả đều khớp: khoá gồm server, kết nối và các
+    // VI: id nên sửa bất kỳ thứ nào cũng hỏi lại, còn máy vẫn trỏ sai id thì
+    // VI: hỏi mỗi lượt, để cấp project trên web là máy tự hồi phục, không cần
+    // VI: khởi động lại.
+    if state.may_claim() {
+        let key = std::iter::once(config.endpoint.as_str())
+            .chain(std::iter::once(access.connection_id.as_str()))
+            .chain(config.repositories.iter().map(|m| m.project_id.as_str()))
+            .collect::<Vec<_>>()
+            .join("\n");
+        if verified.as_deref() != Some(key.as_str()) {
+            let mut unknown = Vec::new();
+            for mapping in &config.repositories {
+                match connection.project_visible(&mapping.project_id) {
+                    Ok(true) => {}
+                    Ok(false) => unknown.push(mapping.project_id.clone()),
+                    Err(failure) => {
+                        schedule.failed();
+                        shared.set_readiness(disconnected(&failure));
+                        return Some(interval);
+                    }
+                }
+            }
+            if unknown.is_empty() {
+                *verified = Some(key);
+            }
+            state = readiness::with_unknown_projects(state, &unknown);
+        }
+    }
     shared.set_readiness(state.clone());
     if !state.may_claim() {
         return Some(interval);

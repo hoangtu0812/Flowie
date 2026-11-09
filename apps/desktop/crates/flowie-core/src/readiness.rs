@@ -67,6 +67,15 @@ pub enum Readiness {
     /// VI: scope là quan trọng vì cấp chúng là việc của quản trị viên, không
     /// VI: phải thứ người ngồi ở máy này sửa được bằng cách đăng nhập lại.
     MissingScopes { scopes: Vec<String> },
+    /// A repository mapping names a project this server does not have, or
+    /// that the connection may not read. Without this state such a machine
+    /// reads "Ready" for ever: its queue is empty because nothing can be
+    /// routed to a project that is not there. `detail` names every such id.
+    /// VI: Một ánh xạ repository trỏ tới project mà server này không có, hoặc
+    /// VI: kết nối không được đọc. Thiếu trạng thái này thì máy đó đọc là "Sẵn
+    /// VI: sàng" mãi mãi: hàng đợi rỗng vì không gì định tuyến được tới một
+    /// VI: project không tồn tại. `detail` nêu từng id như vậy.
+    UnknownProjects { detail: String },
     /// The server cannot be reached right now. Transient by assumption, so
     /// the loop keeps trying instead of asking anyone to do anything.
     /// VI: Hiện không liên lạc được với server. Mặc định coi là tạm thời, nên
@@ -99,6 +108,7 @@ impl Readiness {
             Readiness::NotConfigured
                 | Readiness::NeedsSignIn { .. }
                 | Readiness::MissingScopes { .. }
+                | Readiness::UnknownProjects { .. }
         )
     }
 
@@ -120,7 +130,9 @@ impl Readiness {
     pub fn reason(&self) -> Option<&str> {
         match self {
             Readiness::NeedsSignIn { reason } => Some(reason),
-            Readiness::Disconnected { detail } => Some(detail),
+            Readiness::Disconnected { detail } | Readiness::UnknownProjects { detail } => {
+                Some(detail)
+            }
             Readiness::NotConfigured
             | Readiness::MissingScopes { .. }
             | Readiness::Paused
@@ -152,6 +164,12 @@ impl Readiness {
                     format!("Missing permission: {list}")
                 }
             }
+            Readiness::UnknownProjects { .. } => if vietnamese {
+                "Project không có trên server này"
+            } else {
+                "Project not on this server"
+            }
+            .to_string(),
             Readiness::Disconnected { .. } => if vietnamese {
                 "Mất kết nối"
             } else {
@@ -202,6 +220,26 @@ pub fn assess(config: &CompanionConfig, scopes: &[String], writes_enabled: bool)
         return Readiness::Paused;
     }
     Readiness::Ready
+}
+
+/// Turns a ready state into `UnknownProjects` when any mapped project id was
+/// not found on the server. Any other state is returned unchanged: it already
+/// stops claiming, and the projects are only checked once a machine is ready.
+/// VI: Đổi trạng thái sẵn sàng thành `UnknownProjects` khi có project id đã ánh
+/// VI: xạ mà server không tìm thấy. Mọi trạng thái khác giữ nguyên: chúng vốn
+/// VI: đã chặn việc claim, và project chỉ được kiểm khi máy đã sẵn sàng.
+pub fn with_unknown_projects(state: Readiness, unknown: &[String]) -> Readiness {
+    if unknown.is_empty() || state != Readiness::Ready {
+        return state;
+    }
+    Readiness::UnknownProjects {
+        detail: format!(
+            "No project with id {} exists on this server, or this connection cannot read it. \
+             Use the project id from this server in the repository mapping, or add the \
+             project to the connection.",
+            unknown.join(", ")
+        ),
+    }
 }
 
 #[cfg(test)]
@@ -356,6 +394,9 @@ mod tests {
             Readiness::Disconnected {
                 detail: "offline".into(),
             },
+            Readiness::UnknownProjects {
+                detail: "cproj1".into(),
+            },
             Readiness::Paused,
             Readiness::Ready,
         ];
@@ -364,6 +405,27 @@ mod tests {
             assert!(!state.summary(true).is_empty());
             assert_ne!(state.summary(false), state.summary(true));
         }
+    }
+
+    #[test]
+    fn a_project_missing_from_the_server_stops_a_ready_machine_and_names_the_id() {
+        let state = with_unknown_projects(Readiness::Ready, &["cwrong1".into(), "cwrong2".into()]);
+        assert!(!state.may_claim());
+        assert!(state.needs_person());
+        let reason = state.reason().expect("the ids are given as the reason");
+        assert!(reason.contains("cwrong1") && reason.contains("cwrong2"));
+    }
+
+    #[test]
+    fn known_projects_or_other_states_are_left_alone() {
+        assert_eq!(
+            with_unknown_projects(Readiness::Ready, &[]),
+            Readiness::Ready
+        );
+        assert_eq!(
+            with_unknown_projects(Readiness::Paused, &["cwrong1".into()]),
+            Readiness::Paused
+        );
     }
 
     #[test]
