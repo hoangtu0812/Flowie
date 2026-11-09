@@ -27,6 +27,26 @@ const eslintConfig = [
          'react-hooks/exhaustive-deps': 'off',
       },
    },
+   {
+      // Shipped code must not depend on demo records or test fixtures: the template's
+      // mock-data folder was removed, and e2e fixtures exist only for Playwright.
+      // VI: Mã được phát hành không được phụ thuộc dữ liệu demo hay fixture test: thư mục
+      // VI: mock-data của template đã bị xoá, còn fixture e2e chỉ dành cho Playwright.
+      files: ['{app,features,components,lib,store}/**/*.{ts,tsx}'],
+      rules: {
+         'no-restricted-imports': [
+            'error',
+            {
+               patterns: [
+                  {
+                     group: ['**/mock-data', '**/mock-data/**', '**/e2e/**'],
+                     message: 'Production code cannot import mock data or e2e fixtures.',
+                  },
+               ],
+            },
+         ],
+      },
+   },
 ];
 
 export default eslintConfig;

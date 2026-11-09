@@ -1,5 +1,5 @@
 import type { IssueQuery } from './issue-query';
-import type { StatusCategory } from '@/mock-data/status';
+import type { StatusCategory } from '@/lib/status-presentations';
 
 export const workspaceIssueViews: Array<{
    segment: string;

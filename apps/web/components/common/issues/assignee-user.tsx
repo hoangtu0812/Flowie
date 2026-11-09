@@ -8,10 +8,20 @@ import {
    DropdownMenuSeparator,
    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { statusUserColors, User } from '@/mock-data/users';
+import type { User } from '@/types/users';
 import { useIssuesStore } from '@/store/issues-store';
 import { CheckIcon, CircleUserRound, UserIcon, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
+
+/**
+ * Presence dot colour for each `User.status`.
+ * VI: Màu chấm trạng thái hiện diện cho từng `User.status`.
+ */
+const statusUserColors: Record<User['status'], string> = {
+   online: '#00cc66',
+   offline: '#969696',
+   away: '#ffcc00',
+};
 
 interface AssigneeUserProps {
    user: User | null;

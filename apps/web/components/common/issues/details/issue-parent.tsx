@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import type { Issue } from '@/mock-data/issues';
+import type { Issue } from '@/types/issues';
 import { useIssuesStore } from '@/store/issues-store';
 import { CornerLeftUp } from 'lucide-react';
 import Link from 'next/link';

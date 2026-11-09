@@ -5,7 +5,6 @@ import { messages } from '@/features/issues/messages.vi';
 import { IssueContent } from '@/features/issues/issue-content';
 import { LoadingState } from '@/components/common/loading-state';
 import { QueryState } from '@/components/common/query-state';
-import type { IssueDetail } from '@/mock-data/issue-details';
 import { DesignSurface } from '@/components/common/design-surface';
 import { VStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
@@ -41,11 +40,6 @@ export default function IssueDetails() {
    );
    usePageEntity(issue?.title);
 
-   const detail = useMemo<IssueDetail | null>(
-      () => (issue ? { identifier: issue.identifier, description: [], activity: [] } : null),
-      [issue]
-   );
-
    const team = teams.find((candidate) => candidate.id === issue?.teamId);
    const listHref = useRef(`/${orgId ?? ''}/issues`);
    useEffect(() => {
@@ -61,7 +55,7 @@ export default function IssueDetails() {
          />
       );
 
-   if (!issue || !detail) {
+   if (!issue) {
       if (loading || initialLoad) return <LoadingState label={tx('Loading issue…')} />;
       return (
          <DesignSurface>

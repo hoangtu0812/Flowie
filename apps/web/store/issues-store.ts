@@ -5,12 +5,12 @@ import {
    type PageMetadata,
 } from '@/features/issues/issue-query';
 import type { BugFields } from '@/features/issues/bug-fields';
-import { groupIssuesByStatus, Issue } from '@/mock-data/issues';
-import { LabelInterface } from '@/mock-data/labels';
-import { priorities, Priority } from '@/mock-data/priorities';
-import { Project } from '@/mock-data/projects';
-import { status as statusPresentation, Status, StatusCategory } from '@/mock-data/status';
-import { User } from '@/mock-data/users';
+import { groupIssuesByStatus, Issue } from '@/types/issues';
+import { LabelInterface } from '@/types/labels';
+import { priorities, Priority } from '@/lib/priority-presentations';
+import { Project } from '@/types/projects';
+import { status as statusPresentation, Status, StatusCategory } from '@/lib/status-presentations';
+import { User } from '@/types/users';
 import {
    authenticatedFetch,
    loadCurrentWorkspace,
@@ -29,19 +29,14 @@ const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 export const RESCHEDULE_CONFLICT =
    'This issue changed since you loaded it. Reloaded the latest dates.';
 
-declare module '@/mock-data/issues' {
+declare module '@/types/issues' {
    interface Issue extends BugFields {
       version?: number;
-      /** Personal state persisted for the current signed-in user. */
-      isSubscribed?: boolean;
-      isFavorite?: boolean;
-      reminderAt?: string;
       /** API-only reference used by durable issue actions; never changes Circle presentation. */
       teamId?: string;
       creatorId?: string;
       /** Reporter of the issue; the API falls back to the creator. VI: Reporter; API mặc định là người tạo. */
       reporter?: User;
-      releaseIds?: string[];
       /** Saved sort rule of the sub-issue tree. VI: Quy tắc sort đã lưu của cây sub-issue. */
       subIssueSort?: SubIssueSort;
    }

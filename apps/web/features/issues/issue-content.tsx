@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { parseAsString, parseAsStringLiteral, useQueryState } from 'nuqs';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Heading } from '@astryxdesign/core/Text';
-import type { Issue } from '@/mock-data/issues';
+import type { Issue } from '@/types/issues';
 import { BugDetails } from './bug-details';
 import { IssueDocuments } from '@/features/documents/issue-documents';
 import { IssueDocumentLinks } from '@/features/documents/issue-document-links';
@@ -55,7 +55,6 @@ export function IssueContent({
    orgId: string;
    compact?: boolean;
 }) {
-   const detail = { identifier: issue.identifier, description: [], activity: [] };
    const reviews = useIssueReviews(issue.id);
    const { t } = useLocale();
    const workspaceId = useIssuesStore((state) => state.workspaceId);
@@ -126,7 +125,6 @@ export function IssueContent({
                <IssueParent issue={issue} orgId={orgId} />
                <MobileIssueProperties
                   issue={issue}
-                  detail={detail}
                   reviews={reviews}
                   allScreens={compact}
                />
@@ -190,7 +188,7 @@ export function IssueContent({
                className="hidden min-h-0 shrink-0 border-l border-border/60 bg-muted/10 lg:flex"
                inert={Boolean(openDocument)}
             >
-               <IssuePropertiesPanel issue={issue} detail={detail} reviews={reviews} />
+               <IssuePropertiesPanel issue={issue} reviews={reviews} />
             </VStack>
          )}
       </HStack>

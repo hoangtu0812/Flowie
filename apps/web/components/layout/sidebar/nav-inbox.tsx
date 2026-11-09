@@ -10,7 +10,6 @@ import {
    SidebarMenuButton,
    SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { inboxItems } from '@/mock-data/side-bar-nav';
 import { useNotificationsStore } from '@/store/notifications-store';
 import {
    isSidebarItemVisible,
@@ -22,6 +21,27 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { loadCurrentWorkspace } from '@/lib/workspaces';
+import {
+   Bot,
+   ClipboardCheck,
+   FolderKanban,
+   GitPullRequestArrow,
+   Inbox,
+   LifeBuoy,
+} from 'lucide-react';
+
+/**
+ * Personal sidebar entries in their default order; `url` is relative to the workspace slug.
+ * VI: Các mục cá nhân của sidebar theo thứ tự mặc định; `url` tính từ slug workspace.
+ */
+const inboxItems = [
+   { name: 'Inbox', url: '/inbox', icon: Inbox },
+   { name: 'Reviews', url: '/reviews', icon: GitPullRequestArrow },
+   { name: 'Approvals', url: '/approvals', icon: ClipboardCheck },
+   { name: 'Service Desk', url: '/service-desk', icon: LifeBuoy },
+   { name: 'My issues', url: '/my-issues', icon: FolderKanban },
+   { name: 'Agent', url: '/agent', icon: Bot },
+];
 
 const ITEM_KEYS: Record<string, SidebarItemKey> = {
    'Inbox': 'inbox',
@@ -90,7 +110,7 @@ export function NavInbox() {
                return (
                   <SidebarMenuItem key={tx(item.name)}>
                      <SidebarMenuButton asChild>
-                        <Link href={`/${orgId}${item.url.replace(/^\/lndev-ui/, '')}`}>
+                        <Link href={`/${orgId}${item.url}`}>
                            <item.icon />
                            <span>{tx(item.name)}</span>
                         </Link>

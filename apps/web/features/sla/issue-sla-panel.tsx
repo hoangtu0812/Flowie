@@ -11,7 +11,7 @@ import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { List, ListItem } from '@astryxdesign/core/List';
 import { Token } from '@astryxdesign/core/Token';
-import type { Issue } from '@/mock-data/issues';
+import type { Issue } from '@/types/issues';
 import { useIssuesStore } from '@/store/issues-store';
 import { authenticatedFetch } from '@/lib/workspaces';
 import { responseEnvelope } from '@/lib/http';

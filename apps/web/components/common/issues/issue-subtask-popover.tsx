@@ -14,7 +14,7 @@ import { useIssuesStore } from '@/store/issues-store';
 import { useMessages } from '@/features/shared/use-messages';
 import { issueHref } from '@/lib/issue-route';
 import { withBasePath } from '@/lib/base-path';
-import type { Issue } from '@/mock-data/issues';
+import type { Issue } from '@/types/issues';
 
 const messages = {
    'Sub-issues of {identifier}': 'Task con của {identifier}',

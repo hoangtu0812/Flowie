@@ -6,7 +6,7 @@ import { Icon } from '@astryxdesign/core/Icon';
 import { Tooltip } from '@astryxdesign/core/Tooltip';
 import { CornerDownRight } from 'lucide-react';
 import { DesignSurface } from '@/components/common/design-surface';
-import type { Issue } from '@/mock-data/issues';
+import type { Issue } from '@/types/issues';
 
 export function IssueParentIndicator({ parent }: { parent: Issue['parent'] }) {
    const [open, setOpen] = useState(false);

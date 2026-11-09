@@ -1,5 +1,5 @@
-import type { Issue } from '@/mock-data/issues';
-import type { User } from '@/mock-data/users';
+import type { Issue } from '@/types/issues';
+import type { User } from '@/types/users';
 import { CircleDot } from 'lucide-react';
 import { parseInstant } from '@/lib/time';
 

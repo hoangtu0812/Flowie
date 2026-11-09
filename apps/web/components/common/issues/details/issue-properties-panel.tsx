@@ -20,9 +20,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { IssueDetail } from '@/mock-data/issue-details';
-import { Issue } from '@/mock-data/issues';
-import type { User } from '@/mock-data/users';
+import { Issue } from '@/types/issues';
+import type { User } from '@/types/users';
 import { useIssuesStore } from '@/store/issues-store';
 import {
    Box,
@@ -49,7 +48,6 @@ import { toast } from 'sonner';
 
 interface IssuePropertiesPanelProps {
    issue: Issue;
-   detail: IssueDetail;
    reviews?: CodeReview[];
 }
 
@@ -69,11 +67,11 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 /**
  * Right sidebar of the issue page: editable properties (status, priority,
- * assignee), cycle, labels, project + milestone, relations and linked PRs.
+ * assignee), cycle, labels, project, relations and linked PRs.
  * VI: Sidebar phải của trang issue: thuộc tính chỉnh sửa được (trạng thái, độ ưu tiên,
- * VI: người thực hiện), cycle, nhãn, dự án + milestone, quan hệ và PR liên kết.
+ * VI: người thực hiện), cycle, nhãn, dự án, quan hệ và PR liên kết.
  */
-export function IssuePropertiesPanel({ issue, detail, reviews }: IssuePropertiesPanelProps) {
+export function IssuePropertiesPanel({ issue, reviews }: IssuePropertiesPanelProps) {
    const tx = useMessages(messages);
 
    const {
@@ -497,12 +495,6 @@ export function IssuePropertiesPanel({ issue, detail, reviews }: IssueProperties
                   )}
                </DropdownMenuContent>
             </DropdownMenu>
-            {issue.project && detail.milestone && (
-               <div className="flex items-center gap-2 text-sm mt-1.5 pl-6 text-muted-foreground">
-                  <span className="size-2 rotate-45 border border-amber-400 shrink-0" />
-                  <span className="truncate">{detail.milestone}</span>
-               </div>
-            )}
          </Section>
 
          <IssueRelations issueId={issue.id} />
