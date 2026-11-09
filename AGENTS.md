@@ -32,8 +32,7 @@
 - Nothing deploys automatically. `.github/workflows/verify-mcp.yml` runs only
   by hand (`workflow_dispatch`) for now, so pull requests are not checked
   automatically: run the targeted tests for what you changed before opening
-  one, and dispatch the suite on a risky branch. `.github/workflows/desktop.yml`
-  builds the desktop workspace on Windows only. Neither deploys anywhere. Every
+  one, and dispatch the suite on a risky branch. It deploys nothing. Every
   environment is deployed by hand from its own checkout, so merging changes no
   running system. There is no staging, preview, or development target.
 - Because `main` itself is unchecked, a commit pushed straight to it — a
@@ -93,13 +92,7 @@
 3. Create annotated tag `vX.Y.Z` on the checked commit and publish a GitHub
    release whose notes are the matching `CHANGELOG.md` section. Never tag a
    revision whose checks have not passed.
-4. Attach the desktop installers to that release as assets, taken from the
-   `Verify Flowie Desktop` run of the tagged commit. A release whose notes
-   describe the companion but offer no way to install it leaves a reader
-   hunting through workflow runs for a file, and CI artifacts expire while a
-   release asset does not. Say in the notes that the installer is unsigned for
-   as long as that is true.
-5. Ask the maintainer to pull and rebuild on each server they run, and say
+4. Ask the maintainer to pull and rebuild on each server they run, and say
    which services need rebuilding. A release is tagged, not deployed: it
    reaches people only when they have done that, so never report it as live
    until they confirm.

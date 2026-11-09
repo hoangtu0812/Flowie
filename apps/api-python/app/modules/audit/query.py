@@ -35,9 +35,7 @@ def visible_entities():
     initiative = "EXISTS(SELECT 1 FROM initiatives n WHERE n.id=ev.entity_id AND n.workspace_id=:workspace)"
     comment = f"""EXISTS(SELECT 1 FROM comments c JOIN issues i ON i.id=c.issue_id WHERE c.id=ev.entity_id
         AND i.workspace_id=:workspace AND {team})"""
-    agent = f"""(EXISTS(SELECT 1 FROM agent_runs r JOIN issues i ON i.id=r.issue_id WHERE r.id=ev.entity_id AND r.workspace_id=:workspace AND {team})
-        OR EXISTS(SELECT 1 FROM project_repositories r JOIN projects p ON p.id=r.project_id WHERE r.id=ev.entity_id AND {project})
-        OR EXISTS(SELECT 1 FROM agent_automations r JOIN projects p ON p.id=r.project_id WHERE r.id=ev.entity_id AND {project}))"""
+    agent = f"""EXISTS(SELECT 1 FROM project_repositories r JOIN projects p ON p.id=r.project_id WHERE r.id=ev.entity_id AND {project})"""
     # Unknown or removed entity scopes are excluded when current access cannot be established.
     return f"""(
         (ev.entity_type='issue' AND {issue}) OR (ev.entity_type='project' AND {project_exists})

@@ -63,7 +63,6 @@ from .modules.mcp.api import router as mcp_management_router
 from .modules.mcp.uploads import router as mcp_upload_router
 from .modules.notifications.outbox import outbox_loop
 from .modules.agent_runs.api import router as agent_runs_router
-from .modules.agent_runs.dispatcher import dispatcher_loop as agent_run_dispatcher_loop
 from .modules.mcp.maintenance import maintenance_loop
 from .modules.operations.heartbeats import supervise
 
@@ -112,8 +111,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         sharepoint_task=tracked('sharepoint-publish',sharepoint_loop(session_factory,runtime,outbox_stop),outbox_stop)
         from .modules.news.worker import news_loop
         news_task=tracked('news',news_loop(session_factory,outbox_stop,runtime),outbox_stop)
-        agent_runs_stop = asyncio.Event()
-        agent_runs_task = tracked('agent-dispatcher',agent_run_dispatcher_loop(session_factory, agent_runs_stop),agent_runs_stop) if runtime.mcp_enabled and runtime.mcp_writes_enabled else None
         reminder_stop = asyncio.Event()
         reminder_task = tracked('reminders',reminder_loop(session_factory, reminder_stop),reminder_stop)
         digest_stop = asyncio.Event()
@@ -133,13 +130,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             yield
         finally:
             outbox_stop.set()
-            agent_runs_stop.set()
             reminder_stop.set()
             digest_stop.set()
             dispatch_stop.set()
             team_policy_stop.set()
             scm_stop.set()
-            await asyncio.gather(*[task for task in [reminder_task,digest_task,dispatch_task,team_policy_task,scm_task,scm_sync_task,outbox_task,channel_task,maintenance_task,agent_runs_task,bulk_task,import_task,recurring_task,sla_task,ticket_status_task,sharepoint_task,news_task] if task],return_exceptions=True)
+            await asyncio.gather(*[task for task in [reminder_task,digest_task,dispatch_task,team_policy_task,scm_task,scm_sync_task,outbox_task,channel_task,maintenance_task,bulk_task,import_task,recurring_task,sla_task,ticket_status_task,sharepoint_task,news_task] if task],return_exceptions=True)
             await mcp_stack.aclose()
             await engine.dispose()
 
@@ -154,7 +150,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(mcp_management_router)
     app.include_router(mcp_upload_router)
     app.include_router(agent_runs_router)
-    from .modules.agent_runs.evidence import router as operations_router
+    from .modules.agent_runs.operations import router as operations_router
     app.include_router(operations_router)
     if runtime.mcp_enabled:
         from .modules.mcp.transport import build_server

@@ -1,10 +1,7 @@
 import asyncio
 import os
 from datetime import timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
-from types import SimpleNamespace
 
-import httpx
 import pytest
 from pydantic import ValidationError
 from sqlalchemy import text
@@ -16,12 +13,10 @@ from app.core.errors import ApiError
 from app.core.identifiers import _cuid
 from app.domains.auth import create_workspace_bootstrap
 from app.modules.agent_runs.operations import LimitsInput, overview, put_limits
-from app.modules.agent_runs.evidence import check_github_evidence, github_pull
-from app.modules.agent_runs.evidence import verify_evidence
 from app.modules.mcp.quotas import consume_quota, update_limits
 
 
-def test_budget_validation_and_provider_url_boundary():
+def test_budget_validation():
     for total, tools in [
         (True, {}),
         (5, {"get_issue": True}),
@@ -30,101 +25,6 @@ def test_budget_validation_and_provider_url_boundary():
     ]:
         with pytest.raises(ValidationError):
             LimitsInput(totalPerMinute=total, perTool=tools)
-    for url in [
-        "https://evil.test/a/b/pull/1",
-        "https://github.com@evil.test/a/b/pull/1",
-        "https://github.com/a/b/pull/1?token=x",
-    ]:
-        with pytest.raises(ApiError):
-            github_pull(url)
-
-
-def test_ci_verification_requires_current_head_and_successful_checks():
-    async def run():
-        sha = "a" * 40
-        pull = {"head": {"sha": sha}, "base": {"repo": {"full_name": "owner/repo"}}}
-        responses = [
-            pull,
-            {
-                "total_count": 1,
-                "check_runs": [
-                    {"name": "CI", "status": "completed", "conclusion": "success"}
-                ],
-            },
-            {"statuses": []},
-            {"workflow_runs": []},
-            pull,
-        ]
-        provider = AsyncMock()
-        provider._request.side_effect = [
-            httpx.Response(200, json=value) for value in responses
-        ]
-        assert (await check_github_evidence(provider, "owner/repo", "1", sha))[
-            "status"
-        ] == "VERIFIED"
-        responses[-1] = {"head": {"sha": "b" * 40}}
-        provider._request.side_effect = [
-            httpx.Response(200, json=value) for value in responses
-        ]
-        assert (await check_github_evidence(provider, "owner/repo", "1", sha))[
-            "status"
-        ] == "MISMATCH"
-        responses[1]["check_runs"][0]["conclusion"] = "failure"
-        responses[-1] = pull
-        provider._request.side_effect = [
-            httpx.Response(200, json=value) for value in responses
-        ]
-        assert (await check_github_evidence(provider, "owner/repo", "1", sha))[
-            "status"
-        ] == "FAILED"
-
-    asyncio.run(run())
-
-
-def test_verifier_rechecks_repository_team_before_provider_access():
-    async def run():
-        rows = [
-            {
-                "issue_id": "issue",
-                "project_id": "project",
-                "result": {
-                    "pullRequestUrl": "https://github.com/owner/repo/pull/1",
-                    "commit": "a" * 40,
-                },
-            },
-            ("registered",),
-            {"repository_team_id": "private-team"},
-        ]
-        results = []
-        for row in rows:
-            result = MagicMock()
-            result.first.return_value = row
-            result.mappings.return_value.first.return_value = row
-            results.append(result)
-        db = AsyncMock()
-        db.execute.side_effect = results
-        policy = AsyncMock()
-        policy.team.side_effect = ApiError(404, "Outside team scope", "Not Found")
-        with (
-            patch("app.modules.agent_runs.evidence._manager", new=AsyncMock()),
-            patch("app.modules.agent_runs.evidence.AccessPolicy", return_value=policy),
-            patch("app.modules.agent_runs.evidence.provider_for") as provider,
-        ):
-            with pytest.raises(ApiError) as error:
-                await verify_evidence(
-                    "run",
-                    SimpleNamespace(
-                        app=SimpleNamespace(state=SimpleNamespace(settings=None))
-                    ),
-                    workspaceId="workspace",
-                    user={"id": "manager"},
-                    db=db,
-                )
-            assert error.value.status_code == 404
-            policy.team.assert_awaited_once_with("private-team")
-            provider.assert_not_called()
-
-    asyncio.run(run())
 
 
 @pytest.mark.skipif(

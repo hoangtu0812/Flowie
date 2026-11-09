@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from pydantic import BaseModel
 
 from . import contracts as c
-from ..agent_runs import contracts as r
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,72 +63,11 @@ DEFINITIONS = (
         "attachment_image",
     ),
     ToolDefinition(
-        "get_run",
-        "Read an authorized agent run; lease secrets are visible only to its owning connection.",
-        r.RunInput,
-        "runs:read",
-        "run_get",
-        extra_scopes=("issues:read",),
-    ),
-    ToolDefinition(
-        "list_runs",
-        "List pending and completed agent runs in the project scope.",
-        r.RunPageInput,
-        "runs:read",
-        "run_list",
-        extra_scopes=("issues:read",),
-    ),
-    ToolDefinition(
         "get_project_repositories",
         "Read trusted project repository configuration for an external coding agent.",
         c.ProjectInput,
         "projects:read",
-        "run_repositories",
-    ),
-    ToolDefinition(
-        "claim_issue",
-        "Claim an issue for five minutes; heartbeat and fencing prevent concurrent ownership.",
-        r.ClaimInput,
-        "runs:write",
-        "claim_issue",
-        True,
-        ("issues:read",),
-    ),
-    ToolDefinition(
-        "heartbeat_run",
-        "Renew an owned live run lease and optionally report one line of current progress; use a new key for each heartbeat.",
-        r.HeartbeatInput,
-        "runs:write",
-        "heartbeat_run",
-        True,
-        ("issues:read",),
-    ),
-    ToolDefinition(
-        "release_issue",
-        "Release an owned live run without marking the issue complete.",
-        r.LeaseInput,
-        "runs:write",
-        "release_issue",
-        True,
-        ("issues:read",),
-    ),
-    ToolDefinition(
-        "cancel_run",
-        "Cancel an active run owned by this connection.",
-        r.CancelInput,
-        "runs:write",
-        "cancel_run",
-        True,
-        ("issues:read",),
-    ),
-    ToolDefinition(
-        "report_run_result",
-        "Record agent-reported commit, PR and test evidence; successful code results await review.",
-        r.ResultInput,
-        "runs:write",
-        "report_run_result",
-        True,
-        ("issues:read", "comments:write"),
+        "project_repositories",
     ),
     ToolDefinition(
         "get_my_access",

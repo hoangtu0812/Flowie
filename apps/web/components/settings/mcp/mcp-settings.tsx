@@ -17,7 +17,6 @@ import { READ_PRESET, CODING_PRESET } from '@/features/ai/client-config';
 import { parseInstant } from '@/lib/time';
 import { mcpEndpoint, type McpConnection } from '@/lib/mcp';
 import { useMcpSettings } from './use-mcp-settings';
-import { AgentCoordination } from './agent-coordination';
 import { AgentConfiguration } from './agent-configuration';
 import { AgentInstructions } from './agent-instructions';
 import { SuccessMark } from './success-mark';
@@ -30,8 +29,6 @@ const SCOPE_LABELS: Record<string, string> = {
    'documents:read': 'Read documents',
    'activities:read': 'Read activity history',
    'reviews:read': 'Read linked code reviews',
-   'runs:read': 'Read agent runs',
-   'runs:write': 'Claim tasks and report agent results',
    'issues:write': 'Create and edit tasks',
    'issues:transition': 'Change task status',
    'comments:write': 'Write comments',
@@ -64,9 +61,6 @@ export function McpSettings() {
    /** VI: Kết nối đang được sửa quyền trong form; token và hạn dùng giữ nguyên. */
    const [editingId, setEditingId] = useState<string>();
    const [confirmRevokeId, setConfirmRevokeId] = useState<string>();
-   /** Bumped when an automation is created so the rule list reloads. */
-   /** VI: Tăng khi tạo automation để danh sách luật tải lại. */
-   const [automationsVersion, setAutomationsVersion] = useState(0);
    const [name, setName] = useState('');
    const [teamIds, setTeamIds] = useState<string[]>([]);
    const [projectIds, setProjectIds] = useState<string[]>([]);
@@ -488,24 +482,11 @@ export function McpSettings() {
                href={`/${orgId}/settings/mcp-logs`}
             />
          </HStack>
-         {state.workspaceId && (
-            <AgentCoordination
-               workspaceId={state.workspaceId}
-               canManage={state.canManage}
-               refreshKey={automationsVersion}
-            />
-         )}
          {state.workspaceId && state.canManage && (
             <AgentInstructions workspaceId={state.workspaceId} />
          )}
          {state.workspaceId && state.canManage && (
-            <AgentConfiguration
-               workspaceId={state.workspaceId}
-               resources={state.resources}
-               connections={state.connections}
-               writesEnabled={state.configuration?.writesEnabled ?? false}
-               onAutomationCreated={() => setAutomationsVersion((version) => version + 1)}
-            />
+            <AgentConfiguration workspaceId={state.workspaceId} resources={state.resources} />
          )}
       </VStack>
    );

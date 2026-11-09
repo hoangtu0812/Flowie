@@ -488,35 +488,6 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(report.status_code, 200, report.text)
             self.assertEqual(report.json()["data"]["total"], 1)
 
-    async def test_run_evidence_web_read_excludes_lease_secrets(self):
-        from app.domains.auth import current_user
-
-        run = (
-            await self.call(
-                "claim_issue",
-                issueId=self.issue["id"],
-                idempotencyKey="web-evidence-run",
-            )
-        )["data"]
-        host = create_app(self.settings)
-        host.state.session_factory = self.factory
-        host.dependency_overrides[current_user] = lambda: self.user
-        async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=host), base_url="http://testserver"
-        ) as client:
-            response = await client.get(
-                f"/api/v1/agent-runs/runs/{run['id']}",
-                params={"workspaceId": self.workspace},
-            )
-            self.assertEqual(response.status_code, 200, response.text)
-            self.assertNotIn("leaseToken", response.json()["data"])
-            canceled = await client.post(
-                f"/api/v1/agent-runs/runs/{run['id']}/cancel",
-                params={"workspaceId": self.workspace},
-            )
-            self.assertEqual(canceled.status_code, 200, canceled.text)
-            self.assertEqual(canceled.json()["data"]["state"], "CANCELED")
-
     async def test_password_reset_http_does_not_disclose_accounts_and_invalidates_access_cookie(
         self,
     ):
@@ -1168,225 +1139,6 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                             result.structured_content["id"], self.issue["id"]
                         )
 
-    async def test_queued_run_stays_directed_to_its_connection(self):
-        queued = _cuid()
-        async with self.factory() as db:
-            other = await create(
-                db,
-                self.workspace,
-                self.user,
-                ConnectionInput(
-                    name="Second agent",
-                    scopes=sorted(ALL_SCOPES),
-                    projectIds=[self.project],
-                ),
-            )
-            other_principal = await authenticate(db, other["token"])
-            await db.execute(
-                text("""INSERT INTO agent_runs (id,workspace_id,issue_id,connection_id)
-                VALUES (:id,:workspace,:issue,:connection)"""),
-                {
-                    "id": queued,
-                    "workspace": self.workspace,
-                    "issue": self.issue["id"],
-                    "connection": self.principal.connection_id,
-                },
-            )
-            await db.commit()
-
-        async def claim(principal, key):
-            return await self.application.call(
-                principal,
-                "claim_issue",
-                {"issueId": self.issue["id"], "idempotencyKey": key},
-            )
-
-        async def queue(principal):
-            return await self.application.call(
-                principal,
-                "list_runs",
-                {"projectId": self.project, "assignedToThisConnection": True},
-            )
-
-        with self.assertRaises(ApiError) as blocked:
-            await claim(other_principal, "directed-other-claim")
-        self.assertEqual(blocked.exception.status_code, 409)
-        self.assertEqual((await claim(self.principal, "directed-owner-claim"))["data"]["id"], queued)
-        async with self.factory() as db:
-            await db.execute(
-                text("UPDATE agent_runs SET lease_until=:expired WHERE id=:id"),
-                {"id": queued, "expired": _utcnow() - timedelta(minutes=1)},
-            )
-            await db.commit()
-        # An expired lease is not a takeover window for a different connection.
-        with self.assertRaises(ApiError):
-            await claim(other_principal, "directed-other-expired-claim")
-        self.assertEqual(
-            (await claim(self.principal, "directed-owner-reclaim"))["data"]["fencingToken"], 2
-        )
-        self.assertEqual([row["id"] for row in (await queue(self.principal))["items"]], [queued])
-        self.assertEqual((await queue(other_principal))["items"], [])
-        await self.application.call(
-            self.principal,
-            "cancel_run",
-            {"runId": queued, "idempotencyKey": "directed-owner-cancel"},
-        )
-        # Canceling returns the issue to the shared pool any connection may claim.
-        released = await claim(other_principal, "shared-pool-claim")
-        self.assertNotEqual(released["data"]["id"], queued)
-
-    async def test_review_ready_results_require_passing_test_evidence(self):
-        run = (
-            await self.call(
-                "claim_issue",
-                issueId=self.issue["id"],
-                idempotencyKey="evidence-claim-key",
-            )
-        )["data"]
-        lease = {
-            "runId": run["id"],
-            "leaseToken": run["leaseToken"],
-            "fencingToken": run["fencingToken"],
-        }
-        failing = {**PASSING_TEST, "exitCode": 1, "result": "failed", "log": "1 failed"}
-        rejected = {
-            "no-tests-key": {"tests": []},
-            "failed-test-key": {"tests": [failing]},
-            "mismatched-verdict-key": {"tests": [{**PASSING_TEST, "exitCode": 2}]},
-            "unbounded-command-key": {"tests": [{**PASSING_TEST, "command": []}]},
-            "untyped-evidence-key": {"tests": [{"name": "x", "result": "passed"}]},
-        }
-        for idempotency, payload in rejected.items():
-            with self.subTest(case=idempotency):
-                with self.assertRaises(ApiError) as error:
-                    await self.call(
-                        "report_run_result",
-                        **lease,
-                        idempotencyKey=idempotency,
-                        outcome="AWAITING_REVIEW",
-                        summary="Fixed in a branch; pending review",
-                        commit="b" * 40,
-                        **payload,
-                    )
-                self.assertEqual(error.exception.status_code, 400)
-        # A failure may still report the check that failed, and its log reaches the
-        # issue comment so a reviewer sees why without opening the run record.
-        result = await self.call(
-            "report_run_result",
-            **lease,
-            idempotencyKey="failed-evidence-key",
-            outcome="FAILED",
-            summary="The approved test did not pass",
-            tests=[failing],
-        )
-        self.assertEqual(result["data"]["state"], "FAILED")
-        comments = (await self.call("list_comments", issueId=self.issue["id"]))["items"]
-        posted = comments[0]["content"]
-        self.assertIn("approved-local-test-1: failed (exit 1, 1200 ms)", posted)
-        self.assertIn('["python", "-m", "pytest", "-q"]', posted)
-        self.assertIn("log tail: 1 failed", posted)
-
-    async def test_run_lease_reclaim_fencing_and_results(self):
-        first = (
-            await self.call(
-                "claim_issue",
-                issueId=self.issue["id"],
-                idempotencyKey="first-claim-key",
-            )
-        )["data"]
-        with self.assertRaises(ApiError):
-            await self.call(
-                "claim_issue",
-                issueId=self.issue["id"],
-                idempotencyKey="second-claim-key",
-            )
-        await self.call(
-            "heartbeat_run",
-            runId=first["id"],
-            leaseToken=first["leaseToken"],
-            fencingToken=1,
-            idempotencyKey="heartbeat-key",
-            progress="Editing apps/web/lib/time.ts",
-        )
-        # A heartbeat without progress renews the lease and keeps the last activity line.
-        await self.call(
-            "heartbeat_run",
-            runId=first["id"],
-            leaseToken=first["leaseToken"],
-            fencingToken=1,
-            idempotencyKey="heartbeat-quiet-key",
-        )
-        live = await self.call("get_run", runId=first["id"])
-        self.assertEqual(live["progress"], "Editing apps/web/lib/time.ts")
-        self.assertIsNotNone(live["progressAt"])
-        (listed,) = (await self.call("list_runs", issueId=self.issue["id"]))["items"]
-        self.assertEqual(
-            (listed["id"], listed["progress"]), (first["id"], "Editing apps/web/lib/time.ts")
-        )
-        async with self.factory() as db:
-            await db.execute(
-                text("UPDATE agent_runs SET lease_until=:expired WHERE id=:id"),
-                {"id": first["id"], "expired": _utcnow() - timedelta(minutes=1)},
-            )
-            await db.commit()
-        second = (
-            await self.call(
-                "claim_issue",
-                issueId=self.issue["id"],
-                idempotencyKey="reclaim-issue-key",
-            )
-        )["data"]
-        self.assertEqual(second["id"], first["id"])
-        self.assertEqual(second["fencingToken"], 2)
-        with self.assertRaises(ApiError):
-            await self.call(
-                "report_run_result",
-                runId=first["id"],
-                leaseToken=first["leaseToken"],
-                fencingToken=1,
-                outcome="FAILED",
-                summary="Stale result",
-                idempotencyKey="stale-result-key",
-            )
-        result = await self.call(
-            "report_run_result",
-            runId=second["id"],
-            leaseToken=second["leaseToken"],
-            fencingToken=2,
-            outcome="AWAITING_REVIEW",
-            summary="Fixed in a branch; pending review",
-            commit="a" * 40,
-            tests=[PASSING_TEST],
-            idempotencyKey="run-result-key",
-        )
-        self.assertEqual(result["data"]["state"], "AWAITING_REVIEW")
-        stored = (await self.call("get_run", runId=second["id"]))["result"]["tests"]
-        self.assertEqual(stored, [PASSING_TEST])
-        self.assertEqual(
-            (await self.call("get_issue", issueId=self.issue["id"]))["statusId"],
-            self.status,
-        )
-        self.assertEqual(
-            (await self.call("get_run", runId=second["id"]))["state"], "AWAITING_REVIEW"
-        )
-        self.assertEqual(
-            (await self.call("list_runs", projectId=self.project))["items"][0]["id"],
-            second["id"],
-        )
-        async with self.factory() as db:
-            inbox = (
-                await db.execute(
-                    text(
-                        "SELECT type,data->>'message' FROM notifications WHERE user_id=:user AND entity_id=:issue AND type LIKE 'issue.agent_run_%'"
-                    ),
-                    {"user": self.user["id"], "issue": self.issue["id"]},
-                )
-            ).all()
-        self.assertEqual(
-            inbox,
-            [("issue.agent_run_completed", "agent run finished and awaits review")],
-        )
-
     async def test_modern_sdk_transport(self):
         import httpx2
         from mcp.client.session import ClientSession
@@ -1446,8 +1198,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 for path in [
                     "/api/v1/mcp/resources",
                     "/api/v1/mcp/connections",
-                    "/api/v1/agent-runs/runs",
-                    "/api/v1/agent-runs/summary",
+                    "/api/v1/agent-runs/repositories",
                 ]:
                     response = await client.get(
                         path, params={"workspaceId": self.workspace}
@@ -1964,36 +1715,12 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 },
             )
 
-    async def test_automation_deduplication_and_repository_mapping(self):
-        from app.modules.agent_runs.api import (
-            configure_automation,
-            configure_repository,
-            list_automations,
-        )
-        from app.modules.agent_runs.contracts import AutomationInput, RepositoryInput
-        from app.modules.agent_runs.dispatcher import process_event
+    async def test_repository_mapping_reaches_agents(self):
+        from app.modules.agent_runs.api import configure_repository
+        from app.modules.agent_runs.contracts import RepositoryInput
+        from app.modules.mcp.registry import TOOLS
 
         async with self.factory() as db:
-            label = _cuid()
-            await db.execute(
-                text(
-                    "INSERT INTO labels (id,workspace_id,name,color,created_at,updated_at) VALUES (:id,:workspace,:name,:color,:now,:now)"
-                ),
-                {
-                    "id": label,
-                    "workspace": self.workspace,
-                    "name": "AI requested",
-                    "color": "#ffffff",
-                    "now": _utcnow(),
-                },
-            )
-            await db.execute(
-                text(
-                    "INSERT INTO issue_labels (issue_id,label_id) VALUES (:issue,:label)"
-                ),
-                {"issue": self.issue["id"], "label": label},
-            )
-            await db.commit()
             await configure_repository(
                 RepositoryInput(
                     projectId=self.project,
@@ -2006,77 +1733,17 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 self.user,
                 db,
             )
-            await configure_automation(
-                AutomationInput(
-                    name="AI queue",
-                    connectionId=self.connection["id"],
-                    projectId=self.project,
-                    labelId=label,
-                    enabled=True,
-                    dailyLimit=1,
-                ),
-                self.workspace,
-                self.user,
-                db,
-            )
-            [rule] = (await list_automations(self.workspace, self.user, db))["data"]
-            self.assertEqual(
-                {key: rule[key] for key in ("labelId", "labelName", "connectionId", "connectionName", "projectId")},
-                {
-                    "labelId": label,
-                    "labelName": "AI requested",
-                    "connectionId": self.connection["id"],
-                    "connectionName": "Integration test",
-                    "projectId": self.project,
-                },
-            )
-            self.assertTrue(rule["projectName"])
-            await db.execute(
-                text("UPDATE issues SET title=title WHERE id=:issue"),
-                {"issue": self.issue["id"]},
-            )
-            await db.execute(
-                text("UPDATE issues SET title=title WHERE id=:issue"),
-                {"issue": self.issue["id"]},
-            )
-            await db.commit()
-        for _ in range(10):
-            if not await process_event(self.factory):
-                break
-        runs = await self.call("list_runs", state="PENDING")
-        self.assertEqual(len(runs["items"]), 1)
         repositories = await self.call(
             "get_project_repositories", projectId=self.project
         )
         self.assertEqual(
             repositories["items"][0]["testCommands"], [["python", "-m", "pytest"]]
         )
-        async with self.factory() as db:
-            before = (
-                await db.execute(
-                    text(
-                        "SELECT COUNT(*) FROM agent_issue_events WHERE workspace_id=:workspace"
-                    ),
-                    {"workspace": self.workspace},
-                )
-            ).scalar_one()
-        await self.call(
-            "update_issue",
-            issueId=self.issue["id"],
-            title="AI update",
-            expectedVersion=3,
-            idempotencyKey="no-recursion-key",
+        # The agent run tools were removed with the desktop companion (DTD-544).
+        # VI: Các tool agent run đã bị gỡ cùng desktop companion (DTD-544).
+        self.assertFalse(
+            {"claim_issue", "heartbeat_run", "list_runs", "report_run_result"} & set(TOOLS)
         )
-        async with self.factory() as db:
-            after = (
-                await db.execute(
-                    text(
-                        "SELECT COUNT(*) FROM agent_issue_events WHERE workspace_id=:workspace"
-                    ),
-                    {"workspace": self.workspace},
-                )
-            ).scalar_one()
-        self.assertEqual(before, after)
 
     async def test_transactional_outbox_failure_retry_and_success(self):
         from unittest.mock import AsyncMock, patch
