@@ -73,7 +73,7 @@ def test_csv_sheet_handles_bom_quotes_and_limits():
     assert csv_sheet("b.csv", ("x\n" * (MAX_ROWS + 1)).encode())[2]
 
 
-def preview(monkeypatch, filename: str, body: bytes):
+def preview(monkeypatch, filename: str, body: bytes, headers: dict[str, str] | None = None):
     """Calls the preview route with storage and access stubbed; returns the response."""
 
     class Storage:
@@ -91,7 +91,8 @@ def preview(monkeypatch, filename: str, body: bytes):
     db = SimpleNamespace(execute=lambda *a, **k: _result(row))
     monkeypatch.setattr(native_attachments, "MinioStorage", Storage)
     monkeypatch.setattr(native_attachments, "_authorize_entity", allowed)
-    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(settings=None)))
+    settings = SimpleNamespace(app_url="https://flowie.example/flowie")
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(settings=settings)), headers=headers or {})
     return asyncio.run(native_attachments.preview_attachment("a1", request, {"id": "u"}, db))
 
 
@@ -99,13 +100,33 @@ async def _result(row):
     return SimpleNamespace(mappings=lambda: SimpleNamespace(first=lambda: row))
 
 
-def test_html_preview_is_sandboxed_and_cannot_reach_the_network(monkeypatch):
-    response = preview(monkeypatch, "page.html", b"<h1>Hi</h1><script>alert(document.cookie)</script>")
-    policy = response.headers["content-security-policy"]
-    assert policy.startswith("sandbox;") and "allow-scripts" not in policy and "default-src 'none'" in policy
+IFRAME = {"sec-fetch-dest": "iframe"}
+
+
+def test_html_preview_runs_only_as_an_opaque_origin(monkeypatch):
+    response = preview(monkeypatch, "page.html", b"<!DOCTYPE html><h1>Hi</h1><script>alert(1)</script>", IFRAME)
+    directives = dict(d.strip().split(" ", 1) for d in response.headers["content-security-policy"].split(";"))
+    assert directives["sandbox"].split() == ["allow-scripts", "allow-modals"]
+    assert directives["default-src"] == "'none'" and directives["connect-src"] == "'none'"
+    assert directives["form-action"] == "'none'"
+    assert directives["frame-ancestors"] == "'self' https://flowie.example"
+    assert "https://cdn.jsdelivr.net" in directives["script-src"] and "https://fonts.gstatic.com" in directives["font-src"]
+    assert response.headers["x-content-type-options"] == "nosniff" and response.headers["cache-control"] == "private"
     page = response.body.decode()
-    assert page.startswith('<meta http-equiv="Content-Security-Policy" content="default-src \'none\';')
-    assert "<h1>Hi</h1>" in page
+    assert page.startswith("<!DOCTYPE html><script>(function(){") and "<h1>Hi</h1><script>alert(1)</script>" in page
+    assert 'defineProperty(window,n' in page and '"localStorage","sessionStorage"' in page
+
+
+def test_html_preview_without_doctype_starts_with_the_shim(monkeypatch):
+    assert preview(monkeypatch, "page.htm", b"<p>x</p>", IFRAME).body.decode().startswith("<script>(function(){")
+
+
+@pytest.mark.parametrize("dest", [None, "document", "empty", "frame", "object"])
+def test_html_preview_outside_an_iframe_redirects_to_the_wrapper(monkeypatch, dest):
+    response = preview(monkeypatch, "page.html", b"<h1>Hi</h1>", {"sec-fetch-dest": dest} if dest else {})
+    assert response.status_code == 303
+    assert response.headers["location"] == "https://flowie.example/flowie/preview/a1"
+    assert b"Hi" not in response.body
 
 
 def test_spreadsheet_and_text_previews(monkeypatch):
