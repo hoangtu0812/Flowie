@@ -51,6 +51,7 @@ pub struct Shared {
     site: Mutex<Option<String>>,
     cancel: AtomicBool,
     stop: AtomicBool,
+    retry: AtomicBool,
 }
 
 impl Shared {
@@ -63,6 +64,7 @@ impl Shared {
             site: Mutex::new(None),
             cancel: AtomicBool::new(false),
             stop: AtomicBool::new(false),
+            retry: AtomicBool::new(false),
         }
     }
 
@@ -170,6 +172,30 @@ impl Shared {
         self.stop.store(true, Ordering::SeqCst);
     }
 
+    /// Asks for the next attempt to happen now rather than at the end of the
+    /// current wait.
+    ///
+    /// After a run of failures the wait reaches five minutes, which is the
+    /// right answer to a server that is down and the wrong one to a person who
+    /// has just pasted a new token: they save it, watch the same complaint sit
+    /// there, and cannot tell a token that is still wrong from a turn that has
+    /// not come round yet.
+    /// VI: Yêu cầu lượt thử kế tiếp diễn ra ngay thay vì đợi hết lần chờ hiện
+    /// VI: tại.
+    /// VI: Sau một chuỗi thất bại, thời gian chờ chạm năm phút — câu trả lời
+    /// VI: đúng cho một server đang hỏng và sai cho một người vừa dán token mới:
+    /// VI: họ lưu xong, nhìn đúng lời phàn nàn cũ nằm im, và không phân biệt
+    /// VI: được token vẫn sai với lượt thử chưa tới.
+    pub fn request_retry(&self) {
+        self.retry.store(true, Ordering::SeqCst);
+    }
+
+    /// Takes the request, so one ask produces one attempt.
+    /// VI: Nhận lấy yêu cầu, để một lần yêu cầu sinh ra đúng một lượt thử.
+    fn take_retry(&self) -> bool {
+        self.retry.swap(false, Ordering::SeqCst)
+    }
+
     fn stopping(&self) -> bool {
         self.stop.load(Ordering::SeqCst)
     }
@@ -206,6 +232,17 @@ fn serve(directory: &Path, shared: &Arc<Shared>) {
             }
         }
         rest(schedule.next_delay(seed()), shared);
+        // A person asking to try again is evidence that what failed before may
+        // have been fixed, so the backoff earned by those failures no longer
+        // describes anything. Keeping it would make the first attempt after a
+        // correction wait as long as the attempt after the mistake.
+        // VI: Một người yêu cầu thử lại là bằng chứng rằng thứ hỏng trước đó có
+        // VI: thể đã được sửa, nên khoảng lùi tích lại từ những lần hỏng đó
+        // VI: không còn mô tả điều gì nữa. Giữ nó sẽ khiến lượt thử đầu tiên sau
+        // VI: một lần sửa phải chờ lâu bằng lượt thử sau lần sai.
+        if shared.take_retry() {
+            schedule = Schedule::new(schedule.base());
+        }
     }
 }
 
@@ -469,7 +506,13 @@ fn disconnected(failure: &RunFailure) -> Readiness {
 fn rest(total: Duration, shared: &Shared) {
     let mut slept = Duration::ZERO;
     while slept < total {
-        if shared.stopping() {
+        // Quitting and a retry both end the wait early, and neither is
+        // consumed here: the caller reads the retry flag so the wait and the
+        // schedule reset cannot disagree about whether one was asked for.
+        // VI: Thoát và yêu cầu thử lại đều kết thúc sớm lần chờ, và không cờ nào
+        // VI: bị tiêu thụ ở đây: bên gọi mới đọc cờ thử lại, để lần chờ và việc
+        // VI: đặt lại lịch không thể bất đồng về chuyện có ai yêu cầu hay không.
+        if shared.stopping() || shared.retry.load(Ordering::SeqCst) {
             return;
         }
         let step = TICK.min(total - slept);
@@ -505,6 +548,33 @@ fn today() -> time::Date {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn asking_to_retry_ends_the_wait_and_clears_what_the_failures_earned() {
+        // Saving a token is a person saying "try this now". Leaving the
+        // backoff in place makes the attempt after a correction wait exactly
+        // as long as the attempt after the mistake, so nobody can tell whether
+        // the new token was refused or simply has not been tried.
+        // VI: Lưu token là người dùng nói "thử cái này ngay". Để nguyên khoảng
+        // VI: lùi sẽ khiến lượt thử sau khi sửa phải chờ đúng bằng lượt thử sau
+        // VI: khi sai, nên không ai biết token mới bị từ chối hay đơn giản là
+        // VI: chưa được thử.
+        let shared = Arc::new(Shared::new(Readiness::NotConfigured));
+        let started = Instant::now();
+        shared.request_retry();
+        rest(Duration::from_secs(30), &shared);
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "the wait should end as soon as a retry is asked for"
+        );
+
+        // Read once: a single ask must not reset the schedule on every pass
+        // that follows it.
+        // VI: Chỉ đọc một lần: một yêu cầu không được đặt lại lịch ở mọi lượt
+        // VI: tiếp theo sau đó.
+        assert!(shared.take_retry());
+        assert!(!shared.take_retry());
+    }
 
     #[test]
     fn a_rejected_token_asks_the_person_rather_than_waiting_for_the_network() {

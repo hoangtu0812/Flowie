@@ -1,5 +1,18 @@
 name: Verify MCP and application contracts
 
+# The browser suite runs one test at a time because every test shares one
+# database, and that single step was 38 of the 46 minutes a run took. Splitting
+# it by browser project gives each one its own Postgres service container, so
+# the three run at once without a line of test code changing and without
+# raising Playwright's worker count, which is what would bring back the
+# cross-test interference DTD-506 removed.
+# VI: Bộ test trình duyệt chạy mỗi lúc một test vì mọi test dùng chung một
+# VI: database, và riêng bước đó chiếm 38 trong 46 phút của một lần chạy. Tách
+# VI: theo project trình duyệt cho mỗi bên một service container Postgres riêng,
+# VI: nên cả ba chạy cùng lúc mà không phải sửa một dòng test nào và không phải
+# VI: nâng số worker của Playwright — thứ sẽ kéo lại đúng kiểu nhiễu chéo giữa
+# VI: các test mà DTD-506 đã dọn.
+
 on:
   pull_request:
     paths:
@@ -18,10 +31,68 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: verify-mcp-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  POSTGRES_TEST_URL: postgresql://flowie_test:test-only-password@localhost:5432/flowie_mcp_test
+
 jobs:
-  verify:
+  # Which halves of the suite this change can possibly affect. Anything that is
+  # not a pull request — a release commit checked with workflow_dispatch above
+  # all — runs every job, because a release must never be judged on a subset.
+  # VI: Thay đổi này có thể ảnh hưởng tới những phần nào của bộ kiểm tra. Mọi
+  # VI: thứ không phải pull request — trước hết là commit release được kiểm bằng
+  # VI: workflow_dispatch — đều chạy đủ mọi job, vì một bản phát hành không bao
+  # VI: giờ được đánh giá trên một tập con.
+  changes:
+    name: scope
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    outputs:
+      backend: ${{ steps.scope.outputs.backend }}
+      storage: ${{ steps.scope.outputs.storage }}
+      web: ${{ steps.scope.outputs.web }}
+      e2e: ${{ steps.scope.outputs.e2e }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: scope
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            for scope in backend storage web e2e; do echo "$scope=true" >> "$GITHUB_OUTPUT"; done
+            echo "Not a pull request: every job runs."
+            exit 0
+          fi
+          git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
+          changed=$(git diff --name-only "origin/$BASE_REF...HEAD")
+          echo "Changed files:"; echo "$changed"
+          scope_matches() { echo "$changed" | grep -qE "$1"; }
+          workflow='^\.github/workflows/verify-mcp\.yml$'
+          lockfile='^pnpm-lock\.yaml$'
+          for entry in \
+            "backend:^apps/api-python/|^packages/database/|^scripts/|$workflow|$lockfile" \
+            "storage:^scripts/verify-storage-acceptance\.sh$|^scripts/flowie_backup/|^scripts/flowie-backup\.py$|^infrastructure/|^docker-compose\.yml$|$workflow" \
+            "web:^apps/web/|^packages/|^docker-compose\.yml$|$workflow|$lockfile" \
+            "e2e:^apps/web/|^apps/api-python/|^packages/|^scripts/seed-ui-regression\.py$|^scripts/ui_regression_api\.py$|$workflow|$lockfile" \
+          ; do
+            name=${entry%%:*}
+            if scope_matches "${entry#*:}"; then echo "$name=true" >> "$GITHUB_OUTPUT"; else echo "$name=false" >> "$GITHUB_OUTPUT"; fi
+          done
+          cat "$GITHUB_OUTPUT"
+
+  backend:
+    name: backend and MCP contracts
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16
@@ -41,6 +112,8 @@ jobs:
       SCM_TEST_DATABASE_URL: postgresql://flowie_test:test-only-password@localhost:5432/flowie_mcp_test
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -70,6 +143,39 @@ jobs:
           ruff check scripts/flowie_runner --select F
           ruff check scripts/flowie_backup scripts/flowie-backup.py --select F
           python -m pytest apps/api-python/tests -q
+
+  storage:
+    name: storage and mail transports
+    needs: changes
+    if: needs.changes.outputs.storage == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: flowie_test
+          POSTGRES_PASSWORD: test-only-password
+          POSTGRES_DB: flowie_mcp_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U flowie_test -d flowie_mcp_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      PYTHONPATH: apps/api-python
+      DATABASE_URL: postgresql://flowie_test:test-only-password@localhost:5432/flowie_mcp_test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: apps/api-python/requirements.txt
+      - name: Install dependencies
+        run: python -m pip install -r apps/api-python/requirements.txt pytest==9.1.1
       - name: Install pinned storage fixture toolchain
         uses: actions/setup-go@v5
         with:
@@ -97,31 +203,136 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client-16
           bash scripts/verify-storage-acceptance.sh
+
+  web:
+    name: web build and unit tests
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '9.15.9'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
       - name: Build web and verify Compose dependencies
         run: |
+          pnpm --filter @circle/database exec prisma generate --schema prisma/schema.prisma
           pnpm --filter @circle/contracts build
           pnpm --filter @circle/web test:unit
           pnpm --filter @circle/web build
           docker compose --profile app config --quiet
-      - name: Install browser test dependencies
-        timeout-minutes: 25
-        run: pnpm --filter @circle/web exec playwright install --with-deps chromium firefox webkit
-      # A green suite runs about 30 minutes. The ceiling allows for a slow
-      # runner, for the retry a failing test now gets, and for the run going
-      # all the way through instead of stopping at the fifth failure.
-      # VI: Bộ test xanh chạy khoảng 30 phút. Mức trần này tính thêm cho máy chạy
-      # chậm, cho lần thử lại mà một test hỏng nay được cấp, và cho việc chạy hết
-      # thay vì dừng ở lỗi thứ năm.
-      - name: Verify browser regression workflows
-        timeout-minutes: 75
+
+  e2e:
+    name: browser regression
+    needs: changes
+    if: needs.changes.outputs.e2e == 'true'
+    runs-on: ubuntu-latest
+    # One browser's share of a suite that took 38 minutes for all three.
+    # The ceiling allows for a slow runner and for the retry a failing test
+    # gets, and for the run going all the way through instead of stopping at
+    # the fifth failure.
+    # VI: Phần của một trình duyệt trong bộ test từng mất 38 phút cho cả ba.
+    # VI: Mức trần tính thêm cho máy chạy chậm, cho lần thử lại mà một test hỏng
+    # VI: được cấp, và cho việc chạy hết thay vì dừng ở lỗi thứ năm.
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    services:
+      postgres:
+        image: postgres:16
         env:
-          FLOWIE_E2E_DATABASE_URL: postgresql://flowie_test:test-only-password@localhost:5432/flowie_mcp_test
+          POSTGRES_USER: flowie_test
+          POSTGRES_PASSWORD: test-only-password
+          POSTGRES_DB: flowie_mcp_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U flowie_test -d flowie_mcp_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      PYTHONPATH: apps/api-python
+      DATABASE_URL: postgresql://flowie_test:test-only-password@localhost:5432/flowie_mcp_test
+      FLOWIE_E2E_DATABASE_URL: postgresql://flowie_test:test-only-password@localhost:5432/flowie_mcp_test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: apps/api-python/requirements.txt
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '9.15.9'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+      - name: Install dependencies
+        run: |
+          python -m pip install -r apps/api-python/requirements.txt
+          pnpm install --frozen-lockfile
+      - name: Migrate a clean database
+        run: |
+          pnpm --filter @circle/database exec prisma migrate deploy --schema prisma/schema.prisma
+          pnpm --filter @circle/database exec prisma generate --schema prisma/schema.prisma
+      - name: Build web
+        run: |
+          pnpm --filter @circle/contracts build
+          pnpm --filter @circle/web build
+      # Only the browser this job runs. Installing all three cost every job
+      # three downloads for two it would never open.
+      # VI: Chỉ trình duyệt mà job này chạy. Cài cả ba khiến mỗi job tải về ba
+      # VI: bản cho hai bản nó không bao giờ mở tới.
+      - name: Install browser test dependencies
+        timeout-minutes: 15
+        run: pnpm --filter @circle/web exec playwright install --with-deps ${{ matrix.browser }}
+      - name: Verify browser regression workflows
         run: |
           python scripts/seed-ui-regression.py
-          pnpm --filter @circle/web test:e2e
+          pnpm --filter @circle/web exec playwright test --project=${{ matrix.browser }}
       - uses: actions/upload-artifact@v4
         if: failure() || cancelled()
         with:
-          name: ui-regression-traces
+          name: ui-regression-traces-${{ matrix.browser }}
           path: apps/web/test-results/
           retention-days: 7
+
+  # The one check branch protection requires. Without it a job skipped by the
+  # scope filter would leave its required check pending for ever and no pull
+  # request could merge. It fails on any outcome that is not success or a
+  # deliberate skip, so a cancelled job cannot pass for a green run.
+  # VI: Đây là check duy nhất mà branch protection yêu cầu. Thiếu nó, một job bị
+  # VI: bỏ qua theo phạm vi sẽ để check bắt buộc của nó treo mãi và không pull
+  # VI: request nào merge được. Nó fail với mọi kết cục không phải thành công
+  # VI: hoặc bỏ qua có chủ ý, nên một job bị huỷ không thể bị tính là chạy xanh.
+  verify:
+    name: verify
+    needs: [changes, backend, storage, web, e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every job that ran to have succeeded
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          echo "$RESULTS"
+          failed=$(echo "$RESULTS" | grep -oE '"result"[[:space:]]*:[[:space:]]*"[a-z]+"' | grep -vE '"(success|skipped)"' || true)
+          if [ -n "$failed" ]; then
+            echo "A required job did not succeed." >&2
+            exit 1
+          fi
+          echo "Every job that ran succeeded."
