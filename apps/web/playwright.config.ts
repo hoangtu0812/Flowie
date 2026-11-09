@@ -45,7 +45,13 @@ export default defineConfig({
    ],
    webServer: [
       {
-         command: `${process.env.FLOWIE_E2E_PYTHON ?? 'python'} -m uvicorn ui_regression_api:app --app-dir ../../scripts --host 127.0.0.1 --port 4000`,
+         // Uvicorn drops an idle keep-alive connection after 5 s by default, and a
+         // request that reused the connection at that moment failed with
+         // ECONNRESET. Holding it longer than the client does removes the race.
+         // VI: Mặc định uvicorn đóng kết nối keep-alive nhàn rỗi sau 5 giây, và một
+         // VI: request dùng lại kết nối đúng lúc đó hỏng với ECONNRESET. Giữ lâu hơn
+         // VI: phía client sẽ loại bỏ tranh chấp này.
+         command: `${process.env.FLOWIE_E2E_PYTHON ?? 'python'} -m uvicorn ui_regression_api:app --app-dir ../../scripts --host 127.0.0.1 --port 4000 --timeout-keep-alive 75`,
          url: `${apiUrl}/api/v1/auth/providers`,
          reuseExistingServer: !process.env.CI,
          timeout: 60000,

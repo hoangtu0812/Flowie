@@ -85,6 +85,15 @@ test('member invitation offers searchable existing users with retry and keyboard
    const dialog = page.getByRole('dialog', { name: 'Invite member' });
    const input = dialog.getByRole('combobox', { name: 'Person' });
    await expect(input).toBeVisible();
+   // The field autofocuses when the dialog opens, and its list opens on a focus
+   // event. If that first focus came before the page could answer it, focus()
+   // on an already focused field fires nothing and the list never opens, so
+   // leave the field first to make the focus a real one.
+   // VI: Ô này tự focus khi hộp thoại mở, và danh sách chỉ mở khi có sự kiện
+   // VI: focus. Nếu lần focus đầu tới trước khi trang kịp xử lý, gọi focus() lên
+   // VI: một ô đang có focus sẽ không phát sự kiện nào và danh sách không bao giờ
+   // VI: mở, nên rời ô trước để lần focus này là một lần focus thật.
+   await input.blur();
    await input.focus();
    await expect(page.getByRole('option', { name: /Alice Nguyen/ })).toBeVisible();
    await expect(page.getByRole('option', { name: /Phuc Pham/ })).toContainText(

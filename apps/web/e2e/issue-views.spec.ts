@@ -27,6 +27,11 @@ test('team filters save, reopen, clear, clone, edit and delete through UI', asyn
          await openFilterSection(page, section);
          await page.getByRole('option', { name: new RegExp(`${value}$`) }).click();
          await page.keyboard.press('Escape');
+         // The next Filter click must land after this menu has closed; while it
+         // is still closing, the click is taken as the dismissal and opens nothing.
+         // VI: Lần bấm Filter kế tiếp phải tới sau khi menu này đóng hẳn; khi menu
+         // VI: còn đang đóng, cú bấm bị coi là thao tác đóng và không mở gì cả.
+         await expect(page.getByRole('option', { name: section, exact: true })).toHaveCount(0);
       }
       await expect(
          page.getByRole('link', { name: 'Unassigned regression bug', exact: true })
