@@ -8,6 +8,7 @@ import {
    FileArchive,
    FileSpreadsheet,
    FileText,
+   Link2,
    Paperclip,
    Plus,
 } from 'lucide-react';
@@ -23,6 +24,7 @@ import {
    DialogTitle,
 } from '@/components/ui/dialog';
 import { AttachmentImage } from '@/components/common/attachment-image';
+import { htmlPreviewPageUrl, SandboxedHtmlFrame } from '@/components/common/sandboxed-html-frame';
 import { MarkdownEditor } from '@/components/common/markdown/markdown-editor';
 import { MarkdownPreview } from '@/components/common/markdown/markdown-preview';
 import { useLocale } from '@/features/shared/use-locale';
@@ -296,18 +298,20 @@ function NewMarkdownDialog({
  * Preview of an attachment the app can show (`attachmentPreviewKind`). The file is private and
  * the session cookie is SameSite=Lax, so it is fetched with the app's authenticated helper:
  * Markdown from the download route, rendered by react-markdown, which drops raw HTML; PDF from the
- * preview route into a blob URL for the browser's PDF viewer, revoked on close; every other kind
- * as the HTML page the preview route builds, placed in an iframe `srcdoc` with an empty `sandbox`.
- * The sandbox is what keeps an uploaded HTML file from running script with the app's origin, so it
- * must never gain `allow-scripts` or `allow-same-origin`, and that page is never opened from a blob
- * URL in a new tab.
+ * preview route into a blob URL for the browser's PDF viewer, revoked on close; an HTML file runs in
+ * `SandboxedHtmlFrame` after a metadata request (which refreshes an expired session the iframe could
+ * not refresh), with Open in new tab and Copy link pointing at the `/preview/{id}` page; every other
+ * kind as the static page the preview route builds, placed in an iframe `srcdoc` with an empty
+ * `sandbox`, which must never gain `allow-scripts` or `allow-same-origin` because `srcdoc` would
+ * not get the API's CSP.
  * VI: Xem trước tệp đính kèm mà app hiển thị được (`attachmentPreviewKind`). Tệp là riêng tư và
  * VI: cookie phiên là SameSite=Lax, nên được tải bằng helper có xác thực của app: Markdown lấy từ
  * VI: route download, hiển thị bằng react-markdown vốn bỏ HTML thô; PDF lấy từ route preview thành
- * VI: blob URL cho trình xem PDF của trình duyệt, thu hồi khi đóng; các loại khác là trang HTML do
- * VI: route preview dựng, đặt trong iframe `srcdoc` có `sandbox` rỗng. Sandbox là thứ ngăn file HTML
- * VI: tải lên chạy script với origin của app, nên không bao giờ được thêm `allow-scripts` hay
- * VI: `allow-same-origin`, và trang đó không bao giờ được mở từ blob URL trong tab mới.
+ * VI: blob URL cho trình xem PDF của trình duyệt, thu hồi khi đóng; tệp HTML chạy trong
+ * VI: `SandboxedHtmlFrame` sau một request metadata (làm mới phiên hết hạn mà iframe không tự làm mới
+ * VI: được), có nút Mở tab mới và Copy link trỏ tới trang `/preview/{id}`; các loại khác là trang
+ * VI: tĩnh do route preview dựng, đặt trong iframe `srcdoc` có `sandbox` rỗng, không bao giờ được
+ * VI: thêm `allow-scripts` hay `allow-same-origin` vì `srcdoc` không nhận CSP của API.
  */
 function AttachmentPreviewDialog({
    attachment,
@@ -320,16 +324,25 @@ function AttachmentPreviewDialog({
    const kind = attachmentPreviewKind(attachment.filename);
    const [content, setContent] = useState<string>();
    const [failed, setFailed] = useState(false);
+   const [copied, setCopied] = useState(false);
    useEffect(() => {
       let active = true;
       let objectUrl: string | undefined;
       setContent(undefined);
       setFailed(false);
       void authenticatedFetch(
-         kind === 'markdown' ? downloadUrl(attachment) : attachmentPreviewUrl(attachment.id)
+         kind === 'markdown'
+            ? downloadUrl(attachment)
+            : kind === 'html'
+              ? `${api}/attachments/${encodeURIComponent(attachment.id)}`
+              : attachmentPreviewUrl(attachment.id)
       )
          .then(async (response) => {
             if (!response.ok) throw new Error(response.statusText);
+            if (kind === 'html') {
+               if (active) setContent('');
+               return;
+            }
             if (kind === 'pdf') {
                const blob = new Blob([await response.arrayBuffer()], { type: 'application/pdf' });
                objectUrl = URL.createObjectURL(blob);
@@ -361,6 +374,12 @@ function AttachmentPreviewDialog({
                   <div className="h-40 animate-pulse rounded-md bg-accent/50" />
                ) : kind === 'markdown' ? (
                   <MarkdownPreview content={content} documentMedia />
+               ) : kind === 'html' ? (
+                  <SandboxedHtmlFrame
+                     attachmentId={attachment.id}
+                     title={attachment.filename}
+                     className="h-[70vh] w-full rounded-md border border-border bg-white"
+                  />
                ) : kind === 'pdf' ? (
                   <iframe
                      src={content}
@@ -377,6 +396,31 @@ function AttachmentPreviewDialog({
                )}
             </div>
             <DialogFooter>
+               {kind === 'html' && (
+                  <>
+                     <a
+                        href={htmlPreviewPageUrl(attachment.id)}
+                        target="_blank"
+                        rel="noopener"
+                        className="inline-flex items-center gap-1.5 text-sm hover:underline"
+                     >
+                        <ExternalLink className="size-4" aria-hidden />
+                        {t('openInNewTab')}
+                     </a>
+                     <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 text-sm hover:underline"
+                        onClick={() =>
+                           void navigator.clipboard
+                              .writeText(htmlPreviewPageUrl(attachment.id))
+                              .then(() => setCopied(true))
+                        }
+                     >
+                        <Link2 className="size-4" aria-hidden />
+                        {t(copied ? 'linkCopied' : 'copyLink')}
+                     </button>
+                  </>
+               )}
                <a
                   href={downloadUrl(attachment)}
                   target="_blank"

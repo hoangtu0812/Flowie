@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from html import escape
 from io import BytesIO
-from re import sub
+from re import IGNORECASE, match, sub
 from secrets import token_urlsafe
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 from fastapi import Depends, File, Form, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +32,25 @@ DOCUMENT_FILE_EXTENSIONS = ('.docx', '.pdf', '.md')
 # Files filed in a document-tree folder are previewed beside the tree; PDF only for now.
 # VI: File đặt trong thư mục của cây tài liệu được xem trước cạnh cây; hiện chỉ nhận PDF.
 FOLDER_FILE_EXTENSIONS = ('.pdf',)
+# Hosts an uploaded HTML mockup may load script, style, fonts and images from (SECURITY-REVIEW of
+# DTD-547). Anything they serve still runs inside the opaque-origin sandbox, so the list only
+# widens what a mockup can render, never what it can reach in Flowie.
+# VI: Các host mà mockup HTML tải lên được phép lấy script, style, font và ảnh (SECURITY-REVIEW của
+# VI: DTD-547). Mọi thứ chúng trả về vẫn chạy trong sandbox origin rỗng, nên danh sách chỉ mở rộng
+# VI: những gì mockup hiển thị được, không bao giờ mở rộng những gì nó chạm tới trong Flowie.
+HTML_PREVIEW_CDNS = 'https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://cdn.tailwindcss.com https://fonts.googleapis.com https://fonts.gstatic.com'
+# Mockups call localStorage/sessionStorage, which throw a SecurityError in an opaque origin. This
+# replaces both with an in-memory Storage that is lost on reload, which the task accepts.
+# VI: Mockup gọi localStorage/sessionStorage, vốn ném SecurityError trong origin rỗng. Đoạn này thay
+# VI: cả hai bằng Storage trong bộ nhớ, mất khi tải lại, điều mà task chấp nhận.
+HTML_STORAGE_SHIM = (
+    '<script>(function(){function S(){var m=new Map();return{get length(){return m.size},'
+    'key:function(i){var k=Array.from(m.keys())[i];return k===undefined?null:k},'
+    'getItem:function(k){k=String(k);return m.has(k)?m.get(k):null},'
+    'setItem:function(k,v){m.set(String(k),String(v))},removeItem:function(k){m.delete(String(k))},'
+    'clear:function(){m.clear()}}}["localStorage","sessionStorage"].forEach(function(n){'
+    'try{Object.defineProperty(window,n,{value:S(),configurable:true})}catch(e){}})})();</script>'
+)
 
 
 async def _entity_team_id(db: AsyncSession, workspace_id: str, entity_type: EntityType, entity_id: str) -> str | None:
@@ -135,6 +155,22 @@ async def store_attachment(db: AsyncSession, settings: Any, workspace_id: str, u
     return _present(result.mappings().one())
 
 
+@router.get('/{attachment_id}')
+@public_router.get('/{attachment_id}')
+async def get_attachment(attachment_id: str, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
+    """One attachment's metadata and uploader name, for the HTML preview page's header.
+
+    Same access rule as download; a missing or unreadable attachment is a 404 either way.
+    VI: Metadata và tên người tải lên của một tệp đính kèm, cho header trang xem trước HTML. Cùng
+    VI: luật quyền như tải xuống; tệp không tồn tại hay không đọc được đều trả 404.
+    """
+    row = (await db.execute(text('SELECT a.*, u.name AS uploader_name FROM attachments a LEFT JOIN users u ON u.id = a.uploaded_by WHERE a.id = :attachment_id'), {'attachment_id': attachment_id})).mappings().first()
+    if not row:
+        raise ApiError(404, 'Attachment not found.', 'Not Found')
+    await _authorize_entity(db, row['workspace_id'], row['entity_type'], row['entity_id'], user['id'])
+    return {'data': {**_present(row), 'uploadedByName': row['uploader_name']}}
+
+
 @router.get('/{attachment_id}/download')
 @public_router.get('/{attachment_id}/download')
 async def download_attachment(attachment_id: str, request: Request, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)):
@@ -196,22 +232,44 @@ async def preview_attachment(attachment_id: str, request: Request, user: Any = D
             },
         )
 
-    # HTML is shown as the author wrote it but can never run: the `sandbox` CSP directive (no
-    # `allow-scripts`) gives the page an opaque origin and blocks scripts, forms and popups even
-    # when this URL is opened directly, and `default-src 'none'` stops it loading anything from
-    # the network. The same policy is repeated in a <meta> tag because the web app shows the text
-    # in an iframe `srcdoc`, where response headers do not apply (meta CSP cannot carry `sandbox`;
-    # the iframe's own `sandbox` attribute covers that).
-    # VI: HTML hiển thị đúng như tác giả viết nhưng không bao giờ chạy được: chỉ thị CSP `sandbox`
-    # VI: (không có `allow-scripts`) cho trang origin riêng và chặn script, form, popup kể cả khi
-    # VI: mở thẳng URL này, còn `default-src 'none'` chặn mọi tải từ mạng. Chính sách được lặp lại
-    # VI: trong thẻ <meta> vì web app hiển thị nội dung trong iframe `srcdoc`, nơi header phản hồi
-    # VI: không áp dụng (CSP qua meta không mang được `sandbox`; thuộc tính `sandbox` của iframe lo phần đó).
+    # HTML mockups run, but only as an opaque origin (SECURITY-REVIEW of DTD-547). The `sandbox`
+    # CSP directive without `allow-same-origin` makes the browser treat the page as a unique origin
+    # even when this URL is opened directly: it carries no Flowie cookie, cannot read Flowie
+    # storage, cannot touch the parent page, and CORS refuses its `null` origin. `connect-src
+    # 'none'` and `form-action 'none'` stop it sending data with fetch or forms; no popup,
+    # top-navigation or form flags are granted. The page is only served into an iframe (Fetch
+    # Metadata); any other request, including a browser that sends no `Sec-Fetch-Dest`, is sent to
+    # the web wrapper so the file never fills a tab without Flowie's warning header (phishing).
+    # `frame-ancestors` adds APP_URL's origin, which equals 'self' in production and is the web
+    # port in development. Known residual risk: the page can navigate its own frame to leak itself.
+    # VI: Mockup HTML được chạy, nhưng chỉ với origin rỗng (SECURITY-REVIEW của DTD-547). Chỉ thị
+    # VI: CSP `sandbox` không có `allow-same-origin` khiến trình duyệt coi trang là một origin riêng
+    # VI: kể cả khi mở thẳng URL này: không mang cookie Flowie, không đọc được storage của Flowie,
+    # VI: không chạm tới trang cha, và CORS từ chối origin `null` của nó. `connect-src 'none'` và
+    # VI: `form-action 'none'` chặn gửi dữ liệu bằng fetch hay form; không cấp cờ popup, điều hướng
+    # VI: tab chính hay form. Trang chỉ được phục vụ vào iframe (Fetch Metadata); mọi request khác,
+    # VI: kể cả trình duyệt không gửi `Sec-Fetch-Dest`, được chuyển tới wrapper của web để tệp
+    # VI: không bao giờ chiếm trọn tab mà thiếu header cảnh báo của Flowie (chống phishing).
+    # VI: `frame-ancestors` thêm origin của APP_URL, bằng 'self' trên production và là cổng web khi
+    # VI: phát triển. Rủi ro còn lại đã chấp nhận: trang có thể điều hướng khung của chính nó để làm lộ nội dung.
     if suffix in ('html', 'htm'):
-        policy = "default-src 'none'; style-src 'unsafe-inline'; img-src data:"
+        app_url = request.app.state.settings.app_url
+        if request.headers.get('sec-fetch-dest') != 'iframe':
+            return RedirectResponse(f'{app_url}/preview/{attachment_id}', status_code=303)
+        app_origin = '{0.scheme}://{0.netloc}'.format(urlsplit(app_url))
+        policy = (
+            f"sandbox allow-scripts allow-modals; default-src 'none'; script-src 'unsafe-inline' {HTML_PREVIEW_CDNS}; "
+            f"style-src 'unsafe-inline' {HTML_PREVIEW_CDNS}; font-src {HTML_PREVIEW_CDNS}; img-src data: blob: {HTML_PREVIEW_CDNS}; "
+            f"connect-src 'none'; form-action 'none'; frame-ancestors 'self' {app_origin}"
+        )
+        page = body.decode('utf-8', errors='replace')
+        # The shim goes after any doctype: content before it would switch the page to quirks mode.
+        # VI: Shim đặt sau doctype nếu có: nội dung đứng trước doctype sẽ đưa trang vào quirks mode.
+        doctype = match(r'\ufeff?\s*<!doctype[^>]*>', page, IGNORECASE)
+        cut = doctype.end() if doctype else 0
         return HTMLResponse(
-            f'<meta http-equiv="Content-Security-Policy" content="{policy}">' + body.decode('utf-8', errors='replace'),
-            headers={'content-security-policy': f'sandbox; {policy}', 'x-content-type-options': 'nosniff'},
+            page[:cut] + HTML_STORAGE_SHIM + page[cut:],
+            headers={'content-security-policy': policy, 'x-content-type-options': 'nosniff', 'cache-control': 'private'},
         )
 
     if suffix in ('xlsx', 'xlsm', 'csv'):

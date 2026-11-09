@@ -26,7 +26,9 @@ test('other images are left alone', () => {
 test('previewable attachments are picked by extension, others only download', () => {
    assert.equal(attachmentPreviewKind('notes.MD'), 'markdown');
    assert.equal(attachmentPreviewKind('spec.pdf'), 'pdf');
-   for (const name of ['report.html', 'plan.xlsx', 'data.csv', 'brief.docx', 'run.log'])
+   assert.equal(attachmentPreviewKind('mockup.HTML'), 'html');
+   assert.equal(attachmentPreviewKind('index 2.htm'), 'html');
+   for (const name of ['plan.xlsx', 'data.csv', 'brief.docx', 'run.log'])
       assert.equal(attachmentPreviewKind(name), 'page', name);
    for (const name of ['deck.pptx', 'legacy.xls', 'archive.zip', 'html', 'page.html.exe'])
       assert.equal(attachmentPreviewKind(name), null, name);
