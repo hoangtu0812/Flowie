@@ -7,6 +7,7 @@ from mcp.server.lowlevel import Server
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import (
     CallToolResult,
+    ContentBlock,
     ImageContent,
     ListToolsResult,
     TextContent,
@@ -161,7 +162,7 @@ def build_server(host_app):
             # VI: Kết quả ảnh được gửi dạng nội dung ảnh MCP để model phía client nhìn được;
             # VI: các trường còn lại giữ dạng metadata JSON có cấu trúc.
             image = result.pop("imageBase64", None) if isinstance(result, dict) else None
-            content = [TextContent(type="text", text=json.dumps(result))]
+            content: list[ContentBlock] = [TextContent(type="text", text=json.dumps(result))]
             if image:
                 content.insert(
                     0, ImageContent(type="image", data=image, mime_type=result["mimeType"])

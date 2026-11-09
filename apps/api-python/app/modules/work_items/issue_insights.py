@@ -1,3 +1,4 @@
+from typing import Any
 from sqlalchemy import text
 
 from ...core.errors import ApiError
@@ -29,7 +30,9 @@ async def issue_insights(db, workspace, user, options, slice_by, segment_by):
             result['avatarUrl']=cell[prefix+'_avatar']
         return result
 
-    rows,segments,total = {},{},0
+    rows: dict[str, dict[str, Any]] = {}
+    segments: dict[str, Any] = {}
+    total = 0
     for cell in cells:
         slice_value,segment = value(cell,'slice',slice_by),value(cell,'segment',segment_by)
         segments[segment['id']]=segment

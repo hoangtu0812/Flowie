@@ -279,10 +279,10 @@ async def _teams_mention_card(
             {'users': sorted(recipients), 'workspace_id': workspace_id},
         )
     ).mappings().all()
-    people = [dict(person) for person in people if person['id']]
-    if not people:
+    mentioned = [dict(person) for person in people if person['id']]
+    if not mentioned:
         return None
-    return {'url': url, 'message': teams_mention_message(embed, people)}
+    return {'url': url, 'message': teams_mention_message(embed, mentioned)}
 
 
 def _app_url() -> str:

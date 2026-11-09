@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import text
 
 from ...core.errors import ApiError
@@ -41,7 +43,8 @@ async def comment_rows(
             params,
         )
     ).mappings()
-    grouped_reactions, grouped_attachments = {}, {}
+    grouped_reactions: dict[str, list[dict[str, Any]]] = {}
+    grouped_attachments: dict[str, list[dict[str, Any]]] = {}
     for row in reactions:
         grouped_reactions.setdefault(row["comment_id"], []).append(
             {key: row[key] for key in ["emoji", "count", "reacted"]}

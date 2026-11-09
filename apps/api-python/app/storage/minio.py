@@ -31,7 +31,7 @@ class MinioStorage:
             raise ApiError(502, 'Could not store attachment.', 'Bad Gateway')
 
     async def get(self, key: str, *, maximum_bytes: int | None = None) -> bytes:
-        response = await self._request('GET', f'/{self.bucket}/{self._escape_key(key)}', **({'maximum_bytes':maximum_bytes} if maximum_bytes is not None else {}))
+        response = await self._request('GET', f'/{self.bucket}/{self._escape_key(key)}', maximum_bytes=maximum_bytes)
         if not response.is_success:
             raise ApiError(502, 'Could not read attachment.', 'Bad Gateway')
         return response.content

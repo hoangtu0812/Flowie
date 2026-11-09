@@ -17,9 +17,10 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import text
+from sqlalchemy import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..core.clock import _utcnow
@@ -129,7 +130,7 @@ async def _apply_team_cadence(db: AsyncSession, team: dict[str, Any], today: dat
                       AND end_date < :today'''),
             {'team_id': team['id'], 'today': today, 'now': _utcnow()},
         )
-        completed = result.rowcount or 0
+        completed = cast(CursorResult[Any], result).rowcount or 0
     else:
         completed = (await db.execute(
             text('''SELECT count(*) FROM cycles WHERE team_id = :team_id
@@ -155,7 +156,7 @@ async def _apply_team_cadence(db: AsyncSession, team: dict[str, Any], today: dat
                      " WHERE id = :id AND status = 'UPCOMING'"),
                 {'id': covering_cycle['id'], 'now': _utcnow()},
             )
-            activated = result.rowcount or 0
+            activated = cast(CursorResult[Any], result).rowcount or 0
         else:
             activated = 1
 

@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
+from typing import Any
+
 import httpx
 
 from ..core.config import Settings
@@ -33,7 +35,7 @@ async def _discord_request(
     method: str,
     path: str,
     token: str,
-    **kwargs: object,
+    **kwargs: Any,
 ) -> httpx.Response:
     response = await client.request(
         method,

@@ -7,7 +7,7 @@ from ...core.clock import _utcnow
 from ...core.identifiers import _cuid
 
 INSTANCE=uuid.uuid4().hex
-LAST_PROGRESS={}
+LAST_PROGRESS: dict[str, float] = {}
 
 
 async def heartbeat(factory,job,status=None,*,error=None,progress=False):

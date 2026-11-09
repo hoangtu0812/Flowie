@@ -162,6 +162,9 @@ async def test_category_webhook(
         )
     ).first()
     _found(row, 'News group')
+    # _found has already raised for a missing row; this tells the type checker.
+    # VI: _found đã báo lỗi nếu thiếu dòng; dòng này chỉ để báo cho bộ kiểm kiểu.
+    assert row is not None
     if not row[0]:
         raise ApiError(400, 'This news group has no Microsoft Teams webhook.', 'Bad Request')
     return {'data': await _send_teams_test(row[0])}

@@ -58,10 +58,10 @@ def _copy(value, depth: int):
             copy["…"] = f"{len(items) - MAX_KEYS} more"
         return copy
     if isinstance(value, (list, tuple)):
-        copy = [_copy(item, depth + 1) for item in value[:MAX_ITEMS]]
+        listed = [_copy(item, depth + 1) for item in value[:MAX_ITEMS]]
         if len(value) > MAX_ITEMS:
-            copy.append(f"… {len(value) - MAX_ITEMS} more")
-        return copy
+            listed.append(f"… {len(value) - MAX_ITEMS} more")
+        return listed
     return _text(str(value))
 
 

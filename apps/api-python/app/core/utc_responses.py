@@ -42,12 +42,12 @@ def _utc_endpoint(endpoint: Callable) -> Callable:
     # Evaluated annotations preserve dependency injection across module namespaces.
     hints = get_type_hints(endpoint, include_extras=True)
     signature = inspect.signature(endpoint)
-    operation.__signature__ = signature.replace(
+    setattr(operation, '__signature__', signature.replace(
         parameters=[parameter.replace(annotation=hints.get(name, parameter.annotation)) for name, parameter in signature.parameters.items()],
         return_annotation=hints.get("return", signature.return_annotation),
-    )
+    ))
     operation.__annotations__ = hints
-    operation._flowie_utc_response = True
+    setattr(operation, '_flowie_utc_response', True)
     return operation
 
 

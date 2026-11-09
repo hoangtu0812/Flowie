@@ -287,7 +287,8 @@ async def update_issue(
         "dueDate": "due_date",
         "subIssueSort": "sub_issue_sort",
     }
-    sets, params = [], {"issue_id": issue_id, "now": _utcnow()}
+    sets: list[str] = []
+    params: dict[str, Any] = {"issue_id": issue_id, "now": _utcnow()}
     for field, column in columns.items():
         if field in values:
             params[field] = (

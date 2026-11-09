@@ -91,7 +91,8 @@ async def enable(
         db, user, payload, request, request.app.state.settings
     )
     response = JSONResponse({"data": {"recoveryCodes": codes}})
-    _set_cookies(response, *tokens, request.app.state.settings)
+    access, refresh = tokens
+    _set_cookies(response, access, refresh, request.app.state.settings)
     await close_sockets(request, user)
     return response
 
@@ -151,6 +152,7 @@ async def verify(payload: Verification, request: Request, db=Depends(get_session
             }
         )
     )
-    _set_cookies(response, *tokens, settings)
+    access, refresh = tokens
+    _set_cookies(response, access, refresh, settings)
     clear_challenge(response, settings)
     return response

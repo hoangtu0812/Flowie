@@ -86,7 +86,8 @@ def parse_analysis(raw: str, size: int) -> tuple[dict[int, dict[str, Any]], str 
     if not isinstance(payload, dict):
         raise ValueError('The AI reply is not a JSON object.')
     results: dict[int, dict[str, Any]] = {}
-    for entry in payload.get('items') if isinstance(payload.get('items'), list) else []:
+    items = payload.get('items')
+    for entry in items if isinstance(items, list) else []:
         if not isinstance(entry, dict):
             continue
         index = str(entry.get('id', '')).strip()
@@ -95,7 +96,7 @@ def parse_analysis(raw: str, size: int) -> tuple[dict[int, dict[str, Any]], str 
         if not index.isdigit() or not 1 <= int(index) <= size or risk not in RISK_LEVELS or not summary:
             continue
         try:
-            score = max(0, min(100, int(entry.get('score'))))
+            score = max(0, min(100, int(entry.get('score', ''))))
         except (TypeError, ValueError):
             score = {'CRITICAL': 90, 'HIGH': 70, 'MEDIUM': 40, 'LOW': 10}[risk]
         results[int(index) - 1] = {'risk': risk, 'score': score, 'summary': summary}
@@ -155,7 +156,7 @@ async def analyze_workspace(db: AsyncSession, workspace_id: str, settings: Any) 
             ).mappings().all()
             await db.commit()
             try:
-                system, history = analysis_messages(category['name'], list(items))
+                system, history = analysis_messages(category['name'], [dict(item) for item in items])
                 results, digest = parse_analysis(await _complete(provider, system, history), len(items))
             except Exception as failure:  # Any AI failure leaves the items for the next fetch.
                 logger.warning('News AI failed for category %s: %s', category['id'], getattr(failure, 'message', failure))

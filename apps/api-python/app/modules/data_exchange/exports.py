@@ -1,3 +1,4 @@
+from typing import Any
 from io import BytesIO
 import json
 import re
@@ -129,7 +130,7 @@ async def export_documents(db, user, payload, storage):
             400, "Export at most 200 attachments and 25 MB uncompressed.", "Bad Request"
         )
     output = BytesIO()
-    manifest = {
+    manifest: dict[str, Any] = {
         "documents": [],
         "attachments": [],
         "attachmentLinks": "Original authenticated links are preserved; packaged files are indexed by attachment ID. External source URLs are never fetched.",

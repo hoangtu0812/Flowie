@@ -21,9 +21,10 @@ import json
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import text
+from sqlalchemy import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..core.clock import _utcnow
@@ -242,7 +243,7 @@ async def _apply_auto_close(db: AsyncSession, team: dict[str, Any], now: datetim
                          WHERE {_OPEN_ELIGIBILITY})'''),
             {**params, 'id': issue['id'], 'status_id': canceled_status},
         )
-        if not claim.rowcount:
+        if not cast(CursorResult[Any], claim).rowcount:
             planned.pop()
             continue
         await db.execute(
@@ -312,7 +313,7 @@ async def _apply_auto_archive(db: AsyncSession, team: dict[str, Any], now: datet
                          WHERE {_CLOSED_ELIGIBILITY})'''),
             {**params, 'id': issue['id']},
         )
-        if not claim.rowcount:
+        if not cast(CursorResult[Any], claim).rowcount:
             planned.pop()
             continue
         await db.execute(
@@ -398,7 +399,10 @@ async def team_policy_loop(
     VI: Một lượt quét làm cả hai phần, giống như job BullMQ đơn lẻ trước đây.
     """
     if run_cadence is None:
-        from .cycle_cadence import run_cycle_cadence as run_cadence  # noqa: PLC0415
+        from .cycle_cadence import run_cycle_cadence  # noqa: PLC0415
+
+        run_cadence = run_cycle_cadence
+    cadence_runner = run_cadence
     while not stop.is_set():
         try:
             async def scan() -> tuple[dict[str, Any], dict[str, int]]:
@@ -409,7 +413,7 @@ async def team_policy_loop(
                 # issue và cycle của cùng những team, và để hai session tranh
                 # nhau các dòng đó không được lợi gì với một job chạy mỗi giờ.
                 policies = await run_policies(factory, writes_enabled=writes_enabled)
-                cadence = await run_cadence(factory, writes_enabled=writes_enabled)
+                cadence = await cadence_runner(factory, writes_enabled=writes_enabled)
                 return policies, cadence
 
             policies, cadence = await progress(factory, 'team-policies', scan())
