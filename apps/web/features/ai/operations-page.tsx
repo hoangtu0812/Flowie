@@ -8,7 +8,6 @@ import { DesignSurface } from '@/components/common/design-surface';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
 import { QueryState } from '@/components/common/query-state';
-import { EvidenceVerification } from './evidence-verification';
 import { useParams } from 'next/navigation';
 import { SettingsSection, SettingsShell } from '@/components/common/settings/shared';
 import { RefreshIconButton } from '@/features/shared/refresh-icon-button';
@@ -16,7 +15,6 @@ type Overview = {
    limits: { totalPerMinute: number; perTool: Record<string, number> };
    usage: number;
    tools: { tool: string; calls: number; errors: number; p95Ms: number | null }[];
-   runs: { state: string; count: number; expiredLeases: number }[];
    recentErrors: { tool: string; outcome: string; createdAt: string }[];
    providerCalls: {
       feature: string;
@@ -33,8 +31,6 @@ type Overview = {
       model: string;
       createdAt: string;
    }[];
-   evidencePolicy: string;
-   awaitingReview: { id: string }[];
 };
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 export function OperationsPage() {
@@ -186,24 +182,6 @@ export function OperationsPage() {
                         />
                      </SettingsSection>
                   )}
-                  <SettingsSection title="Agent runs" description={data.evidencePolicy}>
-                     <StatRows
-                        rows={data.runs.map((run) => ({
-                           key: run.state,
-                           name: run.state,
-                           detail: `${run.count} runs · expired leases ${run.expiredLeases}`,
-                           alert: run.expiredLeases > 0,
-                        }))}
-                     />
-                     {workspace &&
-                        data.awaitingReview.map((run) => (
-                           <EvidenceVerification
-                              key={run.id}
-                              runId={run.id}
-                              workspaceId={workspace}
-                           />
-                        ))}
-                  </SettingsSection>
                   <SettingsSection title="Recent errors">
                      <StatRows
                         empty="No recent tool errors."

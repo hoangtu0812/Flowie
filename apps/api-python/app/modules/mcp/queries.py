@@ -58,6 +58,24 @@ class QueryService:
         )
         return {"items": items, "nextCursor": next_cursor, "truncated": more}
 
+    async def project_repositories(self, payload) -> dict:
+        """Repositories configured for a project the connection may read.
+
+        External coding agents read this to know where a project's code lives.
+        VI: Các repository đã cấu hình cho một project mà kết nối được đọc.
+        VI: Coding agent bên ngoài đọc mục này để biết mã của project nằm ở đâu.
+        """
+        await self.policy.project(payload.projectId)
+        rows = (
+            await self.db.execute(
+                text("""SELECT id,name,repository_url AS "repositoryUrl",base_branch AS "baseBranch",
+            test_commands AS "testCommands",instructions FROM project_repositories
+            WHERE workspace_id=:workspace AND project_id=:project ORDER BY name,id LIMIT 100"""),
+                {"workspace": self.principal.workspace_id, "project": payload.projectId},
+            )
+        ).mappings()
+        return {"items": [dict(row) for row in rows]}
+
     async def bug_template(self, payload) -> dict:
         from ..work_items.bug_template import BUG_TEMPLATE
 

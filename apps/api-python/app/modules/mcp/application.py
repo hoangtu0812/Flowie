@@ -140,12 +140,6 @@ class ToolApplication:
                 raise
 
     async def read(self, db, principal, tool, payload):
-        if tool.handler.startswith("run_"):
-            from ..agent_runs.service import RunService
-
-            return await getattr(
-                RunService(db, principal, self.settings), tool.handler[4:]
-            )(payload)
         if tool.handler == "access":
             return {
                 "connectionId": principal.connection_id,
@@ -172,12 +166,7 @@ class ToolApplication:
             text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"),
             {"key": f"requests:{principal.connection_id}"},
         )
-        if tool.scope == "runs:write":
-            from ..agent_runs.service import RunService
-
-            service = RunService(db, principal, self.settings)
-        else:
-            service = CommandService(db, principal, self.settings)
+        service = CommandService(db, principal, self.settings)
         await service.prepare(tool.name, payload)
         key = f"{principal.connection_id}:{tool.name}:{payload.idempotencyKey}"
         await db.execute(
@@ -211,25 +200,6 @@ class ToolApplication:
                     "This idempotency key was already used with different arguments.",
                     "Conflict",
                 )
-            if tool.name in {"claim_issue", "heartbeat_run"}:
-                from ..agent_runs.service import RunService
-                from ..agent_runs.contracts import RunInput
-
-                replay = previous["result"]["data"]
-                run = await RunService(db, principal, self.settings).get(
-                    RunInput(runId=replay["id"])
-                )
-                if (
-                    run["connectionId"] != principal.connection_id
-                    or run["state"] != "RUNNING"
-                    or run["leaseUntil"] <= _utcnow()
-                    or run["fencingToken"] != replay["fencingToken"]
-                ):
-                    raise ApiError(
-                        409,
-                        "The cached lease is no longer valid. Start a new claim.",
-                        "Conflict",
-                    )
             await self.audit(
                 db,
                 principal,

@@ -23,9 +23,8 @@ its number, for example `(#19)`.
 
 ## What the checks cover
 
-`.github/workflows/verify-mcp.yml` runs on every pull request that touches the
-application, and `.github/workflows/desktop.yml` runs on every pull request
-that touches `apps/desktop`. Between them they are the only gate.
+`.github/workflows/verify-mcp.yml` is the only gate, and for now it runs only
+when dispatched by hand.
 
 Nothing runs on a push to `main`. A commit pushed straight to the trunk has
 therefore passed nothing, and a release commit is exactly that: it is also the
@@ -58,9 +57,6 @@ state. Rebuilding `web` alone is the common mistake: a change under
 adds a migration must rebuild `migrate` as well and run it before `api`, then
 compare the migration count in the `migrate` logs with
 `ls packages/database/prisma/migrations/*/migration.sql | wc -l`.
-
-`apps/desktop` is in no server image and ships from its own workflow, so a
-release containing only desktop changes needs no server rebuild at all.
 
 ## Versioned release
 

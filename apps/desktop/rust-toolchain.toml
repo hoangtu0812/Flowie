@@ -1,5 +1,0 @@
-# Pinned so Windows and macOS build the same artifact from one source revision.
-# VI: Ghim để Windows và macOS build ra cùng một artifact từ một source revision.
-[toolchain]
-channel = "1.99.1"
-components = ["rustfmt", "clippy"]

@@ -15,7 +15,6 @@ READ_SCOPES = frozenset(
         "documents:read",
         "activities:read",
         "reviews:read",
-        "runs:read",
     }
 )
 WRITE_SCOPES = frozenset(
@@ -24,7 +23,6 @@ WRITE_SCOPES = frozenset(
         "issues:transition",
         "comments:write",
         "documents:write",
-        "runs:write",
     }
 )
 ALL_SCOPES = READ_SCOPES | WRITE_SCOPES

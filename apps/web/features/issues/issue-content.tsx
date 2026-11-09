@@ -5,7 +5,6 @@ import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Heading } from '@astryxdesign/core/Text';
 import type { Issue } from '@/mock-data/issues';
 import { BugDetails } from './bug-details';
-import { IssueAgentRun } from './issue-agent-run';
 import { IssueDocuments } from '@/features/documents/issue-documents';
 import { IssueDocumentLinks } from '@/features/documents/issue-document-links';
 import { useIssueDocuments } from '@/features/documents/use-issue-documents';
@@ -154,7 +153,6 @@ export function IssueContent({
                   >
                      <IssueDescription issue={issue} />
                      <BugDetails key={issue.id} issue={issue} />
-                     <IssueAgentRun key={issue.id} issueId={issue.id} />
                      <IssueTicketLink workspaceId={workspaceId} issueId={issue.id} orgId={orgId} />
                      <IssuePullRequests reviews={reviews} orgId={orgId} />
                      <IssueDocuments

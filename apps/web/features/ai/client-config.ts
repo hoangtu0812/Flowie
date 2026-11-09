@@ -10,7 +10,6 @@ export const READ_PRESET = [
    'documents:read',
    'activities:read',
    'reviews:read',
-   'runs:read',
 ];
 export const CODING_PRESET = [
    ...READ_PRESET,
@@ -18,7 +17,6 @@ export const CODING_PRESET = [
    'issues:transition',
    'comments:write',
    'documents:write',
-   'runs:write',
 ];
 
 // User-level files only: a project file such as `.mcp.json` would put the embedded token

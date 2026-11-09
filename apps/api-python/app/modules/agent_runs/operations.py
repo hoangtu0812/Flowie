@@ -62,13 +62,6 @@ async def overview(
             params,
         )
     ).mappings()
-    runs = (
-        await db.execute(
-            text("""SELECT state,count(*)::int AS count,count(*) FILTER(WHERE state='RUNNING' AND lease_until<:now)::int AS "expiredLeases"
-        FROM agent_runs WHERE workspace_id=:workspace GROUP BY state"""),
-            params,
-        )
-    ).mappings()
     recent = (
         await db.execute(
             text("""SELECT metadata->>'tool' AS tool,metadata->>'outcome' AS outcome,created_at AS "createdAt"
@@ -85,14 +78,6 @@ async def overview(
             params,
         )
     ).scalar_one_or_none()
-    awaiting = (
-        await db.execute(
-            text(
-                "SELECT id FROM agent_runs WHERE workspace_id=:workspace AND state='AWAITING_REVIEW' ORDER BY finished_at DESC LIMIT 25"
-            ),
-            params,
-        )
-    ).mappings()
     provider_calls = (
         await db.execute(
             text("""SELECT feature,count(*)::int AS calls,count(*) FILTER(WHERE outcome<>'ok')::int AS failed,
@@ -116,11 +101,8 @@ async def overview(
             "limits": await limits(db, workspaceId),
             "usage": usage or 0,
             "tools": [dict(row) for row in tools],
-            "runs": [dict(row) for row in runs],
             "recentErrors": [dict(row) for row in recent],
             "providerCalls": [dict(row) for row in provider_calls],
             "recentProviderErrors": [dict(row) for row in provider_errors],
-            "awaitingReview": [dict(row) for row in awaiting],
-            "evidencePolicy": "Agent-reported commits and tests are unverified until independently checked against the repository and CI.",
         }
     }

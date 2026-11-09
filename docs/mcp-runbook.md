@@ -186,45 +186,14 @@ Per-workspace and per-tool aggregate budgets remain follow-up work.
 
 1. A workspace manager configures the selected project's credential-free HTTPS
    repository URL, base branch and test command argument arrays in Integrations.
-2. Grant the external coding client `issues:read`, `runs:read`, `runs:write`,
-   `projects:read`, `comments:write` and any additional required scopes.
-3. Read the issue/context and `get_project_repositories`.
-4. Call `claim_issue` and retain `runId`, `leaseToken`, `fencingToken`.
-5. Clone/open the repository in the external agent's own authorized workspace.
-   Apply its repository instructions, create a branch, change code and run tests.
-   This step is performed by the coding client, not the Flowie API.
-6. Heartbeat at intervals shorter than five minutes, using a fresh idempotency key
-   for each heartbeat. Release/cancel if the task cannot proceed. The run budget
-   is two hours; a new attempt is required after that budget.
-7. Create a PR through separately authorized SCM tooling. The existing Flowie
-   review integration is read-only and does not grant PR creation/merge access.
-8. Call `report_run_result` with commit, PR URL, summary and test evidence. A code
-   result uses `AWAITING_REVIEW`; failed work uses `FAILED`.
-9. The report creates a Flowie comment and retains evidence. Independently review
-   CI and acceptance criteria before transitioning the issue to completion.
+2. The coding client reads the issue with `get_issue_context` and the
+   repositories with `get_project_repositories`, then follows the workflow in
+   the MCP instructions: `start_issue`, feature documents, code and a pull
+   request in its own authorized environment, then `finish_issue`.
+3. Review CI and the acceptance criteria before moving the issue to Done.
 
-If a run's lease expires, a new claim increments its fencing token. The older
-owner cannot report a result. A cached claim/heartbeat whose lease was displaced
-is rejected. General issue/comment write permissions remain separate from run
-ownership and must be granted deliberately.
-
-## Event automations
-
-A workspace manager can create a rule for a project, label and their own active
-MCP connection. Rules default to disabled and are capped at 1–25 runs per day.
-Enabled rules enqueue matching non-terminal issues after subsequent user/system
-changes. Changes written through MCP do not re-enqueue AI work.
-
-The budget is measured over the preceding 24 hours for the connection and is
-shared across its rules. A lower-limit rule applies its own limit when evaluating
-that connection's total. Active runs are deduplicated by issue. A stopped API can
-resume unprocessed events from PostgreSQL after restart.
-
-External clients poll `list_runs(state="PENDING")`; automatic provider invocation
-or external runner wakeup is not included. Disable a rule or revoke its connection
-to stop new enqueueing. Already queued runs require cancellation if they should
-not be processed. The workspace UI shows runs, state counts and measured average
-duration, with manager controls to cancel active runs and disable rules.
+Agent runs (`claim_issue`, `heartbeat_run`, `report_run_result` and the related
+tools) and label automations were removed in DTD-544.
 
 ## Troubleshooting
 

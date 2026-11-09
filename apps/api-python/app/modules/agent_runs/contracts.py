@@ -1,115 +1,10 @@
 from __future__ import annotations
 
-from typing import Literal
 from urllib.parse import urlsplit
 
 from pydantic import Field, model_validator
 
-from ..mcp.contracts import StrictInput, WriteInput, IssueInput, PageInput
-
-
-class ClaimInput(WriteInput, IssueInput):
-    pass
-
-
-class RunInput(StrictInput):
-    runId: str = Field(min_length=1)
-
-
-class CancelInput(WriteInput, RunInput):
-    pass
-
-
-class LeaseInput(WriteInput, RunInput):
-    leaseToken: str = Field(min_length=16, max_length=100, pattern=r"^[A-Za-z0-9_-]+$")
-    fencingToken: int = Field(ge=1)
-
-
-class HeartbeatInput(LeaseInput):
-    """Lease renewal that may carry the runner's current activity.
-
-    ``progress`` is one line such as "Editing apps/web/lib/time.ts" or "Running approved
-    test 1/2". It replaces the previous line and is shown live on the task; omit it to
-    renew the lease without changing what the task shows.
-    VI: Gia hạn lease, có thể kèm hoạt động hiện tại của runner. ``progress`` là một dòng
-    VI: như "Editing apps/web/lib/time.ts" hoặc "Running approved test 1/2", thay dòng
-    VI: trước và hiển thị trực tiếp trên task; bỏ trống để chỉ gia hạn lease.
-    """
-
-    progress: str | None = Field(default=None, min_length=1, max_length=300)
-
-
-class TestEvidence(StrictInput):
-    """One executed check: what ran, how it ended and how long it took.
-
-    A name and a verdict alone cannot be audited, so the command, exit code,
-    duration and a bounded log tail are all required.
-    """
-
-    name: str = Field(min_length=1, max_length=200)
-    command: list[str] = Field(min_length=1, max_length=50)
-    exitCode: int = Field(ge=-2147483648, le=2147483647)
-    result: Literal["passed", "failed"]
-    durationMs: int = Field(ge=0, le=86400000)
-    log: str = Field(default="", max_length=4000)
-
-    @model_validator(mode="after")
-    def bounded_command(self):
-        if any(not argument or len(argument) > 2000 for argument in self.command):
-            raise ValueError(
-                "Test command arguments must be bounded non-empty strings."
-            )
-        # A verdict that contradicts its own exit code is not evidence.
-        if (self.exitCode == 0) != (self.result == "passed"):
-            raise ValueError("Test result must match its exit code.")
-        return self
-
-
-class ResultInput(LeaseInput):
-    outcome: Literal["AWAITING_REVIEW", "FAILED"]
-    summary: str = Field(min_length=3, max_length=10000)
-    commit: str | None = Field(default=None, pattern=r"^[a-fA-F0-9]{7,64}$")
-    pullRequestUrl: str | None = Field(default=None, max_length=2048)
-    tests: list[TestEvidence] = Field(default_factory=list, max_length=50)
-
-    @model_validator(mode="after")
-    def evidence(self):
-        if self.pullRequestUrl:
-            parsed = urlsplit(self.pullRequestUrl)
-            if (
-                parsed.scheme != "https"
-                or not parsed.hostname
-                or parsed.username
-                or parsed.password
-            ):
-                raise ValueError(
-                    "A credential-free HTTPS pull request URL is required."
-                )
-        if self.outcome == "AWAITING_REVIEW" and not self.commit:
-            raise ValueError("A commit is required for a code result awaiting review.")
-        # Work cannot be presented as review-ready without executed checks behind it,
-        # and a recorded failure contradicts that claim.
-        if self.outcome == "AWAITING_REVIEW":
-            if not self.tests:
-                raise ValueError(
-                    "A code result awaiting review must report the tests it executed."
-                )
-            if any(test.result != "passed" for test in self.tests):
-                raise ValueError(
-                    "A code result awaiting review cannot report a failed test."
-                )
-        return self
-
-
-class RunPageInput(PageInput):
-    state: (
-        Literal["PENDING", "RUNNING", "AWAITING_REVIEW", "FAILED", "CANCELED"] | None
-    ) = None
-    projectId: str | None = None
-    # True returns only runs directed at the calling connection, so a runner polls its
-    # own queue instead of work routed to another agent.
-    assignedToThisConnection: bool | None = None
-    issueId: str | None = None
+from ..mcp.contracts import StrictInput
 
 
 class RepositoryInput(StrictInput):
@@ -143,12 +38,3 @@ class RepositoryInput(StrictInput):
         ):
             raise ValueError("Invalid base branch.")
         return self
-
-
-class AutomationInput(StrictInput):
-    name: str = Field(min_length=2, max_length=100)
-    connectionId: str = Field(min_length=1)
-    projectId: str = Field(min_length=1)
-    labelId: str = Field(min_length=1)
-    enabled: bool = False
-    dailyLimit: int = Field(default=5, ge=1, le=25)

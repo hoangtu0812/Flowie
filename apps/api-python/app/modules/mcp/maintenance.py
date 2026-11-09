@@ -28,11 +28,6 @@ async def cleanup(factory) -> None:
             {"cutoff": cutoff},
         )
         await db.execute(
-            text("""DELETE FROM agent_issue_events WHERE id IN (
-            SELECT id FROM agent_issue_events WHERE processed_at<:cutoff ORDER BY processed_at LIMIT 1000)"""),
-            {"cutoff": cutoff},
-        )
-        await db.execute(
             text(
                 "DELETE FROM ai_tool_windows WHERE ctid IN (SELECT ctid FROM ai_tool_windows WHERE window_start<:cutoff LIMIT 1000)"
             ),

@@ -44,10 +44,9 @@ app/
       transport.py           SDK adapter and pure ASGI authentication
       maintenance.py         bounded retention cleanup after credential expiry
     agent_runs/
-      api.py                 trusted repository and automation management
-      contracts.py           lease, result and configuration schemas
-      service.py             atomic claims, fencing and reported evidence
-      dispatcher.py          durable event consumption and bounded enqueueing
+      api.py                 trusted project repository management
+      contracts.py           repository configuration schema
+      operations.py          AI operations overview and tool budgets
 ```
 
 The existing `domains/native_*` routes retain their public function names and
@@ -78,19 +77,9 @@ The new controls follow the repository's Astryx component guidance.
 - Mutation result, audit, idempotency record and notification intent commit
   together. Retries with identical arguments return the saved result; changing
   arguments under the same key is a conflict.
-- Pending/RUNNING runs are unique per issue. Five-minute leases and increasing
-  fencing tokens prevent a displaced agent from reporting results. A heartbeat
-  does not extend a run beyond its two-hour budget.
-- Reported test and PR evidence is explicitly agent-reported. The API does not
-  claim independent CI verification, merge a PR or mark an issue complete.
-- Each reported check carries its command, exit code, duration and a bounded log
-  tail, and its verdict must match its exit code. A result awaiting review must
-  report at least one check and may not report a failed one; a failed result may.
 - Repository instructions and test argument arrays are maintained by a workspace
   manager. External coding agents execute in their own authorized environments;
   the production API never executes those commands.
-- AI mutations set a transaction-local marker. The issue event trigger excludes
-  those mutations, preventing recursive automation enqueueing.
 
 ## Delivery and operations
 
@@ -100,21 +89,9 @@ attempts. External delivery is at least once: a provider can accept a request
 whose response times out. Successful outbox payloads are cleared; records are
 workspace-bound and removed when that workspace is deleted.
 
-Issue events use row locks with `SKIP LOCKED`, retry/backoff and a terminal failed
-state. Rules are disabled by default and use only an active connection belonging
-to the authorizing user. The daily budget is serialized per connection. Events
-created before a rule are not replayed into new work automatically.
-
-The dispatcher creates pending runs. It does not launch an LLM or a coding
-process. An external client polls `list_runs`, claims an issue, heartbeats and
-reports results. A pending or running run is directed at exactly one connection
-and only that connection may claim or reclaim it, including after its lease
-expires; `list_runs` exposes `assignedToThisConnection` so a client polls its own
-queue. Issues without a pending or running run form the shared pool that any
-connection with `runs:write` and issue access may claim, and canceling a directed
-run is the only way to return its issue to that pool. Provider-specific PR
-creation and independent CI reconciliation remain separate integrations to
-verify against the selected repository/client.
+Agent runs, label automations and the issue event queue were removed with the
+Flowie Desktop companion in DTD-544. Coding agents work on tasks interactively
+through the issue, comment and document tools.
 
 Prisma owns both migrations, including database triggers and partial indexes
 that cannot be represented fully in the Prisma model. Startup continues to

@@ -384,66 +384,6 @@ model ProjectRepository {
   @@map("project_repositories")
 }
 
-model AgentRun {
-  id           String        @id @default(cuid())
-  workspaceId  String        @map("workspace_id")
-  issueId      String        @map("issue_id")
-  connectionId String        @map("connection_id")
-  state        String        @default("PENDING")
-  fencingToken Int           @default(0) @map("fencing_token")
-  leaseToken   String?       @map("lease_token")
-  leaseUntil   DateTime?     @map("lease_until")
-  startedAt    DateTime?     @map("started_at")
-  finishedAt   DateTime?     @map("finished_at")
-  result       Json?
-  // Latest one-line activity the runner reported with a heartbeat, shown live on the task.
-  // VI: Dòng hoạt động mới nhất runner gửi kèm heartbeat, hiển thị trực tiếp trên task.
-  progress     String?
-  progressAt   DateTime?     @map("progress_at")
-  createdAt    DateTime      @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'::text)")) @map("created_at")
-  updatedAt    DateTime      @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'::text)")) @map("updated_at")
-  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  issue        Issue         @relation(fields: [issueId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  connection   McpConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@index([workspaceId, state, createdAt])
-  @@map("agent_runs")
-}
-
-model AgentAutomation {
-  id           String        @id @default(cuid())
-  workspaceId  String        @map("workspace_id")
-  connectionId String        @map("connection_id")
-  projectId    String        @map("project_id")
-  labelId      String        @map("label_id")
-  name         String
-  enabled      Boolean       @default(false)
-  dailyLimit   Int           @default(5) @map("daily_limit")
-  createdAt    DateTime      @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'::text)")) @map("created_at")
-  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  connection   McpConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  label        Label         @relation(fields: [labelId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@index([workspaceId])
-  @@map("agent_automations")
-}
-
-model AgentIssueEvent {
-  id          BigInt    @id @default(autoincrement())
-  workspaceId String    @map("workspace_id")
-  issueId     String    @map("issue_id")
-  createdAt   DateTime  @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'::text)")) @map("created_at")
-  processedAt DateTime? @map("processed_at")
-  attempts    Int       @default(0)
-  availableAt DateTime  @default(dbgenerated("(CURRENT_TIMESTAMP AT TIME ZONE 'UTC'::text)")) @map("available_at")
-  failedAt    DateTime? @map("failed_at")
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  issue       Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@map("agent_issue_events")
-}
-
 model McpConnection {
   id          String            @id @default(cuid())
   workspaceId String            @map("workspace_id")
@@ -463,8 +403,6 @@ model McpConnection {
   user        User              @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   workspace   Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   requests    McpRequest[]
-  runs        AgentRun[]
-  automations AgentAutomation[]
 
   @@index([workspaceId, userId])
   @@map("mcp_connections")
@@ -719,10 +657,7 @@ model Workspace {
   codeReviewIssueLinks    CodeReviewIssueLink[]
   mcpConnections          McpConnection[]
   documentLinks           DocumentLink[]
-  agentRuns               AgentRun[]
-  agentAutomations        AgentAutomation[]
   projectRepositories     ProjectRepository[]
-  agentIssueEvents        AgentIssueEvent[]
   notificationOutbox      NotificationOutbox[]
 
   @@index([organizationId])
@@ -1280,7 +1215,6 @@ model TeamDispatcherSettings {
 
 model Project {
   repositories        ProjectRepository[]
-  agentAutomations    AgentAutomation[]
   documentFolders     DocumentFolder[]
   documentLinks       DocumentLink[]
   /// Shared logical position; new rows start at zero until manually reordered.
@@ -1876,8 +1810,6 @@ model IssueTemplate {
 
 model Issue {
   slaJob            IssueSlaJob?
-  agentRuns         AgentRun[]
-  agentEvents       AgentIssueEvent[]
   documentLinks     DocumentLink[]
   /// Shared logical position; new rows start at zero until manually reordered.
   /// VI: Vị trí logic dùng chung; dòng mới bắt đầu tại không đến khi sắp xếp thủ công.
@@ -2362,7 +2294,6 @@ model ProjectLabelLink {
 }
 
 model Label {
-  agentAutomations AgentAutomation[]
   id               String            @id @default(cuid())
   workspaceId      String            @map("workspace_id")
   groupId          String?           @map("group_id")

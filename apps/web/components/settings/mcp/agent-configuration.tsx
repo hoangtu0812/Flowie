@@ -6,19 +6,16 @@ import { toast } from 'sonner';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { TextInput } from '@astryxdesign/core/TextInput';
-import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
 import { Selector } from '@astryxdesign/core/Selector';
 import { Button } from '@astryxdesign/core/Button';
 import { List, ListItem } from '@astryxdesign/core/List';
 import {
-   configureAgentAutomation,
    configureProjectRepository,
    loadProjectRepositories,
    removeProjectRepository,
    type ProjectRepository,
 } from '@/lib/agent-runs';
-import type { McpConnection, McpResources } from '@/lib/mcp';
-import { SuccessMark } from './success-mark';
+import type { McpResources } from '@/lib/mcp';
 
 function parseCommands(value: string): string[][] {
    const commands: unknown = JSON.parse(value);
@@ -41,15 +38,9 @@ function parseCommands(value: string): string[][] {
 export function AgentConfiguration({
    workspaceId,
    resources,
-   connections,
-   writesEnabled,
-   onAutomationCreated,
 }: {
    workspaceId: string;
    resources: McpResources;
-   connections: McpConnection[];
-   writesEnabled: boolean;
-   onAutomationCreated?: () => void;
 }) {
    const [projectId, setProjectId] = useState('');
    const [repositories, setRepositories] = useState<ProjectRepository[]>([]);
@@ -61,14 +52,7 @@ export function AgentConfiguration({
    const [url, setUrl] = useState('');
    const [branch, setBranch] = useState('main');
    const [commands, setCommands] = useState('[]');
-   const [connectionId, setConnectionId] = useState('');
-   const [labelId, setLabelId] = useState('');
-   const [automationName, setAutomationName] = useState('');
-   const [enabled, setEnabled] = useState(false);
-   const [dailyLimit, setDailyLimit] = useState('5');
    const [busy, setBusy] = useState(false);
-   /** Cleared before each save so the check mark remounts and replays its animation. */
-   const [saved, setSaved] = useState<'repository' | 'automation'>();
 
    const reloadRepositories = useCallback(async () => {
       try {
@@ -83,7 +67,6 @@ export function AgentConfiguration({
    }, [reloadRepositories]);
 
    function openRepositoryForm(repository?: ProjectRepository) {
-      setSaved(undefined);
       setRepositoryForm(repository?.id ?? 'new');
       setRepositoryName(repository?.name ?? '');
       setUrl(repository?.repositoryUrl ?? '');
@@ -92,16 +75,10 @@ export function AgentConfiguration({
       if (repository) setProjectId(repository.projectId);
    }
 
-   async function save(
-      target: 'repository' | 'automation',
-      operation: () => Promise<unknown>,
-      success: string
-   ) {
+   async function save(operation: () => Promise<unknown>, success: string) {
       setBusy(true);
-      setSaved(undefined);
       try {
          await operation();
-         setSaved(target);
          toast.success(success);
       } catch (cause) {
          toast.error(cause instanceof Error ? cause.message : 'Could not save configuration.');
@@ -117,22 +94,6 @@ export function AgentConfiguration({
       (repository) => !projectId || repository.projectId === projectId
    );
 
-   const validLimit =
-      Number.isInteger(Number(dailyLimit)) && Number(dailyLimit) >= 1 && Number(dailyLimit) <= 25;
-   const eligibleConnections = connections.filter(
-      (connection) =>
-         connection.ownedByCurrentUser &&
-         !connection.revokedAt &&
-         connection.scopes.includes('runs:write') &&
-         connection.scopes.includes('issues:read') &&
-         (!connection.projectIds.length || connection.projectIds.includes(projectId))
-   );
-   const labelName = resources.labels.find((label) => label.id === labelId)?.name;
-   // An empty name falls back to one built from the label, so the rule list stays readable.
-   // VI: Tên để trống thì dùng tên dựng từ nhãn, để danh sách luật vẫn đọc được.
-   const ruleName = automationName.trim() || (labelName ? `Queue "${labelName}" issues` : '');
-   const validName = ruleName.length >= 2 && ruleName.length <= 100;
-
    return (
       <VStack gap={3}>
          <Heading level={3}>External coding agent configuration</Heading>
@@ -145,7 +106,6 @@ export function AgentConfiguration({
             value={projectId}
             onChange={(value) => {
                setProjectId(value);
-               setConnectionId('');
                setRepositoryForm(undefined);
             }}
             hasSearch
@@ -199,17 +159,13 @@ export function AgentConfiguration({
                                  variant="destructive"
                                  isLoading={busy}
                                  onClick={() =>
-                                    void save(
-                                       'repository',
-                                       async () => {
-                                          await removeProjectRepository(workspaceId, repository.id);
-                                          setConfirmRemoveId(undefined);
-                                          if (repositoryForm === repository.id)
-                                             setRepositoryForm(undefined);
-                                          await reloadRepositories();
-                                       },
-                                       `Repository "${repository.name}" removed.`
-                                    )
+                                    void save(async () => {
+                                       await removeProjectRepository(workspaceId, repository.id);
+                                       setConfirmRemoveId(undefined);
+                                       if (repositoryForm === repository.id)
+                                          setRepositoryForm(undefined);
+                                       await reloadRepositories();
+                                    }, `Repository "${repository.name}" removed.`)
                                  }
                               />
                               <Button
@@ -314,110 +270,27 @@ export function AgentConfiguration({
                      isLoading={busy}
                      isDisabled={!projectId || repositoryName.trim().length < 2 || !url || !branch}
                      onClick={() =>
-                        void save(
-                           'repository',
-                           async () => {
-                              await configureProjectRepository(
-                                 workspaceId,
-                                 {
-                                    projectId,
-                                    name: repositoryName,
-                                    repositoryUrl: url,
-                                    baseBranch: branch,
-                                    testCommands: parseCommands(commands),
-                                    instructions: editing?.instructions,
-                                 },
-                                 editing?.id
-                              );
-                              setRepositoryForm(undefined);
-                              await reloadRepositories();
-                           },
-                           `Repository "${repositoryName.trim()}" saved.`
-                        )
+                        void save(async () => {
+                           await configureProjectRepository(
+                              workspaceId,
+                              {
+                                 projectId,
+                                 name: repositoryName,
+                                 repositoryUrl: url,
+                                 baseBranch: branch,
+                                 testCommands: parseCommands(commands),
+                                 instructions: editing?.instructions,
+                              },
+                              editing?.id
+                           );
+                           setRepositoryForm(undefined);
+                           await reloadRepositories();
+                        }, `Repository "${repositoryName.trim()}" saved.`)
                      }
                   />
                </HStack>
             </VStack>
          )}
-         <Heading level={4}>Assign work to your coding agent</Heading>
-         <Text color="secondary">
-            Adding the chosen label to an issue in the project above assigns it to your coding
-            agent: the issue joins a queue, and the agent claims and works on it through MCP. Issues
-            that are already done or canceled are skipped.
-         </Text>
-         {!projectId ? (
-            <Text color="secondary">Choose a project above first.</Text>
-         ) : (
-            !eligibleConnections.length && (
-               <Text color="secondary">
-                  None of your connections can take work for this project. It needs one of your own
-                  connections that is not revoked, has the runs:write and issues:read permissions,
-                  and includes this project.
-               </Text>
-            )
-         )}
-         <Selector
-            label="Agent connection"
-            value={connectionId}
-            onChange={setConnectionId}
-            options={eligibleConnections.map((connection) => ({
-               value: connection.id,
-               label: connection.name,
-            }))}
-         />
-         <Selector
-            label="Issue label"
-            value={labelId}
-            onChange={setLabelId}
-            hasSearch
-            options={resources.labels.map((label) => ({ value: label.id, label: label.name }))}
-         />
-         <TextInput
-            label="Name"
-            value={automationName}
-            onChange={setAutomationName}
-            placeholder={labelName ? `Queue "${labelName}" issues` : undefined}
-            description="Optional. Shown in the list of label automations."
-         />
-         <TextInput
-            label="Maximum runs per day"
-            value={dailyLimit}
-            onChange={setDailyLimit}
-            description="Choose 1 to 25. The connection budget is shared across its rules."
-         />
-         <CheckboxInput
-            label="Enable this automation"
-            value={enabled}
-            onChange={setEnabled}
-            isDisabled={!writesEnabled}
-         />
-         <HStack gap={2} vAlign="center">
-            <Button
-               label="Create automation"
-               icon={<Plus className="size-4" />}
-               isLoading={busy}
-               isDisabled={!projectId || !connectionId || !labelId || !validLimit || !validName}
-               onClick={() =>
-                  void save(
-                     'automation',
-                     async () => {
-                        await configureAgentAutomation(workspaceId, {
-                           name: ruleName,
-                           projectId,
-                           connectionId,
-                           labelId,
-                           enabled,
-                           dailyLimit: Number(dailyLimit),
-                        });
-                        setAutomationName('');
-                        onAutomationCreated?.();
-                     },
-                     `Automation "${ruleName}" created.`
-                  )
-               }
-            />
-            {saved === 'automation' && <SuccessMark label="Automation created" />}
-         </HStack>
       </VStack>
    );
 }
