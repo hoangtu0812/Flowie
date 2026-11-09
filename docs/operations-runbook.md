@@ -15,8 +15,8 @@
 
 ## Probes and diagnosis
 
-- `/livez`: API process responds; does not depend on PostgreSQL, Redis or S3.
-- `/readyz`: bounded SELECT 1, Redis PING/PONG and signed bucket HEAD. Returns
+- `/livez`: API process responds; does not depend on PostgreSQL or S3.
+- `/readyz`: bounded SELECT 1 and signed bucket HEAD. Returns
   503 if any fails. TCP connectivity alone cannot make the API ready.
 - `x-request-id` is bounded and validated. Error responses include a reference;
   API logs use route templates, status and duration rather than query strings,

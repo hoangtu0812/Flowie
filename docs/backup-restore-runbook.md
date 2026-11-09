@@ -44,8 +44,8 @@ internal files is deliberately unsupported.
 
 The scratch directory is 0700 and environment capture is 0600. Ensure enough
 free encrypted local disk for one full DB/object-store capture. Temporary data
-is removed after upload; filesystem-level secure erasure is not claimed. Redis
-is excluded: it is a transient queue/cache; durable jobs live in PostgreSQL.
+is removed after upload; filesystem-level secure erasure is not claimed. Flowie
+runs no Redis; durable jobs live in PostgreSQL.
 Do not delete original storage after taking a backup.
 
 ## Configure on CT107 after review

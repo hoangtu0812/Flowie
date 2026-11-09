@@ -19,7 +19,7 @@ NestJS. No domain is any more. The Python API holds no legacy upstream — there
 legacy base URL in `app/core/config.py` or `.env.example`, and every `httpx` client in
 `apps/api-python` targets an external service, not NestJS. No Compose service builds
 `infrastructure/docker/api.Dockerfile`, and `verify-mcp.yml` never built, linted or tested
-it. `apps/api` was therefore deleted in DTD-518, and `apps/worker` is to follow in DTD-519.
+it. `apps/api` was therefore deleted in DTD-518, and `apps/worker` in DTD-519 together with BullMQ and Redis, after the last differential run showed the Python retention and cadence jobs writing exactly what the worker wrote.
 
 The original rule read: do not delete or alter `apps/api`, `apps/worker`, or Prisma
 migrations while a domain is still routed to legacy NestJS; a failed Python domain is
@@ -111,6 +111,8 @@ category/priority/resolution/relation type, project type/custom-field type, and 
 
 ## Worker and asynchronous behavior inventory
 
+Historical. All three jobs below now run inside the Python API; the BullMQ worker, its queue and Redis were removed in DTD-519.
+
 | Job or schedule | Producer | Consumer behavior | Migration rule |
 | --- | --- | --- | --- |
 | `discord-webhook` | `JobsService`, notification/integration services | Posts enabled workspace webhook; retry 5 exponential attempts | Keep Node worker until Python producer/consumer parity is tested |
@@ -125,7 +127,7 @@ name in production. P9 must include a cutover rehearsal on a database clone.
 | Dependency | Current use | Python migration constraint |
 | --- | --- | --- |
 | PostgreSQL 16 | persistent business data | Reuse schema; Prisma owns migrations until P9 |
-| Redis 7 | BullMQ queue and scheduled work | Do not assume BullMQ protocol compatibility from Python |
+| Redis 7 | Removed in DTD-519 with the BullMQ worker | — |
 | MinIO/S3 | attachment storage | Preserve authorization and object-key behavior |
 | Discord webhook | outbound notification | Mask secret URL, enforce manager RBAC, queue delivery |
 | Cookies/session | auth session flow | Forward `Cookie` and `Set-Cookie` exactly through facade until P3 is native |
