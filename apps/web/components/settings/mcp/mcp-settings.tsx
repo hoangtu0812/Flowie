@@ -3,23 +3,25 @@
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'motion/react';
-import { Check, Code2, Copy, Eye, Pencil, Plus, Save, ScrollText, Trash2, X } from 'lucide-react';
+import { Code2, Copy, Eye, Plus, Save, ScrollText, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { VStack, HStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { Button } from '@astryxdesign/core/Button';
 import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
 import { TextInput } from '@astryxdesign/core/TextInput';
-import { List, ListItem } from '@astryxdesign/core/List';
+import { Grid } from '@astryxdesign/core/Grid';
+import { MultiSelector } from '@astryxdesign/core/MultiSelector';
 import { StatusDot } from '@astryxdesign/core/StatusDot';
 import { ClientSetup } from '@/features/ai/client-setup';
 import { READ_PRESET, CODING_PRESET } from '@/features/ai/client-config';
-import { parseInstant } from '@/lib/time';
 import { mcpEndpoint, type McpConnection } from '@/lib/mcp';
 import { useMcpSettings } from './use-mcp-settings';
 import { AgentConfiguration } from './agent-configuration';
 import { AgentInstructions } from './agent-instructions';
 import { SuccessMark } from './success-mark';
+import { ConnectionsTable } from './connections-table';
+import { McpLogo } from '@/features/ai/client-logos';
 
 const SCOPE_LABELS: Record<string, string> = {
    'context:read': 'Read workspace and team information',
@@ -42,8 +44,6 @@ const reveal = {
    transition: { duration: 0.18 },
 };
 
-const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
-
 async function copyText(value: string, success: string) {
    try {
       await navigator.clipboard.writeText(value);
@@ -60,7 +60,6 @@ export function McpSettings() {
    /** Connection whose grant the form edits; the token and expiry stay as they are. */
    /** VI: Kết nối đang được sửa quyền trong form; token và hạn dùng giữ nguyên. */
    const [editingId, setEditingId] = useState<string>();
-   const [confirmRevokeId, setConfirmRevokeId] = useState<string>();
    const [name, setName] = useState('');
    const [teamIds, setTeamIds] = useState<string[]>([]);
    const [projectIds, setProjectIds] = useState<string[]>([]);
@@ -101,7 +100,10 @@ export function McpSettings() {
 
    return (
       <VStack gap={4}>
-         <Heading level={2}>AI connections (MCP)</Heading>
+         <HStack gap={2} vAlign="center">
+            <McpLogo className="size-6 shrink-0" />
+            <Heading level={2}>AI connections (MCP)</Heading>
+         </HStack>
          <Text color="secondary">
             Connect an AI client to read project work and perform the actions you allow.
          </Text>
@@ -135,116 +137,27 @@ export function McpSettings() {
                </HStack>
             </>
          )}
-         <List
-            hasDividers
-            header={
-               <HStack gap={2} vAlign="center" hAlign="between">
-                  <Heading level={3}>Connections ({state.connections.length})</Heading>
-                  {state.configuration && !formOpen && (
-                     <Button
-                        label="New connection"
-                        size="sm"
-                        variant="primary"
-                        icon={<Plus className="size-4" />}
-                        isDisabled={!state.configuration.enabled}
-                        onClick={() => setCreating(true)}
-                     />
-                  )}
-               </HStack>
-            }
-         >
-            {state.connections.map((connection) => {
-               const inactive =
-                  Boolean(connection.revokedAt) ||
-                  parseInstant(connection.expiresAt).getTime() < Date.now();
-               const confirming = confirmRevokeId === connection.id;
-               const fresh = state.createdId === connection.id;
-               return (
-                  <ListItem
-                     key={connection.id}
-                     label={connection.name}
-                     startContent={
-                        <motion.span
-                           className="inline-flex"
-                           initial={fresh ? { scale: 0 } : false}
-                           animate={{ scale: 1 }}
-                           transition={{ type: 'spring', stiffness: 420, damping: 16 }}
-                        >
-                           <StatusDot
-                              variant={inactive ? 'neutral' : 'success'}
-                              label={inactive ? 'Inactive' : 'Active'}
-                              isPulsing={fresh}
-                           />
-                        </motion.span>
-                     }
-                     description={
-                        <Text type="supporting" color="secondary">
-                           {inactive ? 'Inactive' : 'Active'} · Expires{' '}
-                           {connection.expiresAt.slice(0, 10)} ·{' '}
-                           {plural(connection.scopes.length, 'permission')} ·{' '}
-                           {connection.projectIds.length
-                              ? plural(connection.projectIds.length, 'project')
-                              : 'All projects'}
-                        </Text>
-                     }
-                     endContent={
-                        confirming ? (
-                           <HStack gap={1}>
-                              <Button
-                                 label="Confirm revoke"
-                                 tooltip="Confirm revoke"
-                                 icon={<Check className="size-4" />}
-                                 isIconOnly
-                                 size="sm"
-                                 variant="destructive"
-                                 isLoading={state.busy}
-                                 onClick={() =>
-                                    void state
-                                       .revoke(connection.id)
-                                       .then(() => setConfirmRevokeId(undefined))
-                                 }
-                              />
-                              <Button
-                                 label="Keep connection"
-                                 tooltip="Keep connection"
-                                 icon={<X className="size-4" />}
-                                 isIconOnly
-                                 size="sm"
-                                 variant="ghost"
-                                 onClick={() => setConfirmRevokeId(undefined)}
-                              />
-                           </HStack>
-                        ) : (
-                           <HStack gap={1}>
-                              {connection.ownedByCurrentUser && !inactive && (
-                                 <Button
-                                    label={`Edit ${connection.name}`}
-                                    tooltip="Edit permissions and projects"
-                                    icon={<Pencil className="size-4" />}
-                                    isIconOnly
-                                    size="sm"
-                                    variant="ghost"
-                                    isDisabled={state.busy || !state.configuration?.enabled}
-                                    onClick={() => startEdit(connection)}
-                                 />
-                              )}
-                              <Button
-                                 label="Revoke connection"
-                                 tooltip="Revoke connection"
-                                 icon={<Trash2 className="size-4" />}
-                                 isIconOnly
-                                 size="sm"
-                                 variant="ghost"
-                                 isDisabled={inactive || state.busy}
-                                 onClick={() => setConfirmRevokeId(connection.id)}
-                              />
-                           </HStack>
-                        )
-                     }
-                  />
-               );
-            })}
-         </List>
+         <HStack gap={2} vAlign="center" hAlign="between">
+            <Heading level={3}>Connections ({state.connections.length})</Heading>
+            {state.configuration && !formOpen && (
+               <Button
+                  label="New connection"
+                  size="sm"
+                  variant="primary"
+                  icon={<Plus className="size-4" />}
+                  isDisabled={!state.configuration.enabled}
+                  onClick={() => setCreating(true)}
+               />
+            )}
+         </HStack>
+         <ConnectionsTable
+            connections={state.connections}
+            busy={state.busy}
+            enabled={Boolean(state.configuration?.enabled)}
+            createdId={state.createdId}
+            onEdit={startEdit}
+            onRevoke={state.revoke}
+         />
          {!state.loading && !state.connections.length && (
             <Text color="secondary">No AI connections have been created.</Text>
          )}
@@ -357,89 +270,117 @@ export function McpSettings() {
                            />
                         )}
                      </HStack>
-                     <List density="compact" header={<Heading level={4}>Allowed teams</Heading>}>
-                        {state.resources.teams.map((team) => (
-                           <ListItem
-                              key={team.id}
-                              label={team.name}
-                              startContent={
-                                 <CheckboxInput
-                                    label={team.name}
-                                    isLabelHidden
-                                    value={teamIds.includes(team.id)}
-                                    onChange={(checked) => {
-                                       setTeamIds((current) =>
-                                          checked
-                                             ? [...current, team.id]
-                                             : current.filter((id) => id !== team.id)
-                                       );
-                                       setProjectIds([]);
-                                    }}
-                                 />
-                              }
-                           />
-                        ))}
-                     </List>
-                     <List density="compact" header={<Heading level={4}>Allowed projects</Heading>}>
-                        {state.resources.projects
-                           .filter(
-                              (project) =>
-                                 !teamIds.length ||
-                                 (project.teamId && teamIds.includes(project.teamId))
-                           )
-                           .map((project) => (
-                              <ListItem
-                                 key={project.id}
-                                 label={project.name}
-                                 startContent={
-                                    <CheckboxInput
-                                       label={project.name}
-                                       isLabelHidden
-                                       value={projectIds.includes(project.id)}
-                                       onChange={(checked) =>
-                                          setProjectIds((current) =>
-                                             checked
-                                                ? [...current, project.id]
-                                                : current.filter((id) => id !== project.id)
-                                          )
-                                       }
-                                    />
-                                 }
-                              />
-                           ))}
-                     </List>
+                     {/* Searchable multi-selects keep the form short however many teams and
+                         projects the workspace has. Changing teams clears the project choice
+                         because the project list is narrowed to the selected teams. */}
+                     {/* VI: Ô chọn nhiều có tìm kiếm giữ form ngắn dù workspace có bao nhiêu team
+                         và dự án. Đổi team xoá lựa chọn dự án vì danh sách dự án chỉ gồm dự án
+                         của các team đã chọn. */}
+                     <Grid columns={{ minWidth: 260, max: 2 }} gap={3} width="100%">
+                        <MultiSelector
+                           label="Allowed teams"
+                           description="Leave empty to allow every team you can read."
+                           value={teamIds}
+                           options={state.resources.teams.map((team) => ({
+                              value: team.id,
+                              label: team.name,
+                           }))}
+                           onChange={(next) => {
+                              setTeamIds(next);
+                              setProjectIds([]);
+                           }}
+                           hasSearch
+                           hasSelectAll
+                           triggerDisplay="badges"
+                           placeholder="All teams"
+                           width="100%"
+                        />
+                        <MultiSelector
+                           label="Allowed projects"
+                           isRequired
+                           value={projectIds}
+                           options={state.resources.projects
+                              .filter(
+                                 (project) =>
+                                    !teamIds.length ||
+                                    (project.teamId && teamIds.includes(project.teamId))
+                              )
+                              .map((project) => ({ value: project.id, label: project.name }))}
+                           onChange={setProjectIds}
+                           hasSearch
+                           hasSelectAll
+                           triggerDisplay="badges"
+                           placeholder="Select projects"
+                           width="100%"
+                        />
+                     </Grid>
                      {state.resources.truncated && (
                         <Text color="secondary">
                            Only the first 200 teams and projects are shown.
                         </Text>
                      )}
-                     <List density="compact" header={<Heading level={4}>Permissions</Heading>}>
-                        {state.configuration.scopes.map((scope) => (
-                           <ListItem
-                              key={scope}
-                              label={SCOPE_LABELS[scope] ?? scope}
-                              startContent={
+                     <Heading level={4}>Permissions</Heading>
+                     {/* Read and write scopes sit side by side, each with its own select-all;
+                         write scopes are locked while the server only allows reading. */}
+                     {/* VI: Quyền đọc và ghi đặt cạnh nhau, mỗi nhóm có ô chọn tất cả riêng;
+                         quyền ghi bị khoá khi server chỉ cho đọc. */}
+                     <Grid columns={{ minWidth: 260, max: 2 }} gap={4} width="100%">
+                        {(['Read', 'Write'] as const).map((group) => {
+                           const groupScopes = state.configuration!.scopes.filter(
+                              (scope) => scope.endsWith(':read') === (group === 'Read')
+                           );
+                           const locked =
+                              state.busy ||
+                              (group === 'Write' && !state.configuration!.writesEnabled);
+                           const chosen = groupScopes.filter((scope) => scopes.includes(scope));
+                           if (!groupScopes.length) return null;
+                           return (
+                              <VStack
+                                 key={group}
+                                 gap={2}
+                                 role="group"
+                                 aria-label={`${group} permissions`}
+                              >
                                  <CheckboxInput
-                                    label={SCOPE_LABELS[scope] ?? scope}
-                                    isLabelHidden
-                                    value={scopes.includes(scope)}
-                                    isDisabled={
-                                       state.busy ||
-                                       (!state.configuration?.writesEnabled &&
-                                          !scope.endsWith(':read'))
+                                    label={`Select all ${group.toLowerCase()} permissions`}
+                                    value={
+                                       chosen.length === groupScopes.length
+                                          ? true
+                                          : chosen.length
+                                            ? 'indeterminate'
+                                            : false
                                     }
+                                    isDisabled={locked}
                                     onChange={(checked) =>
-                                       setScopes((current) =>
-                                          checked
-                                             ? [...current, scope]
-                                             : current.filter((item) => item !== scope)
-                                       )
+                                       setScopes((current) => [
+                                          ...current.filter(
+                                             (scope) => !groupScopes.includes(scope)
+                                          ),
+                                          ...(checked ? groupScopes : []),
+                                       ])
                                     }
                                  />
-                              }
-                           />
-                        ))}
-                     </List>
+                                 <VStack gap={1} className="pl-6">
+                                    {groupScopes.map((scope) => (
+                                       <CheckboxInput
+                                          key={scope}
+                                          label={SCOPE_LABELS[scope] ?? scope}
+                                          value={scopes.includes(scope)}
+                                          isDisabled={locked}
+                                          onChange={(checked) =>
+                                             setScopes((current) =>
+                                                checked
+                                                   ? [...current, scope]
+                                                   : current.filter((item) => item !== scope)
+                                             )
+                                          }
+                                       />
+                                    ))}
+                                 </VStack>
+                              </VStack>
+                           );
+                        })}
+                     </Grid>
                      <HStack gap={2} hAlign="end">
                         <Button label="Cancel" variant="ghost" onClick={closeForm} />
                         <Button
