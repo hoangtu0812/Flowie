@@ -19,6 +19,11 @@ pull request and commit references, which are for us.
 
 ## Unreleased
 
+### Added
+
+- Five features that were running without a single test now have one each, starting with the two that guard security: a label can never be filed under another workspace's label group, and an emoji upload is accepted only when the file's own bytes are a PNG, JPEG, GIF or WebP image, whatever its name says. Cycle progress, the Pulse feed and release validation are covered too, including that Pulse never shows an issue from a team the viewer is not in. Each test was checked to fail when the rule it guards is removed. No behaviour changes and nothing needs rebuilding. (DTD-531, #228)
+  VI: Năm tính năng đang chạy mà chưa có test nào nay mỗi tính năng đã có test, bắt đầu từ hai tính năng giữ an ninh: một nhãn không bao giờ được xếp vào nhóm nhãn của workspace khác, và upload emoji chỉ được nhận khi chính byte của file là ảnh PNG, JPEG, GIF hoặc WebP, bất kể tên file nói gì. Tiến độ cycle, luồng Pulse và kiểm tra dữ liệu release cũng được phủ, gồm cả việc Pulse không bao giờ hiện issue của team mà người xem không ở trong. Mỗi test đã được kiểm là hỏng khi bỏ quy tắc nó giữ. Không đổi hành vi, không cần build lại gì. (DTD-531)
+
 ### Fixed
 
 - The audit trail for an automatically generated cycle now records its start and end with the time zone they are in, so the record reads as the same two days everywhere. The dates were being written without any marker saying they were UTC, which anyone reading the trail later would have taken for local time and been out by a time zone. Found by running the retiring background worker and its replacement against two identical copies of the same database and comparing what each one wrote, rather than by reading the code. (DTD-519, #222)
