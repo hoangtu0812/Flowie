@@ -43,38 +43,51 @@ async function dragRow(page: Page, handle: Locator, target: Locator, after = tru
    // where a raw mouse press at their coordinates reaches nothing.
    // VI: Các spec trước làm issue fixture dùng chung dài ra, nên hàng có thể nằm dưới viewport,
    // VI: nơi thao tác chuột thô theo toạ độ không chạm vào phần tử nào.
-   // The target goes to the middle of the viewport: WebKit's scroll-if-needed leaves it at the
-   // bottom edge, where the drop point falls in dnd-kit's auto-scroll zone and the page scrolls
-   // away from under the pointer, so the row never moves.
-   // VI: Đưa hàng đích vào giữa viewport: scroll-if-needed của WebKit để hàng sát mép dưới, nơi
-   // VI: điểm thả rơi vào vùng tự cuộn của dnd-kit và trang cuộn đi dưới con trỏ, nên hàng không dời.
+   // Centring the target keeps the drop point clear of dnd-kit's auto-scroll zone at the edges.
+   // VI: Đưa hàng đích vào giữa viewport để điểm thả tránh vùng tự cuộn ở mép của dnd-kit.
    await target.evaluate((el) => el.scrollIntoView({ block: 'center' }));
    await handle.scrollIntoViewIfNeeded();
-   const from = (await handle.boundingBox())!,
-      to = (await target.boundingBox())!;
+   const from = (await handle.boundingBox())!;
    const targetId = await target.getAttribute('data-order-id');
    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
    await page.mouse.down();
    await page.mouse.move(from.x + from.width / 2 + 12, from.y + from.height / 2, { steps: 4 });
    await expect(page.locator('[data-dnd-placeholder]')).toBeVisible();
-   await page.mouse.move(to.x + 80, to.y + (after ? to.height - 2 : 2), { steps: 12 });
-   await expect
-      .poll(() =>
-         handle.evaluate(
-            (el, args) => {
-               const source = el.closest('[data-order-id]')!;
-               const target = document.querySelector(
-                  `[data-order-id="${args.id}"]:not([data-dnd-placeholder])`
-               )!;
-               return Boolean(
-                  source.compareDocumentPosition(target) &
-                  (args.after ? Node.DOCUMENT_POSITION_PRECEDING : Node.DOCUMENT_POSITION_FOLLOWING)
-               );
-            },
-            { id: targetId, after }
+   // The row's collision detector swaps only while the pointer is past the target's middle and
+   // still inside it. Aim a quarter of the target's height inside that band, measured after the
+   // drag has started: a point 2px from the edge, measured before, missed the target whenever the
+   // page settled by a few pixels. Each retry measures again; once the rows have swapped, the
+   // same point lies on the near side of the target's middle and cannot swap them back.
+   // VI: Detector của hàng chỉ đổi chỗ khi con trỏ đã qua điểm giữa hàng đích và vẫn nằm trong
+   // VI: hàng đó. Nhắm vào điểm cách điểm giữa một phần tư chiều cao, đo sau khi đã bắt đầu kéo:
+   // VI: điểm cách mép 2px đo từ trước sẽ trượt khỏi hàng đích mỗi khi trang xê dịch vài pixel.
+   // VI: Mỗi lần thử đều đo lại; khi hai hàng đã đổi chỗ, cùng điểm đó nằm phía gần của điểm
+   // VI: giữa hàng đích nên không thể đổi ngược lại.
+   await expect(async () => {
+      const to = (await target.boundingBox())!;
+      await page.mouse.move(to.x + 80, to.y + to.height * (after ? 0.75 : 0.25), { steps: 6 });
+      await expect
+         .poll(
+            () =>
+               handle.evaluate(
+                  (el, args) => {
+                     const source = el.closest('[data-order-id]')!;
+                     const target = document.querySelector(
+                        `[data-order-id="${args.id}"]:not([data-dnd-placeholder])`
+                     )!;
+                     return Boolean(
+                        source.compareDocumentPosition(target) &
+                        (args.after
+                           ? Node.DOCUMENT_POSITION_PRECEDING
+                           : Node.DOCUMENT_POSITION_FOLLOWING)
+                     );
+                  },
+                  { id: targetId, after }
+               ),
+            { timeout: 2000 }
          )
-      )
-      .toBe(true);
+         .toBe(true);
+   }).toPass({ timeout: 10000 });
    await page.mouse.up();
 }
 
