@@ -388,6 +388,8 @@ test('Help search and project client presets expose meaningful actions', async (
    await expect(
       page.getByRole('button', { name: 'Create connection', exact: true })
    ).toBeDisabled();
+   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+   await expect(page.getByRole('dialog', { name: 'New connection' })).toHaveCount(0);
    await page.getByRole('button', { name: 'Claude Code', exact: true }).click();
    await expect(page.getByText(/claude mcp add .*Bearer <FLOWIE_MCP_TOKEN>/)).toBeVisible();
    await page.getByRole('button', { name: 'Cursor', exact: true }).click();
