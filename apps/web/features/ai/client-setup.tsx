@@ -17,6 +17,7 @@ import {
    type ClientOs,
 } from './client-config';
 import { McpTlsGuide } from './mcp-tls-guide';
+import { ClientLogo, McpLogo } from './client-logos';
 import { probeConnection } from './connection-probe';
 
 async function copy(value: string, success: string) {
@@ -37,13 +38,17 @@ export function ClientSetup({ endpoint, token }: { endpoint: string; token?: str
    const config = clientConfig(client, endpoint, token);
    return (
       <VStack gap={3} className="min-w-0 w-full">
-         <Heading level={3}>Install in your AI client</Heading>
+         <HStack gap={2} vAlign="center">
+            <McpLogo />
+            <Heading level={3}>Install in your AI client</Heading>
+         </HStack>
          <HStack gap={2} vAlign="center" hAlign="between" wrap="wrap">
             <HStack gap={1} wrap="wrap">
                {CLIENTS.map((name) => (
                   <Button
                      key={name}
                      label={name}
+                     icon={<ClientLogo client={name} />}
                      size="sm"
                      variant={client === name ? 'primary' : 'ghost'}
                      aria-pressed={client === name}
