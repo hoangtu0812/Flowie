@@ -8,17 +8,24 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { Check, ChevronDown, ChevronRight } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { MIN_SETTINGS_SECTIONS, SettingsSectionNav, useSettingsSections } from './section-nav';
 
 /**
  * Body shell shared by every settings page: the page scrolls inside itself, content is centered
  * at one max width and padding, and the header is a title, a short description and an optional
  * right-aligned action. Children stack with section spacing, so a page whose toolbar and list
  * belong together wraps them in one element. Astryx pages render it inside `DesignSurface`.
+ * Pages with at least three h2/h3 section headings also get an "On this page" navigation: a
+ * sticky rail beside the content on wide screens and a sticky bar above it on narrow ones. Without
+ * it the column keeps its original width and centring.
  * VI: Khung thân dùng chung cho mọi trang cài đặt: trang tự cuộn bên trong, nội dung căn giữa
  * với cùng độ rộng tối đa và padding, phần đầu gồm tiêu đề, mô tả ngắn và một thao tác tùy chọn
  * căn phải. Các con xếp chồng với khoảng cách giữa các section, nên trang có thanh công cụ và
  * danh sách đi liền nhau phải bọc chúng trong một phần tử. Trang Astryx đặt nó trong `DesignSurface`.
+ * VI: Trang có ít nhất ba tiêu đề section h2/h3 có thêm mục lục "On this page": cột dính bên cạnh
+ * VI: nội dung trên màn hình rộng và thanh dính phía trên trên màn hình hẹp. Không có mục lục thì
+ * VI: cột giữ độ rộng và cách căn giữa như cũ.
  */
 export function SettingsShell({
    title,
@@ -31,17 +38,35 @@ export function SettingsShell({
    action?: React.ReactNode;
    children: React.ReactNode;
 }) {
+   const scrollRef = useRef<HTMLDivElement>(null);
+   const contentRef = useRef<HTMLDivElement>(null);
+   const sections = useSettingsSections(contentRef, scrollRef);
+   const hasNav = sections.links.length >= MIN_SETTINGS_SECTIONS;
    return (
-      <div className="w-full overflow-y-auto h-full">
-         <div className="max-w-4xl mx-auto px-6 py-10 pb-20">
-            <div className="flex items-start justify-between gap-4">
-               <div>
-                  <h1 className="text-2xl font-medium">{title}</h1>
-                  <p className="text-sm text-muted-foreground mt-1">{description}</p>
+      <div ref={scrollRef} className="w-full overflow-y-auto h-full">
+         <div
+            className={cn(
+               'max-w-4xl mx-auto px-6 py-10 pb-20',
+               hasNav && 'xl:flex xl:max-w-6xl xl:gap-10'
+            )}
+         >
+            <div className="min-w-0 flex-1">
+               <div className="flex items-start justify-between gap-4">
+                  <div>
+                     <h1 className="text-2xl font-medium">{title}</h1>
+                     <p className="text-sm text-muted-foreground mt-1">{description}</p>
+                  </div>
+                  {action}
                </div>
-               {action}
+               <SettingsSectionNav {...sections} variant="bar" />
+               <div
+                  ref={contentRef}
+                  className="flex flex-col gap-10 mt-10 [&_h2]:scroll-mt-20 [&_h3]:scroll-mt-20"
+               >
+                  {children}
+               </div>
             </div>
-            <div className="flex flex-col gap-10 mt-10">{children}</div>
+            <SettingsSectionNav {...sections} variant="rail" />
          </div>
       </div>
    );
