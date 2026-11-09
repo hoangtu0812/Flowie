@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
 from typing import Any
@@ -107,11 +107,11 @@ def news_cutoff_utc(now: datetime) -> datetime:
     VI: Mốc 06:30 giờ Việt Nam gần nhất tại hoặc trước ``now`` (vào/ra đều là UTC naive, khớp cột
     VI: ``timestamp without time zone``). Nguồn đã lấy từ mốc này trở đi coi như xong trong ngày.
     """
-    local = now.replace(tzinfo=timezone.utc).astimezone(HCM)
+    local = now.replace(tzinfo=UTC).astimezone(HCM)
     cutoff = local.replace(hour=RUN_HOUR, minute=RUN_MINUTE, second=0, microsecond=0)
     if cutoff > local:
         cutoff -= timedelta(days=1)
-    return cutoff.astimezone(timezone.utc).replace(tzinfo=None)
+    return cutoff.astimezone(UTC).replace(tzinfo=None)
 
 
 def _name(tag: str) -> str:
@@ -151,8 +151,8 @@ def _published(value: str | None, now: datetime) -> datetime:
                 parsed = None
         if parsed is not None:
             if parsed.tzinfo is None:
-                parsed = parsed.replace(tzinfo=timezone.utc)
-            return min(parsed.astimezone(timezone.utc).replace(tzinfo=None), now)
+                parsed = parsed.replace(tzinfo=UTC)
+            return min(parsed.astimezone(UTC).replace(tzinfo=None), now)
     return now
 
 

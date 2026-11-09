@@ -9,8 +9,9 @@ import sys
 import time
 from pathlib import Path
 from urllib.parse import urlsplit
+
 from sqlalchemy import event, text
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "apps/api-python"))
@@ -56,8 +57,8 @@ async def main(args):
         count[0] += 1
 
     if args.hydrate_all:
-        from app.modules.work_items.issue_queries import _issue_rows
         from app.modules.access.projects import _workspace_access
+        from app.modules.work_items.issue_queries import _issue_rows
 
         async def operation(workspace, team, categories, scope, user, db):
             await _workspace_access(db, workspace, user["id"])

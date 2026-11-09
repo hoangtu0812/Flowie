@@ -6,7 +6,7 @@ from ...core.clock import _utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import _cuid
 from ...core.pagination import CursorCodec
-from ..access.projects import _workspace_access, _workspace_manager, _team_access
+from ..access.projects import _team_access, _workspace_access, _workspace_manager
 from ..access.team_scope import workspace_team_scope
 from ..audit.write import record_change
 from .calendar import add_working_seconds

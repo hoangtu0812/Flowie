@@ -4,17 +4,16 @@ import json
 from typing import Any
 
 from fastapi import Depends, Query, WebSocket
-from ..core.utc_responses import UtcAPIRouter as APIRouter
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
+from ..modules.notifications.access import notification_scope
 from .auth import _cuid, _utcnow, current_user
 from .native_projects import _workspace_access
-from ..modules.notifications.access import notification_scope
-
 
 router = APIRouter(prefix='/api/v1/notifications', tags=['notifications'])
 

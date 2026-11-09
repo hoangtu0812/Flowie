@@ -5,14 +5,15 @@ import os
 import sys
 from pathlib import Path
 from urllib.parse import urlsplit
+
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'apps/api-python'))
-from app.core.config import _async_database_url
 from app.core.clock import _utcnow
-from app.domains.auth import _cuid, password_hasher, create_workspace_bootstrap
+from app.core.config import _async_database_url
+from app.domains.auth import _cuid, create_workspace_bootstrap, password_hasher
 from app.modules.work_items.contracts import CreateDocumentInput, CreateIssueInput
 from app.modules.work_items.documents import create_document
 from app.modules.work_items.issues import create_issue

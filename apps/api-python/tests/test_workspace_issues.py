@@ -8,16 +8,16 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
-from app.domains.native_issues import MoveIssueInput, move_issue, list_sub_issues
-from app.modules.work_items.contracts import CreateIssueInput, UpdateIssueInput
-from app.modules.work_items.issues import create_issue, update_issue
-from app.modules.work_items.issue_queries import _issue_row
-from app.modules.work_items.issue_search import search_page
-from app.modules.work_items.bug_reports import report
-from app.modules.work_items.query_contract import IssueSelectionQuery
+from app.domains.native_issues import MoveIssueInput, list_sub_issues, move_issue
+from app.domains.native_projects import _project, _project_issue_rows
 from app.modules.notifications.access import readable_recipients
 from app.modules.sla.alerts import escalation_actor
-from app.domains.native_projects import _project_issue_rows, _project
+from app.modules.work_items.bug_reports import report
+from app.modules.work_items.contracts import CreateIssueInput, UpdateIssueInput
+from app.modules.work_items.issue_queries import _issue_row
+from app.modules.work_items.issue_search import search_page
+from app.modules.work_items.issues import create_issue, update_issue
+from app.modules.work_items.query_contract import IssueSelectionQuery
 
 
 @pytest.mark.skipif(

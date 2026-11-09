@@ -1,22 +1,21 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import Any, Literal
 
 from fastapi import Depends, Query
-from ..core.utc_responses import UtcAPIRouter as APIRouter
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
-from .auth import _cuid, _utcnow, current_user
-from .native_projects import _workspace_access
 from ..modules.access.projects import _team_access
 from ..modules.work_items.saved_view_config import issue_view_config
-
+from .auth import _cuid, _utcnow, current_user
+from .native_projects import _workspace_access
 
 router = APIRouter(prefix="/api/v1/views", tags=["views"])
 
@@ -51,7 +50,7 @@ class UpdateViewInput(BaseModel):
 
 def _revision(value: datetime) -> datetime:
     return (
-        value.astimezone(timezone.utc).replace(tzinfo=None) if value.tzinfo else value
+        value.astimezone(UTC).replace(tzinfo=None) if value.tzinfo else value
     )
 
 

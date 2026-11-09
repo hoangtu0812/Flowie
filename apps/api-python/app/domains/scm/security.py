@@ -3,7 +3,8 @@ from __future__ import annotations
 import base64
 import json
 from hashlib import sha256
-from hmac import compare_digest, new as new_hmac
+from hmac import compare_digest
+from hmac import new as new_hmac
 from secrets import token_urlsafe
 from typing import Any
 

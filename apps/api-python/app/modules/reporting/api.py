@@ -6,10 +6,10 @@ from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
 from ...domains.auth import current_user
 from ..identity.password_reset import limit_request
-from .contracts import WorkflowReport
-from .repository import workflow_report, workload_page
 from .breakdowns import change_page, project_page
+from .contracts import WorkflowReport
 from .dashboard import dashboard_report
+from .repository import workflow_report, workload_page
 
 router = UtcAPIRouter(prefix="/api/v1/reports", tags=["workflow-reports"])
 

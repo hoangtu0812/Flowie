@@ -6,12 +6,12 @@ from pydantic import ValidationError
 from sqlalchemy import text
 
 from ...core.clock import _utcnow
+from ...core.dates import _date
 from ...core.errors import ApiError
 from ...core.identifiers import _cuid
 from ..access.projects import _team_access
 from ..work_items.contracts import CreateIssueInput
 from ..work_items.issue_rules import _validate_references, _validate_schedule_dates
-from ...core.dates import _date
 from .csv_input import parse_csv, validate_mapping
 
 

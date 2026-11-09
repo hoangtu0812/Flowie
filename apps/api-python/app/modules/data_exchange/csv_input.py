@@ -27,7 +27,7 @@ def parse_csv(content):
                 continue
             if len(values) != len(headers) or len(rows) >= 1000:
                 raise ValueError("rows")
-            rows.append(dict(zip(headers, values)))
+            rows.append(dict(zip(headers, values, strict=True)))
         if not rows:
             raise ValueError("empty")
         return headers, rows

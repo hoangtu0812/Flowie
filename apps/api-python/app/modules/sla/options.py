@@ -1,6 +1,6 @@
 from sqlalchemy import text
 
-from ..access.projects import _workspace_manager, _team_access
+from ..access.projects import _team_access, _workspace_manager
 
 
 async def policy_options(db, workspace, user, team):

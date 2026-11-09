@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.modules.sla.calendar import add_working_seconds, working_seconds_between
-from app.modules.sla.contracts import BusinessCalendar, PolicyValues, CalendarPreview
+from app.modules.sla.contracts import BusinessCalendar, CalendarPreview, PolicyValues
 
 
 def test_working_calendar_counts_only_open_windows_holidays_and_split_shifts():

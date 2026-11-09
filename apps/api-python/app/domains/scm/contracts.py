@@ -5,7 +5,6 @@ from typing import Literal, Protocol
 
 from pydantic import BaseModel, Field
 
-
 ScmProviderName = Literal['GITHUB', 'AZURE_DEVOPS']
 ReviewState = Literal['OPEN', 'MERGED', 'CLOSED', 'ABANDONED']
 ReviewDecision = Literal[

@@ -1,5 +1,4 @@
 from __future__ import annotations
-from ..operations.heartbeats import progress
 
 import asyncio
 import logging
@@ -8,6 +7,7 @@ from datetime import timedelta
 from sqlalchemy import text
 
 from ...core.clock import _utcnow
+from ..operations.heartbeats import progress
 
 logger = logging.getLogger(__name__)
 

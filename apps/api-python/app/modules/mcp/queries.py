@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import base64
-from datetime import timezone
+from datetime import UTC
 from typing import Any
 
 from sqlalchemy import text
-from ...core.errors import ApiError
 
 from ...core.clock import _utcnow
+from ...core.errors import ApiError
 from .pagination import CursorCodec, literal_search
 from .policy import AccessPolicy
-
 
 IMAGE_TYPES = frozenset({"image/png", "image/jpeg", "image/gif", "image/webp"})
 IMAGE_LIMIT = 5 * 1048576
@@ -253,7 +252,7 @@ class QueryService:
             if value:
                 filters.append(f"i.updated_at {operator} :{field}")
                 params[field] = (
-                    value.astimezone(timezone.utc).replace(tzinfo=None)
+                    value.astimezone(UTC).replace(tzinfo=None)
                     if value.tzinfo
                     else value
                 )

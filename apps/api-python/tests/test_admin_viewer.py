@@ -8,6 +8,7 @@ import pytest
 from argon2 import PasswordHasher
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from starlette.websockets import WebSocket
 
 from app.core.clock import _utcnow
 from app.core.config import Settings, _async_database_url
@@ -17,7 +18,6 @@ from app.domains.auth import create_workspace_bootstrap
 from app.main import create_app
 from app.modules.access.read_only import enforce_read_only_role
 from app.modules.mcp.application import ToolApplication
-from starlette.websockets import WebSocket
 
 
 @pytest.mark.skipif(not os.getenv("MCP_TEST_DATABASE_URL"), reason="Test database not configured")

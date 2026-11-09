@@ -1,7 +1,7 @@
 import asyncio
-from datetime import datetime, timedelta, timezone
 import json
 import os
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import text
@@ -174,7 +174,7 @@ async def verify_reminders():
                 )
             ).scalar_one()
             assert datetime.fromisoformat(payload["remindAt"]) == stored.replace(
-                tzinfo=timezone.utc
+                tzinfo=UTC
             )
 
             claimed = (

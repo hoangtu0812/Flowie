@@ -4,6 +4,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -12,12 +13,12 @@ from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
 from app.modules.work_items.contracts import CreateDocumentInput, UpdateDocumentInput
-from app.modules.work_items.documents import create_document, update_document
 from app.modules.work_items.document_history import (
     list_revisions,
-    revision_row,
     revision_diff,
+    revision_row,
 )
+from app.modules.work_items.documents import create_document, update_document
 
 
 @unittest.skipUnless(

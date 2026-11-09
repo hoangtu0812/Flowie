@@ -1,6 +1,6 @@
 import asyncio
-from datetime import timedelta
 import os
+from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
@@ -9,9 +9,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.config import _async_database_url
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
-from app.modules.sla.contracts import PolicyValues
-from app.modules.sla.contracts import RetrySlaJob
 from app.modules.sla.commands import retry_job
+from app.modules.sla.contracts import PolicyValues, RetrySlaJob
 from app.modules.sla.jobs import record_failure
 from app.modules.sla.policies import create_policy
 from app.modules.sla.synchronization import latest_cycle, sync_issue
@@ -223,7 +222,7 @@ async def verify_worker():
             )
             assert job["attempts"] == 0 and job["generation"] > generation
             generation = job["generation"]
-        for count in range(8):
+        for _attempt in range(8):
             await record_failure(
                 factory, third["id"], generation, RuntimeError("private"), now=attempt
             )

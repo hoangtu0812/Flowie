@@ -7,6 +7,8 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from pydantic import ValidationError
+
 from app.domains.auth import (
     _compatible_argon2_hash,
     _is_environment_admin,
@@ -14,7 +16,6 @@ from app.domains.auth import (
     _valid_timezone,
 )
 from app.domains.native_admin import UpdateAdminUserInput
-from pydantic import ValidationError
 
 
 class Argon2CompatibilityTests(unittest.TestCase):

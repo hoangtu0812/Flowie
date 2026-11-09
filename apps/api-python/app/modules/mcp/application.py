@@ -10,15 +10,15 @@ from fastapi.encoders import jsonable_encoder
 from pydantic import ValidationError
 from sqlalchemy import text
 
+from ...core.clock import _utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import _cuid
-from ...core.clock import _utcnow
-from .commands import CommandService
-from .planning import planning_warnings
-from .compact import compact_comment, compact_issue
 from ...domains.team_insights import hcm_today
+from .commands import CommandService
+from .compact import compact_comment, compact_issue
 from .connections import validate_current
 from .log_redaction import failure_details, redact_arguments
+from .planning import planning_warnings
 from .queries import QueryService
 from .quotas import consume_quota
 from .registry import TOOLS

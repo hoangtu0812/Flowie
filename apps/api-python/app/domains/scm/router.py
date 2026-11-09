@@ -5,7 +5,6 @@ import re
 from typing import Any, Literal
 
 from fastapi import Depends, Query, Request
-from ...core.utc_responses import UtcAPIRouter as APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
@@ -13,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.errors import ApiError
+from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
 from ..auth import _cuid, _utcnow, current_user
 from ..native_projects import _workspace_manager
@@ -26,7 +26,6 @@ from .security import (
     verify_github_signature,
 )
 from .service import connection_row, connection_sync_lock, sync_connection
-
 
 router = APIRouter(prefix='/api/v1/scm', tags=['source-control'])
 webhook_router = APIRouter(prefix='/api/v1/scm/webhooks', tags=['source-control-webhooks'])

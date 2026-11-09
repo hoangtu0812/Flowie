@@ -1,6 +1,6 @@
 import asyncio
-from datetime import timedelta
 import os
+from datetime import timedelta
 
 import pytest
 from sqlalchemy import text
@@ -10,7 +10,7 @@ from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
 from app.modules.archive.repository import archive_page
-from app.modules.archive.service import restore_preview, restore, archive_project
+from app.modules.archive.service import archive_project, restore, restore_preview
 
 
 @pytest.mark.skipif(

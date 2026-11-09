@@ -5,12 +5,13 @@ from datetime import timedelta
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
-from app.modules.work_items.manual_order import ReorderInput, reorder
-from app.modules.work_items.issue_search import search_page
 from app.modules.portfolio.projects import project_page
+from app.modules.work_items.issue_search import search_page
+from app.modules.work_items.manual_order import ReorderInput, reorder
 
 
 @pytest.mark.skipif(

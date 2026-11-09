@@ -1,11 +1,14 @@
 from __future__ import annotations
-from typing import Any
+
 import json
+from typing import Any
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from ...core.audit_context import audit_agent, audit_source
 from ...core.clock import _utcnow
 from ...core.identifiers import _cuid
-from ...core.audit_context import audit_agent, audit_source
 
 
 async def _write_activity(

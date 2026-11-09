@@ -1,6 +1,7 @@
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from ..access.projects import _workspace_access, _team_access
+
+from ..access.projects import _team_access, _workspace_access
 
 
 async def report(

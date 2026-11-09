@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -16,7 +16,7 @@ class AuditFilters(BaseModel):
     @classmethod
     def utc(cls, value):
         return (
-            value.astimezone(timezone.utc).replace(tzinfo=None)
+            value.astimezone(UTC).replace(tzinfo=None)
             if value and value.tzinfo
             else value
         )

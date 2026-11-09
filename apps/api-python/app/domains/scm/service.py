@@ -4,7 +4,7 @@ import json
 import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import Any
 
 import httpx
@@ -23,7 +23,7 @@ from .security import decrypt_secret_bundle
 def _naive_utc(value: datetime | None) -> datetime | None:
     if value is None or value.tzinfo is None:
         return value
-    return value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value.astimezone(UTC).replace(tzinfo=None)
 
 
 def provider_for(

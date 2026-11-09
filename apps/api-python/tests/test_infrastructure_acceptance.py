@@ -1,21 +1,21 @@
 import asyncio
-from dataclasses import replace
-from datetime import datetime, timedelta, timezone
-from email.message import EmailMessage
 import ipaddress
 import os
 import socketserver
 import ssl
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
+from email.message import EmailMessage
 from threading import Thread
+from unittest.mock import patch
 from urllib.parse import urlsplit
 from uuid import uuid4
-from unittest.mock import patch
 
+import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
-import pytest
 
 from app.core.config import Settings
 from app.services.private_email import send_private_email
@@ -63,7 +63,7 @@ def test_real_s3_signing_binary_unicode_keys_and_cleanup():
 def test_private_smtp_delivers_only_after_verified_tls(tmp_path, implicit_tls):
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "localhost")])
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     certificate = (
         x509.CertificateBuilder()
         .subject_name(name)

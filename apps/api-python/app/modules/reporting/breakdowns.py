@@ -2,8 +2,8 @@ from sqlalchemy import text
 
 from ...core.clock import _utcnow
 from ...core.pagination import CursorCodec
-from ..access.projects import _workspace_access
 from ..access.project_scope import project_read_scope
+from ..access.projects import _workspace_access
 from .history_sql import history_ctes, scoped_sql
 
 

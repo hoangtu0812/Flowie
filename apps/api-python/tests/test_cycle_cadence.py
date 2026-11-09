@@ -1,7 +1,7 @@
 import asyncio
 import json
-from datetime import datetime, timedelta
 import os
+from datetime import datetime, timedelta
 
 import pytest
 from sqlalchemy import text
@@ -266,7 +266,7 @@ async def verify_cadence():
             # VI: Lịch kéo tới ít nhất một chu kỳ sau hôm nay, và các cycle được
             # VI: sinh ra nối sát nhau mà không chồng lên nhau.
             assert rows[-1]["end_date"] >= today + timedelta(days=14)
-            for earlier, later in zip(rows, rows[1:]):
+            for earlier, later in zip(rows, rows[1:], strict=False):
                 assert later["start_date"] > earlier["end_date"]
             audits = (await db.execute(
                 text("SELECT metadata FROM audit_logs WHERE workspace_id=:workspace"

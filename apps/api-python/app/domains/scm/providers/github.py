@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 
 import httpx
 import jwt
 
-from ..contracts import ProviderRepository, ProviderReview, ProviderReviewer, ProviderRevision
+from ..contracts import (
+    ProviderRepository,
+    ProviderReview,
+    ProviderReviewer,
+    ProviderRevision,
+)
 
 
 class GitHubProvider:
@@ -32,7 +37,7 @@ class GitHubProvider:
         self._token_lock = asyncio.Lock()
 
     def _app_jwt(self) -> str:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return jwt.encode(
             {'iat': now - timedelta(seconds=60), 'exp': now + timedelta(minutes=9), 'iss': self._app_id},
             self._private_key,
@@ -40,11 +45,11 @@ class GitHubProvider:
         )
 
     async def _installation_token(self, client: httpx.AsyncClient) -> str:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if self._token and self._token_expires_at and self._token_expires_at > now + timedelta(minutes=2):
             return self._token
         async with self._token_lock:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             if self._token and self._token_expires_at and self._token_expires_at > now + timedelta(minutes=2):
                 return self._token
             response = await client.post(

@@ -1,11 +1,14 @@
 from __future__ import annotations
+
 from typing import Any
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from ...core.errors import ApiError
+
 from ...core.clock import _utcnow
-from .issue_queries import _issue_row
+from ...core.errors import ApiError
 from .issue_activity import _write_activity
+from .issue_queries import _issue_row
 
 
 async def _add_issue_relation(

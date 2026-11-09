@@ -6,7 +6,12 @@ import logging
 from ...core.clock import _utcnow
 from ..operations.heartbeats import progress
 from .feeds import news_cutoff_utc
-from .service import due_workspaces, held_workspaces, refresh_workspace, retry_held_workspace
+from .service import (
+    due_workspaces,
+    held_workspaces,
+    refresh_workspace,
+    retry_held_workspace,
+)
 
 logger = logging.getLogger(__name__)
 

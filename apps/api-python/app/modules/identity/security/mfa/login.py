@@ -4,12 +4,12 @@ from secrets import token_urlsafe
 from sqlalchemy import text
 
 from .....core.clock import _utcnow
-from .....core.identifiers import _cuid, _hash_token
 from .....core.errors import ApiError
+from .....core.identifiers import _cuid, _hash_token
 from ..events import record_event
-from ..sessions import create_session, lock_account, expired
-from .repository import factor
+from ..sessions import create_session, expired, lock_account
 from .proofs import consume_factor, reject
+from .repository import factor
 
 COOKIE = "flowie_mfa_challenge"
 COOKIE_PATH = "/api/v1/auth/mfa"

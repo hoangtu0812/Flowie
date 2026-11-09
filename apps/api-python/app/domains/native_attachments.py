@@ -7,19 +7,18 @@ from secrets import token_urlsafe
 from typing import Any, Literal
 
 from fastapi import Depends, File, Form, Query, Request, UploadFile
-from ..core.utc_responses import UtcAPIRouter as APIRouter
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
 from ..modules.sharepoint.graph import viewer_url
 from ..storage.minio import MinioStorage
 from .attachment_tables import UnreadableSpreadsheet, csv_sheet, table_page, xlsx_sheets
 from .auth import _cuid, _utcnow, current_user
 from .native_projects import _team_access, _workspace_access
-
 
 router = APIRouter(prefix='/api/v1/_native/attachments', tags=['native-attachments'])
 # Storage authorization is entity-aware and already native. Expose this

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import unicodedata
+
 from sqlalchemy import text
+
 from ...core.pagination import CursorCodec, literal_search
 from ..access.membership import _workspace_role
 from ..access.project_scope import project_read_scope
-from ..work_items.issue_search import VIETNAMESE, NORMALIZED
+from ..work_items.issue_search import NORMALIZED, VIETNAMESE
 
 SOURCES = f"""
 SELECT 'issue' AS kind,i.id,i.title,i.identifier AS subtitle,'/issue/'||i.identifier AS path,i.created_at,i.identifier||' '||i.title AS search_text

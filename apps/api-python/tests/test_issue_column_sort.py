@@ -1,14 +1,16 @@
 import asyncio
 import json
 import os
+
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
 from app.modules.work_items.issue_search import search_page
-from app.modules.work_items.issue_sort import parse_sort, SORT_COLUMNS
+from app.modules.work_items.issue_sort import SORT_COLUMNS, parse_sort
 
 
 def test_invalid_sort_is_rejected():

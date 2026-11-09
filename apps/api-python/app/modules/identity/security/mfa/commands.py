@@ -7,8 +7,8 @@ from .....core.clock import _utcnow
 from .....core.errors import ApiError
 from ..events import record_event
 from ..sessions import active_identity, create_session, expired, lock_account
-from .crypto import encrypt_secret, new_secret, new_recovery, enrollment_image
-from .proofs import first_factor, consume_factor, reject
+from .crypto import encrypt_secret, enrollment_image, new_recovery, new_secret
+from .proofs import consume_factor, first_factor, reject
 from .repository import factor, invalidate_sessions
 
 

@@ -1,13 +1,16 @@
 from __future__ import annotations
-from typing import Any
+
+from collections import defaultdict
 from datetime import timedelta
-from ...core.clock import _utcnow
+from typing import Any
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from .bug_contracts import BUG_COLUMNS
+
+from ...core.clock import _utcnow
 from ...core.errors import ApiError
 from ..access.projects import _workspace_access
-from collections import defaultdict
+from .bug_contracts import BUG_COLUMNS
 
 
 async def _issue_rows(

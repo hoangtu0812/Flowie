@@ -8,7 +8,7 @@ from ...db.session import get_session
 from ...domains.auth import current_user
 from .contracts import ArchiveKind, RestoreInput
 from .repository import archive_page
-from .service import restore_preview, restore
+from .service import restore, restore_preview
 
 router = UtcAPIRouter(prefix="/api/v1/archive", tags=["archive"])
 

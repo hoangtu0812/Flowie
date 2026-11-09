@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 import unicodedata
+
 from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from ...core.errors import ApiError
 from ...core.pagination import CursorCodec, literal_search
 from .issue_queries import _issue_rows

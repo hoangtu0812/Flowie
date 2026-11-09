@@ -8,9 +8,9 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
-from app.modules.portfolio.projects import project_page
-from app.modules.portfolio.initiatives import initiative_page
 from app.modules.portfolio.history import history_page
+from app.modules.portfolio.initiatives import initiative_page
+from app.modules.portfolio.projects import project_page
 
 
 @pytest.mark.skipif(

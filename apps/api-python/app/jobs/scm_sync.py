@@ -1,5 +1,4 @@
 from __future__ import annotations
-from ..modules.operations.heartbeats import progress
 
 import asyncio
 import logging
@@ -12,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from ..core.config import Settings
 from ..domains.auth import _utcnow
 from ..domains.scm.service import connection_sync_lock, sync_connection
-
+from ..modules.operations.heartbeats import progress
 
 logger = logging.getLogger(__name__)
 # ERROR connections stay eligible so a transient provider or network failure recovers without a

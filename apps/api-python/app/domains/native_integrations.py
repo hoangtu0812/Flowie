@@ -5,17 +5,21 @@ from urllib.parse import urlparse
 
 import httpx
 from fastapi import Depends, Query, Request
-from ..core.utc_responses import UtcAPIRouter as APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
 from ..modules.access.project_scope import project_read_scope
-from ..services.microsoft_teams import masked_webhook, teams_available, teams_message, valid_teams_webhook
+from ..services.microsoft_teams import (
+    masked_webhook,
+    teams_available,
+    teams_message,
+    valid_teams_webhook,
+)
 from .auth import _cuid, _utcnow, current_user
-
 
 router = APIRouter(prefix='/api/v1/integrations', tags=['integrations'])
 

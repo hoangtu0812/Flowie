@@ -7,8 +7,8 @@ from ...core.clock import _utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import _cuid
 from ..operations.heartbeats import progress
-from .issue_search import issue_scope
 from .contracts import UpdateIssueInput
+from .issue_search import issue_scope
 from .issues import update_issue
 
 

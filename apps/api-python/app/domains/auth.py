@@ -1,38 +1,41 @@
 from __future__ import annotations
 
-from ..core.identifiers import _cuid as _cuid, _hash_token as _hash_token
-
-from ..core.clock import _utcnow as _utcnow
-
-from datetime import datetime, timedelta, timezone
+import re
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from hmac import compare_digest
-import re
 from secrets import choice, token_urlsafe
 from string import digits
 from typing import Any
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-import jwt
 import httpx
+import jwt
 from argon2 import PasswordHasher
-from ..core.passwords import compatible_hash as _compatible_argon2_hash, verify_password
 from fastapi import Depends, Query, Request
-from ..core.utc_responses import UtcAPIRouter as APIRouter
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.clock import _utcnow as _utcnow
 from ..core.config import Settings
 from ..core.errors import ApiError
+from ..core.identifiers import _cuid as _cuid
+from ..core.identifiers import _hash_token as _hash_token
+from ..core.passwords import compatible_hash as _compatible_argon2_hash
+from ..core.passwords import verify_password
 from ..core.slugs import GENERATED_ID, RESERVED_WORKSPACE_SLUGS
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
-from ..services.microsoft_identity import MicrosoftIdentityClient, MicrosoftProfile
 from ..services.auth_policy import require_password_sign_in
-from ..services.registration_verification import RegistrationDeliveryError, deliver_registration_code
+from ..services.microsoft_identity import MicrosoftIdentityClient, MicrosoftProfile
+from ..services.registration_verification import (
+    RegistrationDeliveryError,
+    deliver_registration_code,
+)
 from ..storage.minio import MinioStorage
 from .workflow_catalog import DEFAULT_CIRCLE_ISSUE_STATUSES
 
@@ -93,7 +96,7 @@ def _registration_code() -> str:
 def _request_fingerprint(request: Request, secret: str) -> str | None:
     if not request.client:
         return None
-    return sha256(f'{secret}:{request.client.host}'.encode('utf-8')).hexdigest()
+    return sha256(f'{secret}:{request.client.host}'.encode()).hexdigest()
 
 
 def _normalized_email(value: str) -> str:
@@ -122,7 +125,7 @@ def _api_key_expiry(value: str | None) -> datetime | None:
     except ValueError as error:
         raise ApiError(400, 'expiresAt must be a valid ISO 8601 datetime', 'Bad Request') from error
     if parsed.tzinfo:
-        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+        parsed = parsed.astimezone(UTC).replace(tzinfo=None)
     if parsed <= _utcnow():
         raise ApiError(400, 'API key expiry must be in the future.', 'Bad Request')
     return parsed
@@ -177,7 +180,7 @@ def _microsoft_client(settings: Settings) -> MicrosoftIdentityClient:
 def _microsoft_flow_token(
     flow: dict[str, Any], *, next_path: str | None, timezone_name: str | None, settings: Settings
 ) -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     stored_flow = {key: value for key, value in flow.items() if key != 'auth_uri'}
     return jwt.encode(
         {
@@ -394,7 +397,11 @@ async def _create_session(
 
 
 async def current_user(request: Request, db: AsyncSession = Depends(get_session)) -> Any:
-    from ..modules.identity.security.sessions import decode_access, active_identity, expired
+    from ..modules.identity.security.sessions import (
+        active_identity,
+        decode_access,
+        expired,
+    )
     token = request.cookies.get('flowie_access')
     if not token:
         raise ApiError(401, 'Sign in is required.', 'Unauthorized')
@@ -856,7 +863,7 @@ async def microsoft_callback(
             timezone_name=stored.get('timezone'),
             settings=settings,
         )
-    except (RuntimeError, ValueError, httpx.HTTPError, IntegrityError, ApiError) as error:
+    except (RuntimeError, ValueError, httpx.HTTPError, IntegrityError, ApiError):
         await db.rollback()
         login = RedirectResponse(
             f'{settings.app_url}/auth/login?azure_error=Microsoft+sign-in+could+not+be+completed.',
@@ -977,7 +984,7 @@ async def refresh_presence(
 async def refresh(
     request: Request, payload: RefreshInput | None = None, db: AsyncSession = Depends(get_session)
 ) -> JSONResponse:
-    from ..modules.identity.security.sessions import rotate_session, expired
+    from ..modules.identity.security.sessions import expired, rotate_session
     refresh_token = (payload.refreshToken if payload else None) or request.cookies.get('flowie_refresh')
     if not refresh_token:
         raise expired()

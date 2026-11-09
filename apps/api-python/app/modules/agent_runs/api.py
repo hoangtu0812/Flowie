@@ -3,19 +3,19 @@ from __future__ import annotations
 import json
 
 from fastapi import Depends, Query
-from ...core.utc_responses import UtcAPIRouter as APIRouter
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from ...core.errors import ApiError
+from ...core.identifiers import _cuid
+from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
 from ...domains.auth import current_user
-from ...core.identifiers import _cuid
 from ..access.membership import _manager, _workspace_role
 from ..mcp.domain import Principal
 from ..mcp.policy import AccessPolicy
-from .contracts import RepositoryInput
 from .audit import management_audit
+from .contracts import RepositoryInput
 
 # Only the project repository settings remain here. Agent runs and label
 # automations were removed with the desktop companion (DTD-544); the URL prefix

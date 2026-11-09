@@ -1,19 +1,23 @@
 from __future__ import annotations
 
-from ..modules.work_items.comment_repository import _text_from_body as _text_from_body, _comment_input as _comment_input, _comment as _comment, _reaction_summary as _reaction_summary
-
 import json
-from typing import Any, Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends, Query, Request
-from ..core.utc_responses import UtcAPIRouter as APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..modules.work_items.contracts import CommentInput, CreateCommentInput
 from ..core.errors import ApiError
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
+from ..modules.work_items.comment_repository import _comment as _comment
+from ..modules.work_items.comment_repository import _comment_input as _comment_input
+from ..modules.work_items.comment_repository import (
+    _reaction_summary as _reaction_summary,
+)
+from ..modules.work_items.comment_repository import _text_from_body as _text_from_body
+from ..modules.work_items.contracts import CommentInput, CreateCommentInput
 from ..services.notification_events import (
     create_notification_batch,
     issue_recipient_ids,
@@ -22,7 +26,6 @@ from ..services.notification_events import (
 from .auth import _cuid, _utcnow, current_user
 from .native_issues import _issue_row, _write_activity
 from .native_projects import _workspace_access
-
 
 router = APIRouter(prefix='/api/v1/_native/comments', tags=['native-comments'])
 # Comments have no Circle adapter switched yet. Expose the audited native
@@ -74,8 +77,8 @@ async def list_comments(
     threaded: bool = False,
     parentCommentId: Annotated[str | None, Query(min_length=1,max_length=100)] = None,
 ) -> dict:
-    from ..modules.work_items.collaboration_feed import comment_page
     from ..core.config import Settings
+    from ..modules.work_items.collaboration_feed import comment_page
     settings = request.app.state.settings if request else Settings.from_environment()
     return await comment_page(db, workspaceId, issueId, user['id'], settings.auth_jwt_secret,
         limit=limit,cursor=cursor,threaded=threaded,parent_id=parentCommentId)
@@ -88,8 +91,8 @@ async def create_comment(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    from ..modules.work_items.comments import create_comment as operation
     from ..db.mutations import commit_mutation
+    from ..modules.work_items.comments import create_comment as operation
 
     return await commit_mutation(db, lambda: operation(payload=payload, user=user, db=db))
 
@@ -103,8 +106,8 @@ async def update_comment(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    from ..modules.work_items.comments import update_comment as operation
     from ..db.mutations import commit_mutation
+    from ..modules.work_items.comments import update_comment as operation
 
     return await commit_mutation(db, lambda: operation(comment_id=comment_id, payload=payload, workspaceId=workspaceId, user=user, db=db))
 

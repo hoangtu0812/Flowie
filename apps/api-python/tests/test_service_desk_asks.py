@@ -9,9 +9,9 @@ from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
 from app.domains.native_asks import (
+    AskTransitionInput,
     CreateAskInput,
     UpdateAskInput,
-    AskTransitionInput,
     archive_ask,
     convert_ask,
     create_ask,

@@ -145,7 +145,11 @@ async def verify_deletion():
             ) as client:
                 endpoint = f"/api/v1/workspaces/{workspace}"
                 for user, status in [(outsider, 404), (admin, 403), (member, 403)]:
-                    app.dependency_overrides[current_user] = lambda: user
+                    # FastAPI calls the override within this iteration; a default argument would
+                    # become a request parameter, so binding the loop variable late is intended.
+                    # VI: FastAPI gọi override ngay trong vòng lặp này; tham số mặc định sẽ bị
+                    # VI: hiểu thành tham số request, nên việc bind biến vòng lặp muộn là cố ý.
+                    app.dependency_overrides[current_user] = lambda: user  # noqa: B023
                     response = await client.request(
                         "DELETE", endpoint, json={"confirmationName": name}
                     )

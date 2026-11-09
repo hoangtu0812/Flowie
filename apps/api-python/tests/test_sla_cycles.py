@@ -1,21 +1,20 @@
 import asyncio
+import os
 from copy import deepcopy
 from datetime import datetime, timedelta
-import os
 
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.config import _async_database_url
+from app.core.errors import ApiError
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
-from app.modules.sla.contracts import PolicyValues, UpdatePolicy
+from app.modules.sla.commands import apply_current_policy
+from app.modules.sla.contracts import IssueSlaCommand, PolicyValues, UpdatePolicy
 from app.modules.sla.cycles import transition
 from app.modules.sla.policies import create_policy, update_policy
 from app.modules.sla.queries import issue_sla, sla_report
-from app.modules.sla.commands import apply_current_policy
-from app.modules.sla.contracts import IssueSlaCommand
-from app.core.errors import ApiError
 from app.modules.sla.synchronization import latest_cycle, reapply_policy, sync_issue
 from app.modules.work_items.contracts import CreateIssueInput, UpdateIssueInput
 from app.modules.work_items.issues import create_issue, update_issue

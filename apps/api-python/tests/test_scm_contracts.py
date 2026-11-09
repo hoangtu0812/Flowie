@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import sys
 import unittest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.domains.scm.contracts import ProviderReview, read_only_capabilities, write_capabilities
+from app.domains.scm.contracts import (
+    ProviderReview,
+    read_only_capabilities,
+    write_capabilities,
+)
 
 
 class ScmContractTests(unittest.TestCase):
@@ -44,8 +48,8 @@ class ScmContractTests(unittest.TestCase):
                 'headRevision': 'abc123',
                 'latestRevisionKey': 'iteration:3:abc123',
                 'remoteUrl': 'https://example.invalid/review/42',
-                'externalCreatedAt': datetime.now(timezone.utc),
-                'externalUpdatedAt': datetime.now(timezone.utc),
+                'externalCreatedAt': datetime.now(UTC),
+                'externalUpdatedAt': datetime.now(UTC),
             }
         )
 

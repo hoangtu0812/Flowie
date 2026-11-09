@@ -3,18 +3,17 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import Depends, Query
-from ..core.utc_responses import UtcAPIRouter as APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
 from .auth import _cuid, _utcnow, current_user
 from .native_projects import _workspace_access
 from .teams import _manager
-
 
 router = APIRouter(prefix='/api/v1/labels', tags=['labels'])
 

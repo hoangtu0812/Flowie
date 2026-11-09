@@ -4,7 +4,7 @@ import asyncio
 import base64
 import sys
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from hmac import new as new_hmac
 from pathlib import Path
@@ -69,7 +69,7 @@ class ScmProviderTests(unittest.TestCase):
                     app_id='1', private_key='not-used', installation_id='99', client=client
                 )
                 provider._token = 'installation-token'
-                provider._token_expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+                provider._token_expires_at = datetime.now(UTC) + timedelta(hours=1)
                 repository = ProviderRepository(
                     externalRepositoryId='1', name='repo', fullName='acme/repo'
                 )
@@ -97,7 +97,7 @@ class ScmProviderTests(unittest.TestCase):
                 )
                 provider._app_jwt = lambda: 'app-jwt'
                 provider._token = 'expiring'
-                provider._token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=30)
+                provider._token_expires_at = datetime.now(UTC) + timedelta(seconds=30)
 
                 self.assertEqual(await provider._installation_token(client), 'renewed')
                 self.assertEqual(requests, 1)
@@ -123,7 +123,7 @@ class ScmProviderTests(unittest.TestCase):
                     client=client,
                 )
                 provider._token = 'expiring'
-                provider._token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=30)
+                provider._token_expires_at = datetime.now(UTC) + timedelta(seconds=30)
 
                 self.assertEqual(await provider._access_token(client), 'renewed')
                 self.assertEqual(requests, 1)

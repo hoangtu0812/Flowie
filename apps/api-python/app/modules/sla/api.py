@@ -12,21 +12,21 @@ from .commands import apply_current_policy, retry_job
 from .contracts import (
     CalendarPreview,
     CreatePolicy,
+    IssueSlaCommand,
     PolicyCommand,
     PolicyValues,
-    UpdatePolicy,
-    IssueSlaCommand,
     RetrySlaJob,
+    UpdatePolicy,
 )
+from .options import policy_options
 from .policies import (
     create_policy,
     list_policies,
-    update_policy,
     policy_command,
     policy_history,
+    update_policy,
 )
 from .queries import issue_sla, sla_report
-from .options import policy_options
 
 router = UtcAPIRouter(prefix="/api/v1/slas", tags=["slas"])
 

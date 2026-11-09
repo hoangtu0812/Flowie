@@ -21,7 +21,6 @@ from app.modules.notifications.outbox import process_one
 from tests.document_review_support import add_member
 from tests.test_service_desk_asks import add_project
 
-
 PROJECT_HOOK = "https://prod.westus.logic.azure.com/workflows/project/triggers/manual"
 WORKSPACE_HOOK = "https://prod.westus.logic.azure.com/workflows/workspace/triggers/manual"
 

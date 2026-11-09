@@ -4,7 +4,8 @@ import base64
 import json
 from datetime import datetime
 from hashlib import sha256
-from hmac import compare_digest, new as hmac_new
+from hmac import compare_digest
+from hmac import new as hmac_new
 
 from .errors import ApiError
 

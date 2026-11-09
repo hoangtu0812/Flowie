@@ -82,7 +82,7 @@ jobs:
           workflow='^\.github/workflows/verify-mcp\.yml$'
           lockfile='^pnpm-lock\.yaml$'
           for entry in \
-            "backend:^apps/api-python/|^packages/database/|^scripts/|$workflow|$lockfile" \
+            "backend:^apps/api-python/|^packages/database/|^scripts/|^ruff\.toml$|$workflow|$lockfile" \
             "storage:^scripts/verify-storage-acceptance\.sh$|^scripts/flowie_backup/|^scripts/flowie-backup\.py$|^infrastructure/|^docker-compose\.yml$|$workflow" \
             "web:^apps/web/|^packages/|^docker-compose\.yml$|$workflow|$lockfile" \
             "e2e:^apps/web/|^apps/api-python/|^packages/|^scripts/seed-ui-regression\.py$|^scripts/ui_regression_api\.py$|$workflow|$lockfile" \
@@ -143,9 +143,7 @@ jobs:
           pnpm --filter @circle/database exec prisma generate --schema prisma/schema.prisma
       - name: Verify backend and MCP integration
         run: |
-          ruff check apps/api-python/app/modules apps/api-python/app/core/clock.py apps/api-python/app/core/dates.py apps/api-python/app/core/identifiers.py apps/api-python/app/db/mutations.py --select F
-          ruff check apps/api-python/app --select F821
-          ruff check scripts/flowie_backup scripts/flowie-backup.py --select F
+          ruff check apps/api-python scripts
           (cd apps/api-python && mypy app)
           python -m pytest apps/api-python/tests -q
 
@@ -232,6 +230,7 @@ jobs:
         run: |
           pnpm --filter @circle/database exec prisma generate --schema prisma/schema.prisma
           pnpm --filter @circle/contracts build
+          pnpm --filter @circle/web lint --max-warnings 0
           pnpm --filter @circle/web test:unit
           pnpm --filter @circle/web build
           docker compose --profile app config --quiet

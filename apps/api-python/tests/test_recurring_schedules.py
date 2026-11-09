@@ -1,6 +1,6 @@
 import asyncio
-from datetime import datetime, timedelta
 import os
+from datetime import datetime, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -14,16 +14,16 @@ from app.core.timezones import local_instant, time_zone
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
 from app.modules.recurring.calendar import next_occurrence, upcoming
 from app.modules.recurring.contracts import (
-    ScheduleRule,
     CreateSchedule,
-    UpdateSchedule,
     ScheduleCommand,
+    ScheduleRule,
+    UpdateSchedule,
 )
-from app.modules.recurring.repository import schedules, run_history
+from app.modules.recurring.repository import run_history, schedules
 from app.modules.recurring.service import (
     create_schedule,
-    update_schedule,
     schedule_command,
+    update_schedule,
 )
 from app.modules.recurring.worker import process_schedule
 

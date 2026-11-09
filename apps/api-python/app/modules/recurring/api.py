@@ -8,9 +8,9 @@ from ...db.session import get_session
 from ...domains.auth import current_user
 from ..identity.password_reset import limit_request
 from .calendar import upcoming
-from .contracts import ScheduleRule, CreateSchedule, UpdateSchedule, ScheduleCommand
-from .repository import schedules, schedule_row, public_schedule, run_history
-from .service import create_schedule, update_schedule, schedule_command
+from .contracts import CreateSchedule, ScheduleCommand, ScheduleRule, UpdateSchedule
+from .repository import public_schedule, run_history, schedule_row, schedules
+from .service import create_schedule, schedule_command, update_schedule
 
 router = UtcAPIRouter(prefix="/api/v1/recurring-schedules", tags=["recurring-issues"])
 

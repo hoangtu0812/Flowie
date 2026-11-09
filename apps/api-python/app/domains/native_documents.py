@@ -1,23 +1,27 @@
 from __future__ import annotations
 
-from ..modules.work_items.document_repository import _team_access as _team_access, _document as _document, _documents as _documents, _document_by_id as _document_by_id, _folder as _folder, _resolve_folder as _resolve_folder, _source_url as _source_url
-
 from typing import Any, Literal
 from urllib.parse import urlparse
 
 from fastapi import Depends, Query
-from ..core.utc_responses import UtcAPIRouter as APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..modules.work_items.contracts import CreateDocumentInput, UpdateDocumentInput
-from ..modules.work_items.document_review import DecisionInput, ReviewersInput
 from ..core.errors import ApiError
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
+from ..modules.work_items.contracts import CreateDocumentInput, UpdateDocumentInput
+from ..modules.work_items.document_repository import _document as _document
+from ..modules.work_items.document_repository import _document_by_id as _document_by_id
+from ..modules.work_items.document_repository import _documents as _documents
+from ..modules.work_items.document_repository import _folder as _folder
+from ..modules.work_items.document_repository import _resolve_folder as _resolve_folder
+from ..modules.work_items.document_repository import _source_url as _source_url
+from ..modules.work_items.document_repository import _team_access as _team_access
+from ..modules.work_items.document_review import DecisionInput, ReviewersInput
 from .auth import _cuid, _utcnow, current_user
 from .teams import _workspace_role
-
 
 router = APIRouter(prefix='/api/v1/documents', tags=['documents'])
 
@@ -121,31 +125,32 @@ async def read_project_tree(workspaceId: str = Query(min_length=1), projectId: s
 
 @router.delete('/folders/{folder_id}')
 async def delete_folder(folder_id: str, workspaceId: str = Query(min_length=1), expectedParentId: str | None = None, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
-    from ..modules.work_items.document_tree import delete_folder as operation
     from ..db.mutations import commit_mutation
+    from ..modules.work_items.document_tree import delete_folder as operation
 
     return {'data': await commit_mutation(db, lambda: operation(db, workspace_id=workspaceId, user_id=user['id'], folder_id=folder_id, expected_parent_id=expectedParentId))}
 
 
 @router.patch('/folder-files/{file_id}')
 async def move_folder_file(file_id: str, payload: MoveFolderFileInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
-    from ..modules.work_items.document_tree import mutate_folder_file
     from ..db.mutations import commit_mutation
+    from ..modules.work_items.document_tree import mutate_folder_file
 
     return {'data': await commit_mutation(db, lambda: mutate_folder_file(db, workspace_id=workspaceId, user_id=user['id'], file_id=file_id, expected_folder_id=payload.expectedFolderId, folder_id=payload.folderId))}
 
 
 @router.delete('/folder-files/{file_id}')
 async def delete_folder_file(file_id: str, workspaceId: str = Query(min_length=1), expectedFolderId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
-    from ..modules.work_items.document_tree import mutate_folder_file
     from ..db.mutations import commit_mutation
+    from ..modules.work_items.document_tree import mutate_folder_file
 
     return {'data': await commit_mutation(db, lambda: mutate_folder_file(db, workspace_id=workspaceId, user_id=user['id'], file_id=file_id, expected_folder_id=expectedFolderId))}
 
 
 @router.post('/project-tree/scaffold')
 async def scaffold_project_tree(payload: ProjectTreeInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    from ..modules.work_items.document_tree import project_tree, scaffold_project_tree as operation
+    from ..modules.work_items.document_tree import project_tree
+    from ..modules.work_items.document_tree import scaffold_project_tree as operation
 
     await operation(db, workspace_id=payload.workspaceId, user_id=user['id'], project_id=payload.projectId)
     await db.commit()
@@ -198,40 +203,40 @@ async def read_document_review(document_id: str, workspaceId: str = Query(min_le
 
 @router.put('/{document_id}/review/reviewers')
 async def set_document_reviewers(document_id: str, payload: ReviewersInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
-    from ..modules.work_items.document_review import set_reviewers
     from ..db.mutations import commit_mutation
+    from ..modules.work_items.document_review import set_reviewers
 
     return {'data': await commit_mutation(db, lambda: set_reviewers(db, document_id, payload, user))}
 
 
 @router.post('/{document_id}/review/decision')
 async def decide_document_review(document_id: str, payload: DecisionInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
-    from ..modules.work_items.document_review import decide
     from ..db.mutations import commit_mutation
+    from ..modules.work_items.document_review import decide
 
     return {'data': await commit_mutation(db, lambda: decide(db, document_id, payload, user))}
 
 
 @router.post('')
 async def create_document(payload: CreateDocumentInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    from ..modules.work_items.documents import create_document as operation
     from ..db.mutations import commit_mutation
+    from ..modules.work_items.documents import create_document as operation
 
     return await commit_mutation(db, lambda: operation(payload=payload, user=user, db=db))
 
 
 @router.patch('/{document_id}')
 async def update_document(document_id: str, payload: UpdateDocumentInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    from ..modules.work_items.documents import update_document as operation
     from ..db.mutations import commit_mutation
+    from ..modules.work_items.documents import update_document as operation
 
     return await commit_mutation(db, lambda: operation(document_id=document_id, payload=payload, workspaceId=workspaceId, user=user, db=db))
 
 
 @router.delete('/{document_id}')
 async def archive_document(document_id: str, workspaceId: str = Query(min_length=1), expectedVersion: int | None = Query(default=None, ge=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    from ..modules.work_items.documents import archive_document as operation
     from ..db.mutations import commit_mutation
+    from ..modules.work_items.documents import archive_document as operation
 
     return await commit_mutation(db,lambda:operation(document_id,workspaceId,user,db,expected_version=expectedVersion))
 
@@ -289,7 +294,7 @@ async def get_release(document_id: str, release: int, workspaceId: str = Query(m
 
 @router.get('/{document_id}/diff/{version}')
 async def document_diff(document_id: str, version: int, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict:
-    from ..modules.work_items.document_history import revision_row, revision_diff
+    from ..modules.work_items.document_history import revision_diff, revision_row
     current = await accessible_document(db, workspaceId, document_id, user['id'])
     before = await revision_row(db, document_id, version)
     return {'data': await revision_diff(before, current)}
@@ -297,9 +302,9 @@ async def document_diff(document_id: str, version: int, workspaceId: str = Query
 
 @router.post('/{document_id}/restore')
 async def restore_document(document_id: str, payload: RestoreDocumentInput, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict:
+    from ..db.mutations import commit_mutation
     from ..modules.work_items.document_history import revision_row
     from ..modules.work_items.documents import update_document as operation
-    from ..db.mutations import commit_mutation
     await accessible_document(db, workspaceId, document_id, user['id'])
     revision = await revision_row(db, document_id, payload.revisionVersion)
     return await commit_mutation(db, lambda: operation(document_id, UpdateDocumentInput(

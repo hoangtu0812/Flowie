@@ -5,11 +5,11 @@ import json
 import re
 import secrets
 import struct
-from datetime import timezone
+from datetime import UTC
 from urllib.parse import quote, urlencode
 
-from cryptography.fernet import Fernet, InvalidToken, MultiFernet
 import segno
+from cryptography.fernet import Fernet, InvalidToken, MultiFernet
 
 from .....core.errors import ApiError
 
@@ -67,7 +67,7 @@ def totp(secret, counter, digits=6):
 def matching_counter(secret, code, now, last=None):
     if not re.fullmatch(r"[0-9]{6}", code):
         return None
-    counter = int(now.replace(tzinfo=timezone.utc).timestamp()) // 30
+    counter = int(now.replace(tzinfo=UTC).timestamp()) // 30
     matches = [
         candidate
         for candidate in range(max(0, counter - 1), counter + 2)

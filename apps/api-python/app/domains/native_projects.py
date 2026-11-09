@@ -1,25 +1,24 @@
 from __future__ import annotations
 
-
-from ..modules.access.projects import _workspace_access as _workspace_access, _workspace_manager as _workspace_manager, _team_access as _team_access
-
-from ..core.dates import _date as _date
-
 import json
 from datetime import datetime
-from typing import Any, Literal, Annotated
+from typing import Annotated, Any, Literal
 from urllib.parse import urlparse
 
 from fastapi import Depends, Query, Request
-from ..core.utc_responses import UtcAPIRouter as APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.dates import _date as _date
 from ..core.errors import ApiError
 from ..core.slugs import url_slug
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
+from ..modules.access.projects import _team_access as _team_access
+from ..modules.access.projects import _workspace_access as _workspace_access
+from ..modules.access.projects import _workspace_manager as _workspace_manager
 from ..services.notification_events import (
     create_notification_batch,
     project_recipient_ids,
@@ -674,8 +673,8 @@ async def _project(db: AsyncSession, project_id: str, workspace_id: str, user_id
 @router.get('')
 async def list_projects(workspaceId: str = Query(min_length=1), teamId: str | None = None, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session), *,
     request: Request = None, limit: Annotated[int, Query(ge=1,le=100)] = 100, cursor: Annotated[str | None, Query(max_length=2000)] = None, ordering: str | None = None, favorite: bool = False) -> dict:
-    from ..modules.portfolio.projects import project_page
     from ..core.config import Settings
+    from ..modules.portfolio.projects import project_page
     await _workspace_access(db, workspaceId, user['id'])
     if teamId:
         await _team_access(db, workspaceId, teamId, user['id'])
@@ -715,8 +714,8 @@ async def create_project(payload: CreateProjectInput, user: Any = Depends(curren
 @public_router.get('/updates')
 async def workspace_updates_public(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session), *,
     request: Request = None, limit: Annotated[int, Query(ge=1,le=100)] = 50, cursor: Annotated[str | None, Query(max_length=2000)] = None) -> dict:
-    from ..modules.portfolio.history import history_page
     from ..core.config import Settings
+    from ..modules.portfolio.history import history_page
     settings=request.app.state.settings if request else Settings.from_environment()
     return await history_page(db,workspaceId,user['id'],settings.auth_jwt_secret,'project_updates',limit=limit,cursor=cursor)
 
@@ -1100,8 +1099,8 @@ def _project_update(row: Any, *, include_project: bool = False) -> dict[str, Any
 
 
 async def _workspace_updates(workspaceId: str, user: Any, db: AsyncSession) -> dict:
-    from ..modules.portfolio.history import history_page
     from ..core.config import Settings
+    from ..modules.portfolio.history import history_page
     return await history_page(db,workspaceId,user['id'],Settings.from_environment().auth_jwt_secret,'project_updates')
 
 
@@ -1109,8 +1108,8 @@ async def _workspace_updates(workspaceId: str, user: Any, db: AsyncSession) -> d
 @public_router.get('/{project_id}/updates')
 async def list_updates(project_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session), *,
     request: Request = None, limit: Annotated[int, Query(ge=1,le=100)] = 50, cursor: Annotated[str | None, Query(max_length=2000)] = None) -> dict:
-    from ..modules.portfolio.history import history_page
     from ..core.config import Settings
+    from ..modules.portfolio.history import history_page
     settings=request.app.state.settings if request else Settings.from_environment()
     return await history_page(db,workspaceId,user['id'],settings.auth_jwt_secret,'project_updates',project_id,limit=limit,cursor=cursor)
 

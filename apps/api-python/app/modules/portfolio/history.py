@@ -2,8 +2,8 @@ from sqlalchemy import text
 
 from ...core.errors import ApiError
 from ...core.pagination import CursorCodec
-from ..access.projects import _workspace_access
 from ..access.project_scope import project_read_scope
+from ..access.projects import _workspace_access
 
 
 async def history_page(

@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import quote
 
 import httpx
 
-from ..contracts import ProviderRepository, ProviderReview, ProviderReviewer, ProviderRevision
-
+from ..contracts import (
+    ProviderRepository,
+    ProviderReview,
+    ProviderReviewer,
+    ProviderRevision,
+)
 
 AZURE_DEVOPS_RESOURCE = '499b84ac-1321-427f-aa17-267ca6975798'
 AZURE_VOTE_DECISIONS = {
@@ -43,11 +47,11 @@ class AzureDevOpsProvider:
         self._token_lock = asyncio.Lock()
 
     async def _access_token(self, client: httpx.AsyncClient) -> str:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if self._token and self._token_expires_at and self._token_expires_at > now + timedelta(minutes=2):
             return self._token
         async with self._token_lock:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             if self._token and self._token_expires_at and self._token_expires_at > now + timedelta(minutes=2):
                 return self._token
             if self._auth_mode == 'MANAGED_IDENTITY':

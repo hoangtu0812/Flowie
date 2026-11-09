@@ -1,5 +1,4 @@
 from __future__ import annotations
-from ..modules.operations.heartbeats import progress
 
 import asyncio
 import logging
@@ -13,6 +12,7 @@ from ..domains.team_insights import (
     seconds_until_next_digest,
     send_digest_for_workspace,
 )
+from ..modules.operations.heartbeats import progress
 
 logger = logging.getLogger(__name__)
 

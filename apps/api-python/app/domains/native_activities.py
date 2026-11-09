@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends, Query, Request
-from ..core.utc_responses import UtcAPIRouter as APIRouter
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
 from .auth import current_user
-
 
 router = APIRouter(prefix='/api/v1/_native/activities', tags=['native-activities'])
 public_router = APIRouter(prefix='/api/v1/activities', tags=['activities'])
@@ -23,8 +22,8 @@ async def list_activities(
     limit: Annotated[int, Query(ge=1,le=100)] = 50,
     cursor: Annotated[str | None, Query(max_length=2000)] = None,
 ) -> dict:
-    from ..modules.work_items.collaboration_feed import activity_page
     from ..core.config import Settings
+    from ..modules.work_items.collaboration_feed import activity_page
     settings = request.app.state.settings if request else Settings.from_environment()
     return await activity_page(db,workspaceId,user['id'],settings.auth_jwt_secret,
         issue_id=issueId,project_id=projectId,limit=limit,cursor=cursor)

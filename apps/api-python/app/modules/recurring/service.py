@@ -1,12 +1,12 @@
-from hashlib import sha256
 import json
+from hashlib import sha256
 
 from sqlalchemy import text
 
 from ...core.clock import _utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import _cuid
-from ..access.projects import _workspace_manager, _team_access
+from ..access.projects import _team_access, _workspace_manager
 from ..audit.write import record_change
 from ..work_items.issue_rules import _validate_references
 from .calendar import next_occurrence

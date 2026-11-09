@@ -1,16 +1,18 @@
 import asyncio
 import os
+
 import pytest
 from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from app.core.config import _async_database_url
+
 from app.core.clock import _utcnow
-from app.core.identifiers import _cuid
+from app.core.config import _async_database_url
 from app.core.errors import ApiError
+from app.core.identifiers import _cuid
 from app.modules.identity.preferences import (
-    UiValues,
     PreferencesUpdate,
+    UiValues,
     known_values,
     read_preferences,
     write_preferences,

@@ -1,19 +1,22 @@
 from __future__ import annotations
+
 from typing import Any
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from ...core.clock import _utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import _cuid
-from ...core.clock import _utcnow
-from .contracts import CreateDocumentInput, UpdateDocumentInput
 from ..audit.write import record_change
-from .document_review import announce_status_change, check_status_change
+from .contracts import CreateDocumentInput, UpdateDocumentInput
 from .document_repository import (
-    _team_access,
+    _document_by_id,
     _resolve_folder,
     _source_url,
-    _document_by_id,
+    _team_access,
 )
+from .document_review import announce_status_change, check_status_change
 
 
 async def create_document(

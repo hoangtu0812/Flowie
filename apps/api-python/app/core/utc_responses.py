@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
-from datetime import datetime, timezone
-from functools import wraps
 import inspect
+from collections.abc import Callable, Mapping
+from datetime import UTC, datetime
+from functools import wraps
 from typing import Any, get_type_hints
 
 from fastapi import APIRouter
@@ -16,7 +16,7 @@ from starlette.responses import Response
 def utc_response_value(value: Any) -> Any:
     """UTC-naive database instants gain an offset only at the response boundary."""
     if isinstance(value, datetime):
-        return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+        return value.replace(tzinfo=UTC) if value.tzinfo is None else value
     if isinstance(value, Response):
         return value
     if isinstance(value, BaseModel):
@@ -42,12 +42,14 @@ def _utc_endpoint(endpoint: Callable) -> Callable:
     # Evaluated annotations preserve dependency injection across module namespaces.
     hints = get_type_hints(endpoint, include_extras=True)
     signature = inspect.signature(endpoint)
-    setattr(operation, '__signature__', signature.replace(
+    # setattr because mypy rejects new attributes on a wrapped function.
+    # VI: Dùng setattr vì mypy không cho thêm thuộc tính mới vào hàm đã bọc.
+    setattr(operation, '__signature__', signature.replace(  # noqa: B010
         parameters=[parameter.replace(annotation=hints.get(name, parameter.annotation)) for name, parameter in signature.parameters.items()],
         return_annotation=hints.get("return", signature.return_annotation),
     ))
     operation.__annotations__ = hints
-    setattr(operation, '_flowie_utc_response', True)
+    setattr(operation, '_flowie_utc_response', True)  # noqa: B010
     return operation
 
 

@@ -1,7 +1,7 @@
 import sys
-from pathlib import Path
-from datetime import date, datetime, timezone
 import unittest
+from datetime import UTC, date, datetime
+from pathlib import Path
 
 import httpx
 from fastapi import FastAPI
@@ -20,7 +20,7 @@ class UtcResponseTests(unittest.IsolatedAsyncioTestCase):
     def test_only_datetime_values_are_normalized(self):
         plain = "2026-10-14T00:00:00"
         result = utc_response_value({"createdAt": datetime(2026, 10, 14), "date": date(2026, 10, 14), "content": plain})
-        self.assertEqual(result["createdAt"].tzinfo, timezone.utc)
+        self.assertEqual(result["createdAt"].tzinfo, UTC)
         self.assertEqual(result["content"], plain)
         self.assertEqual(result["date"], date(2026, 10, 14))
 

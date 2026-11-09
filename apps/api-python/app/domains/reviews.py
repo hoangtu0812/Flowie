@@ -4,18 +4,17 @@ import json
 from typing import Any, Literal
 
 from fastapi import Depends, Query
-from ..core.utc_responses import UtcAPIRouter as APIRouter
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
 from .auth import _cuid, _utcnow, current_user
 from .native_projects import _workspace_access
 from .scm.contracts import read_only_capabilities
-
 
 router = APIRouter(prefix='/api/v1/reviews', tags=['reviews'])
 ReviewView = Literal['assigned', 'created', 'all']
@@ -29,7 +28,7 @@ class IssueLinkInput(BaseModel):
     issueIdentifier: str | None = Field(default=None, min_length=1, max_length=100)
 
     @model_validator(mode='after')
-    def require_issue_reference(self) -> 'IssueLinkInput':
+    def require_issue_reference(self) -> IssueLinkInput:
         if bool(self.issueId) == bool(self.issueIdentifier):
             raise ValueError('Provide exactly one issueId or issueIdentifier.')
         return self

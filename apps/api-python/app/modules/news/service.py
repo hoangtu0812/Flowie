@@ -6,15 +6,14 @@ from os import getenv
 from typing import Any, cast
 
 import httpx
-from sqlalchemy import text
-from sqlalchemy import CursorResult
+from sqlalchemy import CursorResult, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import _utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import _cuid
-from ..access.read_only import ADMIN_READ_ROLES
 from ...services.microsoft_teams import masked_webhook
+from ..access.read_only import ADMIN_READ_ROLES
 from .ai import analyze_workspace
 from .feeds import fetch_feed, news_card, parse_feed
 

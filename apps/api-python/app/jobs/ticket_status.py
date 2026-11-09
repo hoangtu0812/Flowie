@@ -1,5 +1,4 @@
 from __future__ import annotations
-from ..modules.operations.heartbeats import progress
 
 import asyncio
 import logging
@@ -10,8 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..domains.native_asks import _identifier, reopen_pending, ticket_status
 from ..modules.notifications.outbox import stage_notifications
+from ..modules.operations.heartbeats import progress
 from ..services.notification_events import create_notification_batch
-
 
 logger = logging.getLogger(__name__)
 SYSTEM_ACTOR = {'id': 'system', 'name': 'Flowie'}

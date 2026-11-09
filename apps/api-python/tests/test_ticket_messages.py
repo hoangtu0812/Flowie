@@ -10,9 +10,9 @@ from app.core.errors import ApiError
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
 from app.domains.native_asks import (
     AskMessageInput,
+    AskTransitionInput,
     CreateAskInput,
     UpdateAskInput,
-    AskTransitionInput,
     archive_ask,
     convert_ask,
     create_ask,

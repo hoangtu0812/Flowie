@@ -1,14 +1,16 @@
 import json
 from typing import Literal
-from pydantic import BaseModel, Field, ConfigDict, field_validator
-from sqlalchemy import text
+
 from fastapi import Depends
-from ...core.utc_responses import UtcAPIRouter
-from ...core.errors import ApiError
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from sqlalchemy import text
+
 from ...core.clock import _utcnow
+from ...core.errors import ApiError
+from ...core.timezones import time_zone
+from ...core.utc_responses import UtcAPIRouter
 from ...db.session import get_session
 from ...domains.auth import current_user
-from ...core.timezones import time_zone
 
 router = UtcAPIRouter(
     prefix="/api/v1/users/me/ui-preferences", tags=["account-preferences"]

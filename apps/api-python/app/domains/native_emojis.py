@@ -6,18 +6,17 @@ from secrets import token_urlsafe
 from typing import Any
 
 from fastapi import Depends, File, Form, Query, Request, UploadFile
-from ..core.utc_responses import UtcAPIRouter as APIRouter
 from fastapi.responses import Response
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
+from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
 from ..storage.minio import MinioStorage
 from .auth import _cuid, _utcnow, current_user
 from .native_projects import _workspace_access, _workspace_manager
-
 
 router = APIRouter(prefix='/api/v1/emojis', tags=['emojis'])
 MAX_EMOJI_BYTES = 512 * 1024

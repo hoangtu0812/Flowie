@@ -2,7 +2,7 @@ from datetime import timedelta
 from typing import Literal
 
 from fastapi import Depends, Request
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 

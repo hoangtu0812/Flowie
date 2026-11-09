@@ -10,9 +10,13 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
-from app.domains.native_projects import public_list_projects, public_get_project,public_project_issues
-from app.domains.native_initiatives import list_initiatives, initiative_activity
+from app.domains.native_initiatives import initiative_activity, list_initiatives
 from app.domains.native_issues import issue_options
+from app.domains.native_projects import (
+    public_get_project,
+    public_list_projects,
+    public_project_issues,
+)
 from app.modules.search.service import search
 
 

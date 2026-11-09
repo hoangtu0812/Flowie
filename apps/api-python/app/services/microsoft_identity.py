@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 import msal
-
 
 GRAPH_SCOPES = ['User.Read']
 
@@ -129,9 +128,9 @@ class MicrosoftIdentityClient:
 
 def authentication_instant(value):
     # Token issuance/acquisition time is not evidence of fresh user authentication.
-    if type(value) is not int or not 0 <= value <= datetime.now(timezone.utc).timestamp() + 60:
+    if type(value) is not int or not 0 <= value <= datetime.now(UTC).timestamp() + 60:
         return None
     try:
-        return datetime.fromtimestamp(value, timezone.utc).replace(tzinfo=None)
+        return datetime.fromtimestamp(value, UTC).replace(tzinfo=None)
     except (OverflowError, OSError, ValueError):
         return None

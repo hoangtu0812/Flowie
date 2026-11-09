@@ -1,4 +1,4 @@
-from datetime import datetime, time, timedelta, timezone
+from datetime import UTC, datetime, time, timedelta
 
 from ...core.errors import ApiError
 from ...core.timezones import local_instant, time_zone
@@ -9,7 +9,7 @@ HORIZON_DAYS = 366 * 10
 
 def utc_naive(value):
     return (
-        value.astimezone(timezone.utc).replace(tzinfo=None) if value.tzinfo else value
+        value.astimezone(UTC).replace(tzinfo=None) if value.tzinfo else value
     )
 
 
@@ -41,7 +41,7 @@ def add_working_seconds(start, seconds, calendar):
         return start + timedelta(seconds=seconds)
     zone = time_zone(calendar.timezone)
     holidays = set(calendar.holidays)
-    day = start.replace(tzinfo=timezone.utc).astimezone(zone).date()
+    day = start.replace(tzinfo=UTC).astimezone(zone).date()
     for _ in range(HORIZON_DAYS):
         for opened, closed in windows_for(day, calendar, zone, holidays):
             cursor = max(start, opened)
@@ -69,8 +69,8 @@ def working_seconds_between(start, end, calendar, *, cap=None):
         )
     zone = time_zone(calendar.timezone)
     holidays = set(calendar.holidays)
-    day = start.replace(tzinfo=timezone.utc).astimezone(zone).date()
-    last = end.replace(tzinfo=timezone.utc).astimezone(zone).date()
+    day = start.replace(tzinfo=UTC).astimezone(zone).date()
+    last = end.replace(tzinfo=UTC).astimezone(zone).date()
     total = 0.0
     for _ in range(HORIZON_DAYS):
         if day > last:

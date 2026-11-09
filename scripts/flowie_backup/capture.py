@@ -1,9 +1,9 @@
 import json
-import shutil
 import re
+import shutil
 import time
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from . import manifest
@@ -101,7 +101,7 @@ def capture(config, root):
         root,
         {
             "revision": revision,
-            "capturedAt": datetime.now(timezone.utc).isoformat(),
+            "capturedAt": datetime.now(UTC).isoformat(),
             "consistency": "application-writers-and-object-store-stopped",
             "databaseFormat": "pg_dump-custom",
             "objectsFormat": "minio-data-directory",

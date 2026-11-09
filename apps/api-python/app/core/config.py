@@ -112,7 +112,7 @@ class Settings:
     agent_provider_allowed_hosts: tuple[str, ...] = ()
 
     @classmethod
-    def from_environment(cls) -> 'Settings':
+    def from_environment(cls) -> Settings:
         return cls(
             api_port=int(getenv('API_PORT', '4000')),
             cors_origins=_origins(getenv('API_CORS_ORIGIN', 'http://localhost:3000')),

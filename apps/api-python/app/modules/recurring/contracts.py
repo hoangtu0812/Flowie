@@ -3,8 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from ...core.timezones import time_zone
 from ...core.errors import ApiError
+from ...core.timezones import time_zone
 from ..work_items.bug_contracts import BugCreateFields
 
 

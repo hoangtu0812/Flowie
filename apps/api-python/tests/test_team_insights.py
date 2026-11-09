@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 import unittest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -65,17 +65,17 @@ class AssignmentPickTests(unittest.TestCase):
 class DigestScheduleTests(unittest.TestCase):
     def test_next_run_is_tomorrow_after_digest_hour(self) -> None:
         now = datetime(2026, 9, 9, 9, 0, tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"))
-        seconds = seconds_until_next_digest(now.astimezone(timezone.utc))
+        seconds = seconds_until_next_digest(now.astimezone(UTC))
         self.assertAlmostEqual(seconds, 23 * 3600, delta=2.0)
 
     def test_next_run_is_today_before_digest_hour(self) -> None:
         now = datetime(2026, 9, 9, 6, 0, tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"))
-        seconds = seconds_until_next_digest(now.astimezone(timezone.utc))
+        seconds = seconds_until_next_digest(now.astimezone(UTC))
         self.assertAlmostEqual(seconds, 2 * 3600, delta=2.0)
 
     def test_cutoff_is_today_08h_naive_utc(self) -> None:
         now = datetime(2026, 9, 9, 15, 0, tzinfo=ZoneInfo("Asia/Ho_Chi_Minh"))
-        cutoff = digest_cutoff_utc(now.astimezone(timezone.utc))
+        cutoff = digest_cutoff_utc(now.astimezone(UTC))
         self.assertEqual(cutoff, datetime(2026, 9, 9, 1, 0))
         self.assertIsNone(cutoff.tzinfo)
 
