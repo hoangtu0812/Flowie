@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useIssuesStore } from '@/store/issues-store';
-import { User, users } from '@/mock-data/users';
+import type { User } from '@/types/users';
 import { CheckIcon, UserCircle } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -21,14 +21,14 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 interface AssigneeSelectorProps {
    assignee: User | null;
    onChange: (assignee: User | null) => void;
-   users?: User[];
+   users: User[];
    teamIdentifier?: string;
 }
 
 export function AssigneeSelector({
    assignee,
    onChange,
-   users: availableUsers = users,
+   users: availableUsers,
    teamIdentifier = 'CORE',
 }: AssigneeSelectorProps) {
    const tx = useMessages(messages);

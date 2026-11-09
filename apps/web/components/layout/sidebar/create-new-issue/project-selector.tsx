@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useIssuesStore } from '@/store/issues-store';
-import { Project, projects } from '@/mock-data/projects';
+import type { Project } from '@/types/projects';
 import { Box, CheckIcon, FolderIcon } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
 
@@ -20,13 +20,13 @@ export type ProjectOption = Pick<Project, 'id' | 'name' | 'icon'>;
 interface ProjectSelectorProps {
    project: ProjectOption | undefined;
    onChange: (project: ProjectOption | undefined) => void;
-   projects?: ProjectOption[];
+   projects: ProjectOption[];
 }
 
 export function ProjectSelector({
    project,
    onChange,
-   projects: availableProjects = projects,
+   projects: availableProjects,
 }: ProjectSelectorProps) {
    const id = useId();
    const [open, setOpen] = useState<boolean>(false);

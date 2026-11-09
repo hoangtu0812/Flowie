@@ -9,9 +9,9 @@ import {
    CommandItem,
    CommandList,
 } from '@/components/ui/command';
-import { Issue } from '@/mock-data/issues';
-import { priorities } from '@/mock-data/priorities';
-import { status as allStatus } from '@/mock-data/status';
+import { Issue } from '@/types/issues';
+import { priorities } from '@/lib/priority-presentations';
+import { status as allStatus } from '@/lib/status-presentations';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useCreateIssueStore } from '@/store/create-issue-store';
 import { useIssuesStore } from '@/store/issues-store';

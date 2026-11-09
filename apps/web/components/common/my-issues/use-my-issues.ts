@@ -1,6 +1,6 @@
 'use client';
 
-import { Issue } from '@/mock-data/issues';
+import { Issue } from '@/types/issues';
 import { loadCurrentUser } from '@/features/identity/current-user';
 import { parseAsStringLiteral, useQueryState } from 'nuqs';
 import { useEffect, useState } from 'react';

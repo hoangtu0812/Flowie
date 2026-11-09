@@ -6,7 +6,7 @@ import { Text } from '@astryxdesign/core/Text';
 import { Icon } from '@astryxdesign/core/Icon';
 import { Tooltip } from '@astryxdesign/core/Tooltip';
 import { DesignSurface } from '@/components/common/design-surface';
-import { Project } from '@/mock-data/projects';
+import { Project } from '@/types/projects';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { projectPath } from '@/lib/project-route';

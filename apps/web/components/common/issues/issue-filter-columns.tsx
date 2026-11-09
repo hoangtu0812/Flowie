@@ -4,12 +4,12 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { createColumnConfigHelper } from '@/components/data-table-filter/core/filters';
 import type { ColumnOption, FiltersState } from '@/components/data-table-filter/core/types';
 import { multiOptionFilterFn, optionFilterFn } from '@/components/data-table-filter/lib/filter-fns';
-import { Issue } from '@/mock-data/issues';
-import type { LabelInterface } from '@/mock-data/labels';
-import { priorities } from '@/mock-data/priorities';
-import type { Status, StatusCategory } from '@/mock-data/status';
-import type { Project } from '@/mock-data/projects';
-import type { User } from '@/mock-data/users';
+import { Issue } from '@/types/issues';
+import type { LabelInterface } from '@/types/labels';
+import { priorities } from '@/lib/priority-presentations';
+import type { Status, StatusCategory } from '@/lib/status-presentations';
+import type { Project } from '@/types/projects';
+import type { User } from '@/types/users';
 import type { IssueCycle } from '@/store/issues-store';
 import {
    BarChart3,

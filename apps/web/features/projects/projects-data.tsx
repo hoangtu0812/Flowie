@@ -3,7 +3,7 @@
 import { health as healthOptions } from '@/lib/project-presentations';
 import { priorities } from '@/lib/priority-presentations';
 import type { Status } from '@/lib/status-presentations';
-import { status as circleStatuses } from '@/mock-data/status';
+import { status as circleStatuses } from '@/lib/status-presentations';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import type { Project } from '@/types/projects';
 import { projectIcon } from '@/components/common/projects/project-icon';

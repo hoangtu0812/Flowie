@@ -9,7 +9,7 @@ import { Button } from '@astryxdesign/core/Button';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { useIssuesStore } from '@/store/issues-store';
-import type { Issue } from '@/mock-data/issues';
+import type { Issue } from '@/types/issues';
 import { BugFieldsForm, type BugFields } from './bug-fields';
 /**
  * Bug report block of the issue body, shown only for bugs: severity, environment, reproduction

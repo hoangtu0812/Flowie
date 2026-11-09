@@ -6,6 +6,7 @@ import type { User } from '@/types/users';
 
 /** UI shape mapped from the Issue API. It contains no fixture records. */
 export interface Issue {
+   manualOrder?: string;
    id: string;
    identifier: string;
    title: string;
@@ -34,6 +35,16 @@ export interface Issue {
    actualEffort?: number;
    dueDate?: string;
    parentIssueId?: string;
+   /** Identifier and title of the parent, so the issue page can link to it. */
+   parent?: { id: string; identifier: string; title: string };
+   /**
+    * Parent chain from the top-level issue down to `parent`, returned by the issue lookup only.
+    * VI: Chuỗi cha từ issue cấp cao nhất xuống `parent`, chỉ API lookup issue trả về.
+    */
+   ancestors?: { id: string; identifier: string; title: string }[];
+   /** Active direct children and how many of them are completed. */
+   subIssueCount?: number;
+   completedSubIssueCount?: number;
 }
 
 export function groupIssuesByStatus(issues: Issue[]): Record<string, Issue[]> {

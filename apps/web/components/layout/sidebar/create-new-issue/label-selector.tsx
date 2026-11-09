@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useIssuesStore } from '@/store/issues-store';
-import { LabelInterface, labels } from '@/mock-data/labels';
+import type { LabelInterface } from '@/types/labels';
 import { CheckIcon, TagIcon } from 'lucide-react';
 import { useId, useState } from 'react';
 import { useMessages } from '@/features/shared/use-messages';
@@ -20,13 +20,13 @@ import { messages } from '@/features/issues/messages.vi';
 interface LabelSelectorProps {
    selectedLabels: LabelInterface[];
    onChange: (labels: LabelInterface[]) => void;
-   labels?: LabelInterface[];
+   labels: LabelInterface[];
 }
 
 export function LabelSelector({
    selectedLabels,
    onChange,
-   labels: availableLabels = labels,
+   labels: availableLabels,
 }: LabelSelectorProps) {
    const tx = useMessages(messages);
    const id = useId();

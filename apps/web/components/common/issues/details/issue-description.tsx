@@ -12,7 +12,7 @@ import { DraftImages } from '@/components/common/markdown/draft-images';
 import { useImagePaste } from '@/hooks/use-image-paste';
 import { attachmentPreviewUrl, uploadAttachment } from '@/lib/attachments';
 import { imageReferences, removeImageReference } from '@/lib/markdown-images';
-import { Issue } from '@/mock-data/issues';
+import { Issue } from '@/types/issues';
 import { useIssuesStore } from '@/store/issues-store';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pencil } from 'lucide-react';

@@ -5,19 +5,16 @@ import { messages } from '@/features/issues/messages.vi';
 import { useState } from 'react';
 import { Button } from '@astryxdesign/core/Button';
 import { VStack } from '@astryxdesign/core/Layout';
-import type { Issue } from '@/mock-data/issues';
-import type { IssueDetail } from '@/mock-data/issue-details';
+import type { Issue } from '@/types/issues';
 import type { CodeReview } from '@/lib/scm';
 import { IssuePropertiesPanel } from './issue-properties-panel';
 
 export function MobileIssueProperties({
    issue,
-   detail,
    reviews,
    allScreens = false,
 }: {
    issue: Issue;
-   detail: IssueDetail;
    reviews?: CodeReview[];
    allScreens?: boolean;
 }) {
@@ -31,7 +28,7 @@ export function MobileIssueProperties({
             aria-expanded={open}
             onClick={() => setOpen((value) => !value)}
          />
-         {open && <IssuePropertiesPanel issue={issue} detail={detail} reviews={reviews} />}
+         {open && <IssuePropertiesPanel issue={issue} reviews={reviews} />}
       </VStack>
    );
 }

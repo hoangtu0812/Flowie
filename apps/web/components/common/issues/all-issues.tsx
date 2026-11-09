@@ -3,8 +3,8 @@
 import type { IssueQuery } from '@/features/issues/issue-query';
 import { useIssueQuery } from '@/features/issues/use-issue-query';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
-import { Issue } from '@/mock-data/issues';
-import { Status, StatusCategory } from '@/mock-data/status';
+import { Issue } from '@/types/issues';
+import { Status, StatusCategory } from '@/lib/status-presentations';
 import { useDisplaySettingsStore } from '@/store/display-settings-store';
 import { useFilterStore } from '@/store/filter-store';
 import { useIssuesStore } from '@/store/issues-store';

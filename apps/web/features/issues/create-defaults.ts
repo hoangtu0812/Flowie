@@ -1,4 +1,4 @@
-import type { User } from '../../mock-data/users';
+import type { User } from '../../types/users';
 export type IssueMemberOption = {
    id: string;
    name: string;

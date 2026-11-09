@@ -1,4 +1,4 @@
-import { User } from '@/mock-data/users';
+import { User } from '@/types/users';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import { useIssuesStore } from '@/store/issues-store';
 import { toast } from 'sonner';

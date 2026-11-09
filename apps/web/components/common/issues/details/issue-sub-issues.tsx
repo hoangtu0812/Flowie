@@ -41,7 +41,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react
 import { toast } from 'sonner';
 import { AssigneeUser } from '../assignee-user';
 import { IssueDateCell } from '../issue-inline-cells';
-import type { User } from '@/mock-data/users';
+import type { User } from '@/types/users';
 import { IssueSearchDialog } from './issue-search-dialog';
 import { Selector } from '@astryxdesign/core/Selector';
 import { DesignSurface } from '@/components/common/design-surface';
@@ -49,7 +49,7 @@ import { moveInList } from '@/features/manual-order/order';
 import { sortSubIssues, type SubIssueSort } from '@/features/manual-order/sub-issue-sort';
 import { ReorderRow, ReorderProvider } from '@/features/manual-order/reorder-row';
 import { outsideParent } from '@/lib/issue-span';
-import type { Issue } from '@/mock-data/issues';
+import type { Issue } from '@/types/issues';
 import { rescheduleIssue, useCanEditIssues } from '@/components/common/timeline/reschedule';
 import { IssueSubIssuesTimeline, type TimelineSubIssueRow } from './issue-sub-issues-timeline';
 
