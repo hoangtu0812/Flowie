@@ -63,7 +63,24 @@ test('MCP connections table filters by status and name; form groups permissions'
       await expect(table.getByText(`Table revoked ${suffix}`, { exact: true })).toHaveCount(0);
 
       await page.getByRole('button', { name: 'New connection', exact: true }).click();
-      await page.getByRole('button', { name: 'Coding project preset' }).click();
+      const dialog = page.getByRole('dialog', { name: 'New connection' });
+      await expect(dialog).toBeVisible();
+      // Controls that share a row must start at the same height (no hint line between one
+      // label and its control).
+      // VI: Các ô cùng hàng phải bắt đầu cùng độ cao (không có dòng gợi ý chen giữa nhãn và ô).
+      const top = async (role: 'textbox' | 'button', name: RegExp) =>
+         (await dialog.getByRole(role, { name }).boundingBox())!.y;
+      expect(
+         Math.abs(
+            (await top('textbox', /^Connection name/)) - (await top('textbox', /^Expires in days/))
+         )
+      ).toBeLessThan(2);
+      expect(
+         Math.abs(
+            (await top('button', /^Allowed teams/)) - (await top('button', /^Allowed projects/))
+         )
+      ).toBeLessThan(2);
+      await dialog.getByRole('button', { name: 'Coding project preset' }).click();
       const write = page.getByRole('group', { name: 'Write permissions' });
       await expect(
          write.getByRole('checkbox', { name: 'Select all write permissions' })
@@ -76,6 +93,8 @@ test('MCP connections table filters by status and name; form groups permissions'
       await expect(
          write.getByRole('checkbox', { name: 'Write comments', exact: true })
       ).toBeChecked();
+      await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await expect(dialog).toHaveCount(0);
 
       for (const client of ['Claude Code', 'Codex', 'Cursor', 'VS Code', 'Antigravity']) {
          await expect(

@@ -5,7 +5,8 @@ import { useParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'motion/react';
 import { Code2, Copy, Eye, Plus, Save, ScrollText, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { VStack, HStack } from '@astryxdesign/core/Layout';
+import { VStack, HStack, Layout, LayoutContent, LayoutFooter } from '@astryxdesign/core/Layout';
+import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { Button } from '@astryxdesign/core/Button';
 import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
@@ -196,222 +197,240 @@ export function McpSettings() {
                </motion.div>
             )}
          </AnimatePresence>
-         <AnimatePresence>
-            {state.configuration && formOpen && (
-               <motion.div key={editingId ?? 'create-connection'} {...reveal}>
-                  <VStack gap={4}>
-                     <HStack gap={2} vAlign="center" hAlign="between">
-                        <Heading level={3}>
-                           {editingId ? 'Edit connection' : 'New connection'}
-                        </Heading>
-                        <Button
-                           label={
-                              editingId ? 'Close edit connection form' : 'Close new connection form'
-                           }
-                           tooltip="Close"
-                           icon={<X className="size-4" />}
-                           isIconOnly
-                           size="sm"
-                           variant="ghost"
-                           onClick={closeForm}
-                        />
-                     </HStack>
-                     <HStack gap={2}>
-                        <Button
-                           label="Read-only project preset"
-                           icon={<Eye className="size-4" />}
-                           variant={preset === 'read' ? 'primary' : 'secondary'}
-                           size="sm"
-                           aria-pressed={preset === 'read'}
-                           onClick={() => {
-                              setPreset('read');
-                              setScopes(READ_PRESET);
-                           }}
-                        >
-                           Read-only
-                        </Button>
-                        <Button
-                           label="Coding project preset"
-                           icon={<Code2 className="size-4" />}
-                           variant={preset === 'coding' ? 'primary' : 'secondary'}
-                           size="sm"
-                           aria-pressed={preset === 'coding'}
-                           isDisabled={!state.configuration.writesEnabled}
-                           onClick={() => {
-                              setPreset('coding');
-                              setScopes(CODING_PRESET);
-                           }}
-                        >
-                           Coding
-                        </Button>
-                     </HStack>
-                     <Text type="supporting" color="secondary">
-                        {preset === 'read'
-                           ? 'Read project work without changing it.'
-                           : 'Permit work edits, status changes and run evidence within selected projects.'}{' '}
-                        {editingId
-                           ? 'Changes apply from the next MCP call; the token stays the same.'
-                           : 'Select at least one project before creating a connection.'}
-                     </Text>
-                     <HStack gap={3}>
-                        <TextInput
-                           label="Connection name"
-                           value={name}
-                           onChange={setName}
-                           isRequired
-                           width="100%"
-                        />
-                        {!editingId && (
-                           <TextInput
-                              label="Expires in days"
-                              value={expires}
-                              onChange={setExpires}
-                              description="Choose 1 to 90 days."
+         {/* The connection form opens in a dialog so creating or editing never pushes the
+             connections table and install guide further down the page. Closing is blocked
+             while a save is in flight so a half-sent change cannot be abandoned silently. */}
+         {/* VI: Form kết nối mở trong hộp thoại để tạo hoặc sửa không đẩy bảng kết nối và
+             hướng dẫn cài đặt xuống dưới trang. Không cho đóng khi đang lưu để thay đổi gửi
+             dở không bị bỏ ngang mà không biết. */}
+         {state.configuration && formOpen && (
+            <Dialog
+               isOpen
+               aria-label={editingId ? 'Edit connection' : 'New connection'}
+               purpose="form"
+               width={760}
+               onOpenChange={(open) => {
+                  if (!open && !state.busy) closeForm();
+               }}
+            >
+               <Layout
+                  height="auto"
+                  padding={4}
+                  header={
+                     <DialogHeader
+                        title={editingId ? 'Edit connection' : 'New connection'}
+                        onOpenChange={() => {
+                           if (!state.busy) closeForm();
+                        }}
+                     />
+                  }
+                  footer={
+                     <LayoutFooter>
+                        <HStack gap={2} hAlign="end" wrap="wrap">
+                           <Button label="Cancel" variant="ghost" onClick={closeForm} />
+                           <Button
+                              label={editingId ? 'Save connection' : 'Create connection'}
+                              variant="primary"
+                              icon={
+                                 editingId ? (
+                                    <Save className="size-4" />
+                                 ) : (
+                                    <Plus className="size-4" />
+                                 )
+                              }
+                              isLoading={state.busy}
+                              isDisabled={
+                                 !state.configuration.enabled ||
+                                 name.trim().length < 2 ||
+                                 !scopes.length ||
+                                 (!editingId && !validExpiry) ||
+                                 !projectIds.length
+                              }
+                              onClick={() =>
+                                 void (
+                                    editingId
+                                       ? state.update(editingId, draft)
+                                       : state.create({ ...draft, expiresInDays: Number(expires) })
+                                 ).then((saved) => {
+                                    if (saved) closeForm();
+                                 })
+                              }
                            />
-                        )}
-                     </HStack>
-                     {/* Searchable multi-selects keep the form short however many teams and
-                         projects the workspace has. Changing teams clears the project choice
-                         because the project list is narrowed to the selected teams. */}
-                     {/* VI: Ô chọn nhiều có tìm kiếm giữ form ngắn dù workspace có bao nhiêu team
-                         và dự án. Đổi team xoá lựa chọn dự án vì danh sách dự án chỉ gồm dự án
-                         của các team đã chọn. */}
-                     <Grid columns={{ minWidth: 260, max: 2 }} gap={3} width="100%">
-                        <MultiSelector
-                           label="Allowed teams"
-                           description="Leave empty to allow every team you can read."
-                           value={teamIds}
-                           options={state.resources.teams.map((team) => ({
-                              value: team.id,
-                              label: team.name,
-                           }))}
-                           onChange={(next) => {
-                              setTeamIds(next);
-                              setProjectIds([]);
-                           }}
-                           hasSearch
-                           hasSelectAll
-                           triggerDisplay="badges"
-                           placeholder="All teams"
-                           width="100%"
-                        />
-                        <MultiSelector
-                           label="Allowed projects"
-                           isRequired
-                           value={projectIds}
-                           options={state.resources.projects
-                              .filter(
-                                 (project) =>
-                                    !teamIds.length ||
-                                    (project.teamId && teamIds.includes(project.teamId))
-                              )
-                              .map((project) => ({ value: project.id, label: project.name }))}
-                           onChange={setProjectIds}
-                           hasSearch
-                           hasSelectAll
-                           triggerDisplay="badges"
-                           placeholder="Select projects"
-                           width="100%"
-                        />
-                     </Grid>
-                     {state.resources.truncated && (
-                        <Text color="secondary">
-                           Only the first 200 teams and projects are shown.
+                        </HStack>
+                     </LayoutFooter>
+                  }
+               >
+                  <LayoutContent>
+                     <VStack gap={4}>
+                        <HStack gap={2}>
+                           <Button
+                              label="Read-only project preset"
+                              icon={<Eye className="size-4" />}
+                              variant={preset === 'read' ? 'primary' : 'secondary'}
+                              size="sm"
+                              aria-pressed={preset === 'read'}
+                              onClick={() => {
+                                 setPreset('read');
+                                 setScopes(READ_PRESET);
+                              }}
+                           >
+                              Read-only
+                           </Button>
+                           <Button
+                              label="Coding project preset"
+                              icon={<Code2 className="size-4" />}
+                              variant={preset === 'coding' ? 'primary' : 'secondary'}
+                              size="sm"
+                              aria-pressed={preset === 'coding'}
+                              isDisabled={!state.configuration.writesEnabled}
+                              onClick={() => {
+                                 setPreset('coding');
+                                 setScopes(CODING_PRESET);
+                              }}
+                           >
+                              Coding
+                           </Button>
+                        </HStack>
+                        <Text type="supporting" color="secondary">
+                           {preset === 'read'
+                              ? 'Read project work without changing it.'
+                              : 'Permit work edits, status changes and run evidence within selected projects.'}{' '}
+                           {editingId
+                              ? 'Changes apply from the next MCP call; the token stays the same.'
+                              : 'Select at least one project before creating a connection.'}
                         </Text>
-                     )}
-                     <Heading level={4}>Permissions</Heading>
-                     {/* Read and write scopes sit side by side, each with its own select-all;
-                         write scopes are locked while the server only allows reading. */}
-                     {/* VI: Quyền đọc và ghi đặt cạnh nhau, mỗi nhóm có ô chọn tất cả riêng;
-                         quyền ghi bị khoá khi server chỉ cho đọc. */}
-                     <Grid columns={{ minWidth: 260, max: 2 }} gap={4} width="100%">
-                        {(['Read', 'Write'] as const).map((group) => {
-                           const groupScopes = state.configuration!.scopes.filter(
-                              (scope) => scope.endsWith(':read') === (group === 'Read')
-                           );
-                           const locked =
-                              state.busy ||
-                              (group === 'Write' && !state.configuration!.writesEnabled);
-                           const chosen = groupScopes.filter((scope) => scopes.includes(scope));
-                           if (!groupScopes.length) return null;
-                           return (
-                              <VStack
-                                 key={group}
-                                 gap={2}
-                                 role="group"
-                                 aria-label={`${group} permissions`}
-                              >
-                                 <CheckboxInput
-                                    label={`Select all ${group.toLowerCase()} permissions`}
-                                    value={
-                                       chosen.length === groupScopes.length
-                                          ? true
-                                          : chosen.length
-                                            ? 'indeterminate'
-                                            : false
-                                    }
-                                    isDisabled={locked}
-                                    onChange={(checked) =>
-                                       setScopes((current) => [
-                                          ...current.filter(
-                                             (scope) => !groupScopes.includes(scope)
-                                          ),
-                                          ...(checked ? groupScopes : []),
-                                       ])
-                                    }
-                                 />
-                                 <VStack gap={1} className="pl-6">
-                                    {groupScopes.map((scope) => (
-                                       <CheckboxInput
-                                          key={scope}
-                                          label={SCOPE_LABELS[scope] ?? scope}
-                                          value={scopes.includes(scope)}
-                                          isDisabled={locked}
-                                          onChange={(checked) =>
-                                             setScopes((current) =>
-                                                checked
-                                                   ? [...current, scope]
-                                                   : current.filter((item) => item !== scope)
-                                             )
-                                          }
-                                       />
-                                    ))}
+                        <HStack gap={3}>
+                           <TextInput
+                              label="Connection name"
+                              value={name}
+                              onChange={setName}
+                              isRequired
+                              width="100%"
+                           />
+                           {!editingId && (
+                              <TextInput
+                                 label="Expires in days (1–90)"
+                                 value={expires}
+                                 onChange={setExpires}
+                              />
+                           )}
+                        </HStack>
+                        {/* Searchable multi-selects keep the form short however many teams and
+                            projects the workspace has. Changing teams clears the project choice
+                            because the project list is narrowed to the selected teams. */}
+                        {/* VI: Ô chọn nhiều có tìm kiếm giữ form ngắn dù workspace có bao nhiêu team
+                            và dự án. Đổi team xoá lựa chọn dự án vì danh sách dự án chỉ gồm dự án
+                            của các team đã chọn. */}
+                        <Grid columns={{ minWidth: 260, max: 2 }} gap={3} width="100%">
+                           <MultiSelector
+                              label="Allowed teams"
+                              labelTooltip="Leave empty to allow every team you can read."
+                              value={teamIds}
+                              options={state.resources.teams.map((team) => ({
+                                 value: team.id,
+                                 label: team.name,
+                              }))}
+                              onChange={(next) => {
+                                 setTeamIds(next);
+                                 setProjectIds([]);
+                              }}
+                              hasSearch
+                              hasSelectAll
+                              triggerDisplay="badges"
+                              placeholder="All teams"
+                              width="100%"
+                           />
+                           <MultiSelector
+                              label="Allowed projects"
+                              isRequired
+                              value={projectIds}
+                              options={state.resources.projects
+                                 .filter(
+                                    (project) =>
+                                       !teamIds.length ||
+                                       (project.teamId && teamIds.includes(project.teamId))
+                                 )
+                                 .map((project) => ({ value: project.id, label: project.name }))}
+                              onChange={setProjectIds}
+                              hasSearch
+                              hasSelectAll
+                              triggerDisplay="badges"
+                              placeholder="Select projects"
+                              width="100%"
+                           />
+                        </Grid>
+                        {state.resources.truncated && (
+                           <Text color="secondary">
+                              Only the first 200 teams and projects are shown.
+                           </Text>
+                        )}
+                        <Heading level={4}>Permissions</Heading>
+                        {/* Read and write scopes sit side by side, each with its own select-all;
+                            write scopes are locked while the server only allows reading. */}
+                        {/* VI: Quyền đọc và ghi đặt cạnh nhau, mỗi nhóm có ô chọn tất cả riêng;
+                            quyền ghi bị khoá khi server chỉ cho đọc. */}
+                        <Grid columns={{ minWidth: 260, max: 2 }} gap={4} width="100%">
+                           {(['Read', 'Write'] as const).map((group) => {
+                              const groupScopes = state.configuration!.scopes.filter(
+                                 (scope) => scope.endsWith(':read') === (group === 'Read')
+                              );
+                              const locked =
+                                 state.busy ||
+                                 (group === 'Write' && !state.configuration!.writesEnabled);
+                              const chosen = groupScopes.filter((scope) => scopes.includes(scope));
+                              if (!groupScopes.length) return null;
+                              return (
+                                 <VStack
+                                    key={group}
+                                    gap={2}
+                                    role="group"
+                                    aria-label={`${group} permissions`}
+                                 >
+                                    <CheckboxInput
+                                       label={`Select all ${group.toLowerCase()} permissions`}
+                                       value={
+                                          chosen.length === groupScopes.length
+                                             ? true
+                                             : chosen.length
+                                               ? 'indeterminate'
+                                               : false
+                                       }
+                                       isDisabled={locked}
+                                       onChange={(checked) =>
+                                          setScopes((current) => [
+                                             ...current.filter(
+                                                (scope) => !groupScopes.includes(scope)
+                                             ),
+                                             ...(checked ? groupScopes : []),
+                                          ])
+                                       }
+                                    />
+                                    <VStack gap={1} className="pl-6">
+                                       {groupScopes.map((scope) => (
+                                          <CheckboxInput
+                                             key={scope}
+                                             label={SCOPE_LABELS[scope] ?? scope}
+                                             value={scopes.includes(scope)}
+                                             isDisabled={locked}
+                                             onChange={(checked) =>
+                                                setScopes((current) =>
+                                                   checked
+                                                      ? [...current, scope]
+                                                      : current.filter((item) => item !== scope)
+                                                )
+                                             }
+                                          />
+                                       ))}
+                                    </VStack>
                                  </VStack>
-                              </VStack>
-                           );
-                        })}
-                     </Grid>
-                     <HStack gap={2} hAlign="end">
-                        <Button label="Cancel" variant="ghost" onClick={closeForm} />
-                        <Button
-                           label={editingId ? 'Save connection' : 'Create connection'}
-                           variant="primary"
-                           icon={
-                              editingId ? <Save className="size-4" /> : <Plus className="size-4" />
-                           }
-                           isLoading={state.busy}
-                           isDisabled={
-                              !state.configuration.enabled ||
-                              name.trim().length < 2 ||
-                              !scopes.length ||
-                              (!editingId && !validExpiry) ||
-                              !projectIds.length
-                           }
-                           onClick={() =>
-                              void (
-                                 editingId
-                                    ? state.update(editingId, draft)
-                                    : state.create({ ...draft, expiresInDays: Number(expires) })
-                              ).then((saved) => {
-                                 if (saved) closeForm();
-                              })
-                           }
-                        />
-                     </HStack>
-                  </VStack>
-               </motion.div>
-            )}
-         </AnimatePresence>
+                              );
+                           })}
+                        </Grid>
+                     </VStack>
+                  </LayoutContent>
+               </Layout>
+            </Dialog>
+         )}
          {endpoint && <ClientSetup endpoint={endpoint} token={state.token} />}
          {/* Call history and its dashboard live in Settings → MCP logs. */}
          {/* VI: Lịch sử lời gọi và dashboard nằm ở Settings → MCP logs. */}
