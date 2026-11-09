@@ -47,7 +47,7 @@ The implementation inventory and remaining adapter work are tracked in [implemen
 | Web | Next.js 15, React 19, TypeScript, Tailwind | Circle UI presentation and live-data adapters |
 | API | Python 3.12, FastAPI, SQLAlchemy | Authentication, RBAC, domain APIs and business logic |
 | Data | PostgreSQL 16 | Durable workspace, team, issue, project and activity data |
-| Services | Redis, MinIO | Background coordination and object storage |
+| Services | MinIO | Object storage; background jobs run inside the API |
 | Runtime | Docker Compose | Reproducible local and internal-network deployment |
 
 > The backend is served entirely by `apps/api-python`. The NestJS service in `apps/api` no longer runs and is kept only as migration reference.

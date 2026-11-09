@@ -18,21 +18,6 @@ services:
          timeout: 5s
          retries: 5
 
-   redis:
-      image: redis:7-alpine
-      pull_policy: never
-      container_name: circle-redis
-      restart: unless-stopped
-      ports:
-         - '${REDIS_PORT:-6379}:6379'
-      volumes:
-         - redis_data:/data
-      healthcheck:
-         test: ['CMD', 'redis-cli', 'ping']
-         interval: 10s
-         timeout: 5s
-         retries: 5
-
    minio:
       image: minio/minio:latest
       pull_policy: never
@@ -86,8 +71,6 @@ services:
          API_PUBLIC_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api/v1}
          POSTGRES_HOST: circle-postgres
          POSTGRES_PORT_INTERNAL: 5432
-         REDIS_HOST: circle-redis
-         REDIS_PORT_INTERNAL: 6379
          MINIO_HOST: circle-minio
          MINIO_PORT_INTERNAL: 9000
          S3_ENDPOINT: http://circle-minio:9000
@@ -127,6 +110,8 @@ services:
          SCM_GITHUB_APP_PRIVATE_KEY: ${SCM_GITHUB_APP_PRIVATE_KEY:-}
          SCM_GITHUB_WEBHOOK_SECRET: ${SCM_GITHUB_WEBHOOK_SECRET:-}
          SCM_SYNC_INTERVAL_SECONDS: ${SCM_SYNC_INTERVAL_SECONDS:-0}
+         TEAM_POLICY_SCAN_INTERVAL_SECONDS: ${TEAM_POLICY_SCAN_INTERVAL_SECONDS:-3600}
+         TEAM_POLICY_WRITES_ENABLED: ${TEAM_POLICY_WRITES_ENABLED:-true}
          MCP_ENABLED: ${MCP_ENABLED:-false}
          MCP_WRITES_ENABLED: ${MCP_WRITES_ENABLED:-false}
          MCP_ALLOWED_HOSTS: ${MCP_ALLOWED_HOSTS:-localhost:*,127.0.0.1:*,[::1]:*}
@@ -141,8 +126,6 @@ services:
             condition: service_healthy
          migrate:
             condition: service_completed_successfully
-         redis:
-            condition: service_healthy
          minio:
             condition: service_healthy
 
@@ -166,26 +149,6 @@ services:
          api:
             condition: service_started
 
-   worker:
-      profiles: ['app']
-      pull_policy: never
-      build:
-         context: .
-         dockerfile: infrastructure/docker/worker.Dockerfile
-      container_name: circle-worker
-      environment:
-         NODE_ENV: production
-         REDIS_URL: redis://circle-redis:6379
-         DATABASE_URL: postgresql://${POSTGRES_USER:-circle}:${POSTGRES_PASSWORD:-circle}@circle-postgres:5432/${POSTGRES_DB:-circle}?schema=public
-         TEAM_POLICY_SCAN_INTERVAL_MS: ${TEAM_POLICY_SCAN_INTERVAL_MS:-3600000}
-      depends_on:
-         migrate:
-            condition: service_completed_successfully
-         redis:
-            condition: service_healthy
-         postgres:
-            condition: service_healthy
-
 networks:
    default:
       driver: bridge
@@ -200,5 +163,4 @@ networks:
 
 volumes:
    postgres_data:
-   redis_data:
    minio_data:

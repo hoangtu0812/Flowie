@@ -96,7 +96,7 @@ quyền hoặc giao thức Flowie phải dùng được trên cả hai nền t�
 | Giao diện Flowie đầy đủ | Dùng giao diện web React/TypeScript hiện có |
 | Runner | Chuyển các chức năng cần thiết từ Python sang Rust, kiểm chứng tương đương trước khi thay thế (§11) |
 | Agent thực thi | Claude Code CLI và Codex CLI cài riêng trên máy; Codex App Server ở giai đoạn session tương tác |
-| Backend, database và web server | Giữ kiến trúc Flowie hiện tại (`apps/api-python`, `apps/web`, `apps/worker`) |
+| Backend, database và web server | Giữ kiến trúc Flowie hiện tại (`apps/api-python`, `apps/web`) |
 | Kết nối companion → Flowie | MCP streamable HTTP, tái sử dụng tool và scope của runner hiện có (§3) |
 
 Phạm vi “Rust hoàn toàn” áp dụng cho lõi native và runner do Flowie viết. UI web dùng

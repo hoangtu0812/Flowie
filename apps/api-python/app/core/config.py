@@ -26,8 +26,6 @@ class Settings:
     cors_origins: tuple[str, ...]
     postgres_host: str
     postgres_port: int
-    redis_host: str
-    redis_port: int
     minio_host: str
     minio_port: int
     s3_endpoint: str
@@ -84,13 +82,13 @@ class Settings:
     # Seconds between team retention and cycle cadence scans; minimum 60.
     # VI: Số giây giữa các lượt quét chính sách lưu giữ và nhịp cycle của team; tối thiểu 60.
     team_policy_scan_interval_seconds: int = 3600
-    # The scan cancels and archives people's issues on its own, so it reports what it would do
-    # and writes nothing until this is switched on deliberately. It stays off while the BullMQ
-    # worker still owns the job, so the two never write the same rows.
-    # VI: Lượt quét tự huỷ và tự lưu trữ issue của người dùng, nên nó chỉ báo cáo việc định làm và
-    # không ghi gì cho tới khi được bật có chủ đích. Nó tắt trong lúc worker BullMQ còn giữ job này,
-    # để hai bên không bao giờ cùng ghi vào một dòng.
-    team_policy_writes_enabled: bool = False
+    # The scan cancels and archives people's issues on its own. It is the only implementation
+    # since the BullMQ worker was removed, so it writes by default; TEAM_POLICY_WRITES_ENABLED=false
+    # is the emergency switch that leaves it logging what it would do and writing nothing.
+    # VI: Lượt quét tự huỷ và tự lưu trữ issue của người dùng. Từ khi worker BullMQ bị gỡ, đây là
+    # bản cài đặt duy nhất nên mặc định nó ghi; TEAM_POLICY_WRITES_ENABLED=false là công tắc khẩn
+    # cấp để nó chỉ log việc định làm và không ghi gì.
+    team_policy_writes_enabled: bool = True
     # Level for the application's own loggers. Uvicorn configures only its own
     # `uvicorn.*` loggers and leaves the root logger at WARNING with no handler, so
     # without this every `logger.info` in `app/` is discarded — which is why a job
@@ -120,8 +118,6 @@ class Settings:
             cors_origins=_origins(getenv('API_CORS_ORIGIN', 'http://localhost:3000')),
             postgres_host=getenv('POSTGRES_HOST', 'circle-postgres'),
             postgres_port=int(getenv('POSTGRES_PORT_INTERNAL', '5432')),
-            redis_host=getenv('REDIS_HOST', 'circle-redis'),
-            redis_port=int(getenv('REDIS_PORT_INTERNAL', '6379')),
             minio_host=getenv('MINIO_HOST', 'circle-minio'),
             minio_port=int(getenv('MINIO_PORT_INTERNAL', '9000')),
             s3_endpoint=getenv('S3_ENDPOINT', 'http://circle-minio:9000'),
@@ -160,7 +156,7 @@ class Settings:
             scm_github_webhook_secret=getenv('SCM_GITHUB_WEBHOOK_SECRET', '').strip(),
             scm_sync_interval_seconds=_sync_interval(int(getenv('SCM_SYNC_INTERVAL_SECONDS', '0'))),
             team_policy_scan_interval_seconds=max(60, int(getenv('TEAM_POLICY_SCAN_INTERVAL_SECONDS', '3600'))),
-            team_policy_writes_enabled=getenv('TEAM_POLICY_WRITES_ENABLED', 'false').lower() == 'true',
+            team_policy_writes_enabled=getenv('TEAM_POLICY_WRITES_ENABLED', 'true').lower() != 'false',
             log_level=getenv('LOG_LEVEL', 'INFO').strip().upper() or 'INFO',
             smtp_host=getenv('SMTP_HOST', '').strip(),
             smtp_port=int(getenv('SMTP_PORT', '587')),

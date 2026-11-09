@@ -36,7 +36,7 @@ Danh mục implementation, các phần còn mock và thứ tự tiếp tục n�
 | Web | Next.js 15, React 19, TypeScript, Tailwind | UI Circle gốc và adapter dữ liệu thật |
 | API | Python 3.12, FastAPI, SQLAlchemy | Xác thực, RBAC và business logic native |
 | Dữ liệu | PostgreSQL 16 | Dữ liệu workspace/team/issue/project bền vững |
-| Dịch vụ | Redis, MinIO | Điều phối background và object storage |
+| Dịch vụ | MinIO | Object storage; job nền chạy trong API |
 | Runtime | Docker Compose | Chạy local/mạng nội bộ có thể tái lập |
 
 ## 🚀 Chạy dự án

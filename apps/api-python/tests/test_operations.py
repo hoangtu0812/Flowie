@@ -1,6 +1,5 @@
 import asyncio
 from dataclasses import replace
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -8,25 +7,18 @@ from fastapi import FastAPI
 import pytest
 
 from app.core.config import Settings
-from app.core.readiness import bounded_probe, redis_ready
+from app.core.readiness import bounded_probe
 from app.modules.operations.diagnostics import install_diagnostics, logger
 from app.modules.operations.api import ClientError
 from app.storage.minio import MinioStorage
 
 
-def test_dependency_probe_requires_a_valid_redis_reply():
+def test_dependency_probe_is_bounded_and_reports_failures_as_false():
+    async def failing():
+        raise ConnectionError('refused')
     async def verify():
-        for reply,expected in [(b'+PONG\r\n',True),(b'+NOPE\r\n',False)]:
-            async def connection(reader,writer):
-                await reader.read(64)
-                writer.write(reply)
-                await writer.drain()
-                writer.close()
-                await writer.wait_closed()
-            server=await asyncio.start_server(connection,'127.0.0.1',0)
-            async with server:
-                settings=SimpleNamespace(redis_host='127.0.0.1',redis_port=server.sockets[0].getsockname()[1])
-                assert await bounded_probe(redis_ready(settings),.5) is expected
+        assert await bounded_probe(asyncio.sleep(0,True),.5) is True
+        assert await bounded_probe(failing(),.5) is False
         assert await bounded_probe(asyncio.sleep(1),.01) is False
     asyncio.run(verify())
 
