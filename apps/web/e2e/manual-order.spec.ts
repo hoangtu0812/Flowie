@@ -43,7 +43,12 @@ async function dragRow(page: Page, handle: Locator, target: Locator, after = tru
    // where a raw mouse press at their coordinates reaches nothing.
    // VI: Các spec trước làm issue fixture dùng chung dài ra, nên hàng có thể nằm dưới viewport,
    // VI: nơi thao tác chuột thô theo toạ độ không chạm vào phần tử nào.
-   await target.scrollIntoViewIfNeeded();
+   // The target goes to the middle of the viewport: WebKit's scroll-if-needed leaves it at the
+   // bottom edge, where the drop point falls in dnd-kit's auto-scroll zone and the page scrolls
+   // away from under the pointer, so the row never moves.
+   // VI: Đưa hàng đích vào giữa viewport: scroll-if-needed của WebKit để hàng sát mép dưới, nơi
+   // VI: điểm thả rơi vào vùng tự cuộn của dnd-kit và trang cuộn đi dưới con trỏ, nên hàng không dời.
+   await target.evaluate((el) => el.scrollIntoView({ block: 'center' }));
    await handle.scrollIntoViewIfNeeded();
    const from = (await handle.boundingBox())!,
       to = (await target.boundingBox())!;
