@@ -1,16 +1,21 @@
 import json
 import re
+from datetime import UTC
 from io import BytesIO
 from typing import Any
 from zipfile import ZIP_DEFLATED, ZipFile
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
 
 from ...core.csv_export import csv_bytes
 from ...core.errors import ApiError
+from ...core.xlsx_export import xlsx_bytes
 from ..access.projects import _workspace_access
 from ..work_items.document_repository import _team_access
 from ..work_items.issue_search import issue_scope
+
+VIETNAM = ZoneInfo("Asia/Ho_Chi_Minh")
 
 
 async def export_issues(db, user, payload):
@@ -23,7 +28,10 @@ async def export_issues(db, user, payload):
             await db.execute(
                 text(
                     """SELECT i.id,i.identifier,i.title,i.description,i.issue_type,i.priority,i.severity,
-        i.status_id,s.name AS status_name,i.team_id,i.project_id,i.assignee_id,i.start_date,i.target_date,i.due_date,i.created_at,i.updated_at """
+        i.status_id,s.name AS status_name,i.team_id,i.project_id,i.assignee_id,i.start_date,i.target_date,i.due_date,i.created_at,i.updated_at,
+        t.name AS team_name,(SELECT p.name FROM projects p WHERE p.id=i.project_id) AS project_name,
+        (SELECT u.name FROM users u WHERE u.id=i.assignee_id) AS assignee_name,i.estimated_effort,i.actual_effort,
+        (SELECT string_agg(l.name,', ' ORDER BY l.name) FROM issue_labels il JOIN labels l ON l.id=il.label_id WHERE il.issue_id=i.id) AS label_names """
                     + scope
                     + " ORDER BY i.created_at DESC,i.id DESC LIMIT 10001"
                 ),
@@ -37,6 +45,8 @@ async def export_issues(db, user, payload):
         raise ApiError(
             400, "Narrow the filters to at most 10000 issues.", "Bad Request"
         )
+    if payload.format == "xlsx":
+        return _issues_workbook(rows)
     columns = [
         "externalId",
         "identifier",
@@ -83,6 +93,69 @@ async def export_issues(db, user, payload):
                 if hasattr(row[field], "isoformat")
                 else row[field]
                 for field in fields
+            ]
+            for row in rows
+        ],
+    )
+
+
+def _day(value):
+    """Planning dates are stored as midnight, so only the day is shown. VI: Ngày kế hoạch lưu nửa đêm nên chỉ hiện ngày."""
+    return value and value.date().isoformat()
+
+
+def _local(value):
+    """Timestamps are stored in UTC and shown in Vietnam time. VI: Mốc thời gian lưu UTC, hiện theo giờ Việt Nam."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.astimezone(VIETNAM).strftime("%Y-%m-%d %H:%M")
+
+
+def _issues_workbook(rows):
+    """Readable workbook of the matching issues: names instead of IDs, one row per issue.
+    VI: Workbook dễ đọc của các công việc khớp bộ lọc: tên thay cho ID, mỗi công việc một dòng."""
+    return xlsx_bytes(
+        "Issues",
+        [
+            "ID",
+            "Title",
+            "Type",
+            "Status",
+            "Priority",
+            "Severity",
+            "Labels",
+            "Project",
+            "Team",
+            "Assignee",
+            "Start",
+            "End",
+            "Due date",
+            "Est. effort",
+            "Act. effort",
+            "Created",
+            "Updated",
+        ],
+        [
+            [
+                row["identifier"],
+                row["title"],
+                row["issue_type"],
+                row["status_name"],
+                row["priority"],
+                row["severity"],
+                row["label_names"],
+                row["project_name"],
+                row["team_name"],
+                row["assignee_name"],
+                _day(row["start_date"]),
+                _day(row["target_date"]),
+                _day(row["due_date"]),
+                row["estimated_effort"],
+                row["actual_effort"],
+                _local(row["created_at"]),
+                _local(row["updated_at"]),
             ]
             for row in rows
         ],

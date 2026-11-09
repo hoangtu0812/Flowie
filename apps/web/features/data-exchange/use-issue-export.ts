@@ -21,18 +21,18 @@ export function useIssueExport(workspace: string, query: string) {
          alive.current = false;
       };
    }, []);
-   const run = async () => {
+   const run = async (format: 'csv' | 'xlsx' = 'csv') => {
       if (busy) return;
       setBusy(true);
       try {
          const response = await authenticatedFetch(exchangeApi + '/issues/export', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ workspaceId: workspace, query: bulkQuery(query) }),
+            body: JSON.stringify({ workspaceId: workspace, query: bulkQuery(query), format }),
          });
          if (!response.ok) await responseData(response, tx('Could not export issues.'));
          const content = await response.blob();
-         if (alive.current) downloadFile(content, 'flowie-issues.csv');
+         if (alive.current) downloadFile(content, `flowie-issues.${format}`);
       } catch (reason) {
          if (alive.current)
             toast.error(reason instanceof Error ? reason.message : tx('Could not export issues.'));
