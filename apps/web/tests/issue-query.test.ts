@@ -9,6 +9,7 @@ test('workspace views preserve scope when exporting or applying bulk changes', (
       noProject: false,
       issueType: 'BUG',
       categories: ['backlog'],
+      sort: [{ key: 'title', direction: 'asc' }],
    });
    assert.deepEqual(bulkQuery(query.toString()), {
       noTeam: true,

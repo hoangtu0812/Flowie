@@ -22,6 +22,7 @@ export const messages = {
    'Issue actions': 'Thao tác công việc',
    'Exporting issues…': 'Đang xuất công việc…',
    'Export matching issues CSV': 'Xuất CSV công việc khớp bộ lọc',
+   'Export matching issues to Excel': 'Xuất Excel công việc khớp bộ lọc',
    'Insights cover all matching issues.': 'Phân tích bao gồm tất cả công việc khớp bộ lọc.',
    '{loaded} of {total} issues loaded': 'Đã tải {loaded} / {total} công việc',
    '{total} issues': '{total} công việc',

@@ -152,6 +152,12 @@ async def issues_export(
         payload.workspaceId,
     )
     await db.commit()
+    if payload.format == "xlsx":
+        return private_download(
+            content,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "flowie-issues.xlsx",
+        )
     return private_download(content, "text/csv", "flowie-issues.csv")
 
 
