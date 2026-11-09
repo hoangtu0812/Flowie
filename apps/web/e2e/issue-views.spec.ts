@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { openFilterSection } from './filter-menu';
 import { readFileSync } from 'node:fs';
 const fixture = JSON.parse(readFileSync('.e2e-fixture.json', 'utf8'));
 const api = 'http://localhost:4000/api/v1';
@@ -23,8 +24,7 @@ test('team filters save, reopen, clear, clone, edit and delete through UI', asyn
          ['Assignee', 'Regression Owner'],
          ['Project', 'Regression project'],
       ]) {
-         await page.getByRole('button', { name: 'Filter', exact: true }).first().click();
-         await page.getByRole('option', { name: section, exact: true }).click();
+         await openFilterSection(page, section);
          await page.getByRole('option', { name: new RegExp(`${value}$`) }).click();
          await page.keyboard.press('Escape');
       }
@@ -78,8 +78,7 @@ test('team filters save, reopen, clear, clone, edit and delete through UI', asyn
          ).json()
       ).data;
       expect(unchanged.filters.query.filters).toHaveLength(2);
-      await page.getByRole('button', { name: 'Filter', exact: true }).first().click();
-      await page.getByRole('option', { name: 'Assignee', exact: true }).click();
+      await openFilterSection(page, 'Assignee');
       await page.getByRole('option', { name: 'Unassigned', exact: true }).click();
       await page.keyboard.press('Escape');
       await expect(page.getByText('1 issues', { exact: true })).toBeVisible();

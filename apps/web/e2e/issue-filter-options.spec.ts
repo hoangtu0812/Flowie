@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { openFilterSection } from './filter-menu';
 import { readFileSync } from 'node:fs';
 
 const fixture = JSON.parse(readFileSync('.e2e-fixture.json', 'utf8')) as {
@@ -29,10 +30,7 @@ test('All issues filter offers real assignees and projects', async ({ page }) =>
    await expect(page.getByRole('link', { name: 'Assigned regression task' })).toBeVisible();
    await expect(page.getByRole('link', { name: 'Unassigned regression bug' })).toBeVisible();
 
-   const openSection = async (name: string) => {
-      await page.getByRole('button', { name: 'Filter', exact: true }).click();
-      await page.getByRole('option', { name, exact: true }).click();
-   };
+   const openSection = (name: string) => openFilterSection(page, name);
 
    await openSection('Project');
    await expect(page.getByRole('option', { name: 'Regression project' })).toBeVisible();
@@ -66,10 +64,7 @@ test('All issues filter applies real statuses, keeps them in the URL and clears'
    const unassigned = page.getByRole('link', { name: 'Unassigned regression bug' });
    await expect(assigned).toBeVisible();
 
-   const openSection = async (name: string) => {
-      await page.getByRole('button', { name: 'Filter', exact: true }).first().click();
-      await page.getByRole('option', { name, exact: true }).click();
-   };
+   const openSection = (name: string) => openFilterSection(page, name);
 
    await openSection('Labels');
    await expect(page.getByRole('option', { name: 'UI Enhancement' })).toHaveCount(0);
