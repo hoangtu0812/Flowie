@@ -66,8 +66,18 @@ test('MCP connections table filters by status and name; form groups permissions'
       const dialog = page.getByRole('dialog', { name: 'New connection' });
       await expect(dialog).toBeVisible();
       // Controls that share a row must start at the same height (no hint line between one
-      // label and its control).
+      // label and its control). The dialog slides in with a CSS animation that moves its
+      // content by about 20px, and each boundingBox call below reads a different frame, so the
+      // measurement waits for that animation to finish; otherwise two level controls differ by
+      // however far the dialog moved between the reads.
       // VI: Các ô cùng hàng phải bắt đầu cùng độ cao (không có dòng gợi ý chen giữa nhãn và ô).
+      // VI: Hộp thoại trượt vào bằng một CSS animation làm nội dung dịch khoảng 20px, và mỗi lần
+      // VI: gọi boundingBox bên dưới đọc một khung hình khác, nên phép đo chờ animation đó chạy
+      // VI: xong; nếu không, hai ô thẳng hàng vẫn lệch đúng bằng quãng hộp thoại dịch giữa hai lần
+      // VI: đọc.
+      await dialog.evaluate((element) =>
+         Promise.all(element.getAnimations().map((animation) => animation.finished))
+      );
       const top = async (role: 'textbox' | 'button', name: RegExp) =>
          (await dialog.getByRole(role, { name }).boundingBox())!.y;
       expect(
