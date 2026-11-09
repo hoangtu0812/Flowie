@@ -1,4 +1,5 @@
 import asyncio
+import json
 from datetime import datetime, timedelta
 import os
 
@@ -267,12 +268,28 @@ async def verify_cadence():
             assert rows[-1]["end_date"] >= today + timedelta(days=14)
             for earlier, later in zip(rows, rows[1:]):
                 assert later["start_date"] > earlier["end_date"]
-            generated = (await db.execute(
-                text("SELECT count(*) FROM audit_logs WHERE workspace_id=:workspace"
+            audits = (await db.execute(
+                text("SELECT metadata FROM audit_logs WHERE workspace_id=:workspace"
                      " AND action='cycle.auto_generated'"),
                 {"workspace": seed["workspace_id"]},
-            )).scalar_one()
-            assert generated == result["created"]
+            )).scalars().all()
+            assert len(audits) == result["created"]
+            # The span goes into a jsonb column nothing re-serialises, so the
+            # instants have to carry their offset. Counting the rows missed
+            # this; a differential run against the worker being replaced caught
+            # it, because that one wrote a UTC designator and this did not.
+            # VI: Khoảng ngày đi vào cột jsonb không ai tuần tự hoá lại, nên các
+            # VI: mốc thời gian phải mang theo offset của mình. Chỉ đếm số dòng
+            # VI: thì bỏ sót điều này; một lượt chạy đối chiếu với worker đang
+            # VI: được thay thế mới bắt được, vì bên đó có ghi chỉ báo UTC còn
+            # VI: bên này thì không.
+            for entry in audits:
+                payload = json.loads(entry) if isinstance(entry, str) else entry
+                for key in ("startDate", "endDate"):
+                    assert datetime.fromisoformat(payload[key]).tzinfo is not None, (
+                        key,
+                        payload[key],
+                    )
             total = len(rows)
 
         repeat = await run_cycle_cadence(factory, writes_enabled=True)
