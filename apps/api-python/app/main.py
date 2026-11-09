@@ -165,8 +165,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=['*'],
         expose_headers=['x-request-id','x-flowie-revision'],
     )
-    app.add_exception_handler(ApiError, api_error_handler)
-    app.add_exception_handler(RequestValidationError, validation_error_handler)
+    # Starlette types every handler as taking a bare Exception even though it
+    # dispatches by the registered class, so a narrower handler needs the ignore.
+    # VI: Starlette khai mọi handler nhận Exception chung dù nó phân phối theo đúng
+    # VI: lớp đã đăng ký, nên handler cho lớp hẹp hơn cần bỏ qua kiểm tra này.
+    app.add_exception_handler(ApiError, api_error_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(RequestValidationError, validation_error_handler)  # type: ignore[arg-type]
     app.include_router(auth_router)
     from .modules.identity.preferences import router as preferences_router
     app.include_router(preferences_router)

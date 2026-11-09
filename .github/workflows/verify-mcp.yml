@@ -133,7 +133,7 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: |
-          python -m pip install -r apps/api-python/requirements.txt pytest==9.1.1 ruff==0.15.4
+          python -m pip install -r apps/api-python/requirements.txt pytest==9.1.1 ruff==0.15.4 mypy==2.4.1
           pnpm install --frozen-lockfile
       - name: Validate and migrate a clean database
         run: |
@@ -146,6 +146,7 @@ jobs:
           ruff check apps/api-python/app/modules apps/api-python/app/core/clock.py apps/api-python/app/core/dates.py apps/api-python/app/core/identifiers.py apps/api-python/app/db/mutations.py --select F
           ruff check apps/api-python/app --select F821
           ruff check scripts/flowie_backup scripts/flowie-backup.py --select F
+          (cd apps/api-python && mypy app)
           python -m pytest apps/api-python/tests -q
 
   storage:

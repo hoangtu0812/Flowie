@@ -3,10 +3,11 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 from os import getenv
-from typing import Any
+from typing import Any, cast
 
 import httpx
 from sqlalchemy import text
+from sqlalchemy import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import _utcnow
@@ -190,7 +191,7 @@ async def refresh_workspace(
                         'published_at': entry['publishedAt'], 'now': now,
                     },
                 )
-                inserted += result.rowcount or 0
+                inserted += cast(CursorResult[Any], result).rowcount or 0
             await db.execute(
                 text('UPDATE news_sources SET last_fetched_at = :now, last_error = :error WHERE id = :id'),
                 {'now': now, 'error': error, 'id': source['id']},

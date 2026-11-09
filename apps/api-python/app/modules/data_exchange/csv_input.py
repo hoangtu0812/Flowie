@@ -21,7 +21,7 @@ def parse_csv(content):
             or len(set(headers)) != len(headers)
         ):
             raise ValueError("headers")
-        rows = []
+        rows: list[dict[str, str]] = []
         for values in reader:
             if not values or all(not value.strip() for value in values):
                 continue

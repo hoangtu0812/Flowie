@@ -44,7 +44,7 @@ async def project_summaries(db, workspace, user, identifiers):
             }
         )
     scope, query = issue_scope(workspace, user, {})
-    counts = defaultdict(dict)
+    counts: defaultdict[str, dict[str, int]] = defaultdict(dict)
     for row in (
         await db.execute(
             text(

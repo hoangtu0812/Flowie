@@ -26,6 +26,16 @@ class CommandService:
         self.parent_id: str | None = None
         self.status_id: str | None = None
 
+    @property
+    def subject(self) -> dict:
+        """The record prepare() resolved; execute() only runs after it.
+
+        VI: Bản ghi mà prepare() đã tìm ra; execute() chỉ chạy sau bước đó.
+        """
+        if self.target is None:
+            raise RuntimeError("prepare() must run before execute().")
+        return self.target
+
     async def prepare(self, name: str, payload) -> None:
         if name == "create_attachment_upload":
             self.target = await self.policy.issue(payload.issueId)
@@ -94,7 +104,7 @@ class CommandService:
             await self.db.execute(
                 text("""SELECT id,name FROM issue_statuses WHERE workspace_id=:workspace
                 AND (team_id IS NULL OR team_id=:team) ORDER BY position,name"""),
-                {"workspace": self.principal.workspace_id, "team": self.target["team_id"]},
+                {"workspace": self.principal.workspace_id, "team": self.subject["team_id"]},
             )
         ).all()
         wanted = name.strip().casefold()
@@ -123,7 +133,7 @@ class CommandService:
     def check_version(self, payload) -> None:
         if (
             hasattr(payload, "expectedVersion")
-            and self.target["version"] != payload.expectedVersion
+            and self.subject["version"] != payload.expectedVersion
         ):
             raise ApiError(
                 409, "The record changed. Read it again before updating.", "Conflict"
@@ -162,7 +172,7 @@ class CommandService:
             changes = {key: getattr(payload, key) for key in fields if key in payload.model_fields_set}
             result = (
                 await issues.update_issue(
-                    self.target["id"],
+                    self.subject["id"],
                     UpdateIssueInput(**changes, statusId=self.status_id),
                     workspace,
                     actor,
@@ -173,7 +183,7 @@ class CommandService:
                 await comments.create_comment(
                     CreateCommentInput(
                         workspaceId=workspace,
-                        issueId=self.target["id"],
+                        issueId=self.subject["id"],
                         content=payload.plan if name == "start_issue" else payload.result,
                     ),
                     actor,
@@ -192,7 +202,7 @@ class CommandService:
                 values["parentIssueId"] = self.parent_id
             result = (
                 await issues.update_issue(
-                    self.target["id"],
+                    self.subject["id"],
                     UpdateIssueInput(**values),
                     workspace,
                     actor,
@@ -203,7 +213,7 @@ class CommandService:
                 await comments.create_comment(
                     CreateCommentInput(
                         workspaceId=workspace,
-                        issueId=self.target["id"],
+                        issueId=self.subject["id"],
                         content=payload.reason,
                     ),
                     actor,
@@ -215,7 +225,7 @@ class CommandService:
                 await comments.create_comment(
                     CreateCommentInput(
                         workspaceId=workspace,
-                        issueId=self.target["id"],
+                        issueId=self.subject["id"],
                         content=payload.content, parentCommentId=payload.parentCommentId, mentionIds=payload.mentionIds,
                     ),
                     actor,
@@ -234,7 +244,7 @@ class CommandService:
             )["data"]
         if name == "create_document":
             values.pop("projectId", None)
-            values["teamId"] = self.target["team_id"]
+            values["teamId"] = self.subject["team_id"]
             result = (
                 await documents.create_document(
                     CreateDocumentInput(workspaceId=workspace, **values), actor, self.db
@@ -248,7 +258,7 @@ class CommandService:
             if values.get("edits"):
                 from .edits import apply_edits
 
-                values["content"] = apply_edits(self.target["content"], payload.edits)
+                values["content"] = apply_edits(self.subject["content"], payload.edits)
             values.pop("edits", None)
             if name == "restore_document":
                 revision = (
@@ -285,9 +295,9 @@ class CommandService:
                 )
             )["data"]
         if name == "upsert_feature_doc":
-            return await upsert_feature_doc(self.db, self.principal, self.target, payload)
+            return await upsert_feature_doc(self.db, self.principal, self.subject, payload)
         if name == "create_attachment_upload":
-            return upload_link(self.settings, self.principal, self.target, payload.filename)
+            return upload_link(self.settings, self.principal, self.subject, payload.filename)
         if name == "link_document":
             await self.add_link(payload.documentId, payload)
             return {"documentId": payload.documentId, "linked": True}

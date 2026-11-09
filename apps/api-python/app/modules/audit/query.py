@@ -1,3 +1,4 @@
+from typing import Any
 import re
 
 from sqlalchemy import text
@@ -79,7 +80,7 @@ def query_scope(workspace, user, filters):
 
 def present(row):
     raw = row["metadata"] if isinstance(row["metadata"], dict) else {}
-    metadata = {}
+    metadata: dict[str, Any] = {}
     for key in ["tool", "outcome"]:
         value = raw.get(key)
         if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_.:-]{1,100}", value):

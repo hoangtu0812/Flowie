@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 from datetime import timezone
+from typing import Any
 
 from sqlalchemy import text
 from ...core.errors import ApiError
@@ -496,7 +497,7 @@ class QueryService:
 
         issue = await self.policy.issue(payload.issueId)
         params = IssuePageInput(issueId=issue["id"], limit=payload.limit)
-        comments = (
+        comments: dict[str, Any] = (
             await self.comments(params)
             if "comments:read" in self.principal.scopes
             else {"unavailable": True}
