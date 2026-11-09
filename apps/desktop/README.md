@@ -109,6 +109,6 @@ có CI xác nhận.
 - Thư mục này không nằm trong image server nào. Trước đây có `deploy-scope.sh`
   miễn trừ nó khỏi pipeline deploy production; pipeline đó đã bị bỏ, mọi server
   nay được deploy tay, nên không còn quy tắc miễn trừ nào để giữ.
-- CI của desktop là `.github/workflows/desktop.yml`, chạy trên `windows-latest`
-  và `macos-latest`. Build xanh ở một nền tảng không phải bằng chứng cho nền
-  tảng còn lại.
+- CI của desktop là `.github/workflows/desktop.yml`, tạm thời chỉ chạy trên
+  `windows-latest`. Build xanh ở một nền tảng không phải bằng chứng cho nền
+  tảng còn lại, nên thay đổi chạm mã `cfg(unix)` phải tự kiểm trên macOS.

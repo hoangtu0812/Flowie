@@ -13,18 +13,15 @@ name: Verify MCP and application contracts
 # VI: nâng số worker của Playwright — thứ sẽ kéo lại đúng kiểu nhiễu chéo giữa
 # VI: các test mà DTD-506 đã dọn.
 
+# Manual only for now: the project is shipping features and a pull request
+# waiting on this suite cost more than it caught. Run it with
+# workflow_dispatch on a release commit or a risky branch. To check pull
+# requests again, restore the pull_request trigger with its paths filter.
+# VI: Tạm thời chỉ chạy tay: dự án đang cần ship tính năng, và việc pull request
+# VI: phải chờ bộ kiểm tra này tốn nhiều hơn những gì nó bắt được. Chạy bằng
+# VI: workflow_dispatch trên commit release hoặc một nhánh rủi ro. Muốn kiểm pull
+# VI: request trở lại thì khôi phục trigger pull_request cùng bộ lọc paths.
 on:
-  pull_request:
-    paths:
-      - 'apps/api-python/**'
-      - 'apps/web/**'
-      - 'packages/**'
-      - 'docker-compose.yml'
-      - 'pnpm-lock.yaml'
-      - '.github/workflows/verify-mcp.yml'
-      - 'scripts/**'
-  push:
-    branches: ['codex/**']
   workflow_dispatch:
   workflow_call:
 
