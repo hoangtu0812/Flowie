@@ -1,11 +1,14 @@
 name: Verify Flowie Desktop
 
-# The desktop workspace builds for the machines it ships to, so a Windows
-# build passing is no evidence for macOS and the reverse. Both run on every
-# change that touches the workspace.
-# VI: Workspace desktop build cho đúng những máy nó phát hành tới, nên build
-# VI: Windows xanh không phải bằng chứng cho macOS và ngược lại. Cả hai chạy
-# VI: với mọi thay đổi chạm workspace.
+# Only Windows builds for now, because Windows is the platform being shipped
+# and its installer is the artifact people take from here. A green Windows
+# build says nothing about macOS: cfg(unix) code is not compiled at all, so
+# check macOS by hand (apps/desktop/README.md) until macos-latest returns to
+# the matrix.
+# VI: Tạm thời chỉ build Windows, vì Windows là nền tảng đang phát hành và bộ
+# VI: cài của nó là artifact mọi người lấy từ đây. Build Windows xanh không nói
+# VI: gì về macOS: mã cfg(unix) hoàn toàn không được biên dịch, nên kiểm macOS
+# VI: bằng tay (apps/desktop/README.md) cho tới khi macos-latest trở lại matrix.
 on:
   push:
     branches: [main]
@@ -36,7 +39,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        os: [windows-latest]
     steps:
       - uses: actions/checkout@v4
         with:

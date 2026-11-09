@@ -29,9 +29,11 @@
   checkout, then rebuild and restart the Compose services. Merging to `main`
   does not put a change on that server; it is live only after the maintainer
   pulls and rebuilds.
-- Nothing deploys automatically. `.github/workflows/verify-mcp.yml` checks pull
-  requests and `.github/workflows/desktop.yml` checks the desktop workspace;
-  neither deploys anywhere, and no workflow runs on a push to `main`. Every
+- Nothing deploys automatically. `.github/workflows/verify-mcp.yml` runs only
+  by hand (`workflow_dispatch`) for now, so pull requests are not checked
+  automatically: run the targeted tests for what you changed before opening
+  one, and dispatch the suite on a risky branch. `.github/workflows/desktop.yml`
+  builds the desktop workspace on Windows only. Neither deploys anywhere. Every
   environment is deployed by hand from its own checkout, so merging changes no
   running system. There is no staging, preview, or development target.
 - Because `main` itself is unchecked, a commit pushed straight to it — a
