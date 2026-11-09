@@ -113,6 +113,21 @@ async def _create_generated_cycle(db: AsyncSession, team: dict[str, Any], names:
 async def _apply_team_cadence(db: AsyncSession, team: dict[str, Any], today: datetime,
                               writes_enabled: bool) -> dict[str, int]:
     duration_days = team['cycle_cadence_weeks'] * 7
+    if writes_enabled:
+        # Two scans can run at once (more than one API process, or an overlap
+        # during a restart). Each checks a span is free before inserting it and
+        # commits only after the whole team, so without this both see "free"
+        # and both insert. The lock is per team and held to the commit, so the
+        # second scan waits, then reads the cycles the first one created.
+        # VI: Hai lượt quét có thể chạy cùng lúc (nhiều tiến trình API, hoặc chồng
+        # VI: nhau lúc khởi động lại). Mỗi lượt kiểm một khoảng ngày còn trống rồi
+        # VI: mới chèn và chỉ commit khi xong cả team, nên thiếu khoá này thì cả hai
+        # VI: cùng thấy "trống" và cùng chèn. Khoá theo từng team và giữ tới lúc
+        # VI: commit, nên lượt sau phải chờ rồi đọc được các cycle lượt trước đã tạo.
+        await db.execute(
+            text('SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))'),
+            {'key': f"cycle-cadence:{team['id']}"},
+        )
     cycles = (await db.execute(
         text('''SELECT id, name, status, start_date, end_date FROM cycles
                 WHERE team_id = :team_id ORDER BY start_date ASC, created_at ASC'''),

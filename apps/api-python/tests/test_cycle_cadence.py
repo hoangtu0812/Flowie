@@ -11,6 +11,7 @@ from app.core.clock import _utcnow
 from app.core.config import _async_database_url
 from app.core.identifiers import _cuid
 from app.domains.auth import create_workspace_bootstrap
+from app.jobs import cycle_cadence
 from app.jobs.cycle_cadence import (
     _create_generated_cycle,
     run_cycle_cadence,
@@ -39,7 +40,20 @@ def test_cadence_generates_activates_completes_and_stays_idempotent():
 @pytest.mark.skipif(
     not os.getenv("MCP_TEST_DATABASE_URL"), reason="Test database is not configured"
 )
-def test_two_concurrent_scans_do_not_duplicate_a_cycle_span():
+def test_two_concurrent_scans_do_not_duplicate_a_cycle_span(monkeypatch):
+    # Pause each scan just before it creates a cycle, after it has read the
+    # calendar, so the two scans always interleave instead of only on a slow
+    # machine. Without the per-team lock both then insert the same spans.
+    # VI: Dừng mỗi lượt quét ngay trước khi tạo cycle, sau khi đã đọc lịch, để
+    # VI: hai lượt luôn xen kẽ nhau chứ không chỉ trên máy chậm. Thiếu khoá theo
+    # VI: team thì cả hai sẽ cùng chèn những khoảng ngày giống nhau.
+    original = cycle_cadence._create_generated_cycle
+
+    async def paused(*args, **kwargs):
+        await asyncio.sleep(0.05)
+        return await original(*args, **kwargs)
+
+    monkeypatch.setattr(cycle_cadence, "_create_generated_cycle", paused)
     asyncio.run(verify_concurrent_cadence())
 
 
@@ -118,18 +132,20 @@ async def verify_span_identity():
 async def verify_concurrent_cadence():
     """Two scans overlapping in one event loop still leave one set of cycles.
 
-    This holds the end-to-end property only. It does not pin the span check in
-    ``_create_generated_cycle``: the two sessions serialise at their await
-    points, so the second scan reads a calendar the first already filled and
-    never reaches the creation path. Removing the check leaves this test green.
-    The check itself is pinned by ``verify_span_identity`` below.
+    The scans run in separate transactions that each commit only after the
+    whole team, so both can find a span free and insert it. The per-team
+    advisory lock in ``_apply_team_cadence`` is what keeps this green: without
+    it the test fails whenever the two scans interleave, which they did in CI.
+    The span check in ``_create_generated_cycle`` is pinned separately by
+    ``verify_span_identity`` below.
 
     VI: Hai lượt quét chồng nhau trong cùng một event loop vẫn chỉ để lại một bộ
-    cycle. Test này chỉ giữ tính chất đầu-cuối. Nó **không** giữ được phần kiểm
-    khoảng ngày trong ``_create_generated_cycle``: hai session nối tiếp nhau tại
-    các điểm await, nên lượt sau đọc được lịch mà lượt trước đã lấp và không bao
-    giờ chạm tới nhánh tạo mới. Bỏ phần kiểm đó đi thì test này vẫn xanh. Chính
-    phần kiểm ấy được ``verify_span_identity`` bên dưới giữ.
+    cycle. Hai lượt chạy trong hai transaction riêng và mỗi bên chỉ commit sau
+    khi xong cả team, nên cả hai có thể cùng thấy một khoảng ngày còn trống rồi
+    cùng chèn. Khoá advisory theo team trong ``_apply_team_cadence`` là thứ giữ
+    test này xanh: thiếu nó, test hỏng mỗi khi hai lượt xen kẽ nhau, đúng như đã
+    xảy ra trên CI. Phần kiểm khoảng ngày trong ``_create_generated_cycle`` được
+    ``verify_span_identity`` bên dưới giữ riêng.
     """
     engine = create_async_engine(_async_database_url(os.environ["MCP_TEST_DATABASE_URL"]))
     factory = async_sessionmaker(engine)
