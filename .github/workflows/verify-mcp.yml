@@ -73,7 +73,15 @@ jobs:
           git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
           changed=$(git diff --name-only "origin/$BASE_REF...HEAD")
           echo "Changed files:"; echo "$changed"
-          scope_matches() { echo "$changed" | grep -qE "$1"; }
+          # The browser suite never loads unit tests or Markdown, so a change made
+          # only of those cannot fail it. Background jobs stay in scope: the UI
+          # harness runs create_app, whose lifespan starts every loop.
+          # VI: Bộ test trình duyệt không bao giờ nạp unit test hay Markdown, nên
+          # VI: một thay đổi chỉ gồm những file đó không thể làm nó hỏng. Job nền
+          # VI: vẫn nằm trong phạm vi: harness UI chạy create_app, và lifespan của
+          # VI: nó khởi động mọi loop.
+          e2e_changed=$(echo "$changed" | grep -vE '^apps/api-python/tests/|^apps/web/tests/|\.md$' || true)
+          scope_matches() { if [ "$1" = e2e ]; then echo "$e2e_changed"; else echo "$changed"; fi | grep -qE "$2"; }
           workflow='^\.github/workflows/verify-mcp\.yml$'
           lockfile='^pnpm-lock\.yaml$'
           for entry in \
@@ -83,7 +91,7 @@ jobs:
             "e2e:^apps/web/|^apps/api-python/|^packages/|^scripts/seed-ui-regression\.py$|^scripts/ui_regression_api\.py$|$workflow|$lockfile" \
           ; do
             name=${entry%%:*}
-            if scope_matches "${entry#*:}"; then echo "$name=true" >> "$GITHUB_OUTPUT"; else echo "$name=false" >> "$GITHUB_OUTPUT"; fi
+            if scope_matches "$name" "${entry#*:}"; then echo "$name=true" >> "$GITHUB_OUTPUT"; else echo "$name=false" >> "$GITHUB_OUTPUT"; fi
           done
           cat "$GITHUB_OUTPUT"
 
@@ -231,23 +239,34 @@ jobs:
           pnpm --filter @circle/web build
           docker compose --profile app config --quiet
 
+  # Each browser's suite is split into three shards by spec file, every shard
+  # with its own Postgres, so tests still run one at a time against a database
+  # no other job touches. A browser took up to 12 minutes in one job; three
+  # shards bring the slowest job near a third of that plus setup. The repository
+  # is public, so the extra runners cost queue slots, not money.
+  # VI: Bộ test của mỗi trình duyệt được chia thành ba shard theo file spec, mỗi
+  # VI: shard có Postgres riêng, nên test vẫn chạy từng cái một trên một database
+  # VI: không job nào khác chạm vào. Một trình duyệt từng mất tới 12 phút trong
+  # VI: một job; ba shard đưa job chậm nhất về khoảng một phần ba con số đó cộng
+  # VI: thời gian chuẩn bị. Repository là public nên runner thêm chỉ tốn slot
+  # VI: hàng đợi, không tốn tiền.
   e2e:
     name: browser regression
     needs: changes
     if: needs.changes.outputs.e2e == 'true'
     runs-on: ubuntu-latest
-    # One browser's share of a suite that took 38 minutes for all three.
-    # The ceiling allows for a slow runner and for the retry a failing test
-    # gets, and for the run going all the way through instead of stopping at
-    # the fifth failure.
-    # VI: Phần của một trình duyệt trong bộ test từng mất 38 phút cho cả ba.
-    # VI: Mức trần tính thêm cho máy chạy chậm, cho lần thử lại mà một test hỏng
-    # VI: được cấp, và cho việc chạy hết thay vì dừng ở lỗi thứ năm.
-    timeout-minutes: 40
+    # One shard's share of a browser that took 12 minutes in a single job. The
+    # ceiling allows for a slow runner, the retry a failing test gets, and the
+    # run going all the way through instead of stopping at the fifth failure.
+    # VI: Phần của một shard trong một trình duyệt từng mất 12 phút trong một
+    # VI: job. Mức trần tính thêm cho máy chạy chậm, cho lần thử lại mà một test
+    # VI: hỏng được cấp, và cho việc chạy hết thay vì dừng ở lỗi thứ năm.
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
         browser: [chromium, firefox, webkit]
+        shard: [1, 2, 3]
     services:
       postgres:
         image: postgres:16
@@ -302,11 +321,11 @@ jobs:
       - name: Verify browser regression workflows
         run: |
           python scripts/seed-ui-regression.py
-          pnpm --filter @circle/web exec playwright test --project=${{ matrix.browser }}
+          pnpm --filter @circle/web exec playwright test --project=${{ matrix.browser }} --shard=${{ matrix.shard }}/3
       - uses: actions/upload-artifact@v4
         if: failure() || cancelled()
         with:
-          name: ui-regression-traces-${{ matrix.browser }}
+          name: ui-regression-traces-${{ matrix.browser }}-${{ matrix.shard }}
           path: apps/web/test-results/
           retention-days: 7
 
