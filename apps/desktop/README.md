@@ -70,6 +70,50 @@ Bản build này **chưa ký số**. Windows SmartScreen sẽ cảnh báo ở l�
 cả bộ cài lẫn file exe. Ký số cần chứng chỉ của tổ chức và thuộc `DTD-488`; chưa ký
 thì đây là bản để tự thử, chưa phải thứ đem phát cho người khác.
 
+## Build trên macOS
+
+Các bước dưới đây đã chạy được ngày 09/11/2026 trên Apple Silicon. CI không
+build macOS, nên đây là cách duy nhất để có bản chạy trên Mac.
+
+1. **Cài rustup** qua Homebrew rồi đưa nó lên `PATH`:
+
+   ```bash
+   brew install rustup
+   export PATH="/opt/homebrew/opt/rustup/bin:$PATH"
+   ```
+
+   Toolchain ghim trong `rust-toolchain.toml` (hiện là `1.99.1`) tự cài ở lần
+   chạy `cargo` đầu tiên trong `apps/desktop`. Đường dẫn `/opt/homebrew` chỉ có
+   trên Apple Silicon; máy Intel dùng `/usr/local/opt/rustup/bin`.
+
+2. **Kiểm** giống CI:
+
+   ```bash
+   cd apps/desktop
+   cargo fmt --all --check
+   cargo clippy --workspace --all-targets -- -D warnings
+   cargo test --workspace --all-targets
+   ```
+
+3. **Đóng gói** thành `.app`, vẫn từ `apps/desktop`:
+
+   ```bash
+   cargo install tauri-cli --version "^2" --locked
+   cd src-tauri
+   cargo tauri build --bundles app
+   ```
+
+   Kết quả nằm ở `apps/desktop/target/release/bundle/macos/Flowie Desktop.app`.
+   Phải có `--bundles app` vì `tauri.conf.json` chỉ khai target `nsis` (bộ cài
+   Windows).
+
+4. **Nơi lưu dữ liệu**: file cấu hình ở
+   `~/Library/Application Support/io.flowie.desktop/companion.json`; token nằm
+   trong Keychain, service `io.flowie.desktop`.
+
+Bản `.app` này **chưa ký số**, nên Gatekeeper sẽ chặn ở lần mở đầu. Ký số thuộc
+`DTD-488`.
+
 ## Kiểm tra mã macOS từ máy Windows
 
 Mã trong nhánh `cfg(unix)` không được biên dịch trên Windows, nên lỗi của nó
