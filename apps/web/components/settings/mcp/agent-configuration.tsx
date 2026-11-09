@@ -43,11 +43,13 @@ export function AgentConfiguration({
    resources,
    connections,
    writesEnabled,
+   onAutomationCreated,
 }: {
    workspaceId: string;
    resources: McpResources;
    connections: McpConnection[];
    writesEnabled: boolean;
+   onAutomationCreated?: () => void;
 }) {
    const [projectId, setProjectId] = useState('');
    const [repositories, setRepositories] = useState<ProjectRepository[]>([]);
@@ -61,6 +63,7 @@ export function AgentConfiguration({
    const [commands, setCommands] = useState('[]');
    const [connectionId, setConnectionId] = useState('');
    const [labelId, setLabelId] = useState('');
+   const [automationName, setAutomationName] = useState('');
    const [enabled, setEnabled] = useState(false);
    const [dailyLimit, setDailyLimit] = useState('5');
    const [busy, setBusy] = useState(false);
@@ -124,6 +127,11 @@ export function AgentConfiguration({
          connection.scopes.includes('issues:read') &&
          (!connection.projectIds.length || connection.projectIds.includes(projectId))
    );
+   const labelName = resources.labels.find((label) => label.id === labelId)?.name;
+   // An empty name falls back to one built from the label, so the rule list stays readable.
+   // VI: Tên để trống thì dùng tên dựng từ nhãn, để danh sách luật vẫn đọc được.
+   const ruleName = automationName.trim() || (labelName ? `Queue "${labelName}" issues` : '');
+   const validName = ruleName.length >= 2 && ruleName.length <= 100;
 
    return (
       <VStack gap={3}>
@@ -331,11 +339,23 @@ export function AgentConfiguration({
                </HStack>
             </VStack>
          )}
-         <Heading level={4}>Queue work by label</Heading>
+         <Heading level={4}>Assign work to your coding agent</Heading>
          <Text color="secondary">
-            Matching project issues enter a durable queue. Your coding agent uses MCP to claim and
-            process them.
+            Adding the chosen label to an issue in the project above assigns it to your coding
+            agent: the issue joins a queue, and the agent claims and works on it through MCP. Issues
+            that are already done or canceled are skipped.
          </Text>
+         {!projectId ? (
+            <Text color="secondary">Choose a project above first.</Text>
+         ) : (
+            !eligibleConnections.length && (
+               <Text color="secondary">
+                  None of your connections can take work for this project. It needs one of your own
+                  connections that is not revoked, has the runs:write and issues:read permissions,
+                  and includes this project.
+               </Text>
+            )
+         )}
          <Selector
             label="Agent connection"
             value={connectionId}
@@ -351,6 +371,13 @@ export function AgentConfiguration({
             onChange={setLabelId}
             hasSearch
             options={resources.labels.map((label) => ({ value: label.id, label: label.name }))}
+         />
+         <TextInput
+            label="Name"
+            value={automationName}
+            onChange={setAutomationName}
+            placeholder={labelName ? `Queue "${labelName}" issues` : undefined}
+            description="Optional. Shown in the list of label automations."
          />
          <TextInput
             label="Maximum runs per day"
@@ -369,20 +396,23 @@ export function AgentConfiguration({
                label="Create automation"
                icon={<Plus className="size-4" />}
                isLoading={busy}
-               isDisabled={!projectId || !connectionId || !labelId || !validLimit}
+               isDisabled={!projectId || !connectionId || !labelId || !validLimit || !validName}
                onClick={() =>
                   void save(
                      'automation',
-                     () =>
-                        configureAgentAutomation(workspaceId, {
-                           name: 'Queue labeled project issues',
+                     async () => {
+                        await configureAgentAutomation(workspaceId, {
+                           name: ruleName,
                            projectId,
                            connectionId,
                            labelId,
                            enabled,
                            dailyLimit: Number(dailyLimit),
-                        }),
-                     'Automation created. Refresh agent runs to see it.'
+                        });
+                        setAutomationName('');
+                        onAutomationCreated?.();
+                     },
+                     `Automation "${ruleName}" created.`
                   )
                }
             />

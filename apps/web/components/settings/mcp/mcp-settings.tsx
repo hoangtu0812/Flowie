@@ -64,6 +64,9 @@ export function McpSettings() {
    /** VI: Kết nối đang được sửa quyền trong form; token và hạn dùng giữ nguyên. */
    const [editingId, setEditingId] = useState<string>();
    const [confirmRevokeId, setConfirmRevokeId] = useState<string>();
+   /** Bumped when an automation is created so the rule list reloads. */
+   /** VI: Tăng khi tạo automation để danh sách luật tải lại. */
+   const [automationsVersion, setAutomationsVersion] = useState(0);
    const [name, setName] = useState('');
    const [teamIds, setTeamIds] = useState<string[]>([]);
    const [projectIds, setProjectIds] = useState<string[]>([]);
@@ -486,7 +489,11 @@ export function McpSettings() {
             />
          </HStack>
          {state.workspaceId && (
-            <AgentCoordination workspaceId={state.workspaceId} canManage={state.canManage} />
+            <AgentCoordination
+               workspaceId={state.workspaceId}
+               canManage={state.canManage}
+               refreshKey={automationsVersion}
+            />
          )}
          {state.workspaceId && state.canManage && (
             <AgentInstructions workspaceId={state.workspaceId} />
@@ -497,6 +504,7 @@ export function McpSettings() {
                resources={state.resources}
                connections={state.connections}
                writesEnabled={state.configuration?.writesEnabled ?? false}
+               onAutomationCreated={() => setAutomationsVersion((version) => version + 1)}
             />
          )}
       </VStack>
