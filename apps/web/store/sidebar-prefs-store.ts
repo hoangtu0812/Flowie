@@ -82,7 +82,11 @@ export const useSidebarPrefsStore = create<SidebarPrefsState>()(
             set((state) => ({ visibility: { ...state.visibility, [item]: value } })),
          moveItem: (section, from, to) =>
             set((state) => {
-               const keys = [...state.order[section]];
+               // Indexes come from the resolved order the dialog shows, so resolve before moving:
+               // a stored order saved before an item existed is shorter than the list on screen.
+               // VI: Index lấy từ thứ tự đã resolve mà dialog hiển thị, nên phải resolve trước khi
+               // VI: di chuyển: thứ tự lưu trước khi có mục mới ngắn hơn danh sách trên màn hình.
+               const keys = resolveOrder(state.order[section], DEFAULT_ORDER[section]);
                if (from < 0 || from >= keys.length || to < 0 || to >= keys.length) return state;
                const [moved] = keys.splice(from, 1);
                keys.splice(to, 0, moved);
