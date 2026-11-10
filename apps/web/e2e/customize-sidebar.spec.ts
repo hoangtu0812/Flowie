@@ -15,8 +15,12 @@ async function signIn(page: Page) {
    await expect(page).toHaveURL(new RegExp(`/${fixture.slug}/`));
 }
 
+// Team rows carry a screen-reader-only "More" label too, so match the Workspace menu button whose whole
+// text is "More" instead of any element with that text.
+// VI: Dòng team cũng có nhãn "More" chỉ dành cho trình đọc màn hình, nên chọn nút menu Workspace có toàn bộ
+// VI: nội dung là "More" thay vì bất kỳ phần tử nào chứa chữ đó.
 async function openCustomize(page: Page) {
-   await page.getByText('More', { exact: true }).click();
+   await page.locator('[data-sidebar="menu-button"]', { hasText: /^More$/ }).click();
    await page.getByRole('menuitem', { name: 'Customize sidebar' }).click();
    return page.getByRole('dialog', { name: 'Customize sidebar' });
 }
