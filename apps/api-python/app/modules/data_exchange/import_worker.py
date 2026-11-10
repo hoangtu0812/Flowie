@@ -1,37 +1,43 @@
 import asyncio
 from datetime import timedelta
 
-from sqlalchemy import text
-
 from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ..access.projects import team_access
 from ..operations.heartbeats import progress
 from ..work_items.contracts import CreateIssueInput
 from ..work_items.issues import create_issue
+from .commands import (
+    PROCESS_IMPORT_ROW_DELETE_ISSUE_IMPORT_BATCHES,
+    PROCESS_IMPORT_ROW_INSERT_ISSUE_IMPORT_KEYS,
+    PROCESS_IMPORT_ROW_LOCK,
+    PROCESS_IMPORT_ROW_UPDATE_ISSUE_IMPORT_BATCHES,
+    PROCESS_IMPORT_ROW_UPDATE_ISSUE_IMPORT_BATCHES_2,
+    PROCESS_IMPORT_ROW_UPDATE_ISSUE_IMPORT_BATCHES_3,
+    PROCESS_IMPORT_ROW_UPDATE_ISSUE_IMPORT_ROWS,
+)
 from .import_service import duplicate_key
+from .queries import (
+    PROCESS_IMPORT_ROW_SELECT_ISSUE_IMPORT_BATCHES,
+    PROCESS_IMPORT_ROW_SELECT_ISSUE_IMPORT_ROWS,
+    PROCESS_IMPORT_ROW_SELECT_USERS,
+)
 
 
 async def process_import_row(factory):
     async with factory() as db:
         await db.execute(
-            text(
-                "UPDATE issue_import_batches SET state='EXPIRED' WHERE state='PREVIEW' AND expires_at<=:now"
-            ),
+            PROCESS_IMPORT_ROW_UPDATE_ISSUE_IMPORT_BATCHES,
             {"now": utcnow()},
         )
         await db.execute(
-            text(
-                "DELETE FROM issue_import_batches WHERE state NOT IN ('RUNNING','QUEUED') AND created_at<:old"
-            ),
+            PROCESS_IMPORT_ROW_DELETE_ISSUE_IMPORT_BATCHES,
             {"old": utcnow() - timedelta(days=30)},
         )
         batch = (
             (
                 await db.execute(
-                    text(
-                        "SELECT * FROM issue_import_batches WHERE state IN ('QUEUED','RUNNING') ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT 1"
-                    )
+                    PROCESS_IMPORT_ROW_SELECT_ISSUE_IMPORT_BATCHES
                 )
             )
             .mappings()
@@ -43,9 +49,7 @@ async def process_import_row(factory):
         user = (
             (
                 await db.execute(
-                    text(
-                        "SELECT id,name,avatar_url AS \"avatarUrl\" FROM users WHERE id=:id AND status='ACTIVE'"
-                    ),
+                    PROCESS_IMPORT_ROW_SELECT_USERS,
                     {"id": batch["actor_id"]},
                 )
             )
@@ -55,9 +59,7 @@ async def process_import_row(factory):
         row = (
             (
                 await db.execute(
-                    text(
-                        "SELECT * FROM issue_import_rows WHERE batch_id=:id AND state='PENDING' ORDER BY row_number LIMIT 1 FOR UPDATE"
-                    ),
+                    PROCESS_IMPORT_ROW_SELECT_ISSUE_IMPORT_ROWS,
                     {"id": batch["id"]},
                 )
             )
@@ -66,7 +68,7 @@ async def process_import_row(factory):
         )
         if not user or not row:
             await db.execute(
-                text("UPDATE issue_import_batches SET state=:state WHERE id=:id"),
+                PROCESS_IMPORT_ROW_UPDATE_ISSUE_IMPORT_BATCHES_3,
                 {"id": batch["id"], "state": "DONE" if user else "FAILED"},
             )
             await db.commit()
@@ -79,7 +81,7 @@ async def process_import_row(factory):
                 )
                 # Serialize external keys across batches so creation and deduplication commit atomically.
                 await db.execute(
-                    text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"),
+                    PROCESS_IMPORT_ROW_LOCK,
                     {
                         "key": f"import-key:{batch['workspace_id']}:{batch['source_key']}:{row['external_id']}"
                     },
@@ -98,9 +100,7 @@ async def process_import_row(factory):
                     )
                     issue = result["data"]
                     await db.execute(
-                        text(
-                            "INSERT INTO issue_import_keys(workspace_id,source_key,external_id,issue_id) VALUES (:workspace,:source,:external,:issue)"
-                        ),
+                        PROCESS_IMPORT_ROW_INSERT_ISSUE_IMPORT_KEYS,
                         {
                             "workspace": batch["workspace_id"],
                             "source": batch["source_key"],
@@ -120,9 +120,7 @@ async def process_import_row(factory):
         except Exception:
             state, code = "FAILED", "FAILED"
         await db.execute(
-            text(
-                "UPDATE issue_import_rows SET state=:state,error_code=:code,issue_id=:issue,identifier=:identifier WHERE batch_id=:batch AND row_number=:number"
-            ),
+            PROCESS_IMPORT_ROW_UPDATE_ISSUE_IMPORT_ROWS,
             {
                 "state": state,
                 "code": code,
@@ -135,9 +133,7 @@ async def process_import_row(factory):
             },
         )
         await db.execute(
-            text(
-                "UPDATE issue_import_batches SET state=CASE WHEN EXISTS(SELECT 1 FROM issue_import_rows WHERE batch_id=:id AND state='PENDING') THEN 'RUNNING' ELSE 'DONE' END WHERE id=:id"
-            ),
+            PROCESS_IMPORT_ROW_UPDATE_ISSUE_IMPORT_BATCHES_2,
             {"id": batch["id"]},
         )
         await db.commit()

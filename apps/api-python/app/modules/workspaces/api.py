@@ -7,7 +7,6 @@ from typing import Any, Literal
 
 from fastapi import Depends, Query, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +19,44 @@ from ...db.session import get_session
 from ...services.auth_policy import microsoft_sign_in_enabled
 from ..access.read_only import ADMIN_READ_ROLES
 from ..identity.auth import create_workspace_bootstrap, current_user, normalized_email
+from .commands import (
+    ACCEPT_INVITATION_UPDATE_WORKSPACE_MEMBERS,
+    BLOCK_AUTO_JOIN_INSERT_WORKSPACE_AUTO_JOIN_BLOCKS,
+    DECLINE_INVITATION_DELETE_WORKSPACE_MEMBERS,
+    DELETE_WORKSPACE_DELETE_WORKSPACES,
+    DELETE_WORKSPACE_UPDATE_USER_UI_PREFERENCES,
+    INVITE_INSERT_WORKSPACE_MEMBERS,
+    INVITE_UPDATE_WORKSPACE_MEMBERS,
+    LEAVE_DELETE_TEAM_MEMBERS,
+    LEAVE_DELETE_WORKSPACE_MEMBERS,
+    LEAVE_INSERT_AUDIT_LOGS,
+    REMOVE_MEMBER_DELETE_TEAM_MEMBERS,
+    REMOVE_MEMBER_DELETE_WORKSPACE_MEMBERS,
+    UPDATE_AUTO_JOIN_INSERT_AUDIT_LOGS,
+    UPDATE_AUTO_JOIN_UPDATE_WORKSPACES,
+    UPDATE_MEMBER_UPDATE_WORKSPACE_MEMBERS,
+    UPDATE_WORKSPACE_INSERT_AUDIT_LOGS,
+    WRITE_DISPLAY_PREFERENCES_INSERT_AUDIT_LOGS,
+    update_workspace_update_workspaces_sql,
+    write_display_preferences_update_workspaces_sql,
+)
+from .queries import (
+    ACCEPT_INVITATION_SELECT_WORKSPACE_MEMBERS,
+    AUTO_JOIN_STATUS_SELECT_PROJECTS,
+    DELETE_WORKSPACE_SELECT_WORKSPACES,
+    INVITATION_CANDIDATES_SELECT_USERS,
+    INVITE_SELECT_USERS,
+    MINE_SELECT_WORKSPACE_MEMBERS,
+    PENDING_INVITATIONS_SELECT_WORKSPACE_MEMBERS,
+    REMOVE_MEMBER_SELECT_WORKSPACE_MEMBERS,
+    RESOLVE_WORKSPACE_SELECT_WORKSPACES,
+    UPDATE_MEMBER_SELECT_WORKSPACE_MEMBERS,
+    UPDATE_WORKSPACE_SELECT_WORKSPACES,
+    WORKSPACE_SUMMARY_SELECT_WORKSPACES,
+    member_row_select_workspace_members_sql,
+    members_select_workspace_members_sql,
+    read_display_preferences_select_workspaces_sql,
+)
 
 router = APIRouter(prefix='/api/v1/workspaces', tags=['workspaces'])
 
@@ -215,19 +252,7 @@ def _member(row: Any, *, include_user: bool = True) -> dict[str, Any]:
 
 async def _member_row(db: AsyncSession, workspace_id: str, user_id: str) -> Any | None:
     result = await db.execute(
-        text(
-            f'''
-            SELECT wm.id AS member_id, wm.workspace_id, wm.user_id AS member_user_id,
-                   wm.status AS member_status, wm.role AS member_role,
-                   wm.joined_at AS member_joined_at, wm.invited_by AS member_invited_by,
-                   wm.created_at AS member_created_at, wm.updated_at AS member_updated_at,
-                   {USER_SELECT}
-            FROM workspace_members AS wm
-            INNER JOIN users AS u ON u.id = wm.user_id
-            WHERE wm.workspace_id = :workspace_id AND wm.user_id = :user_id
-            LIMIT 1
-            '''
-        ),
+        member_row_select_workspace_members_sql(USER_SELECT),
         {'workspace_id': workspace_id, 'user_id': user_id},
     )
     return result.mappings().first()
@@ -283,23 +308,7 @@ def _workspace(row: Any) -> dict[str, Any]:
 
 async def _workspace_summary(db: AsyncSession, workspace_id: str) -> dict[str, Any] | None:
     result = await db.execute(
-        text(
-            '''
-            SELECT w.id AS workspace_id_value, w.organization_id, w.name AS workspace_name,
-                   w.slug AS workspace_slug, w.icon AS workspace_icon, w.description AS workspace_description,
-                   w.timezone AS workspace_timezone, w.project_display_defaults,
-                   w.issue_display_defaults, w.issue_insight_defaults,
-                   w.created_at AS workspace_created_at, w.updated_at AS workspace_updated_at,
-                   o.id AS organization_id_value, o.name AS organization_name,
-                   o.slug AS organization_slug, o.logo_url AS organization_logo_url,
-                   o.owner_id AS organization_owner_id, o.created_at AS organization_created_at,
-                   o.updated_at AS organization_updated_at
-            FROM workspaces AS w
-            INNER JOIN organizations AS o ON o.id = w.organization_id
-            WHERE w.id = :workspace_id
-            LIMIT 1
-            '''
-        ),
+        WORKSPACE_SUMMARY_SELECT_WORKSPACES,
         {'workspace_id': workspace_id},
     )
     row = result.mappings().first()
@@ -329,7 +338,7 @@ async def _read_display_preferences(
 ) -> dict[str, Any]:
     await _authorize_member(db, workspace_id, user_id)
     result = await db.execute(
-        text(f'SELECT {column} AS settings, updated_at FROM workspaces WHERE id = :workspace_id'),
+        read_display_preferences_select_workspaces_sql(column),
         {'workspace_id': workspace_id},
     )
     row = result.mappings().first()
@@ -350,30 +359,14 @@ async def _write_display_preferences(
     await _authorize_manager(db, workspace_id, user_id)
     now = utcnow()
     result = await db.execute(
-        text(
-            f'''
-            UPDATE workspaces
-            SET {column} = CAST(:settings AS jsonb), updated_at = :now
-            WHERE id = :workspace_id
-            RETURNING {column} AS settings, updated_at
-            '''
-        ),
+        write_display_preferences_update_workspaces_sql(column),
         {'workspace_id': workspace_id, 'settings': json.dumps(settings), 'now': now},
     )
     row = result.mappings().first()
     if not row:
         raise ApiError(404, 'Workspace not found.', 'Not Found')
     await db.execute(
-        text(
-            '''
-            INSERT INTO audit_logs (
-                id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at
-            ) VALUES (
-                :id, :workspace_id, :actor_id, :action, 'workspace', :entity_id,
-                CAST('{}' AS jsonb), :now
-            )
-            '''
-        ),
+        WRITE_DISPLAY_PREFERENCES_INSERT_AUDIT_LOGS,
         {
             'id': cuid(),
             'workspace_id': workspace_id,
@@ -402,12 +395,7 @@ async def resolve_workspace(
     """
     row = (
         await db.execute(
-            text(
-                '''SELECT w.id, w.slug FROM workspaces w
-                   JOIN workspace_members m ON m.workspace_id = w.id AND m.user_id = :user AND m.status = 'ACTIVE'
-                   WHERE w.id = :key OR w.id = (SELECT s.workspace_id FROM workspace_slugs s WHERE s.slug = lower(:key))
-                   ORDER BY w.id = :key DESC LIMIT 1'''
-            ),
+            RESOLVE_WORKSPACE_SELECT_WORKSPACES,
             {'key': key, 'user': user['id']},
         )
     ).mappings().first()
@@ -421,28 +409,7 @@ async def mine(
     user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)
 ) -> dict[str, list[dict[str, Any]]]:
     result = await db.execute(
-        text(
-            '''
-            SELECT wm.id AS member_id, wm.workspace_id, wm.user_id AS member_user_id,
-                   wm.status AS member_status, wm.role AS member_role,
-                   wm.joined_at AS member_joined_at, wm.invited_by AS member_invited_by,
-                   wm.created_at AS member_created_at, wm.updated_at AS member_updated_at,
-                   w.id AS workspace_id_value, w.organization_id, w.name AS workspace_name,
-                   w.slug AS workspace_slug, w.icon AS workspace_icon, w.description AS workspace_description,
-                   w.timezone AS workspace_timezone, w.project_display_defaults,
-                   w.issue_display_defaults, w.issue_insight_defaults,
-                   w.created_at AS workspace_created_at, w.updated_at AS workspace_updated_at,
-                   o.id AS organization_id_value, o.name AS organization_name,
-                   o.slug AS organization_slug, o.logo_url AS organization_logo_url,
-                   o.owner_id AS organization_owner_id, o.created_at AS organization_created_at,
-                   o.updated_at AS organization_updated_at
-            FROM workspace_members AS wm
-            INNER JOIN workspaces AS w ON w.id = wm.workspace_id
-            INNER JOIN organizations AS o ON o.id = w.organization_id
-            WHERE wm.user_id = :user_id AND wm.status = 'ACTIVE'
-            ORDER BY wm.created_at ASC
-            '''
-        ),
+        MINE_SELECT_WORKSPACE_MEMBERS,
         {'user_id': user['id']},
     )
     memberships = []
@@ -458,30 +425,7 @@ async def pending_invitations(
     user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)
 ) -> dict[str, list[dict[str, Any]]]:
     result = await db.execute(
-        text(
-            '''
-            SELECT wm.id AS member_id, wm.workspace_id, wm.user_id AS member_user_id,
-                   wm.status AS member_status, wm.role AS member_role,
-                   wm.joined_at AS member_joined_at, wm.invited_by AS member_invited_by,
-                   wm.created_at AS member_created_at, wm.updated_at AS member_updated_at,
-                   w.id AS workspace_id_value, w.organization_id, w.name AS workspace_name,
-                   w.slug AS workspace_slug, w.icon AS workspace_icon, w.description AS workspace_description,
-                   w.timezone AS workspace_timezone, w.project_display_defaults,
-                   w.issue_display_defaults, w.issue_insight_defaults,
-                   w.created_at AS workspace_created_at, w.updated_at AS workspace_updated_at,
-                   o.id AS organization_id_value, o.name AS organization_name,
-                   o.slug AS organization_slug, o.logo_url AS organization_logo_url,
-                   o.owner_id AS organization_owner_id, o.created_at AS organization_created_at,
-                   o.updated_at AS organization_updated_at,
-                   inviter.id AS inviter_id, inviter.name AS inviter_name, inviter.email AS inviter_email
-            FROM workspace_members AS wm
-            INNER JOIN workspaces AS w ON w.id = wm.workspace_id
-            INNER JOIN organizations AS o ON o.id = w.organization_id
-            LEFT JOIN users AS inviter ON inviter.id = wm.invited_by
-            WHERE wm.user_id = :user_id AND wm.status = 'INVITED'
-            ORDER BY wm.created_at DESC
-            '''
-        ),
+        PENDING_INVITATIONS_SELECT_WORKSPACE_MEMBERS,
         {'user_id': user['id']},
     )
     invitations = []
@@ -531,12 +475,7 @@ async def delete_workspace(
     # Lock both identity and membership until deletion so ownership cannot change
     # between authorization and the cascading delete.
     result = await db.execute(
-        text('''
-            SELECT w.name, wm.role
-            FROM workspaces w JOIN workspace_members wm ON wm.workspace_id = w.id
-            WHERE w.id = :workspace AND wm.user_id = :user AND wm.status = 'ACTIVE'
-            FOR UPDATE OF w, wm
-        '''),
+        DELETE_WORKSPACE_SELECT_WORKSPACES,
         {'workspace': workspace_id, 'user': user['id']},
     )
     workspace = result.mappings().first()
@@ -547,12 +486,10 @@ async def delete_workspace(
     if unicodedata.normalize('NFC', payload.confirmationName) != unicodedata.normalize('NFC', workspace['name']):
         raise ApiError(400, 'Enter the exact workspace name to confirm deletion.', 'Bad Request')
     await db.execute(
-        text('''UPDATE user_ui_preferences
-            SET preferences = preferences - 'defaultWorkspaceId', version = version + 1, updated_at = :now
-            WHERE preferences ->> 'defaultWorkspaceId' = :workspace'''),
+        DELETE_WORKSPACE_UPDATE_USER_UI_PREFERENCES,
         {'workspace': workspace_id, 'now': utcnow()},
     )
-    await db.execute(text('DELETE FROM workspaces WHERE id = :workspace'), {'workspace': workspace_id})
+    await db.execute(DELETE_WORKSPACE_DELETE_WORKSPACES, {'workspace': workspace_id})
     await db.commit()
     return {'data': {'deleted': True}}
 
@@ -580,7 +517,7 @@ async def update_workspace(
     """
     await _authorize_manager(db, workspace_id, user['id'])
     values = payload.model_dump(exclude_unset=True)
-    current = (await db.execute(text('SELECT name, icon, slug FROM workspaces WHERE id = :id FOR UPDATE'), {'id': workspace_id})).mappings().first()
+    current = (await db.execute(UPDATE_WORKSPACE_SELECT_WORKSPACES, {'id': workspace_id})).mappings().first()
     if not current:
         raise ApiError(404, 'Workspace not found.', 'Not Found')
     changes: dict[str, Any] = {}
@@ -597,7 +534,7 @@ async def update_workspace(
         sets = ', '.join(f'{column} = :{column}' for column in changes)
         try:
             await db.execute(
-                text(f'UPDATE workspaces SET {sets}, updated_at = :now WHERE id = :workspace_id'),
+                update_workspace_update_workspaces_sql(sets),
                 {**changes, 'workspace_id': workspace_id, 'now': utcnow()},
             )
         except IntegrityError as error:
@@ -609,16 +546,7 @@ async def update_workspace(
         if value == current[column]:
             continue
         await db.execute(
-            text(
-                '''
-                INSERT INTO audit_logs (
-                    id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at
-                ) VALUES (
-                    :id, :workspace_id, :actor_id, :action, 'workspace', :entity_id,
-                    CAST(:metadata AS jsonb), :now
-                )
-                '''
-            ),
+            UPDATE_WORKSPACE_INSERT_AUDIT_LOGS,
             {
                 'id': cuid(),
                 'workspace_id': workspace_id,
@@ -752,19 +680,7 @@ async def members(
 ) -> dict[str, list[dict[str, Any]]]:
     await _authorize_member(db, workspace_id, user['id'])
     result = await db.execute(
-        text(
-            f'''
-            SELECT wm.id AS member_id, wm.workspace_id, wm.user_id AS member_user_id,
-                   wm.status AS member_status, wm.role AS member_role,
-                   wm.joined_at AS member_joined_at, wm.invited_by AS member_invited_by,
-                   wm.created_at AS member_created_at, wm.updated_at AS member_updated_at,
-                   {USER_SELECT}
-            FROM workspace_members AS wm
-            INNER JOIN users AS u ON u.id = wm.user_id
-            WHERE wm.workspace_id = :workspace_id
-            ORDER BY wm.created_at ASC
-            '''
-        ),
+        members_select_workspace_members_sql(USER_SELECT),
         {'workspace_id': workspace_id},
     )
     return {'data': [_member(row) for row in result.mappings().all()]}
@@ -780,16 +696,7 @@ async def invitation_candidates(
 ) -> dict[str, Any]:
     await _authorize_manager(db, workspace_id, user['id'])
     response.headers['Cache-Control'] = 'no-store'
-    rows = (await db.execute(text('''
-        SELECT u.id, u.name, u.email FROM users u
-        WHERE u.status = 'ACTIVE'
-          AND (strpos(lower(u.name), :query) > 0 OR strpos(lower(u.email), :query) > 0)
-          AND NOT EXISTS (
-              SELECT 1 FROM workspace_members m WHERE m.user_id = u.id
-                AND m.workspace_id = :workspace AND m.status IN ('ACTIVE', 'INVITED')
-          )
-        ORDER BY lower(u.name), u.id LIMIT 26
-    '''), {'query': q.strip().lower(), 'workspace': workspace_id})).mappings().all()
+    rows = (await db.execute(INVITATION_CANDIDATES_SELECT_USERS, {'query': q.strip().lower(), 'workspace': workspace_id})).mappings().all()
     return {'data': [dict(row) for row in rows[:25]], 'meta': {'hasMore': len(rows) > 25}}
 
 
@@ -803,7 +710,7 @@ async def invite(
     await _authorize_manager(db, workspace_id, user['id'])
     email = normalized_email(payload.email)
     role = _role(payload.role, invite=True)
-    result = await db.execute(text("SELECT id FROM users WHERE lower(email) = :email AND status = 'ACTIVE' LIMIT 2"), {'email': email})
+    result = await db.execute(INVITE_SELECT_USERS, {'email': email})
     matches = result.scalars().all()
     if len(matches) > 1:
         raise ApiError(409, 'Multiple accounts use this email. Contact your administrator.', 'Conflict')
@@ -817,9 +724,9 @@ async def invite(
         raise ApiError(409, 'This person is already a workspace member.', 'Conflict')
     now = utcnow()
     if existing:
-        await db.execute(text("UPDATE workspace_members SET status = 'INVITED', role = :role, invited_by = :invited_by, joined_at = NULL, updated_at = :now WHERE id = :id"), {'id': existing['member_id'], 'role': role, 'invited_by': user['id'], 'now': now})
+        await db.execute(INVITE_UPDATE_WORKSPACE_MEMBERS, {'id': existing['member_id'], 'role': role, 'invited_by': user['id'], 'now': now})
     else:
-        await db.execute(text("INSERT INTO workspace_members (id, workspace_id, user_id, status, role, invited_by, created_at, updated_at) VALUES (:id, :workspace_id, :user_id, 'INVITED', :role, :invited_by, :now, :now)"), {'id': cuid(), 'workspace_id': workspace_id, 'user_id': invited_id, 'role': role, 'invited_by': user['id'], 'now': now})
+        await db.execute(INVITE_INSERT_WORKSPACE_MEMBERS, {'id': cuid(), 'workspace_id': workspace_id, 'user_id': invited_id, 'role': role, 'invited_by': user['id'], 'now': now})
     await db.commit()
     invited = await _member_row(db, workspace_id, invited_id)
     return {'data': _member(invited)}
@@ -831,11 +738,11 @@ async def accept_invitation(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    result = await db.execute(text("SELECT workspace_id FROM workspace_members WHERE id = :id AND user_id = :user_id AND status = 'INVITED' LIMIT 1"), {'id': member_id, 'user_id': user['id']})
+    result = await db.execute(ACCEPT_INVITATION_SELECT_WORKSPACE_MEMBERS, {'id': member_id, 'user_id': user['id']})
     workspace_id = result.scalar_one_or_none()
     if not workspace_id:
         raise ApiError(404, 'Invitation not found.', 'Not Found')
-    await db.execute(text("UPDATE workspace_members SET status = 'ACTIVE', joined_at = :now, updated_at = :now WHERE id = :id"), {'id': member_id, 'now': utcnow()})
+    await db.execute(ACCEPT_INVITATION_UPDATE_WORKSPACE_MEMBERS, {'id': member_id, 'now': utcnow()})
     await db.commit()
     member = await _member_row(db, workspace_id, user['id'])
     record = _member(member, include_user=False)
@@ -849,7 +756,7 @@ async def decline_invitation(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    result = await db.execute(text("DELETE FROM workspace_members WHERE id = :id AND user_id = :user_id AND status = 'INVITED' RETURNING id"), {'id': member_id, 'user_id': user['id']})
+    result = await db.execute(DECLINE_INVITATION_DELETE_WORKSPACE_MEMBERS, {'id': member_id, 'user_id': user['id']})
     if not result.scalar_one_or_none():
         raise ApiError(404, 'Invitation not found.', 'Not Found')
     await db.commit()
@@ -860,7 +767,7 @@ async def _block_auto_join(db: AsyncSession, workspace_id: str, user_id: str) ->
     # The member row is about to go, so this is what keeps the next sign-in from bringing them back.
     # VI: Dòng thành viên sắp bị xoá, nên đây là thứ giữ lần đăng nhập sau không đưa họ quay lại.
     await db.execute(
-        text('INSERT INTO workspace_auto_join_blocks (workspace_id, user_id) VALUES (:workspace_id, :user_id) ON CONFLICT DO NOTHING'),
+        BLOCK_AUTO_JOIN_INSERT_WORKSPACE_AUTO_JOIN_BLOCKS,
         {'workspace_id': workspace_id, 'user_id': user_id},
     )
 
@@ -881,13 +788,7 @@ async def auto_join_status(
     """
     await _authorize_manager(db, workspace_id, user['id'])
     result = await db.execute(
-        text(
-            '''SELECT w.auto_join_tenant_id,
-                      (SELECT COUNT(*) FROM projects p WHERE p.workspace_id = w.id AND p.team_id IS NULL AND p.archived_at IS NULL) AS projects,
-                      (SELECT COUNT(*) FROM issues i WHERE i.workspace_id = w.id AND i.team_id IS NULL AND i.archived_at IS NULL) AS issues,
-                      (SELECT COUNT(*) FROM documents d WHERE d.workspace_id = w.id AND d.team_id IS NULL AND d.archived_at IS NULL) AS documents
-               FROM workspaces w WHERE w.id = :workspace_id'''
-        ),
+        AUTO_JOIN_STATUS_SELECT_PROJECTS,
         {'workspace_id': workspace_id},
     )
     row = result.mappings().one()
@@ -914,14 +815,11 @@ async def update_auto_join(
         raise ApiError(409, 'Microsoft sign-in is not configured.', 'Conflict')
     now = utcnow()
     await db.execute(
-        text('UPDATE workspaces SET auto_join_tenant_id = :tenant_id, updated_at = :now WHERE id = :workspace_id'),
+        UPDATE_AUTO_JOIN_UPDATE_WORKSPACES,
         {'tenant_id': settings.azure_ad_tenant_id if payload.enabled else None, 'now': now, 'workspace_id': workspace_id},
     )
     await db.execute(
-        text(
-            '''INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
-               VALUES (:id, :workspace_id, :actor_id, 'workspace.auto_join.changed', 'workspace', :workspace_id, CAST(:metadata AS jsonb), :now)'''
-        ),
+        UPDATE_AUTO_JOIN_INSERT_AUDIT_LOGS,
         {'id': cuid(), 'workspace_id': workspace_id, 'actor_id': user['id'], 'metadata': json.dumps({'enabled': payload.enabled}), 'now': now},
     )
     await db.commit()
@@ -938,10 +836,10 @@ async def leave(
     if membership['member_role'] == 'OWNER':
         raise ApiError(403, 'Transfer workspace ownership before leaving.', 'Forbidden')
     now = utcnow()
-    await db.execute(text("INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at) VALUES (:id, :workspace_id, :actor_id, 'workspace.member.left', 'workspace-member', :entity_id, CAST('{}' AS jsonb), :now)"), {'id': cuid(), 'workspace_id': workspace_id, 'actor_id': user['id'], 'entity_id': membership['member_id'], 'now': now})
-    await db.execute(text('DELETE FROM team_members WHERE user_id = :user_id AND team_id IN (SELECT id FROM teams WHERE workspace_id = :workspace_id)'), {'user_id': user['id'], 'workspace_id': workspace_id})
+    await db.execute(LEAVE_INSERT_AUDIT_LOGS, {'id': cuid(), 'workspace_id': workspace_id, 'actor_id': user['id'], 'entity_id': membership['member_id'], 'now': now})
+    await db.execute(LEAVE_DELETE_TEAM_MEMBERS, {'user_id': user['id'], 'workspace_id': workspace_id})
     await _block_auto_join(db, workspace_id, user['id'])
-    await db.execute(text('DELETE FROM workspace_members WHERE id = :id'), {'id': membership['member_id']})
+    await db.execute(LEAVE_DELETE_WORKSPACE_MEMBERS, {'id': membership['member_id']})
     await db.commit()
     return {'data': {'id': membership['member_id'], 'left': True}}
 
@@ -955,14 +853,14 @@ async def update_member(
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
     await _authorize_owner(db, workspace_id, user['id'])
-    member_result = await db.execute(text('SELECT user_id, role FROM workspace_members WHERE id = :id AND workspace_id = :workspace_id LIMIT 1'), {'id': member_id, 'workspace_id': workspace_id})
+    member_result = await db.execute(UPDATE_MEMBER_SELECT_WORKSPACE_MEMBERS, {'id': member_id, 'workspace_id': workspace_id})
     member = member_result.mappings().first()
     if not member:
         raise ApiError(404, 'Workspace member not found.', 'Not Found')
     role = _role(payload.role, invite=False)
     if member['user_id'] == user['id'] or member['role'] == 'OWNER' or role == 'OWNER':
         raise ApiError(403, 'Workspace ownership cannot be changed here.', 'Forbidden')
-    await db.execute(text('UPDATE workspace_members SET role = :role, updated_at = :now WHERE id = :id'), {'id': member_id, 'role': role, 'now': utcnow()})
+    await db.execute(UPDATE_MEMBER_UPDATE_WORKSPACE_MEMBERS, {'id': member_id, 'role': role, 'now': utcnow()})
     await db.commit()
     updated = await _member_row(db, workspace_id, member['user_id'])
     return {'data': _member(updated)}
@@ -976,14 +874,14 @@ async def remove_member(
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
     await _authorize_manager(db, workspace_id, user['id'])
-    member_result = await db.execute(text('SELECT user_id, role FROM workspace_members WHERE id = :id AND workspace_id = :workspace_id LIMIT 1'), {'id': member_id, 'workspace_id': workspace_id})
+    member_result = await db.execute(REMOVE_MEMBER_SELECT_WORKSPACE_MEMBERS, {'id': member_id, 'workspace_id': workspace_id})
     member = member_result.mappings().first()
     if not member:
         raise ApiError(404, 'Workspace member not found.', 'Not Found')
     if member['user_id'] == user['id'] or member['role'] == 'OWNER':
         raise ApiError(403, 'The workspace owner cannot be removed.', 'Forbidden')
-    await db.execute(text('DELETE FROM team_members WHERE user_id = :user_id AND team_id IN (SELECT id FROM teams WHERE workspace_id = :workspace_id)'), {'user_id': member['user_id'], 'workspace_id': workspace_id})
+    await db.execute(REMOVE_MEMBER_DELETE_TEAM_MEMBERS, {'user_id': member['user_id'], 'workspace_id': workspace_id})
     await _block_auto_join(db, workspace_id, member['user_id'])
-    await db.execute(text('DELETE FROM workspace_members WHERE id = :id'), {'id': member_id})
+    await db.execute(REMOVE_MEMBER_DELETE_WORKSPACE_MEMBERS, {'id': member_id})
     await db.commit()
     return {'data': {'id': member_id, 'removed': True}}

@@ -2,8 +2,6 @@ import asyncio
 import json
 from datetime import timedelta
 
-from sqlalchemy import text
-
 from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import cuid
@@ -11,7 +9,19 @@ from ..operations.heartbeats import progress
 from ..work_items.contracts import CreateIssueInput
 from ..work_items.issues import create_issue
 from .calendar import next_occurrence
+from .commands import (
+    PROCESS_SCHEDULE_INSERT_RECURRING_RUNS,
+    PROCESS_SCHEDULE_UPDATE_RECURRING_RUNS,
+    PROCESS_SCHEDULE_UPDATE_RECURRING_RUNS_2,
+    PROCESS_SCHEDULE_UPDATE_RECURRING_SCHEDULES,
+    PROCESS_SCHEDULE_UPDATE_RECURRING_SCHEDULES_2,
+)
 from .contracts import ScheduleRule
+from .queries import (
+    PROCESS_SCHEDULE_SELECT_RECURRING_RUNS,
+    PROCESS_SCHEDULE_SELECT_RECURRING_SCHEDULES,
+    PROCESS_SCHEDULE_SELECT_USERS,
+)
 from .service import run_snapshot
 
 
@@ -21,9 +31,7 @@ async def process_schedule(factory, *, now=None):
         schedule = (
             (
                 await db.execute(
-                    text("""SELECT * FROM recurring_schedules s WHERE active=true AND
-            (next_run_at<=:now OR EXISTS(SELECT 1 FROM recurring_runs r WHERE r.schedule_id=s.id AND r.state='QUEUED'))
-            ORDER BY next_run_at,id FOR UPDATE SKIP LOCKED LIMIT 1"""),
+                    PROCESS_SCHEDULE_SELECT_RECURRING_SCHEDULES,
                     {"now": now},
                 )
             )
@@ -35,9 +43,7 @@ async def process_schedule(factory, *, now=None):
         manual = (
             (
                 await db.execute(
-                    text(
-                        "SELECT * FROM recurring_runs WHERE schedule_id=:id AND state='QUEUED' ORDER BY created_at,id FOR UPDATE LIMIT 1"
-                    ),
+                    PROCESS_SCHEDULE_SELECT_RECURRING_RUNS,
                     {"id": schedule["id"]},
                 )
             )
@@ -49,8 +55,7 @@ async def process_schedule(factory, *, now=None):
         if not manual:
             inserted = (
                 await db.execute(
-                    text("""INSERT INTO recurring_runs(id,schedule_id,occurrence_key,scheduled_for,state,snapshot,created_at)
-                VALUES (:id,:schedule,:key,:due,'QUEUED',CAST(:snapshot AS jsonb),:now) ON CONFLICT(schedule_id,occurrence_key) DO NOTHING RETURNING id"""),
+                    PROCESS_SCHEDULE_INSERT_RECURRING_RUNS,
                     {
                         "id": identifier,
                         "schedule": schedule["id"],
@@ -63,9 +68,7 @@ async def process_schedule(factory, *, now=None):
             ).scalar_one_or_none()
             if not inserted:
                 await db.execute(
-                    text(
-                        "UPDATE recurring_schedules SET next_run_at=:next WHERE id=:id"
-                    ),
+                    PROCESS_SCHEDULE_UPDATE_RECURRING_SCHEDULES_2,
                     {
                         "id": schedule["id"],
                         "next": next_occurrence(
@@ -81,9 +84,7 @@ async def process_schedule(factory, *, now=None):
                 user = (
                     (
                         await db.execute(
-                            text(
-                                "SELECT id,name,avatar_url AS \"avatarUrl\" FROM users WHERE id=:id AND status='ACTIVE'"
-                            ),
+                            PROCESS_SCHEDULE_SELECT_USERS,
                             {"id": schedule["created_by"]},
                         )
                     )
@@ -118,9 +119,7 @@ async def process_schedule(factory, *, now=None):
         except Exception:
             state, code = "FAILED", "FAILED"
         await db.execute(
-            text(
-                "UPDATE recurring_runs SET state=:state,error_code=:code,issue_id=:issue WHERE id=:id"
-            ),
+            PROCESS_SCHEDULE_UPDATE_RECURRING_RUNS,
             {
                 "id": identifier,
                 "state": state,
@@ -139,15 +138,12 @@ async def process_schedule(factory, *, now=None):
             else schedule["next_run_at"],
         }
         await db.execute(
-            text("""UPDATE recurring_schedules SET next_run_at=:next,consecutive_failures=:failures,active=:active,
-            version=version+CASE WHEN active<>:active THEN 1 ELSE 0 END,updated_at=:now WHERE id=:id"""),
+            PROCESS_SCHEDULE_UPDATE_RECURRING_SCHEDULES,
             params,
         )
         if failures >= 3:
             await db.execute(
-                text(
-                    "UPDATE recurring_runs SET state='CANCELED' WHERE schedule_id=:id AND state='QUEUED'"
-                ),
+                PROCESS_SCHEDULE_UPDATE_RECURRING_RUNS_2,
                 {"id": schedule["id"]},
             )
         await db.commit()

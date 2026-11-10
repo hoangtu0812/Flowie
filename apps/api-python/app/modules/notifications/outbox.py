@@ -9,7 +9,6 @@ from os import getenv
 
 import httpx
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
@@ -17,6 +16,11 @@ from ...core.identifiers import cuid
 from ...services.microsoft_teams import teams_message
 from ...services.notification_events import NotificationBatch, notification_hub
 from ..operations.heartbeats import progress
+from .commands import (
+    PROCESS_ONE_UPDATE_NOTIFICATION_OUTBOX,
+    PROCESS_ONE_UPDATE_NOTIFICATION_OUTBOX_2,
+    STAGE_NOTIFICATIONS_INSERT_NOTIFICATION_OUTBOX,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,9 +32,7 @@ async def stage_notifications(
     for batch in batches:
         if batch is not None and (batch.records or batch.discord_embed or batch.teams_cards):
             await db.execute(
-                text(
-                    "INSERT INTO notification_outbox (id,workspace_id,payload) VALUES (:id,:workspace,CAST(:payload AS jsonb))"
-                ),
+                STAGE_NOTIFICATIONS_INSERT_NOTIFICATION_OUTBOX,
                 {
                     "id": cuid(),
                     "workspace": workspace_id,
@@ -78,14 +80,7 @@ async def process_one(factory, outbox_id: str | None = None) -> bool:
     token, now = cuid(), utcnow()
     async with factory() as db:
         result = await db.execute(
-            text("""
-            UPDATE notification_outbox SET lease_until=:lease, lease_token=:token, attempts=attempts+1
-            WHERE id=(SELECT id FROM notification_outbox
-                WHERE delivered_at IS NULL AND failed_at IS NULL AND available_at<=:now
-                AND (lease_until IS NULL OR lease_until<:now) AND (CAST(:target AS text) IS NULL OR id=CAST(:target AS text))
-                ORDER BY available_at,id FOR UPDATE SKIP LOCKED LIMIT 1)
-            RETURNING id,payload,attempts
-        """),
+            PROCESS_ONE_UPDATE_NOTIFICATION_OUTBOX,
             {
                 "lease": now + timedelta(minutes=2),
                 "token": token,
@@ -115,12 +110,7 @@ async def process_one(factory, outbox_id: str | None = None) -> bool:
     async with factory() as db:
         now = utcnow()
         await db.execute(
-            text("""
-            UPDATE notification_outbox SET delivered_at=:delivered,failed_at=:failed,
-                available_at=:retry,lease_until=NULL,lease_token=NULL,
-                payload=CASE WHEN :clear THEN '{}'::jsonb ELSE payload END
-            WHERE id=:id AND lease_token=:token
-        """),
+            PROCESS_ONE_UPDATE_NOTIFICATION_OUTBOX_2,
             {
                 "id": row["id"],
                 "token": token,

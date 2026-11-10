@@ -6,7 +6,7 @@ from os import getenv
 from typing import Any, cast
 
 import httpx
-from sqlalchemy import CursorResult, text
+from sqlalchemy import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
@@ -15,7 +15,23 @@ from ...core.identifiers import cuid
 from ...services.microsoft_teams import masked_webhook
 from ..access.read_only import ADMIN_READ_ROLES
 from .ai import analyze_workspace
+from .commands import (
+    NOTIFY_WORKSPACE_UPDATE_NEWS_ITEMS,
+    REFRESH_WORKSPACE_INSERT_NEWS_ITEMS,
+    REFRESH_WORKSPACE_UPDATE_NEWS_SOURCES,
+)
 from .feeds import fetch_feed, news_card, parse_feed
+from .queries import (
+    DUE_WORKSPACES_SELECT_NEWS_SOURCES,
+    HELD_WORKSPACES_SELECT_NEWS_ITEMS,
+    MEMBER_ROLE_SELECT_WORKSPACE_MEMBERS,
+    NEWS_PAGE_SELECT_NEWS_CATEGORIES,
+    NEWS_PAGE_SELECT_NEWS_ITEMS,
+    NEWS_PAGE_SELECT_NEWS_SOURCES,
+    NOTIFY_WORKSPACE_SELECT_NEWS_ITEMS,
+    NOTIFY_WORKSPACE_SELECT_WORKSPACE_AGENT_PROVIDERS,
+    refresh_workspace_select_news_sources_sql,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +45,7 @@ NEWS_AI_GRACE = timedelta(hours=2)
 async def member_role(db: AsyncSession, workspace_id: str, user_id: str) -> str:
     role = (
         await db.execute(
-            text(
-                '''SELECT role FROM workspace_members
-                   WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE' '''
-            ),
+            MEMBER_ROLE_SELECT_WORKSPACE_MEMBERS,
             {'workspace_id': workspace_id, 'user_id': user_id},
         )
     ).scalar_one_or_none()
@@ -56,24 +69,13 @@ async def news_page(db: AsyncSession, workspace_id: str, user_id: str) -> dict[s
     params = {'workspace_id': workspace_id}
     categories = (
         await db.execute(
-            text(
-                'SELECT id, name, webhook_url, digest, digest_at FROM news_categories '
-                'WHERE workspace_id = :workspace_id ORDER BY name'
-            ),
+            NEWS_PAGE_SELECT_NEWS_CATEGORIES,
             params,
         )
     ).mappings().all()
     items = (
         await db.execute(
-            text(
-                '''SELECT * FROM (
-                     SELECT i.id, i.title, i.url, i.summary, i.published_at, s.name AS source_name, s.category_id,
-                            i.risk_level, i.risk_score, i.ai_summary,
-                            row_number() OVER (PARTITION BY s.category_id ORDER BY i.published_at DESC) AS position
-                     FROM news_items i JOIN news_sources s ON s.id = i.source_id
-                     WHERE i.workspace_id = :workspace_id) ranked
-                   WHERE position <= 100 ORDER BY published_at DESC'''
-            ),
+            NEWS_PAGE_SELECT_NEWS_ITEMS,
             params,
         )
     ).mappings().all()
@@ -112,10 +114,7 @@ async def news_page(db: AsyncSession, workspace_id: str, user_id: str) -> dict[s
     if manage:
         sources = (
             await db.execute(
-                text(
-                    '''SELECT id, category_id, name, feed_url, enabled, last_fetched_at, last_error
-                       FROM news_sources WHERE workspace_id = :workspace_id ORDER BY name'''
-                ),
+                NEWS_PAGE_SELECT_NEWS_SOURCES,
                 params,
             )
         ).mappings().all()
@@ -136,10 +135,7 @@ async def news_page(db: AsyncSession, workspace_id: str, user_id: str) -> dict[s
 
 async def due_workspaces(db: AsyncSession, cutoff: Any) -> list[str]:
     rows = await db.execute(
-        text(
-            '''SELECT DISTINCT workspace_id FROM news_sources
-               WHERE enabled AND (last_fetched_at IS NULL OR last_fetched_at < :cutoff)'''
-        ),
+        DUE_WORKSPACES_SELECT_NEWS_SOURCES,
         {'cutoff': cutoff},
     )
     return [row[0] for row in rows.all()]
@@ -160,12 +156,10 @@ async def refresh_workspace(
     VI: Có ``settings`` thì tin mới được provider AI của workspace gán nhãn trước khi gửi Teams; thẻ
     VI: chờ nhãn được giữ tối đa ``NEWS_AI_GRACE``, nên lỗi AI chỉ làm thẻ đến muộn.
     """
-    query = 'SELECT id, feed_url FROM news_sources WHERE workspace_id = :workspace_id AND enabled'
     params: dict[str, Any] = {'workspace_id': workspace_id}
     if due_before is not None:
-        query += ' AND (last_fetched_at IS NULL OR last_fetched_at < :cutoff)'
         params['cutoff'] = due_before
-    sources = (await db.execute(text(query), params)).mappings().all()
+    sources = (await db.execute(refresh_workspace_select_news_sources_sql(due_before is not None), params)).mappings().all()
     await db.commit()
     inserted = 0
     async with httpx.AsyncClient(
@@ -179,11 +173,7 @@ async def refresh_workspace(
                 error = (getattr(failure, 'message', None) or str(failure) or type(failure).__name__)[:500]
             for entry in entries:
                 result = await db.execute(
-                    text(
-                        '''INSERT INTO news_items (id, workspace_id, source_id, title, url, summary, published_at, created_at)
-                           VALUES (:id, :workspace_id, :source_id, :title, :url, :summary, :published_at, :now)
-                           ON CONFLICT (workspace_id, url) DO NOTHING'''
-                    ),
+                    REFRESH_WORKSPACE_INSERT_NEWS_ITEMS,
                     {
                         'id': cuid(), 'workspace_id': workspace_id, 'source_id': source['id'],
                         'title': entry['title'], 'url': entry['url'], 'summary': entry['summary'],
@@ -192,7 +182,7 @@ async def refresh_workspace(
                 )
                 inserted += cast(CursorResult[Any], result).rowcount or 0
             await db.execute(
-                text('UPDATE news_sources SET last_fetched_at = :now, last_error = :error WHERE id = :id'),
+                REFRESH_WORKSPACE_UPDATE_NEWS_SOURCES,
                 {'now': now, 'error': error, 'id': source['id']},
             )
             await db.commit()
@@ -206,11 +196,7 @@ async def held_workspaces(db: AsyncSession) -> list[str]:
     VI: Các workspace có provider đang bật và tin chưa gửi còn chờ nhãn AI.
     """
     rows = await db.execute(
-        text(
-            '''SELECT DISTINCT i.workspace_id FROM news_items i
-               JOIN workspace_agent_providers p ON p.workspace_id = i.workspace_id AND p.enabled
-               WHERE i.notified_at IS NULL AND i.analyzed_at IS NULL'''
-        )
+        HELD_WORKSPACES_SELECT_NEWS_ITEMS
     )
     return [row[0] for row in rows.all()]
 
@@ -243,21 +229,14 @@ async def notify_workspace(
     await_labels = hold and bool(
         (
             await db.execute(
-                text('SELECT 1 FROM workspace_agent_providers WHERE workspace_id = :workspace_id AND enabled LIMIT 1'),
+                NOTIFY_WORKSPACE_SELECT_WORKSPACE_AGENT_PROVIDERS,
                 {'workspace_id': workspace_id},
             )
         ).first()
     )
     rows = (
         await db.execute(
-            text(
-                '''SELECT c.id AS category_id, c.name, c.webhook_url, c.digest, c.digest_at,
-                          i.id, i.title, i.url, i.risk_level, i.ai_summary, i.analyzed_at, i.created_at
-                   FROM news_items i JOIN news_sources s ON s.id = i.source_id
-                   JOIN news_categories c ON c.id = s.category_id
-                   WHERE i.workspace_id = :workspace_id AND i.notified_at IS NULL
-                   ORDER BY i.risk_score DESC NULLS LAST, i.published_at DESC'''
-            ),
+            NOTIFY_WORKSPACE_SELECT_NEWS_ITEMS,
             {'workspace_id': workspace_id},
         )
     ).mappings().all()
@@ -293,7 +272,7 @@ async def notify_workspace(
             delivered += int(handled)
         if handled:
             await db.execute(
-                text('UPDATE news_items SET notified_at = :now WHERE id = ANY(:ids)'),
+                NOTIFY_WORKSPACE_UPDATE_NEWS_ITEMS,
                 {'now': utcnow(), 'ids': [item['id'] for item in items]},
             )
             await db.commit()

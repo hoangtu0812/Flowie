@@ -23,12 +23,29 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 from typing import Any, cast
 
-from sqlalchemy import CursorResult, text
+from sqlalchemy import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..core.clock import utcnow
 from ..core.identifiers import cuid
 from ..modules.operations.heartbeats import progress
+from .commands import (
+    APPLY_AUTO_ARCHIVE_INSERT_ACTIVITIES,
+    APPLY_AUTO_ARCHIVE_INSERT_NOTIFICATIONS,
+    APPLY_AUTO_CLOSE_INSERT_ACTIVITIES,
+    APPLY_AUTO_CLOSE_INSERT_NOTIFICATIONS,
+    apply_auto_archive_update_issues_sql,
+    apply_auto_close_update_issues_sql,
+)
+from .queries import (
+    APPLY_AUTO_CLOSE_SELECT_ISSUE_SUBSCRIPTIONS,
+    CANCELED_STATUS_ID_SELECT_ISSUE_STATUSES,
+    CLOSED_PROJECT_STATUS_NAMES_SELECT_PROJECT_STATUSES,
+    HAS_ACTIVE_SLA_SELECT_SLA_POLICIES,
+    RUN_TEAM_POLICIES_SELECT_TEAMS,
+    apply_auto_archive_select_issues_sql,
+    apply_auto_close_select_issues_sql,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -145,8 +162,7 @@ _CLOSED_ELIGIBILITY = '''
 
 async def _closed_project_status_names(db: AsyncSession, workspace_id: str) -> list[str]:
     rows = await db.execute(
-        text("SELECT name FROM project_statuses WHERE workspace_id = :workspace_id"
-             " AND category IN ('completed', 'canceled')"),
+        CLOSED_PROJECT_STATUS_NAMES_SELECT_PROJECT_STATUSES,
         {'workspace_id': workspace_id},
     )
     return list(dict.fromkeys([*BUILTIN_CLOSED_PROJECT_STATUSES, *rows.scalars().all()]))
@@ -158,12 +174,7 @@ async def _has_active_sla(db: AsyncSession, workspace_id: str, team_id: str | No
     VI: Một policy bao phủ issue thì giữ nó mở: SLA là lời hứa với một con người.
     """
     found = await db.execute(
-        text('''SELECT 1 FROM sla_policies policy
-                WHERE policy.workspace_id = :workspace_id AND policy.archived_at IS NULL
-                  AND policy.enabled = true
-                  AND (policy.team_id IS NULL OR policy.team_id = :team_id)
-                  AND (policy.priority IS NULL OR policy.priority = :priority)
-                LIMIT 1'''),
+        HAS_ACTIVE_SLA_SELECT_SLA_POLICIES,
         {'workspace_id': workspace_id, 'team_id': team_id, 'priority': priority},
     )
     return found.first() is not None
@@ -186,10 +197,7 @@ async def _canceled_status_id(db: AsyncSession, team: dict[str, Any]) -> str | N
     """
     for team_id in (team['id'], None):
         row = await db.execute(
-            text('''SELECT id FROM issue_statuses
-                    WHERE workspace_id = :workspace_id AND category = 'CANCELED'
-                      AND (team_id = :team_id OR (:team_id IS NULL AND team_id IS NULL))
-                    ORDER BY position ASC LIMIT 1'''),
+            CANCELED_STATUS_ID_SELECT_ISSUE_STATUSES,
             {'workspace_id': team['workspace_id'], 'team_id': team_id},
         )
         found = row.scalar_one_or_none()
@@ -211,11 +219,7 @@ async def _apply_auto_close(db: AsyncSession, team: dict[str, Any], now: datetim
         return 0
 
     candidates = (await db.execute(
-        text(f'''SELECT issue.id, issue.workspace_id, issue.team_id, issue.status_id,
-                        issue.identifier, issue.title, issue.priority
-                 FROM issues issue JOIN issue_statuses status ON status.id = issue.status_id
-                 WHERE {_OPEN_ELIGIBILITY}
-                 ORDER BY issue.updated_at ASC LIMIT :batch_size'''),
+        apply_auto_close_select_issues_sql(_OPEN_ELIGIBILITY),
         {**params, 'batch_size': batch_size},
     )).mappings().all()
 
@@ -233,22 +237,14 @@ async def _apply_auto_close(db: AsyncSession, team: dict[str, Any], now: datetim
         # VI: không cùng xử lý một issue; bên thua cuộc không cập nhật dòng nào
         # VI: và bị bỏ qua.
         claim = await db.execute(
-            text(f'''UPDATE issues SET status_id = :status_id, completed_at = NULL,
-                            canceled_at = :now, resolution = NULL, duplicate_of_id = NULL,
-                            updated_at = :now
-                     WHERE id = :id AND id IN (
-                         SELECT issue.id FROM issues issue
-                         JOIN issue_statuses status ON status.id = issue.status_id
-                         WHERE {_OPEN_ELIGIBILITY})'''),
+            apply_auto_close_update_issues_sql(_OPEN_ELIGIBILITY),
             {**params, 'id': issue['id'], 'status_id': canceled_status},
         )
         if not cast(CursorResult[Any], claim).rowcount:
             planned.pop()
             continue
         await db.execute(
-            text('''INSERT INTO activities (id, workspace_id, issue_id, actor_id, type, data, created_at)
-                    VALUES (:id, :workspace_id, :issue_id, NULL, 'issue.auto_closed',
-                            CAST(:data AS jsonb), :now)'''),
+            APPLY_AUTO_CLOSE_INSERT_ACTIVITIES,
             {'id': cuid(), 'workspace_id': issue['workspace_id'], 'issue_id': issue['id'],
              'data': json.dumps({'previousStatusId': issue['status_id'], 'statusId': canceled_status,
                                  'inactivityDays': team['auto_close_days']}), 'now': now},
@@ -258,19 +254,12 @@ async def _apply_auto_close(db: AsyncSession, team: dict[str, Any], now: datetim
         # VI: Chỉ subscriber đã bật nhận thông báo hoàn thành mới được báo, và
         # VI: người đăng ký hai lần chỉ được báo một lần.
         recipients = (await db.execute(
-            text('''SELECT DISTINCT subscription.user_id FROM issue_subscriptions subscription
-                    JOIN notification_preferences preference
-                      ON preference.user_id = subscription.user_id
-                     AND preference.workspace_id = :workspace_id
-                    WHERE subscription.issue_id = :issue_id AND preference.issue_completed = true'''),
+            APPLY_AUTO_CLOSE_SELECT_ISSUE_SUBSCRIPTIONS,
             {'workspace_id': issue['workspace_id'], 'issue_id': issue['id']},
         )).scalars().all()
         for user_id in recipients:
             await db.execute(
-                text('''INSERT INTO notifications
-                        (id, workspace_id, user_id, type, entity_type, entity_id, data, created_at)
-                        VALUES (:id, :workspace_id, :user_id, 'issue.auto_closed', 'issue', :issue_id,
-                                CAST(:data AS jsonb), :now)'''),
+                APPLY_AUTO_CLOSE_INSERT_NOTIFICATIONS,
                 {'id': cuid(), 'workspace_id': issue['workspace_id'], 'user_id': user_id,
                  'issue_id': issue['id'],
                  'data': json.dumps({'identifier': issue['identifier'], 'title': issue['title'],
@@ -290,11 +279,7 @@ async def _apply_auto_archive(db: AsyncSession, team: dict[str, Any], now: datet
     params = _eligibility_params(team, cutoff, now, closed_project_statuses)
 
     candidates = (await db.execute(
-        text(f'''SELECT issue.id, issue.workspace_id, issue.creator_id,
-                        issue.identifier, issue.title
-                 FROM issues issue JOIN issue_statuses status ON status.id = issue.status_id
-                 WHERE {_CLOSED_ELIGIBILITY}
-                 ORDER BY issue.updated_at ASC LIMIT :batch_size'''),
+        apply_auto_archive_select_issues_sql(_CLOSED_ELIGIBILITY),
         {**params, 'batch_size': batch_size},
     )).mappings().all()
 
@@ -305,20 +290,14 @@ async def _apply_auto_archive(db: AsyncSession, team: dict[str, Any], now: datet
             archived += 1
             continue
         claim = await db.execute(
-            text(f'''UPDATE issues SET archived_at = :now, updated_at = :now
-                     WHERE id = :id AND id IN (
-                         SELECT issue.id FROM issues issue
-                         JOIN issue_statuses status ON status.id = issue.status_id
-                         WHERE {_CLOSED_ELIGIBILITY})'''),
+            apply_auto_archive_update_issues_sql(_CLOSED_ELIGIBILITY),
             {**params, 'id': issue['id']},
         )
         if not cast(CursorResult[Any], claim).rowcount:
             planned.pop()
             continue
         await db.execute(
-            text('''INSERT INTO activities (id, workspace_id, issue_id, actor_id, type, data, created_at)
-                    VALUES (:id, :workspace_id, :issue_id, NULL, 'issue.auto_archived',
-                            CAST(:data AS jsonb), :now)'''),
+            APPLY_AUTO_ARCHIVE_INSERT_ACTIVITIES,
             {'id': cuid(), 'workspace_id': issue['workspace_id'], 'issue_id': issue['id'],
              'data': json.dumps({'inactivityDays': team['auto_archive_days']}), 'now': now},
         )
@@ -327,10 +306,7 @@ async def _apply_auto_archive(db: AsyncSession, team: dict[str, Any], now: datet
         # VI: Việc lưu trữ chỉ báo cho người tạo, và không xét tuỳ chọn thông báo
         # VI: hoàn thành: đây là sự kiện khác với việc issue được hoàn thành.
         await db.execute(
-            text('''INSERT INTO notifications
-                    (id, workspace_id, user_id, type, entity_type, entity_id, data, created_at)
-                    VALUES (:id, :workspace_id, :user_id, 'issue.auto_archived', 'issue', :issue_id,
-                            CAST(:data AS jsonb), :now)'''),
+            APPLY_AUTO_ARCHIVE_INSERT_NOTIFICATIONS,
             {'id': cuid(), 'workspace_id': issue['workspace_id'], 'user_id': issue['creator_id'],
              'issue_id': issue['id'],
              'data': json.dumps({'identifier': issue['identifier'], 'title': issue['title'],
@@ -362,9 +338,7 @@ async def run_team_policies(factory: async_sessionmaker[AsyncSession], now: date
     closed = archived = 0
     async with factory() as db:
         teams = (await db.execute(
-            text('''SELECT id, workspace_id, auto_close_days, auto_archive_days FROM teams
-                    WHERE archived_at IS NULL
-                      AND (auto_close_days IS NOT NULL OR auto_archive_days IS NOT NULL)''')
+            RUN_TEAM_POLICIES_SELECT_TEAMS
         )).mappings().all()
         for team in teams:
             statuses = await _closed_project_status_names(db, team['workspace_id'])

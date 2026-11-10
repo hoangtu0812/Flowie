@@ -6,7 +6,7 @@ from typing import Any, Literal, cast
 
 from fastapi import Depends, Query, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import CursorResult, text
+from sqlalchemy import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
@@ -30,6 +30,32 @@ from ..work_items.issues_api import (
     create_issue,
 )
 from .assistant import AssistantQuestion, answer_question, assistant_status
+from .commands import (
+    ADD_MESSAGE_INSERT_ASK_MESSAGES,
+    ARCHIVE_ASK_UPDATE_ASKS,
+    AUDIT_INSERT_AUDIT_LOGS,
+    CONVERT_ASK_UPDATE_ASKS,
+    CREATE_ASK_INSERT_ASKS,
+    CREATE_ASK_MESSAGE_UPDATE_ASKS,
+    CREATE_ASK_UPDATE_WORKSPACES,
+    RECORD_TICKET_FILE_UPDATE_ASKS,
+    TRANSITION_ASK_UPDATE_ASKS,
+    update_ask_update_asks_sql,
+)
+from .queries import (
+    ACCEPTS_TICKETS_SELECT_PROJECTS,
+    ASK_SELECT_ASK_MESSAGES,
+    IS_HANDLER_SELECT_TEAM_MEMBERS,
+    LIST_ASKS_SELECT_ASKS,
+    LIST_ASKS_SELECT_ASKS_2,
+    LIST_SERVICE_DESK_PROJECTS_SELECT_PROJECTS,
+    RECORD_TICKET_FILE_SELECT_AUDIT_LOGS,
+    REFERENCES_SELECT_PROJECTS,
+    ROLE_SELECT_WORKSPACE_MEMBERS,
+    TICKET_FOR_ISSUE_SELECT_ASKS,
+    create_ask_message_select_ask_messages_sql,
+    list_ask_messages_select_ask_messages_sql,
+)
 
 router = APIRouter(prefix='/api/v1/asks', tags=['asks'])
 TICKET_FILE_NOTICE_GAP = timedelta(seconds=60)
@@ -75,7 +101,7 @@ class AskTransitionInput(BaseModel):
 
 
 async def _role(db: AsyncSession, workspace_id: str, user_id: str) -> str:
-    result = await db.execute(text("SELECT role FROM workspace_members WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE'"), {'workspace_id': workspace_id, 'user_id': user_id})
+    result = await db.execute(ROLE_SELECT_WORKSPACE_MEMBERS, {'workspace_id': workspace_id, 'user_id': user_id})
     role = result.scalar_one_or_none()
     if not role:
         raise ApiError(403, 'You do not have access to this workspace.', 'Forbidden')
@@ -85,9 +111,7 @@ async def _role(db: AsyncSession, workspace_id: str, user_id: str) -> str:
 async def _accepts_tickets(db: AsyncSession, workspace_id: str, team_id: str, project_id: str | None) -> bool:
     if not project_id:
         return False
-    result = await db.execute(text('''SELECT 1 FROM projects project JOIN teams team ON team.id = project.team_id
-                                      WHERE project.id = :project_id AND project.workspace_id = :workspace_id AND project.team_id = :team_id
-                                      AND project.service_desk_enabled AND project.archived_at IS NULL AND team.archived_at IS NULL'''), {'project_id': project_id, 'workspace_id': workspace_id, 'team_id': team_id})
+    result = await db.execute(ACCEPTS_TICKETS_SELECT_PROJECTS, {'project_id': project_id, 'workspace_id': workspace_id, 'team_id': team_id})
     return result.scalar_one_or_none() is not None
 
 
@@ -98,15 +122,13 @@ async def _references(db: AsyncSession, workspace_id: str, team_id: str, project
         return
     await team_access(db, workspace_id, team_id, user_id)
     if project_id:
-        result = await db.execute(text('''SELECT 1 FROM projects WHERE id = :project_id AND workspace_id = :workspace_id
-                                          AND archived_at IS NULL AND (team_id IS NULL OR team_id = :team_id)'''), {'project_id': project_id, 'workspace_id': workspace_id, 'team_id': team_id})
+        result = await db.execute(REFERENCES_SELECT_PROJECTS, {'project_id': project_id, 'workspace_id': workspace_id, 'team_id': team_id})
         if result.scalar_one_or_none() is None:
             raise ApiError(404, 'Ask project not found for this team.', 'Not Found')
 
 
 async def _audit(db: AsyncSession, workspace_id: str, actor_id: str, action: str, ask_id: str, metadata: dict[str, Any]) -> None:
-    await db.execute(text('''INSERT INTO audit_logs (id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at)
-                             VALUES (:id, :workspace_id, :actor_id, :action, 'ask', :entity_id, CAST(:metadata AS jsonb), :now)'''), {'id': cuid(), 'workspace_id': workspace_id, 'actor_id': actor_id, 'action': action, 'entity_id': ask_id, 'metadata': json.dumps(metadata), 'now': utcnow()})
+    await db.execute(AUDIT_INSERT_AUDIT_LOGS, {'id': cuid(), 'workspace_id': workspace_id, 'actor_id': actor_id, 'action': action, 'entity_id': ask_id, 'metadata': json.dumps(metadata), 'now': utcnow()})
 
 
 def ticket_identifier(number: int) -> str:
@@ -144,14 +166,7 @@ def ticket_status(ask_status: str, issue_category: str | None, awaiting_requeste
 
 
 async def _ask(db: AsyncSession, ask_id: str, workspace_id: str) -> dict[str, Any]:
-    result = await db.execute(text('''SELECT ask.*, team.id AS team_id_value, team.name AS team_name, team.identifier AS team_identifier, team.icon AS team_icon,
-                                      project.id AS project_id_value, project.name AS project_name, project.identifier AS project_identifier,
-                                      creator.id AS creator_id, creator.name AS creator_name, creator.avatar_url AS creator_avatar_url,
-                                      issue.id AS issue_id_value, issue.identifier AS issue_identifier, issue.title AS issue_title, COALESCE(issue.completed_at, issue.canceled_at) AS issue_closed_at, issue_status.category AS issue_category, assignee.name AS assignee_name, assignee.avatar_url AS assignee_avatar_url,
-                                      (SELECT message.author_id FROM ask_messages message WHERE message.ask_id = ask.id ORDER BY message.created_at DESC, message.id DESC LIMIT 1) AS last_message_author
-                               FROM asks ask JOIN teams team ON team.id = ask.team_id JOIN users creator ON creator.id = ask.created_by
-                               LEFT JOIN projects project ON project.id = ask.project_id LEFT JOIN issues issue ON issue.id = ask.converted_issue_id LEFT JOIN issue_statuses issue_status ON issue_status.id = issue.status_id LEFT JOIN users assignee ON assignee.id = ask.assignee_id
-                               WHERE ask.id = :ask_id AND ask.workspace_id = :workspace_id AND ask.archived_at IS NULL'''), {'ask_id': ask_id, 'workspace_id': workspace_id})
+    result = await db.execute(ASK_SELECT_ASK_MESSAGES, {'ask_id': ask_id, 'workspace_id': workspace_id})
     row = result.mappings().first()
     if not row: raise ApiError(404, 'Ask not found.', 'Not Found')
     pending = reopen_pending(row['status'], row['issue_category'], row['reopened_at'], row['issue_closed_at'])
@@ -171,7 +186,7 @@ def _requester_view(ask: dict[str, Any]) -> dict[str, Any]:
 async def _is_handler(db: AsyncSession, ask: dict[str, Any], workspace_id: str, user_id: str) -> bool:
     if await _role(db, workspace_id, user_id) in {'OWNER', 'ADMIN'}:
         return True
-    result = await db.execute(text('SELECT 1 FROM team_members WHERE team_id = :team_id AND user_id = :user_id'), {'team_id': ask['teamId'], 'user_id': user_id})
+    result = await db.execute(IS_HANDLER_SELECT_TEAM_MEMBERS, {'team_id': ask['teamId'], 'user_id': user_id})
     return result.scalar_one_or_none() is not None
 
 
@@ -193,9 +208,7 @@ async def list_service_desk_projects(workspaceId: str = Query(min_length=1), use
     # The one project read open to people outside the team, so it returns only what the ticket form needs.
     # VI: Đây là API đọc dự án duy nhất mở cho người ngoài team, nên chỉ trả những gì form ticket cần.
     await workspace_access(db, workspaceId, user['id'])
-    result = await db.execute(text('''SELECT project.id, project.name, project.team_id FROM projects project JOIN teams team ON team.id = project.team_id
-                                      WHERE project.workspace_id = :workspace_id AND project.service_desk_enabled
-                                      AND project.archived_at IS NULL AND team.archived_at IS NULL ORDER BY project.name'''), {'workspace_id': workspaceId})
+    result = await db.execute(LIST_SERVICE_DESK_PROJECTS_SELECT_PROJECTS, {'workspace_id': workspaceId})
     return {'data': [{'id': row['id'], 'name': row['name'], 'teamId': row['team_id']} for row in result.mappings().all()]}
 
 
@@ -217,10 +230,9 @@ async def ask_assistant(payload: AssistantQuestion, request: Request, user: Any 
 async def list_asks(workspaceId: str = Query(min_length=1), scope: AskScope = 'team', user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
     await workspace_access(db, workspaceId, user['id'])
     if scope == 'mine':
-        result = await db.execute(text('''SELECT id FROM asks WHERE workspace_id = :workspace_id AND archived_at IS NULL AND created_by = :user_id ORDER BY updated_at DESC'''), {'workspace_id': workspaceId, 'user_id': user['id']})
+        result = await db.execute(LIST_ASKS_SELECT_ASKS_2, {'workspace_id': workspaceId, 'user_id': user['id']})
         return {'data': [_requester_view(await _ask(db, row['id'], workspaceId)) for row in result.mappings().all()]}
-    result = await db.execute(text('''SELECT ask.id FROM asks ask JOIN team_members member ON member.team_id = ask.team_id
-                                      WHERE ask.workspace_id = :workspace_id AND ask.archived_at IS NULL AND member.user_id = :user_id ORDER BY ask.updated_at DESC'''), {'workspace_id': workspaceId, 'user_id': user['id']})
+    result = await db.execute(LIST_ASKS_SELECT_ASKS, {'workspace_id': workspaceId, 'user_id': user['id']})
     return {'data': [await _ask(db, row['id'], workspaceId) for row in result.mappings().all()]}
 
 
@@ -256,7 +268,7 @@ async def _parties(db: AsyncSession, ask: dict[str, Any]) -> set[str]:
 
 async def _add_message(db: AsyncSession, ask_id: str, author_id: str, content: str, now: Any) -> str:
     message_id = cuid()
-    await db.execute(text('INSERT INTO ask_messages (id, ask_id, author_id, content, created_at) VALUES (:id, :ask_id, :author_id, :content, :now)'), {'id': message_id, 'ask_id': ask_id, 'author_id': author_id, 'content': content, 'now': now})
+    await db.execute(ADD_MESSAGE_INSERT_ASK_MESSAGES, {'id': message_id, 'ask_id': ask_id, 'author_id': author_id, 'content': content, 'now': now})
     return message_id
 
 
@@ -267,9 +279,8 @@ async def create_ask(payload: CreateAskInput, user: Any = Depends(current_user),
     ask_id, now = cuid(), utcnow()
     # The row lock lasts until commit, so concurrent tickets in a workspace take numbers in turn.
     # VI: Khoá dòng giữ đến khi commit, nên các ticket tạo đồng thời trong workspace lấy số lần lượt.
-    number = (await db.execute(text('UPDATE workspaces SET ticket_sequence = ticket_sequence + 1 WHERE id = :id RETURNING ticket_sequence'), {'id': payload.workspaceId})).scalar_one()
-    await db.execute(text('''INSERT INTO asks (id, number, workspace_id, team_id, project_id, title, description, priority, status, notified_ticket_status, created_by, created_at, updated_at)
-                             VALUES (:id, :number, :workspace_id, :team_id, :project_id, :title, :description, :priority, 'open', 'received', :created_by, :now, :now)'''), {'id': ask_id, 'number': number, 'workspace_id': payload.workspaceId, 'team_id': payload.teamId, 'project_id': payload.projectId, 'title': payload.title.strip(), 'description': payload.description.strip() if payload.description else None, 'priority': payload.priority, 'created_by': user['id'], 'now': now})
+    number = (await db.execute(CREATE_ASK_UPDATE_WORKSPACES, {'id': payload.workspaceId})).scalar_one()
+    await db.execute(CREATE_ASK_INSERT_ASKS, {'id': ask_id, 'number': number, 'workspace_id': payload.workspaceId, 'team_id': payload.teamId, 'project_id': payload.projectId, 'title': payload.title.strip(), 'description': payload.description.strip() if payload.description else None, 'priority': payload.priority, 'created_by': user['id'], 'now': now})
     await _audit(db, payload.workspaceId, user['id'], 'ask.created', ask_id, {'title': payload.title.strip(), 'teamId': payload.teamId})
     # Only Service Desk intake reaches the team's Inbox; Asks a team files for itself stay quiet.
     # VI: Chỉ ticket từ Service Desk mới báo vào Inbox của team; Ask do team tự tạo thì không báo.
@@ -308,7 +319,7 @@ async def update_ask(ask_id: str, payload: UpdateAskInput, workspaceId: str = Qu
             if field == 'description' and isinstance(value, str): value = value.strip() or None
             params[field] = value; sets.append(f'{column} = :{field}')
     if sets:
-        await db.execute(text(f"UPDATE asks SET {', '.join(sets)}, updated_at = :now WHERE id = :ask_id"), params)
+        await db.execute(update_ask_update_asks_sql(sets), params)
         await _audit(db, workspaceId, user['id'], 'ask.updated', ask_id, values)
         if values.get('assigneeId') and values['assigneeId'] != ask['assigneeId']:
             batch = await create_notification_batch(db, workspace_id=workspaceId, recipient_ids={values['assigneeId']}, actor=user, event_type='ticket.assigned', entity_type='ticket', entity_id=ask_id,
@@ -335,9 +346,7 @@ async def transition_ask(ask_id: str, payload: AskTransitionInput, workspaceId: 
     # keeps the ticket-status job from repeating this news, or telling someone what they just did.
     # VI: Khớp trạng thái cũ để hai người không ghi đè nhau. Ghi nhãn tại đây để job ticket-status
     # VI: không báo lại tin này, cũng không báo cho người vừa tự thao tác.
-    changed = await db.execute(text('''UPDATE asks SET status = :status, notified_ticket_status = :label, updated_at = :now,
-                                       reopened_at = CASE WHEN :reopen THEN CAST(:now AS timestamp) ELSE reopened_at END
-                                       WHERE id = :ask_id AND status = :current'''), {'status': status, 'label': label, 'now': now, 'reopen': payload.action == 'reopen', 'ask_id': ask_id, 'current': ask['status']})
+    changed = await db.execute(TRANSITION_ASK_UPDATE_ASKS, {'status': status, 'label': label, 'now': now, 'reopen': payload.action == 'reopen', 'ask_id': ask_id, 'current': ask['status']})
     if cast(CursorResult[Any], changed).rowcount == 0:
         await db.rollback()
         raise ApiError(409, 'This ticket has just changed. Reload it and try again.', 'Conflict')
@@ -358,7 +367,7 @@ async def convert_ask(ask_id: str, workspaceId: str = Query(min_length=1), user:
     if ask['status'] != 'open': raise ApiError(400, 'Only open tickets can be converted.', 'Bad Request')
     issue = await create_issue(CreateIssueInput(workspaceId=workspaceId, teamId=ask['teamId'], projectId=ask['projectId'], title=ask['title'], description=ask['description'], priority=ask['priority'], assigneeId=ask['assigneeId']), user, db)
     issue_data = issue['data']
-    await db.execute(text("UPDATE asks SET status = 'accepted', converted_issue_id = :issue_id, updated_at = :now WHERE id = :ask_id"), {'issue_id': issue_data['id'], 'ask_id': ask_id, 'now': utcnow()})
+    await db.execute(CONVERT_ASK_UPDATE_ASKS, {'issue_id': issue_data['id'], 'ask_id': ask_id, 'now': utcnow()})
     await _audit(db, workspaceId, user['id'], 'ask.converted', ask_id, {'issueId': issue_data['id'], 'identifier': issue_data['identifier']}); await db.commit()
     return {'data': await _ask(db, ask_id, workspaceId)}
 
@@ -373,7 +382,7 @@ MESSAGE_COLUMNS = 'message.id, message.ask_id, message.content, message.created_
 @router.get('/by-issue/{issue_id}')
 async def ticket_for_issue(issue_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, str] | None]:
     await workspace_access(db, workspaceId, user['id'])
-    result = await db.execute(text('SELECT id FROM asks WHERE converted_issue_id = :issue_id AND workspace_id = :workspace_id AND archived_at IS NULL'), {'issue_id': issue_id, 'workspace_id': workspaceId})
+    result = await db.execute(TICKET_FOR_ISSUE_SELECT_ASKS, {'issue_id': issue_id, 'workspace_id': workspaceId})
     ask_id = result.scalar_one_or_none()
     if ask_id is None:
         return {'data': None}
@@ -384,8 +393,7 @@ async def ticket_for_issue(issue_id: str, workspaceId: str = Query(min_length=1)
 @router.get('/{ask_id}/messages')
 async def list_ask_messages(ask_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
     ask = await _ask(db, ask_id, workspaceId); await _manage(db, ask, workspaceId, user['id'])
-    result = await db.execute(text(f'''SELECT {MESSAGE_COLUMNS} FROM ask_messages message JOIN users author ON author.id = message.author_id
-                                       WHERE message.ask_id = :ask_id ORDER BY message.created_at, message.id'''), {'ask_id': ask_id})
+    result = await db.execute(list_ask_messages_select_ask_messages_sql(MESSAGE_COLUMNS), {'ask_id': ask_id})
     return {'data': [_message(row) for row in result.mappings().all()]}
 
 
@@ -396,7 +404,7 @@ async def create_ask_message(ask_id: str, payload: AskMessageInput, workspaceId:
     if not content: raise ApiError(400, 'A message cannot be empty.', 'Bad Request')
     now = utcnow()
     message_id = await _add_message(db, ask_id, user['id'], content, now)
-    await db.execute(text('UPDATE asks SET updated_at = :now WHERE id = :ask_id'), {'now': now, 'ask_id': ask_id})
+    await db.execute(CREATE_ASK_MESSAGE_UPDATE_ASKS, {'now': now, 'ask_id': ask_id})
     await _audit(db, workspaceId, user['id'], 'ask.message_created', ask_id, {'messageId': message_id})
     # discord=False keeps a requester's conversation out of the shared team channels.
     # VI: discord=False giữ trao đổi của người yêu cầu ngoài các kênh chung của team.
@@ -405,7 +413,7 @@ async def create_ask_message(ask_id: str, payload: AskMessageInput, workspaceId:
                                             entity_path=f'/service-desk/{ask_id}', entity_label=ask['identifier'], body=content, discord=False)
     await stage_notifications(db, batch, workspace_id=workspaceId)
     await db.commit()
-    result = await db.execute(text(f'SELECT {MESSAGE_COLUMNS} FROM ask_messages message JOIN users author ON author.id = message.author_id WHERE message.id = :id'), {'id': message_id})
+    result = await db.execute(create_ask_message_select_ask_messages_sql(MESSAGE_COLUMNS), {'id': message_id})
     return {'data': _message(result.mappings().one())}
 
 
@@ -419,9 +427,8 @@ async def record_ticket_file(db: AsyncSession, ask_id: str, workspace_id: str, u
     """
     ask = await _ask(db, ask_id, workspace_id)
     now = utcnow()
-    recent = await db.execute(text('''SELECT 1 FROM audit_logs WHERE entity_type = 'ask' AND entity_id = :ask_id AND actor_id = :user_id
-                                      AND action IN ('ask.created', 'ask.file_added') AND created_at > :since LIMIT 1'''), {'ask_id': ask_id, 'user_id': user['id'], 'since': now - TICKET_FILE_NOTICE_GAP})
-    await db.execute(text('UPDATE asks SET updated_at = :now WHERE id = :ask_id'), {'now': now, 'ask_id': ask_id})
+    recent = await db.execute(RECORD_TICKET_FILE_SELECT_AUDIT_LOGS, {'ask_id': ask_id, 'user_id': user['id'], 'since': now - TICKET_FILE_NOTICE_GAP})
+    await db.execute(RECORD_TICKET_FILE_UPDATE_ASKS, {'now': now, 'ask_id': ask_id})
     await _audit(db, workspace_id, user['id'], 'ask.file_added', ask_id, {'filename': filename})
     if recent.scalar_one_or_none() is None:
         batch = await create_notification_batch(db, workspace_id=workspace_id, recipient_ids=await _parties(db, ask), actor=user, event_type='ticket.attachment', entity_type='ticket', entity_id=ask_id,
@@ -432,6 +439,6 @@ async def record_ticket_file(db: AsyncSession, ask_id: str, workspace_id: str, u
 @router.delete('/{ask_id}')
 async def archive_ask(ask_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
     ask = await _ask(db, ask_id, workspaceId); await _triage(db, ask, workspaceId, user['id'])
-    now = utcnow(); await db.execute(text('UPDATE asks SET archived_at = :now, updated_at = :now WHERE id = :ask_id'), {'ask_id': ask_id, 'now': now})
+    now = utcnow(); await db.execute(ARCHIVE_ASK_UPDATE_ASKS, {'ask_id': ask_id, 'now': now})
     await _audit(db, workspaceId, user['id'], 'ask.archived', ask_id, {'title': ask['title']}); await db.commit()
     return {'data': {'id': ask_id, 'archivedAt': now}}

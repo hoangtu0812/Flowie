@@ -3,7 +3,6 @@ from datetime import timedelta
 from hashlib import sha256
 
 from pydantic import ValidationError
-from sqlalchemy import text
 
 from ...core.clock import utcnow
 from ...core.dates import parse_date
@@ -12,15 +11,27 @@ from ...core.identifiers import cuid
 from ..access.projects import team_access
 from ..work_items.contracts import CreateIssueInput
 from ..work_items.issue_rules import validate_references, validate_schedule_dates
+from .commands import (
+    IMPORT_COMMAND_UPDATE_ISSUE_IMPORT_BATCHES,
+    IMPORT_COMMAND_UPDATE_ISSUE_IMPORT_BATCHES_2,
+    IMPORT_PREVIEW_INSERT_ISSUE_IMPORT_BATCHES,
+    IMPORT_PREVIEW_INSERT_ISSUE_IMPORT_ROWS,
+    IMPORT_PREVIEW_LOCK,
+)
 from .csv_input import parse_csv, validate_mapping
+from .queries import (
+    DUPLICATE_KEY_SELECT_ISSUE_IMPORT_KEYS,
+    IMPORT_PREVIEW_SELECT_ISSUE_IMPORT_BATCHES,
+    IMPORT_RESULT_SELECT_ISSUE_IMPORT_ROWS,
+    IMPORT_RESULT_SELECT_ISSUE_IMPORT_ROWS_2,
+    owned_batch_select_issue_import_batches_sql,
+)
 
 
 async def duplicate_key(db, workspace, source, external):
     return (
         await db.execute(
-            text(
-                "SELECT 1 FROM issue_import_keys WHERE workspace_id=:workspace AND source_key=:source AND external_id=:external"
-            ),
+            DUPLICATE_KEY_SELECT_ISSUE_IMPORT_KEYS,
             {"workspace": workspace, "source": source, "external": external},
         )
     ).first() is not None
@@ -34,15 +45,13 @@ async def import_preview(db, user, payload):
         json.dumps(payload.model_dump(), sort_keys=True).encode()
     ).hexdigest()
     await db.execute(
-        text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"),
+        IMPORT_PREVIEW_LOCK,
         {"key": f"import:{user['id']}:{payload.requestKey}"},
     )
     previous = (
         (
             await db.execute(
-                text(
-                    "SELECT id,fingerprint FROM issue_import_batches WHERE actor_id=:actor AND request_key=:key"
-                ),
+                IMPORT_PREVIEW_SELECT_ISSUE_IMPORT_BATCHES,
                 {"actor": user["id"], "key": payload.requestKey},
             )
         )
@@ -59,8 +68,7 @@ async def import_preview(db, user, payload):
         return await import_result(db, user, payload.workspaceId, previous["id"])
     batch, now = cuid(), utcnow()
     await db.execute(
-        text("""INSERT INTO issue_import_batches(id,workspace_id,actor_id,team_id,source_key,request_key,fingerprint,duplicate_mode,created_at,expires_at)
-        VALUES (:id,:workspace,:actor,:team,:source,:key,:fingerprint,:mode,:now,:expires)"""),
+        IMPORT_PREVIEW_INSERT_ISSUE_IMPORT_BATCHES,
         {
             "id": batch,
             "workspace": payload.workspaceId,
@@ -121,8 +129,7 @@ async def import_preview(db, user, payload):
         except (ValueError, ApiError):
             state, code = "INVALID", "INVALID_INPUT_OR_REFERENCE"
         await db.execute(
-            text("""INSERT INTO issue_import_rows(batch_id,row_number,external_id,payload,state,error_code)
-            VALUES (:batch,:number,:external,CAST(:payload AS jsonb),:state,:code)"""),
+            IMPORT_PREVIEW_INSERT_ISSUE_IMPORT_ROWS,
             {
                 "batch": batch,
                 "number": number,
@@ -139,10 +146,7 @@ async def owned_batch(db, user, workspace, identifier, *, lock=False):
     batch = (
         (
             await db.execute(
-                text(
-                    "SELECT * FROM issue_import_batches WHERE id=:id AND workspace_id=:workspace AND actor_id=:actor"
-                    + (" FOR UPDATE" if lock else "")
-                ),
+                owned_batch_select_issue_import_batches_sql(lock),
                 {"id": identifier, "workspace": workspace, "actor": user["id"]},
             )
         )
@@ -160,9 +164,7 @@ async def import_result(db, user, workspace, identifier, *, after=0):
     counts = dict(
         (
             await db.execute(
-                text(
-                    "SELECT state,COUNT(*) FROM issue_import_rows WHERE batch_id=:id GROUP BY state"
-                ),
+                IMPORT_RESULT_SELECT_ISSUE_IMPORT_ROWS,
                 {"id": identifier},
             )
         ).all()
@@ -170,9 +172,7 @@ async def import_result(db, user, workspace, identifier, *, after=0):
     rows = (
         (
             await db.execute(
-                text(
-                    "SELECT row_number,external_id,payload,state,error_code,issue_id,identifier FROM issue_import_rows WHERE batch_id=:id AND row_number>:after ORDER BY row_number LIMIT 51"
-                ),
+                IMPORT_RESULT_SELECT_ISSUE_IMPORT_ROWS_2,
                 {"id": identifier, "after": after},
             )
         )
@@ -209,12 +209,12 @@ async def import_command(db, user, workspace, identifier, command):
         if batch["expires_at"] <= utcnow():
             raise ApiError(409, "Preview expired. Create a new preview.", "Conflict")
         await db.execute(
-            text("UPDATE issue_import_batches SET state='QUEUED' WHERE id=:id"),
+            IMPORT_COMMAND_UPDATE_ISSUE_IMPORT_BATCHES,
             {"id": identifier},
         )
     elif command == "cancel" and batch["state"] in ("PREVIEW", "QUEUED", "RUNNING"):
         await db.execute(
-            text("UPDATE issue_import_batches SET state='CANCELED' WHERE id=:id"),
+            IMPORT_COMMAND_UPDATE_ISSUE_IMPORT_BATCHES_2,
             {"id": identifier},
         )
     return await import_result(db, user, workspace, identifier)

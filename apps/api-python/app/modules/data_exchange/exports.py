@@ -6,14 +6,17 @@ from typing import Any
 from zipfile import ZIP_DEFLATED, ZipFile
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import text
-
 from ...core.csv_export import csv_bytes
 from ...core.errors import ApiError
 from ...core.xlsx_export import xlsx_bytes
 from ..access.projects import workspace_access
 from ..work_items.document_repository import document_team_access
 from ..work_items.issue_search import issue_scope
+from .queries import (
+    EXPORT_DOCUMENTS_SELECT_ATTACHMENTS,
+    EXPORT_DOCUMENTS_SELECT_DOCUMENTS,
+    export_issues_select_projects_sql,
+)
 
 VIETNAM = ZoneInfo("Asia/Ho_Chi_Minh")
 
@@ -26,15 +29,7 @@ async def export_issues(db, user, payload):
     rows = (
         (
             await db.execute(
-                text(
-                    """SELECT i.id,i.identifier,i.title,i.description,i.issue_type,i.priority,i.severity,
-        i.status_id,s.name AS status_name,i.team_id,i.project_id,i.assignee_id,i.start_date,i.target_date,i.due_date,i.created_at,i.updated_at,
-        t.name AS team_name,(SELECT p.name FROM projects p WHERE p.id=i.project_id) AS project_name,
-        (SELECT u.name FROM users u WHERE u.id=i.assignee_id) AS assignee_name,i.estimated_effort,i.actual_effort,
-        (SELECT string_agg(l.name,', ' ORDER BY l.name) FROM issue_labels il JOIN labels l ON l.id=il.label_id WHERE il.issue_id=i.id) AS label_names """
-                    + scope
-                    + " ORDER BY i.created_at DESC,i.id DESC LIMIT 10001"
-                ),
+                export_issues_select_projects_sql(scope),
                 params,
             )
         )
@@ -168,9 +163,7 @@ async def export_documents(db, user, payload, storage):
     documents = (
         (
             await db.execute(
-                text(
-                    "SELECT id,title,content,team_id,source_type,source_url FROM documents WHERE workspace_id=:workspace AND id=ANY(CAST(:ids AS text[])) AND archived_at IS NULL ORDER BY id"
-                ),
+                EXPORT_DOCUMENTS_SELECT_DOCUMENTS,
                 {"workspace": payload.workspaceId, "ids": identifiers},
             )
         )
@@ -186,9 +179,7 @@ async def export_documents(db, user, payload, storage):
         attachments = (
             (
                 await db.execute(
-                    text(
-                        "SELECT id,entity_id,filename,object_key,size FROM attachments WHERE workspace_id=:workspace AND entity_type='document' AND entity_id=ANY(CAST(:ids AS text[])) ORDER BY id LIMIT 201"
-                    ),
+                    EXPORT_DOCUMENTS_SELECT_ATTACHMENTS,
                     {"workspace": payload.workspaceId, "ids": identifiers},
                 )
             )

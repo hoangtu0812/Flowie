@@ -5,13 +5,21 @@ import logging
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..core.clock import utcnow
 from ..core.config import Settings
 from ..modules.operations.heartbeats import progress
 from ..modules.scm.service import sync_delivery_review
+from .commands import (
+    PROCESS_SCM_DELIVERIES_UPDATE_SCM_WEBHOOK_DELIVERIES,
+    PROCESS_SCM_DELIVERIES_UPDATE_SCM_WEBHOOK_DELIVERIES_2,
+    PROCESS_SCM_DELIVERIES_UPDATE_SCM_WEBHOOK_DELIVERIES_3,
+)
+from .queries import (
+    PROCESS_SCM_DELIVERIES_SELECT_SCM_WEBHOOK_DELIVERIES,
+    PROCESS_SCM_DELIVERIES_SELECT_SCM_WEBHOOK_DELIVERIES_2,
+)
 
 logger = logging.getLogger(__name__)
 MAX_ATTEMPTS = 8
@@ -23,23 +31,13 @@ async def process_scm_deliveries(
 ) -> int:
     async with factory() as db:
         result = await db.execute(
-            text(
-                '''SELECT id FROM scm_webhook_deliveries
-                   WHERE status IN ('PENDING', 'FAILED', 'PROCESSING') AND next_attempt_at <= :now
-                     AND attempts < :max_attempts
-                   ORDER BY received_at ASC
-                   FOR UPDATE SKIP LOCKED LIMIT 20'''
-            ),
+            PROCESS_SCM_DELIVERIES_SELECT_SCM_WEBHOOK_DELIVERIES,
             {'now': utcnow(), 'max_attempts': MAX_ATTEMPTS},
         )
         ids = [str(value) for value in result.scalars().all()]
         if ids:
             await db.execute(
-                text(
-                    '''UPDATE scm_webhook_deliveries
-                       SET status = 'PROCESSING', next_attempt_at = :lease_until
-                       WHERE id = ANY(:ids)'''
-                ),
+                PROCESS_SCM_DELIVERIES_UPDATE_SCM_WEBHOOK_DELIVERIES,
                 {'ids': ids, 'lease_until': utcnow() + timedelta(minutes=5)},
             )
         await db.commit()
@@ -48,7 +46,7 @@ async def process_scm_deliveries(
     for delivery_id in ids:
         async with factory() as db:
             result = await db.execute(
-                text('SELECT * FROM scm_webhook_deliveries WHERE id = :id'),
+                PROCESS_SCM_DELIVERIES_SELECT_SCM_WEBHOOK_DELIVERIES_2,
                 {'id': delivery_id},
             )
             delivery = result.mappings().one()
@@ -56,12 +54,7 @@ async def process_scm_deliveries(
                 synchronized = await sync_delivery_review(db, delivery, settings)
                 now = utcnow()
                 await db.execute(
-                    text(
-                        '''UPDATE scm_webhook_deliveries
-                           SET status = :status, payload = CAST('{}' AS jsonb),
-                               processed_at = :now, last_error = NULL
-                           WHERE id = :id'''
-                    ),
+                    PROCESS_SCM_DELIVERIES_UPDATE_SCM_WEBHOOK_DELIVERIES_2,
                     {'id': delivery_id, 'status': 'PROCESSED' if synchronized else 'IGNORED', 'now': now},
                 )
                 await db.commit()
@@ -72,14 +65,7 @@ async def process_scm_deliveries(
                 terminal = attempts >= MAX_ATTEMPTS
                 retry_at = utcnow() + timedelta(seconds=min(30 * (2 ** max(attempts - 1, 0)), 3600))
                 await db.execute(
-                    text(
-                        '''UPDATE scm_webhook_deliveries
-                           SET status = 'FAILED', attempts = :attempts, last_error = :error,
-                               payload = CASE WHEN :terminal THEN CAST('{}' AS jsonb) ELSE payload END,
-                               next_attempt_at = :retry_at,
-                               processed_at = CASE WHEN :terminal THEN :now ELSE NULL END
-                           WHERE id = :id'''
-                    ),
+                    PROCESS_SCM_DELIVERIES_UPDATE_SCM_WEBHOOK_DELIVERIES_3,
                     {
                         'id': delivery_id,
                         'attempts': attempts,

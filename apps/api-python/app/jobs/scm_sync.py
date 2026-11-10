@@ -5,13 +5,16 @@ import logging
 from collections.abc import Awaitable, Callable
 from datetime import timedelta
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..core.clock import utcnow
 from ..core.config import Settings
 from ..modules.operations.heartbeats import progress
 from ..modules.scm.service import connection_sync_lock, sync_connection
+from .queries import (
+    sync_due_connections_select_scm_connections_sql,
+    sync_due_connections_select_scm_connections_sql_2,
+)
 
 logger = logging.getLogger(__name__)
 # ERROR connections stay eligible so a transient provider or network failure recovers without a
@@ -41,7 +44,7 @@ async def sync_due_connections(
     due = utcnow() - timedelta(seconds=interval_seconds)
     async with factory() as db:
         result = await db.execute(
-            text(f'SELECT id FROM scm_connections WHERE {DUE} ORDER BY last_synced_at ASC NULLS FIRST'),
+            sync_due_connections_select_scm_connections_sql(DUE),
             {'due': due},
         )
         ids = [str(value) for value in result.scalars().all()]
@@ -53,7 +56,7 @@ async def sync_due_connections(
                 continue
             async with factory() as db:
                 still_due = await db.execute(
-                    text(f'SELECT id FROM scm_connections WHERE id = :id AND {DUE}'),
+                    sync_due_connections_select_scm_connections_sql_2(DUE),
                     {'id': connection_id, 'due': due},
                 )
                 if still_due.scalar() is None:

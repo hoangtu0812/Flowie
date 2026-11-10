@@ -1,6 +1,9 @@
 import re
 
-from sqlalchemy import text
+from .queries import (
+    readable_recipients_select_n_sql,
+    readable_records_select_notifications_sql,
+)
 
 
 def notification_scope(alias="n", *, actor=None):
@@ -45,11 +48,7 @@ async def readable_recipients(db, workspace, entity_type, entity_id, recipients)
     if not candidates:
         return set()
     rows = await db.execute(
-        text(
-            """WITH n AS (SELECT CAST(:workspace AS text) AS workspace_id,CAST(:entity_type AS text) AS entity_type,CAST(:entity_id AS text) AS entity_id,unnest(CAST(:users AS text[])) AS user_id)
-        SELECT n.user_id FROM n WHERE """
-            + notification_scope()
-        ),
+        readable_recipients_select_n_sql(notification_scope),
         {
             "workspace": workspace,
             "entity_type": entity_type,
@@ -70,10 +69,7 @@ async def readable_records(db, records):
     for start in range(0, len(valid), 500):
         rows = (
             await db.execute(
-                text(
-                    "SELECT n.id,n.workspace_id,n.user_id FROM notifications n WHERE n.id=ANY(CAST(:ids AS text[])) AND "
-                    + notification_scope()
-                ),
+                readable_records_select_notifications_sql(notification_scope),
                 {"ids": [row["id"] for row in valid[start : start + 500]]},
             )
         ).all()

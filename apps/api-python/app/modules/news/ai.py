@@ -5,14 +5,21 @@ import logging
 from datetime import timedelta
 from typing import Any
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ..agent.api import configured_provider
 from ..ai.calls import call_provider
+from .commands import (
+    ANALYZE_WORKSPACE_UPDATE_NEWS_CATEGORIES,
+    ANALYZE_WORKSPACE_UPDATE_NEWS_ITEMS,
+)
 from .feeds import plain_text
+from .queries import (
+    ANALYZE_WORKSPACE_SELECT_NEWS_CATEGORIES,
+    ANALYZE_WORKSPACE_SELECT_NEWS_ITEMS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -130,12 +137,7 @@ async def analyze_workspace(db: AsyncSession, workspace_id: str, settings: Any) 
         return 0
     categories = (
         await db.execute(
-            text(
-                '''SELECT DISTINCT c.id, c.name FROM news_categories c
-                   JOIN news_sources s ON s.category_id = c.id
-                   JOIN news_items i ON i.source_id = s.id
-                   WHERE c.workspace_id = :workspace_id AND i.analyzed_at IS NULL'''
-            ),
+            ANALYZE_WORKSPACE_SELECT_NEWS_CATEGORIES,
             {'workspace_id': workspace_id},
         )
     ).mappings().all()
@@ -144,13 +146,7 @@ async def analyze_workspace(db: AsyncSession, workspace_id: str, settings: Any) 
         for batch in range(MAX_BATCHES):
             items = (
                 await db.execute(
-                    text(
-                        '''SELECT i.id, i.title, i.summary, i.published_at, i.analyzed_at, s.name AS source_name
-                           FROM news_items i JOIN news_sources s ON s.id = i.source_id
-                           WHERE s.category_id = :category_id
-                             AND (i.analyzed_at IS NULL OR i.published_at >= :since)
-                           ORDER BY (i.analyzed_at IS NULL) DESC, i.published_at DESC LIMIT :limit'''
-                    ),
+                    ANALYZE_WORKSPACE_SELECT_NEWS_ITEMS,
                     {'category_id': category['id'], 'since': utcnow() - timedelta(hours=24), 'limit': BATCH_ITEMS},
                 )
             ).mappings().all()
@@ -166,16 +162,13 @@ async def analyze_workspace(db: AsyncSession, workspace_id: str, settings: Any) 
             for index, result in results.items():
                 if items[index]['analyzed_at'] is None:
                     await db.execute(
-                        text(
-                            '''UPDATE news_items SET risk_level = :risk, risk_score = :score, ai_summary = :summary,
-                                      analyzed_at = :now WHERE id = :id'''
-                        ),
+                        ANALYZE_WORKSPACE_UPDATE_NEWS_ITEMS,
                         {**result, 'now': now, 'id': items[index]['id']},
                     )
                     batch_labelled += 1
             if digest and batch == 0:
                 await db.execute(
-                    text('UPDATE news_categories SET digest = :digest, digest_at = :now WHERE id = :id'),
+                    ANALYZE_WORKSPACE_UPDATE_NEWS_CATEGORIES,
                     {'digest': digest, 'now': now, 'id': category['id']},
                 )
             await db.commit()
