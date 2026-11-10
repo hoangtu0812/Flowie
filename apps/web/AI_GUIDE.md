@@ -50,7 +50,7 @@ app/                          # Next.js routes (thin wrappers around components)
       overview/  documents/  members/           # Team Home tabs
 components/
   common/                     # Feature components still waiting to move to features/ (DTD-524)
-    issues/    projects/    initiatives/    settings/    markdown/
+    issues/    projects/    settings/    markdown/
     projects/details/         # Project detail tabs (overview / activity / issues) + properties panel
   layout/
     main-layout.tsx           # Sidebar + rounded content shell used by every page
@@ -234,7 +234,7 @@ Each feature is self-contained under `features/<feature>` (or, until DTD-524 fin
   optional custom sidebar) whose CSS variables are generated at runtime by
   `ThemeApplier` (mounted in `theme-provider.tsx`). Custom themes can be copied to /
   imported from the clipboard as JSON.
-- **Initiatives** (`components/common/initiatives/` + `app/[orgId]/initiatives/` +
+- **Initiatives** (`features/initiatives/` + `app/[orgId]/initiatives/` +
   `app/[orgId]/initiative/[initiativeId]/`) — Linear-style initiatives: list with
   Active/Planned/All tabs, URL-backed filters (`store/initiatives-filter-store.ts`, nuqs),
   display options (`store/initiatives-display-store.ts`: grouping/ordering/columns) and an
