@@ -11,7 +11,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useProjectsData } from '@/features/projects/projects-data';
 import { useIssuesStore } from '@/store/issues-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
-import { useLiveViews } from '@/components/common/views/use-live-views';
+import { useLiveViews } from '@/features/views/use-live-views';
 import { useMessages } from '@/features/shared/use-messages';
 import { messages } from '@/features/views/messages.vi';
 

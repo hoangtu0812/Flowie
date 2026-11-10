@@ -1,4 +1,4 @@
-import ViewDetails from '@/components/common/views/view-details';
+import ViewDetails from '@/features/views/view-details';
 import Header from '@/components/layout/headers/view/header';
 import MainLayout from '@/components/layout/main-layout';
 import { ProjectsDataProvider } from '@/features/projects/projects-data';

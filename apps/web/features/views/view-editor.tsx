@@ -11,7 +11,7 @@ import { Text } from '@astryxdesign/core/Text';
 import { toast } from 'sonner';
 import { authenticatedFetch } from '@/lib/workspaces';
 import { responseData, ApiRequestError } from '@/lib/http';
-import type { LiveView } from '@/components/common/views/use-live-views';
+import type { LiveView } from '@/features/views/use-live-views';
 import { useMessages } from '@/features/shared/use-messages';
 import { messages } from './messages.vi';
 import { isIssueViewConfig, type IssueViewConfig } from './config';

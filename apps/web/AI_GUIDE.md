@@ -49,14 +49,15 @@ app/                          # Next.js routes (thin wrappers around components)
       cycles/                                   # Cycles timeline + burn-up chart
       overview/  documents/  members/           # Team Home tabs
 components/
-  common/                     # Feature components (the real UI)
-    issues/    inbox/    projects/    teams/    members/    settings/    cycles/    agent/
+  common/                     # Feature components still waiting to move to features/ (DTD-524)
+    issues/    inbox/    projects/    teams/    settings/    agent/
     projects/details/         # Project detail tabs (overview / activity / issues) + properties panel
   layout/
     main-layout.tsx           # Sidebar + rounded content shell used by every page
     sidebar/                  # App sidebar (nav, org switcher, create-issue modal)
     headers/                  # Per-page headers (nav row + options row)
   ui/                         # shadcn/ui primitives (button, dialog, table, …)
+features/<domain>/            # Everything that belongs to one business domain (see AGENTS.md)
 types/                        # UI domain types mapped from the API (Issue, User, Project, …)
 store/                        # Zustand stores (state + mutations + filtering)
 lib/                          # cn(), LexoRank re-export, status/notification helpers
@@ -71,7 +72,7 @@ Every route follows the same composition — copy it when adding a page:
 // app/[orgId]/team/[teamId]/example/page.tsx
 import MainLayout from '@/components/layout/main-layout';
 import Header from '@/components/layout/headers/example/header';
-import Example from '@/components/common/example/example';
+import Example from '@/features/example/example';
 
 export default function ExamplePage() {
    return (
@@ -135,7 +136,8 @@ projects/teams/members store to mutate yet.
 
 ## Feature inventory (what to grab if you only want one part)
 
-Each feature is self-contained under `components/common/<feature>` + its header under
+Each feature is self-contained under `features/<feature>` (or, until DTD-524 finishes,
+`components/common/<feature>`) + its header under
 `components/layout/headers/<feature>`. Dependencies below are in addition to
 `components/ui/*`, `lib/utils.ts` and Tailwind.
 
@@ -168,7 +170,7 @@ Each feature is self-contained under `components/common/<feature>` + its header 
   `issue-properties-panel.tsx` (editable status/priority/assignee, labels, project,
   milestone, blocked-by/related, PR links), header with prev/next navigation
   (`components/layout/headers/issue/`). Needs the issues feature.
-- **Cycles** (`components/common/cycles/`) — `cycles.tsx` (timeline),
+- **Cycles** (`features/cycles/`) — `cycles.tsx` (timeline),
   `cycle-line.tsx`, `cycle-burnup-chart.tsx` (+ `CycleProgressLegend`),
   `capacity-ring.tsx`, `cycle-details-panel.tsx`. `cycle-issues.tsx` (in
   `components/common/issues/`) renders a cycle-scoped issue view. Needs:
@@ -182,7 +184,7 @@ Each feature is self-contained under `components/common/<feature>` + its header 
   `features/inbox/notification-data.ts`, `react-resizable-panels`, the issue-details renderer.
 - **Projects / Teams / Members tables** (`components/common/{projects,teams,members}/`)
   — plain sorted/filtered tables + their filter stores.
-- **Member profile** (`components/common/members/member-profile.tsx` +
+- **Member profile** (`features/members/member-profile.tsx` +
   `components/layout/headers/profile/` + `app/[orgId]/profiles/[memberId]/`) —
   Assigned/Created tabs (nuqs `?tab=`), issues grouped by status, right panel with
   identity (email, client-computed local time from `User.timezone`, joined, teams,
@@ -239,7 +241,7 @@ Each feature is self-contained under `components/common/<feature>` + its header 
   Owner/Team/Health side panel; detail page with Overview (properties, progress area chart,
   Health/Status/Teams/Leads breakdowns, projects table), Activity and Projects (reuses
   `ProjectsTimeline`) tabs. Data from the initiatives API.
-- **Views** (`components/common/views/` + `app/[orgId]/views/` + `app/[orgId]/view/[viewId]/`)
+- **Views** (`features/views/` + `app/[orgId]/views/` + `app/[orgId]/view/[viewId]/`)
   — saved views: list with Issues/Projects tabs and display options
   (`store/views-display-store.ts`); detail page applies the view's declarative filter
   (saved on the server) and reuses

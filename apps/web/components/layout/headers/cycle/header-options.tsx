@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { useLiveCycle } from '@/components/common/cycles/use-live-cycle';
+import { useLiveCycle } from '@/features/cycles/use-live-cycle';
 import { IssueListActions } from '@/features/issues/issue-list-actions';
 import { IssueFilterTrigger } from '@/components/common/issues/issue-filter-trigger';
 import { useIssuesStore } from '@/store/issues-store';

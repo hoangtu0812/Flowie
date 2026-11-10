@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { InviteMemberDialog } from '@/components/common/members/invite-member-dialog';
+import { InviteMemberDialog } from '@/features/members/invite-member-dialog';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useMembersData } from '@/features/members/members-data';
 import { Plus } from 'lucide-react';

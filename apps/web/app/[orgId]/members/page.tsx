@@ -1,4 +1,4 @@
-import Members from '@/components/common/members/members';
+import Members from '@/features/members/members';
 import Header from '@/components/layout/headers/members/header';
 import MainLayout from '@/components/layout/main-layout';
 import { MembersDataProvider } from '@/features/members/members-data';

@@ -1,7 +1,7 @@
 'use client';
 
-import { CyclePlayIcon } from '@/components/common/cycles/cycle-line';
-import { useLiveCycle } from '@/components/common/cycles/use-live-cycle';
+import { CyclePlayIcon } from '@/features/cycles/cycle-line';
+import { useLiveCycle } from '@/features/cycles/use-live-cycle';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { ChevronRight, MoreHorizontal, Star } from 'lucide-react';
 import Link from 'next/link';

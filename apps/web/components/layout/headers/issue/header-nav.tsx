@@ -2,7 +2,7 @@
 import { useMessages } from '@/features/shared/use-messages';
 import { messages } from '@/features/navigation/messages.vi';
 
-import { CyclePlayIcon } from '@/components/common/cycles/cycle-line';
+import { CyclePlayIcon } from '@/features/cycles/cycle-line';
 import { Button } from '@/components/ui/button';
 import {
    DropdownMenu,

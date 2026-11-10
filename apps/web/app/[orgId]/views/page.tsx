@@ -1,4 +1,4 @@
-import Views from '@/components/common/views/views';
+import Views from '@/features/views/views';
 import Header from '@/components/layout/headers/views/header';
 import MainLayout from '@/components/layout/main-layout';
 

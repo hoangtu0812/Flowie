@@ -1,12 +1,12 @@
 'use client';
 
 import { useIssueQuery } from '@/features/issues/use-issue-query';
-import { CycleDetailsPanel } from '@/components/common/cycles/cycle-details-panel';
+import { CycleDetailsPanel } from '@/features/cycles/cycle-details-panel';
 import { LoadingState } from '@/components/common/loading-state';
 import { QueryState } from '@/components/common/query-state';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { DesignSurface } from '@/components/common/design-surface';
-import { useLiveCycle } from '@/components/common/cycles/use-live-cycle';
+import { useLiveCycle } from '@/features/cycles/use-live-cycle';
 import { useFilterStore } from '@/store/filter-store';
 import { useIssuesStore } from '@/store/issues-store';
 import { applyIssueFilters } from './issue-filter-columns';

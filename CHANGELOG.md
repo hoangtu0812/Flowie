@@ -51,6 +51,9 @@ pull request and commit references, which are for us.
 
 ### Changed
 
+- The web app's cycles, views, members and reviews code now lives in `apps/web/features/<domain>/` instead of `components/common/`, and `apps/web/AGENTS.md` says where new code goes: `features/<domain>` for anything owned by a business domain, `components/` only for primitives, the app frame and UI shared by several domains. This is the first of six moves; nothing changes for users. Rebuild `web`; no migration. (DTD-524, DTD-570)
+  VI: Code cycles, views, members và reviews của web nay nằm ở `apps/web/features/<domain>/` thay vì `components/common/`, và `apps/web/AGENTS.md` ghi nơi đặt code mới: `features/<domain>` cho mọi thứ thuộc một domain nghiệp vụ, `components/` chỉ cho primitive, khung ứng dụng và UI dùng chung cho nhiều domain. Đây là đợt đầu trong sáu đợt chuyển; người dùng không thấy gì thay đổi. Build lại `web`; không có migration. (DTD-524, DTD-570)
+
 - The AI connections (MCP) page is compact: connections are a table with search by name, an Active/Inactive/All filter that shows only active connections by default, sortable Name/Expires/Last used columns and 10 rows per page; the connection form picks teams and projects from searchable multi-selects and lays permissions out as Read and Write groups, each with Select all; and every AI client button under Install in your AI client shows its logo. Rebuild `web`; no migration. (DTD-563, #236)
   VI: Trang AI connections (MCP) gọn hơn: danh sách kết nối là bảng có tìm theo tên, bộ lọc Active/Inactive/All mặc định chỉ hiện kết nối đang hoạt động, sắp xếp được theo Name/Expires/Last used và 10 dòng mỗi trang; form kết nối chọn team và dự án bằng ô chọn nhiều có tìm kiếm, xếp quyền thành hai nhóm Read và Write, mỗi nhóm có Select all; và mỗi nút AI client trong Install in your AI client có logo. Build lại `web`; không có migration. (DTD-563)
 
