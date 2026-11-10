@@ -9,7 +9,7 @@ from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
 from app.modules.work_items.contracts import CreateIssueInput
-from app.modules.work_items.issue_rules import _ensure_circle_issue_statuses
+from app.modules.work_items.issue_rules import _ensure_default_issue_statuses
 from app.modules.work_items.issues import create_issue
 from app.modules.work_items.workflow_statuses import mutate_status, statuses
 
@@ -35,7 +35,7 @@ async def verify_workflow():
             with pytest.raises(ApiError) as conflict:
                 await mutate_status(db,workspace,user,values,identifier=identifier,expected=initial['updatedAt'])
             assert conflict.value.status_code == 409
-            await _ensure_circle_issue_statuses(db,workspace)
+            await _ensure_default_issue_statuses(db,workspace)
             edited = next(s for s in await statuses(db,workspace,user) if s['id']==identifier)
             assert edited['name']=='Quality review' and edited['color']=='#123456'
             await create_issue(CreateIssueInput(workspaceId=workspace,teamId=seed['team_id'],title='Workflow issue',statusId=identifier),user,db)

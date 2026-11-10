@@ -16,8 +16,10 @@ from .native_issues import _issue_row
 from .native_projects import _date, _team_access, _workspace_access
 
 router = APIRouter(prefix='/api/v1/_native/cycles', tags=['native-cycles'])
-# The active/upcoming Circle views already consume this exact read shape. Keep
+# The active/upcoming cycle views already consume this exact read shape. Keep
 # mutations staged privately until their UI adapters are audited one by one.
+# VI: Màn cycle đang chạy/sắp tới đã dùng đúng dạng dữ liệu đọc này. Các thao
+# tác ghi vẫn để ở prefix riêng cho đến khi từng adapter UI được kiểm tra.
 public_router = APIRouter(prefix='/api/v1/cycles', tags=['cycles'])
 CycleStatus = Literal['UPCOMING', 'ACTIVE', 'COMPLETED', 'CANCELED']
 

@@ -32,7 +32,10 @@ import { withBasePath } from '@/lib/base-path';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
-/** Team settings retains the Circle settings sections and persists supported Team fields. */
+/**
+ * Team settings sections; persists the Team fields the API supports.
+ * VI: Các mục cài đặt team; lưu những trường Team mà API hỗ trợ.
+ */
 export default function TeamSettings({ teamId }: { teamId: string }) {
    const { orgId } = useParams<{ orgId: string }>();
    const { team, workspaceId, loading, error, updateTeam, reload } = useLiveTeam(teamId);

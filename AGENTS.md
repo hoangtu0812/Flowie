@@ -62,7 +62,7 @@
   opening a pull request that touches Python.
 - Lint before opening a pull request: `ruff check apps/api-python scripts`
   from the repository root (rules in `ruff.toml`) and
-  `pnpm --filter @circle/web lint --max-warnings 0`. CI runs the same commands.
+  `pnpm --filter @flowie/web lint --max-warnings 0`. CI runs the same commands.
   Silence a finding only on its own line, with the reason beside it.
 - Every package except `app/domains` is checked including unannotated
   function bodies. Never weaken the level of a package that passes, and never

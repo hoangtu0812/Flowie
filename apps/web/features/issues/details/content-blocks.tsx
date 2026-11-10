@@ -2,7 +2,7 @@
 
 import { AttachmentImage } from '@/components/common/attachment-image';
 import { cn } from '@/lib/utils';
-import type { ContentBlock } from '@circle/contracts';
+import type { ContentBlock } from '@flowie/contracts';
 import { useIssuesStore } from '@/store/issues-store';
 import { Check, ImageIcon, Play } from 'lucide-react';
 import Link from 'next/link';

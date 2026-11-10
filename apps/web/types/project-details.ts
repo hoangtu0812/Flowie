@@ -1,4 +1,4 @@
-import type { ContentBlock } from '@circle/contracts';
+import type { ContentBlock } from '@flowie/contracts';
 import type { User } from '@/types/users';
 
 export interface ProjectMilestone {

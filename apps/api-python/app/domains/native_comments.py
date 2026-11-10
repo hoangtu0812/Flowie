@@ -28,9 +28,12 @@ from .native_issues import _issue_row, _write_activity
 from .native_projects import _workspace_access
 
 router = APIRouter(prefix='/api/v1/_native/comments', tags=['native-comments'])
-# Comments have no Circle adapter switched yet. Expose the audited native
+# Comments have no web UI adapter switched yet. Expose the audited native
 # contract now so the later Issue-detail cutover does not depend on the
 # legacy facade, while keeping the current presentation untouched.
+# VI: Bình luận chưa có adapter giao diện web nào được chuyển. Mở sẵn contract
+# native đã kiểm tra để việc chuyển màn chi tiết Issue sau này không phụ thuộc
+# facade cũ, đồng thời giữ nguyên giao diện hiện tại.
 public_router = APIRouter(prefix='/api/v1/comments', tags=['comments'])
 
 

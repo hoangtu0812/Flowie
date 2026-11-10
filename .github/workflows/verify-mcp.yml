@@ -137,10 +137,10 @@ jobs:
           pnpm install --frozen-lockfile
       - name: Validate and migrate a clean database
         run: |
-          pnpm --filter @circle/database exec prisma validate --schema prisma/schema.prisma
-          pnpm --filter @circle/database exec prisma migrate deploy --schema prisma/schema.prisma
-          pnpm --filter @circle/database exec prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
-          pnpm --filter @circle/database exec prisma generate --schema prisma/schema.prisma
+          pnpm --filter @flowie/database exec prisma validate --schema prisma/schema.prisma
+          pnpm --filter @flowie/database exec prisma migrate deploy --schema prisma/schema.prisma
+          pnpm --filter @flowie/database exec prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
+          pnpm --filter @flowie/database exec prisma generate --schema prisma/schema.prisma
       - name: Verify backend and MCP integration
         run: |
           ruff check apps/api-python scripts
@@ -228,11 +228,11 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build web and verify Compose dependencies
         run: |
-          pnpm --filter @circle/database exec prisma generate --schema prisma/schema.prisma
-          pnpm --filter @circle/contracts build
-          pnpm --filter @circle/web lint --max-warnings 0
-          pnpm --filter @circle/web test:unit
-          pnpm --filter @circle/web build
+          pnpm --filter @flowie/database exec prisma generate --schema prisma/schema.prisma
+          pnpm --filter @flowie/contracts build
+          pnpm --filter @flowie/web lint --max-warnings 0
+          pnpm --filter @flowie/web test:unit
+          pnpm --filter @flowie/web build
           docker compose --profile app config --quiet
 
   # Each browser's suite is split into three shards by spec file, every shard
@@ -301,23 +301,23 @@ jobs:
           pnpm install --frozen-lockfile
       - name: Migrate a clean database
         run: |
-          pnpm --filter @circle/database exec prisma migrate deploy --schema prisma/schema.prisma
-          pnpm --filter @circle/database exec prisma generate --schema prisma/schema.prisma
+          pnpm --filter @flowie/database exec prisma migrate deploy --schema prisma/schema.prisma
+          pnpm --filter @flowie/database exec prisma generate --schema prisma/schema.prisma
       - name: Build web
         run: |
-          pnpm --filter @circle/contracts build
-          pnpm --filter @circle/web build
+          pnpm --filter @flowie/contracts build
+          pnpm --filter @flowie/web build
       # Only the browser this job runs. Installing all three cost every job
       # three downloads for two it would never open.
       # VI: Chỉ trình duyệt mà job này chạy. Cài cả ba khiến mỗi job tải về ba
       # VI: bản cho hai bản nó không bao giờ mở tới.
       - name: Install browser test dependencies
         timeout-minutes: 15
-        run: pnpm --filter @circle/web exec playwright install --with-deps ${{ matrix.browser }}
+        run: pnpm --filter @flowie/web exec playwright install --with-deps ${{ matrix.browser }}
       - name: Verify browser regression workflows
         run: |
           python scripts/seed-ui-regression.py
-          pnpm --filter @circle/web exec playwright test --project=${{ matrix.browser }} --shard=${{ matrix.shard }}/3
+          pnpm --filter @flowie/web exec playwright test --project=${{ matrix.browser }} --shard=${{ matrix.shard }}/3
       - uses: actions/upload-artifact@v4
         if: failure() || cancelled()
         with:

@@ -69,7 +69,10 @@ const toCycle = (cycle: ApiCycle, team: WorkspaceTeam): Cycle => {
    };
 };
 
-/** Original Circle cycle timeline backed by native FastAPI records. */
+/**
+ * Cycle timeline backed by native FastAPI records.
+ * VI: Dòng thời gian cycle lấy dữ liệu từ bản ghi FastAPI native.
+ */
 export default function Cycles() {
    const { teamId } = useParams<{ teamId: string }>();
    const [team, setTeam] = useState<WorkspaceTeam>();

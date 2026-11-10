@@ -29,7 +29,10 @@ async function errorMessage(response: Response, fallback: string) {
    return Array.isArray(payload?.message) ? payload.message[0] : payload?.message ?? fallback;
 }
 
-/** Existing Circle workflow settings presentation, now backed by FastAPI/PostgreSQL. */
+/**
+ * Project workflow settings, backed by FastAPI/PostgreSQL.
+ * VI: Cài đặt workflow dự án, lưu qua FastAPI/PostgreSQL.
+ */
 export default function ProjectStatusesSettings() {
    const [workspaceId, setWorkspaceId] = useState<string>();
    const [statuses, setStatuses] = useState<ProjectStatus[]>([]);

@@ -62,7 +62,10 @@ async function errorMessage(response: Response, fallback: string) {
    return Array.isArray(payload?.message) ? payload.message[0] : (payload?.message ?? fallback);
 }
 
-/** Workspace labels settings, backed by persisted Python APIs for each Circle scope. */
+/**
+ * Workspace labels settings, backed by persisted Python APIs for the issue and project scopes.
+ * VI: Cài đặt nhãn workspace, lưu qua API Python cho phạm vi issue và project.
+ */
 export default function IssueLabelsSettings({ scope = 'issue' }: { scope?: 'issue' | 'project' }) {
    const isProject = scope === 'project';
    const kind = isProject ? 'project' : 'issue';

@@ -28,7 +28,7 @@ from ..modules.work_items.issue_relations import (
 )
 from ..modules.work_items.issue_relations import _relation_kind as _relation_kind
 from ..modules.work_items.issue_rules import (
-    _ensure_circle_issue_statuses as _ensure_circle_issue_statuses,
+    _ensure_default_issue_statuses as _ensure_default_issue_statuses,
 )
 from ..modules.work_items.issue_rules import (
     _validate_references as _validate_references,
@@ -52,10 +52,12 @@ from .auth import _cuid, _utcnow, current_user
 from .native_projects import _date, _team_access, _workspace_access
 from .native_slas import resolve_deadline
 from .teams import _manager
-from .workflow_catalog import DEFAULT_CIRCLE_ISSUE_STATUSES
+from .workflow_catalog import DEFAULT_ISSUE_STATUSES
 
 # Mutations remain staged under the private prefix. Read endpoints are exposed
-# through the audited public router below once their Circle adapter is ready.
+# through the audited public router below once their web UI adapter is ready.
+# VI: Thao tác ghi vẫn nằm dưới prefix riêng. Endpoint đọc được mở qua public
+# router đã kiểm tra bên dưới khi adapter giao diện web tương ứng sẵn sàng.
 router = APIRouter(prefix='/api/v1/_native/issues', tags=['native-issues'])
 public_router = APIRouter(prefix='/api/v1/issues', tags=['issues'])
 
@@ -230,7 +232,7 @@ async def issue_options(
     await _workspace_access(db, workspaceId, user['id'])
     if teamId:
         await _team_access(db, workspaceId, teamId, user['id'])
-    await _ensure_circle_issue_statuses(db, workspaceId)
+    await _ensure_default_issue_statuses(db, workspaceId)
     await db.commit()
     team_filter = 'AND team_id IS NULL' if noTeam else ('AND (team_id IS NULL OR team_id = :team_id)' if teamId else '')
     params = {'workspace_id': workspaceId, 'team_id': teamId, 'user_id': user['id']}
@@ -269,8 +271,11 @@ async def issue_options(
 
 
 # Public read contract: this is intentionally limited to the data already
-# consumed by the Circle list adapter. Every other Issue route stays on the
+# consumed by the web issue-list adapter. Every other Issue route stays on the
 # legacy facade or under /_native until it has comparable contract coverage.
+# VI: Contract đọc public chỉ gồm dữ liệu mà adapter danh sách issue trên web
+# đang dùng. Các route Issue khác ở lại facade cũ hoặc dưới /_native cho đến
+# khi có độ phủ contract tương đương.
 @public_router.get('/bug-report')
 async def bug_report(workspaceId: str = Query(min_length=1), teamId: str | None = None,
     projectId: str | None = None, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict:
@@ -307,7 +312,10 @@ async def public_create_issue(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    """Audited create contract for the untouched Circle Create Issue dialog."""
+    """Audited create contract for the web Create Issue dialog.
+
+    VI: Contract tạo issue đã kiểm tra, dùng cho hộp thoại Create Issue trên web.
+    """
     return await create_issue(payload, user, db)
 
 

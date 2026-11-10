@@ -15,7 +15,10 @@ export type NotificationType =
    | 'upload'
    | 'reminder';
 
-/** Presentation shape retained for the unchanged Circle Inbox markup. */
+/**
+ * Presentation shape consumed by the Inbox markup.
+ * VI: Dạng dữ liệu hiển thị mà giao diện Inbox sử dụng.
+ */
 export interface InboxItem extends Issue {
    content: string;
    type: NotificationType;
@@ -66,8 +69,8 @@ export function readableTime(value: string): string {
 
 export function contentFor(notification: NativeNotification): string {
    const data = notification.data ?? {};
-   // Comments and updates read better as their own text, as in the Circle Inbox.
-   // VI: Bình luận và cập nhật hiển thị chính nội dung của chúng, giống Inbox Circle.
+   // Comments and updates read better as their own text than as a generic summary.
+   // VI: Bình luận và cập nhật hiển thị chính nội dung của chúng thay cho câu tóm tắt chung.
    if (typeof data.body === 'string' && data.body.trim()) return data.body;
    if (typeof data.message === 'string') return data.message;
    if (notification.type === 'issue.reminder') return 'reminded you about this issue';

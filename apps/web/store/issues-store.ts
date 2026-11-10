@@ -32,7 +32,10 @@ export const RESCHEDULE_CONFLICT =
 declare module '@/types/issues' {
    interface Issue extends BugFields {
       version?: number;
-      /** API-only reference used by durable issue actions; never changes Circle presentation. */
+      /**
+       * API-only reference used by durable issue actions; never changes presentation.
+       * VI: Tham chiếu chỉ dùng cho API trong thao tác issue bền vững; không đổi hiển thị.
+       */
       teamId?: string;
       creatorId?: string;
       /** Reporter of the issue; the API falls back to the creator. VI: Reporter; API mặc định là người tạo. */

@@ -29,20 +29,31 @@ from .teams import _team
 
 # This router is deliberately private until the complete Projects contract is
 # ported. It lets us exercise real Python/database behavior without switching
-# any Circle screen away from the stable legacy facade mid-migration.
+# any web screen away from the stable legacy facade mid-migration.
+# VI: Router này cố ý để riêng cho đến khi contract Projects được chuyển đủ. Nó
+# cho phép chạy hành vi Python/database thật mà không chuyển màn web nào khỏi
+# facade cũ ổn định khi đang chuyển đổi dở dang.
 router = APIRouter(prefix='/api/v1/_native/projects', tags=['native-projects'])
 # The public router intentionally exposes only the Project paths that have
 # completed a Python contract audit. All other Project paths continue through
-# the facade, so the unchanged Circle UI never observes a partial migration.
+# the facade, so the web UI never observes a partial migration.
+# VI: Public router chỉ mở các đường dẫn Project đã qua kiểm tra contract Python.
+# Các đường dẫn khác vẫn đi qua facade nên giao diện web không thấy trạng thái
+# chuyển đổi dở dang.
 public_router = APIRouter(prefix='/api/v1/projects', tags=['projects'])
 ProjectType = Literal['GENERAL', 'PRODUCT', 'MARKETING', 'OPERATIONS', 'EVENT', 'CLIENT', 'RESEARCH', 'CUSTOM']
 ProjectCustomFieldType = Literal['TEXT', 'NUMBER', 'DATE', 'SELECT', 'MULTI_SELECT', 'BOOLEAN', 'URL']
 ProjectStatusCategory = Literal['backlog', 'planned', 'in-progress', 'completed', 'canceled']
 
-# Keep the persisted Project workflow compatible with Circle's unchanged
-# selector. The original UI has this fixed catalog, so presentation does not
-# depend on whichever partial status rows happened to exist before migration.
-CIRCLE_PROJECT_STATUSES = (
+# Keep the persisted Project workflow compatible with the web status
+# selector. The UI has this fixed catalog, so presentation does not depend on
+# whichever partial status rows happened to exist before migration. The status
+# keys are stored in the database and must not change.
+# VI: Giữ workflow Project đã lưu tương thích với bộ chọn trạng thái trên web.
+# UI dùng danh mục cố định này nên hiển thị không phụ thuộc vào các dòng trạng
+# thái lẻ có sẵn trước khi chuyển đổi. Khoá trạng thái được lưu trong database
+# nên không được đổi.
+DEFAULT_PROJECT_STATUSES = (
     ('in-progress', 'in-progress', '#facc15'),
     ('technical-review', 'in-progress', '#22c55e'),
     ('done', 'completed', '#5e6ad2'),
@@ -400,7 +411,7 @@ def _status_name(value: str) -> str:
 
 
 async def _project_statuses(db: AsyncSession, workspace_id: str) -> list[dict[str, Any]]:
-    await _ensure_circle_project_statuses(db, workspace_id)
+    await _ensure_default_project_statuses(db, workspace_id)
     rows = await db.execute(
         text('''SELECT s.*, COUNT(p.id)::integer AS project_count
                 FROM project_statuses s LEFT JOIN projects p ON p.workspace_id = s.workspace_id
@@ -555,9 +566,9 @@ async def delete_project_template(template_id: str, workspaceId: str = Query(min
     return {'data': {'id': template_id, 'deleted': True}}
 
 
-async def _ensure_circle_project_statuses(db: AsyncSession, workspace_id: str) -> None:
+async def _ensure_default_project_statuses(db: AsyncSession, workspace_id: str) -> None:
     now = _utcnow()
-    for position, (name, category, color) in enumerate(CIRCLE_PROJECT_STATUSES):
+    for position, (name, category, color) in enumerate(DEFAULT_PROJECT_STATUSES):
         await db.execute(
             text(
                 '''INSERT INTO project_statuses
@@ -750,7 +761,7 @@ async def update_project(project_id: str, payload: UpdateProjectInput, workspace
     if values.get('serviceDeskEnabled') and not values.get('teamId', current['teamId']):
         raise ApiError(400, 'Service Desk needs a project with a team.', 'Bad Request')
     if values.get('status'):
-        await _ensure_circle_project_statuses(db, workspaceId)
+        await _ensure_default_project_statuses(db, workspaceId)
         status = await db.execute(text('SELECT 1 FROM project_statuses WHERE workspace_id = :workspace_id AND name = :name'), {'workspace_id': workspaceId, 'name': values['status']})
         if status.scalar_one_or_none() is None: raise ApiError(404, 'Project status is not configured in this workspace.', 'Not Found')
     label_ids = values.pop('labelIds', None)

@@ -86,7 +86,10 @@ function ProjectDocsLinks() {
    );
 }
 
-/** Documents tab backed by FastAPI/PostgreSQL, retaining Circle’s grouped list layout. */
+/**
+ * Documents tab backed by FastAPI/PostgreSQL, shown as a grouped list.
+ * VI: Tab Documents lấy dữ liệu từ FastAPI/PostgreSQL, hiển thị dạng danh sách nhóm.
+ */
 export default function TeamDocuments() {
    const { teamId } = useParams<{ teamId: string }>();
    const {

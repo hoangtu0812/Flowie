@@ -37,7 +37,7 @@ from ..services.registration_verification import (
     deliver_registration_code,
 )
 from ..storage.minio import MinioStorage
-from .workflow_catalog import DEFAULT_CIRCLE_ISSUE_STATUSES
+from .workflow_catalog import DEFAULT_ISSUE_STATUSES
 
 router = APIRouter(prefix='/api/v1/auth', tags=['auth'])
 password_hasher = PasswordHasher()
@@ -341,7 +341,7 @@ async def create_workspace_bootstrap(
         text("INSERT INTO team_members (team_id, user_id, role) VALUES (:team_id, :user_id, 'LEAD')"),
         {'team_id': team_id, 'user_id': user_id},
     )
-    for position, (status_name, category, color) in enumerate(DEFAULT_CIRCLE_ISSUE_STATUSES):
+    for position, (status_name, category, color) in enumerate(DEFAULT_ISSUE_STATUSES):
         await db.execute(
             text(
                 '''

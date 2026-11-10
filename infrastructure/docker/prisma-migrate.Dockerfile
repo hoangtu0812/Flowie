@@ -11,8 +11,8 @@ RUN apt-get update \
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/database/package.json ./packages/database/package.json
-RUN pnpm install --filter @circle/database --frozen-lockfile
+RUN pnpm install --filter @flowie/database --frozen-lockfile
 
 COPY packages/database/prisma ./packages/database/prisma
 
-CMD ["pnpm", "--filter", "@circle/database", "exec", "prisma", "migrate", "deploy", "--schema", "prisma/schema.prisma"]
+CMD ["pnpm", "--filter", "@flowie/database", "exec", "prisma", "migrate", "deploy", "--schema", "prisma/schema.prisma"]

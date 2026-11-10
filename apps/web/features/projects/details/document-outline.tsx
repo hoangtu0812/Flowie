@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import type { ContentBlock } from '@circle/contracts';
+import type { ContentBlock } from '@flowie/contracts';
 import { AlignLeft } from 'lucide-react';
 import { RefObject, useEffect, useMemo, useState } from 'react';
 
