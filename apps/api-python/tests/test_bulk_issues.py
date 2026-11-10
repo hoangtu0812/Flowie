@@ -15,7 +15,7 @@ from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.work_items.bulk_contracts import BulkChanges, BulkPreview
 from app.modules.work_items.bulk_service import bulk_command, bulk_preview, bulk_result
 from app.modules.work_items.bulk_worker import process_bulk_item
-from app.modules.work_items.issue_rules import _validate_references
+from app.modules.work_items.issue_rules import validate_references
 
 
 def test_bulk_requires_explicit_selection_and_bounded_references():
@@ -174,7 +174,7 @@ async def verify_bulk():
             assert conflict.value.status_code == 409
             for field in ["projectId", "assigneeId", "labelIds"]:
                 with pytest.raises(ApiError):
-                    await _validate_references(
+                    await validate_references(
                         db,
                         workspace,
                         team,

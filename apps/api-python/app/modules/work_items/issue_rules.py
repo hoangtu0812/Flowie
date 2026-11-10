@@ -12,7 +12,7 @@ from ...core.identifiers import cuid
 from .workflow_catalog import DEFAULT_ISSUE_STATUSES
 
 
-def _validate_schedule_dates(
+def validate_schedule_dates(
     start_date: datetime | None, target_date: datetime | None
 ) -> None:
     if start_date and target_date and target_date < start_date:
@@ -118,7 +118,7 @@ async def _ensure_default_issue_statuses(db: AsyncSession, workspace_id: str) ->
         )
 
 
-async def _validate_references(
+async def validate_references(
     db: AsyncSession,
     workspace_id: str,
     team_id: str | None,

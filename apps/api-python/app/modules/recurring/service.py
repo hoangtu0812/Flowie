@@ -8,14 +8,14 @@ from ...core.errors import ApiError
 from ...core.identifiers import cuid
 from ..access.projects import team_access, workspace_manager
 from ..audit.write import record_change
-from ..work_items.issue_rules import _validate_references
+from ..work_items.issue_rules import validate_references
 from .calendar import next_occurrence
 from .repository import public_schedule, schedule_row
 
 
 async def validate_template(db, workspace, team, template):
     values = template.model_dump()
-    await _validate_references(db, workspace, team, values, creating=True)
+    await validate_references(db, workspace, team, values, creating=True)
     return values
 
 

@@ -19,8 +19,8 @@ from ...core.errors import ApiError
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
 from ..identity.auth import current_user
-from ..integrations.api import _manager_access
-from ..work_items.document_tree import _project_team
+from ..integrations.api import integration_manager
+from ..work_items.document_tree import project_document_team
 from .graph import SharePointError
 from .service import (
     checked_folder_url,
@@ -52,7 +52,7 @@ async def get_connection(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    await _manager_access(db, workspaceId, user["id"])
+    await integration_manager(db, workspaceId, user["id"])
     return {"data": connection_payload(await connection_row(db, workspaceId))}
 
 
@@ -64,7 +64,7 @@ async def put_connection(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    await _manager_access(db, workspaceId, user["id"])
+    await integration_manager(db, workspaceId, user["id"])
     data = await save_connection(
         db, request.app.state.settings, workspaceId, user["id"],
         tenant_id=payload.tenantId.strip(), client_id=payload.clientId.strip(),
@@ -85,7 +85,7 @@ async def test_folder(
 ) -> dict[str, Any]:
     """Sign in with the saved connection and resolve a folder URL without uploading.
     VI: Đăng nhập bằng kết nối đã lưu và phân giải URL thư mục mà không tải file lên."""
-    await _manager_access(db, workspaceId, user["id"])
+    await integration_manager(db, workspaceId, user["id"])
     row = await connection_row(db, workspaceId)
     if not row:
         raise ApiError(400, "Save the SharePoint connection first.", "Bad Request")
@@ -109,7 +109,7 @@ async def get_project_folder(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    await _project_team(db, workspaceId, projectId, user["id"])
+    await project_document_team(db, workspaceId, projectId, user["id"])
     return {"data": await project_publishing(db, workspaceId, projectId)}
 
 
@@ -121,7 +121,7 @@ async def put_project_folder(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    await _manager_access(db, workspaceId, user["id"])
+    await integration_manager(db, workspaceId, user["id"])
     updated = (
         await db.execute(
             text(

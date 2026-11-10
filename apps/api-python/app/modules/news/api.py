@@ -15,7 +15,7 @@ from ...db.session import get_session
 from ...services.microsoft_teams import valid_teams_webhook
 from ..identity.auth import current_user
 from ..identity.password_reset import limit_request
-from ..integrations.api import _send_teams_test
+from ..integrations.api import send_teams_test
 from .feeds import feed_url
 from .service import news_page, refresh_workspace, require_manager
 
@@ -167,7 +167,7 @@ async def test_category_webhook(
     assert row is not None
     if not row[0]:
         raise ApiError(400, 'This news group has no Microsoft Teams webhook.', 'Bad Request')
-    return {'data': await _send_teams_test(row[0])}
+    return {'data': await send_teams_test(row[0])}
 
 
 @router.post('/sources')

@@ -157,7 +157,7 @@ def test_webhook_test_posts_only_to_the_stored_url(monkeypatch):
         return {'delivered': True}
 
     monkeypatch.setattr(api, 'require_manager', allow)
-    monkeypatch.setattr(api, '_send_teams_test', send)
+    monkeypatch.setattr(api, 'send_teams_test', send)
     db = _Db(('https://x.logic.azure.com/workflows/a',))
     result = asyncio.run(api.test_category_webhook('cat', workspaceId='ws', user={'id': 'u'}, db=db))
     assert result == {'data': {'delivered': True}}
