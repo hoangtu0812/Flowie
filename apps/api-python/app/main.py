@@ -14,56 +14,56 @@ from .core.errors import ApiError, api_error_handler, validation_error_handler
 from .core.readiness import dependency_status
 from .db.session import create_session_factory
 from .domains.agent import router as agent_router
-from .domains.native_admin import router as admin_router
 from .domains.native_asks import router as asks_router
-from .domains.native_attachments import public_router as attachments_router
-from .domains.native_attachments import router as native_attachments_router
-from .domains.native_comments import public_router as comments_router
-from .domains.native_comments import router as native_comments_router
 from .domains.native_customer_requests import router as customer_requests_router
-from .domains.native_documents import router as native_documents_router
-from .domains.native_initiatives import public_router as initiatives_router
-from .domains.native_initiatives import router as native_initiatives_router
 from .domains.native_integrations import router as integrations_router
-from .domains.native_notifications import router as notifications_router
-from .domains.native_pulse import router as pulse_router
-from .domains.native_slas import router as slas_router
 from .domains.scm.router import router as scm_router
 from .domains.scm.router import webhook_router as scm_webhook_router
 from .domains.team_dispatcher import router as team_dispatcher_router
 from .domains.team_insights import digest_router as digest_router
 from .domains.team_insights import router as team_insights_router
 from .domains.teams import router as teams_router
-from .domains.users import router as users_router
 from .jobs.digest import digest_loop
 from .jobs.dispatcher import dispatcher_loop
 from .jobs.reminders import reminder_loop
 from .jobs.scm_deliveries import scm_delivery_loop
 from .jobs.scm_sync import scm_sync_loop
 from .modules.agent_runs.api import router as agent_runs_router
+from .modules.attachments.api import public_router as attachments_router
+from .modules.attachments.api import router as native_attachments_router
 from .modules.cycles.api import public_router as cycles_router
 from .modules.cycles.api import router as native_cycles_router
 from .modules.emojis.api import router as emojis_router
+from .modules.identity.admin_api import router as admin_router
 from .modules.identity.api import router as password_reset_router
 from .modules.identity.auth import router as auth_router
+from .modules.identity.users_api import router as users_router
 from .modules.labels.api import router as labels_router
 from .modules.link_metadata.api import router as link_metadata_router
 from .modules.mcp.api import router as mcp_management_router
 from .modules.mcp.maintenance import maintenance_loop
 from .modules.mcp.uploads import router as mcp_upload_router
+from .modules.notifications.api import router as notifications_router
 from .modules.notifications.outbox import outbox_loop
 from .modules.operations.heartbeats import supervise
+from .modules.portfolio.initiatives_api import public_router as initiatives_router
+from .modules.portfolio.initiatives_api import router as native_initiatives_router
 from .modules.portfolio.projects_api import public_router as projects_router
 from .modules.portfolio.projects_api import router as native_projects_router
 from .modules.releases.api import router as releases_router
 from .modules.reviews.api import router as reviews_router
+from .modules.sla.api import router as slas_router
 from .modules.views.api import router as views_router
 from .modules.work_items.activity_api import public_router as activities_router
 from .modules.work_items.activity_api import router as native_activities_router
 from .modules.work_items.approvals_api import router as approvals_router
+from .modules.work_items.comments_api import public_router as comments_router
+from .modules.work_items.comments_api import router as native_comments_router
+from .modules.work_items.documents_api import router as native_documents_router
 from .modules.work_items.issues_api import public_router as issues_router
 from .modules.work_items.issues_api import router as native_issues_router
 from .modules.work_items.manual_order import router as manual_order_router
+from .modules.work_items.pulse_api import router as pulse_router
 from .modules.workspaces.api import router as workspaces_router
 
 

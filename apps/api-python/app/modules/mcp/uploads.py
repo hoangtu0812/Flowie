@@ -28,11 +28,7 @@ from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import cuid
 from ...core.utc_responses import UtcAPIRouter as APIRouter
-from ...domains.native_attachments import (
-    MAX_ATTACHMENT_BYTES,
-    _authorize_entity,
-    store_attachment,
-)
+from ..attachments.api import MAX_ATTACHMENT_BYTES, _authorize_entity, store_attachment
 from .connections import load_principal
 from .policy import AccessPolicy
 

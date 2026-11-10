@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from typing import Annotated, Any
 
 from fastapi import Depends, Query, Request
@@ -8,26 +7,20 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.clock import utcnow
-from ..core.errors import ApiError
-from ..core.identifiers import cuid
-from ..core.utc_responses import UtcAPIRouter as APIRouter
-from ..db.session import get_session
-from ..modules.access.projects import workspace_access
-from ..modules.identity.auth import current_user
-from ..modules.work_items.comment_repository import _comment as _comment
-from ..modules.work_items.comment_repository import _comment_input as _comment_input
-from ..modules.work_items.comment_repository import (
-    _reaction_summary as _reaction_summary,
+from ...core.clock import utcnow
+from ...core.errors import ApiError
+from ...core.utc_responses import UtcAPIRouter as APIRouter
+from ...db.session import get_session
+from ..identity.auth import current_user
+from .comment_repository import (
+    _comment,
+    _reaction_summary,
 )
-from ..modules.work_items.comment_repository import _text_from_body as _text_from_body
-from ..modules.work_items.contracts import CommentInput, CreateCommentInput
-from ..modules.work_items.issue_queries import issue_row
-from ..services.notification_events import (
-    create_notification_batch,
-    issue_recipient_ids,
-    publish_notification_batches,
+from .contracts import (
+    CommentInput,
+    CreateCommentInput,
 )
+from .issue_queries import issue_row
 
 router = APIRouter(prefix='/api/v1/_native/comments', tags=['native-comments'])
 # Comments have no web UI adapter switched yet. Expose the audited native
@@ -50,7 +43,7 @@ class ToggleReactionInput(BaseModel):
 
 @public_router.get('/mentions')
 async def mention_members(workspaceId: str = Query(min_length=1), issueId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict:
-    from ..modules.work_items.comment_mentions import mention_options
+    from .comment_mentions import mention_options
     issue = await issue_row(db, issueId, workspaceId, user['id'])
     return {'data': await mention_options(db, issue)}
 
@@ -76,14 +69,18 @@ async def comment_revisions(comment_id: str, workspaceId: str = Query(min_length
 async def list_comments(
     workspaceId: str = Query(min_length=1), issueId: str = Query(min_length=1),
     user: Any = Depends(current_user), db: AsyncSession = Depends(get_session), *,
-    request: Request = None,
+    # FastAPI injects the request through the plain `Request` annotation; None is only for direct
+    # calls outside a request, which read settings from the environment.
+    # VI: FastAPI inject request qua annotation `Request` thuần; None chỉ dành cho lời gọi trực tiếp
+    # VI: ngoài request, khi đó settings lấy từ biến môi trường.
+    request: Request = None,  # type: ignore[assignment]
     limit: Annotated[int, Query(ge=1,le=100)] = 50,
     cursor: Annotated[str | None, Query(max_length=2000)] = None,
     threaded: bool = False,
     parentCommentId: Annotated[str | None, Query(min_length=1,max_length=100)] = None,
 ) -> dict:
-    from ..core.config import Settings
-    from ..modules.work_items.collaboration_feed import comment_page
+    from ...core.config import Settings
+    from .collaboration_feed import comment_page
     settings = request.app.state.settings if request else Settings.from_environment()
     return await comment_page(db, workspaceId, issueId, user['id'], settings.auth_jwt_secret,
         limit=limit,cursor=cursor,threaded=threaded,parent_id=parentCommentId)
@@ -96,8 +93,8 @@ async def create_comment(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    from ..db.mutations import commit_mutation
-    from ..modules.work_items.comments import create_comment as operation
+    from ...db.mutations import commit_mutation
+    from .comments import create_comment as operation
 
     return await commit_mutation(db, lambda: operation(payload=payload, user=user, db=db))
 
@@ -111,8 +108,8 @@ async def update_comment(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    from ..db.mutations import commit_mutation
-    from ..modules.work_items.comments import update_comment as operation
+    from ...db.mutations import commit_mutation
+    from .comments import update_comment as operation
 
     return await commit_mutation(db, lambda: operation(comment_id=comment_id, payload=payload, workspaceId=workspaceId, user=user, db=db))
 

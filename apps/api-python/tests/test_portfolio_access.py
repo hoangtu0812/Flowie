@@ -11,8 +11,8 @@ from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.core.identifiers import cuid
-from app.domains.native_initiatives import initiative_activity, list_initiatives
 from app.modules.identity.auth import create_workspace_bootstrap
+from app.modules.portfolio.initiatives_api import initiative_activity, list_initiatives
 from app.modules.portfolio.projects_api import (
     public_get_project,
     public_list_projects,

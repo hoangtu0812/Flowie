@@ -24,10 +24,10 @@ from app.domains.native_asks import (
     transition_ask,
     update_ask,
 )
-from app.domains.native_attachments import _authorize_entity
-from app.domains.native_notifications import list_notifications
 from app.jobs.ticket_status import notify_ticket_status_changes
+from app.modules.attachments.api import _authorize_entity
 from app.modules.identity.auth import create_workspace_bootstrap
+from app.modules.notifications.api import list_notifications
 from app.modules.work_items.comments import create_comment
 from app.modules.work_items.contracts import CreateCommentInput
 from tests.document_review_support import add_member

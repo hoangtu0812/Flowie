@@ -1811,7 +1811,7 @@ class McpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(row["payload"], {})
 
     async def test_large_search_and_web_document_isolation(self):
-        from app.domains.native_documents import list_documents
+        from app.modules.work_items.documents_api import list_documents
 
         async with self.factory() as db:
             await db.execute(

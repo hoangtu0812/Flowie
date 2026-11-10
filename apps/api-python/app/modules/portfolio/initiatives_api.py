@@ -9,17 +9,17 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.audit_context import audit_source
-from ..core.clock import utcnow
-from ..core.dates import parse_date
-from ..core.errors import ApiError
-from ..core.identifiers import cuid
-from ..core.utc_responses import UtcAPIRouter as APIRouter
-from ..db.session import get_session
-from ..modules.access.membership import manager
-from ..modules.access.project_scope import project_read_scope
-from ..modules.access.projects import workspace_access
-from ..modules.identity.auth import current_user
+from ...core.audit_context import audit_source
+from ...core.clock import utcnow
+from ...core.dates import parse_date
+from ...core.errors import ApiError
+from ...core.identifiers import cuid
+from ...core.utc_responses import UtcAPIRouter as APIRouter
+from ...db.session import get_session
+from ..access.membership import manager
+from ..access.project_scope import project_read_scope
+from ..access.projects import workspace_access
+from ..identity.auth import current_user
 
 router = APIRouter(prefix='/api/v1/_native/initiatives', tags=['native-initiatives'])
 public_router = APIRouter(prefix='/api/v1/initiatives', tags=['initiatives'])
@@ -96,7 +96,7 @@ async def _audit(
 
 
 async def _project(db: AsyncSession, project_id: str, workspace_id: str, user_id: str) -> dict[str, Any] | None:
-    from ..modules.portfolio.projects import project_summaries
+    from .projects import project_summaries
     return (await project_summaries(db,workspace_id,user_id,[project_id])).get(project_id)
 
 
@@ -117,7 +117,7 @@ async def _initiative(db: AsyncSession, initiative_id: str, workspace_id: str, u
         text('SELECT project_id, created_at FROM initiative_projects WHERE initiative_id = :initiative_id ORDER BY created_at'),
         {'initiative_id': initiative_id},
     )
-    from ..modules.portfolio.projects import project_summaries
+    from .projects import project_summaries
     link_rows=links.mappings().all()
     projects=await project_summaries(db,workspace_id,user_id,[link['project_id'] for link in link_rows])
     project_links=[{'initiativeId':initiative_id,'projectId':link['project_id'],'createdAt':link['created_at'],'project':projects[link['project_id']]}
@@ -184,9 +184,14 @@ async def _initiative(db: AsyncSession, initiative_id: str, workspace_id: str, u
 @router.get('')
 @public_router.get('')
 async def list_initiatives(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session), *,
-    request: Request = None, limit: Annotated[int, Query(ge=1,le=100)] = 100, cursor: Annotated[str | None, Query(max_length=2000)] = None) -> dict:
-    from ..core.config import Settings
-    from ..modules.portfolio.initiatives import initiative_page
+    # FastAPI injects the request through the plain `Request` annotation; None is only for direct
+    # calls outside a request, which read settings from the environment.
+    # VI: FastAPI inject request qua annotation `Request` thuần; None chỉ dành cho lời gọi trực tiếp
+    # VI: ngoài request, khi đó settings lấy từ biến môi trường.
+    request: Request = None,  # type: ignore[assignment]
+    limit: Annotated[int, Query(ge=1,le=100)] = 100, cursor: Annotated[str | None, Query(max_length=2000)] = None) -> dict:
+    from ...core.config import Settings
+    from .initiatives import initiative_page
     await workspace_access(db,workspaceId,user['id'])
     settings=request.app.state.settings if request else Settings.from_environment()
     return await initiative_page(db,workspaceId,user['id'],settings.auth_jwt_secret,limit=limit,cursor=cursor)
@@ -314,9 +319,14 @@ async def unlink_label(initiative_id: str, label_id: str, workspaceId: str = Que
 @router.get('/{initiative_id}/activity')
 @public_router.get('/{initiative_id}/activity')
 async def initiative_activity(initiative_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session), *,
-    request: Request = None, limit: Annotated[int, Query(ge=1,le=100)] = 50, cursor: Annotated[str | None, Query(max_length=2000)] = None) -> dict:
-    from ..core.config import Settings
-    from ..modules.portfolio.history import history_page
+    # FastAPI injects the request through the plain `Request` annotation; None is only for direct
+    # calls outside a request, which read settings from the environment.
+    # VI: FastAPI inject request qua annotation `Request` thuần; None chỉ dành cho lời gọi trực tiếp
+    # VI: ngoài request, khi đó settings lấy từ biến môi trường.
+    request: Request = None,  # type: ignore[assignment]
+    limit: Annotated[int, Query(ge=1,le=100)] = 50, cursor: Annotated[str | None, Query(max_length=2000)] = None) -> dict:
+    from ...core.config import Settings
+    from .history import history_page
     settings=request.app.state.settings if request else Settings.from_environment()
     return await history_page(db,workspaceId,user['id'],settings.auth_jwt_secret,'initiative_activity',initiative_id,limit=limit,cursor=cursor)
 
@@ -324,9 +334,14 @@ async def initiative_activity(initiative_id: str, workspaceId: str = Query(min_l
 @router.get('/{initiative_id}/updates')
 @public_router.get('/{initiative_id}/updates')
 async def initiative_updates(initiative_id: str,workspaceId: str = Query(min_length=1),user: Any = Depends(current_user),db: AsyncSession = Depends(get_session), *,
-    request: Request = None, limit: Annotated[int, Query(ge=1,le=100)] = 50, cursor: Annotated[str | None, Query(max_length=2000)] = None) -> dict:
-    from ..core.config import Settings
-    from ..modules.portfolio.history import history_page
+    # FastAPI injects the request through the plain `Request` annotation; None is only for direct
+    # calls outside a request, which read settings from the environment.
+    # VI: FastAPI inject request qua annotation `Request` thuần; None chỉ dành cho lời gọi trực tiếp
+    # VI: ngoài request, khi đó settings lấy từ biến môi trường.
+    request: Request = None,  # type: ignore[assignment]
+    limit: Annotated[int, Query(ge=1,le=100)] = 50, cursor: Annotated[str | None, Query(max_length=2000)] = None) -> dict:
+    from ...core.config import Settings
+    from .history import history_page
     settings=request.app.state.settings if request else Settings.from_environment()
     return await history_page(db,workspaceId,user['id'],settings.auth_jwt_secret,'initiative_updates',initiative_id,limit=limit,cursor=cursor)
 

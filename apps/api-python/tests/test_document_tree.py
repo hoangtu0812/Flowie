@@ -9,7 +9,6 @@ from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.core.identifiers import cuid
-from app.domains.native_documents import get_document, list_folders
 from app.modules.identity.auth import create_workspace_bootstrap
 from app.modules.work_items.contracts import (
     CreateDocumentInput,
@@ -26,6 +25,7 @@ from app.modules.work_items.document_tree import (
     update_folder,
 )
 from app.modules.work_items.documents import create_document
+from app.modules.work_items.documents_api import get_document, list_folders
 from app.modules.work_items.issues import create_issue
 from tests.document_review_support import approve
 

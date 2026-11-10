@@ -8,14 +8,14 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.clock import utcnow
-from ..core.errors import ApiError
-from ..core.identifiers import cuid
-from ..core.utc_responses import UtcAPIRouter as APIRouter
-from ..db.session import get_session
-from ..modules.access.projects import workspace_access
-from ..modules.identity.auth import current_user
-from ..modules.notifications.access import notification_scope
+from ...core.clock import utcnow
+from ...core.errors import ApiError
+from ...core.identifiers import cuid
+from ...core.utc_responses import UtcAPIRouter as APIRouter
+from ...db.session import get_session
+from ..access.projects import workspace_access
+from ..identity.auth import current_user
+from .access import notification_scope
 
 router = APIRouter(prefix='/api/v1/notifications', tags=['notifications'])
 
@@ -32,7 +32,7 @@ async def _access(db: AsyncSession, workspace_id: str, user_id: str) -> None:
 
 @router.websocket('/stream')
 async def notification_stream(websocket: WebSocket, workspaceId: str = Query(min_length=1)) -> None:
-    from ..modules.identity.security.realtime import serve_notifications
+    from ..identity.security.realtime import serve_notifications
     await serve_notifications(websocket, workspaceId)
 
 
