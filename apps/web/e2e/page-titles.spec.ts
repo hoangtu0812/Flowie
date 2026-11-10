@@ -26,7 +26,11 @@ test('browser tab titles follow the screen and its object', async ({ page }) => 
    await expect(page).toHaveTitle(`${issue.identifier} | Issue: ${issue.title} | Flowie`);
 
    await page.goto(`/${fixture.slug}/project/${fixture.projectId}/overview`);
-   await expect(page).toHaveTitle(/^.+ - Overview \| Flowie$/);
+   // Until the project loads the title reads "Project - Overview", which would match too; wait
+   // for the project's own name so the title captured below is the final one.
+   // VI: Trước khi dự án tải xong, title là "Project - Overview" và cũng khớp mẫu chung; chờ tên
+   // VI: của chính dự án để title lưu bên dưới là title cuối cùng.
+   await expect(page).toHaveTitle(/^(?!Project - ).+ - Overview \| Flowie$/);
    const projectTitle = await page.title();
    expect(projectTitle).not.toContain(issue.title);
 
