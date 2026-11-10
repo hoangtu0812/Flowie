@@ -4,13 +4,22 @@ from collections import defaultdict
 from datetime import timedelta
 from typing import Any
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ..access.projects import workspace_access
 from .bug_contracts import BUG_COLUMNS
+from .queries import (
+    ISSUE_ROWS_SELECT_ISSUE_CYCLES,
+    ISSUE_ROWS_SELECT_ISSUE_LABELS,
+    ISSUE_ROWS_SELECT_ISSUE_RELEASES,
+    ISSUE_ROWS_SELECT_ISSUE_SUBSCRIPTIONS,
+    PERSON_NAME_SELECT_USERS,
+    PROJECT_NAME_SELECT_PROJECTS,
+    STATUS_NAME_SELECT_ISSUE_STATUSES,
+    TEMPLATE_ROW_SELECT_ISSUE_TEMPLATES,
+)
 
 
 async def _issue_rows(
@@ -19,39 +28,7 @@ async def _issue_rows(
     if not issue_ids:
         return []
     result = await db.execute(
-        text("""SELECT i.*, t.id AS team_id_value, t.name AS team_name,
-                      t.identifier AS team_identifier, s.id AS status_id_value,
-                      s.name AS status_name, s.category AS status_category, s.color AS status_color,
-                      p.id AS project_id_value, p.name AS project_name, p.identifier AS project_identifier,
-                      c.id AS creator_id_value, c.name AS creator_name, c.avatar_url AS creator_avatar_url,
-                      r.id AS reporter_id_value, r.name AS reporter_name, r.avatar_url AS reporter_avatar_url,
-                      parent.identifier AS parent_identifier, parent.title AS parent_title,
-                      sub.total AS sub_issue_count, sub.completed AS completed_sub_issue_count,
-                      a.id AS assignee_id_value, a.name AS assignee_name, a.avatar_url AS assignee_avatar_url, a.last_seen_at AS assignee_last_seen_at,
-                      EXISTS(SELECT 1 FROM issue_subscriptions sub WHERE sub.issue_id = i.id AND sub.user_id = :user_id) AS is_subscribed,
-                      EXISTS(SELECT 1 FROM issue_favorites favorite WHERE favorite.issue_id = i.id AND favorite.user_id = :user_id) AS is_favorite,
-                      (SELECT remind_at FROM issue_reminders reminder
-                       WHERE reminder.issue_id = i.id AND reminder.user_id = :user_id AND reminder.delivered_at IS NULL
-                       ORDER BY reminder.updated_at DESC LIMIT 1) AS reminder_at
-               FROM issues i
-               LEFT JOIN teams t ON t.id = i.team_id
-               JOIN issue_statuses s ON s.id = i.status_id
-               LEFT JOIN projects p ON p.id = i.project_id
-               JOIN users c ON c.id = i.creator_id
-               JOIN users r ON r.id = COALESCE(i.reporter_id, i.creator_id)
-               LEFT JOIN users a ON a.id = i.assignee_id
-               LEFT JOIN issues parent ON parent.id = i.parent_issue_id AND parent.archived_at IS NULL
-               LEFT JOIN LATERAL (
-                   SELECT count(*) AS total, count(*) FILTER (WHERE cs.category::text = 'COMPLETED') AS completed
-                   FROM issues child JOIN issue_statuses cs ON cs.id = child.status_id
-                   WHERE child.parent_issue_id = i.id AND child.archived_at IS NULL
-                     AND child.team_id IS NOT DISTINCT FROM i.team_id
-               ) sub ON true
-               WHERE i.id = ANY(CAST(:issue_ids AS text[])) AND i.workspace_id = :workspace_id AND i.archived_at IS NULL
-               AND t.archived_at IS NULL
-               AND (i.team_id IS NULL OR EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=i.team_id AND tm.user_id=:user_id))
-               AND EXISTS(SELECT 1 FROM workspace_members wm WHERE wm.workspace_id=i.workspace_id AND wm.user_id=:user_id AND wm.status='ACTIVE')
-"""),
+        ISSUE_ROWS_SELECT_ISSUE_SUBSCRIPTIONS,
         {"issue_ids": issue_ids, "workspace_id": workspace_id, "user_id": user_id},
     )
     mapped = {row["id"]: row for row in result.mappings().all()}
@@ -60,9 +37,7 @@ async def _issue_rows(
     labels = (
         (
             await db.execute(
-                text(
-                    """SELECT il.issue_id,l.id,l.name,l.color FROM issue_labels il JOIN labels l ON l.id=il.label_id WHERE il.issue_id=ANY(CAST(:ids AS text[])) ORDER BY l.name"""
-                ),
+                ISSUE_ROWS_SELECT_ISSUE_LABELS,
                 {"ids": ids},
             )
         )
@@ -72,9 +47,7 @@ async def _issue_rows(
     cycles = (
         (
             await db.execute(
-                text(
-                    "SELECT issue_id,cycle_id,created_at FROM issue_cycles WHERE issue_id=ANY(CAST(:ids AS text[])) ORDER BY created_at,cycle_id"
-                ),
+                ISSUE_ROWS_SELECT_ISSUE_CYCLES,
                 {"ids": ids},
             )
         )
@@ -84,9 +57,7 @@ async def _issue_rows(
     releases = (
         (
             await db.execute(
-                text(
-                    "SELECT issue_id,release_id,created_at FROM issue_releases WHERE issue_id=ANY(CAST(:ids AS text[])) ORDER BY created_at,release_id"
-                ),
+                ISSUE_ROWS_SELECT_ISSUE_RELEASES,
                 {"ids": ids},
             )
         )
@@ -246,14 +217,7 @@ async def _template_row(
     db: AsyncSession, template_id: str, workspace_id: str
 ) -> Any | None:
     result = await db.execute(
-        text(
-            """SELECT template.*, creator.id AS creator_id, creator.name AS creator_name,
-                      creator.avatar_url AS creator_avatar_url
-               FROM issue_templates template
-               JOIN users creator ON creator.id = template.created_by
-               WHERE template.id = :template_id AND template.workspace_id = :workspace_id
-               LIMIT 1"""
-        ),
+        TEMPLATE_ROW_SELECT_ISSUE_TEMPLATES,
         {"template_id": template_id, "workspace_id": workspace_id},
     )
     return result.mappings().first()
@@ -263,7 +227,7 @@ async def _status_name(db: AsyncSession, status_id: str | None) -> str | None:
     if not status_id:
         return None
     result = await db.execute(
-        text("SELECT name FROM issue_statuses WHERE id = :id"), {"id": status_id}
+        STATUS_NAME_SELECT_ISSUE_STATUSES, {"id": status_id}
     )
     return result.scalar_one_or_none()
 
@@ -272,7 +236,7 @@ async def _person_name(db: AsyncSession, user_id: str | None) -> str | None:
     if not user_id:
         return None
     result = await db.execute(
-        text("SELECT name FROM users WHERE id = :id"), {"id": user_id}
+        PERSON_NAME_SELECT_USERS, {"id": user_id}
     )
     return result.scalar_one_or_none()
 
@@ -281,6 +245,6 @@ async def _project_name(db: AsyncSession, project_id: str | None) -> str | None:
     if not project_id:
         return None
     result = await db.execute(
-        text("SELECT name FROM projects WHERE id = :id"), {"id": project_id}
+        PROJECT_NAME_SELECT_PROJECTS, {"id": project_id}
     )
     return result.scalar_one_or_none()

@@ -4,12 +4,16 @@ import json
 import unicodedata
 
 from pydantic import BaseModel, Field, ValidationError
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.errors import ApiError
 from ...core.pagination import CursorCodec, literal_search
 from .issue_queries import _issue_rows
+from .queries import (
+    search_page_select_sql,
+    search_page_select_sql_2,
+    search_page_select_sql_3,
+)
 
 OPTION_COLUMNS = {
     "status": "i.status_id",
@@ -172,7 +176,7 @@ async def search_page(
         raise ApiError(
             400, "Column sort cannot be combined with manual ordering.", "Bad Request"
         )
-    total = (await db.execute(text("SELECT COUNT(*) " + sql), params)).scalar_one()
+    total = (await db.execute(search_page_select_sql(sql), params)).scalar_one()
     codec = CursorCodec(
         secret,
         f"{user}:{workspace}",
@@ -192,11 +196,7 @@ async def search_page(
             params.update(cursor_id=identifier, cursor_rank=rank)
             exists = (
                 await db.execute(
-                    text(
-                        "SELECT COUNT(*) "
-                        + sql
-                        + " AND i.id=:cursor_id AND i.manual_order=:cursor_rank"
-                    ),
+                    search_page_select_sql_2(sql),
                     params,
                 )
             ).scalar_one()
@@ -215,16 +215,7 @@ async def search_page(
     rows = (
         (
             await db.execute(
-                text(
-                    "SELECT i.id,i.created_at,i.manual_order "
-                    + sql
-                    + cursor_clause
-                    + (
-                        " ORDER BY i.manual_order,i.id LIMIT :limit"
-                        if manual
-                        else " ORDER BY i.created_at DESC,i.id DESC LIMIT :limit"
-                    )
-                ),
+                search_page_select_sql_3(sql, cursor_clause, manual),
                 {**params, "limit": limit + 1},
             )
         )

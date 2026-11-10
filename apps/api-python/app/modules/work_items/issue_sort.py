@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 
-from sqlalchemy import text
-
 from ...core.errors import ApiError
 from .issue_queries import _issue_rows
+from .queries import (
+    sorted_page_select_sql,
+    sorted_page_select_sql_2,
+)
 
 SORT_COLUMNS = {
     "title": "lower(i.title)",
@@ -79,7 +81,7 @@ async def sorted_page(db, workspace, user, sql, params, sorts, codec, options, t
             ) from None
         found = (
             await db.execute(
-                text("SELECT ordinal FROM (" + ranked + ") ranked WHERE id=:anchor_id"),
+                sorted_page_select_sql(ranked),
                 {**params, "anchor_id": identifier},
             )
         ).scalar_one_or_none()
@@ -93,11 +95,7 @@ async def sorted_page(db, workspace, user, sql, params, sorts, codec, options, t
     rows = (
         (
             await db.execute(
-                text(
-                    "SELECT * FROM ("
-                    + ranked
-                    + ") ranked WHERE ordinal>:after ORDER BY ordinal LIMIT :limit"
-                ),
+                sorted_page_select_sql_2(ranked),
                 {**params, "after": after, "limit": limit + 1},
             )
         )

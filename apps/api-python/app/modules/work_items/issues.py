@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
@@ -19,6 +18,17 @@ from ..access.projects import team_access, workspace_access
 from ..sla.policies import select_policy
 from ..sla.synchronization import initialize_cycle, locked_issue, safe_clock, sync_issue
 from .bug_contracts import BUG_COLUMNS
+from .commands import (
+    CREATE_ISSUE_INSERT_ISSUE_LABELS,
+    CREATE_ISSUE_INSERT_ISSUE_SUBSCRIPTIONS,
+    CREATE_ISSUE_INSERT_ISSUES,
+    UPDATE_ISSUE_DELETE_ISSUE_LABELS,
+    UPDATE_ISSUE_DELETE_ISSUE_RELEASES,
+    UPDATE_ISSUE_INSERT_ISSUE_LABELS,
+    UPDATE_ISSUE_INSERT_ISSUE_RELEASES,
+    UPDATE_ISSUE_INSERT_ISSUE_SUBSCRIPTIONS,
+    update_issue_update_issues_sql,
+)
 from .contracts import CreateIssueInput, UpdateIssueInput
 from .issue_activity import _transition, _write_activity
 from .issue_hierarchy import validate_parent
@@ -31,6 +41,11 @@ from .issue_rules import (
     validate_schedule_dates,
 )
 from .lifecycle import actor_context
+from .queries import (
+    CREATE_ISSUE_SELECT_ISSUES,
+    UPDATE_ISSUE_SELECT_ISSUES,
+    UPDATE_ISSUE_SELECT_ISSUES_2,
+)
 
 
 async def create_issue(
@@ -61,8 +76,7 @@ async def create_issue(
     )
     if values.get("parentIssueId"):
         parent = await db.execute(
-            text("""SELECT 1 FROM issues WHERE id = :issue_id AND workspace_id = :workspace_id
-                    AND team_id IS NOT DISTINCT FROM :team_id AND archived_at IS NULL"""),
+            CREATE_ISSUE_SELECT_ISSUES,
             {
                 "issue_id": values["parentIssueId"],
                 "workspace_id": payload.workspaceId,
@@ -86,14 +100,7 @@ async def create_issue(
     completed_at = now if category == "COMPLETED" else None
     canceled_at = now if category == "CANCELED" else None
     await db.execute(
-        text(
-            """INSERT INTO issues (id, workspace_id, team_id, status_id, project_id, parent_issue_id,
-               identifier, number, issue_type, severity, environment, reproduction_steps, expected_result, actual_result, title, description, priority, estimated_effort, actual_effort, start_date, target_date, due_date, creator_id,
-               reporter_id, assignee_id, completed_at, canceled_at, created_at, updated_at,sla_opt_out)
-               VALUES (:id, :workspace_id, :team_id, :status_id, :project_id, :parent_issue_id,
-               :identifier, :number, :issueType, :severity, :environment, :reproductionSteps, :expectedResult, :actualResult, :title, :description, :priority, :estimated_effort, :actual_effort, :start_date, :target_date, :due_date, :creator_id,
-               :reporter_id, :assignee_id, :completed_at, :canceled_at, :now, :now,:sla_opt_out)"""
-        ),
+        CREATE_ISSUE_INSERT_ISSUES,
         {
             **{field: values.get(field) for field in BUG_COLUMNS},
             "id": issue_id,
@@ -128,16 +135,12 @@ async def create_issue(
     await sync_issue(db, issue_id, now=now)
     for label_id in values.get("labelIds") or []:
         await db.execute(
-            text(
-                "INSERT INTO issue_labels (issue_id, label_id) VALUES (:issue_id, :label_id)"
-            ),
+            CREATE_ISSUE_INSERT_ISSUE_LABELS,
             {"issue_id": issue_id, "label_id": label_id},
         )
     for subscriber_id in {user["id"], values.get("assigneeId"), values.get("reporterId")} - {None}:
         await db.execute(
-            text(
-                "INSERT INTO issue_subscriptions (issue_id, user_id) VALUES (:issue_id, :user_id) ON CONFLICT DO NOTHING"
-            ),
+            CREATE_ISSUE_INSERT_ISSUE_SUBSCRIPTIONS,
             {"issue_id": issue_id, "user_id": subscriber_id},
         )
     await _write_activity(
@@ -216,9 +219,7 @@ async def update_issue(
     db: AsyncSession,
 ) -> dict[str, dict[str, Any]]:
     await db.execute(
-        text(
-            "SELECT id FROM issues WHERE id=:id AND workspace_id=:workspace FOR UPDATE"
-        ),
+        UPDATE_ISSUE_SELECT_ISSUES,
         {"id": issue_id, "workspace": workspaceId},
     )
     issue = await issue_row(db, issue_id, workspaceId, user["id"])
@@ -268,7 +269,7 @@ async def update_issue(
             )
             before = (
                 await db.execute(
-                    text("SELECT identifier FROM issues WHERE id = :id"),
+                    UPDATE_ISSUE_SELECT_ISSUES_2,
                     {"id": issue["parentIssueId"]},
                 )
             ).scalar_one_or_none() if issue["parentIssueId"] else None
@@ -308,41 +309,33 @@ async def update_issue(
         params["canceled_at"] = utcnow() if category == "CANCELED" else None
     if values:
         await db.execute(
-            text(
-                f"UPDATE issues SET {', '.join([*sets, 'updated_at = :now'])} WHERE id = :issue_id"
-            ),
+            update_issue_update_issues_sql(sets),
             params,
         )
     await sync_issue(db, issue_id)
     if "labelIds" in values:
         await db.execute(
-            text("DELETE FROM issue_labels WHERE issue_id = :issue_id"),
+            UPDATE_ISSUE_DELETE_ISSUE_LABELS,
             {"issue_id": issue_id},
         )
         for label_id in values["labelIds"] or []:
             await db.execute(
-                text(
-                    "INSERT INTO issue_labels (issue_id, label_id) VALUES (:issue_id, :label_id)"
-                ),
+                UPDATE_ISSUE_INSERT_ISSUE_LABELS,
                 {"issue_id": issue_id, "label_id": label_id},
             )
     if "releaseIds" in values:
         await db.execute(
-            text("DELETE FROM issue_releases WHERE issue_id = :issue_id"),
+            UPDATE_ISSUE_DELETE_ISSUE_RELEASES,
             {"issue_id": issue_id},
         )
         for release_id in values["releaseIds"]:
             await db.execute(
-                text(
-                    "INSERT INTO issue_releases (issue_id, release_id) VALUES (:issue_id, :release_id)"
-                ),
+                UPDATE_ISSUE_INSERT_ISSUE_RELEASES,
                 {"issue_id": issue_id, "release_id": release_id},
             )
     for subscriber_id in {values.get("assigneeId"), values.get("reporterId")} - {None}:
         await db.execute(
-            text(
-                "INSERT INTO issue_subscriptions (issue_id, user_id) VALUES (:issue_id, :user_id) ON CONFLICT DO NOTHING"
-            ),
+            UPDATE_ISSUE_INSERT_ISSUE_SUBSCRIPTIONS,
             {"issue_id": issue_id, "user_id": subscriber_id},
         )
     recipients = await issue_recipient_ids(db, issue_id, previous_assignee_id)

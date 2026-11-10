@@ -4,7 +4,6 @@ from typing import Any, Literal
 
 from fastapi import Depends
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
@@ -14,6 +13,16 @@ from ...db.session import get_session
 from ..access.project_scope import project_read_scope
 from ..access.projects import workspace_access
 from ..identity.auth import current_user
+from .commands import (
+    REORDER_LOCK,
+    reorder_update_sql,
+    reorder_update_unnest_sql,
+)
+from .queries import (
+    reorder_select_issues_sql,
+    reorder_select_projects_sql,
+    reorder_select_sql,
+)
 
 router = UtcAPIRouter(prefix="/api/v1/manual-order", tags=["manual-order"])
 
@@ -60,7 +69,7 @@ async def reorder(
     if payload.sourceId == payload.targetId:
         raise ApiError(400, "Choose a different target.", "Bad Request")
     await db.execute(
-        text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"),
+        REORDER_LOCK,
         {"key": f"manual-order:{payload.workspaceId}:{payload.entityType}"},
     )
     params = {
@@ -70,20 +79,12 @@ async def reorder(
     }
     if payload.entityType == "issue":
         scope, bindings = issue_scope(payload.workspaceId, user["id"], {})
-        query = (
-            "SELECT i.id,i.manual_order,i.parent_issue_id "
-            + scope
-            + " AND i.id=ANY(CAST(:ids AS text[])) FOR UPDATE OF i"
-        )
+        query = reorder_select_issues_sql(scope)
         params.update(bindings)
     else:
-        query = (
-            "SELECT p.id,p.manual_order,NULL::text AS parent_issue_id FROM projects p WHERE "
-            + project_read_scope()
-            + " AND p.id=ANY(CAST(:ids AS text[])) FOR UPDATE OF p"
-        )
+        query = reorder_select_projects_sql(project_read_scope())
     rows = {
-        row["id"]: row for row in (await db.execute(text(query), params)).mappings()
+        row["id"]: row for row in (await db.execute(query, params)).mappings()
     }
     if len(rows) != 2:
         raise ApiError(
@@ -113,9 +114,7 @@ async def reorder(
     ids = list(
         (
             await db.execute(
-                text(
-                    f"SELECT id FROM {table} WHERE workspace_id=:workspace AND archived_at IS NULL{parent} ORDER BY manual_order,id"
-                ),
+                reorder_select_sql(table, parent),
                 {"workspace": payload.workspaceId, "parent": source["parent_issue_id"]},
             )
         ).scalars()
@@ -124,15 +123,11 @@ async def reorder(
     index = ids.index(payload.targetId) + (payload.placement == "after")
     ids.insert(index, payload.sourceId)
     await db.execute(
-        text(f"""UPDATE {table} item SET manual_order=sequence.position*1024
-        FROM unnest(CAST(:ids AS text[])) WITH ORDINALITY AS sequence(id,position)
-        WHERE item.id=sequence.id AND item.workspace_id=:workspace"""),
+        reorder_update_unnest_sql(table),
         {"ids": ids, "workspace": payload.workspaceId},
     )
     await db.execute(
-        text(
-            f"UPDATE {table} SET updated_at=:now WHERE id=:id AND workspace_id=:workspace"
-        ),
+        reorder_update_sql(table),
         {"id": payload.sourceId, "workspace": payload.workspaceId, "now": utcnow()},
     )
     await db.commit()

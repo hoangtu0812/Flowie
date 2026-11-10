@@ -4,18 +4,21 @@ import asyncio
 from difflib import unified_diff
 from itertools import islice
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.errors import ApiError
+from .queries import (
+    LIST_REVISIONS_SELECT_DOCUMENT_REVISIONS,
+    REVISION_ROW_SELECT_DOCUMENT_REVISIONS,
+    list_releases_select_document_releases_sql,
+    release_row_select_document_releases_sql,
+)
 
 
 async def list_revisions(db: AsyncSession, document_id: str) -> dict:
     rows = (
         await db.execute(
-            text("""SELECT version,title,actor_id AS "actorId",
-        created_at AS "createdAt" FROM document_revisions WHERE document_id=:id
-        ORDER BY version DESC LIMIT 100"""),
+            LIST_REVISIONS_SELECT_DOCUMENT_REVISIONS,
             {"id": document_id},
         )
     ).mappings()
@@ -26,8 +29,7 @@ async def revision_row(db: AsyncSession, document_id: str, version: int) -> dict
     row = (
         (
             await db.execute(
-                text("""SELECT version,title,content,actor_id FROM
-        document_revisions WHERE document_id=:id AND version=:version"""),
+                REVISION_ROW_SELECT_DOCUMENT_REVISIONS,
                 {"id": document_id, "version": version},
             )
         )
@@ -50,9 +52,7 @@ async def list_releases(db: AsyncSession, document_id: str) -> dict:
     VI: Các phiên bản đã duyệt của tài liệu, mới nhất trước, không kèm nội dung."""
     rows = (
         await db.execute(
-            text(f"""SELECT {RELEASE_COLUMNS} FROM document_releases r
-            LEFT JOIN users u ON u.id = r.approved_by
-            WHERE r.document_id=:id ORDER BY r.release DESC LIMIT 100"""),
+            list_releases_select_document_releases_sql(RELEASE_COLUMNS),
             {"id": document_id},
         )
     ).mappings()
@@ -65,9 +65,7 @@ async def release_row(db: AsyncSession, document_id: str, release: int) -> dict:
     row = (
         (
             await db.execute(
-                text(f"""SELECT {RELEASE_COLUMNS}, r.content FROM document_releases r
-                LEFT JOIN users u ON u.id = r.approved_by
-                WHERE r.document_id=:id AND r.release=:release"""),
+                release_row_select_document_releases_sql(RELEASE_COLUMNS),
                 {"id": document_id, "release": release},
             )
         )

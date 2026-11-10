@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
@@ -15,11 +14,20 @@ from ...services.notification_events import (
     issue_recipient_ids,
 )
 from ..access.projects import workspace_access
+from .commands import (
+    CREATE_COMMENT_INSERT_COMMENTS,
+    CREATE_COMMENT_LOCK,
+    UPDATE_COMMENT_UPDATE_COMMENTS,
+)
 from .comment_mentions import validate_mentions
 from .comment_repository import _comment, _comment_input
 from .contracts import CommentInput, CreateCommentInput
 from .issue_activity import _write_activity
 from .issue_queries import issue_row
+from .queries import (
+    CREATE_COMMENT_SELECT_COMMENTS,
+    UPDATE_COMMENT_SELECT_COMMENTS,
+)
 
 
 async def create_comment(
@@ -36,9 +44,9 @@ async def create_comment(
         if parent['issueId'] != payload.issueId or parent['parentCommentId']:
             raise ApiError(400, 'Replies must reference a top-level comment on this issue.', 'Bad Request')
     if payload.clientRequestKey:
-        await db.execute(text('SELECT pg_advisory_xact_lock(hashtextextended(:key,0))'),
+        await db.execute(CREATE_COMMENT_LOCK,
             {'key': user['id'] + ':' + payload.clientRequestKey})
-        previous = (await db.execute(text('SELECT * FROM comments WHERE author_id=:author AND client_request_key=:key'),
+        previous = (await db.execute(CREATE_COMMENT_SELECT_COMMENTS,
             {'author': user['id'], 'key': payload.clientRequestKey})).mappings().first()
         if previous:
             if previous['issue_id'] != payload.issueId or previous['content'] != content or previous['body'] != body or previous['parent_comment_id'] != payload.parentCommentId or previous['mention_ids'] != mention_ids or previous['deleted_at']:
@@ -46,10 +54,7 @@ async def create_comment(
             return {'data': await _comment(db, previous['id'], payload.workspaceId, user['id'])}
     comment_id, now = cuid(), utcnow()
     await db.execute(
-        text(
-            """INSERT INTO comments (id, issue_id, author_id, client_request_key, parent_comment_id, mention_ids, content, body, created_at, updated_at)
-               VALUES (:id, :issue_id, :author_id, :request_key, :parent, CAST(:mentions AS jsonb), :content, CAST(:body AS jsonb), :now, :now)"""
-        ),
+        CREATE_COMMENT_INSERT_COMMENTS,
         {
             "id": comment_id,
             "issue_id": payload.issueId,
@@ -103,7 +108,7 @@ async def update_comment(
     user: Any,
     db: AsyncSession,
 ) -> dict[str, dict[str, Any]]:
-    await db.execute(text('SELECT id FROM comments WHERE id=:id FOR UPDATE'), {'id': comment_id})
+    await db.execute(UPDATE_COMMENT_SELECT_COMMENTS, {'id': comment_id})
     current = await _comment(db, comment_id, workspaceId, user["id"])
     if payload.expectedVersion is not None and current['version'] != payload.expectedVersion:
         raise ApiError(409, 'This comment changed. Reload before editing; your draft is retained.', 'Conflict')
@@ -113,9 +118,7 @@ async def update_comment(
     issue = await issue_row(db, current['issueId'], workspaceId, user['id'])
     mention_ids = await validate_mentions(db, issue, payload.mentionIds if payload.mentionIds is not None else current['mentionIds'])
     await db.execute(
-        text(
-            "UPDATE comments SET content = :content, body = CAST(:body AS jsonb), mention_ids = CAST(:mentions AS jsonb), updated_at = :now WHERE id = :comment_id"
-        ),
+        UPDATE_COMMENT_UPDATE_COMMENTS,
         {
             "comment_id": comment_id,
             "mentions": json.dumps(mention_ids),

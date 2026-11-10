@@ -4,7 +4,6 @@ from typing import Any, Literal
 
 from fastapi import Depends, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.errors import ApiError
@@ -23,6 +22,9 @@ from .document_repository import (
 from .document_review import (
     DecisionInput,
     ReviewersInput,
+)
+from .queries import (
+    LIST_FOLDERS_SELECT_DOCUMENT_FOLDERS,
 )
 
 router = APIRouter(prefix='/api/v1/documents', tags=['documents'])
@@ -85,9 +87,7 @@ async def list_folders(workspaceId: str = Query(min_length=1), teamId: str = Que
     # VI: Thư mục cây Docs dự án cũng mang team của dự án; ở đây chỉ trả thư mục chung của team,
     # VI: cây dự án đọc qua /project-tree.
     result = await db.execute(
-        text('''SELECT * FROM document_folders WHERE workspace_id = :workspace_id AND team_id = :team_id
-                AND project_id IS NULL
-                ORDER BY position ASC, name ASC, id ASC'''),
+        LIST_FOLDERS_SELECT_DOCUMENT_FOLDERS,
         {'workspace_id': workspaceId, 'team_id': teamId},
     )
     return {'data': [

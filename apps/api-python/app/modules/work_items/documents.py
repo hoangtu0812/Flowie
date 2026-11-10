@@ -2,13 +2,18 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import cuid
 from ..audit.write import record_change
+from .commands import (
+    ARCHIVE_DOCUMENT_UPDATE_DOCUMENTS,
+    CREATE_DOCUMENT_INSERT_DOCUMENTS,
+    UPDATE_DOCUMENT_UPDATE_DOCUMENT_PUBLICATIONS,
+    update_document_update_documents_sql,
+)
 from .contracts import CreateDocumentInput, UpdateDocumentInput
 from .document_repository import (
     _document_by_id,
@@ -17,6 +22,13 @@ from .document_repository import (
     document_team_access,
 )
 from .document_review import announce_status_change, check_status_change
+from .queries import (
+    ARCHIVE_DOCUMENT_SELECT_DOCUMENTS,
+    CREATE_DOCUMENT_SELECT_DOCUMENTS,
+    ROW_SELECT_DOCUMENTS,
+    UPDATE_DOCUMENT_SELECT_DOCUMENTS,
+    UPDATE_DOCUMENT_SELECT_DOCUMENTS_2,
+)
 
 
 async def create_document(
@@ -42,16 +54,13 @@ async def create_document(
     if position is None and folder:
         position = (
             await db.execute(
-                text(
-                    "SELECT COALESCE(MAX(position), -1) + 1 FROM documents WHERE folder_id = :folder_id"
-                ),
+                CREATE_DOCUMENT_SELECT_DOCUMENTS,
                 {"folder_id": folder["id"]},
             )
         ).scalar_one()
     document_id, now = cuid(), utcnow()
     await db.execute(
-        text("""INSERT INTO documents (id, workspace_id, team_id, folder_id, title, content, icon, source_type, source_url, doc_type, status, pinned, position, created_by, updated_by, created_at, updated_at)
-                            VALUES (:id, :workspace_id, :team_id, :folder_id, :title, :content, :icon, :source_type, :source_url, :doc_type, :status, :pinned, :position, :user_id, :user_id, :now, :now)"""),
+        CREATE_DOCUMENT_INSERT_DOCUMENTS,
         {
             "id": document_id,
             "workspace_id": payload.workspaceId,
@@ -93,9 +102,7 @@ async def update_document(
     from .document_tree import _folder_row, _lock_team_folders
 
     if "folderId" in payload.model_fields_set:
-        owner = (await db.execute(text(
-            "SELECT team_id FROM documents WHERE id = :id AND workspace_id = :workspace AND archived_at IS NULL"
-        ), {"id": document_id, "workspace": workspaceId})).mappings().first()
+        owner = (await db.execute(UPDATE_DOCUMENT_SELECT_DOCUMENTS_2, {"id": document_id, "workspace": workspaceId})).mappings().first()
         if not owner:
             raise ApiError(404, "Document not found.", "Not Found")
         await document_team_access(db, workspaceId, owner["team_id"], user["id"])
@@ -108,9 +115,7 @@ async def update_document(
     current = (
         (
             await db.execute(
-                text(
-                    "SELECT * FROM documents WHERE id = :id AND workspace_id = :workspace_id AND archived_at IS NULL FOR UPDATE"
-                ),
+                UPDATE_DOCUMENT_SELECT_DOCUMENTS,
                 {"id": document_id, "workspace_id": workspaceId},
             )
         )
@@ -175,13 +180,11 @@ async def update_document(
         if "title" in params:
             params["title"] = str(params["title"]).strip()
         await db.execute(
-            text(
-                f"UPDATE documents SET {', '.join(sets)}, updated_by = :updated_by, updated_at = :now WHERE id = :id"
-            ),
+            update_document_update_documents_sql(sets),
             params,
         )
         if "folderId" in values and values["folderId"] != current["folder_id"]:
-            await db.execute(text("UPDATE document_publications SET release = NULL WHERE document_id = :id"),
+            await db.execute(UPDATE_DOCUMENT_UPDATE_DOCUMENT_PUBLICATIONS,
                              {"id": document_id})
         document = await _document_by_id(db, document_id, workspaceId)
         await record_change(
@@ -203,9 +206,7 @@ async def archive_document(document_id, workspaceId, user, db, expected_version=
     current = (
         (
             await db.execute(
-                text(
-                    "SELECT team_id, version FROM documents WHERE id=:id AND workspace_id=:workspace AND archived_at IS NULL FOR UPDATE"
-                ),
+                ARCHIVE_DOCUMENT_SELECT_DOCUMENTS,
                 {"id": document_id, "workspace": workspaceId},
             )
         )
@@ -218,9 +219,7 @@ async def archive_document(document_id, workspaceId, user, db, expected_version=
     if expected_version is not None and current["version"] != expected_version:
         raise ApiError(409, "This document changed. Reload it before deleting.", "Conflict")
     await db.execute(
-        text(
-            "UPDATE documents SET archived_at=:now,updated_at=:now,updated_by=:actor WHERE id=:id"
-        ),
+        ARCHIVE_DOCUMENT_UPDATE_DOCUMENTS,
         {"id": document_id, "actor": user["id"], "now": utcnow()},
     )
     await record_change(
@@ -234,7 +233,7 @@ async def _row(db: AsyncSession, document_id: str) -> dict:
     VI: Dòng tài liệu đã lưu, sau trigger (sửa có thể đưa Đã duyệt về Nháp).
     """
     return dict(
-        (await db.execute(text("SELECT * FROM documents WHERE id = :id"), {"id": document_id}))
+        (await db.execute(ROW_SELECT_DOCUMENTS, {"id": document_id}))
         .mappings()
         .one()
     )

@@ -3,13 +3,26 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
-from sqlalchemy import text
 
 from ...core.audit_context import audit_source
 from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import cuid
 from ..access.projects import team_access, workspace_access, workspace_manager
+from .commands import (
+    MUTATE_STATUS_DELETE_ISSUE_STATUSES,
+    MUTATE_STATUS_INSERT_AUDIT_LOGS,
+    MUTATE_STATUS_INSERT_ISSUE_STATUSES,
+    MUTATE_STATUS_LOCK,
+    MUTATE_STATUS_UPDATE_ISSUE_STATUSES,
+)
+from .queries import (
+    MUTATE_STATUS_SELECT_ISSUE_STATUSES,
+    MUTATE_STATUS_SELECT_ISSUE_STATUSES_2,
+    MUTATE_STATUS_SELECT_ISSUE_STATUSES_3,
+    MUTATE_STATUS_SELECT_ISSUES,
+    STATUSES_SELECT_ISSUES,
+)
 
 Category = Literal['TRIAGE', 'BACKLOG', 'UNSTARTED', 'STARTED', 'COMPLETED', 'CANCELED']
 
@@ -32,12 +45,7 @@ class EditStatus(StatusValues):
 
 async def statuses(db, workspace, user):
     await workspace_access(db, workspace, user['id'])
-    rows = (await db.execute(text('''SELECT s.*,
-        (SELECT COUNT(*) FROM issues i WHERE i.status_id=s.id) AS issue_count
-        FROM issue_statuses s WHERE s.workspace_id=:workspace AND
-        (s.team_id IS NULL OR EXISTS (SELECT 1 FROM team_members tm JOIN teams t ON t.id=tm.team_id
-        WHERE t.id=s.team_id AND t.archived_at IS NULL AND tm.user_id=:user))
-        ORDER BY s.position,s.name,s.id'''), {'workspace':workspace,'user':user['id']})).mappings().all()
+    rows = (await db.execute(STATUSES_SELECT_ISSUES, {'workspace':workspace,'user':user['id']})).mappings().all()
     return [{'id':r['id'],'name':r['name'],'category':r['category'],'color':r['color'],
              'position':r['position'],'teamId':r['team_id'],'issueCount':r['issue_count'],
              'requiredBeforeStart':r['required_before_start'],
@@ -46,10 +54,10 @@ async def statuses(db, workspace, user):
 
 async def mutate_status(db, workspace, user, values=None, *, identifier=None, expected=None, remove=False):
     await workspace_manager(db, workspace, user['id'])
-    await db.execute(text('SELECT pg_advisory_xact_lock(hashtextextended(:scope,0))'), {'scope':'issue-statuses:'+workspace})
+    await db.execute(MUTATE_STATUS_LOCK, {'scope':'issue-statuses:'+workspace})
     previous = None
     if identifier:
-        previous = (await db.execute(text('SELECT * FROM issue_statuses WHERE id=:id AND workspace_id=:workspace FOR UPDATE'), {'id':identifier,'workspace':workspace})).mappings().first()
+        previous = (await db.execute(MUTATE_STATUS_SELECT_ISSUE_STATUSES_3, {'id':identifier,'workspace':workspace})).mappings().first()
         if not previous:
             raise ApiError(404,'Issue status not found.','Not Found')
         if previous['team_id']:
@@ -57,18 +65,16 @@ async def mutate_status(db, workspace, user, values=None, *, identifier=None, ex
         instant = expected.astimezone(UTC).replace(tzinfo=None) if expected and expected.tzinfo else expected
         if instant != previous['updated_at']:
             raise ApiError(409,'This status changed. Reload before saving.','Conflict')
-        references = (await db.execute(text('''SELECT
-            EXISTS(SELECT 1 FROM issues WHERE status_id=:id) OR
-            EXISTS(SELECT 1 FROM issue_templates WHERE status_id=:id)'''), {'id':identifier})).scalar_one()
+        references = (await db.execute(MUTATE_STATUS_SELECT_ISSUES, {'id':identifier})).scalar_one()
         if references and (remove or values['category']!=previous['category']):
             raise ApiError(409,'A status used by issues or templates cannot be deleted or change category.','Conflict')
         if previous['team_id'] is None and (remove or values['category']!=previous['category']):
-            count = (await db.execute(text('SELECT COUNT(*) FROM issue_statuses WHERE workspace_id=:workspace AND team_id IS NULL AND category=:category'), {'workspace':workspace,'category':previous['category']})).scalar_one()
+            count = (await db.execute(MUTATE_STATUS_SELECT_ISSUE_STATUSES_2, {'workspace':workspace,'category':previous['category']})).scalar_one()
             if count<=1:
                 raise ApiError(409,'Keep at least one workspace status in each workflow category.','Conflict')
     now = utcnow()
     if remove:
-        await db.execute(text('DELETE FROM issue_statuses WHERE id=:id'), {'id':identifier})
+        await db.execute(MUTATE_STATUS_DELETE_ISSUE_STATUSES, {'id':identifier})
     else:
         values = {**values,'name':values['name'].strip(),'requiredBeforeStart':values.get('requiredBeforeStart',False)}
         if not values['name']:
@@ -77,21 +83,17 @@ async def mutate_status(db, workspace, user, values=None, *, identifier=None, ex
         # VI: Cổng bắt đầu là bước trước khi làm nên phải nằm trước nhóm STARTED.
         if values['requiredBeforeStart'] and values['category'] not in ('TRIAGE','BACKLOG','UNSTARTED'):
             raise ApiError(400,'Only Triage, Backlog or Unstarted statuses can be required before start.','Bad Request')
-        duplicate = (await db.execute(text('''SELECT id FROM issue_statuses WHERE workspace_id=:workspace
-            AND team_id IS NOT DISTINCT FROM :team AND lower(name)=lower(:name) AND id<>:id'''),
+        duplicate = (await db.execute(MUTATE_STATUS_SELECT_ISSUE_STATUSES,
             {'workspace':workspace,'team':previous['team_id'] if previous else None,'name':values['name'],'id':identifier or ''})).first()
         if duplicate:
             raise ApiError(409,'A status with this name already exists.','Conflict')
         if identifier:
-            await db.execute(text('''UPDATE issue_statuses SET name=:name,category=:category,color=:color,
-                position=:position,required_before_start=:requiredBeforeStart,updated_at=:now WHERE id=:id'''), {**values,'now':now,'id':identifier})
+            await db.execute(MUTATE_STATUS_UPDATE_ISSUE_STATUSES, {**values,'now':now,'id':identifier})
         else:
             identifier = cuid()
-            await db.execute(text('''INSERT INTO issue_statuses(id,workspace_id,name,category,color,position,required_before_start,created_at,updated_at)
-                VALUES (:id,:workspace,:name,:category,:color,:position,:requiredBeforeStart,:now,:now)'''), {**values,'id':identifier,'workspace':workspace,'now':now})
+            await db.execute(MUTATE_STATUS_INSERT_ISSUE_STATUSES, {**values,'id':identifier,'workspace':workspace,'now':now})
     team=previous['team_id'] if previous else None
-    await db.execute(text('''INSERT INTO audit_logs(id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at)
-        VALUES (:audit,:workspace,:user,:action,'issue-status',:id,CAST(:metadata AS jsonb),:now)'''), {'audit':cuid(),'workspace':workspace,'user':user['id'],
+    await db.execute(MUTATE_STATUS_INSERT_AUDIT_LOGS, {'audit':cuid(),'workspace':workspace,'user':user['id'],
         'action':'issue-status.deleted' if remove else 'issue-status.saved','id':identifier,'now':now,
         'metadata':json.dumps({'source':audit_source.get(),'scope':'TEAM' if team else 'WORKSPACE','teamId':team})})
     return identifier

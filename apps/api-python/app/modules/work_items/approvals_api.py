@@ -15,7 +15,6 @@ from collections.abc import Mapping
 from typing import Any
 
 from fastapi import Depends, Query
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.utc_responses import UtcAPIRouter as APIRouter
@@ -24,6 +23,11 @@ from ..access.membership import workspace_role
 from ..access.team_scope import workspace_team_scope
 from ..identity.auth import current_user
 from .document_review import approval_block, approver_ids
+from .queries import (
+    REVIEWERS_SELECT_DOCUMENT_REVIEWERS,
+    done_select_audit_logs_sql,
+    rows_select_documents_sql,
+)
 
 router = APIRouter(prefix='/api/v1/approvals', tags=['approvals'])
 
@@ -70,8 +74,7 @@ async def _rows(
     db: AsyncSession, workspace_id: str, user_id: str, where: str, *, limit: int
 ) -> list[dict[str, Any]]:
     result = await db.execute(
-        text(f"""SELECT {COLUMNS} FROM documents d {JOINS}
-        WHERE {SCOPE} AND {where} ORDER BY d.updated_at DESC,d.id LIMIT :limit"""),
+        rows_select_documents_sql(COLUMNS, JOINS, SCOPE, where),
         {'workspace': workspace_id, 'user': user_id, 'limit': limit},
     )
     return [dict(row) for row in result.mappings().all()]
@@ -80,9 +83,7 @@ async def _rows(
 async def _reviewers(db: AsyncSession, document_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
     grouped: dict[str, list[dict[str, Any]]] = {document_id: [] for document_id in document_ids}
     result = await db.execute(
-        text("""SELECT r.document_id,r.reviewer_id AS id,r.decision,r.note,u.name
-        FROM document_reviewers r JOIN users u ON u.id=r.reviewer_id
-        WHERE r.document_id=ANY(CAST(:ids AS text[])) ORDER BY r.assigned_at,r.reviewer_id"""),
+        REVIEWERS_SELECT_DOCUMENT_REVIEWERS,
         {'ids': document_ids},
     )
     for row in result.mappings().all():
@@ -153,23 +154,7 @@ async def _done(db: AsyncSession, workspace_id: str, user_id: str) -> list[dict[
     VI: nhưng không lưu giá trị, nên `decision` là null với vòng trước.
     """
     result = await db.execute(
-        text(f"""WITH handled AS (
-            SELECT entity_id AS document_id,max(created_at) AS handled_at FROM audit_logs
-            WHERE workspace_id=:workspace AND actor_id=:user AND entity_type='document'
-              AND action='document.review_decided'
-            GROUP BY entity_id
-            UNION ALL
-            SELECT document_id,max(approved_at) FROM document_releases
-            WHERE approved_by=:user GROUP BY document_id
-        ), latest AS (
-            SELECT document_id,max(handled_at) AS handled_at FROM handled GROUP BY document_id
-        )
-        SELECT {COLUMNS},latest.handled_at,mine.decision,
-            (SELECT max(r.release) FROM document_releases r
-             WHERE r.document_id=d.id AND r.approved_by=:user) AS own_release
-        FROM latest JOIN documents d ON d.id=latest.document_id {JOINS}
-        LEFT JOIN document_reviewers mine ON mine.document_id=d.id AND mine.reviewer_id=:user
-        WHERE {SCOPE} ORDER BY latest.handled_at DESC,d.id LIMIT :limit"""),
+        done_select_audit_logs_sql(COLUMNS, JOINS, SCOPE),
         {'workspace': workspace_id, 'user': user_id, 'limit': LIST_LIMIT},
     )
     rows = result.mappings().all()
