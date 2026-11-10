@@ -25,23 +25,7 @@ export type DisplayPropertyKey =
    | 'created'
    | 'cycle';
 
-export const DISPLAY_PROPERTIES: { key: DisplayPropertyKey; label: string }[] = [
-   { key: 'id', label: 'ID' },
-   { key: 'status', label: 'Status' },
-   { key: 'assignee', label: 'Assignee' },
-   { key: 'priority', label: 'Priority' },
-   { key: 'labels', label: 'Labels' },
-   { key: 'project', label: 'Project' },
-   { key: 'startDate', label: 'Start date' },
-   { key: 'targetDate', label: 'End date' },
-   { key: 'estimatedEffort', label: 'Est. effort' },
-   { key: 'actualEffort', label: 'Act. effort' },
-   { key: 'dueDate', label: 'Due date' },
-   { key: 'created', label: 'Created' },
-   { key: 'cycle', label: 'Cycle' },
-];
-
-const DEFAULT_DISPLAY_PROPERTIES: Record<DisplayPropertyKey, boolean> = {
+export const DEFAULT_DISPLAY_PROPERTIES: Record<DisplayPropertyKey, boolean> = {
    id: true,
    status: true,
    priority: true,
@@ -66,6 +50,14 @@ interface DisplaySettingsState {
    completedIssues: CompletedIssuesFilter;
    showSubIssues: boolean;
    showEmptyGroups: boolean;
+   /**
+    * Per-browser visibility from before columns were stored per account. Only
+    * read as the starting point until the account saves its own columns
+    * (`useIssueColumns`); nothing writes it any more.
+    * VI: Trạng thái ẩn/hiện theo trình duyệt từ trước khi cột được lưu theo tài
+    * khoản. Chỉ được đọc làm điểm khởi đầu cho tới khi tài khoản lưu cột của
+    * mình (`useIssueColumns`); không còn nơi nào ghi vào.
+    */
    displayProperties: Record<DisplayPropertyKey, boolean>;
 
    setGrouping: (grouping: GroupingKey) => void;
@@ -74,7 +66,6 @@ interface DisplaySettingsState {
    setCompletedIssues: (value: CompletedIssuesFilter) => void;
    setShowSubIssues: (value: boolean) => void;
    setShowEmptyGroups: (value: boolean) => void;
-   toggleDisplayProperty: (key: DisplayPropertyKey) => void;
    resetDisplaySettings: () => void;
 }
 
@@ -91,8 +82,11 @@ const DEFAULTS = {
 
 /**
  * View display settings (Linear's "Display" popover): grouping, ordering,
- * completed-issue visibility and per-row display properties.
- * Persisted to localStorage.
+ * completed-issue visibility and sort columns, persisted to localStorage.
+ * Column visibility, order and widths are per account (`useIssueColumns`).
+ * VI: Thiết lập hiển thị của view: grouping, ordering, ẩn/hiện issue đã xong và
+ * sort cột, lưu trong localStorage. Ẩn/hiện, thứ tự và độ rộng cột lưu theo tài
+ * khoản (`useIssueColumns`).
  */
 export const useDisplaySettingsStore = create<DisplaySettingsState>()(
    persist(
@@ -109,13 +103,6 @@ export const useDisplaySettingsStore = create<DisplaySettingsState>()(
          setCompletedIssues: (completedIssues) => set({ completedIssues }),
          setShowSubIssues: (showSubIssues) => set({ showSubIssues }),
          setShowEmptyGroups: (showEmptyGroups) => set({ showEmptyGroups }),
-         toggleDisplayProperty: (key) =>
-            set((state) => ({
-               displayProperties: {
-                  ...state.displayProperties,
-                  [key]: !state.displayProperties[key],
-               },
-            })),
          resetDisplaySettings: () => set({ ...DEFAULTS }),
       }),
       {

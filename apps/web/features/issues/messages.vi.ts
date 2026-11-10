@@ -5,6 +5,7 @@ export const messages = {
    'ascending': 'tăng dần',
    'descending': 'giảm dần',
    'default order': 'thứ tự mặc định',
+   'Hide column': 'Ẩn cột',
    'Could not save images.': 'Không lưu được ảnh.',
    'Each image must be at most 10 MB.': 'Mỗi ảnh tối đa 10 MB.',
    'Issue {identifier} was created. Retry to finish saving images.':

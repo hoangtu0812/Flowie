@@ -15,12 +15,13 @@ import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import {
    CompletedIssuesFilter,
-   DISPLAY_PROPERTIES,
    GroupingKey,
    OrderingKey,
    useDisplaySettingsStore,
 } from '@/store/display-settings-store';
 import { useViewStore } from '@/store/view-store';
+import { IssueColumnsList } from '@/features/issues/issue-columns-list';
+import { resetIssueColumns } from '@/features/issues/issue-columns';
 import {
    ArrowUpNarrowWide,
    ArrowUpDown,
@@ -46,7 +47,11 @@ const ORDERINGS: { value: OrderingKey; label: string }[] = [
 
 /**
  * Linear-style "Display" popover: list/board switch, grouping, ordering,
- * completed-issue visibility, list options and display property chips.
+ * completed-issue visibility and list options with the issue columns (order and
+ * visibility, shared with the table header).
+ * VI: Popover "Display" kiểu Linear: chuyển list/board, grouping, ordering, ẩn/hiện
+ * issue đã xong và list options cùng các cột issue (thứ tự và ẩn/hiện, dùng chung
+ * với header bảng).
  */
 export function DisplayOptions() {
    const { viewType, setViewType } = useViewStore();
@@ -57,14 +62,12 @@ export function DisplayOptions() {
       completedIssues,
       showSubIssues,
       showEmptyGroups,
-      displayProperties,
       setGrouping,
       setOrdering,
       setOrderCompletedByRecency,
       setCompletedIssues,
       setShowSubIssues,
       setShowEmptyGroups,
-      toggleDisplayProperty,
       resetDisplaySettings,
    } = useDisplaySettingsStore();
 
@@ -85,7 +88,10 @@ export function DisplayOptions() {
                )}
             </Button>
          </PopoverTrigger>
-         <PopoverContent className="w-80 p-0" align="end">
+         <PopoverContent
+            className="w-80 p-0 max-h-(--radix-popover-content-available-height) overflow-y-auto"
+            align="end"
+         >
             {/* List / Board switch */}
             <div className="p-3">
                <div className="grid grid-cols-2 gap-1 bg-accent/50 rounded-md p-1">
@@ -234,27 +240,15 @@ export function DisplayOptions() {
                </div>
 
                <span className="text-xs text-muted-foreground mt-1">Display properties</span>
-               <div className="flex flex-wrap gap-1.5">
-                  {DISPLAY_PROPERTIES.map((property) => (
-                     <button
-                        key={property.key}
-                        onClick={() => toggleDisplayProperty(property.key)}
-                        className={cn(
-                           'px-2 h-6 rounded-md text-xs border transition-colors',
-                           displayProperties[property.key]
-                              ? 'bg-accent border-border text-foreground'
-                              : 'border-transparent bg-accent/40 text-muted-foreground hover:text-foreground'
-                        )}
-                     >
-                        {property.label}
-                     </button>
-                  ))}
-               </div>
+               <IssueColumnsList />
             </div>
 
             <div className="border-t px-3 py-2.5 flex items-center justify-between">
                <button
-                  onClick={resetDisplaySettings}
+                  onClick={() => {
+                     resetDisplaySettings();
+                     resetIssueColumns();
+                  }}
                   className="text-xs text-muted-foreground hover:text-foreground"
                >
                   Reset
