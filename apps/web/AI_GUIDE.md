@@ -50,7 +50,7 @@ app/                          # Next.js routes (thin wrappers around components)
       overview/  documents/  members/           # Team Home tabs
 components/
   common/                     # Feature components still waiting to move to features/ (DTD-524)
-    issues/    inbox/    projects/    teams/    settings/    agent/
+    issues/    projects/    initiatives/    settings/    markdown/
     projects/details/         # Project detail tabs (overview / activity / issues) + properties panel
   layout/
     main-layout.tsx           # Sidebar + rounded content shell used by every page
@@ -175,9 +175,9 @@ Each feature is self-contained under `features/<feature>` (or, until DTD-524 fin
   `capacity-ring.tsx`, `cycle-details-panel.tsx`. `cycle-issues.tsx` (in
   `components/common/issues/`) renders a cycle-scoped issue view. Needs:
   `types/cycles.ts`, recharts, the issues feature.
-- **Team Home** (`components/common/teams/team-{overview,documents,members}.tsx`
+- **Team Home** (`features/teams/team-{overview,documents,members}.tsx`
    - `components/layout/headers/team/`) — loads the team through `teams/use-live-team.ts`.
-- **Inbox** (`components/common/inbox/`) — resizable two-pane notifications (single-pane
+- **Inbox** (`features/inbox/`) — resizable two-pane notifications (single-pane
   with back navigation on mobile). Notifications reference REAL issues by identifier
   (`InboxItem extends Issue`) and the preview pane renders the actual issue (live store
   data + rich description + properties column). Needs `notifications-store`,
@@ -253,7 +253,7 @@ Each feature is self-contained under `features/<feature>` (or, until DTD-524 fin
   `app/[orgId]/review/[reviewId]/{,review,changes}`) — intentionally unavailable because
   Flowie manages general projects and has no code-review backend. Fixture-backed review
   components and seeded diffs were removed.
-- **My issues** (`components/common/my-issues/my-issues.tsx` + `app/[orgId]/my-issues/`)
+- **My issues** (`features/my-issues/my-issues.tsx` + `app/[orgId]/my-issues/`)
   — personal issue hub with Assigned / Created / Subscribed / Activity tabs (nuqs).
   Assigned groups by cycle (name + date range via `types/cycles.ts`) then
   Backlog/Completed; Created/Subscribed are flat `IssueLine` lists derived from

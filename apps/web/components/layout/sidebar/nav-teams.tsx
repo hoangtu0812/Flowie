@@ -42,7 +42,7 @@ import {
    leaveWorkspaceTeam,
    loadJoinedWorkspaceTeams,
    type WorkspaceTeam,
-} from '@/components/common/teams/team-types';
+} from '@/features/teams/team-types';
 import { RiDonutChartFill } from '@remixicon/react';
 import { toast } from 'sonner';
 import { withBasePath } from '@/lib/base-path';

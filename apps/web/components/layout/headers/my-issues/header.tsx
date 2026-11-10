@@ -7,7 +7,7 @@ import {
    scopeMyIssues,
    useCurrentUserId,
    useMyIssuesTab,
-} from '@/components/common/my-issues/use-my-issues';
+} from '@/features/my-issues/use-my-issues';
 import { IssueListActions } from '@/features/issues/issue-list-actions';
 import { IssueFilterTrigger } from '@/components/common/issues/issue-filter-trigger';
 import { Button } from '@/components/ui/button';

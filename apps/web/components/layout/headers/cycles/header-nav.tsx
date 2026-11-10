@@ -1,7 +1,7 @@
 'use client';
 
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { useLiveTeam } from '@/components/common/teams/use-live-team';
+import { useLiveTeam } from '@/features/teams/use-live-team';
 import { ChevronRight, Star } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';

@@ -41,7 +41,7 @@ Key facts for coding agents:
 - [features/members/member-profile.tsx](./features/members/member-profile.tsx): member profile (Assigned/Created tabs, identity panel, breakdowns)
 - [components/common/projects/details/project-overview.tsx](./components/common/projects/details/project-overview.tsx): project detail tabs (overview/activity/issues) + properties panel
 - [components/common/projects/projects.tsx](./components/common/projects/projects.tsx): projects page — All table + Active timeline (gantt) + Health/Teams/Leads insights panel
-- [components/common/agent/agent-chat.tsx](./components/common/agent/agent-chat.tsx): functional mock Agent chat (canned replies, word-by-word streaming)
+- [features/agent/agent-chat.tsx](./features/agent/agent-chat.tsx): functional mock Agent chat (canned replies, word-by-word streaming)
 
 ## Optional
 

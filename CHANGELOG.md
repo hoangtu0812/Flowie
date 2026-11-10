@@ -51,6 +51,9 @@ pull request and commit references, which are for us.
 
 ### Changed
 
+- The web app's teams, inbox, my issues and agent code now lives in `apps/web/features/<domain>/` instead of `components/common/`, the second of six moves. Nothing changes for users. Rebuild `web`; no migration. (DTD-524, DTD-571)
+  VI: Code teams, inbox, my issues và agent của web nay nằm ở `apps/web/features/<domain>/` thay vì `components/common/`, là đợt thứ hai trong sáu đợt chuyển. Người dùng không thấy gì thay đổi. Build lại `web`; không có migration. (DTD-524, DTD-571)
+
 - The web app's cycles, views, members and reviews code now lives in `apps/web/features/<domain>/` instead of `components/common/`, and `apps/web/AGENTS.md` says where new code goes: `features/<domain>` for anything owned by a business domain, `components/` only for primitives, the app frame and UI shared by several domains. This is the first of six moves; nothing changes for users. Rebuild `web`; no migration. (DTD-524, DTD-570, #242)
   VI: Code cycles, views, members và reviews của web nay nằm ở `apps/web/features/<domain>/` thay vì `components/common/`, và `apps/web/AGENTS.md` ghi nơi đặt code mới: `features/<domain>` cho mọi thứ thuộc một domain nghiệp vụ, `components/` chỉ cho primitive, khung ứng dụng và UI dùng chung cho nhiều domain. Đây là đợt đầu trong sáu đợt chuyển; người dùng không thấy gì thay đổi. Build lại `web`; không có migration. (DTD-524, DTD-570)
 

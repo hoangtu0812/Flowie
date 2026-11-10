@@ -12,7 +12,7 @@ import { TextArea } from '@astryxdesign/core/TextArea';
 import { MarkdownPreview } from '@/components/common/markdown/markdown-preview';
 import { relativeTime } from '@/lib/time';
 import { uploadAttachment } from '@/lib/attachments';
-import { useCurrentUserId } from '@/components/common/my-issues/use-my-issues';
+import { useCurrentUserId } from '@/features/my-issues/use-my-issues';
 import { commentHistory, editComment, removeComment, type IssueComment } from './comments-api';
 import { SubmissionGate } from '@/features/shared/submission-gate';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';

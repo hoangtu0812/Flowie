@@ -1,6 +1,6 @@
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import { responseData } from '@/lib/http';
-import type { LiveDocument } from '@/components/common/teams/use-live-team';
+import type { LiveDocument } from '@/features/teams/use-live-team';
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 export type Revision = { version: number; title: string; actorId: string; createdAt: string };
 export type RevisionDiff = {

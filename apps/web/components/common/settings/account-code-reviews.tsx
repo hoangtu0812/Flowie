@@ -1,6 +1,6 @@
 'use client';
 
-import { loadCurrentWorkspaceTeams, WorkspaceTeam } from '@/components/common/teams/team-types';
+import { loadCurrentWorkspaceTeams, WorkspaceTeam } from '@/features/teams/team-types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {

@@ -17,7 +17,7 @@ import {
    workspaceSlugFromLocation,
 } from '@/lib/workspaces';
 import { ApiRequestError, responseData, responseEnvelope } from '@/lib/http';
-import { loadJoinedWorkspaceTeams, type WorkspaceTeam } from '@/components/common/teams/team-types';
+import { loadJoinedWorkspaceTeams, type WorkspaceTeam } from '@/features/teams/team-types';
 import { create } from 'zustand';
 import { Box } from 'lucide-react';
 import { toast } from 'sonner';

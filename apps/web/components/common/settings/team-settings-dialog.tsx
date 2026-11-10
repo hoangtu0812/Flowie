@@ -20,7 +20,7 @@ import {
    SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import type { WorkspaceTeam } from '@/components/common/teams/team-types';
+import type { WorkspaceTeam } from '@/features/teams/team-types';
 import { type FormEvent, useEffect, useState } from 'react';
 
 export type TeamSettingsEditKind = 'general' | 'template' | 'automation' | 'cycles' | 'hierarchy';

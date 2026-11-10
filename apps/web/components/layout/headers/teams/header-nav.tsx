@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { CreateTeamDialog } from '@/components/common/teams/create-team-dialog';
+import { CreateTeamDialog } from '@/features/teams/create-team-dialog';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useTeamsData } from '@/features/teams/teams-data';
 import { Plus } from 'lucide-react';

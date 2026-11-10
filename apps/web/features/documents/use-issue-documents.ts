@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { LiveDocument } from '@/components/common/teams/use-live-team';
+import type { LiveDocument } from '@/features/teams/use-live-team';
 import { linkIssueDocument, loadIssueDocuments, unlinkIssueDocument } from './project-docs-api';
 
 /**

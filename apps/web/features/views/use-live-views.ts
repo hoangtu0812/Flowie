@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { authenticatedFetch, loadCurrentWorkspace } from '@/lib/workspaces';
 import { responseData, ApiRequestError } from '@/lib/http';
 import { useParams } from 'next/navigation';
-import { loadJoinedWorkspaceTeams } from '@/components/common/teams/team-types';
+import { loadJoinedWorkspaceTeams } from '@/features/teams/team-types';
 
 export type LiveView = {
    id: string;

@@ -26,7 +26,7 @@ import {
    SelectValue,
 } from '@/components/ui/select';
 import { MarkdownPreview } from '@/components/common/markdown/markdown-preview';
-import { TableOfContents } from '@/components/common/teams/markdown-document-editor';
+import { TableOfContents } from '@/features/teams/markdown-document-editor';
 import { useMessages } from '@/features/shared/use-messages';
 import { messages } from '@/features/documents/messages.vi';
 import { attachmentPreviewUrl } from '@/lib/attachments';

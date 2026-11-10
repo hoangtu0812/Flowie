@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { useParams } from 'next/navigation';
-import { loadJoinedWorkspaceTeams, type WorkspaceTeam } from '@/components/common/teams/team-types';
+import { loadJoinedWorkspaceTeams, type WorkspaceTeam } from '@/features/teams/team-types';
 
 export function NavTeamsSettings() {
    const { orgId } = useParams<{ orgId: string }>();
