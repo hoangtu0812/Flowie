@@ -1,4 +1,4 @@
-import AllIssues from '@/components/common/issues/all-issues';
+import AllIssues from '@/features/issues/all-issues';
 import Header from '@/components/layout/headers/issues/header';
 import MainLayout from '@/components/layout/main-layout';
 import { workspaceIssueViews } from '@/features/issues/workspace-views';

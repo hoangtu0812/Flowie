@@ -3,7 +3,7 @@
 import {
    PanelFilterTarget,
    usePanelFilter,
-} from '@/components/common/issues/use-panel-filter';
+} from '@/features/issues/use-panel-filter';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';

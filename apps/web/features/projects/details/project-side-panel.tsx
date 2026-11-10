@@ -1,6 +1,6 @@
 'use client';
 
-import { InsightsPanel } from '@/components/common/issues/insights-panel';
+import { InsightsPanel } from '@/features/issues/insights-panel';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import type { ProjectDetail } from '@/types/project-details';
 import type { ProjectDetailUiIssue, ProjectDetailUiProject } from './project-detail-ui-adapter';

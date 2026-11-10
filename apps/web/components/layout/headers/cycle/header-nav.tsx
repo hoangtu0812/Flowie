@@ -6,7 +6,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { ChevronRight, MoreHorizontal, Star } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { CycleView } from '@/components/common/issues/cycle-issues';
+import { CycleView } from '@/features/issues/cycle-issues';
 
 export default function HeaderNav({ cycleView }: { cycleView: CycleView }) {
    const { orgId, teamId } = useParams<{ orgId: string; teamId: string }>();

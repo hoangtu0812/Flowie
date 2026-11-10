@@ -50,7 +50,7 @@ app/                          # Next.js routes (thin wrappers around components)
       overview/  documents/  members/           # Team Home tabs
 components/
   common/                     # Feature components still waiting to move to features/ (DTD-524)
-    issues/    settings/    markdown/
+    settings/    markdown/
   layout/
     main-layout.tsx           # Sidebar + rounded content shell used by every page
     sidebar/                  # App sidebar (nav, org switcher, create-issue modal)
@@ -141,7 +141,7 @@ Each feature is self-contained under `features/<feature>` (or, until DTD-524 fin
 `components/layout/headers/<feature>`. Dependencies below are in addition to
 `components/ui/*`, `lib/utils.ts` and Tailwind.
 
-- **Filter bar** (`components/common/issues/issue-filter-bar.tsx` + `issue-filter-columns.tsx`
+- **Filter bar** (`features/issues/issue-filter-bar.tsx` + `issue-filter-columns.tsx`
    - vendored `components/data-table-filter/`) — Linear-style filter chips
      (subject / operator / values / remove) built on [bazza/ui data-table-filter]
      (vendored, Radix + shadcn, lint-exempted in `eslint.config.mjs`). Column configs are
@@ -154,7 +154,7 @@ Each feature is self-contained under `features/<feature>` (or, until DTD-524 fin
      panels (one panel filter at a time, re-click clears). When filters hide issues,
      `grouped-issues-view.tsx` shows a "hidden by filters" footer and, on the board,
      collapses emptied columns into a "Hidden columns" section (`0 / total`).
-- **Issues views** (`components/common/issues/`) — `all-issues.tsx` (accepts
+- **Issues views** (`features/issues/`) — `all-issues.tsx` (accepts
   `categories?: StatusCategory[]` for the Active/Backlog tabs), `grouped-issues-view.tsx`
   (grouping/ordering-aware list/board + DnD), `group-issues.tsx` (generic
   `IssueGroupDescriptor` — a group is a status, an assignee, a priority or a project),
@@ -163,7 +163,7 @@ Each feature is self-contained under `features/<feature>` (or, until DTD-524 fin
   `issue-context-menu.tsx`, `search-issues.tsx`, `insights-panel.tsx`. Needs:
   `issues-store`, `filter-store`, `view-store`, `display-settings-store`,
   `search-store`, `right-panel-store`, `types/*` and `lib/{status,priority}-presentations`.
-- **Issue detail page** (`components/common/issues/details/` + `app/[orgId]/issue/[issueId]/`)
+- **Issue detail page** (`features/issues/details/` + `app/[orgId]/issue/[issueId]/`)
   — `issue-details.tsx` (composition), `content-blocks.tsx` (renders `ContentBlock[]`
   with inline \`code\`/**bold** parsing, image & video placeholders, issue refs),
   `activity-feed.tsx` (events + comments + local composer),
@@ -173,7 +173,7 @@ Each feature is self-contained under `features/<feature>` (or, until DTD-524 fin
 - **Cycles** (`features/cycles/`) — `cycles.tsx` (timeline),
   `cycle-line.tsx`, `cycle-burnup-chart.tsx` (+ `CycleProgressLegend`),
   `capacity-ring.tsx`, `cycle-details-panel.tsx`. `cycle-issues.tsx` (in
-  `components/common/issues/`) renders a cycle-scoped issue view. Needs:
+  `features/issues/`) renders a cycle-scoped issue view. Needs:
   `types/cycles.ts`, recharts, the issues feature.
 - **Team Home** (`features/teams/team-{overview,documents,members}.tsx`
    - `components/layout/headers/team/`) — loads the team through `teams/use-live-team.ts`.

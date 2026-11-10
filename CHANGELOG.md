@@ -54,6 +54,9 @@ pull request and commit references, which are for us.
 
 ### Changed
 
+- The web app's issues code, including the issue detail page under `details/`, now lives in `apps/web/features/issues/` instead of `components/common/`, the fifth of six moves. Nothing changes for users. Rebuild `web`; no migration. (DTD-524, DTD-574)
+  VI: Code issues của web, gồm cả trang chi tiết issue trong `details/`, nay nằm ở `apps/web/features/issues/` thay vì `components/common/`, là đợt thứ năm trong sáu đợt chuyển. Người dùng không thấy gì thay đổi. Build lại `web`; không có migration. (DTD-524, DTD-574)
+
 - The web app's projects code, including the project detail pages under `details/`, now lives in `apps/web/features/projects/` instead of `components/common/`, the fourth of six moves. Nothing changes for users. Rebuild `web`; no migration. (DTD-524, DTD-573, #245)
   VI: Code projects của web, gồm cả các trang chi tiết project trong `details/`, nay nằm ở `apps/web/features/projects/` thay vì `components/common/`, là đợt thứ tư trong sáu đợt chuyển. Người dùng không thấy gì thay đổi. Build lại `web`; không có migration. (DTD-524, DTD-573)
 

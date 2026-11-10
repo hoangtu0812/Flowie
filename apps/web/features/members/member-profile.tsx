@@ -11,14 +11,14 @@ import type { User } from '@/types/users';
 import type { MemberProfileData } from '@/features/members/use-member-profile';
 import { scopeMemberIssues } from '@/features/members/profile-scope';
 import { DesignSurface } from '@/components/common/design-surface';
-import { IssueFilterBar } from '@/components/common/issues/issue-filter-bar';
-import { applyIssueFilters } from '@/components/common/issues/issue-filter-columns';
-import { GroupedIssuesView } from '@/components/common/issues/grouped-issues-view';
+import { IssueFilterBar } from '@/features/issues/issue-filter-bar';
+import { applyIssueFilters } from '@/features/issues/issue-filter-columns';
+import { GroupedIssuesView } from '@/features/issues/grouped-issues-view';
 import { useIssuesStore } from '@/store/issues-store';
 import { useFilterStore } from '@/store/filter-store';
 import { useViewStore } from '@/store/view-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
-import { InsightsPanel } from '@/components/common/issues/insights-panel';
+import { InsightsPanel } from '@/features/issues/insights-panel';
 import { projectPath } from '@/lib/project-route';
 
 export default function MemberProfile({

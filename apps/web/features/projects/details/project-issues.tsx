@@ -3,9 +3,9 @@
 import { useIssueQuery } from '@/features/issues/use-issue-query';
 import { QueryState } from '@/components/common/query-state';
 import { LoadingState } from '@/components/common/loading-state';
-import { GroupedIssuesView } from '@/components/common/issues/grouped-issues-view';
-import { applyIssueFilters } from '@/components/common/issues/issue-filter-columns';
-import { IssueFilterBar } from '@/components/common/issues/issue-filter-bar';
+import { GroupedIssuesView } from '@/features/issues/grouped-issues-view';
+import { applyIssueFilters } from '@/features/issues/issue-filter-columns';
+import { IssueFilterBar } from '@/features/issues/issue-filter-bar';
 import { useFilterStore } from '@/store/filter-store';
 import { useDisplaySettingsStore } from '@/store/display-settings-store';
 import { useViewStore } from '@/store/view-store';

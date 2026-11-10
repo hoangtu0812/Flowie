@@ -14,7 +14,7 @@ import { DraftImages } from '@/components/common/markdown/draft-images';
 import {
    IssueSearchDialog,
    type IssueCandidate,
-} from '@/components/common/issues/details/issue-search-dialog';
+} from '@/features/issues/details/issue-search-dialog';
 import { uploadAttachment } from '@/lib/attachments';
 import dynamic from 'next/dynamic';
 import {

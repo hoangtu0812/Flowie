@@ -2,7 +2,7 @@
 
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { InlineText } from '@/components/common/issues/details/content-blocks';
+import { InlineText } from '@/features/issues/details/content-blocks';
 import { useAccountTime, useDateFormatter } from '@/features/shared/account-time';
 import { useMessages } from '@/features/shared/use-messages';
 import { parseInstant } from '@/lib/time';

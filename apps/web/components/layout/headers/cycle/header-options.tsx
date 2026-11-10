@@ -3,12 +3,12 @@
 import { Button } from '@/components/ui/button';
 import { useLiveCycle } from '@/features/cycles/use-live-cycle';
 import { IssueListActions } from '@/features/issues/issue-list-actions';
-import { IssueFilterTrigger } from '@/components/common/issues/issue-filter-trigger';
+import { IssueFilterTrigger } from '@/features/issues/issue-filter-trigger';
 import { useIssuesStore } from '@/store/issues-store';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { BarChart3, PanelRight } from 'lucide-react';
 import { DisplayOptions } from '../display-options';
-import { CycleView } from '@/components/common/issues/cycle-issues';
+import { CycleView } from '@/features/issues/cycle-issues';
 
 export default function HeaderOptions({ cycleView }: { cycleView: CycleView }) {
    const { openPanel, togglePanel } = useRightPanelStore();

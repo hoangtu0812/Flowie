@@ -5,7 +5,7 @@ import { messages } from '@/features/navigation/messages.vi';
 import { Button } from '@/components/ui/button';
 import { IssueListCount } from '@/features/issues/issue-list-count';
 import { IssueListActions } from '@/features/issues/issue-list-actions';
-import { IssueFilterTrigger } from '@/components/common/issues/issue-filter-trigger';
+import { IssueFilterTrigger } from '@/features/issues/issue-filter-trigger';
 import { useRightPanelStore } from '@/store/right-panel-store';
 import { BarChart3 } from 'lucide-react';
 import { DisplayOptions } from '../display-options';
