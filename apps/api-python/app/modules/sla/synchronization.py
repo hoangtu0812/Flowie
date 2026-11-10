@@ -1,8 +1,13 @@
-from sqlalchemy import text
 
 from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ..work_items.lifecycle import managed_due
+from .commands import (
+    REAPPLY_POLICY_UPDATE_ISSUE_LIFECYCLE_EVENTS,
+    REAPPLY_POLICY_UPDATE_ISSUES,
+    SYNC_ISSUE_UPDATE_ISSUE_LIFECYCLE_EVENTS,
+    SYNC_ISSUE_UPDATE_ISSUE_LIFECYCLE_EVENTS_2,
+)
 from .cycles import (
     LIVE,
     TERMINAL,
@@ -16,15 +21,17 @@ from .cycles import (
 )
 from .jobs import reschedule
 from .policies import select_policy
+from .queries import (
+    LOCKED_ISSUE_SELECT_ISSUES,
+    SYNC_ISSUE_SELECT_ISSUE_LIFECYCLE_EVENTS,
+)
 
 
 async def locked_issue(db, identifier):
     row = (
         (
             await db.execute(
-                text("""SELECT i.*,s.category::text AS category,t.archived_at AS team_archived_at
-        FROM issues i JOIN issue_statuses s ON s.id=i.status_id LEFT JOIN teams t ON t.id=i.team_id
-        WHERE i.id=:id FOR UPDATE OF i"""),
+                LOCKED_ISSUE_SELECT_ISSUES,
                 {"id": identifier},
             )
         )
@@ -83,9 +90,7 @@ async def sync_issue(db, identifier, *, now=None):
     events = (
         (
             await db.execute(
-                text(
-                    "SELECT * FROM issue_lifecycle_events WHERE issue_id=:id AND sla_processed_at IS NULL ORDER BY issue_version FOR UPDATE"
-                ),
+                SYNC_ISSUE_SELECT_ISSUE_LIFECYCLE_EVENTS,
                 {"id": identifier},
             )
         )
@@ -140,9 +145,7 @@ async def sync_issue(db, identifier, *, now=None):
                 else:
                     rebind = True
         await db.execute(
-            text(
-                "UPDATE issue_lifecycle_events SET sla_processed_at=:now WHERE id=:id"
-            ),
+            SYNC_ISSUE_UPDATE_ISSUE_LIFECYCLE_EVENTS,
             {"id": event["id"], "now": now},
         )
     if issue["team_archived_at"] is not None or issue["archived_at"] is not None:
@@ -171,9 +174,7 @@ async def sync_issue(db, identifier, *, now=None):
         if (same_team or rebind) and issue["due_date"] != desired:
             await managed_due(db, identifier, desired)
             await db.execute(
-                text(
-                    "UPDATE issue_lifecycle_events SET sla_processed_at=:now WHERE issue_id=:id AND sla_processed_at IS NULL AND managed_due=true"
-                ),
+                SYNC_ISSUE_UPDATE_ISSUE_LIFECYCLE_EVENTS_2,
                 {"id": identifier, "now": now},
             )
     await reschedule(db, identifier, now=now)
@@ -204,7 +205,7 @@ async def reapply_policy(db, identifier, *, now=None):
     if cycle and cycle["state"] in LIVE:
         await close_cycle(db, cycle, "OVERRIDDEN", now)
     await db.execute(
-        text("UPDATE issues SET sla_opt_out=false WHERE id=:id"), {"id": identifier}
+        REAPPLY_POLICY_UPDATE_ISSUES, {"id": identifier}
     )
     issue["sla_opt_out"] = False
     cycle = await initialize_cycle(
@@ -213,9 +214,7 @@ async def reapply_policy(db, identifier, *, now=None):
     if issue["due_date"] != cycle["due_at"]:
         await managed_due(db, identifier, cycle["due_at"])
     await db.execute(
-        text(
-            "UPDATE issue_lifecycle_events SET sla_processed_at=:now WHERE issue_id=:id AND sla_processed_at IS NULL AND managed_due=true"
-        ),
+        REAPPLY_POLICY_UPDATE_ISSUE_LIFECYCLE_EVENTS,
         {"id": identifier, "now": now},
     )
     await reschedule(db, identifier, now=now)

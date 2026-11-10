@@ -10,13 +10,23 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from sqlalchemy import text
-
 from ...core.errors import ApiError
 from ...core.identifiers import cuid
 from ..work_items import documents
 from ..work_items.contracts import CreateDocumentInput, UpdateDocumentInput
 from ..work_items.document_tree import create_folder, scaffold_project_tree
+from .commands import (
+    UPSERT_FEATURE_DOC_INSERT_DOCUMENT_LINKS,
+)
+from .queries import (
+    CHILD_FOLDER_SELECT_DOCUMENT_FOLDERS,
+    READ_FEATURE_DOCS_SELECT_DOCUMENT_FOLDERS,
+    UPSERT_FEATURE_DOC_SELECT_DOCUMENT_FOLDERS,
+    UPSERT_FEATURE_DOC_SELECT_DOCUMENTS,
+    UPSERT_FEATURE_DOC_SELECT_DOCUMENTS_2,
+    read_feature_docs_select_documents_sql,
+    read_feature_docs_select_documents_sql_2,
+)
 
 CHANGE_LOG_HEADING = "## Lịch sử thay đổi"
 # Linked documents are returned with content so an agent can edit them in one step; longer
@@ -79,12 +89,7 @@ async def read_feature_docs(db, policy, issue_id: str) -> dict[str, Any]:
     params = {**policy.params, "issue": issue["id"]}
     linked = (
         await db.execute(
-            text(
-                f"""SELECT d.* FROM documents d WHERE {policy.document_clause()}
-                AND d.doc_type IN ('FDS','TDS')
-                AND EXISTS(SELECT 1 FROM document_links l WHERE l.document_id=d.id AND l.issue_id=:issue)
-                ORDER BY d.doc_type, d.title"""
-            ),
+            read_feature_docs_select_documents_sql(policy),
             params,
         )
     ).mappings().all()
@@ -92,22 +97,13 @@ async def read_feature_docs(db, policy, issue_id: str) -> dict[str, Any]:
     if issue["project_id"]:
         folders = (
             await db.execute(
-                text(
-                    """SELECT f.id, f.name, m.name AS module FROM document_folders f
-                    JOIN document_folders m ON m.id = f.parent_id
-                    WHERE f.workspace_id=:workspace AND f.project_id=:project AND f.kind='feature'
-                    ORDER BY m.name, f.name"""
-                ),
+                READ_FEATURE_DOCS_SELECT_DOCUMENT_FOLDERS,
                 {"workspace": policy.params["workspace"], "project": issue["project_id"]},
             )
         ).mappings().all()
         docs = (
             await db.execute(
-                text(
-                    f"""SELECT d.* FROM documents d WHERE {policy.document_clause()}
-                    AND d.doc_type IN ('FDS','TDS') AND d.folder_id = ANY(CAST(:folders AS text[]))
-                    ORDER BY d.doc_type, d.title"""
-                ),
+                read_feature_docs_select_documents_sql_2(policy),
                 {**params, "folders": [folder["id"] for folder in folders]},
             )
         ).mappings().all()
@@ -133,9 +129,7 @@ async def read_feature_docs(db, policy, issue_id: str) -> dict[str, Any]:
 async def _child_folder(db, *, workspace_id, user_id, parent_id, name, kind) -> str:
     existing = (
         await db.execute(
-            text(
-                "SELECT id FROM document_folders WHERE parent_id=:parent AND lower(name)=lower(:name)"
-            ),
+            CHILD_FOLDER_SELECT_DOCUMENT_FOLDERS,
             {"parent": parent_id, "name": name},
         )
     ).scalar_one_or_none()
@@ -173,10 +167,7 @@ async def upsert_feature_doc(db, principal, issue: dict, payload) -> dict[str, A
     await scaffold_project_tree(db, workspace_id=workspace_id, user_id=user["id"], project_id=project_id)
     root = (
         await db.execute(
-            text(
-                """SELECT id FROM document_folders WHERE project_id=:project AND parent_id IS NULL
-                AND kind='project' ORDER BY created_at LIMIT 1"""
-            ),
+            UPSERT_FEATURE_DOC_SELECT_DOCUMENT_FOLDERS,
             {"project": project_id},
         )
     ).scalar_one()
@@ -185,10 +176,7 @@ async def upsert_feature_doc(db, principal, issue: dict, payload) -> dict[str, A
     feature_id = await _child_folder(db, **common, parent_id=module_id, name=payload.feature, kind="feature")
     current = (
         await db.execute(
-            text(
-                """SELECT id FROM documents WHERE folder_id=:folder AND doc_type=:type
-                AND archived_at IS NULL ORDER BY created_at LIMIT 1 FOR UPDATE"""
-            ),
+            UPSERT_FEATURE_DOC_SELECT_DOCUMENTS,
             {"folder": feature_id, "type": payload.docType},
         )
     ).scalar_one_or_none()
@@ -202,7 +190,7 @@ async def upsert_feature_doc(db, principal, issue: dict, payload) -> dict[str, A
         from .edits import apply_edits
 
         existing = (
-            await db.execute(text("SELECT content FROM documents WHERE id=:id"), {"id": current})
+            await db.execute(UPSERT_FEATURE_DOC_SELECT_DOCUMENTS_2, {"id": current})
         ).scalar_one()
         body = apply_edits(existing, payload.edits)
     else:
@@ -230,10 +218,7 @@ async def upsert_feature_doc(db, principal, issue: dict, payload) -> dict[str, A
             )
         )["data"]
     await db.execute(
-        text(
-            """INSERT INTO document_links (id,document_id,workspace_id,project_id,issue_id)
-            VALUES (:id,:document,:workspace,NULL,:issue) ON CONFLICT DO NOTHING"""
-        ),
+        UPSERT_FEATURE_DOC_INSERT_DOCUMENT_LINKS,
         {"id": cuid(), "document": result["id"], "workspace": workspace_id, "issue": issue["id"]},
     )
     return {

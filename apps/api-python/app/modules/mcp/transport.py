@@ -14,7 +14,6 @@ from mcp.types import (
     Tool,
     ToolAnnotations,
 )
-from sqlalchemy import text
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -22,6 +21,9 @@ from ...core.audit_context import audit_agent
 from ...core.clock import utcnow
 from ...core.errors import ApiError
 from .application import ToolApplication
+from .commands import (
+    CALL_UPDATE_MCP_CONNECTIONS,
+)
 from .connections import authenticate
 from .domain import current_principal, principal_context
 from .instructions import server_instructions
@@ -88,9 +90,7 @@ class ConnectionAuthMiddleware:
 
                 row = (
                     await db.execute(
-                        text("""UPDATE mcp_connections SET
-                    rate_count=CASE WHEN rate_window=date_trunc('minute',CAST(:now AS timestamp)) THEN rate_count+1 ELSE 1 END,
-                    rate_window=date_trunc('minute',CAST(:now AS timestamp)) WHERE id=:id RETURNING rate_count"""),
+                        CALL_UPDATE_MCP_CONNECTIONS,
                         {
                             "id": principal.connection_id,
                             "now": utcnow(),

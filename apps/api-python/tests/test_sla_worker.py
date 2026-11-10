@@ -11,7 +11,7 @@ from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.identifiers import cuid
 from app.modules.identity.auth import create_workspace_bootstrap
-from app.modules.sla.commands import retry_job
+from app.modules.sla.actions import retry_job
 from app.modules.sla.contracts import PolicyValues, RetrySlaJob
 from app.modules.sla.jobs import record_failure
 from app.modules.sla.policies import create_policy

@@ -7,7 +7,6 @@ from typing import Any, Literal
 from fastapi import Depends, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,7 +17,32 @@ from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
 from ..access.projects import workspace_manager
 from ..identity.auth import current_user
+from .commands import (
+    AUDIT_INSERT_AUDIT_LOGS,
+    CREATE_CONNECTION_INSERT_SCM_CONNECTION_SECRETS,
+    CREATE_CONNECTION_INSERT_SCM_CONNECTIONS,
+    DELETE_IDENTITY_DELETE_SCM_USER_IDENTITIES,
+    DELETE_IDENTITY_UPDATE_CODE_REVIEW_REVIEWERS,
+    DISCONNECT_UPDATE_SCM_CONNECTIONS,
+    DISCONNECT_UPDATE_SCM_REPOSITORIES,
+    REACTIVATE_CONNECTION_UPDATE_SCM_CONNECTIONS,
+    ROTATE_CONNECTION_CREDENTIALS_UPDATE_SCM_CONNECTION_SECRETS,
+    SAVE_DELIVERY_INSERT_SCM_WEBHOOK_DELIVERIES,
+    SAVE_IDENTITY_INSERT_SCM_USER_IDENTITIES,
+    SAVE_IDENTITY_UPDATE_CODE_REVIEW_REVIEWERS,
+    SAVE_IDENTITY_UPDATE_CODE_REVIEW_REVIEWERS_2,
+    UPDATE_REPOSITORY_UPDATE_SCM_REPOSITORIES,
+)
 from .contracts import read_only_capabilities
+from .queries import (
+    GITHUB_APP_WEBHOOK_SELECT_SCM_CONNECTIONS,
+    LIST_CONNECTIONS_SELECT_SCM_CONNECTIONS,
+    LIST_IDENTITIES_SELECT_SCM_USER_IDENTITIES,
+    SAVE_IDENTITY_SELECT_WORKSPACE_MEMBERS,
+    UPDATE_REPOSITORY_SELECT_SCM_REPOSITORIES,
+    UPDATE_REPOSITORY_SELECT_TEAMS,
+    list_repositories_select_scm_repositories_sql,
+)
 from .security import (
     decrypt_secret_bundle,
     encrypt_secret_bundle,
@@ -82,14 +106,7 @@ async def _audit(
     metadata: dict[str, Any],
 ) -> None:
     await db.execute(
-        text(
-            '''INSERT INTO audit_logs (
-                   id, workspace_id, actor_id, action, entity_type, entity_id, metadata, created_at
-               ) VALUES (
-                   :id, :workspace_id, :actor_id, :action, 'scm-connection', :entity_id,
-                   CAST(:metadata AS jsonb), :now
-               )'''
-        ),
+        AUDIT_INSERT_AUDIT_LOGS,
         {
             'id': cuid(),
             'workspace_id': workspace_id,
@@ -166,18 +183,7 @@ async def list_connections(
 ) -> dict[str, list[dict[str, Any]]]:
     await workspace_manager(db, workspaceId, user['id'])
     result = await db.execute(
-        text(
-            '''SELECT connection.*, secret.encrypted_value,
-                      COUNT(repository.id) AS repository_count,
-                      COUNT(repository.id) FILTER (WHERE repository.enabled = true) AS enabled_repository_count
-               FROM scm_connections connection
-               LEFT JOIN scm_connection_secrets secret ON secret.connection_id = connection.id
-               LEFT JOIN scm_repositories repository
-                 ON repository.connection_id = connection.id AND repository.archived_at IS NULL
-               WHERE connection.workspace_id = :workspace_id
-               GROUP BY connection.id, secret.encrypted_value
-               ORDER BY connection.created_at ASC'''
-        ),
+        LIST_CONNECTIONS_SELECT_SCM_CONNECTIONS,
         {'workspace_id': workspaceId},
     )
     return {'data': [_connection_view(row) for row in result.mappings().all()]}
@@ -196,16 +202,7 @@ async def create_connection(
     connection_id = cuid()
     try:
         await db.execute(
-            text(
-                '''INSERT INTO scm_connections (
-                       id, workspace_id, provider, external_account_id, display_name, status,
-                       auth_mode, settings, created_by_id, created_at, updated_at
-                   ) VALUES (
-                       :id, :workspace_id, CAST(:provider AS "ScmProvider"), :external_account_id,
-                       :display_name, 'ACTIVE', CAST(:auth_mode AS "ScmAuthMode"), CAST(:settings AS jsonb),
-                       :created_by_id, :now, :now
-                   )'''
-            ),
+            CREATE_CONNECTION_INSERT_SCM_CONNECTIONS,
             {
                 'id': connection_id,
                 'workspace_id': payload.workspaceId,
@@ -220,11 +217,7 @@ async def create_connection(
         )
         if bundle:
             await db.execute(
-                text(
-                    '''INSERT INTO scm_connection_secrets (
-                           id, connection_id, encrypted_value, key_version, created_at, updated_at
-                       ) VALUES (:id, :connection_id, :encrypted_value, 1, :now, :now)'''
-                ),
+                CREATE_CONNECTION_INSERT_SCM_CONNECTION_SECRETS,
                 {
                     'id': cuid(),
                     'connection_id': connection_id,
@@ -271,16 +264,7 @@ async def list_repositories(
     await workspace_manager(db, workspaceId, user['id'])
     connection_clause = 'AND repository.connection_id = :connection_id' if connectionId else ''
     result = await db.execute(
-        text(
-            f'''SELECT repository.*, connection.provider, connection.display_name AS connection_name,
-                       team.name AS team_name
-                FROM scm_repositories repository
-                JOIN scm_connections connection ON connection.id = repository.connection_id
-                LEFT JOIN teams team ON team.id = repository.team_id
-                WHERE repository.workspace_id = :workspace_id AND repository.archived_at IS NULL
-                  {connection_clause}
-                ORDER BY connection.provider, repository.full_name'''
-        ),
+        list_repositories_select_scm_repositories_sql(connection_clause),
         {'workspace_id': workspaceId, 'connection_id': connectionId},
     )
     return {
@@ -315,13 +299,7 @@ async def list_identities(
     await workspace_manager(db, workspaceId, user['id'])
     await connection_row(db, connectionId, workspaceId)
     result = await db.execute(
-        text(
-            '''SELECT identity.*, account.name AS flowie_name, account.email AS flowie_email
-               FROM scm_user_identities identity
-               JOIN users account ON account.id = identity.user_id
-               WHERE identity.connection_id = :connection_id
-               ORDER BY account.name, account.email'''
-        ),
+        LIST_IDENTITIES_SELECT_SCM_USER_IDENTITIES,
         {'connection_id': connectionId},
     )
     return {
@@ -354,10 +332,7 @@ async def save_identity(
     await workspace_manager(db, workspaceId, user['id'])
     await connection_row(db, connection_id, workspaceId)
     member = await db.execute(
-        text(
-            '''SELECT 1 FROM workspace_members
-               WHERE workspace_id = :workspace_id AND user_id = :user_id AND status = 'ACTIVE' '''
-        ),
+        SAVE_IDENTITY_SELECT_WORKSPACE_MEMBERS,
         {'workspace_id': workspaceId, 'user_id': user_id},
     )
     if member.scalar_one_or_none() is None:
@@ -365,19 +340,7 @@ async def save_identity(
     now = utcnow()
     try:
         result = await db.execute(
-            text(
-                '''INSERT INTO scm_user_identities (
-                       id, workspace_id, connection_id, user_id, external_user_id,
-                       display_name, email, created_at, updated_at
-                   ) VALUES (
-                       :id, :workspace_id, :connection_id, :user_id, :external_user_id,
-                       :display_name, :email, :now, :now
-                   ) ON CONFLICT (connection_id, user_id) DO UPDATE SET
-                       external_user_id = EXCLUDED.external_user_id,
-                       display_name = EXCLUDED.display_name, email = EXCLUDED.email,
-                       updated_at = EXCLUDED.updated_at
-                   RETURNING id, user_id, external_user_id, display_name, email, updated_at'''
-            ),
+            SAVE_IDENTITY_INSERT_SCM_USER_IDENTITIES,
             {
                 'id': cuid(),
                 'workspace_id': workspaceId,
@@ -391,27 +354,11 @@ async def save_identity(
         )
         row = result.mappings().one()
         await db.execute(
-            text(
-                '''UPDATE code_review_reviewers reviewer
-                   SET flowie_user_id = NULL, updated_at = :now
-                   FROM code_reviews review
-                   JOIN scm_repositories repository ON repository.id = review.repository_id
-                   WHERE reviewer.code_review_id = review.id
-                     AND repository.connection_id = :connection_id
-                     AND reviewer.flowie_user_id = :user_id'''
-            ),
+            SAVE_IDENTITY_UPDATE_CODE_REVIEW_REVIEWERS,
             {'user_id': user_id, 'connection_id': connection_id, 'now': now},
         )
         await db.execute(
-            text(
-                '''UPDATE code_review_reviewers reviewer
-                   SET flowie_user_id = :user_id, updated_at = :now
-                   FROM code_reviews review
-                   JOIN scm_repositories repository ON repository.id = review.repository_id
-                   WHERE reviewer.code_review_id = review.id
-                     AND repository.connection_id = :connection_id
-                     AND reviewer.external_user_id = :external_user_id'''
-            ),
+            SAVE_IDENTITY_UPDATE_CODE_REVIEW_REVIEWERS_2,
             {
                 'user_id': user_id,
                 'connection_id': connection_id,
@@ -454,24 +401,13 @@ async def delete_identity(
     await workspace_manager(db, workspaceId, user['id'])
     await connection_row(db, connection_id, workspaceId)
     result = await db.execute(
-        text(
-            '''DELETE FROM scm_user_identities
-               WHERE connection_id = :connection_id AND user_id = :user_id RETURNING id'''
-        ),
+        DELETE_IDENTITY_DELETE_SCM_USER_IDENTITIES,
         {'connection_id': connection_id, 'user_id': user_id},
     )
     if result.scalar_one_or_none() is None:
         raise ApiError(404, 'Source-control identity mapping not found.', 'Not Found')
     await db.execute(
-        text(
-            '''UPDATE code_review_reviewers reviewer
-               SET flowie_user_id = NULL, updated_at = :now
-               FROM code_reviews review
-               JOIN scm_repositories repository ON repository.id = review.repository_id
-               WHERE reviewer.code_review_id = review.id
-                 AND repository.connection_id = :connection_id
-                 AND reviewer.flowie_user_id = :user_id'''
-        ),
+        DELETE_IDENTITY_UPDATE_CODE_REVIEW_REVIEWERS,
         {'connection_id': connection_id, 'user_id': user_id, 'now': utcnow()},
     )
     await _audit(
@@ -511,11 +447,7 @@ async def rotate_connection_credentials(
         webhook_secret = new_webhook_secret()
         bundle['webhookSecret'] = webhook_secret
     await db.execute(
-        text(
-            '''UPDATE scm_connection_secrets
-               SET encrypted_value = :encrypted_value, key_version = key_version + 1, updated_at = :now
-               WHERE connection_id = :connection_id'''
-        ),
+        ROTATE_CONNECTION_CREDENTIALS_UPDATE_SCM_CONNECTION_SECRETS,
         {
             'connection_id': connection_id,
             'encrypted_value': encrypt_secret_bundle(request.app.state.settings, bundle),
@@ -552,10 +484,7 @@ async def reactivate_connection(
     await connection_row(db, connection_id, workspaceId)
     now = utcnow()
     await db.execute(
-        text(
-            '''UPDATE scm_connections
-               SET status = 'ACTIVE', last_error = NULL, updated_at = :now WHERE id = :id'''
-        ),
+        REACTIVATE_CONNECTION_UPDATE_SCM_CONNECTIONS,
         {'id': connection_id, 'now': now},
     )
     await _audit(db, workspaceId, user['id'], 'scm.connection.reactivated', connection_id, {})
@@ -573,13 +502,7 @@ async def update_repository(
 ) -> dict[str, dict[str, Any]]:
     await workspace_manager(db, workspaceId, user['id'])
     current = await db.execute(
-        text(
-            '''SELECT repository.id, repository.connection_id, repository.full_name, repository.team_id
-               FROM scm_repositories repository
-               JOIN scm_connections connection ON connection.id = repository.connection_id
-               WHERE repository.id = :id AND repository.workspace_id = :workspace_id
-                 AND repository.archived_at IS NULL AND connection.status = 'ACTIVE' '''
-        ),
+        UPDATE_REPOSITORY_SELECT_SCM_REPOSITORIES,
         {'id': repository_id, 'workspace_id': workspaceId},
     )
     repository = current.mappings().first()
@@ -590,19 +513,13 @@ async def update_repository(
         raise ApiError(400, 'Map the repository to a Flowie team before enabling Reviews.', 'Bad Request')
     if team_id:
         team = await db.execute(
-            text(
-                '''SELECT 1 FROM teams WHERE id = :team_id AND workspace_id = :workspace_id
-                   AND deleted_at IS NULL AND archived_at IS NULL'''
-            ),
+            UPDATE_REPOSITORY_SELECT_TEAMS,
             {'team_id': team_id, 'workspace_id': workspaceId},
         )
         if team.scalar_one_or_none() is None:
             raise ApiError(400, 'The selected team is not available in this workspace.', 'Bad Request')
     await db.execute(
-        text(
-            '''UPDATE scm_repositories SET enabled = :enabled, team_id = :team_id, updated_at = :now
-               WHERE id = :id'''
-        ),
+        UPDATE_REPOSITORY_UPDATE_SCM_REPOSITORIES,
         {'id': repository_id, 'enabled': payload.enabled, 'team_id': team_id, 'now': utcnow()},
     )
     await _audit(
@@ -647,11 +564,11 @@ async def disconnect(
     await connection_row(db, connection_id, workspaceId)
     now = utcnow()
     await db.execute(
-        text("UPDATE scm_connections SET status = 'REVOKED', updated_at = :now WHERE id = :id"),
+        DISCONNECT_UPDATE_SCM_CONNECTIONS,
         {'id': connection_id, 'now': now},
     )
     await db.execute(
-        text('UPDATE scm_repositories SET enabled = false, updated_at = :now WHERE connection_id = :id'),
+        DISCONNECT_UPDATE_SCM_REPOSITORIES,
         {'id': connection_id, 'now': now},
     )
     await _audit(db, workspaceId, user['id'], 'scm.connection.revoked', connection_id, {})
@@ -691,17 +608,7 @@ async def _save_delivery(
     relevant: bool,
 ) -> bool:
     result = await db.execute(
-        text(
-            '''INSERT INTO scm_webhook_deliveries (
-                   id, connection_id, external_delivery_id, event_type, action, status, payload,
-                   payload_hash, attempts, next_attempt_at, received_at
-               ) VALUES (
-                   :id, :connection_id, :external_delivery_id, :event_type, :action,
-                   CAST(:status AS "ScmDeliveryStatus"), CAST(:payload AS jsonb), :payload_hash,
-                   0, :now, :now
-               ) ON CONFLICT (connection_id, external_delivery_id) DO NOTHING
-               RETURNING id'''
-        ),
+        SAVE_DELIVERY_INSERT_SCM_WEBHOOK_DELIVERIES,
         {
             'id': cuid(),
             'connection_id': connection['id'],
@@ -767,13 +674,7 @@ async def github_app_webhook(
     if not installation_id or not delivery_id or not event_type:
         raise ApiError(400, 'GitHub installation, delivery, and event headers are required.', 'Bad Request')
     result = await db.execute(
-        text(
-            '''SELECT connection.*, secret.encrypted_value
-               FROM scm_connections connection
-               LEFT JOIN scm_connection_secrets secret ON secret.connection_id = connection.id
-               WHERE connection.provider = 'GITHUB' AND connection.status = 'ACTIVE'
-                 AND connection.external_account_id = :installation_id'''
-        ),
+        GITHUB_APP_WEBHOOK_SELECT_SCM_CONNECTIONS,
         {'installation_id': installation_id},
     )
     connections = result.mappings().all()

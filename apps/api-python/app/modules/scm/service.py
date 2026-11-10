@@ -8,7 +8,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ...core.clock import utcnow
@@ -16,8 +15,32 @@ from ...core.config import Settings
 from ...core.errors import ApiError
 from ...core.identifiers import cuid
 from ...services.notification_events import notification_hub
+from .commands import (
+    CONNECTION_SYNC_LOCK_LOCK,
+    LINK_DETECTED_ISSUES_INSERT_CODE_REVIEW_ISSUE_LINKS,
+    SYNC_CONNECTION_UPDATE_SCM_CONNECTIONS,
+    SYNC_CONNECTION_UPDATE_SCM_CONNECTIONS_2,
+    SYNC_CONNECTION_UPDATE_SCM_REPOSITORIES,
+    SYNC_DELIVERY_REVIEW_INSERT_NOTIFICATIONS,
+    UPSERT_REPOSITORY_INSERT_SCM_REPOSITORIES,
+    UPSERT_REVIEW_DELETE_CODE_REVIEW_REVIEWERS,
+    UPSERT_REVIEW_DELETE_CODE_REVIEW_REVIEWERS_2,
+    UPSERT_REVIEW_INSERT_CODE_REVIEW_REVIEWERS,
+    UPSERT_REVIEW_INSERT_CODE_REVIEW_REVISIONS,
+    UPSERT_REVIEW_INSERT_CODE_REVIEWS,
+)
 from .contracts import ProviderRepository, ProviderReview, ReviewProvider
 from .providers import AzureDevOpsProvider, GitHubProvider
+from .queries import (
+    SYNC_CONNECTION_SELECT_SCM_REPOSITORIES,
+    SYNC_CONNECTION_SELECT_SCM_REPOSITORIES_2,
+    SYNC_DELIVERY_REVIEW_SELECT_CODE_REVIEW_REVIEWERS,
+    SYNC_DELIVERY_REVIEW_SELECT_CODE_REVIEW_REVIEWERS_2,
+    SYNC_DELIVERY_REVIEW_SELECT_CODE_REVIEWS,
+    SYNC_DELIVERY_REVIEW_SELECT_SCM_REPOSITORIES,
+    UPSERT_REVIEW_SELECT_SCM_USER_IDENTITIES,
+    connection_row_select_scm_connections_sql,
+)
 from .security import decrypt_secret_bundle
 
 
@@ -61,12 +84,7 @@ def provider_for(
 async def connection_row(db: AsyncSession, connection_id: str, workspace_id: str | None = None) -> Any:
     workspace_clause = 'AND connection.workspace_id = :workspace_id' if workspace_id else ''
     result = await db.execute(
-        text(
-            f'''SELECT connection.*, secret.encrypted_value
-                FROM scm_connections connection
-                LEFT JOIN scm_connection_secrets secret ON secret.connection_id = connection.id
-                WHERE connection.id = :connection_id {workspace_clause}'''
-        ),
+        connection_row_select_scm_connections_sql(workspace_clause),
         {'connection_id': connection_id, 'workspace_id': workspace_id},
     )
     row = result.mappings().first()
@@ -82,20 +100,7 @@ async def upsert_repository(
 ) -> str:
     now = utcnow()
     result = await db.execute(
-        text(
-            '''INSERT INTO scm_repositories (
-                   id, workspace_id, connection_id, external_project_id, external_repository_id,
-                   name, full_name, is_private, default_branch, created_at, updated_at
-               ) VALUES (
-                   :id, :workspace_id, :connection_id, :external_project_id, :external_repository_id,
-                   :name, :full_name, :is_private, :default_branch, :now, :now
-               ) ON CONFLICT (connection_id, external_repository_id) DO UPDATE SET
-                   external_project_id = EXCLUDED.external_project_id,
-                   name = EXCLUDED.name, full_name = EXCLUDED.full_name,
-                   is_private = EXCLUDED.is_private, default_branch = EXCLUDED.default_branch,
-                   archived_at = NULL, updated_at = EXCLUDED.updated_at
-               RETURNING id'''
-        ),
+        UPSERT_REPOSITORY_INSERT_SCM_REPOSITORIES,
         {
             'id': cuid(),
             'workspace_id': connection['workspace_id'],
@@ -115,32 +120,7 @@ async def upsert_repository(
 async def upsert_review(db: AsyncSession, repository: Any, review: ProviderReview) -> str:
     now = utcnow()
     result = await db.execute(
-        text(
-            '''INSERT INTO code_reviews (
-                   id, workspace_id, repository_id, external_review_id, number, title, description,
-                   state, is_draft, external_author_id, author_name, source_ref, target_ref,
-                   head_revision, latest_revision_key, remote_url, additions, deletions, changed_files,
-                   external_created_at, external_updated_at, merged_at, closed_at, created_at, updated_at
-               ) VALUES (
-                   :id, :workspace_id, :repository_id, :external_review_id, :number, :title, :description,
-                   CAST(:state AS "CodeReviewState"), :is_draft, :external_author_id, :author_name,
-                   :source_ref, :target_ref, :head_revision, :latest_revision_key, :remote_url,
-                   :additions, :deletions, :changed_files, :external_created_at, :external_updated_at,
-                   :merged_at, :closed_at, :now, :now
-               ) ON CONFLICT (repository_id, external_review_id) DO UPDATE SET
-                   number = EXCLUDED.number, title = EXCLUDED.title, description = EXCLUDED.description,
-                   state = EXCLUDED.state, is_draft = EXCLUDED.is_draft,
-                   external_author_id = EXCLUDED.external_author_id, author_name = EXCLUDED.author_name,
-                   source_ref = EXCLUDED.source_ref, target_ref = EXCLUDED.target_ref,
-                   head_revision = EXCLUDED.head_revision, latest_revision_key = EXCLUDED.latest_revision_key,
-                   remote_url = EXCLUDED.remote_url, additions = EXCLUDED.additions,
-                   deletions = EXCLUDED.deletions, changed_files = EXCLUDED.changed_files,
-                   external_created_at = EXCLUDED.external_created_at,
-                   external_updated_at = EXCLUDED.external_updated_at,
-                   merged_at = EXCLUDED.merged_at, closed_at = EXCLUDED.closed_at,
-                   updated_at = EXCLUDED.updated_at
-               RETURNING id'''
-        ),
+        UPSERT_REVIEW_INSERT_CODE_REVIEWS,
         {
             'id': cuid(),
             'workspace_id': repository['workspace_id'],
@@ -173,30 +153,14 @@ async def upsert_review(db: AsyncSession, repository: Any, review: ProviderRevie
     for reviewer in review.reviewers:
         reviewer_ids.append(reviewer.externalUserId)
         identity = await db.execute(
-            text(
-                '''SELECT user_id FROM scm_user_identities
-                   WHERE connection_id = :connection_id AND external_user_id = :external_user_id'''
-            ),
+            UPSERT_REVIEW_SELECT_SCM_USER_IDENTITIES,
             {
                 'connection_id': repository['connection_id'],
                 'external_user_id': reviewer.externalUserId,
             },
         )
         await db.execute(
-            text(
-                '''INSERT INTO code_review_reviewers (
-                       id, code_review_id, flowie_user_id, external_user_id, display_name,
-                       reviewer_kind, is_required, decision, provider_decision, updated_at
-                   ) VALUES (
-                       :id, :code_review_id, :flowie_user_id, :external_user_id, :display_name,
-                       :reviewer_kind, :is_required, CAST(:decision AS "CodeReviewDecision"),
-                       :provider_decision, :now
-                   ) ON CONFLICT (code_review_id, external_user_id) DO UPDATE SET
-                       flowie_user_id = EXCLUDED.flowie_user_id, display_name = EXCLUDED.display_name,
-                       reviewer_kind = EXCLUDED.reviewer_kind, is_required = EXCLUDED.is_required,
-                       decision = EXCLUDED.decision, provider_decision = EXCLUDED.provider_decision,
-                       updated_at = EXCLUDED.updated_at'''
-            ),
+            UPSERT_REVIEW_INSERT_CODE_REVIEW_REVIEWERS,
             {
                 'id': cuid(),
                 'code_review_id': review_id,
@@ -212,32 +176,17 @@ async def upsert_review(db: AsyncSession, repository: Any, review: ProviderRevie
         )
     if reviewer_ids:
         await db.execute(
-            text(
-                '''DELETE FROM code_review_reviewers
-                   WHERE code_review_id = :code_review_id
-                     AND NOT (external_user_id = ANY(:reviewer_ids))'''
-            ),
+            UPSERT_REVIEW_DELETE_CODE_REVIEW_REVIEWERS,
             {'code_review_id': review_id, 'reviewer_ids': reviewer_ids},
         )
     else:
         await db.execute(
-            text('DELETE FROM code_review_reviewers WHERE code_review_id = :code_review_id'),
+            UPSERT_REVIEW_DELETE_CODE_REVIEW_REVIEWERS_2,
             {'code_review_id': review_id},
         )
     for revision in review.revisions:
         await db.execute(
-            text(
-                '''INSERT INTO code_review_revisions (
-                       id, code_review_id, external_revision_id, sequence, base_revision,
-                       head_revision, external_created_at, created_at
-                   ) VALUES (
-                       :id, :code_review_id, :external_revision_id, :sequence, :base_revision,
-                       :head_revision, :external_created_at, :now
-                   ) ON CONFLICT (code_review_id, external_revision_id) DO UPDATE SET
-                       sequence = EXCLUDED.sequence, base_revision = EXCLUDED.base_revision,
-                       head_revision = EXCLUDED.head_revision,
-                       external_created_at = EXCLUDED.external_created_at'''
-            ),
+            UPSERT_REVIEW_INSERT_CODE_REVIEW_REVISIONS,
             {
                 'id': cuid(),
                 'code_review_id': review_id,
@@ -287,21 +236,7 @@ async def link_detected_issues(
     if not keys:
         return
     await db.execute(
-        text(
-            '''INSERT INTO code_review_issue_links (
-                   workspace_id, code_review_id, issue_id, source, created_by_id, created_at
-               )
-               SELECT issue.workspace_id, :review_id, issue.id, 'DETECTED',
-                      connection.created_by_id, :now
-               FROM scm_repositories repository
-               JOIN scm_connections connection ON connection.id = repository.connection_id
-               JOIN issues issue ON issue.workspace_id = repository.workspace_id
-                                AND issue.team_id = repository.team_id
-               WHERE repository.id = :repository_id
-                 AND issue.archived_at IS NULL
-                 AND upper(issue.identifier) = ANY(:keys)
-               ON CONFLICT (code_review_id, issue_id) DO NOTHING'''
-        ),
+        LINK_DETECTED_ISSUES_INSERT_CODE_REVIEW_ISSUE_LINKS,
         {'review_id': review_id, 'repository_id': repository['id'], 'keys': keys, 'now': utcnow()},
     )
 
@@ -320,7 +255,7 @@ async def connection_sync_lock(factory: async_sessionmaker[AsyncSession], connec
     # không cần thêm cột schema.
     async with factory() as lock_db:
         result = await lock_db.execute(
-            text('SELECT pg_try_advisory_xact_lock(hashtextextended(:key,0))'),
+            CONNECTION_SYNC_LOCK_LOCK,
             {'key': f'scm-sync:{connection_id}'},
         )
         yield bool(result.scalar())
@@ -339,26 +274,20 @@ async def sync_connection(db: AsyncSession, connection_id: str, settings: Settin
             seen_ids.add(repository.externalRepositoryId)
             await upsert_repository(db, connection, repository)
         existing = await db.execute(
-            text('SELECT id, external_repository_id FROM scm_repositories WHERE connection_id = :connection_id'),
+            SYNC_CONNECTION_SELECT_SCM_REPOSITORIES,
             {'connection_id': connection_id},
         )
         now = utcnow()
         for row in existing.mappings():
             if row['external_repository_id'] not in seen_ids:
                 await db.execute(
-                    text(
-                        '''UPDATE scm_repositories SET archived_at = :now, enabled = false, updated_at = :now
-                           WHERE id = :id'''
-                    ),
+                    SYNC_CONNECTION_UPDATE_SCM_REPOSITORIES,
                     {'id': row['id'], 'now': now},
                 )
         await db.commit()
 
         enabled_result = await db.execute(
-            text(
-                '''SELECT * FROM scm_repositories
-                   WHERE connection_id = :connection_id AND enabled = true AND archived_at IS NULL'''
-            ),
+            SYNC_CONNECTION_SELECT_SCM_REPOSITORIES_2,
             {'connection_id': connection_id},
         )
         review_count = 0
@@ -377,11 +306,7 @@ async def sync_connection(db: AsyncSession, connection_id: str, settings: Settin
                 review_count += 1
             await db.commit()
         await db.execute(
-            text(
-                '''UPDATE scm_connections
-                   SET last_synced_at = :now, last_error = NULL, status = 'ACTIVE', updated_at = :now
-                   WHERE id = :id'''
-            ),
+            SYNC_CONNECTION_UPDATE_SCM_CONNECTIONS,
             {'id': connection_id, 'now': utcnow()},
         )
         await db.commit()
@@ -389,10 +314,7 @@ async def sync_connection(db: AsyncSession, connection_id: str, settings: Settin
     except (httpx.HTTPError, KeyError, ValueError) as error:
         await db.rollback()
         await db.execute(
-            text(
-                '''UPDATE scm_connections SET status = 'ERROR', last_error = :error, updated_at = :now
-                   WHERE id = :id'''
-            ),
+            SYNC_CONNECTION_UPDATE_SCM_CONNECTIONS_2,
             {'id': connection_id, 'error': str(error)[:1000], 'now': utcnow()},
         )
         await db.commit()
@@ -417,31 +339,21 @@ async def sync_delivery_review(db: AsyncSession, delivery: Any, settings: Settin
     if not repository_id or not external_review_id:
         return False
     repository_result = await db.execute(
-        text(
-            '''SELECT * FROM scm_repositories
-               WHERE connection_id = :connection_id AND external_repository_id = :external_repository_id
-                 AND enabled = true AND archived_at IS NULL'''
-        ),
+        SYNC_DELIVERY_REVIEW_SELECT_SCM_REPOSITORIES,
         {'connection_id': connection['id'], 'external_repository_id': repository_id},
     )
     repository = repository_result.mappings().first()
     if not repository:
         return False
     existing_result = await db.execute(
-        text(
-            '''SELECT id, latest_revision_key FROM code_reviews
-               WHERE repository_id = :repository_id AND external_review_id = :external_review_id'''
-        ),
+        SYNC_DELIVERY_REVIEW_SELECT_CODE_REVIEWS,
         {'repository_id': repository['id'], 'external_review_id': external_review_id},
     )
     existing = existing_result.mappings().first()
     previous_recipients: set[str] = set()
     if existing:
         previous_result = await db.execute(
-            text(
-                '''SELECT flowie_user_id FROM code_review_reviewers
-                   WHERE code_review_id = :review_id AND flowie_user_id IS NOT NULL'''
-            ),
+            SYNC_DELIVERY_REVIEW_SELECT_CODE_REVIEW_REVIEWERS_2,
             {'review_id': existing['id']},
         )
         previous_recipients = {str(value) for value in previous_result.scalars().all()}
@@ -461,10 +373,7 @@ async def sync_delivery_review(db: AsyncSession, delivery: Any, settings: Settin
     review = await provider.get_review(provider_repository, external_review_id)
     review_id = await upsert_review(db, repository, review)
     current_result = await db.execute(
-        text(
-            '''SELECT flowie_user_id FROM code_review_reviewers
-               WHERE code_review_id = :review_id AND flowie_user_id IS NOT NULL'''
-        ),
+        SYNC_DELIVERY_REVIEW_SELECT_CODE_REVIEW_REVIEWERS,
         {'review_id': review_id},
     )
     current_recipients = {str(value) for value in current_result.scalars().all()}
@@ -485,14 +394,7 @@ async def sync_delivery_review(db: AsyncSession, delivery: Any, settings: Settin
         for recipient_id in recipients:
             notification_id = cuid()
             await db.execute(
-                text(
-                    '''INSERT INTO notifications (
-                           id, workspace_id, user_id, type, entity_type, entity_id, data, created_at
-                       ) VALUES (
-                           :id, :workspace_id, :user_id, :type, 'review', :review_id,
-                           CAST(:data AS jsonb), :now
-                       )'''
-                ),
+                SYNC_DELIVERY_REVIEW_INSERT_NOTIFICATIONS,
                 {
                     'id': notification_id,
                     'workspace_id': repository['workspace_id'],

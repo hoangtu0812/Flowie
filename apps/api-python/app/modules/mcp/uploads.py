@@ -22,15 +22,21 @@ from time import monotonic
 
 import jwt
 from fastapi import File, Request, UploadFile
-from sqlalchemy import text
 
 from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import cuid
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ..attachments.api import MAX_ATTACHMENT_BYTES, _authorize_entity, store_attachment
+from .commands import (
+    UPLOAD_ATTACHMENT_INSERT_MCP_REQUESTS,
+    UPLOAD_ATTACHMENT_LOCK,
+)
 from .connections import load_principal
 from .policy import AccessPolicy
+from .queries import (
+    UPLOAD_ATTACHMENT_SELECT_MCP_REQUESTS,
+)
 
 UPLOAD_TTL = timedelta(minutes=10)
 UPLOAD_AUDIENCE = "flowie-mcp-upload"
@@ -146,13 +152,12 @@ async def upload_attachment(token: str, request: Request, file: UploadFile = Fil
         # The lock makes two concurrent posts of one URL store a single file.
         # VI: Khóa giúp hai lần gửi đồng thời cùng một URL chỉ lưu một file.
         await db.execute(
-            text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"),
+            UPLOAD_ATTACHMENT_LOCK,
             {"key": f"{principal.connection_id}:{UPLOAD_TOOL}:{claims['jti']}"},
         )
         previous = (
             await db.execute(
-                text("""SELECT result FROM mcp_requests
-                WHERE connection_id=:connection AND tool=:tool AND key=:key"""),
+                UPLOAD_ATTACHMENT_SELECT_MCP_REQUESTS,
                 key,
             )
         ).scalar_one_or_none()
@@ -175,8 +180,7 @@ async def upload_attachment(token: str, request: Request, file: UploadFile = Fil
             duration_ms=int((monotonic() - started) * 1000),
         )
         await db.execute(
-            text("""INSERT INTO mcp_requests (connection_id,tool,key,request_hash,result)
-            VALUES (:connection,:tool,:key,:hash,CAST(:result AS jsonb))"""),
+            UPLOAD_ATTACHMENT_INSERT_MCP_REQUESTS,
             {
                 **key,
                 "hash": sha256(token.encode()).hexdigest(),

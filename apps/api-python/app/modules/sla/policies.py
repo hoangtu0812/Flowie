@@ -1,7 +1,5 @@
 import json
 
-from sqlalchemy import text
-
 from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import cuid
@@ -10,7 +8,30 @@ from ..access.projects import team_access, workspace_access, workspace_manager
 from ..access.team_scope import workspace_team_scope
 from ..audit.write import record_change
 from .calendar import add_working_seconds
+from .commands import (
+    CREATE_POLICY_INSERT_SLA_POLICIES,
+    CREATE_POLICY_LOCK,
+    POLICY_COMMAND_LOCK,
+    POLICY_COMMAND_UPDATE_SLA_POLICIES,
+    REVISION_INSERT_SLA_POLICY_REVISIONS,
+    UPDATE_POLICY_LOCK,
+    UPDATE_POLICY_UPDATE_SLA_POLICIES,
+)
 from .contracts import BusinessCalendar
+from .queries import (
+    CREATE_POLICY_SELECT_SLA_POLICIES,
+    POLICY_COMMAND_SELECT_SLA_POLICIES,
+    SELECT_POLICY_SELECT_SLA_POLICIES,
+    UNIQUE_NAME_SELECT_SLA_POLICIES,
+    VALIDATE_POLICY_SELECT_ISSUE_STATUSES,
+    VALIDATE_POLICY_SELECT_TEAM_MEMBERS,
+    VALIDATE_POLICY_SELECT_WORKSPACE_MEMBERS,
+    list_policies_select_sla_policies_sql,
+    list_policies_select_sla_policies_sql_2,
+    policy_history_select_sla_policy_revisions_sql,
+    policy_history_select_sla_policy_revisions_sql_2,
+    read_policy_select_sla_policies_sql,
+)
 
 
 def policy_values(row):
@@ -51,11 +72,7 @@ async def read_policy(
     row = (
         (
             await db.execute(
-                text(
-                    "SELECT p.* FROM sla_policies p WHERE p.id=:id AND "
-                    + scope
-                    + (" FOR UPDATE OF p" if lock else "")
-                ),
+                read_policy_select_sla_policies_sql(scope, lock),
                 {"id": identifier, "workspace": workspace, "user": user["id"]},
             )
         )
@@ -75,7 +92,7 @@ async def list_policies(
     params = {"workspace": workspace, "user": user["id"]}
     total = (
         await db.execute(
-            text("SELECT COUNT(*) FROM sla_policies p WHERE " + scope), params
+            list_policies_select_sla_policies_sql(scope), params
         )
     ).scalar_one()
     codec = CursorCodec(
@@ -90,11 +107,7 @@ async def list_policies(
     rows = (
         (
             await db.execute(
-                text(
-                    "SELECT p.* FROM sla_policies p WHERE "
-                    + scope
-                    + " ORDER BY p.created_at DESC,p.id DESC LIMIT :limit"
-                ),
+                list_policies_select_sla_policies_sql_2(scope),
                 {**params, "limit": limit + 1},
             )
         )
@@ -122,8 +135,7 @@ async def validate_policy(db, workspace, user, payload):
     if payload.pauseStatusIds:
         count = (
             await db.execute(
-                text("""SELECT COUNT(*) FROM issue_statuses s WHERE s.id=ANY(CAST(:ids AS text[])) AND s.workspace_id=:workspace
-            AND (s.team_id IS NULL OR s.team_id=:team) AND s.category NOT IN ('COMPLETED','CANCELED')"""),
+                VALIDATE_POLICY_SELECT_ISSUE_STATUSES,
                 {
                     "ids": payload.pauseStatusIds,
                     "workspace": workspace,
@@ -140,9 +152,7 @@ async def validate_policy(db, workspace, user, payload):
     if payload.escalateToId:
         target = (
             await db.execute(
-                text(
-                    "SELECT 1 FROM workspace_members wm JOIN users u ON u.id=wm.user_id WHERE wm.workspace_id=:workspace AND wm.user_id=:target AND wm.status='ACTIVE' AND u.status='ACTIVE'"
-                ),
+                VALIDATE_POLICY_SELECT_WORKSPACE_MEMBERS,
                 {"workspace": workspace, "target": payload.escalateToId},
             )
         ).first()
@@ -155,9 +165,7 @@ async def validate_policy(db, workspace, user, payload):
         if payload.teamId:
             target_team = (
                 await db.execute(
-                    text(
-                        "SELECT 1 FROM team_members WHERE team_id=:team AND user_id=:target"
-                    ),
+                    VALIDATE_POLICY_SELECT_TEAM_MEMBERS,
                     {"team": payload.teamId, "target": payload.escalateToId},
                 )
             ).first()
@@ -175,8 +183,7 @@ async def validate_policy(db, workspace, user, payload):
 async def unique_name(db, workspace, payload, identifier=None):
     duplicate = (
         await db.execute(
-            text("""SELECT 1 FROM sla_policies WHERE workspace_id=:workspace AND archived_at IS NULL
-        AND lower(name)=lower(:name) AND team_id IS NOT DISTINCT FROM :team AND (CAST(:id AS text) IS NULL OR id<>:id)"""),
+            UNIQUE_NAME_SELECT_SLA_POLICIES,
             {
                 "workspace": workspace,
                 "name": payload.name,
@@ -199,9 +206,7 @@ async def revision(db, row, actor, *, kind=None):
         "archivedAt": row["archived_at"].isoformat() if row["archived_at"] else None,
     }
     await db.execute(
-        text(
-            "INSERT INTO sla_policy_revisions(policy_id,version,kind,snapshot,actor_id,created_at) VALUES (:id,:version,:kind,CAST(:snapshot AS jsonb),:actor,:now)"
-        ),
+        REVISION_INSERT_SLA_POLICY_REVISIONS,
         {
             "id": row["id"],
             "version": row["version"],
@@ -216,15 +221,13 @@ async def revision(db, row, actor, *, kind=None):
 async def create_policy(db, workspace, user, payload):
     await validate_policy(db, workspace, user, payload)
     await db.execute(
-        text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"),
+        CREATE_POLICY_LOCK,
         {"key": "sla-policy:" + workspace},
     )
     await unique_name(db, workspace, payload)
     total = (
         await db.execute(
-            text(
-                "SELECT COUNT(*) FROM sla_policies WHERE workspace_id=:workspace AND archived_at IS NULL"
-            ),
+            CREATE_POLICY_SELECT_SLA_POLICIES,
             {"workspace": workspace},
         )
     ).scalar_one()
@@ -237,8 +240,7 @@ async def create_policy(db, workspace, user, payload):
     identifier, now = cuid(), utcnow()
     values = payload.model_dump(mode="json", exclude={"workspaceId"})
     await db.execute(
-        text("""INSERT INTO sla_policies(id,workspace_id,created_by,name,description,team_id,priority,deadline_minutes,enabled,calendar,pause_status_ids,warning_minutes,escalate_to_id,created_at,updated_at)
-        VALUES (:id,:workspace,:actor,:name,:description,:teamId,:priority,:deadlineMinutes,:enabled,CAST(:calendar AS jsonb),:pauseStatusIds,:warningMinutes,:escalateToId,:now,:now)"""),
+        CREATE_POLICY_INSERT_SLA_POLICIES,
         {
             **values,
             "id": identifier,
@@ -261,7 +263,7 @@ async def create_policy(db, workspace, user, payload):
 async def update_policy(db, workspace, user, identifier, payload):
     await validate_policy(db, workspace, user, payload)
     await db.execute(
-        text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"),
+        UPDATE_POLICY_LOCK,
         {"key": "sla-policy:" + workspace},
     )
     row = await read_policy(
@@ -273,8 +275,7 @@ async def update_policy(db, workspace, user, identifier, payload):
         await unique_name(db, workspace, payload, identifier)
     values = payload.model_dump(mode="json", exclude={"expectedVersion"})
     await db.execute(
-        text("""UPDATE sla_policies SET name=:name,description=:description,team_id=:teamId,priority=:priority,deadline_minutes=:deadlineMinutes,
-        enabled=:enabled,calendar=CAST(:calendar AS jsonb),pause_status_ids=:pauseStatusIds,warning_minutes=:warningMinutes,escalate_to_id=:escalateToId,version=version+1,updated_at=:now WHERE id=:id"""),
+        UPDATE_POLICY_UPDATE_SLA_POLICIES,
         {
             **values,
             "id": identifier,
@@ -305,7 +306,7 @@ async def policy_history(db, workspace, user, identifier, *, before=None, limit=
         WHERE t.id=r.snapshot->>'teamId' AND t.workspace_id=:workspace AND t.archived_at IS NULL AND tm.user_id=:user))"""
     total = (
         await db.execute(
-            text("SELECT COUNT(*) FROM sla_policy_revisions r WHERE " + scope), params
+            policy_history_select_sla_policy_revisions_sql(scope), params
         )
     ).scalar_one()
     if before:
@@ -314,11 +315,7 @@ async def policy_history(db, workspace, user, identifier, *, before=None, limit=
     rows = (
         (
             await db.execute(
-                text(
-                    'SELECT version,kind,snapshot,created_at AS "createdAt" FROM sla_policy_revisions r WHERE '
-                    + scope
-                    + " ORDER BY version DESC LIMIT :limit"
-                ),
+                policy_history_select_sla_policy_revisions_sql_2(scope),
                 {**params, "limit": limit + 1},
             )
         )
@@ -338,9 +335,7 @@ async def select_policy(db, workspace, team, priority):
     row = (
         (
             await db.execute(
-                text("""SELECT * FROM sla_policies WHERE workspace_id=:workspace AND archived_at IS NULL AND enabled=true
-        AND (team_id IS NULL OR team_id=:team) AND (priority IS NULL OR priority=:priority)
-        ORDER BY ((CASE WHEN team_id=:team THEN 2 ELSE 0 END)+(CASE WHEN priority=:priority THEN 1 ELSE 0 END)) DESC,created_at,id LIMIT 1 FOR SHARE"""),
+                SELECT_POLICY_SELECT_SLA_POLICIES,
                 {"workspace": workspace, "team": team, "priority": priority},
             )
         )
@@ -362,7 +357,7 @@ async def select_policy(db, workspace, team, priority):
 async def policy_command(db, workspace, user, identifier, command, expected):
     await workspace_manager(db, workspace, user["id"])
     await db.execute(
-        text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"),
+        POLICY_COMMAND_LOCK,
         {"key": "sla-policy:" + workspace},
     )
     row = await read_policy(
@@ -386,9 +381,7 @@ async def policy_command(db, workspace, user, identifier, command, expected):
         await unique_name(db, workspace, values, identifier)
         total = (
             await db.execute(
-                text(
-                    "SELECT COUNT(*) FROM sla_policies WHERE workspace_id=:workspace AND archived_at IS NULL"
-                ),
+                POLICY_COMMAND_SELECT_SLA_POLICIES,
                 {"workspace": workspace},
             )
         ).scalar_one()
@@ -400,9 +393,7 @@ async def policy_command(db, workspace, user, identifier, command, expected):
     else:
         raise ApiError(400, "Unknown policy command.", "Bad Request")
     await db.execute(
-        text(
-            "UPDATE sla_policies SET archived_at=:archived,version=version+1,updated_at=:now WHERE id=:id"
-        ),
+        POLICY_COMMAND_UPDATE_SLA_POLICIES,
         {"id": identifier, "archived": archived, "now": utcnow()},
     )
     row = await read_policy(db, workspace, user, identifier, include_archived=True)

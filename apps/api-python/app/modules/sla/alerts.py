@@ -1,7 +1,5 @@
 import json
 
-from sqlalchemy import text
-
 from ...core.errors import ApiError
 from ...services.notification_events import (
     create_notification_batch,
@@ -10,7 +8,15 @@ from ...services.notification_events import (
 from ..notifications.outbox import stage_notifications
 from ..work_items.contracts import UpdateIssueInput
 from ..work_items.issues import update_issue
+from .commands import (
+    PROCESS_ALERTS_UPDATE_ISSUE_SLA_CYCLES,
+    PROCESS_ALERTS_UPDATE_ISSUE_SLA_CYCLES_2,
+)
 from .cycles import LIVE, TERMINAL
+from .queries import (
+    PROCESS_ALERTS_SELECT_ISSUE_SLA_CYCLES,
+    escalation_actor_select_users_sql,
+)
 
 
 async def escalation_actor(db, issue, identifier):
@@ -25,12 +31,7 @@ async def escalation_actor(db, issue, identifier):
     return (
         (
             await db.execute(
-                text(
-                    f"""SELECT u.id,u.name,u.avatar_url FROM users u
-        JOIN workspace_members wm ON wm.user_id=u.id AND wm.workspace_id=:workspace
-        {team_join}
-        WHERE u.id=:id AND u.status='ACTIVE' AND wm.status='ACTIVE' FOR SHARE OF {locked_rows}"""
-                ),
+                escalation_actor_select_users_sql(team_join, locked_rows),
                 {
                     "id": identifier,
                     "workspace": issue["workspace_id"],
@@ -115,9 +116,7 @@ async def process_alerts(db, issue, latest, now):
     overdue = (
         (
             await db.execute(
-                text(
-                    "SELECT * FROM issue_sla_cycles WHERE issue_id=:id AND breached_at IS NOT NULL AND breach_sent_at IS NULL ORDER BY cycle LIMIT 20 FOR UPDATE"
-                ),
+                PROCESS_ALERTS_SELECT_ISSUE_SLA_CYCLES,
                 {"id": issue["id"]},
             )
         )
@@ -147,9 +146,7 @@ async def process_alerts(db, issue, latest, now):
         )
         outcomes = {**cycle["alert_results"], "breach": result}
         await db.execute(
-            text(
-                """UPDATE issue_sla_cycles SET breach_sent_at=:now,escalation_code=:code,escalated_at=:applied,alert_results=CAST(:results AS jsonb) WHERE id=:id"""
-            ),
+            PROCESS_ALERTS_UPDATE_ISSUE_SLA_CYCLES,
             {
                 "id": cycle["id"],
                 "now": now,
@@ -178,9 +175,7 @@ async def process_alerts(db, issue, latest, now):
             suppressed="INACTIVE_ISSUE" if inactive else None,
         )
         await db.execute(
-            text(
-                "UPDATE issue_sla_cycles SET warning_sent_at=:now,alert_results=CAST(:results AS jsonb) WHERE id=:id"
-            ),
+            PROCESS_ALERTS_UPDATE_ISSUE_SLA_CYCLES_2,
             {
                 "id": latest["id"],
                 "now": now,

@@ -1,10 +1,15 @@
 import json
 
-from sqlalchemy import text
-
 from ...core.identifiers import cuid
 from .calendar import add_working_seconds, working_seconds_between
+from .commands import (
+    INSERT_CYCLE_INSERT_ISSUE_SLA_CYCLES,
+    SAVE_CYCLE_UPDATE_ISSUE_SLA_CYCLES,
+)
 from .contracts import BusinessCalendar
+from .queries import (
+    LATEST_CYCLE_SELECT_ISSUE_SLA_CYCLES,
+)
 
 TERMINAL = {"COMPLETED", "CANCELED"}
 LIVE = {"ACTIVE", "PAUSED"}
@@ -49,9 +54,7 @@ async def latest_cycle(db, issue):
     row = (
         (
             await db.execute(
-                text(
-                    "SELECT * FROM issue_sla_cycles WHERE issue_id=:id ORDER BY cycle DESC LIMIT 1 FOR UPDATE"
-                ),
+                LATEST_CYCLE_SELECT_ISSUE_SLA_CYCLES,
                 {"id": issue},
             )
         )
@@ -81,8 +84,7 @@ async def insert_cycle(
         "bindingReason": reason,
     }
     await db.execute(
-        text("""INSERT INTO issue_sla_cycles(id,issue_id,workspace_id,cycle,policy_id,policy_version,snapshot,state,budget_seconds,remaining_seconds,last_started_at,due_at,warning_at,started_at,closed_at)
-        VALUES (:id,:issue,:workspace,:cycle,:policy,:version,CAST(:snapshot AS jsonb),:state,:budget,:remaining,:last,:due,:warning,:now,:closed)"""),
+        INSERT_CYCLE_INSERT_ISSUE_SLA_CYCLES,
         {
             "id": identifier,
             "issue": issue["id"],
@@ -178,8 +180,7 @@ def transition(cycle, event):
 
 async def save_cycle(db, cycle):
     await db.execute(
-        text("""UPDATE issue_sla_cycles SET state=:state,remaining_seconds=:remaining_seconds,last_started_at=:last_started_at,
-        due_at=:due_at,warning_at=:warning_at,closed_at=:closed_at,breached_at=:breached_at WHERE id=:id"""),
+        SAVE_CYCLE_UPDATE_ISSUE_SLA_CYCLES,
         {
             key: cycle[key]
             for key in (

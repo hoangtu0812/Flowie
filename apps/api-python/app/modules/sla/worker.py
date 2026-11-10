@@ -1,13 +1,14 @@
 import asyncio
 
-from sqlalchemy import text
-
 from ...core.audit_context import audit_source
 from ...core.clock import utcnow
 from ..operations.heartbeats import progress
 from .alerts import process_alerts
 from .cycles import consume, save_cycle
 from .jobs import record_failure, reschedule
+from .queries import (
+    PROCESS_SLA_JOB_SELECT_ISSUE_SLA_JOBS,
+)
 from .synchronization import locked_issue, sync_issue
 
 
@@ -21,9 +22,7 @@ async def process_sla_job(factory, *, now=None, issue_id=None):
             job = (
                 (
                     await db.execute(
-                        text("""SELECT j.issue_id,j.generation FROM issue_sla_jobs j JOIN issues i ON i.id=j.issue_id
-                WHERE j.failed_at IS NULL AND j.next_attempt_at<=:now AND (CAST(:issue AS text) IS NULL OR j.issue_id=:issue)
-                ORDER BY j.next_attempt_at,j.issue_id FOR UPDATE OF i SKIP LOCKED LIMIT 1"""),
+                        PROCESS_SLA_JOB_SELECT_ISSUE_SLA_JOBS,
                         {"now": now, "issue": issue_id},
                     )
                 )

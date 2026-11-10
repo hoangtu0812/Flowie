@@ -4,15 +4,30 @@ import json
 from datetime import timedelta
 from secrets import token_urlsafe
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...core.clock import utcnow
 from ...core.errors import ApiError
 from ...core.identifiers import cuid, hash_token
 from ..access.membership import workspace_role
+from .commands import (
+    AUTHENTICATE_UPDATE_MCP_CONNECTIONS,
+    CREATE_INSERT_AUDIT_LOGS,
+    CREATE_INSERT_MCP_CONNECTIONS,
+    REVOKE_INSERT_AUDIT_LOGS,
+    REVOKE_UPDATE_MCP_CONNECTIONS,
+    UPDATE_INSERT_AUDIT_LOGS,
+    UPDATE_UPDATE_MCP_CONNECTIONS,
+)
 from .contracts import ConnectionInput, ConnectionUpdateInput
 from .domain import Principal
+from .queries import (
+    AUTHENTICATE_SELECT_MCP_CONNECTIONS,
+    LIST_CONNECTIONS_SELECT_MCP_CONNECTIONS,
+    LOAD_PRINCIPAL_SELECT_MCP_CONNECTIONS,
+    UPDATE_SELECT_MCP_CONNECTIONS,
+    VALIDATE_CURRENT_SELECT_MCP_CONNECTIONS,
+)
 
 
 def present(row) -> dict:
@@ -35,10 +50,7 @@ async def load_principal(db, connection_id: str) -> Principal:
     row = (
         (
             await db.execute(
-                text("""SELECT c.*,u.name AS user_name,u.email,u.avatar_url
-        FROM mcp_connections c JOIN users u ON u.id=c.user_id
-        JOIN workspace_members wm ON wm.user_id=c.user_id AND wm.workspace_id=c.workspace_id
-        WHERE c.id=:id AND c.revoked_at IS NULL AND c.expires_at>:now AND u.status='ACTIVE' AND wm.status='ACTIVE' """),
+                LOAD_PRINCIPAL_SELECT_MCP_CONNECTIONS,
                 {"id": connection_id, "now": utcnow()},
             )
         )
@@ -67,14 +79,7 @@ async def authenticate(db: AsyncSession, token: str) -> Principal:
     if not token.startswith("flowie_mcp_") or len(token) > 128:
         raise ApiError(401, "Invalid MCP token.", "Unauthorized")
     result = await db.execute(
-        text("""
-        SELECT c.*,u.name AS user_name,u.email,u.avatar_url,w.mcp_instructions
-        FROM mcp_connections c JOIN users u ON u.id=c.user_id
-        JOIN workspaces w ON w.id=c.workspace_id
-        JOIN workspace_members wm ON wm.workspace_id=c.workspace_id AND wm.user_id=c.user_id
-        WHERE c.token_hash=:hash AND c.revoked_at IS NULL AND c.expires_at>:now
-        AND u.status='ACTIVE' AND wm.status='ACTIVE'
-    """),
+        AUTHENTICATE_SELECT_MCP_CONNECTIONS,
         {"hash": hash_token(token), "now": utcnow()},
     )
     row = result.mappings().first()
@@ -83,7 +88,7 @@ async def authenticate(db: AsyncSession, token: str) -> Principal:
             401, "The MCP token is invalid, expired or revoked.", "Unauthorized"
         )
     await db.execute(
-        text("UPDATE mcp_connections SET last_used_at=:now WHERE id=:id"),
+        AUTHENTICATE_UPDATE_MCP_CONNECTIONS,
         {"id": row["id"], "now": utcnow()},
     )
     return Principal(
@@ -107,12 +112,7 @@ async def validate_current(db: AsyncSession, principal: Principal) -> None:
     # The shared lock prevents a concurrent revocation from completing during a mutation.
     row = (
         await db.execute(
-            text("""
-        SELECT c.id FROM mcp_connections c JOIN users u ON u.id=c.user_id
-        JOIN workspace_members wm ON wm.user_id=c.user_id AND wm.workspace_id=c.workspace_id
-        WHERE c.id=:id AND c.revoked_at IS NULL AND c.expires_at>:now
-        AND u.status='ACTIVE' AND wm.status='ACTIVE' FOR SHARE OF c,u,wm
-    """),
+            VALIDATE_CURRENT_SELECT_MCP_CONNECTIONS,
             {"id": principal.connection_id, "now": utcnow()},
         )
     ).first()
@@ -144,10 +144,7 @@ async def create(
     await _validate_grant(db, workspace_id, user, payload)
     token, now = f"flowie_mcp_{token_urlsafe(32)}", utcnow()
     result = await db.execute(
-        text("""
-        INSERT INTO mcp_connections (id,workspace_id,user_id,name,prefix,token_hash,scopes,team_ids,project_ids,expires_at,created_at)
-        VALUES (:id,:workspace,:user,:name,:prefix,:hash,:scopes,:teams,:projects,:expires,:now) RETURNING *
-    """),
+        CREATE_INSERT_MCP_CONNECTIONS,
         {
             "id": cuid(),
             "workspace": workspace_id,
@@ -164,8 +161,7 @@ async def create(
     )
     row = result.mappings().one()
     await db.execute(
-        text("""INSERT INTO audit_logs (id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at)
-        VALUES (:id,:workspace,:user,'mcp.connection.created','mcp-connection',:connection,'{}'::jsonb,:now)"""),
+        CREATE_INSERT_AUDIT_LOGS,
         {
             "id": cuid(),
             "workspace": workspace_id,
@@ -195,8 +191,7 @@ async def update(
     current = (
         (
             await db.execute(
-                text("""SELECT * FROM mcp_connections WHERE id=:id AND workspace_id=:workspace
-        AND user_id=:user AND revoked_at IS NULL AND expires_at>:now FOR UPDATE"""),
+                UPDATE_SELECT_MCP_CONNECTIONS,
                 {
                     "id": connection_id,
                     "workspace": workspace_id,
@@ -214,8 +209,7 @@ async def update(
     row = (
         (
             await db.execute(
-                text("""UPDATE mcp_connections SET name=:name,scopes=:scopes,team_ids=:teams,
-        project_ids=:projects WHERE id=:id RETURNING *"""),
+                UPDATE_UPDATE_MCP_CONNECTIONS,
                 {
                     "id": connection_id,
                     "name": payload.name.strip(),
@@ -238,8 +232,7 @@ async def update(
         if sorted(current[column]) != getattr(payload, key)
     }
     await db.execute(
-        text("""INSERT INTO audit_logs (id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at)
-        VALUES (:id,:workspace,:user,'mcp.connection.updated','mcp-connection',:connection,CAST(:metadata AS jsonb),:now)"""),
+        UPDATE_INSERT_AUDIT_LOGS,
         {
             "id": cuid(),
             "workspace": workspace_id,
@@ -258,8 +251,7 @@ async def list_connections(
 ) -> list[dict]:
     role = await workspace_role(db, workspace_id, user["id"])
     rows = await db.execute(
-        text("""SELECT * FROM mcp_connections WHERE workspace_id=:workspace
-        AND (:manager OR user_id=:user) ORDER BY created_at DESC LIMIT 200"""),
+        LIST_CONNECTIONS_SELECT_MCP_CONNECTIONS,
         {
             "workspace": workspace_id,
             "user": user["id"],
@@ -277,8 +269,7 @@ async def revoke(
 ) -> None:
     role = await workspace_role(db, workspace_id, user["id"])
     result = await db.execute(
-        text("""UPDATE mcp_connections SET revoked_at=:now
-        WHERE id=:id AND workspace_id=:workspace AND (:manager OR user_id=:user) RETURNING id"""),
+        REVOKE_UPDATE_MCP_CONNECTIONS,
         {
             "id": connection_id,
             "workspace": workspace_id,
@@ -290,8 +281,7 @@ async def revoke(
     if not result.first():
         raise ApiError(404, "Connection not found.", "Not Found")
     await db.execute(
-        text("""INSERT INTO audit_logs (id,workspace_id,actor_id,action,entity_type,entity_id,metadata,created_at)
-        VALUES (:id,:workspace,:user,'mcp.connection.revoked','mcp-connection',:connection,'{}'::jsonb,:now)"""),
+        REVOKE_INSERT_AUDIT_LOGS,
         {
             "id": cuid(),
             "workspace": workspace_id,
