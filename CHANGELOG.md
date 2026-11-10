@@ -64,7 +64,7 @@ pull request and commit references, which are for us.
 
 ### Changed
 
-- The sign-in, registration, Microsoft sign-in, session, cookie and API-key code, and the `current_user` check every route uses, now live in `app/modules/identity` instead of `app/domains`, and the token-hashing helper has a public name. Every route, response, error and security check stays the same. Rebuild `api`; no migration. (DTD-523, DTD-707)
+- The sign-in, registration, Microsoft sign-in, session, cookie and API-key code, and the `current_user` check every route uses, now live in `app/modules/identity` instead of `app/domains`, and the token-hashing helper has a public name. Every route, response, error and security check stays the same. Rebuild `api`; no migration. (DTD-523, DTD-707, #260)
   VI: Mã đăng nhập, đăng ký, đăng nhập Microsoft, phiên, cookie và API key, cùng bước kiểm tra `current_user` mà mọi route dùng, nay nằm trong `app/modules/identity` thay vì `app/domains`, và helper băm token có tên công khai. Mọi route, phản hồi, lỗi và kiểm tra bảo mật giữ nguyên. Build lại `api`; không có migration. (DTD-523, DTD-707)
 - The API code for issues, sub-issues, relations, reactions and issue templates now lives in `app/modules/work_items` instead of `app/domains`, and `scripts/benchmark-issue-queries.py --baseline-ref` reads the issue API from either location. Every route, response and error stays the same. Rebuild `api`; no migration. (DTD-523, DTD-702, #259)
   VI: Mã API của issue, sub-issue, quan hệ, reaction và mẫu issue nay nằm trong `app/modules/work_items` thay vì `app/domains`, và `scripts/benchmark-issue-queries.py --baseline-ref` đọc được API issue ở cả hai vị trí. Mọi route, phản hồi và lỗi giữ nguyên. Build lại `api`; không có migration. (DTD-523, DTD-702)
