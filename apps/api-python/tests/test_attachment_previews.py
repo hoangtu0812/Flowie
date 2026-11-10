@@ -7,7 +7,7 @@ import pytest
 
 from app.core.errors import ApiError
 from app.domains import native_attachments
-from app.domains.attachment_tables import (
+from app.modules.attachments.tables import (
     MAX_ROWS,
     UnreadableSpreadsheet,
     csv_sheet,

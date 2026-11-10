@@ -1,5 +1,5 @@
 from app.core.xlsx_export import xlsx_bytes
-from app.domains.attachment_tables import xlsx_sheets
+from app.modules.attachments.tables import xlsx_sheets
 
 
 def test_xlsx_round_trips_text_numbers_formula_text_and_invalid_xml_characters():

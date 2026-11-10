@@ -3,7 +3,7 @@ import asyncio
 import pytest
 
 from app.core.errors import ApiError
-from app.domains.link_metadata import page_title, public_url
+from app.modules.link_metadata.service import page_title, public_url
 
 
 def test_page_title_prefers_open_graph_and_unescapes():

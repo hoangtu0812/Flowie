@@ -12,8 +12,8 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from ...core.errors import ApiError
-from ...domains.link_metadata import public_url
 from ...services.microsoft_teams import teams_message
+from ..link_metadata.service import public_url
 
 # Feed hosts Flowie may read. The list is fixed in code so that adding a host goes through review:
 # an admin-supplied URL can never make the server request an arbitrary or internal address.

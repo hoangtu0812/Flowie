@@ -12,8 +12,9 @@ from app.core.clock import _utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.core.identifiers import _cuid
-from app.domains import agent, ai_calls
+from app.domains import agent
 from app.domains.auth import create_workspace_bootstrap
+from app.modules.ai import calls as ai_calls
 
 OPENAI = {'provider': 'OPENAI', 'endpoint': 'https://api.openai.com/v1', 'model': 'm', 'apiKey': 'secret-key'}
 GATEWAY = {**OPENAI, 'endpoint': 'http://192.168.98.100:4000/v1'}

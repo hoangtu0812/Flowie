@@ -20,12 +20,19 @@ async def _workspace_role(db: AsyncSession, workspace_id: str, user_id: str) -> 
     return role
 
 
-async def _manager(db: AsyncSession, workspace_id: str, user_id: str) -> None:
+async def manager(db: AsyncSession, workspace_id: str, user_id: str) -> None:
     # ADMIN_VIEWER passes for reads; its writes never get here (`read_only.enforce_read_only_role`).
     # VI: ADMIN_VIEWER qua được khi đọc; thao tác ghi của role này không tới được đây (`read_only.enforce_read_only_role`).
     if await _workspace_role(db, workspace_id, user_id) not in ADMIN_READ_ROLES:
         raise ApiError(403, "Workspace administrator access is required.", "Forbidden")
 
+
+
+# shortcut: private alias kept for callers not yet moved out of app/domains; delete it once DTD-523
+# has switched every caller to `manager`.
+# VI: shortcut: alias nội bộ giữ cho các nơi gọi chưa chuyển khỏi app/domains; xoá khi DTD-523 đã
+# VI: chuyển mọi nơi gọi sang `manager`.
+_manager = manager
 
 async def _owner(db: AsyncSession, workspace_id: str, user_id: str) -> None:
     # Keep ownership stable until the protected membership write commits.

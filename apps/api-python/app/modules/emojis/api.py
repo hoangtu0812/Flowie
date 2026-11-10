@@ -11,12 +11,14 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.errors import ApiError
-from ..core.utc_responses import UtcAPIRouter as APIRouter
-from ..db.session import get_session
-from ..storage.minio import MinioStorage
-from .auth import _cuid, _utcnow, current_user
-from .native_projects import _workspace_access, _workspace_manager
+from ...core.clock import utcnow
+from ...core.errors import ApiError
+from ...core.identifiers import cuid
+from ...core.utc_responses import UtcAPIRouter as APIRouter
+from ...db.session import get_session
+from ...domains.auth import current_user
+from ...storage.minio import MinioStorage
+from ..access.projects import workspace_access, workspace_manager
 
 router = APIRouter(prefix='/api/v1/emojis', tags=['emojis'])
 MAX_EMOJI_BYTES = 512 * 1024
@@ -82,8 +84,8 @@ async def _audit(
                        CAST(:metadata AS jsonb), :created_at)'''
         ),
         {
-            'id': _cuid(), 'workspace_id': workspace_id, 'actor_id': actor_id, 'action': action,
-            'entity_id': emoji_id, 'metadata': json.dumps(metadata), 'created_at': _utcnow(),
+            'id': cuid(), 'workspace_id': workspace_id, 'actor_id': actor_id, 'action': action,
+            'entity_id': emoji_id, 'metadata': json.dumps(metadata), 'created_at': utcnow(),
         },
     )
 
@@ -94,7 +96,7 @@ async def list_emojis(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, list[dict[str, Any]]]:
-    await _workspace_access(db, workspaceId, user['id'])
+    await workspace_access(db, workspaceId, user['id'])
     result = await db.execute(
         text(
             '''SELECT id FROM workspace_emojis
@@ -115,7 +117,7 @@ async def upload_emoji(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _workspace_manager(db, workspaceId, user['id'])
+    await workspace_manager(db, workspaceId, user['id'])
     normalized_name = name.strip().lower()
     if not EMOJI_NAME.fullmatch(normalized_name):
         raise ApiError(400, 'Emoji names must contain 2–32 lowercase letters, numbers, hyphens or underscores.', 'Bad Request')
@@ -131,13 +133,13 @@ async def upload_emoji(
     filename = f'{normalized_name}.{_extension(mime_type)}'
     object_key = f'{workspaceId}/emojis/{token_urlsafe(18)}-{filename}'
     await MinioStorage(request.app.state.settings).put(object_key, body, mime_type)
-    now = _utcnow()
+    now = utcnow()
     existing = await db.execute(
         text('SELECT id FROM workspace_emojis WHERE workspace_id = :workspace_id AND name = :name'),
         {'workspace_id': workspaceId, 'name': normalized_name},
     )
     existing_id = existing.scalar_one_or_none()
-    emoji_id = existing_id or _cuid()
+    emoji_id = existing_id or cuid()
     try:
         if existing_id:
             await db.execute(
@@ -184,7 +186,7 @@ async def emoji_image(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> Response:
-    await _workspace_access(db, workspaceId, user['id'])
+    await workspace_access(db, workspaceId, user['id'])
     emoji = await _emoji(db, emoji_id, workspaceId)
     body = await MinioStorage(request.app.state.settings).get(emoji['objectKey'])
     return Response(body, media_type=emoji['mimeType'], headers={'cache-control': 'private, max-age=3600'})
@@ -197,9 +199,9 @@ async def archive_emoji(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _workspace_manager(db, workspaceId, user['id'])
+    await workspace_manager(db, workspaceId, user['id'])
     emoji = await _emoji(db, emoji_id, workspaceId)
-    now = _utcnow()
+    now = utcnow()
     await db.execute(
         text('UPDATE workspace_emojis SET archived_at = :now, updated_at = :now WHERE id = :emoji_id'),
         {'emoji_id': emoji_id, 'now': now},

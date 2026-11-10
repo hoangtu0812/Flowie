@@ -8,12 +8,14 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.errors import ApiError
-from ..core.utc_responses import UtcAPIRouter as APIRouter
-from ..db.session import get_session
-from .auth import _cuid, _utcnow, current_user
-from .native_projects import _workspace_access
-from .teams import _manager
+from ...core.clock import utcnow
+from ...core.errors import ApiError
+from ...core.identifiers import cuid
+from ...core.utc_responses import UtcAPIRouter as APIRouter
+from ...db.session import get_session
+from ...domains.auth import current_user
+from ..access.membership import manager
+from ..access.projects import workspace_access
 
 router = APIRouter(prefix='/api/v1/labels', tags=['labels'])
 
@@ -138,7 +140,7 @@ async def list_labels(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, list[dict[str, Any]]]:
-    await _workspace_access(db, workspaceId, user['id'])
+    await workspace_access(db, workspaceId, user['id'])
     result = await db.execute(
         text(
             '''SELECT l.id FROM labels l
@@ -156,10 +158,10 @@ async def create_label(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _manager(db, payload.workspaceId, user['id'])
+    await manager(db, payload.workspaceId, user['id'])
     if payload.groupId:
         await _group_exists(db, payload.groupId, payload.workspaceId)
-    label_id, now = _cuid(), _utcnow()
+    label_id, now = cuid(), utcnow()
     try:
         await db.execute(
             text(
@@ -192,7 +194,7 @@ async def update_label(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _manager(db, workspaceId, user['id'])
+    await manager(db, workspaceId, user['id'])
     await _label_record(db, label_id, workspaceId)
     values = payload.model_dump(exclude_unset=True)
     if not values:
@@ -204,7 +206,7 @@ async def update_label(
     if values.get('groupId'):
         await _group_exists(db, values['groupId'], workspaceId)
     column_names = {'groupId': 'group_id'}
-    assignments, params = [], {'id': label_id, 'now': _utcnow()}
+    assignments, params = [], {'id': label_id, 'now': utcnow()}
     for key, value in values.items():
         column = column_names.get(key, key)
         assignments.append(f'{column} = :{key}')
@@ -228,7 +230,7 @@ async def delete_label(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _manager(db, workspaceId, user['id'])
+    await manager(db, workspaceId, user['id'])
     await _label_record(db, label_id, workspaceId)
     await db.execute(text('DELETE FROM labels WHERE id = :id'), {'id': label_id})
     await db.commit()
@@ -241,7 +243,7 @@ async def list_label_groups(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, list[dict[str, Any]]]:
-    await _workspace_access(db, workspaceId, user['id'])
+    await workspace_access(db, workspaceId, user['id'])
     result = await db.execute(
         text('SELECT id FROM label_groups WHERE workspace_id = :workspace_id ORDER BY name ASC'),
         {'workspace_id': workspaceId},
@@ -255,8 +257,8 @@ async def create_label_group(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _manager(db, payload.workspaceId, user['id'])
-    group_id, now = _cuid(), _utcnow()
+    await manager(db, payload.workspaceId, user['id'])
+    group_id, now = cuid(), utcnow()
     try:
         await db.execute(
             text(
@@ -287,7 +289,7 @@ async def update_label_group(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _manager(db, workspaceId, user['id'])
+    await manager(db, workspaceId, user['id'])
     await _group_record(db, group_id, workspaceId)
     values = payload.model_dump(exclude_unset=True)
     if not values:
@@ -300,7 +302,7 @@ async def update_label_group(
     try:
         await db.execute(
             text(f'UPDATE label_groups SET {assignments}, updated_at = :now WHERE id = :id'),
-            {**values, 'id': group_id, 'now': _utcnow()},
+            {**values, 'id': group_id, 'now': utcnow()},
         )
         await db.commit()
     except IntegrityError as error:
@@ -316,7 +318,7 @@ async def delete_label_group(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _manager(db, workspaceId, user['id'])
+    await manager(db, workspaceId, user['id'])
     await _group_record(db, group_id, workspaceId)
     await db.execute(text('DELETE FROM label_groups WHERE id = :id'), {'id': group_id})
     await db.commit()

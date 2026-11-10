@@ -24,10 +24,10 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import ApiError
+from ..modules.ai.calls import call_provider
 from ..modules.identity.password_reset import limit_request
 from ..modules.work_items.issue_search import NORMALIZED, VIETNAMESE
 from .agent import _fence_untrusted, configured_provider
-from .ai_calls import call_provider
 
 # Common Vietnamese and English question words. They match almost every document, so keeping
 # them would rank documents by how much prose they have instead of by the question's subject.
