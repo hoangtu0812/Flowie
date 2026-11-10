@@ -10,7 +10,10 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.core.clock import utcnow
 from app.core.config import Settings, _async_database_url
 from app.core.identifiers import cuid
-from app.domains.native_asks import (
+from app.modules.identity.auth import create_workspace_bootstrap
+from app.modules.notifications.delivery_worker import deliver_one
+from app.modules.notifications.ticket_email import ticket_email
+from app.modules.service_desk.api import (
     AskMessageInput,
     AskTransitionInput,
     CreateAskInput,
@@ -19,9 +22,6 @@ from app.domains.native_asks import (
     create_ask_message,
     transition_ask,
 )
-from app.modules.identity.auth import create_workspace_bootstrap
-from app.modules.notifications.delivery_worker import deliver_one
-from app.modules.notifications.ticket_email import ticket_email
 from tests.document_review_support import add_member
 from tests.test_service_desk_asks import add_project
 

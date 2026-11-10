@@ -8,13 +8,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.clock import utcnow
-from ..core.errors import ApiError
-from ..core.identifiers import cuid
-from ..core.utc_responses import UtcAPIRouter as APIRouter
-from ..db.session import get_session
-from ..modules.access.projects import workspace_access
-from ..modules.identity.auth import current_user
+from ...core.clock import utcnow
+from ...core.errors import ApiError
+from ...core.identifiers import cuid
+from ...core.utc_responses import UtcAPIRouter as APIRouter
+from ...db.session import get_session
+from ..access.projects import workspace_access
+from ..identity.auth import current_user
 
 router = APIRouter(prefix='/api/v1/customer-requests', tags=['customer-requests'])
 RequestSource = Literal['manual', 'interview', 'support', 'sales', 'other']

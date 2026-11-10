@@ -14,9 +14,6 @@ from .core.errors import ApiError, api_error_handler, validation_error_handler
 from .core.readiness import dependency_status
 from .db.session import create_session_factory
 from .domains.agent import router as agent_router
-from .domains.native_asks import router as asks_router
-from .domains.native_customer_requests import router as customer_requests_router
-from .domains.native_integrations import router as integrations_router
 from .domains.scm.router import router as scm_router
 from .domains.scm.router import webhook_router as scm_webhook_router
 from .jobs.digest import digest_loop
@@ -34,6 +31,7 @@ from .modules.identity.admin_api import router as admin_router
 from .modules.identity.api import router as password_reset_router
 from .modules.identity.auth import router as auth_router
 from .modules.identity.users_api import router as users_router
+from .modules.integrations.api import router as integrations_router
 from .modules.labels.api import router as labels_router
 from .modules.link_metadata.api import router as link_metadata_router
 from .modules.mcp.api import router as mcp_management_router
@@ -48,6 +46,10 @@ from .modules.portfolio.projects_api import public_router as projects_router
 from .modules.portfolio.projects_api import router as native_projects_router
 from .modules.releases.api import router as releases_router
 from .modules.reviews.api import router as reviews_router
+from .modules.service_desk.api import router as asks_router
+from .modules.service_desk.customer_requests_api import (
+    router as customer_requests_router,
+)
 from .modules.sla.api import router as slas_router
 from .modules.teams.api import router as teams_router
 from .modules.teams.dispatcher_api import router as team_dispatcher_router

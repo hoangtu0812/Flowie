@@ -9,7 +9,11 @@ from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.core.identifiers import cuid
-from app.domains.native_asks import (
+from app.jobs.ticket_status import notify_ticket_status_changes
+from app.modules.attachments.api import _authorize_entity
+from app.modules.identity.auth import create_workspace_bootstrap
+from app.modules.notifications.api import list_notifications
+from app.modules.service_desk.api import (
     AskMessageInput,
     AskTransitionInput,
     CreateAskInput,
@@ -24,10 +28,6 @@ from app.domains.native_asks import (
     transition_ask,
     update_ask,
 )
-from app.jobs.ticket_status import notify_ticket_status_changes
-from app.modules.attachments.api import _authorize_entity
-from app.modules.identity.auth import create_workspace_bootstrap
-from app.modules.notifications.api import list_notifications
 from app.modules.work_items.comments import create_comment
 from app.modules.work_items.contracts import CreateCommentInput
 from tests.document_review_support import add_member

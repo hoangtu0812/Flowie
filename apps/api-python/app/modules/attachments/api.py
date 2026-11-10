@@ -84,10 +84,7 @@ async def _authorize_entity(db: AsyncSession, workspace_id: str, entity_type: En
     # Requesters sit outside the ticket's team, so the team rule below would lock them out of their own files.
     # VI: Người yêu cầu ở ngoài team của ticket, nên quy tắc team bên dưới sẽ chặn họ khỏi tệp của chính mình.
     if entity_type == 'ticket':
-        from ...domains.native_asks import (
-            _ask,
-            _manage,
-        )
+        from ..service_desk.api import _ask, _manage
 
         await _manage(db, await _ask(db, entity_id, workspace_id), workspace_id, user_id)
         return
@@ -124,7 +121,7 @@ async def create_attachment(request: Request, workspaceId: str = Form(), entityT
     body = await file.read(MAX_ATTACHMENT_BYTES + 1)
     data = await store_attachment(db, request.app.state.settings, workspaceId, user['id'], entityType, entityId, file.filename, file.content_type, body)
     if entityType == 'ticket':
-        from ...domains.native_asks import record_ticket_file
+        from ..service_desk.api import record_ticket_file
 
         await record_ticket_file(db, entityId, workspaceId, user, data['filename'])
     await db.commit()

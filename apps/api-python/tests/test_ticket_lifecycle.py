@@ -6,12 +6,14 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-import app.domains.native_asks as native_asks
+import app.modules.service_desk.api as native_asks
 from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.core.identifiers import cuid
-from app.domains.native_asks import (
+from app.jobs.ticket_status import notify_ticket_status_changes
+from app.modules.identity.auth import create_workspace_bootstrap
+from app.modules.service_desk.api import (
     AskTransitionInput,
     CreateAskInput,
     UpdateAskInput,
@@ -25,8 +27,6 @@ from app.domains.native_asks import (
     transition_ask,
     update_ask,
 )
-from app.jobs.ticket_status import notify_ticket_status_changes
-from app.modules.identity.auth import create_workspace_bootstrap
 from tests.document_review_support import add_member
 from tests.test_service_desk_asks import add_project, forbidden
 from tests.test_ticket_messages import inbox, set_issue_category

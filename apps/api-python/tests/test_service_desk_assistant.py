@@ -11,9 +11,10 @@ from app.core.clock import utcnow
 from app.core.config import _async_database_url
 from app.core.errors import ApiError
 from app.core.identifiers import cuid
-from app.domains import service_desk_assistant as assistant
-from app.domains.native_asks import ask_assistant, get_assistant_status
-from app.domains.service_desk_assistant import (
+from app.modules.identity.auth import create_workspace_bootstrap
+from app.modules.service_desk import assistant
+from app.modules.service_desk.api import ask_assistant, get_assistant_status
+from app.modules.service_desk.assistant import (
     MAX_DESCRIPTION_CHARS,
     MAX_SECTION_CHARS,
     MAX_SOURCE_CHARS,
@@ -27,7 +28,6 @@ from app.domains.service_desk_assistant import (
     split_sections,
     ticket_draft,
 )
-from app.modules.identity.auth import create_workspace_bootstrap
 from tests.document_review_support import add_member
 
 

@@ -7,9 +7,9 @@ from collections.abc import Awaitable, Callable
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from ..domains.native_asks import _identifier, reopen_pending, ticket_status
 from ..modules.notifications.outbox import stage_notifications
 from ..modules.operations.heartbeats import progress
+from ..modules.service_desk.api import reopen_pending, ticket_identifier, ticket_status
 from ..services.notification_events import create_notification_batch
 
 logger = logging.getLogger(__name__)
@@ -65,7 +65,7 @@ async def notify_ticket_status_changes(factory: async_sessionmaker[AsyncSession]
                 title=row['title'],
                 message='Your ticket status changed',
                 entity_path=f"/service-desk/{row['id']}",
-                entity_label=_identifier(row['number']),
+                entity_label=ticket_identifier(row['number']),
                 details=[('Status', f"{STATUS_LABELS[seen]} → {STATUS_LABELS[current]}")],
                 discord=False,
             )
