@@ -12,7 +12,7 @@ from app.core.errors import ApiError
 from app.domains.auth import _cuid, _utcnow, create_workspace_bootstrap
 from app.domains.native_initiatives import initiative_activity, list_initiatives
 from app.domains.native_issues import issue_options
-from app.domains.native_projects import (
+from app.modules.portfolio.projects_api import (
     public_get_project,
     public_list_projects,
     public_project_issues,

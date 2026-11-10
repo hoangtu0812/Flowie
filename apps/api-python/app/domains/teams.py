@@ -59,7 +59,7 @@ class TeamMemberRoleInput(BaseModel):
     role: Literal['LEAD', 'MEMBER']
 
 
-def _team(row: Any) -> dict[str, Any]:
+def team_record(row: Any) -> dict[str, Any]:
     # Owner-managed membership also applies to legacy teams stored with OPEN access.
     return {
         'id': row['id'], 'workspaceId': row['workspace_id'], 'name': row['name'],
@@ -73,8 +73,11 @@ def _team(row: Any) -> dict[str, Any]:
     }
 
 
-
-
+# shortcut: private alias kept for callers not yet moved out of app/domains; delete it once DTD-523
+# has switched every caller to `team_record`.
+# VI: shortcut: alias nội bộ giữ cho các nơi gọi chưa chuyển khỏi app/domains; xoá khi DTD-523 đã
+# VI: chuyển mọi nơi gọi sang `team_record`.
+_team = team_record
 
 
 async def _team_row(db: AsyncSession, team_id: str, workspace_id: str, *, include_archived: bool = False) -> Any | None:

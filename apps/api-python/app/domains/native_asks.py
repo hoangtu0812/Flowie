@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.errors import ApiError
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
+from ..modules.access.projects import team_access, workspace_access
 from ..modules.notifications.outbox import stage_notifications
 from ..services.notification_events import (
     create_notification_batch,
@@ -20,7 +21,6 @@ from ..services.notification_events import (
 )
 from .auth import _cuid, _utcnow, current_user
 from .native_issues import CreateIssueInput, create_issue
-from .native_projects import _team_access, _workspace_access
 from .service_desk_assistant import AssistantQuestion, answer_question, assistant_status
 
 router = APIRouter(prefix='/api/v1/asks', tags=['asks'])
@@ -88,7 +88,7 @@ async def _references(db: AsyncSession, workspace_id: str, team_id: str, project
     # VI: Dự án bật Service Desk mở tiếp nhận cho cả workspace; caller đã kiểm tra thành viên trước khi gọi.
     if await _accepts_tickets(db, workspace_id, team_id, project_id):
         return
-    await _team_access(db, workspace_id, team_id, user_id)
+    await team_access(db, workspace_id, team_id, user_id)
     if project_id:
         result = await db.execute(text('''SELECT 1 FROM projects WHERE id = :project_id AND workspace_id = :workspace_id
                                           AND archived_at IS NULL AND (team_id IS NULL OR team_id = :team_id)'''), {'project_id': project_id, 'workspace_id': workspace_id, 'team_id': team_id})
@@ -170,7 +170,7 @@ async def _is_handler(db: AsyncSession, ask: dict[str, Any], workspace_id: str, 
 async def _manage(db: AsyncSession, ask: dict[str, Any], workspace_id: str, user_id: str) -> None:
     # Authorship alone is not enough: a creator who left the workspace keeps no access to the ticket.
     # VI: Là người tạo thôi chưa đủ: người tạo đã rời workspace không còn quyền với ticket.
-    await _workspace_access(db, workspace_id, user_id)
+    await workspace_access(db, workspace_id, user_id)
     if ask['createdById'] != user_id and not await _is_handler(db, ask, workspace_id, user_id):
         raise ApiError(403, 'Only the creator, a team member or a workspace administrator can manage this Ask.', 'Forbidden')
 
@@ -184,7 +184,7 @@ async def _triage(db: AsyncSession, ask: dict[str, Any], workspace_id: str, user
 async def list_service_desk_projects(workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
     # The one project read open to people outside the team, so it returns only what the ticket form needs.
     # VI: Đây là API đọc dự án duy nhất mở cho người ngoài team, nên chỉ trả những gì form ticket cần.
-    await _workspace_access(db, workspaceId, user['id'])
+    await workspace_access(db, workspaceId, user['id'])
     result = await db.execute(text('''SELECT project.id, project.name, project.team_id FROM projects project JOIN teams team ON team.id = project.team_id
                                       WHERE project.workspace_id = :workspace_id AND project.service_desk_enabled
                                       AND project.archived_at IS NULL AND team.archived_at IS NULL ORDER BY project.name'''), {'workspace_id': workspaceId})
@@ -207,7 +207,7 @@ async def ask_assistant(payload: AssistantQuestion, request: Request, user: Any 
 
 @router.get('')
 async def list_asks(workspaceId: str = Query(min_length=1), scope: AskScope = 'team', user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, list[dict[str, Any]]]:
-    await _workspace_access(db, workspaceId, user['id'])
+    await workspace_access(db, workspaceId, user['id'])
     if scope == 'mine':
         result = await db.execute(text('''SELECT id FROM asks WHERE workspace_id = :workspace_id AND archived_at IS NULL AND created_by = :user_id ORDER BY updated_at DESC'''), {'workspace_id': workspaceId, 'user_id': user['id']})
         return {'data': [_requester_view(await _ask(db, row['id'], workspaceId)) for row in result.mappings().all()]}
@@ -254,7 +254,7 @@ async def _add_message(db: AsyncSession, ask_id: str, author_id: str, content: s
 
 @router.post('')
 async def create_ask(payload: CreateAskInput, user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, Any]]:
-    await _workspace_access(db, payload.workspaceId, user['id'])
+    await workspace_access(db, payload.workspaceId, user['id'])
     await _references(db, payload.workspaceId, payload.teamId, payload.projectId, user['id'])
     ask_id, now = _cuid(), _utcnow()
     # The row lock lasts until commit, so concurrent tickets in a workspace take numbers in turn.
@@ -362,7 +362,7 @@ MESSAGE_COLUMNS = 'message.id, message.ask_id, message.content, message.created_
 
 @router.get('/by-issue/{issue_id}')
 async def ticket_for_issue(issue_id: str, workspaceId: str = Query(min_length=1), user: Any = Depends(current_user), db: AsyncSession = Depends(get_session)) -> dict[str, dict[str, str] | None]:
-    await _workspace_access(db, workspaceId, user['id'])
+    await workspace_access(db, workspaceId, user['id'])
     result = await db.execute(text('SELECT id FROM asks WHERE converted_issue_id = :issue_id AND workspace_id = :workspace_id AND archived_at IS NULL'), {'issue_id': issue_id, 'workspace_id': workspaceId})
     ask_id = result.scalar_one_or_none()
     if ask_id is None:

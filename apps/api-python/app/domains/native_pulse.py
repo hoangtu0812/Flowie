@@ -8,15 +8,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
+from ..modules.access.projects import workspace_access
 from .auth import current_user
-from .native_projects import _workspace_access
 
 router=APIRouter(prefix='/api/v1/pulse',tags=['pulse'])
 LABELS={'issue.created':'created an issue','issue.updated':'updated an issue','issue.archived':'archived an issue','issue.moved':'moved an issue','project.created':'created a project','project.updated':'updated a project','project.archived':'archived a project'}
 
 @router.get('')
 async def pulse(workspaceId:str=Query(min_length=1),limit:int=Query(default=100,ge=1,le=200),user:Any=Depends(current_user),db:AsyncSession=Depends(get_session)):
-    await _workspace_access(db,workspaceId,user['id'])
+    await workspace_access(db,workspaceId,user['id'])
     activities=await db.execute(text('''SELECT a.*,u.name actor_name,u.avatar_url actor_avatar,i.id issue_id,i.identifier issue_identifier,i.title issue_title,p.id project_id,p.name project_name
     FROM activities a LEFT JOIN users u ON u.id=a.actor_id LEFT JOIN issues i ON i.id=a.issue_id LEFT JOIN projects p ON p.id=a.project_id
     WHERE a.workspace_id=:workspace_id AND (i.id IS NULL OR (i.archived_at IS NULL AND (i.team_id IS NULL OR EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=i.team_id AND tm.user_id=:user_id))))

@@ -64,6 +64,8 @@ pull request and commit references, which are for us.
 
 ### Changed
 
+- The API code for projects, their statuses, custom fields, updates and members now lives in `app/modules/portfolio` instead of `app/domains`, and the team serializer has a public name. Every route, response and error stays the same. Rebuild `api`; no migration. (DTD-523, DTD-693, #258)
+  VI: Mã API của dự án, trạng thái, trường tuỳ chỉnh, cập nhật và thành viên dự án nay nằm trong `app/modules/portfolio` thay vì `app/domains`, và hàm dựng dữ liệu team có tên công khai. Mọi route, phản hồi và lỗi giữ nguyên. Build lại `api`; không có migration. (DTD-523, DTD-693)
 - The API code for workspaces, their members, invitations, auto-join and display defaults now lives in `app/modules/workspaces` instead of `app/domains`, and the email-normalising helper has a public name. Every route, response and error stays the same. Rebuild `api`; no migration. (DTD-523, DTD-690, #257)
   VI: Mã API của workspace, thành viên, lời mời, tự tham gia và cài đặt hiển thị mặc định nay nằm trong `app/modules/workspaces` thay vì `app/domains`, và helper chuẩn hoá email có tên công khai. Mọi route, phản hồi và lỗi giữ nguyên. Build lại `api`; không có migration. (DTD-523, DTD-690)
 - The API code for cycles, releases, saved views, code reviews, the activity feed, the Approvals page and the default issue workflow now lives in `app/modules` (`cycles`, `releases`, `views`, `reviews`, `work_items`) instead of `app/domains`, and the date-parsing, team-access, workspace-role and issue-row helpers have public names. Every route, response and error stays the same. Rebuild `api`; no migration. (DTD-523, DTD-689, #256)

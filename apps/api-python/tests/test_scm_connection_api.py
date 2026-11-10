@@ -38,7 +38,7 @@ def test_creating_a_github_connection_returns_its_timestamps_as_utc_json():
         app.dependency_overrides[current_user] = lambda: {'id': 'user'}
         app.dependency_overrides[get_session] = lambda: AsyncMock()
         with (
-            patch('app.domains.scm.router._workspace_manager', AsyncMock()),
+            patch('app.domains.scm.router.workspace_manager', AsyncMock()),
             patch('app.domains.scm.router._audit', AsyncMock()),
             patch('app.domains.scm.router.connection_row', AsyncMock(return_value=row)),
         ):

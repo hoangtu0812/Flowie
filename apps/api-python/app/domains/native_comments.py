@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.errors import ApiError
 from ..core.utc_responses import UtcAPIRouter as APIRouter
 from ..db.session import get_session
+from ..modules.access.projects import workspace_access
 from ..modules.work_items.comment_repository import _comment as _comment
 from ..modules.work_items.comment_repository import _comment_input as _comment_input
 from ..modules.work_items.comment_repository import (
@@ -25,7 +26,6 @@ from ..services.notification_events import (
 )
 from .auth import _cuid, _utcnow, current_user
 from .native_issues import _issue_row, _write_activity
-from .native_projects import _workspace_access
 
 router = APIRouter(prefix='/api/v1/_native/comments', tags=['native-comments'])
 # Comments have no web UI adapter switched yet. Expose the audited native

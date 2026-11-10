@@ -21,7 +21,7 @@ from app.domains.native_asks import (
     transition_ask,
     update_ask,
 )
-from app.domains.native_projects import UpdateProjectInput, update_project
+from app.modules.portfolio.projects_api import UpdateProjectInput, update_project
 from tests.document_review_support import add_member
 
 

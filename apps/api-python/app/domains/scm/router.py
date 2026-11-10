@@ -14,8 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ...core.errors import ApiError
 from ...core.utc_responses import UtcAPIRouter as APIRouter
 from ...db.session import get_session
+from ...modules.access.projects import workspace_manager
 from ..auth import _cuid, _utcnow, current_user
-from ..native_projects import _workspace_manager
 from .contracts import read_only_capabilities
 from .security import (
     decrypt_secret_bundle,
@@ -162,7 +162,7 @@ async def list_connections(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, list[dict[str, Any]]]:
-    await _workspace_manager(db, workspaceId, user['id'])
+    await workspace_manager(db, workspaceId, user['id'])
     result = await db.execute(
         text(
             '''SELECT connection.*, secret.encrypted_value,
@@ -188,7 +188,7 @@ async def create_connection(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    await _workspace_manager(db, payload.workspaceId, user['id'])
+    await workspace_manager(db, payload.workspaceId, user['id'])
     connection_settings, bundle = _validated_connection(payload, request)
     now = _utcnow()
     connection_id = _cuid()
@@ -266,7 +266,7 @@ async def list_repositories(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, list[dict[str, Any]]]:
-    await _workspace_manager(db, workspaceId, user['id'])
+    await workspace_manager(db, workspaceId, user['id'])
     connection_clause = 'AND repository.connection_id = :connection_id' if connectionId else ''
     result = await db.execute(
         text(
@@ -310,7 +310,7 @@ async def list_identities(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, list[dict[str, Any]]]:
-    await _workspace_manager(db, workspaceId, user['id'])
+    await workspace_manager(db, workspaceId, user['id'])
     await connection_row(db, connectionId, workspaceId)
     result = await db.execute(
         text(
@@ -349,7 +349,7 @@ async def save_identity(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _workspace_manager(db, workspaceId, user['id'])
+    await workspace_manager(db, workspaceId, user['id'])
     await connection_row(db, connection_id, workspaceId)
     member = await db.execute(
         text(
@@ -449,7 +449,7 @@ async def delete_identity(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _workspace_manager(db, workspaceId, user['id'])
+    await workspace_manager(db, workspaceId, user['id'])
     await connection_row(db, connection_id, workspaceId)
     result = await db.execute(
         text(
@@ -493,7 +493,7 @@ async def rotate_connection_credentials(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _workspace_manager(db, workspaceId, user['id'])
+    await workspace_manager(db, workspaceId, user['id'])
     connection = await connection_row(db, connection_id, workspaceId)
     if connection['provider'] != 'AZURE_DEVOPS':
         raise ApiError(400, 'GitHub App credentials are rotated in the server environment.', 'Bad Request')
@@ -546,7 +546,7 @@ async def reactivate_connection(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _workspace_manager(db, workspaceId, user['id'])
+    await workspace_manager(db, workspaceId, user['id'])
     await connection_row(db, connection_id, workspaceId)
     now = _utcnow()
     await db.execute(
@@ -569,7 +569,7 @@ async def update_repository(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _workspace_manager(db, workspaceId, user['id'])
+    await workspace_manager(db, workspaceId, user['id'])
     current = await db.execute(
         text(
             '''SELECT repository.id, repository.connection_id, repository.full_name, repository.team_id
@@ -623,7 +623,7 @@ async def synchronize_connection(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, int]]:
-    await _workspace_manager(db, workspaceId, user['id'])
+    await workspace_manager(db, workspaceId, user['id'])
     await connection_row(db, connection_id, workspaceId)
     async with connection_sync_lock(request.app.state.session_factory, connection_id) as acquired:
         if not acquired:
@@ -641,7 +641,7 @@ async def disconnect(
     user: Any = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict[str, dict[str, Any]]:
-    await _workspace_manager(db, workspaceId, user['id'])
+    await workspace_manager(db, workspaceId, user['id'])
     await connection_row(db, connection_id, workspaceId)
     now = _utcnow()
     await db.execute(
