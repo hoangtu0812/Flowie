@@ -263,7 +263,7 @@ Each feature is self-contained under `features/<feature>` + its header under
   breakdown panel on the Created tab.
 - **Customize sidebar** (`components/layout/sidebar/customize-sidebar-dialog.tsx` +
   `store/sidebar-prefs-store.ts`) — functional modal (badge style Count/Dot, per-item
-  visibility Always/On badge/Never, drag & drop reordering via the grip handles —
+  visibility switch on/off plus an "Only when badged" checkbox on badged items, drag & drop reordering via the grip handles —
   persisted `order` per section) opened from the sidebar "More" menu and from
   Preferences; `nav-inbox`/`nav-workspace` respect the persisted prefs and hidden
   workspace items fall back into the "More" dropdown.

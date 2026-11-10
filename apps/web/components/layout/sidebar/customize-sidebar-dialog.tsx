@@ -1,5 +1,6 @@
 'use client';
 
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
    DropdownMenu,
@@ -7,13 +8,13 @@ import {
    DropdownMenuItem,
    DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import {
    resolveOrder,
    SidebarBadgeStyle,
    SidebarItemKey,
    SidebarSection,
-   SidebarVisibility,
    useSidebarPrefsStore,
 } from '@/store/sidebar-prefs-store';
 import {
@@ -42,7 +43,7 @@ interface ItemConfig {
    key: SidebarItemKey;
    label: string;
    icon: LucideIcon;
-   /** Items with a badge get the "Show when badged" option. */
+   /** Items with a badge get the "Only when badged" option. */
    badged?: boolean;
 }
 
@@ -66,39 +67,6 @@ export const WORKSPACE_ITEMS: ItemConfig[] = [
    { key: 'teams', label: 'Teams', icon: ContactRound },
    { key: 'members', label: 'Members', icon: UserRound },
 ];
-
-const VISIBILITY_LABELS: Record<SidebarVisibility, string> = {
-   always: 'Always show',
-   badged: 'Show when badged',
-   never: "Don't show",
-};
-
-function VisibilityDropdown({
-   value,
-   options,
-   onChange,
-}: {
-   value: SidebarVisibility;
-   options: SidebarVisibility[];
-   onChange: (value: SidebarVisibility) => void;
-}) {
-   return (
-      <DropdownMenu>
-         <DropdownMenuTrigger className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors outline-none">
-            {VISIBILITY_LABELS[value]}
-            <ChevronDown className="size-3.5" />
-         </DropdownMenuTrigger>
-         <DropdownMenuContent align="end" className="min-w-44">
-            {options.map((option) => (
-               <DropdownMenuItem key={option} onClick={() => onChange(option)}>
-                  {VISIBILITY_LABELS[option]}
-                  {value === option && <Check className="ml-auto size-3.5" />}
-               </DropdownMenuItem>
-            ))}
-         </DropdownMenuContent>
-      </DropdownMenu>
-   );
-}
 
 /** One section (Personal / Workspace): rows reorderable by dragging the grip. */
 function ItemSection({ section, items }: { section: SidebarSection; items: ItemConfig[] }) {
@@ -126,9 +94,6 @@ function ItemSection({ section, items }: { section: SidebarSection; items: ItemC
       <div className="rounded-lg border divide-y divide-border/60">
          {ordered.map((item, index) => {
             const current = visibility[item.key] ?? 'always';
-            const options: SidebarVisibility[] = item.badged
-               ? ['always', 'badged', 'never']
-               : ['always', 'never'];
             return (
                <div
                   key={item.key}
@@ -176,18 +141,34 @@ function ItemSection({ section, items }: { section: SidebarSection; items: ItemC
                         current === 'never' && 'text-muted-foreground/50'
                      )}
                   />
-                  <span
-                     className={cn(
-                        'flex-1 text-sm',
-                        current === 'never' && 'text-muted-foreground/60'
+                  <div className="flex flex-1 flex-col gap-1">
+                     <span
+                        className={cn('text-sm', current === 'never' && 'text-muted-foreground/60')}
+                     >
+                        {item.label}
+                     </span>
+                     {/* The switch stores 'always' / 'never'; a badged item keeps its third value
+                         'badged' behind this checkbox, so saved prefs need no migration.
+                         VI: Switch lưu 'always' / 'never'; mục có badge giữ giá trị thứ ba 'badged'
+                         VI: qua checkbox này, nên cấu hình đã lưu không cần migration. */}
+                     {item.badged && current !== 'never' && (
+                        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                           <Checkbox
+                              checked={current === 'badged'}
+                              onCheckedChange={(checked) =>
+                                 setVisibility(item.key, checked === true ? 'badged' : 'always')
+                              }
+                              className="size-3.5"
+                              aria-label={`Show ${item.label} only when badged`}
+                           />
+                           Only when badged
+                        </label>
                      )}
-                  >
-                     {item.label}
-                  </span>
-                  <VisibilityDropdown
-                     value={current}
-                     options={options}
-                     onChange={(value) => setVisibility(item.key, value)}
+                  </div>
+                  <Switch
+                     checked={current !== 'never'}
+                     onCheckedChange={(on) => setVisibility(item.key, on ? 'always' : 'never')}
+                     aria-label={`Show ${item.label} in sidebar`}
                   />
                </div>
             );
